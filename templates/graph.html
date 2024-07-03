@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+
+{% block title %}График{% endblock %}
+
+{% block content %}
+<h2>График зависимости</h2>
+<form method="post" action="{{ url_for('graph') }}" style="text-align: center;">
+    <label for="target_table">Выберите таблицу:</label>
+    <input type="text" id="target_table" name="target_table" list="tables_list" required style="width: 50%;">
+    <datalist id="tables_list">
+        {% for table in tables %}
+        <option value="{{ table }}">{{ table }}</option>
+        {% endfor %}
+    </datalist>
+    <button type="submit">Построить график</button>
+</form>
+{% if graph_path %}
+<div style="text-align: center;">
+    <img src="{{ url_for('static', filename=graph_path) }}" alt="График зависимости" style="max-width: 80%;">
+</div>
+{% endif %}
+{% endblock %}

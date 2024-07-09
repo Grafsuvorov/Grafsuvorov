@@ -1,22 +1,96 @@
-{% extends 'base.html' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>График Зависимостей</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/graph">Граф Зависимостей</a></li>
+            <li><a href="/other">Диаграмма Ганта</a></li>
+        </ul>
+    </nav>
+    <div class="content">
+        <div class="container">
+            <form method="POST" action="/graph" onsubmit="showLoadingOverlay()">
+                <label for="target_table">Выберите таблицу:</label>
+                <input type="text" id="target_table" name="target_table" placeholder="Введите или выберите таблицу">
+                <button type="submit">Построить график</button>
+            </form>
+            {% if graph_path %}
+                <div class="graph-container">
+                    <object data="{{ url_for('static', filename=graph_path) }}" type="image/svg+xml" class="graph" id="graph"></object>
+                </div>
+                <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+                <script>
+                    document.addEventListener('DOMContentLoaded', function () {
+                        var graphObject = document.getElementById('graph');
+                        graphObject.addEventListener('load', function() {
+                            console.log("SVG loaded");
+                            var svgDoc = graphObject.contentDocument;
+                            if (!svgDoc) {
+                                console.error("Failed to load SVG document.");
+                                return;
+                            }
+                            var svgRoot = svgDoc.documentElement;
+                            if (!svgRoot) {
+                                console.error("Failed to find SVG root element.");
+                                return;
+                            }
 
-{% block title %}График{% endblock %}
+                            console.log("Initializing svg-pan-zoom");
+                            var panZoomInstance = svgPanZoom(svgRoot, {
+                                zoomEnabled: true,
+                                controlIconsEnabled: true,
+                                fit: true,
+                                center: true,
+                                minZoom: 0.1,
+                                maxZoom: 10,
+                                zoomScaleSensitivity: 0.2,
+                                contain: true,
+                                initialZoom: 0.5
+                            });
 
-{% block content %}
-<h2>График зависимости</h2>
-<form method="post" action="{{ url_for('graph') }}" style="text-align: center;">
-    <label for="target_table">Выберите таблицу:</label>
-    <input type="text" id="target_table" name="target_table" list="tables_list" required style="width: 50%;">
-    <datalist id="tables_list">
-        {% for table in tables %}
-        <option value="{{ table }}">{{ table }}</option>
-        {% endfor %}
-    </datalist>
-    <button type="submit">Построить график</button>
-</form>
-{% if graph_path %}
-<div style="text-align: center;">
-    <img src="{{ url_for('static', filename=graph_path) }}" alt="График зависимости" style="max-width: 80%;">
-</div>
-{% endif %}
-{% endblock %}
+                            panZoomInstance.zoomAtPoint(1, {x: svgRoot.clientWidth / 2, y: svgRoot.clientHeight / 2});
+                            console.log("Initial zoom set");
+                            hideLoadingOverlay();
+                        });
+                    });
+
+                    function showLoadingOverlay() {
+                        document.getElementById('loading-overlay').style.display = 'flex';
+                    }
+
+                    function hideLoadingOverlay() {
+                        document.getElementById('loading-overlay').style.display = 'none';
+                    }
+                </script>
+            {% endif %}
+        </div>
+    </div>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script>
+        $(function() {
+            var availableTables = [
+                {% for table in tables %}
+                    "{{ table }}",
+                {% endfor %}
+            ];
+            $("#target_table").autocomplete({
+                source: availableTables,
+                minLength: 0
+            }).focus(function() {
+                $(this).autocomplete("search", "");
+            });
+        });
+    </script>
+</body>
+</html>

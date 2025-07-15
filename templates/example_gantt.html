@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Example Gantt Chart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .nav-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .nav-tabs a {
+            margin: 0 10px;
+            text-decoration: none;
+            color: #007bff;
+        }
+        .nav-tabs a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-tabs">
+            <a href="/">Главная</a>
+            <a href="/graph">Граф Зависимостей</a>
+            <a href="/other">Диаграмма Ганта</a>
+        </div>
+        <h1>Пример Диаграммы Ганта</h1>
+        <div>{{ gantt_html | safe }}</div>
+    </div>
+</body>
+</html>

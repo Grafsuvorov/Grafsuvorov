@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Диаграмма Ганта</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="/">Главная</a></li>
+            <li><a href="/graph">Граф Зависимостей</a></li>
+            <li><a href="/other">Диаграмма Ганта</a></li>
+        </ul>
+    </nav>
+    <div class="content">
+        <div class="container">
+            <form method="POST" action="/gantt" onsubmit="showLoadingOverlay()">
+                <label for="target_table">Выберите таблицу:</label>
+                <input type="text" id="target_table" name="target_table" placeholder="Введите или выберите таблицу">
+                <button type="submit">Построить диаграмму</button>
+            </form>
+            {% if gantt_html %}
+                <div class="gantt-chart-container">{{ gantt_html | safe }}</div>
+            {% endif %}
+        </div>
+    </div>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <script>
+        $(function() {
+            var availableTables = [
+                {% for table in tables %}
+                    "{{ table }}",
+                {% endfor %}
+            ];
+            $("#target_table").autocomplete({
+                source: availableTables,
+                minLength: 0
+            }).focus(function() {
+                $(this).autocomplete("search", "");
+            });
+        });
+
+        function showLoadingOverlay() {
+            document.getElementById('loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoadingOverlay() {
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>

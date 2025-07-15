@@ -1,0 +1,12 @@
+﻿{% extends 'base.html' %}
+
+{% block title %}Информация о таблице{% endblock %}
+
+{% block content %}
+<h2>Информация о таблице</h2>
+<p><strong>Схема:</strong> {{ table_info.table_schema }}</p>
+<p><strong>Название таблицы:</strong> {{ table_info.table_name }}</p>
+<p><strong>Дата загрузки:</strong> {{ table_info.table_last_load }}</p>
+<p><strong>Запрос на вставку:</strong></p>
+<pre>{{ table_info.query_insert_init }}</pre>
+{% endblock %}

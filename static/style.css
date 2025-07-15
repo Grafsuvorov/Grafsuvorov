@@ -1,0 +1,213 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f5f5;
+}
+
+nav {
+    background-color: #4A90E2; /* Светло-синий цвет */
+    padding: 1em;
+}
+
+nav ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+}
+
+nav ul li {
+    margin: 0 1em;
+}
+
+nav ul li a {
+    color: white;
+    text-decoration: none;
+    font-size: 1.2em;
+}
+
+nav ul li a:hover {
+    text-decoration: underline;
+}
+
+.content {
+    padding: 2em;
+    text-align: center;
+    background-color: #ffffff; /* Белый фон для контента */
+    border-radius: 8px; /* Закругленные углы */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Тень */
+}
+
+form {
+    margin: 2em auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 600px; /* Максимальная ширина формы */
+    background-color: #ffffff; /* Белый цвет фона формы */
+    padding: 1em; /* Внутренний отступ формы */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Тень вокруг формы */
+    border-radius: 8px; /* Радиус закругления углов формы */
+}
+
+label, input, button {
+    display: block;
+    margin: 0.5em 0;
+}
+
+input, button {
+    padding: 0.5em;
+    font-size: 1em;
+    width: 100%; /* Устанавливает ширину на 100% от родительского контейнера */
+    box-sizing: border-box; /* Включает отступы и границы в общую ширину и высоту элемента */
+}
+
+button {
+    background-color: #4A90E2; /* Светло-синий цвет */
+    color: white;
+    border: none;
+    cursor: pointer;
+    width: auto; /* Устанавливает ширину кнопки на авто, чтобы она подгонялась по содержимому */
+}
+
+button:hover {
+    background-color: #4178be; /* Более темный оттенок синего */
+}
+
+.ui-autocomplete {
+    z-index: 1050;
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.nav-tabs {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.nav-tabs a {
+    margin: 0 10px;
+    text-decoration: none;
+    color: #007bff;
+}
+
+.nav-tabs a:hover {
+    text-decoration: underline;
+}
+
+.gantt-chart-container {
+    text-align: left;
+    margin-left: 0;
+    width: 100%;
+}
+
+.graph-container {
+    text-align: center;
+    overflow: auto;
+    width: 100%;
+    height: 80vh; /* Высота полотна */
+    border: 1px solid #ccc;
+}
+
+.graph {
+    width: 100%;
+    height: 100%;
+}
+
+/* Стили для таблицы информации */
+.table-container {
+    width: 100%;
+    overflow-x: auto; /* Горизонтальная прокрутка для таблицы */
+}
+
+.info-table {
+    width: 100%;
+    border-collapse: collapse; /* Убираем промежутки между ячейками */
+    margin: 20px 0; /* Отступы сверху и снизу */
+    font-size: 1em; /* Размер шрифта */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Тень */
+}
+
+.info-table th,
+.info-table td {
+    padding: 12px 15px; /* Внутренние отступы */
+    border: 1px solid #ddd; /* Граница */
+}
+
+.info-table th {
+    background-color: #4A90E2; /* Цвет фона заголовков */
+    color: #ffffff; /* Цвет текста заголовков */
+    text-align: left; /* Выравнивание текста по левому краю */
+}
+
+.info-table td {
+    background-color: #f9f9f9; /* Цвет фона ячеек */
+    color: #333333; /* Цвет текста ячеек */
+}
+
+pre {
+    white-space: pre-wrap; /* Перенос длинных строк */
+    word-wrap: break-word; /* Перенос слов */
+    background-color: #f9f9f9; /* Цвет фона для <pre> */
+    padding: 10px; /* Внутренние отступы для <pre> */
+    border: 1px solid #ddd; /* Граница для <pre> */
+    border-radius: 4px; /* Закругленные углы для <pre> */
+}
+
+/* Дополнительные стили для приветственного блока */
+.welcome-container {
+    text-align: left;
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.welcome-container ul {
+    list-style-type: disc;
+    padding-left: 20px;
+}
+
+.welcome-container ul li {
+    margin: 0.5em 0;
+}
+
+/* Добавьте это в конец вашего файла style.css */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.loading-overlay .spinner {
+    border: 16px solid #f3f3f3;
+    border-top: 16px solid #4A90E2;
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

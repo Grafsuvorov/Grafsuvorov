@@ -1,3 +1,88 @@
+create temporary table tmp_1 ON COMMIT DROP as (
+	select 
+		currency_code 
+	from 
+		dict_dds.mandant 
+	where 
+		mandant_code = '400')
+distributed by (currency_code);
+
+insert into dm.material_stock_balance (
+	dt_posting,
+	material_code,
+	material_uom_code,
+	plant_code,
+	warehouse_code,
+	batch_code,
+	valuation_type_code,
+	stock_type_code,
+	sales_document_code,
+	sales_document_position_line_item_code,
+	wbs_element_code,
+	supplier_code,
+	customer_code,
+	total_stock_quantity,
+	unit_balance_currency_code,
+	material_costing_system_code,
+	price_rule_code,
+	dt_posting_next,
+	plant_name,
+	valuation_assessment_code,
+	warehouse_name,
+	warehouse_type_code,
+	warehouse_type_name,
+	storage_bin_code,
+	material_full_name,
+	material_kubal_code,
+	is_batch_mandatory,
+	material_type_code,
+	material_group_code,
+	sector_code,
+	material_category_code,
+	material_short_name,
+	material_alternative_uom_code,
+	material_alternative_uom_name,
+	material_tnved_eas_code,
+	material_okpd2_code,
+	purchase_responsible_department_code,
+	material_planning_controller_code,
+	head_of_production_code,
+	material_type_name,
+	material_group_name,
+	purchase_responsible_department_name,
+	material_planning_controller_name,
+	holding_currency_code,
+	wbs_element_short_name,
+	unit_balance_code,
+	material_category_name,
+	counterparty_wbs_element_code,
+	valuation_class_code,
+	external_contract_number,
+	supplier_extended_name,
+	customer_extended_name,
+	non_liquid_asset_type_code,
+	uom_to_alternative_uom_coefficient_amount,
+	base_uom_name,
+	valuation_class_name,
+	general_ledger_account_code,
+	general_ledger_account_name,
+	general_ledger_alternative_account_code,
+	general_ledger_alternative_account_name,
+	counterparty_wbs_element_name,
+	non_liquid_asset_type_name,
+	material_search_name,
+	material_group_search_name,
+	warehouse_search_name,
+	purchase_responsible_department_search_name,
+	valuation_class_search_name,
+	material_planning_controller_search_name,
+	plant_search_name,
+	material_trimmed_code,
+	material_truncated_code,
+	dt_last_material_movement_and_calculation,
+	dt_last_material_movement_and_calculation_shifted,
+	dt_last_existed_material_movement_and_calculation
+)
 select
 	base.dt_posting,
 	base.material_code,
@@ -407,7 +492,6 @@ from (
 		on ckmlpp_2.calculation_code =  base.material_costing_system_code 
 		and ckmlpp_1.calculation_code is null 
 		and base.price_rule_code = '2';
-
 
 
 [

@@ -1,159 +1,686 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Nested Loop",
-      "Slice": 0,
-      "Segments": 0,
-      "Gang Type": "unallocated",
-      "Join Type": "Inner",
-      "Startup Cost": 20000000068.00,
-      "Total Cost": 20002871502.89,
-      "Plan Rows": 108893950,
-      "Plan Width": 77,
-      "Output": ["s.material_code", "s.valuation_area_code", "s.valuation_type_code", "s.sales_document_code", "s.sales_document_position_code", "(gs.dt_month)::date", "s.valuation_class_code", "CASE WHEN ((s.is_period_closed IS NOT NULL) AND ((date_trunc('month'::text, (s.dt_valid_from)::timestamp with time zone))::date = gs.dt_month)) THEN 1 WHEN (s.is_period_closed IS NULL) THEN 2 ELSE 3 END"],
-      "Plans": [
-        {
-          "Node Type": "Gather Motion",
-          "Senders": 8,
-          "Receivers": 1,
-          "Parent Relationship": "Outer",
-          "Slice": 1,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 149080.75,
-          "Plan Rows": 4949725,
-          "Plan Width": 73,
-          "Output": ["s.material_code", "s.valuation_area_code", "s.valuation_type_code", "s.sales_document_code", "s.sales_document_position_code", "s.valuation_class_code", "s.is_period_closed", "s.dt_valid_from", "s.dt_valid_to"],
-          "Plans": [
-            {
-              "Node Type": "Seq Scan",
-              "Parent Relationship": "Outer",
-              "Slice": 1,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Relation Name": "valuation_class_to_sales_order",
-              "Schema": "dds",
-              "Alias": "s",
-              "Startup Cost": 0.00,
-              "Total Cost": 50086.25,
-              "Plan Rows": 4949725,
-              "Plan Width": 73,
-              "Output": ["s.material_code", "s.valuation_area_code", "s.valuation_type_code", "s.sales_document_code", "s.sales_document_position_code", "s.valuation_class_code", "s.is_period_closed", "s.dt_valid_from", "s.dt_valid_to"]
-            }
-          ]
-        },
-        {
-          "Node Type": "Materialize",
-          "Parent Relationship": "Inner",
-          "Slice": 0,
-          "Segments": 0,
-          "Gang Type": "unallocated",
-          "Startup Cost": 10000000068.00,
-          "Total Cost": 10000000073.44,
-          "Plan Rows": 22,
-          "Plan Width": 8,
-          "Output": ["gs.dt_month"],
-          "Plans": [
-            {
-              "Node Type": "Merge Join",
-              "Parent Relationship": "Outer",
-              "Slice": 0,
-              "Segments": 0,
-              "Gang Type": "unallocated",
-              "Join Type": "Inner",
-              "Startup Cost": 10000000068.00,
-              "Total Cost": 10000000073.33,
-              "Plan Rows": 22,
-              "Plan Width": 8,
-              "Output": ["gs.dt_month"],
-              "Merge Cond": "(gs.dt_month = m.dt_month)",
-              "Plans": [
-                {
-                  "Node Type": "Sort",
-                  "Parent Relationship": "Outer",
-                  "Slice": 0,
-                  "Segments": 0,
-                  "Gang Type": "unallocated",
-                  "Startup Cost": 59.85,
-                  "Total Cost": 62.35,
-                  "Plan Rows": 1000,
-                  "Plan Width": 8,
-                  "Output": ["gs.dt_month"],
-                  "Sort Key": ["gs.dt_month"],
-                  "Plans": [
-                    {
-                      "Node Type": "Function Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 0,
-                      "Segments": 0,
-                      "Gang Type": "unallocated",
-                      "Function Name": "generate_series",
-                      "Schema": "pg_catalog",
-                      "Alias": "gs",
-                      "Startup Cost": 0.02,
-                      "Total Cost": 10.02,
-                      "Plan Rows": 1000,
-                      "Plan Width": 8,
-                      "Output": ["gs.dt_month"],
-                      "Function Call": "generate_series(((date_trunc('month'::text, (s.dt_valid_from)::timestamp with time zone))::date)::timestamp with time zone, ((date_trunc('month'::text, (s.dt_valid_to)::timestamp with time zone))::date)::timestamp with time zone, '1 mon'::interval)"
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Sort",
-                  "Parent Relationship": "Inner",
-                  "Slice": 0,
-                  "Segments": 0,
-                  "Gang Type": "unallocated",
-                  "Startup Cost": 8.15,
-                  "Total Cost": 8.21,
-                  "Plan Rows": 22,
-                  "Plan Width": 4,
-                  "Output": ["m.dt_month"],
-                  "Sort Key": ["m.dt_month"],
-                  "Plans": [
-                    {
-                      "Node Type": "Gather Motion",
-                      "Senders": 8,
-                      "Receivers": 1,
-                      "Parent Relationship": "Outer",
-                      "Slice": 2,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 7.66,
-                      "Plan Rows": 22,
-                      "Plan Width": 4,
-                      "Output": ["m.dt_month"],
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 2,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "tmp_months",
-                          "Schema": "pg_temp_2667845",
-                          "Alias": "m",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 7.22,
-                          "Plan Rows": 22,
-                          "Plan Width": 4,
-                          "Output": ["m.dt_month"]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Postgres query optimizer"
-    }
-  }
-]
+--временные таблицы для base
+create temporary table tmp_1 ON COMMIT DROP as (
+	select 
+		currency_code 
+	from 
+		dict_dds.mandant 
+	where 
+		mandant_code = '400'
+)
+distributed by (currency_code);
+
+create temporary table pawad ON COMMIT DROP as (
+	select 
+		paw.plant_code as plant_code,
+		paw.warehouse_code as warehouse_code,
+		max(paw.address_code) as address_code 
+	from 
+		dict_dds.plant_and_warehouse_address_definition as paw
+	group by paw.plant_code, paw.warehouse_code
+)
+distributed by (plant_code, warehouse_code);
+
+
+create temporary table muom ON COMMIT DROP as (
+		select
+			material_code,
+			material_alternative_uom_code
+		from
+			dict_dds.material_unit_of_measure as mum
+			left join dict_dds.internal_characteristic as ich
+				on mum.internal_characteristic_code = ich.internal_characteristic_code
+		where
+			ich.internal_characteristic_title_code = 'COEF_TRANS'
+)
+distributed replicated;
+
+--формирование base
+drop table if exists base;
+
+create temporary table base (
+	dt_posting date null, -- Дата выбора запасов
+	material_code varchar(18) NULL, -- Материал
+	material_uom_code varchar(90) NULL,
+	plant_code varchar(4) null, -- Завод
+	warehouse_code varchar(4) NULL, -- Склад
+	batch_code varchar(10) NULL, -- Партия
+	valuation_type_code varchar(10) NULL, -- Вид оценки
+	stock_type_code varchar(1) NULL, -- Особый запас
+	sales_document_code varchar(10) NULL, -- Заказ клиента MAT_KDAUF
+	sales_document_position_line_item_code varchar(6) NULL, -- ПозЗаказКлиента MAT_KDPOS
+	wbs_element_code varchar(24) NULL, -- СПП-элемент
+	supplier_code varchar(30) NULL,
+	customer_code varchar(30) NULL,
+	-------------------------------------------------------------------
+	total_stock_quantity numeric(16, 3) NULL,
+	---------------------------------------------------------------------
+	unit_balance_currency_code varchar(15) NULL, -- Валюта
+	material_costing_system_code varchar(12) NULL, -- Номер калькуляции
+	price_rule_code varchar(1) NULL,
+	dt_posting_next date NULL,
+	plant_name varchar(30) NULL,
+	valuation_assessment_code varchar(4) NULL,
+	warehouse_name varchar(16) NULL,
+	warehouse_type_code varchar(4) NULL,
+	warehouse_type_name varchar(30) NULL,
+	storage_bin_code varchar(10) NULL,
+	material_full_name varchar(260) NULL,
+	material_kubal_code varchar(30) NULL,
+	is_batch_mandatory varchar(1) NULL,
+	material_type_code varchar(4) NULL,
+	material_group_code varchar(9) NULL,
+	sector_code varchar(2) NULL,
+	material_category_code varchar(30) NULL,
+	material_short_name varchar(60) NULL,
+	material_alternative_uom_code varchar(3) NULL,
+	material_alternative_uom_name varchar(3) NULL,
+	material_tnved_eas_code varchar(17) NULL,
+	material_okpd2_code varchar(16) NULL,
+	purchase_responsible_department_code varchar(3) NULL,
+	material_planning_controller_code varchar(4) NULL,
+	head_of_production_code varchar(3) NULL,
+	material_type_name varchar(25) NULL,
+	material_group_name varchar(20) NULL,
+	purchase_responsible_department_name varchar(18) NULL,
+	material_planning_controller_name varchar(18) NULL,
+	holding_currency_code varchar(3) NULL,
+	wbs_element_short_name varchar(40) NULL,
+	unit_balance_code varchar(4) NULL,
+	material_category_name varchar(240) NULL,
+	counterparty_wbs_element_code varchar(72) NULL,
+	valuation_class_code varchar(12) NULL,
+	external_contract_number varchar(35) NULL,
+	supplier_extended_name varchar(100) NULL,
+	customer_extended_name varchar(100) NULL,
+	non_liquid_asset_type_code varchar(1) NULL,
+	uom_to_alternative_uom_coefficient_amount float8 NULL,
+	base_uom_name varchar(3) NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, 
+	non_liquid_asset_type_code, material_costing_system_code);
+
+
+
+insert into base(
+	dt_posting,
+	material_code,
+	material_uom_code,
+	plant_code,
+	warehouse_code,
+	batch_code,
+	valuation_type_code,
+	stock_type_code,
+	sales_document_code,
+	sales_document_position_line_item_code,
+	wbs_element_code,
+	supplier_code,
+	customer_code,
+	total_stock_quantity,
+	unit_balance_currency_code,
+	material_costing_system_code,
+	price_rule_code,
+	dt_posting_next,
+	plant_name,
+	valuation_assessment_code,
+	warehouse_name,
+	warehouse_type_code,
+	warehouse_type_name,
+	storage_bin_code,
+	material_full_name,
+	material_kubal_code,
+	is_batch_mandatory,
+	material_type_code,
+	material_group_code,
+	sector_code,
+	material_category_code,
+	material_short_name,
+	material_alternative_uom_code,
+	material_alternative_uom_name,
+	material_tnved_eas_code,
+	material_okpd2_code,
+	purchase_responsible_department_code,
+	material_planning_controller_code,
+	head_of_production_code,
+	material_type_name,
+	material_group_name,
+	purchase_responsible_department_name,
+	material_planning_controller_name,
+	holding_currency_code,
+	wbs_element_short_name,
+	unit_balance_code,
+	material_category_name,
+	counterparty_wbs_element_code,
+	valuation_class_code,
+	external_contract_number,
+	supplier_extended_name,
+	customer_extended_name,
+	non_liquid_asset_type_code,
+	uom_to_alternative_uom_coefficient_amount,
+	base_uom_name
+)
+select 
+	base.dt_posting,
+	base.material_code,
+	base.material_uom_code,
+	base.plant_code,
+	base.warehouse_code,
+	base.batch_code,
+	base.valuation_type_code,
+	base.stock_type_code,
+	base.sales_document_code,
+	base.sales_document_position_line_item_code,
+	wbs_sprav.wbs_element_number as wbs_element_code,
+	base.supplier_code,
+	base.customer_code,
+	-------------------------------------------------------------------
+	base.total_stock_quantity as total_stock_quantity,
+	---------------------------------------------------------------------
+	base.unit_balance_currency_code,
+	base.material_costing_system_code,
+	base.price_rule_code,
+	base.dt_posting_next,
+	pas.plant_short_name as plant_name,
+	pas.valuation_area_code as valuation_assessment_code,
+	ware.warehouse_name as warehouse_name,
+	addr.title_code as warehouse_type_code,
+	titt.title_name as warehouse_type_name,
+	mabw.storage_bin_code as storage_bin_code,
+	matt.material_full_name as material_full_name,
+	mara.material_kubal_code as material_kubal_code,
+	mara.is_batch_mandatory as is_batch_mandatory,
+	mara.material_type_code as material_type_code,
+	mara.material_group_code as material_group_code,
+	mara.sector_code as sector_code,
+	mara.material_category_code as material_category_code,
+	case 
+		when mara.is_batch_mandatory is not null 
+			and ksk.object_class_code is not null 
+			and mat_bat.material_detailed_name is not null 
+		then mat_bat.material_detailed_name 
+		else matt.material_name 
+	end as material_short_name,
+	muom.material_alternative_uom_code as material_alternative_uom_code, -- Альтернативная ЕИ
+	ueft.uom_external_format_code as material_alternative_uom_name,
+	mabp.tnved_code as material_tnved_eas_code,	
+	mabp.excise_tax_foreign_trade_control_code as material_okpd2_code,
+	mabp.purchase_group_code as purchase_responsible_department_code,
+	mabp.material_planning_controller_code as material_planning_controller_code,
+	mabp.head_of_production_code as head_of_production_code,
+	mtt.material_type_name as material_type_name,
+	mgt.material_group_short_name as material_group_name,
+	pgn.purchase_group_name as purchase_responsible_department_name,
+	mpc.material_planning_controller_name as material_planning_controller_name,
+	tmp_1.currency_code as holding_currency_code,
+	wbs_sprav.wbs_element_short_name as wbs_element_short_name,
+	vaar.unit_balance_code as unit_balance_code,
+	mcmdt.material_category_name as material_category_name,
+	case 
+		when base.wbs_element_code is null 
+			and base.sales_document_code is not null
+			and base.sales_document_position_line_item_code is not null 
+			and coalesce(
+				vbap_1.sales_request_for_proposal_position_wbs_element_code, 
+				vbap_2.sales_contract_position_wbs_element_code, 
+				vbap_3.sales_order_position_wbs_element_code,
+				vbap_4.sales_proposal_position_wbs_element_code) is not null
+		then coalesce(
+				vbap_1.sales_request_for_proposal_position_wbs_element_code,
+				vbap_2.sales_contract_position_wbs_element_code,
+				vbap_3.sales_order_position_wbs_element_code,
+				vbap_4.sales_proposal_position_wbs_element_code)
+		else coalesce(
+				vbak_1.sales_request_for_proposal_wbs_element_code,
+				vbak_2.sales_contract_wbs_element_code,
+				vbak_3.sales_order_wbs_element_code,
+				vbak_4.sales_proposal_wbs_element_code) 
+	end as counterparty_wbs_element_code,
+	case
+		when base.sales_document_code is not null
+			and ebh.valuation_class_code is not null
+			and ebh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then ebh.valuation_class_code
+		when base.sales_document_code is not null
+			and ebn.valuation_class_code is not null 
+		then ebn.valuation_class_code
+		when base.sales_document_code is not null
+			and ebn.valuation_class_code is null
+		then ebh.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbh.valuation_class_code is not null
+			and qbh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then qbh.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbn.valuation_class_code is not null
+		then qbn.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbn.valuation_class_code is null
+		then qbh.valuation_class_code	
+		when mbh.valuation_class_code is not null
+			and mbh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then mbh.valuation_class_code
+		when mbn.valuation_class_code is not null
+		then mbn.valuation_class_code
+		when mbn.valuation_class_code is null
+		then mbh.valuation_class_code
+	else null
+	end as valuation_class_code, -- Класс оценки
+	coalesce(
+		vbak_1.sales_order_external_number,
+		vbak_2.sales_order_external_number,
+		vbak_3.sales_order_external_number,
+		vbak_4.sales_order_external_number
+	) as external_contract_number,
+	countr_1.counterparty_full_name as supplier_extended_name,
+	countr_2.counterparty_full_name as customer_extended_name,
+	case
+		when base.wbs_element_code is not null
+			and wbs_sprav.project_type_code = '99'
+		then substring(wbs_sprav.wbs_element_code, 6, 1)
+		when base.wbs_element_code is null
+			and base.valuation_type_code like 'U%'
+		then mat_bat.nonliquid_asset_type_code--aup3.ATWRT
+		else null
+	end as non_liquid_asset_type_code,
+	mat_bat.uom_to_alternative_uom_coefficient_amount as uom_to_alternative_uom_coefficient_amount,
+	t006a.uom_external_format_code as base_uom_name
+from 
+	dm_calc.material_stock_balance as base 
+	cross join tmp_1
+	left join dict_dds.wbs_element_master_data_detail as wbs_sprav 
+		on wbs_sprav.wbs_element_code = base.wbs_element_code
+	left join dict_dds.plant_and_subsidiary as pas
+		on pas.plant_code = base.plant_code
+	left join dict_dds.warehouse as ware
+		on ware.warehouse_code = base.warehouse_code
+		and ware.plant_code = base.plant_code
+	left join pawad
+		on pawad.plant_code = base.plant_code
+		and pawad.warehouse_code = base.warehouse_code
+	left join dict_dds.address as addr
+		on addr.address_code = pawad.address_code
+	left join dict_dds.title_texts as titt
+		on titt.title_code = addr.title_code
+		and titt.language_code = 'R'
+	left join dict_dds.material_by_warehouse as mabw
+		on mabw.material_code = base.material_code
+		and mabw.plant_code = base.plant_code
+		and mabw.warehouse_code = base.warehouse_code
+	left join dict_dds.material_texts as matt
+		on matt.material_code = base.material_code
+		and matt.language_code = 'R'
+	left join dict_dds.material as mara
+		on mara.material_code = base.material_code			
+	left join dict_dds.map_object_to_class as ksk
+		on ksk.object_class_code = mara.material_classification_system_code
+		and ksk.object_or_class_code = 'O'
+		and ksk.class_type_code = (
+			select
+				range_low_value 
+			from
+				dict_dds.settings_and_parameters_sap
+			where 
+				abap_program_code = '/RUSAL/CO360M'
+				and parameter_code = 'KLART')
+	left join dds.material_batch as mat_bat
+		on mat_bat.material_code = base.material_code
+		and mat_bat.batch_code = base.batch_code
+	left join muom
+		on muom.material_code = base.material_code
+	left join dict_dds.uom_external_format_texts as ueft
+		on ueft.uom_code = muom.material_alternative_uom_code
+		and ueft.language_code = 'R'
+	left join dict_dds.material_by_plant as mabp
+		on mabp.material_code = base.material_code
+		and mabp.plant_code = base.plant_code
+	left join dict_dds.material_type_texts as mtt	
+		on mtt.material_type_code = mara.material_type_code
+		and mtt.language_code = 'R'
+	left join dict_dds.material_group_texts as mgt	
+		on mgt.material_group_code = mara.material_group_code
+		and mgt.language_code = 'R'
+	left join dict_dds.purchase_group as pgn	
+		on pgn.purchase_group_code = mabp.purchase_group_code 
+	left join dict_dds.material_planning_controller as mpc	
+		on mpc.plant_code = base.plant_code
+		and mpc.material_planning_controller_code = mabp.material_planning_controller_code
+	left join dict_dds.valuation_area as vaar	
+		on vaar.valuation_area_code = base.plant_code
+	left join dict_dds.material_category_main_data_texts as mcmdt
+		on mcmdt.material_category_code = mara.material_category_code
+		and mcmdt.language_code = 'R'
+	left join dds.sales_request_for_proposal_position as vbap_1
+		on vbap_1.sales_request_for_proposal_code = base.sales_document_code 
+		and vbap_1.sales_request_for_proposal_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_contract_position as vbap_2
+		on vbap_2.sales_contract_code = base.sales_document_code
+		and vbap_2.sales_contract_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_order_position as vbap_3
+		on vbap_3.sales_order_code = base.sales_document_code
+		and vbap_3.sales_order_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_proposal_position as vbap_4
+		on vbap_4.sales_proposal_code = base.sales_document_code
+		and vbap_4.sales_proposal_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_request_for_proposal_header as vbak_1
+		on vbak_1.sales_request_for_proposal_code = base.sales_document_code
+	left join dds.sales_contract_header as vbak_2
+		on vbak_2.sales_contract_code = base.sales_document_code
+	left join dds.sales_order_header as vbak_3
+		on vbak_3.sales_order_code = base.sales_document_code
+	left join dds.sales_proposal_header as vbak_4
+		on vbak_4.sales_proposal_code = base.sales_document_code	
+	left join dict_dds.counterparty as countr_1
+		on countr_1.counterparty_code = base.supplier_code
+	left join dict_dds.counterparty as countr_2
+		on countr_2.counterparty_code = base.customer_code
+	left join dict_dds.uom_external_format_texts as t006a
+		on t006a.uom_code = base.material_uom_code
+		and t006a.language_code = 'R'		
+	left join dds.valuation_class_to_free_stock as mbh
+		on mbh.material_code = base.material_code
+		and mbh.valuation_area_code = pas.valuation_area_code 
+		and mbh.valuation_type_code = base.valuation_type_code
+		and mbh.dt_valid_from <= base.dt_posting
+		and mbh.dt_valid_to >= base.dt_posting
+		and mbh.is_period_closed is not null
+	left join dds.valuation_class_to_free_stock as mbn
+		on mbn.material_code = base.material_code
+		and mbn.valuation_area_code = pas.valuation_area_code 
+		and mbn.valuation_type_code = base.valuation_type_code
+		and mbn.dt_valid_from <= base.dt_posting
+		and mbn.dt_valid_to >= base.dt_posting
+		and mbn.is_period_closed is null
+	left join dds.valuation_class_to_project as qbh
+		on qbh.material_code = base.material_code
+		and qbh.valuation_area_code = pas.valuation_area_code
+		and qbh.valuation_type_code = base.valuation_type_code
+		and qbh.wbs_element_code = base.wbs_element_code
+		and qbh.dt_valid_from <= base.dt_posting 
+		and qbh.dt_valid_to >= base.dt_posting
+		and qbh.is_period_closed is not null
+	left join dds.valuation_class_to_project as qbn
+		on qbn.material_code = base.material_code
+		and qbn.valuation_area_code = pas.valuation_area_code
+		and qbn.valuation_type_code = base.valuation_type_code
+		and qbn.wbs_element_code = base.wbs_element_code
+		and qbn.dt_valid_from <= base.dt_posting 
+		and qbn.dt_valid_to >= base.dt_posting
+		and qbn.is_period_closed is null
+	left join dds.valuation_class_to_sales_order as ebh
+		on ebh.material_code = base.material_code
+		and ebh.valuation_area_code = pas.valuation_area_code 
+		and ebh.valuation_type_code = base.valuation_type_code
+		and ebh.sales_document_code = base.sales_document_code 
+		and ebh.sales_document_position_code = base.sales_document_position_line_item_code
+		and ebh.dt_valid_from <= base.dt_posting
+		and ebh.dt_valid_to >= base.dt_posting
+		and ebh.is_period_closed is not null
+	left join dds.valuation_class_to_sales_order as ebn
+		on ebn.material_code = base.material_code
+		and ebn.valuation_area_code = pas.valuation_area_code 
+		and ebn.valuation_type_code = base.valuation_type_code
+		and ebn.sales_document_code = base.sales_document_code 
+		and ebn.sales_document_position_code = base.sales_document_position_line_item_code
+		and	ebn.dt_valid_from <= base.dt_posting
+		and ebn.dt_valid_to >= base.dt_posting
+		and ebn.is_period_closed is null;
+
+
+-----------------------------------------------------
+create temporary table ckmlpp_2 ON COMMIT DROP as (
+		select
+			calculation_code,
+			max(dt_valid_from) as max_ckmlpp
+		from
+			dm.material_price_calculation
+		group by calculation_code
+)
+distributed by (calculation_code);
+
+
+insert into dm.material_stock_balance (
+	dt_posting,
+	material_code,
+	material_uom_code,
+	plant_code,
+	warehouse_code,
+	batch_code,
+	valuation_type_code,
+	stock_type_code,
+	sales_document_code,
+	sales_document_position_line_item_code,
+	wbs_element_code,
+	supplier_code,
+	customer_code,
+	total_stock_quantity,
+	unit_balance_currency_code,
+	material_costing_system_code,
+	price_rule_code,
+	dt_posting_next,
+	plant_name,
+	valuation_assessment_code,
+	warehouse_name,
+	warehouse_type_code,
+	warehouse_type_name,
+	storage_bin_code,
+	material_full_name,
+	material_kubal_code,
+	is_batch_mandatory,
+	material_type_code,
+	material_group_code,
+	sector_code,
+	material_category_code,
+	material_short_name,
+	material_alternative_uom_code,
+	material_alternative_uom_name,
+	material_tnved_eas_code,
+	material_okpd2_code,
+	purchase_responsible_department_code,
+	material_planning_controller_code,
+	head_of_production_code,
+	material_type_name,
+	material_group_name,
+	purchase_responsible_department_name,
+	material_planning_controller_name,
+	holding_currency_code,
+	wbs_element_short_name,
+	unit_balance_code,
+	material_category_name,
+	counterparty_wbs_element_code,
+	valuation_class_code,
+	external_contract_number,
+	supplier_extended_name,
+	customer_extended_name,
+	non_liquid_asset_type_code,
+	uom_to_alternative_uom_coefficient_amount,
+	base_uom_name,
+	valuation_class_name,
+	general_ledger_account_code,
+	general_ledger_account_name,
+	general_ledger_alternative_account_code,
+	general_ledger_alternative_account_name,
+	counterparty_wbs_element_name,
+	non_liquid_asset_type_name,
+	material_search_name,
+	material_group_search_name,
+	warehouse_search_name,
+	purchase_responsible_department_search_name,
+	valuation_class_search_name,
+	material_planning_controller_search_name,
+	plant_search_name,
+	material_trimmed_code,
+	material_truncated_code,
+	dt_last_material_movement_and_calculation,
+	dt_last_material_movement_and_calculation_shifted,
+	dt_last_existed_material_movement_and_calculation
+)
+select
+	base.dt_posting,
+	base.material_code,
+	base.material_uom_code,
+	base.plant_code,
+	base.warehouse_code,
+	base.batch_code,
+	base.valuation_type_code,
+	base.stock_type_code,
+	base.sales_document_code,
+	base.sales_document_position_line_item_code,
+	base.wbs_element_code,
+	base.supplier_code,
+	base.customer_code,
+	base.total_stock_quantity,
+	base.unit_balance_currency_code,
+	base.material_costing_system_code,
+	base.price_rule_code,
+	base.dt_posting_next,
+	base.plant_name,
+	base.valuation_assessment_code,
+	base.warehouse_name,
+	base.warehouse_type_code,
+	base.warehouse_type_name,
+	base.storage_bin_code,
+	base.material_full_name,
+	base.material_kubal_code,
+	base.is_batch_mandatory,
+	base.material_type_code,
+	base.material_group_code,
+	base.sector_code,
+	base.material_category_code,
+	base.material_short_name,
+	base.material_alternative_uom_code,
+	base.material_alternative_uom_name,
+	base.material_tnved_eas_code,
+	base.material_okpd2_code,
+	base.purchase_responsible_department_code,
+	base.material_planning_controller_code,
+	base.head_of_production_code,
+	base.material_type_name,
+	base.material_group_name,
+	base.purchase_responsible_department_name,
+	base.material_planning_controller_name,
+	base.holding_currency_code,
+	base.wbs_element_short_name,
+	base.unit_balance_code,
+	base.material_category_name,
+	wem.wbs_element_number as counterparty_wbs_element_code,
+	base.valuation_class_code,
+	base.external_contract_number,
+	base.supplier_extended_name,
+	base.customer_extended_name,
+	base.non_liquid_asset_type_code,
+	base.uom_to_alternative_uom_coefficient_amount, 
+	base.base_uom_name,
+	vct.valuation_class_name as valuation_class_name,
+	coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code) as general_ledger_account_code,
+	glact_1.general_ledger_account_short_name as general_ledger_account_name,
+	glamd.general_ledger_alternative_account_code as general_ledger_alternative_account_code,
+	glact_2.general_ledger_account_short_name as general_ledger_alternative_account_name,
+	wem.wbs_element_short_name as counterparty_wbs_element_name,
+	case
+		when base.wbs_element_code is not null 
+			and wem.project_type_code = '99'
+		then rait.reason_of_allocation_to_illiquid_name
+		when base.wbs_element_code is null 
+			and base.valuation_type_code like 'U%'
+		then icvt.internal_characteristic_value_name
+		else null 
+	end as non_liquid_asset_type_name,
+	concat(ltrim(base.material_code, '0'), ' ', base.material_short_name) as material_search_name,
+	concat(base.material_group_code, ' ', base.material_group_name) as material_group_search_name,
+	concat(base.warehouse_code, ' ', base.warehouse_name) as warehouse_search_name,
+	concat(base.purchase_responsible_department_code, ' ', base.purchase_responsible_department_name) as purchase_responsible_department_search_name,
+	concat(base.valuation_class_code, ' ', vct.valuation_class_name) as valuation_class_search_name,
+	concat(base.material_planning_controller_code, ' ', base.material_planning_controller_name) as material_planning_controller_search_name,
+	concat(base.plant_code, ' ', base.plant_name) as plant_search_name,
+	case 
+		when length(base.material_code) <= 14
+		then base.material_code
+		else substring(base.material_code, length(base.material_code) - 13, length(base.material_code)) 
+	end as material_trimmed_code,
+	ltrim(base.material_code, '0') as material_truncated_code,
+	coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from) as dt_last_material_movement_and_calculation, -- base_dt,
+	ckmlpp_1.dt_valid_from as dt_last_material_movement_and_calculation_shifted, --ckmlpp_1_dt 
+	ckmlpp_2.max_ckmlpp as dt_last_existed_material_movement_and_calculation --max_ckmlpp
+from base
+	left join dict_dds.valuation_class_texts as vct
+		on vct.valuation_class_code = base.valuation_class_code
+		and vct.language_code = 'R'
+	left join dict_dds.valuation_area as vala
+		on vala.valuation_area_code = base.valuation_assessment_code
+	left join dict_dds.general_ledger_account_standard as glas
+		on glas.valuation_group_code = vala.valuation_group_code
+		and glas.valuation_class_code = base.valuation_class_code
+		and glas.account_modification_code is null
+		and glas.transaction_key_code = 'BSX'
+		and glas.account_chart_code = '1000'
+	left join dict_dds.general_ledger_account_standard_td as glast
+		on glast.valuation_grouping_code = vala.valuation_group_code
+		and glast.valuation_class_code = base.valuation_class_code
+		and glast.dt_valid_from >= base.dt_posting
+		and glast.dt_valid_to <= base.dt_posting
+		and glast.account_modification_code is null
+		and glast.transaction_code = 'BSX'
+		and glast.account_chart_code = '1000'
+	left join dict_dds.unit_balance as unb
+		on unb.unit_balance_code = base.unit_balance_code
+	left join dict_dds.general_ledger_account_chart_texts as glact_1
+		on glact_1.account_chart_code = unb.account_chart_code
+		and glact_1.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
+		and glact_1.language_code = 'R'
+	left join dict_dds.general_ledger_accounts_main_data as glamd
+		on glamd.unit_balance_code = base.unit_balance_code 
+		and glamd.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
+	left join dict_dds.general_ledger_account_chart_texts as glact_2
+		on glact_2.account_chart_code = unb.country_specific_account_chart_code
+		and glact_2.general_ledger_account_code = glamd.general_ledger_alternative_account_code
+		and glact_2.language_code = 'R'
+	left join dict_dds.wbs_element_master_data_detail as wem
+		on wem.wbs_element_code = base.counterparty_wbs_element_code
+	left join dict_dds.reason_of_allocation_to_illiquid_texts as rait
+		on rait.reason_of_allocation_to_illiquid_code = base.non_liquid_asset_type_code
+		and rait.language_code = 'R'
+	left join dict_dds.internal_characteristic_value as icv
+		on icv.internal_characteristic_value_code = base.non_liquid_asset_type_code
+		and icv.internal_characteristic_code in (
+			select
+				internal_characteristic_code
+			from
+				dict_dds.internal_characteristic
+			where
+				internal_characteristic_title_code in ('NLQREASON'))
+	left join dict_dds.internal_characteristic_value_texts as icvt
+		on icvt.internal_subsequent_code = icv.internal_subsequent_code
+		and icvt.language_code = 'R'
+		and icvt.internal_characteristic_code in (
+			select
+				internal_characteristic_code
+			from
+				dict_dds.internal_characteristic
+			where
+				internal_characteristic_title_code in ('NLQREASON'))
+	left join dds.valuation_class_to_free_stock as mbew
+		on mbew.calculation_code = base.material_costing_system_code
+		and mbew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dds.valuation_class_to_sales_order as ebew
+		on ebew.calculation_code = base.material_costing_system_code
+		and ebew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dds.valuation_class_to_project as qbew
+		on qbew.calculation_code = base.material_costing_system_code
+		and qbew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dm.material_price_calculation as ckmlpp_1
+		on ckmlpp_1.calculation_code = base.material_costing_system_code
+		and ckmlpp_1.dt_valid_from - interval '1 month' = coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from)
+		and base.price_rule_code = '2'
+	left join ckmlpp_2
+		on ckmlpp_2.calculation_code =  base.material_costing_system_code
+		and ckmlpp_1.calculation_code is null
+		and base.price_rule_code = '2'
+;

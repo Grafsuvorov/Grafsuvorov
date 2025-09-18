@@ -1,3 +1,135 @@
+[!] stmt#4 EXPLAIN error: syntax error at or near "drop"
+LINE 2: drop table if exists base;
+        ^
+
+[!] stmt#5 EXPLAIN error: cannot EXPLAIN CREATE TABLE without AS clause
+
+[!] stmt#6 EXPLAIN error: relation "base" does not exist
+LINE 1: EXPLAIN (VERBOSE, FORMAT JSON) insert into base(
+                                                   ^
+
+[!] stmt#8 EXPLAIN error: relation "base" does not exist
+LINE 164: from base
+               ^
+
+==============================================================================================================
+GREENPLUM PLAN DOCTOR — СВОДКА
+==============================================================================================================
+— Итоги: ERROR=0 | WARN=4 | INFO=7
+
+— ТОП проблемные узлы:
+   1. [WARN] stmt#3 Крупный узел: Hash Join | bytes≈130.7 MB (rows=6,526,884, width=21)
+   2. [INFO] stmt#7 Redistribute Motion: движение данных | bytes≈8.1 MB (rows=497,383, width=17)
+   3. [INFO] stmt#7 Крупный узел: Aggregate | bytes≈8.1 MB (rows=497,383, width=17)
+   4. [INFO] stmt#7 Крупный узел: Aggregate | bytes≈8.1 MB (rows=497,383, width=17)
+   5. [INFO] stmt#3 Крупный узел: Hash | bytes≈264 B (rows=24, width=11)
+   6. [INFO] stmt#2 Redistribute Motion: движение данных | bytes≈91.1 KB (rows=5,488, width=17)
+   7. [INFO] stmt#2 Крупный узел: Aggregate | bytes≈91.1 KB (rows=5,488, width=17)
+   8. [INFO] stmt#2 Крупный узел: Aggregate | bytes≈91.1 KB (rows=5,488, width=17)
+
+— Детальный разбор (с привязкой к SQL):
+--------------------------------------------------------------------------------------------------------------
+[WARN] stmt#7 — Seq Scan без фильтра на большой таблице
+  Узел:      Seq Scan
+  Контекст:  Seq Scan <- Aggregate <- Result <- Redistribute Motion <- Aggregate <- Result <- Result
+  Детали:    dm.material_price_calculation rows≈86,061,880, width=17
+  SQL место:  C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql
+    строки 437–443:
+  437|                  calculation_code,
+  438|                  max(dt_valid_from) as max_ckmlpp
+  439|          from
+  440|                  dm.material_price_calculation
+  441|          group by calculation_code
+  442| )
+  443| distributed by (calculation_code);
+
+    строки 674–680:
+  674|          on qbew.calculation_code = base.material_costing_system_code
+  675|          and qbew.is_period_closed is null
+  676|          and base.price_rule_code = '2'
+  677|  left join dm.material_price_calculation as ckmlpp_1
+  678|          on ckmlpp_1.calculation_code = base.material_costing_system_code
+  679|          and ckmlpp_1.dt_valid_from - interval '1 month' = coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from)
+  680|          and base.price_rule_code = '2'
+
+  Совет:     Добавьте селективные предикаты/partition pruning или промежуточный TEMP со сужением.
+--------------------------------------------------------------------------------------------------------------
+[WARN] stmt#3 — Seq Scan без фильтра на большой таблице
+  Узел:      Seq Scan
+  Контекст:  Seq Scan <- Hash Join <- Result <- Result
+  Детали:    dict_dds.material_unit_of_measure rows≈6,526,884, width=32
+  SQL место:  C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql
+    строки 26–32:
+   26|                  material_code,
+   27|                  material_alternative_uom_code
+   28|          from
+   29|                  dict_dds.material_unit_of_measure as mum
+   30|                  left join dict_dds.internal_characteristic as ich
+   31|                          on mum.internal_characteristic_code = ich.internal_characteristic_code
+   32|          where
+
+  Совет:     Добавьте селективные предикаты/partition pruning или промежуточный TEMP со сужением.
+--------------------------------------------------------------------------------------------------------------
+[WARN] stmt#3 — Крупный узел: Hash Join
+  Узел:      Hash Join
+  Контекст:  Hash Join <- Result <- Result
+  Детали:    bytes≈130.7 MB (rows=6,526,884, width=21)
+  Совет:     Проверьте распределение и ключи хеширования. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+--------------------------------------------------------------------------------------------------------------
+[WARN] stmt#3 — Hash Join: анализ соединения
+  Узел:      Hash Join
+  Контекст:  Hash Join <- Result <- Result
+  Детали:    keys: нет; left=dict_dds.material_unit_of_measure; right=dict_dds.internal_characteristic; bytes≈130.7 MB
+  Лево/Право: dict_dds.material_unit_of_measure  ⟷  dict_dds.internal_characteristic
+  Распределение:
+    left : random [-], size≈68.4 MB
+    right: random [-], size≈2.1 MB
+    hint : Убедитесь, что обе стороны JOIN распределены по одинаковым ключам соединения или малая сторона REPLICATED.
+  Совет:     Похоже на картезианский JOIN — проверь условия соединения (отсутствуют =/ON). Убедитесь, что обе стороны JOIN распределены по одинаковым ключам соединения или малая сторона REPLICATED. Сделайте `dict_dds.internal_characteristic` DISTRIBUTED REPLICATED (≈2.1 MB).  Сузьте вход `dict_dds.material_unit_of_measure` (TEMP со списком нужных полей). Сузьте вход `dict_dds.internal_characteristic` (TEMP со списком нужных полей).
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#7 — Redistribute Motion: движение данных
+  Узел:      Redistribute Motion
+  Контекст:  Redistribute Motion <- Aggregate <- Result <- Result
+  Детали:    bytes≈8.1 MB (rows=497,383, width=17)
+  Совет:     Синхронизируйте ключи DISTRIBUTED BY с ключами JOIN; допускайте REPLICATED для малой стороны.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#7 — Крупный узел: Aggregate
+  Узел:      Aggregate
+  Контекст:  Aggregate <- Result <- Result
+  Детали:    bytes≈8.1 MB (rows=497,383, width=17)
+  Совет:     Сделайте предагрегацию на сегментах/по распределённому ключу. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#7 — Крупный узел: Aggregate
+  Узел:      Aggregate
+  Контекст:  Aggregate <- Result <- Redistribute Motion <- Aggregate <- Result <- Result
+  Детали:    bytes≈8.1 MB (rows=497,383, width=17)
+  Совет:     Сделайте предагрегацию на сегментах/по распределённому ключу. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#3 — Крупный узел: Hash
+  Узел:      Hash
+  Контекст:  Hash <- Hash Join <- Result <- Result
+  Детали:    bytes≈264 B (rows=24, width=11)
+  Совет:     Проверьте распределение и ключи хеширования. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#2 — Redistribute Motion: движение данных
+  Узел:      Redistribute Motion
+  Контекст:  Redistribute Motion <- Aggregate <- Result <- Result
+  Детали:    bytes≈91.1 KB (rows=5,488, width=17)
+  Совет:     Синхронизируйте ключи DISTRIBUTED BY с ключами JOIN; допускайте REPLICATED для малой стороны.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#2 — Крупный узел: Aggregate
+  Узел:      Aggregate
+  Контекст:  Aggregate <- Result <- Result
+  Детали:    bytes≈91.1 KB (rows=5,488, width=17)
+  Совет:     Сделайте предагрегацию на сегментах/по распределённому ключу. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+--------------------------------------------------------------------------------------------------------------
+[INFO] stmt#2 — Крупный узел: Aggregate
+  Узел:      Aggregate
+  Контекст:  Aggregate <- Result <- Redistribute Motion <- Aggregate <- Result <- Result
+  Детали:    bytes≈91.1 KB (rows=5,488, width=17)
+  Совет:     Сделайте предагрегацию на сегментах/по распределённому ключу. Памяти, вероятно, достаточно; проверьте пики на Hash/Sort/Agg.
+
+
 --временные таблицы для base
 create temporary table tmp_1 ON COMMIT DROP as (
 	select 
@@ -621,8 +753,7 @@ from base
 	left join dict_dds.general_ledger_account_standard_td as glast
 		on glast.valuation_grouping_code = vala.valuation_group_code
 		and glast.valuation_class_code = base.valuation_class_code
-		and glast.dt_valid_from >= base.dt_posting
-		and glast.dt_valid_to <= base.dt_posting
+		and base.dt_posting between glast.dt_valid_from and glast.dt_valid_to
 		and glast.account_modification_code is null
 		and glast.transaction_code = 'BSX'
 		and glast.account_chart_code = '1000'
@@ -684,3 +815,4 @@ from base
 		and ckmlpp_1.calculation_code is null
 		and base.price_rule_code = '2'
 ;
+

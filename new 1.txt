@@ -1,154 +1,93 @@
-[i] File: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+select kalnr, (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, salk3
+from ods.ckmlcr_ral as ckmlcr_2
+where ckmlcr_2.untper = '000' and ckmlcr_2.curtp = '10')
+distributed by (kalnr);
+
+
+create temporary table mlcd ON COMMIT DROP as (
+select kalnr, bdatj, poper, sum(salk3) as salk3, sum(estprd) as estprd, sum(mstprd) as mstprd 
+from ods.mlcd_ral where categ in ('ZU', 'VP', 'PC') and curtp = '10' 
+group by kalnr, bdatj, poper)
+distributed by (kalnr);
+
+
+
+insert into dm.material_price_calculation
+select ckmlpp.kalnr as calculation_code,
+(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date as dt_valid_from,
+case when lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+is null then '22991231'::date
+else lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date) - interval '1 day' 
+end as dt_valid_to,
+ckmlcr.vprsv as price_valuation_type_code, 
+ckmlcr.stprs as standard_price_amount, 
+ckmlcr.peinh as price_unit_code, 
+ckmlcr.pvprs as moving_average_price_amount, 
+case when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0 then 0
+	else trunc(cast(round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+	then trunc(cast(ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case when (ckmlpp.lbkum) <> 0 then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd.price_rule_code as price_rule_code
+from ods.ckmlpp_ral as ckmlpp
+left join ods.ckmlcr_ral as ckmlcr 
+on ckmlcr.kalnr = ckmlpp.kalnr and ckmlcr.bdatj = ckmlpp.bdatj and ckmlcr.poper = ckmlpp.poper and ckmlcr.untper = '000' and ckmlcr.curtp = '10'
+left join ckmlcr_2 on ckmlcr_2.kalnr = ckmlpp.kalnr and ckmlcr_2.dt_posting = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date
+left join mlcd on mlcd.kalnr = ckmlpp.kalnr and mlcd.bdatj = ckmlpp.bdatj and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000';
+
+
+
+i] File: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql
 
 
 ==============================================================================================================
 GREENPLUM PLAN DOCTOR — СВОДКА
 ==============================================================================================================
-— Итоги: ERROR=0 | WARN=67 | INFO=64
+— Итоги: ERROR=2 | WARN=2 | INFO=6
 
 — ТОП сигналы:
-  1. [WARN] stmt#6 Крупный узел: Hash Join bytes≈15414267252.0 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  2. [WARN] stmt#6 Крупный узел: Hash Join bytes≈15334648102.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  3. [WARN] stmt#6 Крупный узел: Hash Join bytes≈15191333634.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  4. [WARN] stmt#6 Крупный узел: Hash Join bytes≈15111714485.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  5. [WARN] stmt#6 Крупный узел: Hash Join bytes≈14968400017.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  6. [WARN] stmt#6 Крупный узел: Hash Join bytes≈14888780868.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  7. [WARN] stmt#6 Крупный узел: Hash Join bytes≈14745466400.1 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  8. [WARN] stmt#6 Крупный узел: Hash Join bytes≈7340885540.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  9. [WARN] stmt#6 Крупный узел: Hash Join bytes≈3487318727.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  10. [WARN] stmt#6 Крупный узел: Hash Join bytes≈1652097342.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  1. [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: убедись, что результат небольшого объёма (<~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
+  2. [WARN] stmt#3 Seq Scan без фильтра: material_unit_of_measure — 6 526 884 × 32 B/row (199.18 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35]
+
+— Ошибки:
+  [!] stmt#6 EXPLAIN error: relation "base" does not exist
+LINE 1: EXPLAIN (VERBOSE, FORMAT JSON) insert into base(
+                                                   ^
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431
+  [!] stmt#8 EXPLAIN error: relation "base" does not exist
+LINE 164: from base
+               ^
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685
 
 — Предупреждения:
-  [WARN] stmt#3 LEFT JOIN → фактически INNER (фильтр по правой таблице `ich` в WHERE). Перенеси предикат в ON или используй INNER. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈15414267252.0 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈15334648102.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈15191333634.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈15111714485.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈14968400017.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈14888780868.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈14745466400.1 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈7340885540.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈3487318727.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈1652097342.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈803158165.8 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈388640971.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈188100239.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈89447137.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈88327493.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈87207849.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈86088204.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈84968560.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈39685169.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈19687078.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈18940649.1 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈9081559.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431] 
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈4393045.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431] 
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈2822774.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431] 
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈1724058.0 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431] 
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈855214.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈834302.5 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈747361.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈743415.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈324520.1 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈111356.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈108376.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]  
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈51746.0 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]   
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈23829.1 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]   
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈22906.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]   
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈21311.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]   
-  [WARN] stmt#6 Крупный узел: Hash Join bytes≈9355.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]    
-  [WARN] stmt#6 Seq Scan без фильтра: material_stock_balance rows≈21,995,274, width=138. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈100.4 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: wbs_element_master_data_detail rows≈1,300,002, width=81. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈129.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: address rows≈9,060,012, width=15. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈683.9 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈463.8 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: material rows≈6,483,972, width=75. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈1181.6 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: material_batch rows≈15,487,459, width=80. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈751.0 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: material_by_plant rows≈12,909,930, width=61. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: sales_contract_position rows≈1,336,307, width=27. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: sales_order_position rows≈1,596,327, width=27. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈140.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: sales_contract_header rows≈4,085,087, width=36. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: sales_order_header rows≈1,292,454, width=37. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈138.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: counterparty rows≈2,543,970, width=57. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈138.3 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Seq Scan без фильтра: counterparty rows≈2,543,970, width=57. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈4549.2 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈221.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈135.8 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#6 Крупный узел: Hash bytes≈131.7 MB. Проверь ключи/предагрегацию/statement_mem. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [WARN] stmt#8 Seq Scan без фильтра: ckmlpp_2 rows≈3,199,040, width=17. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [WARN] stmt#8 Seq Scan без фильтра: material_price_calculation rows≈86,061,880, width=17. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [WARN] stmt#8 Seq Scan без фильтра: wbs_element_master_data_detail rows≈1,300,002, width=81. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [WARN] stmt#8 Seq Scan без фильтра: general_ledger_accounts_main_data rows≈7,935,912, width=25. Сузь вход (предикаты/предфильтр TEMP). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: убедись, что результат небольшого объёма (<~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
+  [WARN] stmt#3 Seq Scan без фильтра: material_unit_of_measure — 6 526 884 × 32 B/row (199.18 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35]
 
 — Инфо:
-  [INFO] stmt#6 Узел: Hash bytes≈0.1 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈1.4 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.6 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈21.4 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash Join bytes≈3.6 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.3 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.5 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈1.6 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.2 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈34.4 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈41.1 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.8 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.4 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈45.6 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.9 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#6 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.1 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash Join bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
-  [INFO] stmt#8 Узел: Hash bytes≈0.0 MB. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#2 TEMP pawad: DISTRIBUTED BY (plant_code, warehouse_code). ON COMMIT DROP — ок для промежуточных витрин.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21
+  [INFO] stmt#2 Узел: Aggregate — 5 488 × 17 B/row (91 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21]
+  [INFO] stmt#2 Узел: Aggregate — 5 488 × 17 B/row (91 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21]
+  [INFO] stmt#3 JOIN: left={ dict_dds.material_unit_of_measure } right={ dict_dds.internal_characteristic } on=(((material_unit_of_measure.internal_characteristic_code)::text = (internal_characteristic.internal_characteristic_code)::text)) — 6 526 884 × 21 B/row (130.71 MB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения.
+  [INFO] stmt#3 Узел: Hash — 24 × 11 B/row (264 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35]
+  [INFO] stmt#5 TEMP base: DISTRIBUTED BY (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, non_liquid_asset_type_code, material_costing_system_code). WITH(appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) — ок для AO/column/zstd, проверь compresslevel.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 38–106

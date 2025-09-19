@@ -1,30 +1,349 @@
 ==============================================================================================================
 GREENPLUM PLAN DOCTOR — СВОДКА
 ==============================================================================================================
-— Итоги: ERROR=2 | WARN=1 | INFO=10
+— Итоги: ERROR=0 | WARN=77 | INFO=66
 — ТОП сигналы:
-  1. [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  1. [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — таблица живёт до конца транзакции.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
-
-— Ошибки:
-  [!] stmt#6 error: relation "tmp_1" does not exist
-LINE 185:  cross join tmp_1
-                      ^
-  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431
-  [!] stmt#8 EXPLAIN error: relation "ckmlpp_2" does not exist
-LINE 160:  left join ckmlpp_2
-                     ^
-  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685
+  2. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to
+_free_stock_1, dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1, dds.valuation_class_to_sales_order } right={ dds.valuation_class_to_sales_order valuation_class_to_sales_order_1 } on=((
+((material_stock_balance.material_code)::text = (valuation_class_to_sales_order_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order_1.valuation_area_code)::text) AND ((
+material_stock_balance.valuation_type_code)::text = (valuation_class_to_sales_order_1.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order_1.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order_1.sales_document_position_code)::text))) — 16 560 138 316 438 × 990 B/row (14910.74 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  3. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to
+_free_stock_1, dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1 } right={ dds.valuation_class_to_sales_order } on=((((material_stock_balance.material_code)::text = (valuation_class_to_s
+ales_order.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_s
+ales_order.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order.sales_document_position_code)::text))) — 16 560 138 316 438 × 985 B/row (14835.44 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  4. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to
+_free_stock_1, dds.valuation_class_to_project } right={ dds.valuation_class_to_project valuation_class_to_project_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project_1.material_code)::text) AND (
+(plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_project_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project_1.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project_1.wbs_element_code)::text))) — 16 560 138 316 438 × 976 B/row (14699.89 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  5. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to
+_free_stock_1 } right={ dds.valuation_class_to_project } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_c
+lass_to_project.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project.wbs_element_code)::text))) — 16 560 138 316 438 × 971 B/row (14624.58 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  6. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock } right={ dds.valuation_class_to_free_stock valuation
+_class_to_free_stock_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_free_stock_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock_1.valuation_type_code)::text))) — 16 560 138 316 438 × 962 B/row (14489.03 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  7. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1 } right={ dds.valuation_class_to_free_stock } on=((((material_stock_balance.material_cod
+e)::text = (valuation_class_to_free_stock.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock.valuation_type_code)::text))) — 16 560 138 316 438 × 957 B/row (14413.72 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  8. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_p
+roposal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1 } right={ dict_dds.uom_external_format_texts uom_external_format_texts_1 } on=(((material_stock_balance.material_uom_code)::text = (uom_external_format_texts_1.uom_code)::text)) — 16 560 138 316 438 × 948 B/row (14278.17 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  9. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds
+.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format
+_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts
+, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, dict_dds.counterparty } right={ dict_dds.counterparty counterparty_1 } on=(((material_stock_balance.customer_code)::text = (counterparty_1.counterparty_code)::text)) — 8 280 069 158 219 × 944 B/row (7108.96 TB). 
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  10. [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dd
+s.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_forma
+t_texts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_text
+s, dds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header } right={ dict_dds.counterparty } on=(((material_stock_balance.supplier_code)::text = (counterparty.counterparty_code)::text)) — 4 140 034 579 110 × 898 B/row (3381.27 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
 
 — Предупреждения:
-  [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — таблица живёт до конца транзакции.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_fr
+ee_stock_1, dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1, dds.valuation_class_to_sales_order } right={ dds.valuation_class_to_sales_order valuation_class_to_sales_order_1 } on=((((m
+aterial_stock_balance.material_code)::text = (valuation_class_to_sales_order_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order_1.valuation_area_code)::text) AND ((mat
+erial_stock_balance.valuation_type_code)::text = (valuation_class_to_sales_order_1.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order_1.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order_1.sales_document_position_code)::text))) — 16 560 138 316 438 × 990 B/row (14910.74 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_fr
+ee_stock_1, dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1 } right={ dds.valuation_class_to_sales_order } on=((((material_stock_balance.material_code)::text = (valuation_class_to_sale
+s_order.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_sale
+s_order.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order.sales_document_position_code)::text))) — 16 560 138 316 438 × 985 B/row (14835.44 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_fr
+ee_stock_1, dds.valuation_class_to_project } right={ dds.valuation_class_to_project valuation_class_to_project_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project_1.material_code)::text) AND ((pl
+ant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_project_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project_1.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project_1.wbs_element_code)::text))) — 16 560 138 316 438 × 976 B/row (14699.89 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_fr
+ee_stock_1 } right={ dds.valuation_class_to_project } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_clas
+s_to_project.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project.wbs_element_code)::text))) — 16 560 138 316 438 × 971 B/row (14624.58 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock } right={ dds.valuation_class_to_free_stock valuation_cl
+ass_to_free_stock_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_free_stock_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock_1.valuation_type_code)::text))) — 16 560 138 316 438 × 962 B/row (14489.03 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1 } right={ dds.valuation_class_to_free_stock } on=((((material_stock_balance.material_code):
+:text = (valuation_class_to_free_stock.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock.valuation_type_code)::text))) — 16 560 138 316 438 × 957 B/row (14413.72 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_prop
+osal_header, dict_dds.counterparty, dict_dds.counterparty counterparty_1 } right={ dict_dds.uom_external_format_texts uom_external_format_texts_1 } on=(((material_stock_balance.material_uom_code)::text = (uom_external_format_texts_1.uom_code)::text)) — 16 560 138 316 438 × 948 B/row (14278.17 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, dict_dds.counterparty } right={ dict_dds.counterparty counterparty_1 } on=(((material_stock_balance.customer_code)::text = (counterparty_1.counterparty_code)::text)) — 8 280 069 158 219 × 944 B/row (7108.96 TB).    
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header } right={ dict_dds.counterparty } on=(((material_stock_balance.supplier_code)::text = (counterparty.counterparty_code)::text)) — 4 140 034 579 110 × 898 B/row (3381.27 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header } right={ dds.sales_proposal_header } on=(((material_stock_balance.sales_document_code)::text = (sales_proposal_header.sales_proposal_code)::text)) — 2 070 017 289 555 × 852 B/row (1604.03 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header } right={ dds.sales_order_header } on=(((material_stock_balance.sales_document_code)::text = (sales_order_header.sales_order_code)::text)) — 1 035 008 644 777 × 829 B/row (780.37 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header } right={ dds.sales_contract_header } on=(((material_stock_balance.sales_document_code)::text = (sales_contract_header.sales_contract_code)::text)) — 517 504 322 389 × 803 B/row (377.95 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position } right={ dds.sales_request_for_proposal_header } on=(((material_stock_balance.sales_document_code)::text = (sales_request_for_proposal_header.sales_request_for_proposal_code)::text)) — 258 752 161 194 × 778 B/row (183.09 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position, dds.sales_order_position } right={ dds.sales_proposal_position } on=((((material_stock_balance.sales_document_code)::text = (sales_proposal_position.sales_proposal_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_proposal_position.sales_proposal_position_code)::text))) — 129 376 080 597 × 741 B/row (87.19 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position, dds.sales_contract_position } right={ dds.sales_order_position } on=((((material_stock_balance.sales_document_code)::text = (sales_order_position.sales_order_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_order_position.sales_order_position_code)::text))) — 129 376 080 597 × 732 B/row (86.13 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, d
+ds.sales_request_for_proposal_position } right={ dds.sales_contract_position } on=((((material_stock_balance.sales_document_code)::text = (sales_contract_position.sales_contract_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_contract_position.sales_contract_position_code)::text))) — 129 376 080 597 × 723 B/row (85.07 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts } 
+right={ dds.sales_request_for_proposal_position } on=((((material_stock_balance.sales_document_code)::text = (sales_request_for_proposal_position.sales_request_for_proposal_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_request_for_proposal_position.sales_request_for_proposal_position_code)::text))) — 129 376 080 597 × 714 B/row (84.01 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area } right={ dict_dds.material_category_main_data_texts } on=(((material.material_category_code)::text = (material_category_main_data_texts.material_category_code)::text)) — 129 376 080 597 × 705 B/row (82.96 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller } right={ dict_dds.valuation_area } on=(((material_stock_balance.plant_code)::text = (valuation_area.valuation_area_code)::text)) — 64 688 040 299 × 660 B/row (38.83 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group } right={ dict_dds.material_planning_controller } on=((((material_stock_balance.plant_code)::text = (material_planning_controller.plant_code)::text) AND ((material_by_plant.material_planning_controller_code)::text = (material_planning_controller.material_planning_controller_code)::text))) — 32 344 020 149 × 655 B/row (19.27 TB).        
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts } right={ dict_dds.purchase_group } on=(((material_by_plant.purchase_group_code)::text = (purchase_group.purchase_group_code)::text)) — 32 344 020 149 × 631 B/row (18.56 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts, dict_dds.material_by_plant, dict_dds.material_type_texts } right={ dict_dds.material_group_texts } on=(((material.material_group_code)::text = (material_group_texts.material_group_code)::text)) — 16 172 010 075 × 606 B/row (8.91 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_texts, dict_dds.material_by_plant } right={ dict_dds.material_type_texts } on=(((material.material_type_code)::text = (material_type_texts.material_type_code)::text)) — 8 085 999 738 × 587 B/row (4.32 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom, dict_dds.uom_external_format_te
+xts } right={ dict_dds.material_by_plant } on=((((material_stock_balance.material_code)::text = (material_by_plant.material_code)::text) AND ((material_stock_balance.plant_code)::text = (material_by_plant.plant_code)::text))) — 5 396 270 858 × 566 B/row (2.78 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2882674.muom } right={ dict_dds.uom_external_format_texts } on=(((muom.material_alternative_uom_code)::text = (uom_external_format_texts.uom_code)::text)) — 3 543 380 483 × 528 B/row (1.70 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch } right={ pg_temp_2882674.muom } on=(((material_stock_balance.material_code)::text = (muom.material_code)::text)) — 1 771 690 242 × 524 B/row (864.61 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap } right={ dds.material_batch } on=((((material_stock_balance.material_code)::text = (material_batch.material_code)::text) AND ((material_stock_balance.batch_code)::text = (material_batch.batch_code)::text))) — 1 738 759 196 × 521 B/row (843.68 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts, dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material } right={ dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap } on=(((material.material_classification_system_code)::text = (map_object_to_class.object_class_code)::text)) — 1 738 759 196 × 469 B/row (759.47 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts } right={ dict_dds.material } on=(((material_stock_balance.material_code)::text = (material.material_code)::text)) — 1 721 876 307 × 471 B/row (755.31 GB).      
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.title_texts, dict_dds.material_by_warehouse } right={ dict_dds.material_texts } on=(((material_stock_balance.material_code)::text = (material_texts.material_code)::text)) — 860 938 153 × 414 B/row (331.95 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address, dict_dds.ti
+tle_texts } right={ dict_dds.material_by_warehouse } on=((((material_stock_balance.material_code)::text = (material_by_warehouse.material_code)::text) AND ((material_stock_balance.plant_code)::text = (material_by_warehouse.plant_code)::text) AND ((material_stock_balance.warehouse_code)::text = (material_by_warehouse.warehouse_code)::text))) — 387 311 297 × 321 B/row (115.79 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad, dict_dds.address } right={ dict_dds.title_texts } on=(((address.title_code)::text = (title_texts.title_code)::text)) — 387 311 297 × 291 B/row (104.97 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2882674.pawad } right={ dict_dds.address } on=((pawad.address_code = (address.address_code)::text)) — 194 273 628 × 277 B/row (50.12 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse } right={ pg_temp_2882674.pawad } on=((((material_stock_balance.plant_code)::text = (pawad.plant_code)::text) AND ((material_stock_balance.warehouse_code)::text = (pawad.warehouse_code)::text))) — 87 981 096 × 284 B/row (23.27 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary } right={ dict_dds.warehouse } on=((((material_stock_balance.warehouse_code)::text = (warehouse.warehouse_code)::text) AND ((material_stock_balance.plant_code)::text = (warehouse.plant_code)::text))) — 87 981 096 × 273 B/row (22.37 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1, dict_dds.wbs_element_master_data_detail } right={ dict_dds.plant_and_subsidiary } on=(((material_stock_balance.plant_code)::text = (plant_and_subsidiary.plant_code)::text)) — 87 981 096 × 254 B/row (20.81 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 JOIN: left={ dm_calc.material_stock_balance, pg_temp_2882674.tmp_1 } right={ dict_dds.wbs_element_master_data_detail } on=(((material_stock_balance.wbs_element_code)::text = (wbs_element_master_data_detail.wbs_element_code)::text)) — 43 990 548 × 223 B/row (9.14 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: material_stock_balance — 21 995 274 × 138 B/row (2.83 GB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: wbs_element_master_data_detail — 1 300 002 × 81 B/row (100.42 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: address — 9 061 578 × 15 B/row (129.63 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Узел: Hash — 6 460 940 × 111 B/row (683.94 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: material — 6 483 972 × 75 B/row (463.77 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Узел: Hash — 15 487 459 × 80 B/row (1.15 GB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: material_batch — 15 487 459 × 80 B/row (1.15 GB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Узел: Hash — 12 909 930 × 61 B/row (751.02 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: material_by_plant — 12 909 930 × 61 B/row (751.02 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: sales_contract_position — 1 336 307 × 27 B/row (34.41 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: sales_order_position — 1 596 327 × 27 B/row (41.10 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: sales_contract_header — 4 085 087 × 36 B/row (140.25 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: sales_order_header — 1 292 454 × 37 B/row (45.61 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: counterparty — 2 544 312 × 57 B/row (138.31 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Seq Scan без фильтра: counterparty — 2 544 312 × 57 B/row (138.31 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#6 Узел: Hash — 91 733 311 × 52 B/row (4.44 GB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic, dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1, dds.valuation_class_to_fr
+ee_stock, dds.valuation_class_to_sales_order, dds.valuation_class_to_project, dm.material_price_calculation } right={ pg_temp_2882674.ckmlpp_2 } on=(((base.material_costing_system_code)::text = (ckmlpp_2.calculation_code)::text)) — 188 435 845 484 × 953 B/row (163.33 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic, dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1, dds.valuation_class_to_fr
+ee_stock, dds.valuation_class_to_sales_order, dds.valuation_class_to_project } right={ dm.material_price_calculation } on=((((base.material_costing_system_code)::text = (material_price_calculation.calculation_code)::text) AND ((
+COALESCE(valuation_class_to_free_stock.dt_valid_from, valuation_class_to_sales_order.dt_valid_from, valuation_class_to_project.dt_valid_from))::timestamp without time zone = (material_price_calculation.dt_valid_from - '1 mon'::interval)))) — 94 217 922 742 × 962 B/row (82.43 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic, dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1, dds.valuation_class_to_fr
+ee_stock, dds.valuation_class_to_sales_order } right={ dds.valuation_class_to_project } on=(((base.material_costing_system_code)::text = (valuation_class_to_project.calculation_code)::text)) — 75 611 136 483 × 945 B/row (64.99 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic, dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1, dds.valuation_class_to_free_stock } right={ dds.valuation_class_to_sales_order } on=(((base.material_costing_system_code)::text = (valuation_class_to_sales_order.calculation_code)::text)) — 37 805 568 241 × 941 B/row (32.36 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic, dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1 } right={ dds.valuation_class_to_free_stock } on=(((base.material_costing_system_code)::text = (valuation_class_to_free_stock.calculation_code)::text)) — 18 902 784 121 × 937 B/row (16.11 TB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts, dict_dds.internal_characteristic_value, dict_dds.internal_characteristic } right={ dict_dds.internal_characteristic_value_texts, dict_dds.internal_characteristic internal_characteristic_1 } on=(((internal_characteristic_value.internal_subsequent_code)::text = (internal_characteristic_value_texts.internal_subsequent_code)::text)) — 839 362 856 × 933 B/row (729.34 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail, dict_dds.reason_of_allocat
+ion_to_illiquid_texts } right={ dict_dds.internal_characteristic_value, dict_dds.internal_characteristic } on=(((base.non_liquid_asset_type_code)::text = (internal_characteristic_value.internal_characteristic_value_code)::text)) — 833 979 657 × 910 B/row (706.80 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1, dict_dds.wbs_element_master_data_detail } right={ dict_dds.reason_of_allocation_to_illiquid_texts } on=(((base.non_liquid_asset_type_code)::text = (reason_of_allocation_to_illiquid_texts.reason_of_allocation_to_illiquid_code)::text)) — 833 979 657 × 905 B/row (702.92 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data, dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1 } right={ dict_dds.wbs_element_master_data_detail } on=(((base.counterparty_wbs_element_code)::text = (wbs_element_master_data_detail.wbs_element_code)::text)) — 429 869 529 × 871 B/row (348.70 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts, dict_dds.general_ledger_accounts_main_data } right={ dict_dds.general_ledger_account_chart_texts general_ledger_account_chart_texts_1 } on=((((unit_balance.country_specific_account_chart_code):
+:text = (general_ledger_account_chart_texts_1.account_chart_code)::text) AND ((general_ledger_accounts_main_data.general_ledger_alternative_account_code)::text = (general_ledger_account_chart_texts_1.general_ledger_account_code)::text))) — 214 934 764 × 808 B/row (161.74 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance, dict_dds.g
+eneral_ledger_account_chart_texts } right={ dict_dds.general_ledger_accounts_main_data } on=((((base.unit_balance_code)::text = (general_ledger_accounts_main_data.unit_balance_code)::text) AND ((COALESCE(general_ledger_account_standard.general_ledger_account_code, general_ledger_account_standard_td.general_ledger_account_code))::text = (general_ledger_accounts_main_data.general_ledger_account_code)::text))) — 176 121 684 × 784 B/row (128.60 GB).       
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td, dict_dds.unit_balance } right={ d
+ict_dds.general_ledger_account_chart_texts } on=((((unit_balance.account_chart_code)::text = (general_ledger_account_chart_texts.account_chart_code)::text) AND ((COALESCE(general_ledger_account_standard.general_ledger_account_code, general_ledger_account_standard_td.general_ledger_account_code))::text = (general_ledger_account_chart_texts.general_ledger_account_code)::text))) — 176 121 684 × 774 B/row (126.96 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard, dict_dds.general_ledger_account_standard_td } right={ dict_dds.unit_balance } on=(((base.unit_balance_code)::text = (unit_balance.unit_balance_code)::text)) — 176 121 684 × 750 B/row (123.02 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area, dict_dds.general_ledger_account_standard } right={ dict_dds.general_ledger_account_standard_td } on=((((valuation_area.v
+aluation_group_code)::text = (general_ledger_account_standard_td.valuation_grouping_code)::text) AND ((base.valuation_class_code)::text = (general_ledger_account_standard_td.valuation_class_code)::text))) — 87 981 149 × 742 B/row (60.80 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts, dict_dds.valuation_area } right={ dict_dds.general_ledger_account_standard } on=((((valuation_area.valuation_group_code)::text = (general_ledger_account_standard.valuation_group_code)::text) AND ((base.valuation_class_code)::text = (general_ledger_account_standard.valuation_class_code)::text))) — 87 981 149 × 736 B/row (60.31 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base, dict_dds.valuation_class_texts } right={ dict_dds.valuation_area } on=(((base.valuation_assessment_code)::text = (valuation_area.valuation_area_code)::text)) — 87 981 149 × 726 B/row (59.49 GB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 JOIN: left={ pg_temp_2882674.base } right={ dict_dds.valuation_class_texts } on=(((base.valuation_class_code)::text = (valuation_class_texts.valuation_class_code)::text)) — 43 990 575 × 721 B/row (29.54 GB).     
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Seq Scan без фильтра: base — 21 995 274 × 698 B/row (14.30 GB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Seq Scan без фильтра: general_ledger_accounts_main_data — 7 935 912 × 25 B/row (189.21 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Seq Scan без фильтра: wbs_element_master_data_detail — 1 300 002 × 81 B/row (100.42 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Узел: Hash — 86 079 344 × 17 B/row (1.36 GB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Seq Scan без фильтра: material_price_calculation — 86 079 344 × 17 B/row (1.36 GB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [WARN] stmt#8 Seq Scan без фильтра: ckmlpp_2 — 3 199 040 × 17 B/row (51.86 MB).
+  Совет: добавь селективные предикаты/предфильтр во TEMP; протяни фильтры выше по конвейеру. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
 
 — Инфо:
-  [INFO] stmt#1 TEMP tmp_1: DISTRIBUTED BY (currency_code). ON COMMIT DROP — ок для промежуточных витрин.
+  [INFO] stmt#1 TEMP tmp_1: DISTRIBUTED BY (currency_code). ON COMMIT DROP — таблица живёт до конца транзакции.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 1–10
   [INFO] stmt#1 CREATE TEMP выполнен.
-  [INFO] stmt#2 TEMP pawad: DISTRIBUTED BY (plant_code, warehouse_code). ON COMMIT DROP — ок для промежуточных витрин.
+  [INFO] stmt#2 TEMP pawad: DISTRIBUTED BY (plant_code, warehouse_code). ON COMMIT DROP — таблица живёт до конца транзакции.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21
   [INFO] stmt#2 CREATE TEMP выполнен.
   [INFO] stmt#3 CREATE TEMP выполнен.
@@ -32,695 +351,117 @@ LINE 160:  left join ckmlpp_2
   [INFO] stmt#5 TEMP base: DISTRIBUTED BY (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, non_liquid_asset_type_code, material_costing_system_code). WITH(appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) — ок для AO/column/zstd, проверь compresslevel.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 38–106
   [INFO] stmt#5 CREATE TEMP выполнен.
-  [INFO] stmt#7 TEMP ckmlpp_2: DISTRIBUTED BY (calculation_code). ON COMMIT DROP — ок для промежуточных витрин.
+  [INFO] stmt#6 INSERT INTO TEMP выполнен. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 300 002 × 81 B/row (100.42 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 3 666 × 36 B/row (129 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 54 258 × 28 B/row (1.45 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 32 454 × 20 B/row (634 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 9 061 578 × 15 B/row (129.63 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 294 × 18 B/row (5 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 6 × 54 B/row (324 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 6 483 972 × 75 B/row (463.77 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 322 498 × 17 B/row (21.44 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 JOIN: left={ dict_dds.map_object_to_class } right={ dict_dds.settings_and_parameters_sap } on=(((map_object_to_class.class_type_code)::text = (settings_and_parameters_sap.range_low_value)::text)) — 220 416 × 17 B/row (3.57 MB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 6 × 8 B/row (48 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 870 × 22 B/row (19 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 038 × 7 B/row (7 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 480 × 25 B/row (12 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 618 × 24 B/row (14 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 10 404 × 30 B/row (305 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 14 310 × 34 B/row (475 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 3 378 × 10 B/row (33 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 27 852 × 61 B/row (1.62 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 8 676 × 27 B/row (229 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 336 307 × 27 B/row (34.41 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 596 327 × 27 B/row (41.10 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 31 072 × 27 B/row (819 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 9 540 × 48 B/row (447 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 4 085 087 × 36 B/row (140.25 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 292 454 × 37 B/row (45.61 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 26 891 × 34 B/row (893 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 2 544 312 × 57 B/row (138.31 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 2 544 312 × 57 B/row (138.31 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 1 038 × 7 B/row (7 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 4 470 239 × 52 B/row (221.68 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 6 × 61 B/row (366 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 2 334 150 × 61 B/row (135.79 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 6 × 67 B/row (402 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#6 Узел: Hash — 2 061 828 × 67 B/row (131.74 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] stmt#7 TEMP ckmlpp_2: DISTRIBUTED BY (calculation_code). ON COMMIT DROP — таблица живёт до конца транзакции.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 431–443
   [INFO] stmt#7 CREATE TEMP выполнен.
-
-
-
---временные таблицы для base
-create temporary table tmp_1 ON COMMIT DROP as (
-	select 
-		currency_code 
-	from 
-		dict_dds.mandant 
-	where 
-		mandant_code = '400'
-)
-distributed by (currency_code);
-
-create temporary table pawad ON COMMIT DROP as (
-	select 
-		paw.plant_code as plant_code,
-		paw.warehouse_code as warehouse_code,
-		max(paw.address_code) as address_code 
-	from 
-		dict_dds.plant_and_warehouse_address_definition as paw
-	group by paw.plant_code, paw.warehouse_code
-)
-distributed by (plant_code, warehouse_code);
-
-
-create temporary table muom ON COMMIT DROP as (
-		select
-			material_code,
-			material_alternative_uom_code
-		from
-			dict_dds.material_unit_of_measure as mum
-			left join dict_dds.internal_characteristic as ich
-				on mum.internal_characteristic_code = ich.internal_characteristic_code
-		where
-			ich.internal_characteristic_title_code = 'COEF_TRANS'
-)
-distributed replicated;
-
---формирование base
-drop table if exists base;
-
-create temporary table base (
-	dt_posting date null, -- Дата выбора запасов
-	material_code varchar(18) NULL, -- Материал
-	material_uom_code varchar(90) NULL,
-	plant_code varchar(4) null, -- Завод
-	warehouse_code varchar(4) NULL, -- Склад
-	batch_code varchar(10) NULL, -- Партия
-	valuation_type_code varchar(10) NULL, -- Вид оценки
-	stock_type_code varchar(1) NULL, -- Особый запас
-	sales_document_code varchar(10) NULL, -- Заказ клиента MAT_KDAUF
-	sales_document_position_line_item_code varchar(6) NULL, -- ПозЗаказКлиента MAT_KDPOS
-	wbs_element_code varchar(24) NULL, -- СПП-элемент
-	supplier_code varchar(30) NULL,
-	customer_code varchar(30) NULL,
-	-------------------------------------------------------------------
-	total_stock_quantity numeric(16, 3) NULL,
-	---------------------------------------------------------------------
-	unit_balance_currency_code varchar(15) NULL, -- Валюта
-	material_costing_system_code varchar(12) NULL, -- Номер калькуляции
-	price_rule_code varchar(1) NULL,
-	dt_posting_next date NULL,
-	plant_name varchar(30) NULL,
-	valuation_assessment_code varchar(4) NULL,
-	warehouse_name varchar(16) NULL,
-	warehouse_type_code varchar(4) NULL,
-	warehouse_type_name varchar(30) NULL,
-	storage_bin_code varchar(10) NULL,
-	material_full_name varchar(260) NULL,
-	material_kubal_code varchar(30) NULL,
-	is_batch_mandatory varchar(1) NULL,
-	material_type_code varchar(4) NULL,
-	material_group_code varchar(9) NULL,
-	sector_code varchar(2) NULL,
-	material_category_code varchar(30) NULL,
-	material_short_name varchar(60) NULL,
-	material_alternative_uom_code varchar(3) NULL,
-	material_alternative_uom_name varchar(3) NULL,
-	material_tnved_eas_code varchar(17) NULL,
-	material_okpd2_code varchar(16) NULL,
-	purchase_responsible_department_code varchar(3) NULL,
-	material_planning_controller_code varchar(4) NULL,
-	head_of_production_code varchar(3) NULL,
-	material_type_name varchar(25) NULL,
-	material_group_name varchar(20) NULL,
-	purchase_responsible_department_name varchar(18) NULL,
-	material_planning_controller_name varchar(18) NULL,
-	holding_currency_code varchar(3) NULL,
-	wbs_element_short_name varchar(40) NULL,
-	unit_balance_code varchar(4) NULL,
-	material_category_name varchar(240) NULL,
-	counterparty_wbs_element_code varchar(72) NULL,
-	valuation_class_code varchar(12) NULL,
-	external_contract_number varchar(35) NULL,
-	supplier_extended_name varchar(100) NULL,
-	customer_extended_name varchar(100) NULL,
-	non_liquid_asset_type_code varchar(1) NULL,
-	uom_to_alternative_uom_coefficient_amount float8 NULL,
-	base_uom_name varchar(3) NULL
-)
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-distributed by (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, 
-	non_liquid_asset_type_code, material_costing_system_code);
-
-
-
-insert into base(
-	dt_posting,
-	material_code,
-	material_uom_code,
-	plant_code,
-	warehouse_code,
-	batch_code,
-	valuation_type_code,
-	stock_type_code,
-	sales_document_code,
-	sales_document_position_line_item_code,
-	wbs_element_code,
-	supplier_code,
-	customer_code,
-	total_stock_quantity,
-	unit_balance_currency_code,
-	material_costing_system_code,
-	price_rule_code,
-	dt_posting_next,
-	plant_name,
-	valuation_assessment_code,
-	warehouse_name,
-	warehouse_type_code,
-	warehouse_type_name,
-	storage_bin_code,
-	material_full_name,
-	material_kubal_code,
-	is_batch_mandatory,
-	material_type_code,
-	material_group_code,
-	sector_code,
-	material_category_code,
-	material_short_name,
-	material_alternative_uom_code,
-	material_alternative_uom_name,
-	material_tnved_eas_code,
-	material_okpd2_code,
-	purchase_responsible_department_code,
-	material_planning_controller_code,
-	head_of_production_code,
-	material_type_name,
-	material_group_name,
-	purchase_responsible_department_name,
-	material_planning_controller_name,
-	holding_currency_code,
-	wbs_element_short_name,
-	unit_balance_code,
-	material_category_name,
-	counterparty_wbs_element_code,
-	valuation_class_code,
-	external_contract_number,
-	supplier_extended_name,
-	customer_extended_name,
-	non_liquid_asset_type_code,
-	uom_to_alternative_uom_coefficient_amount,
-	base_uom_name
-)
-select 
-	base.dt_posting,
-	base.material_code,
-	base.material_uom_code,
-	base.plant_code,
-	base.warehouse_code,
-	base.batch_code,
-	base.valuation_type_code,
-	base.stock_type_code,
-	base.sales_document_code,
-	base.sales_document_position_line_item_code,
-	wbs_sprav.wbs_element_number as wbs_element_code,
-	base.supplier_code,
-	base.customer_code,
-	-------------------------------------------------------------------
-	base.total_stock_quantity as total_stock_quantity,
-	---------------------------------------------------------------------
-	base.unit_balance_currency_code,
-	base.material_costing_system_code,
-	base.price_rule_code,
-	base.dt_posting_next,
-	pas.plant_short_name as plant_name,
-	pas.valuation_area_code as valuation_assessment_code,
-	ware.warehouse_name as warehouse_name,
-	addr.title_code as warehouse_type_code,
-	titt.title_name as warehouse_type_name,
-	mabw.storage_bin_code as storage_bin_code,
-	matt.material_full_name as material_full_name,
-	mara.material_kubal_code as material_kubal_code,
-	mara.is_batch_mandatory as is_batch_mandatory,
-	mara.material_type_code as material_type_code,
-	mara.material_group_code as material_group_code,
-	mara.sector_code as sector_code,
-	mara.material_category_code as material_category_code,
-	case 
-		when mara.is_batch_mandatory is not null 
-			and ksk.object_class_code is not null 
-			and mat_bat.material_detailed_name is not null 
-		then mat_bat.material_detailed_name 
-		else matt.material_name 
-	end as material_short_name,
-	muom.material_alternative_uom_code as material_alternative_uom_code, -- Альтернативная ЕИ
-	ueft.uom_external_format_code as material_alternative_uom_name,
-	mabp.tnved_code as material_tnved_eas_code,	
-	mabp.excise_tax_foreign_trade_control_code as material_okpd2_code,
-	mabp.purchase_group_code as purchase_responsible_department_code,
-	mabp.material_planning_controller_code as material_planning_controller_code,
-	mabp.head_of_production_code as head_of_production_code,
-	mtt.material_type_name as material_type_name,
-	mgt.material_group_short_name as material_group_name,
-	pgn.purchase_group_name as purchase_responsible_department_name,
-	mpc.material_planning_controller_name as material_planning_controller_name,
-	tmp_1.currency_code as holding_currency_code,
-	wbs_sprav.wbs_element_short_name as wbs_element_short_name,
-	vaar.unit_balance_code as unit_balance_code,
-	mcmdt.material_category_name as material_category_name,
-	case 
-		when base.wbs_element_code is null 
-			and base.sales_document_code is not null
-			and base.sales_document_position_line_item_code is not null 
-			and coalesce(
-				vbap_1.sales_request_for_proposal_position_wbs_element_code, 
-				vbap_2.sales_contract_position_wbs_element_code, 
-				vbap_3.sales_order_position_wbs_element_code,
-				vbap_4.sales_proposal_position_wbs_element_code) is not null
-		then coalesce(
-				vbap_1.sales_request_for_proposal_position_wbs_element_code,
-				vbap_2.sales_contract_position_wbs_element_code,
-				vbap_3.sales_order_position_wbs_element_code,
-				vbap_4.sales_proposal_position_wbs_element_code)
-		else coalesce(
-				vbak_1.sales_request_for_proposal_wbs_element_code,
-				vbak_2.sales_contract_wbs_element_code,
-				vbak_3.sales_order_wbs_element_code,
-				vbak_4.sales_proposal_wbs_element_code) 
-	end as counterparty_wbs_element_code,
-	case
-		when base.sales_document_code is not null
-			and ebh.valuation_class_code is not null
-			and ebh.dt_valid_from = date_trunc('month', base.dt_posting)
-		then ebh.valuation_class_code
-		when base.sales_document_code is not null
-			and ebn.valuation_class_code is not null 
-		then ebn.valuation_class_code
-		when base.sales_document_code is not null
-			and ebn.valuation_class_code is null
-		then ebh.valuation_class_code
-		when base.wbs_element_code is not null
-			and qbh.valuation_class_code is not null
-			and qbh.dt_valid_from = date_trunc('month', base.dt_posting)
-		then qbh.valuation_class_code
-		when base.wbs_element_code is not null
-			and qbn.valuation_class_code is not null
-		then qbn.valuation_class_code
-		when base.wbs_element_code is not null
-			and qbn.valuation_class_code is null
-		then qbh.valuation_class_code	
-		when mbh.valuation_class_code is not null
-			and mbh.dt_valid_from = date_trunc('month', base.dt_posting)
-		then mbh.valuation_class_code
-		when mbn.valuation_class_code is not null
-		then mbn.valuation_class_code
-		when mbn.valuation_class_code is null
-		then mbh.valuation_class_code
-	else null
-	end as valuation_class_code, -- Класс оценки
-	coalesce(
-		vbak_1.sales_order_external_number,
-		vbak_2.sales_order_external_number,
-		vbak_3.sales_order_external_number,
-		vbak_4.sales_order_external_number
-	) as external_contract_number,
-	countr_1.counterparty_full_name as supplier_extended_name,
-	countr_2.counterparty_full_name as customer_extended_name,
-	case
-		when base.wbs_element_code is not null
-			and wbs_sprav.project_type_code = '99'
-		then substring(wbs_sprav.wbs_element_code, 6, 1)
-		when base.wbs_element_code is null
-			and base.valuation_type_code like 'U%'
-		then mat_bat.nonliquid_asset_type_code--aup3.ATWRT
-		else null
-	end as non_liquid_asset_type_code,
-	mat_bat.uom_to_alternative_uom_coefficient_amount as uom_to_alternative_uom_coefficient_amount,
-	t006a.uom_external_format_code as base_uom_name
-from 
-	dm_calc.material_stock_balance as base 
-	cross join tmp_1
-	left join dict_dds.wbs_element_master_data_detail as wbs_sprav 
-		on wbs_sprav.wbs_element_code = base.wbs_element_code
-	left join dict_dds.plant_and_subsidiary as pas
-		on pas.plant_code = base.plant_code
-	left join dict_dds.warehouse as ware
-		on ware.warehouse_code = base.warehouse_code
-		and ware.plant_code = base.plant_code
-	left join pawad
-		on pawad.plant_code = base.plant_code
-		and pawad.warehouse_code = base.warehouse_code
-	left join dict_dds.address as addr
-		on addr.address_code = pawad.address_code
-	left join dict_dds.title_texts as titt
-		on titt.title_code = addr.title_code
-		and titt.language_code = 'R'
-	left join dict_dds.material_by_warehouse as mabw
-		on mabw.material_code = base.material_code
-		and mabw.plant_code = base.plant_code
-		and mabw.warehouse_code = base.warehouse_code
-	left join dict_dds.material_texts as matt
-		on matt.material_code = base.material_code
-		and matt.language_code = 'R'
-	left join dict_dds.material as mara
-		on mara.material_code = base.material_code			
-	left join dict_dds.map_object_to_class as ksk
-		on ksk.object_class_code = mara.material_classification_system_code
-		and ksk.object_or_class_code = 'O'
-		and ksk.class_type_code = (
-			select
-				range_low_value 
-			from
-				dict_dds.settings_and_parameters_sap
-			where 
-				abap_program_code = '/RUSAL/CO360M'
-				and parameter_code = 'KLART')
-	left join dds.material_batch as mat_bat
-		on mat_bat.material_code = base.material_code
-		and mat_bat.batch_code = base.batch_code
-	left join muom
-		on muom.material_code = base.material_code
-	left join dict_dds.uom_external_format_texts as ueft
-		on ueft.uom_code = muom.material_alternative_uom_code
-		and ueft.language_code = 'R'
-	left join dict_dds.material_by_plant as mabp
-		on mabp.material_code = base.material_code
-		and mabp.plant_code = base.plant_code
-	left join dict_dds.material_type_texts as mtt	
-		on mtt.material_type_code = mara.material_type_code
-		and mtt.language_code = 'R'
-	left join dict_dds.material_group_texts as mgt	
-		on mgt.material_group_code = mara.material_group_code
-		and mgt.language_code = 'R'
-	left join dict_dds.purchase_group as pgn	
-		on pgn.purchase_group_code = mabp.purchase_group_code 
-	left join dict_dds.material_planning_controller as mpc	
-		on mpc.plant_code = base.plant_code
-		and mpc.material_planning_controller_code = mabp.material_planning_controller_code
-	left join dict_dds.valuation_area as vaar	
-		on vaar.valuation_area_code = base.plant_code
-	left join dict_dds.material_category_main_data_texts as mcmdt
-		on mcmdt.material_category_code = mara.material_category_code
-		and mcmdt.language_code = 'R'
-	left join dds.sales_request_for_proposal_position as vbap_1
-		on vbap_1.sales_request_for_proposal_code = base.sales_document_code 
-		and vbap_1.sales_request_for_proposal_position_code = base.sales_document_position_line_item_code
-	left join dds.sales_contract_position as vbap_2
-		on vbap_2.sales_contract_code = base.sales_document_code
-		and vbap_2.sales_contract_position_code = base.sales_document_position_line_item_code
-	left join dds.sales_order_position as vbap_3
-		on vbap_3.sales_order_code = base.sales_document_code
-		and vbap_3.sales_order_position_code = base.sales_document_position_line_item_code
-	left join dds.sales_proposal_position as vbap_4
-		on vbap_4.sales_proposal_code = base.sales_document_code
-		and vbap_4.sales_proposal_position_code = base.sales_document_position_line_item_code
-	left join dds.sales_request_for_proposal_header as vbak_1
-		on vbak_1.sales_request_for_proposal_code = base.sales_document_code
-	left join dds.sales_contract_header as vbak_2
-		on vbak_2.sales_contract_code = base.sales_document_code
-	left join dds.sales_order_header as vbak_3
-		on vbak_3.sales_order_code = base.sales_document_code
-	left join dds.sales_proposal_header as vbak_4
-		on vbak_4.sales_proposal_code = base.sales_document_code	
-	left join dict_dds.counterparty as countr_1
-		on countr_1.counterparty_code = base.supplier_code
-	left join dict_dds.counterparty as countr_2
-		on countr_2.counterparty_code = base.customer_code
-	left join dict_dds.uom_external_format_texts as t006a
-		on t006a.uom_code = base.material_uom_code
-		and t006a.language_code = 'R'		
-	left join dds.valuation_class_to_free_stock as mbh
-		on mbh.material_code = base.material_code
-		and mbh.valuation_area_code = pas.valuation_area_code 
-		and mbh.valuation_type_code = base.valuation_type_code
-		and mbh.dt_valid_from <= base.dt_posting
-		and mbh.dt_valid_to >= base.dt_posting
-		and mbh.is_period_closed is not null
-	left join dds.valuation_class_to_free_stock as mbn
-		on mbn.material_code = base.material_code
-		and mbn.valuation_area_code = pas.valuation_area_code 
-		and mbn.valuation_type_code = base.valuation_type_code
-		and mbn.dt_valid_from <= base.dt_posting
-		and mbn.dt_valid_to >= base.dt_posting
-		and mbn.is_period_closed is null
-	left join dds.valuation_class_to_project as qbh
-		on qbh.material_code = base.material_code
-		and qbh.valuation_area_code = pas.valuation_area_code
-		and qbh.valuation_type_code = base.valuation_type_code
-		and qbh.wbs_element_code = base.wbs_element_code
-		and qbh.dt_valid_from <= base.dt_posting 
-		and qbh.dt_valid_to >= base.dt_posting
-		and qbh.is_period_closed is not null
-	left join dds.valuation_class_to_project as qbn
-		on qbn.material_code = base.material_code
-		and qbn.valuation_area_code = pas.valuation_area_code
-		and qbn.valuation_type_code = base.valuation_type_code
-		and qbn.wbs_element_code = base.wbs_element_code
-		and qbn.dt_valid_from <= base.dt_posting 
-		and qbn.dt_valid_to >= base.dt_posting
-		and qbn.is_period_closed is null
-	left join dds.valuation_class_to_sales_order as ebh
-		on ebh.material_code = base.material_code
-		and ebh.valuation_area_code = pas.valuation_area_code 
-		and ebh.valuation_type_code = base.valuation_type_code
-		and ebh.sales_document_code = base.sales_document_code 
-		and ebh.sales_document_position_code = base.sales_document_position_line_item_code
-		and ebh.dt_valid_from <= base.dt_posting
-		and ebh.dt_valid_to >= base.dt_posting
-		and ebh.is_period_closed is not null
-	left join dds.valuation_class_to_sales_order as ebn
-		on ebn.material_code = base.material_code
-		and ebn.valuation_area_code = pas.valuation_area_code 
-		and ebn.valuation_type_code = base.valuation_type_code
-		and ebn.sales_document_code = base.sales_document_code 
-		and ebn.sales_document_position_code = base.sales_document_position_line_item_code
-		and	ebn.dt_valid_from <= base.dt_posting
-		and ebn.dt_valid_to >= base.dt_posting
-		and ebn.is_period_closed is null;
-
-
------------------------------------------------------
-create temporary table ckmlpp_2 ON COMMIT DROP as (
-		select
-			calculation_code,
-			max(dt_valid_from) as max_ckmlpp
-		from
-			dm.material_price_calculation
-		group by calculation_code
-)
-distributed by (calculation_code);
-
-
-insert into dm.material_stock_balance (
-	dt_posting,
-	material_code,
-	material_uom_code,
-	plant_code,
-	warehouse_code,
-	batch_code,
-	valuation_type_code,
-	stock_type_code,
-	sales_document_code,
-	sales_document_position_line_item_code,
-	wbs_element_code,
-	supplier_code,
-	customer_code,
-	total_stock_quantity,
-	unit_balance_currency_code,
-	material_costing_system_code,
-	price_rule_code,
-	dt_posting_next,
-	plant_name,
-	valuation_assessment_code,
-	warehouse_name,
-	warehouse_type_code,
-	warehouse_type_name,
-	storage_bin_code,
-	material_full_name,
-	material_kubal_code,
-	is_batch_mandatory,
-	material_type_code,
-	material_group_code,
-	sector_code,
-	material_category_code,
-	material_short_name,
-	material_alternative_uom_code,
-	material_alternative_uom_name,
-	material_tnved_eas_code,
-	material_okpd2_code,
-	purchase_responsible_department_code,
-	material_planning_controller_code,
-	head_of_production_code,
-	material_type_name,
-	material_group_name,
-	purchase_responsible_department_name,
-	material_planning_controller_name,
-	holding_currency_code,
-	wbs_element_short_name,
-	unit_balance_code,
-	material_category_name,
-	counterparty_wbs_element_code,
-	valuation_class_code,
-	external_contract_number,
-	supplier_extended_name,
-	customer_extended_name,
-	non_liquid_asset_type_code,
-	uom_to_alternative_uom_coefficient_amount,
-	base_uom_name,
-	valuation_class_name,
-	general_ledger_account_code,
-	general_ledger_account_name,
-	general_ledger_alternative_account_code,
-	general_ledger_alternative_account_name,
-	counterparty_wbs_element_name,
-	non_liquid_asset_type_name,
-	material_search_name,
-	material_group_search_name,
-	warehouse_search_name,
-	purchase_responsible_department_search_name,
-	valuation_class_search_name,
-	material_planning_controller_search_name,
-	plant_search_name,
-	material_trimmed_code,
-	material_truncated_code,
-	dt_last_material_movement_and_calculation,
-	dt_last_material_movement_and_calculation_shifted,
-	dt_last_existed_material_movement_and_calculation
-)
-select
-	base.dt_posting,
-	base.material_code,
-	base.material_uom_code,
-	base.plant_code,
-	base.warehouse_code,
-	base.batch_code,
-	base.valuation_type_code,
-	base.stock_type_code,
-	base.sales_document_code,
-	base.sales_document_position_line_item_code,
-	base.wbs_element_code,
-	base.supplier_code,
-	base.customer_code,
-	base.total_stock_quantity,
-	base.unit_balance_currency_code,
-	base.material_costing_system_code,
-	base.price_rule_code,
-	base.dt_posting_next,
-	base.plant_name,
-	base.valuation_assessment_code,
-	base.warehouse_name,
-	base.warehouse_type_code,
-	base.warehouse_type_name,
-	base.storage_bin_code,
-	base.material_full_name,
-	base.material_kubal_code,
-	base.is_batch_mandatory,
-	base.material_type_code,
-	base.material_group_code,
-	base.sector_code,
-	base.material_category_code,
-	base.material_short_name,
-	base.material_alternative_uom_code,
-	base.material_alternative_uom_name,
-	base.material_tnved_eas_code,
-	base.material_okpd2_code,
-	base.purchase_responsible_department_code,
-	base.material_planning_controller_code,
-	base.head_of_production_code,
-	base.material_type_name,
-	base.material_group_name,
-	base.purchase_responsible_department_name,
-	base.material_planning_controller_name,
-	base.holding_currency_code,
-	base.wbs_element_short_name,
-	base.unit_balance_code,
-	base.material_category_name,
-	wem.wbs_element_number as counterparty_wbs_element_code,
-	base.valuation_class_code,
-	base.external_contract_number,
-	base.supplier_extended_name,
-	base.customer_extended_name,
-	base.non_liquid_asset_type_code,
-	base.uom_to_alternative_uom_coefficient_amount, 
-	base.base_uom_name,
-	vct.valuation_class_name as valuation_class_name,
-	coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code) as general_ledger_account_code,
-	glact_1.general_ledger_account_short_name as general_ledger_account_name,
-	glamd.general_ledger_alternative_account_code as general_ledger_alternative_account_code,
-	glact_2.general_ledger_account_short_name as general_ledger_alternative_account_name,
-	wem.wbs_element_short_name as counterparty_wbs_element_name,
-	case
-		when base.wbs_element_code is not null 
-			and wem.project_type_code = '99'
-		then rait.reason_of_allocation_to_illiquid_name
-		when base.wbs_element_code is null 
-			and base.valuation_type_code like 'U%'
-		then icvt.internal_characteristic_value_name
-		else null 
-	end as non_liquid_asset_type_name,
-	concat(ltrim(base.material_code, '0'), ' ', base.material_short_name) as material_search_name,
-	concat(base.material_group_code, ' ', base.material_group_name) as material_group_search_name,
-	concat(base.warehouse_code, ' ', base.warehouse_name) as warehouse_search_name,
-	concat(base.purchase_responsible_department_code, ' ', base.purchase_responsible_department_name) as purchase_responsible_department_search_name,
-	concat(base.valuation_class_code, ' ', vct.valuation_class_name) as valuation_class_search_name,
-	concat(base.material_planning_controller_code, ' ', base.material_planning_controller_name) as material_planning_controller_search_name,
-	concat(base.plant_code, ' ', base.plant_name) as plant_search_name,
-	case 
-		when length(base.material_code) <= 14
-		then base.material_code
-		else substring(base.material_code, length(base.material_code) - 13, length(base.material_code)) 
-	end as material_trimmed_code,
-	ltrim(base.material_code, '0') as material_truncated_code,
-	coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from) as dt_last_material_movement_and_calculation, -- base_dt,
-	ckmlpp_1.dt_valid_from as dt_last_material_movement_and_calculation_shifted, --ckmlpp_1_dt 
-	ckmlpp_2.max_ckmlpp as dt_last_existed_material_movement_and_calculation --max_ckmlpp
-from base
-	left join dict_dds.valuation_class_texts as vct
-		on vct.valuation_class_code = base.valuation_class_code
-		and vct.language_code = 'R'
-	left join dict_dds.valuation_area as vala
-		on vala.valuation_area_code = base.valuation_assessment_code
-	left join dict_dds.general_ledger_account_standard as glas
-		on glas.valuation_group_code = vala.valuation_group_code
-		and glas.valuation_class_code = base.valuation_class_code
-		and glas.account_modification_code is null
-		and glas.transaction_key_code = 'BSX'
-		and glas.account_chart_code = '1000'
-	left join dict_dds.general_ledger_account_standard_td as glast
-		on glast.valuation_grouping_code = vala.valuation_group_code
-		and glast.valuation_class_code = base.valuation_class_code
-		and base.dt_posting between glast.dt_valid_from and glast.dt_valid_to
-		and glast.account_modification_code is null
-		and glast.transaction_code = 'BSX'
-		and glast.account_chart_code = '1000'
-	left join dict_dds.unit_balance as unb
-		on unb.unit_balance_code = base.unit_balance_code
-	left join dict_dds.general_ledger_account_chart_texts as glact_1
-		on glact_1.account_chart_code = unb.account_chart_code
-		and glact_1.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
-		and glact_1.language_code = 'R'
-	left join dict_dds.general_ledger_accounts_main_data as glamd
-		on glamd.unit_balance_code = base.unit_balance_code 
-		and glamd.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
-	left join dict_dds.general_ledger_account_chart_texts as glact_2
-		on glact_2.account_chart_code = unb.country_specific_account_chart_code
-		and glact_2.general_ledger_account_code = glamd.general_ledger_alternative_account_code
-		and glact_2.language_code = 'R'
-	left join dict_dds.wbs_element_master_data_detail as wem
-		on wem.wbs_element_code = base.counterparty_wbs_element_code
-	left join dict_dds.reason_of_allocation_to_illiquid_texts as rait
-		on rait.reason_of_allocation_to_illiquid_code = base.non_liquid_asset_type_code
-		and rait.language_code = 'R'
-	left join dict_dds.internal_characteristic_value as icv
-		on icv.internal_characteristic_value_code = base.non_liquid_asset_type_code
-		and icv.internal_characteristic_code in (
-			select
-				internal_characteristic_code
-			from
-				dict_dds.internal_characteristic
-			where
-				internal_characteristic_title_code in ('NLQREASON'))
-	left join dict_dds.internal_characteristic_value_texts as icvt
-		on icvt.internal_subsequent_code = icv.internal_subsequent_code
-		and icvt.language_code = 'R'
-		and icvt.internal_characteristic_code in (
-			select
-				internal_characteristic_code
-			from
-				dict_dds.internal_characteristic
-			where
-				internal_characteristic_title_code in ('NLQREASON'))
-	left join dds.valuation_class_to_free_stock as mbew
-		on mbew.calculation_code = base.material_costing_system_code
-		and mbew.is_period_closed is null
-		and base.price_rule_code = '2'
-	left join dds.valuation_class_to_sales_order as ebew
-		on ebew.calculation_code = base.material_costing_system_code
-		and ebew.is_period_closed is null
-		and base.price_rule_code = '2'
-	left join dds.valuation_class_to_project as qbew
-		on qbew.calculation_code = base.material_costing_system_code
-		and qbew.is_period_closed is null
-		and base.price_rule_code = '2'
-	left join dm.material_price_calculation as ckmlpp_1
-		on ckmlpp_1.calculation_code = base.material_costing_system_code
-		and ckmlpp_1.dt_valid_from - interval '1 month' = coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from)
-		and base.price_rule_code = '2'
-	left join ckmlpp_2
-		on ckmlpp_2.calculation_code =  base.material_costing_system_code
-		and ckmlpp_1.calculation_code is null
-		and base.price_rule_code = '2'
-;
-
+  [INFO] stmt#8 Узел: Hash — 4 950 × 28 B/row (135 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 3 378 × 10 B/row (33 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 2 853 × 19 B/row (53 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 1 278 × 29 B/row (36 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 3 318 × 12 B/row (39 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 100 986 × 43 B/row (4.14 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 7 935 912 × 25 B/row (189.21 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 100 986 × 43 B/row (4.14 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 1 300 002 × 81 B/row (100.42 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 90 × 36 B/row (3 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 139 × 12 B/row (2 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 JOIN: left={ dict_dds.internal_characteristic_value } right={ dict_dds.internal_characteristic } on=(((internal_characteristic_value.internal_characteristic_code)::text = (internal_characteristic.internal_characteristic_code)::text)) — 139 × 12 B/row (2 KB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 24 × 11 B/row (264 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 262 × 33 B/row (8 KB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 JOIN: left={ dict_dds.internal_characteristic_value_texts } right={ dict_dds.internal_characteristic internal_characteristic_1 } on=(((internal_characteristic_value_texts.internal_characteristic_code)::text = (internal_characteristic_1.internal_characteristic_code)::text)) — 262 × 33 B/row (8 KB).
+  Совет: Согласуй DISTRIBUTED BY с ключами ON (избежать Redistribute). Малую сторону можно REPLICATED (если < ~256 MB). Если есть дубли — предагрегируй по ключу соединения. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 24 × 11 B/row (264 B).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 4 470 239 × 17 B/row (72.47 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 343 638 × 17 B/row (5.57 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 389 025 × 17 B/row (6.31 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]
+  [INFO] stmt#8 Узел: Hash — 3 199 040 × 17 B/row (51.86 MB).
+  Совет: проверь ключи/предагрегацию; при необходимости увеличь statement_mem точечно. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685]

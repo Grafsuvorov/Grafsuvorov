@@ -1,156 +1,248 @@
-Описание Генератора
-
-Инструмент: tools/generator/generator.py
-Назначение: Создание моделей для работы с данными.
-
-2. Артефакты Генератора
-
-Файл SQL:
-Код для создания таблиц или представлений.
-Включает запросы для выборки, агрегации и добавления столбцов.
-Файл YML:
-Метаданные модели.
-Содержит имя, описание, теги, тесты и список колонок.
-
-3. Режимы Работы Генератора
-
-Режим создания модели (model):
-
-На основе ручного описания таблицы в .yml файле
-На основе физической таблицы в Greenplum
-На основе записи в tech_etl.tables_meta
-
-
-Режим создания источника (source):
-
-На основе ручного описания таблицы в .yml файле
-На основе физической внешней таблицы в Grenplum (external table)
-
-
-4. Управление Файлами и Директория
-
-
-Работа с данной инструкцией ведется из директории dbt_greenplum_elt/
-
-Существующие файлы моделей .sql и .yaml не переписываются при повторном запуске generator.py, их необходимо удалить перед повторным запуском generator.py
-
-
-
-
-Генерация моделей
-
-
-1. Генерация источника данных
-
-
-
-Создать источник в Greenplum
-
-
-Открыть файл ..\tools\generator\configs\source_from_existing_table\source.yml
-Структура файла:
-
-source_name: dict_raw_ext # название источника в логике dbt (соответствует названию схемы источника)
-schema: dict_raw_ext # название схемы источника
-table: '"A003_READ"' # название таблицы-источника
-
-
-
-
-
-
-Заполнить файл, подставляя актуальные значения
-Запустить генерацию модели источника:
-
-python ..\tools\generator\generator.py --mode source_from_existing_table --config source_from_existing_table/source.yml
-
-
-
-
-
-
-2. Генерация DICT_STG-модели
-
-
-
-Создать таблицу в Greenplum
-
-
-Открыть файл ..\tools\generator\configs\model_from_existing_table\dict_stg.yml
-Структура файла:
-
-model:
-  where_clause: 1 = 1 # условие фильтрации для источника dict_raw_ext."A003_READ" (опционально)
-target:
-  schema: dict_stg # название целевой схемы
-  table: '"A003"' # название целевой таблицы
-  distributed_by: replicated # распределение данных
-  tags: ['DICT_LOADER'] # тег модели (соответствует названию сущности таблицы) 
-source:
-  source_type: source # тип источника
-  source_name: dict_raw_ext # название схемы источника
-  table: A003_READ # название таблицы-источника
-
-
-
-
-
-
-Заполнить шаблон, подставляя актуальные значения
-Запустить генерацию DICT_STG-модели:​
-
-python ..\tools\generator\generator.py --mode model_from_existing_table --config model_from_existing_table\dict_stg.yml
-
-
-
-
-
-
-Проверить созданную модель командой:
-
-dbt run --select <название модели>
-
-
-
-
-
-3. Генерация DICT_DDS-модели
-
-
-
-Создать таблицу в Greenplum
-
-
-Открыть файл ..\tools\generator\configs\model_from_existing_table\dict_dds.yml
-Структура файла:
-
-target:
-  schema: dict_dds # название целевой схемы
-  table: mandant # название целевой таблицы
-  distributed_by: replicated # распределение данных
-  tags: ['DICT_LOADER'] # тег модели (соответствует названию сущности таблицы)
-source:
-  query: | # блок select скрипта целевой таблицы (все строки должны быть отступлены минимум на один уровень относительно параметра query)
-    SELECT 
-    tech_etl.util_text_to_null_validation(t1."MANDT"),
-    tech_etl.util_text_to_null_validation(t1."MWAER")
-    FROM dict_stg."T000" t1;
-
-
-
-
-
-
-Заполнить шаблон, подставляя актуальные значения
-Запустить генерацию DICT_DDS-модели:​
-
-python ..\tools\generator\generator.py --mode model_from_existing_table --config model_from_existing_table\dict_dds.yml
-
-
-
-
-
-
-Проверить созданную модель командой:
-
-dbt run --select <название модели>
+GREENPLUM PLAN DOCTOR — СВОДКА (умное ревью)
+==============================================================================================================
+— Итоги: ERROR=3 | WARN=54 | INFO=46
+— ТОП сигналы:
+  1. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1,
+ dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1, dds.valuation_class_to_sales_order } right={ dds.valuation_class_to_sales_order valuation_class_to_sales_order_1 } on=((((material_sto
+ck_balance.material_code)::text = (valuation_class_to_sales_order_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order_1.valuation_area_code)::text) AND ((material_stock
+_balance.valuation_type_code)::text = (valuation_class_to_sales_order_1.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order_1.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order_1.sales_document_position_code)::text))) — 16 422 380 214 131 × 990 B/row (14786.71 TB).
+  2. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1,
+ dds.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1 } right={ dds.valuation_class_to_sales_order } on=((((material_stock_balance.material_code)::text = (valuation_class_to_sales_order.mat
+erial_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_sales_order.val
+uation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order.sales_document_position_code)::text))) — 16 422 380 214 131 × 985 B/row (14712.03 TB).
+  3. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1,
+ dds.valuation_class_to_project } right={ dds.valuation_class_to_project valuation_class_to_project_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project_1.material_code)::text) AND ((plant_and_sub
+sidiary.valuation_area_code)::text = (valuation_class_to_project_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project_1.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project_1.wbs_element_code)::text))) — 16 422 380 214 131 × 976 B/row (14577.60 TB).
+  4. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1 
+} right={ dds.valuation_class_to_project } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_projec
+t.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project.wbs_element_code)::text))) — 16 422 380 214 131 × 971 B/row (14502.92 TB).
+  5. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock } right={ dds.valuation_class_to_free_stock valuation_class_to_free
+_stock_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_free_stock_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock_1.valuation_type_code)::text))) — 16 422 380 214 131 × 962 B/row (14368.50 TB).
+  6. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1 } right={ dds.valuation_class_to_free_stock } on=((((material_stock_balance.material_code)::text = (va
+luation_class_to_free_stock.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock.valuation_type_code)::text))) — 16 422 380 214 131 × 957 B/row (14293.82 TB).
+  7. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header
+, dict_dds.counterparty, dict_dds.counterparty counterparty_1 } right={ dict_dds.uom_external_format_texts uom_external_format_texts_1 } on=(((material_stock_balance.material_uom_code)::text = (uom_external_format_texts_1.uom_code)::text)) — 16 422 380 214 131 × 948 B/row (14159.39 TB).
+  8. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, dict_dds.counterparty } right={ dict_dds.counterparty counterparty_1 } on=(((material_stock_balance.customer_code)::text = (counterparty_1.counterparty_code)::text)) — 8 211 190 107 066 × 944 B/row (7049.82 TB).
+  9. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, 
+dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_d
+ds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_re
+quest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header } right={ dict_dds.counterparty } on=(((material_stock_balance.supplier_code)::text = (counterparty.counterparty_code)::text)) — 4 105 595 053 533 × 898 B/row (3353.15 TB).
+  10. JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts,
+ dict_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_
+dds.material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_r
+equest_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header } right={ dds.sales_proposal_header } on=(((material_stock_balance.sales_document_code)::text = (sales_proposal_header.sales_proposal_code)::text)) — 2 052 797 526 766 × 852 B/row (1590.69 TB).
+
+— Ошибки:
+  [!] stmt#6 EXPLAIN error: relation "base" does not exist
+LINE 1: EXPLAIN (VERBOSE, FORMAT JSON) insert into base(
+                                                   ^
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431
+  [!] stmt#8 EXPLAIN error: relation "base" does not exist
+LINE 164: from base
+               ^
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685
+  [!] stmt#8 EXPLAIN error: relation "base" does not exist
+LINE 88: from base
+              ^
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685
+
+— Предупреждения (схлопнуто):
+  [WARN] TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1, dd
+s.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1, dds.valuation_class_to_sales_order } right={ dds.valuation_class_to_sales_order valuation_class_to_sales_order_1 } on=((((material_stock_
+balance.material_code)::text = (valuation_class_to_sales_order_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order_1.valuation_area_code)::text) AND ((material_stock_ba
+lance.valuation_type_code)::text = (valuation_class_to_sales_order_1.valuation_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order_1.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order_1.sales_document_position_code)::text))) — 16 422 380 214 131 × 990 B/row (14786.71 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1, dd
+s.valuation_class_to_project, dds.valuation_class_to_project valuation_class_to_project_1 } right={ dds.valuation_class_to_sales_order } on=((((material_stock_balance.material_code)::text = (valuation_class_to_sales_order.materi
+al_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_sales_order.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_sales_order.valuat
+ion_type_code)::text) AND ((material_stock_balance.sales_document_code)::text = (valuation_class_to_sales_order.sales_document_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (valuation_class_to_sales_order.sales_document_position_code)::text))) — 16 422 380 214 131 × 985 B/row (14712.03 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1, dd
+s.valuation_class_to_project } right={ dds.valuation_class_to_project valuation_class_to_project_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project_1.material_code)::text) AND ((plant_and_subsid
+iary.valuation_area_code)::text = (valuation_class_to_project_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project_1.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project_1.wbs_element_code)::text))) — 16 422 380 214 131 × 976 B/row (14577.60 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock, dds.valuation_class_to_free_stock valuation_class_to_free_stock_1 } r
+ight={ dds.valuation_class_to_project } on=((((material_stock_balance.material_code)::text = (valuation_class_to_project.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_project.v
+aluation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_project.valuation_type_code)::text) AND ((material_stock_balance.wbs_element_code)::text = (valuation_class_to_project.wbs_element_code)::text))) — 16 422 380 214 131 × 971 B/row (14502.92 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1, dds.valuation_class_to_free_stock } right={ dds.valuation_class_to_free_stock valuation_class_to_free_st
+ock_1 } on=((((material_stock_balance.material_code)::text = (valuation_class_to_free_stock_1.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock_1.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock_1.valuation_type_code)::text))) — 16 422 380 214 131 × 962 B/row (14368.50 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1, dict_dds.uom_external_format_texts uom_external_format_texts_1 } right={ dds.valuation_class_to_free_stock } on=((((material_stock_balance.material_code)::text = (valua
+tion_class_to_free_stock.material_code)::text) AND ((plant_and_subsidiary.valuation_area_code)::text = (valuation_class_to_free_stock.valuation_area_code)::text) AND ((material_stock_balance.valuation_type_code)::text = (valuation_class_to_free_stock.valuation_type_code)::text))) — 16 422 380 214 131 × 957 B/row (14293.82 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, d
+ict_dds.counterparty, dict_dds.counterparty counterparty_1 } right={ dict_dds.uom_external_format_texts uom_external_format_texts_1 } on=(((material_stock_balance.material_uom_code)::text = (uom_external_format_texts_1.uom_code)::text)) — 16 422 380 214 131 × 948 B/row (14159.39 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header, dict_dds.counterparty } right={ dict_dds.counterparty counterparty_1 } on=(((material_stock_balance.customer_code)::text = (counterparty_1.counterparty_code)::text)) — 8 211 190 107 066 × 944 B/row (7049.82 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header, dds.sales_proposal_header } right={ dict_dds.counterparty } on=(((material_stock_balance.supplier_code)::text = (counterparty.counterparty_code)::text)) — 4 105 595 053 533 × 898 B/row (3353.15 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header, dds.sales_order_header } right={ dds.sales_proposal_header } on=(((material_stock_balance.sales_document_code)::text = (sales_proposal_header.sales_proposal_code)::text)) — 2 052 797 526 766 × 852 B/row (1590.69 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header, dds.sales_contract_header } right={ dds.sales_order_header } on=(((material_stock_balance.sales_document_code)::text = (sales_order_header.sales_order_code)::text)) — 1 026 398 763 383 × 829 B/row (773.88 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position, dds.sales_request_for_proposal_header } right={ dds.sales_contract_header } on=(((material_stock_balance.sales_document_code)::text = (sales_contract_header.sales_contract_code)::text)) — 513 199 381 692 × 803 B/row (374.80 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position, dds.sales_proposal_position } right={ dds.sales_request_for_proposal_header } on=(((material_stock_balance.sales_document_code)::text = (sales_request_for_proposal_header.sales_request_for_proposal_code)::text)) — 256 599 690 846 × 778 B/row (181.57 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position, dds.sales_order_position } right={ dds.sales_proposal_position } on=((((material_stock_balance.sales_document_code)::text = (sales_proposal_position.sales_proposal_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_proposal_position.sales_proposal_position_code)::text))) — 128 299 845 423 × 741 B/row (86.47 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position, dds.sales_contract_position } right={ dds.sales_order_position } on=((((material_stock_balance.sales_document_code)::text = (sales_order_position.sales_order_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_order_position.sales_order_position_code)::text))) — 128 299 845 423 × 732 B/row (85.42 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts, dds.sales_reque
+st_for_proposal_position } right={ dds.sales_contract_position } on=((((material_stock_balance.sales_document_code)::text = (sales_contract_position.sales_contract_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_contract_position.sales_contract_position_code)::text))) — 128 299 845 423 × 723 B/row (84.37 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area, dict_dds.material_category_main_data_texts } right={ dds.sa
+les_request_for_proposal_position } on=((((material_stock_balance.sales_document_code)::text = (sales_request_for_proposal_position.sales_request_for_proposal_code)::text) AND ((material_stock_balance.sales_document_position_line_item_code)::text = (sales_request_for_proposal_position.sales_request_for_proposal_position_code)::text))) — 128 299 845 423 × 714 B/row (83.32 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller, dict_dds.valuation_area } right={ dict_dds.material_category_main_data_texts } on=(((material.material_category_code)::text = (material_category_main_data_texts.material_category_code)::text)) — 128 299 845 423 × 705 B/row (82.27 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group, dict_dds.material_planning_controller } right={ dict_dds.valuation_area } on=(((material_stock_balance.plant_code)::text = (valuation_area.valuation_area_code)::text)) — 64 149 922 711 × 660 B/row (38.51 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts, dict_dds.purchase_group } right={ dict_dds.material_planning_controller } on=((((material_stock_balance.plant_code)::text = (material_planning_controller.plant_code)::text) AND ((material_by_plant.material_planning_controller_code)::text = (material_planning_controller.material_planning_controller_code)::text))) — 32 074 961 356 × 655 B/row (19.11 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.
+material_by_plant, dict_dds.material_type_texts, dict_dds.material_group_texts } right={ dict_dds.purchase_group } on=(((material_by_plant.purchase_group_code)::text = (purchase_group.purchase_group_code)::text)) — 32 074 961 356 × 631 B/row (18.41 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.material_by_plant, dict_dds.material_type_texts } right={ dict_dds.material_group_texts } on=(((material.material_group_code)::text = (material_group_texts.material_group_code)::text)) — 16 037 480 678 × 606 B/row (8.84 TB).    
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts, dict_dds.material_by_plant } right={ dict_dds.material_type_texts } on=(((material.material_type_code)::text = (material_type_texts.material_type_code)::text)) — 8 018 735 084 × 587 B/row (4.28 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom, dict_dds.uom_external_format_texts } right={ 
+dict_dds.material_by_plant } on=((((material_stock_balance.material_code)::text = (material_by_plant.material_code)::text) AND ((material_stock_balance.plant_code)::text = (material_by_plant.plant_code)::text))) — 5 351 381 135 × 566 B/row (2.75 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch, pg_temp_2900850.muom } right={ dict_dds.uom_external_format_texts } on=(((muom.material_alternative_uom_code)::text = (uom_external_format_texts.uom_code)::text)) — 3 513 904 318 × 528 B/row (1.69 TB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap, dds.material_batch } right={ pg_temp_2900850.muom } on=(((material_stock_balance.material_code)::text = (muom.material_code)::text)) — 1 756 952 159 × 524 B/row (857.42 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material, dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap } right={ dds.material_batch } on=((((material_stock_balance.material_code)::text = (material_batch.material_code)::text) AND ((material_stock_balance.batch_code)::text = (material_batch.batch_code)::text))) — 1 724 295 056 × 521 B/row (836.66 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dic
+t_dds.material_by_warehouse, dict_dds.material_texts, dict_dds.material } right={ dict_dds.map_object_to_class, dict_dds.settings_and_parameters_sap } on=(((material.material_classification_system_code)::text = (map_object_to_class.object_class_code)::text)) — 1 724 295 056 × 469 B/row (753.16 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dict_dds.material_by_warehouse, dict_dds.material_texts } right={ dict_dds.material } on=(((material_stock_balance.material_code)::text = (material.material_code)::text)) — 1 707 552 609 × 471 B/row (749.02 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts, dict_dds.material_by_warehouse } right={ dict_dds.material_texts } on=(((material_stock_balance.material_code)::text = (material_texts.material_code)::text)) — 853 776 304 × 414 B/row (329.19 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address, dict_dds.title_texts } ri
+ght={ dict_dds.material_by_warehouse } on=((((material_stock_balance.material_code)::text = (material_by_warehouse.material_code)::text) AND ((material_stock_balance.plant_code)::text = (material_by_warehouse.plant_code)::text) AND ((material_stock_balance.warehouse_code)::text = (material_by_warehouse.warehouse_code)::text))) — 384 089 388 × 321 B/row (114.83 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad, dict_dds.address } right={ dict_dds.title_texts } on=(((address.title_code)::text = (title_texts.title_code)::text)) — 384 089 388 × 291 B/row (104.09 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse, pg_temp_2900850.pawad } right={ dict_dds.address } on=((pawad.address_code = (address.address_code)::text)) — 192 657 533 × 277 B/row (49.70 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary, dict_dds.warehouse } right={ pg_temp_2900850.pawad } on=((((material_stock_balance.plant_code)::text = (pawad.plant_code)::text) AND ((material_stock_balance.warehouse_code)::text = (pawad.warehouse_code)::text))) — 87 981 096 × 284 B/row (23.27 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail, dict_dds.plant_and_subsidiary } right={ dict_dds.warehouse } on=((((material_stock_balance.warehouse_code)::text = (warehouse.warehouse_code)::text) AND ((material_stock_balance.plant_code)::text = (warehouse.plant_code)::text))) — 87 981 096 × 273 B/row (22.37 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1, dict_dds.wbs_element_master_data_detail } right={ dict_dds.plant_and_subsidiary } on=(((material_stock_balance.plant_code)::text = (plant_and_subsidiary.plant_code)::text)) — 87 981 096 × 254 B/row (20.81 GB).
+  JOIN: left={ dm_calc.material_stock_balance, pg_temp_2900850.tmp_1 } right={ dict_dds.wbs_element_master_data_detail } on=(((material_stock_balance.wbs_element_code)::text = (wbs_element_master_data_detail.wbs_element_code)::text)) — 43 990 548 × 223 B/row (9.14 GB).
+  Seq Scan без фильтра: material_stock_balance — 21 995 274 × 138 B/row (2.83 GB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: wbs_element_master_data_detail — 1 300 002 × 81 B/row (100.42 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: address — 9 061 578 × 15 B/row (129.63 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Узел Hash — 91 733 311 × 52 B/row (4.44 GB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Узел Hash — 15 487 459 × 80 B/row (1.15 GB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Узел Hash — 12 909 930 × 61 B/row (751.02 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Узел Hash — 6 460 940 × 111 B/row (683.94 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: material — 6 483 972 × 75 B/row (463.77 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: material_batch — 15 487 459 × 80 B/row (1.15 GB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: material_by_plant — 12 909 930 × 61 B/row (751.02 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: sales_contract_position — 1 336 307 × 27 B/row (34.41 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: sales_order_position — 1 596 327 × 27 B/row (41.10 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: sales_contract_header — 4 085 087 × 36 B/row (140.25 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: sales_order_header — 1 292 454 × 37 B/row (45.61 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: counterparty — 2 544 312 × 57 B/row (138.31 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Seq Scan без фильтра: counterparty — 2 544 312 × 57 B/row (138.31 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+
+— Инфо (схлопнуто):
+  PREWARM CREATE TEMP выполнен.
+  PREWARM CREATE TEMP выполнен.
+  PREWARM CREATE TEMP выполнен.
+  PREWARM CREATE TEMP выполнен.
+  PREWARM CREATE TEMP выполнен.
+  PREWARM INSERT INTO TEMP выполнен. [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  [INFO] TEMP tmp_1: DISTRIBUTED BY (currency_code). ON COMMIT DROP.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 1–10
+  [INFO] TEMP pawad: DISTRIBUTED BY (plant_code, warehouse_code). ON COMMIT DROP.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21
+  DROP выполнен.
+  [INFO] TEMP base: DISTRIBUTED BY (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, non_liquid_asset_type_code, material_costing_system_code). WITH(appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) ок для AO/column/zstd.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 38–106
+  Узел Hash — 6 483 972 × 75 B/row (463.77 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  Узел Hash — 4 470 239 × 52 B/row (221.68 MB). [C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 106–431]
+  …и ещё 32 похожих тяжёлых узлов (Hash/Agg/Sort).
+  JOIN: left={ dict_dds.map_object_to_class } right={ dict_dds.settings_and_parameters_sap } on=(((map_object_to_class.class_type_code)::text = (settings_and_parameters_sap.range_low_value)::text)) — 220 416 × 17 B/row (3.57 MB).
+  [INFO] TEMP ckmlpp_2: DISTRIBUTED BY (calculation_code). ON COMMIT DROP.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 431–443
+
+— Что сделать в первую очередь:
+  1) Поставь селективные фильтры/предфильтр во временные таблицы перед крупными Seq Scan.
+  2) Согласуй DISTRIBUTED BY с ключами JOIN; малые таблицы можно REPLICATE (<~256MB).
+  3) Предагрегируй/сужай строки до Hash/Aggregate/Sort; точечно увеличь statement_mem.
+  4) Для TEMP указывай явный DISTRIBUTED BY; избегай RANDOMLY.

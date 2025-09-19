@@ -1,65 +1,112 @@
 # -*- coding: utf-8 -*-
 """
-GP Plan Doctor — TEMP edition (v5.1, fix imports)
+Greenplum Plan Doctor v4.5 — prewarm + умное ревью без спама
+- Берёт SQL из указанного пути и прогоняет по шагам.
+- TEMP (CREATE TEMP / CTAS / INSERT INTO temp_*) реально создаёт и заполняет (с опц. LIMIT),
+  чтобы EXPLAIN последующих операторов не падал по отсутствующим отношениям.
+- INSERT в постоянные таблицы НЕ исполняет (делает EXPLAIN по SELECT-части).
+- Добавлен явный prewarm-проход: сначала все CREATE TEMP, затем все INSERT INTO temp_*.
+- «Умное ревью»: группировка и дедупликация повторов (JOIN/SeqScan/Heavy/Motion),
+  компактный ТОП и список действий. Дубликаты схлопываются в «N похожих случаев».
+
+Важно: всё выполняется в одной транзакции и откатывается в конце.
 """
 
-import os, re, json, textwrap
-from dataclasses import dataclass, field   # <-- ВАЖНО: field импортирован
-from typing import List, Optional, Dict, Tuple, Set
+import os
+import re
+import json
+from dataclasses import dataclass
+from typing import List, Tuple, Optional, Dict, Set, Iterable
 
 import psycopg2
 import psycopg2.extras
-
-# ==== НАСТРОЙКИ ====
+# =========================
+# НАСТРОЙКИ ДЛЯ ТЕСТА
+# =========================
 SQL_FILE_PATH = r"C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql"
-DEFAULT_DSN   = "postgresql://gpadmin:gpadmin@localhost:5432/gpdb"
+DEFAULT_DSN = "postgresql://gpetl:gpetl@10.66.229.171:5432/dwh"  # как раньше, «открыто» для тестов
 
-# Лимитируем создание CTAS-времянок “нулём данных”
-CTAS_CREATE_LIMIT = 0  # 0 = LIMIT 0; None = не ограничивать (не рекомендуется)
+# Исполняем TEMP-DDL и INSERT в TEMP
+EXECUTE_TEMPS = True
+EXECUTE_INSERT_INTO_TEMP = True
 
-# Пороговые эвристики (мегабайты)
-SIZE_MB_SEQSCAN_WARN   = 256
-SIZE_MB_HEAVY_WARN     = 512
-SIZE_MB_MOTION_WARN    = 256
-SMALL_REPLICATE_CEILMB = 256
+# Сэмплирование при прогреве (безопасные LIMIT’ы); None = выкл
+EXECUTE_CTAS_LIMIT: Optional[int] = None     # например 200_000
+INSERT_TEMP_LIMIT: Optional[int]  = None     # например 200_000
 
-def strip_comments_sql(s: str) -> str:
-    out = []
-    in_block = False
-    i = 0
-    while i < len(s):
-        if not in_block and s.startswith("/*", i):
-            in_block = True; i += 2; continue
-        if in_block and s.startswith("*/", i):
-            in_block = False; i += 2; continue
-        if not in_block:
-            out.append(s[i])
-        i += 1
-    txt = "".join(out)
-    return re.sub(r"(^|\n)\s*--.*(?=\n|$)", r"\1", txt)
+# Исполняем TEMP-DDL и INSERT в TEMP
+EXECUTE_TEMPS = True
+EXECUTE_INSERT_INTO_TEMP = True
+
+# Сэмплирование при прогреве (безопасные LIMIT’ы); None = выкл
+EXECUTE_CTAS_LIMIT: Optional[int] = None     # например 200_000
+INSERT_TEMP_LIMIT: Optional[int]  = None     # например 200_000
+
+# Пороги/константы
+BIG_SCAN_ROWS    = 500_000
+HEAVY_NODE_MB    = 512
+BIG_MOTION_MB    = 256
+TEMP_RANDOM_WARN = True
+
+SIZE_1KB = 1024
+SIZE_1MB = 1024 * 1024
+SIZE_1GB = 1024 * 1024 * 1024
+SIZE_1TB = 1024 * 1024 * 1024 * 1024
+
+
+def format_bytes(num: float) -> str:
+    if num >= SIZE_1TB: return f"{num/SIZE_1TB:.2f} TB"
+    if num >= SIZE_1GB: return f"{num/SIZE_1GB:.2f} GB"
+    if num >= SIZE_1MB: return f"{num/SIZE_1MB:.2f} MB"
+    if num >= SIZE_1KB: return f"{num/SIZE_1KB:.0f} KB"
+    return f"{int(num)} B"
+
+
+def fmt_rows_width(rows: float, width: float) -> str:
+    return f"{int(rows):,} × {int(width)} B/row".replace(",", " ")
+
 
 @dataclass
 class Stmt:
     idx: int
     sql: str
-    start: int
-    end: int
-    path: str
+    start_line: int
+    end_line: int
+    file_path: str
+
+
+# ---------- разбор SQL ----------
+_COMMENT_LINE = re.compile(r"^\s*--")
+
+
+def strip_leading_comments(sql: str) -> str:
+    s = sql.lstrip()
+    # снять стартовые /* ... */
+    while s.startswith("/*"):
+        end = s.find("*/")
+        if end == -1: return ""
+        s = s[end+2:].lstrip()
+    # снять ведущие --
+    lines = s.splitlines()
+    i = 0
+    while i < len(lines) and _COMMENT_LINE.match(lines[i]): i += 1
+    return "\n".join(lines[i:]).lstrip()
+
 
 def split_sql_with_lines(sql_text: str, file_path: str) -> List[Stmt]:
-    text = sql_text
-    stmts, buf, start_ln, ln, in_block = [], [], 1, 1, False
-    for line in text.splitlines():
-        if "/*" in line and "*/" not in line: in_block = True
-        if "*/" in line: in_block = False
+    stmts, buf, start_ln, ln = [], [], 1, 1
+    in_block = False
+    for line in sql_text.splitlines():
+        if not in_block and "/*" in line: in_block = True
+        if in_block and "*/" in line: in_block = False
         buf.append(line)
         if ";" in line and not in_block:
             chunk = "\n".join(buf)
             parts = chunk.split(";")
             for part in parts[:-1]:
-                p = part.strip()
-                if p:
-                    stmts.append(Stmt(len(stmts)+1, p, start_ln, ln, file_path))
+                pr = part.strip()
+                if pr:
+                    stmts.append(Stmt(len(stmts)+1, pr, start_ln, ln, file_path))
                 start_ln = ln
             buf = [parts[-1]]
         ln += 1
@@ -68,302 +115,548 @@ def split_sql_with_lines(sql_text: str, file_path: str) -> List[Stmt]:
         stmts.append(Stmt(len(stmts)+1, tail, start_ln, ln-1, file_path))
     return stmts
 
-def low(s: str) -> str:
-    return strip_comments_sql(s).lower().strip()
 
-def is_temp_create(sql: str) -> bool:
-    h = low(sql)
-    return h.startswith("create") and (" temp " in f" {h} " or " temporary " in f" {h} ")
+def lhead(s: str) -> str:
+    return strip_leading_comments(s).lower().lstrip()
 
-def temp_name_from_create(sql: str) -> Optional[str]:
-    m = re.search(r"create\s+(?:temporary|temp)\s+table\s+([^\s(]+)", strip_comments_sql(sql), re.IGNORECASE)
-    return m.group(1).split(".")[-1].strip('"').lower() if m else None
 
+def is_drop(sql: str) -> bool:    return lhead(sql).startswith("drop ")
+def is_set(sql: str) -> bool:     h=lhead(sql); return h.startswith("set ") or h.startswith("reset ")
+def is_select_like(sql: str) -> bool:
+    h = lhead(sql); return h.startswith("select") or h.startswith("with")
+def is_insert(sql: str) -> bool:  return lhead(sql).startswith("insert")
 def is_ctas(sql: str) -> bool:
-    return bool(re.search(r"create\s+(?:temporary|temp)\s+table\s+\S+\s+as\s+select", strip_comments_sql(sql), re.IGNORECASE|re.DOTALL))
-
-def is_drop(sql: str) -> bool:
-    return low(sql).startswith("drop ")
-
-def is_set(sql: str) -> bool:
-    h = low(sql)
-    return h.startswith("set ") or h.startswith("reset ")
-
+    h=lhead(sql); return h.startswith("create") and (" as " in h)
+def is_temp_create(sql: str) -> bool:
+    h = lhead(sql)
+    return h.startswith("create") and (" temp " in f" {h} " or " temporary " in f" {h} ")
 def is_explainable(sql: str) -> bool:
-    h = low(sql)
-    return h.startswith("select") or h.startswith("with") or h.startswith("insert") or h.startswith("update") or h.startswith("delete") or h.startswith("merge") or h.startswith("create")
+    return is_select_like(sql) or is_insert(sql) or is_ctas(sql)
 
-def insert_target_name(sql: str) -> Optional[str]:
-    m = re.search(r"\binsert\s+into\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)", strip_comments_sql(sql), re.IGNORECASE)
-    return m.group(1).split(".")[-1].lower() if m else None
 
-def update_target_name(sql: str) -> Optional[str]:
-    m = re.search(r"\bupdate\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)", strip_comments_sql(sql), re.IGNORECASE)
-    return m.group(1).split(".")[-1].lower() if m else None
+def target_table_name_from_insert(stmt_sql: str) -> Optional[str]:
+    low = strip_leading_comments(stmt_sql).lower()
+    m = re.search(r"\binsert\s+into\s+([a-zA-Z_][\w\.]*)", low)
+    return m.group(1) if m else None
 
-def delete_target_name(sql: str) -> Optional[str]:
-    m = re.search(r"\bdelete\s+from\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)", strip_comments_sql(sql), re.IGNORECASE)
-    return m.group(1).split(".")[-1].lower() if m else None
 
-def mentioned_tables(sql: str) -> Set[str]:
-    txt = strip_comments_sql(sql)
-    names = set()
-    for kw in ("from","join","update","delete\s+from","into"):
-        for t in re.findall(rf"\b{kw}\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)?)", txt, re.IGNORECASE):
-            names.add(t.split(".")[-1].lower())
-    return names
+def is_target_temp_table(stmt_sql: str) -> bool:
+    tgt = target_table_name_from_insert(stmt_sql)
+    if not tgt: return False
+    short = tgt.split(".")[-1]
+    # эвристика: наши временные префиксы + часто встречающиеся
+    return short.startswith(("tmp_", "temp_", "stg_", "wrk_", "base")) or short in {"ckmlpp_2"}
 
-@dataclass
-class TempDef:
-    name: str
-    ddl_stmt: Stmt
-    distributed: Optional[str] = None
-    dist_cols: Tuple[str, ...] = field(default_factory=tuple)  # <-- теперь field определён
-    is_ctas: bool = False
 
-def parse_distribution(sql: str) -> Tuple[Optional[str], Tuple[str,...]]:
-    txt = strip_comments_sql(sql)
-    m_rep = re.search(r"\bdistributed\s+replicated\b", txt, re.IGNORECASE)
-    if m_rep: return ("REPLICATED", tuple())
-    m_rand = re.search(r"\bdistributed\s+randomly\b", txt, re.IGNORECASE)
-    if m_rand: return ("RANDOMLY", tuple())
-    m_by = re.search(r"\bdistributed\s+by\s*\(([^)]+)\)", txt, re.IGNORECASE|re.DOTALL)
-    if m_by:
-        cols = tuple(c.strip().strip('"').lower() for c in m_by.group(1).split(","))
-        return ("BY", cols)
-    return (None, tuple())
+def extract_insert_select(sql: str) -> Optional[str]:
+    m = re.search(
+        r"\binsert\s+into\s+[^\(;]+(?:\([^\)]*\))?\s*(with\s+.*|select\s+.*)$",
+        strip_leading_comments(sql), re.IGNORECASE | re.DOTALL
+    )
+    return m.group(1) if m else None
+
+
+def add_limit_to_select(sel_sql: str, limit_rows: Optional[int]) -> str:
+    if not limit_rows: return sel_sql
+    if re.search(r"\blimit\s+\d+\b", sel_sql, re.IGNORECASE): return sel_sql
+    return sel_sql.rstrip() + f"\nLIMIT {int(limit_rows)}"
+
+
+def inject_limit_into_ctas(ctas_sql: str, limit_rows: Optional[int]) -> str:
+    if not limit_rows: return ctas_sql
+    txt = strip_leading_comments(ctas_sql)
+    m = re.search(r"\bas\s*\(", txt, re.IGNORECASE)
+    if not m:
+        m2 = re.search(r"^(.*?\bas\b)(.*)$", txt, re.IGNORECASE | re.DOTALL)
+        if not m2: return ctas_sql
+        head, sel = m2.group(1), m2.group(2)
+        limited = head + add_limit_to_select(sel, limit_rows)
+        return ctas_sql.replace(txt, limited, 1)
+    start = m.end(); depth = 1; i = start
+    while i < len(txt) and depth > 0:
+        ch = txt[i]; depth += (ch == "(") - (ch == ")"); i += 1
+    if depth != 0: return ctas_sql
+    inner = txt[start:i-1]
+    inner_limited = add_limit_to_select(inner, limit_rows)
+    patched = txt[:start] + inner_limited + txt[i-1:]
+    return ctas_sql.replace(txt, patched, 1)
+
+
+def wrap_insert_select_with_limit(insert_sql: str, limit_rows: Optional[int]) -> str:
+    if not limit_rows: return insert_sql
+    txt = strip_leading_comments(insert_sql)
+    m = re.search(r"^(.*?\binsert\s+into\s+[^\(;]+(?:\([^\)]*\))?\s*)(with\s+.*|select\s+.*)$",
+                  txt, re.IGNORECASE | re.DOTALL)
+    if not m: return insert_sql
+    head, sel = m.group(1), m.group(2)
+    if re.search(r"\blimit\s+\d+\b", sel, re.IGNORECASE): return insert_sql
+    wrapped = f"{head}SELECT * FROM (\n{sel}\nLIMIT {int(limit_rows)}\n) __lim"
+    return insert_sql.replace(txt, wrapped, 1)
+
 
 def build_explain(sql: str) -> str:
     return f"EXPLAIN (VERBOSE, FORMAT JSON) {sql}"
 
-def as_limit0(sql: str) -> str:
-    txt = strip_comments_sql(sql)
-    m = re.search(r"\bas\b(.*)$", txt, re.IGNORECASE|re.DOTALL)
-    if not m:
-        return sql
-    sel = m.group(1).strip()
-    if re.search(r"\blimit\s+\d+\b", sel, re.IGNORECASE):
-        return sql
-    lim = CTAS_CREATE_LIMIT if CTAS_CREATE_LIMIT is not None else 0
-    return txt[:m.start(1)] + f"{sel}\n LIMIT {lim}"
 
-def main(sql_path: str, dsn: str):
-    full = open(sql_path, "r", encoding="utf-8").read()
-    stmts = split_sql_with_lines(full, sql_path)
+# ---------- парсинг плана ----------
+def collect_base_rels(node) -> List[str]:
+    rels = []
+    def walk(n):
+        if not isinstance(n, dict): return
+        if "Relation Name" in n:
+            sch = n.get("Schema", n.get("Schema Name", ""))
+            rel = n.get("Relation Name")
+            alias = n.get("Alias")
+            fq = f"{sch}.{rel}" if sch else rel
+            rels.append(f"{fq}{(' ' + alias) if alias and alias != rel else ''}")
+        for k in ("Plans", "Inner", "Outer"):
+            ch = n.get(k)
+            if isinstance(ch, list):
+                for c in ch: walk(c)
+            elif isinstance(ch, dict):
+                walk(ch)
+    walk(node)
+    out, seen = [], set()
+    for r in rels:
+        if r not in seen: seen.add(r); out.append(r)
+    return out
 
-    temp_defs: Dict[str, TempDef] = {}
+
+def find_join_in_sql(sql: str, left_aliases: List[str], right_aliases: List[str]) -> Optional[Tuple[int,int,str]]:
+    lines = sql.splitlines()
+    la = [a.split()[-1] for a in left_aliases if a]
+    ra = [a.split()[-1] for a in right_aliases if a]
+    if not la and not ra: return None
+    text = sql
+    for m in re.finditer(
+        r"\b(join)\b.*?\bon\b.*?(?:(?:left|right|full|inner|cross)\s+join|\bend\b|\bwhere\b|;|$)",
+        text, re.IGNORECASE | re.DOTALL
+    ):
+        block = m.group(0)
+        has_l = any(re.search(rf"\b{re.escape(a)}\.", block) for a in la)
+        has_r = any(re.search(rf"\b{re.escape(b)}\.", block) for b in ra)
+        if has_l and has_r:
+            pos = m.start()
+            start_ln = text[:pos].count("\n") + 1
+            s = max(1, start_ln-5); e = min(len(lines), start_ln+15)
+            snip = "\n".join(f"{i:>5}| {lines[i-1]}" for i in range(s, e+1))
+            return (s, e, snip)
+    return None
+
+
+def _normalize_rel_list(rels: Iterable[str]) -> Tuple[str, ...]:
+    base = [r.split()[0] for r in rels]
+    return tuple(sorted(set(base)))
+
+
+def collect_findings_from_plan(plan_json: dict, stmt: Stmt):
+    findings = []
+    def note(level, key, msg, meta=None): findings.append((level, key, msg, meta))
+    def anchor(): return f"[{stmt.file_path} строки {stmt.start_line}–{stmt.end_line}]"
+
+    def walk(node):
+        if not isinstance(node, dict): return
+        ntype = node.get("Node Type") or ""
+        rel = node.get("Relation Name")
+        rows = float(node.get("Plan Rows", 0) or 0)
+        width = float(node.get("Plan Width", 0) or 0)
+        est_bytes = rows * max(width, 1.0)
+
+        if ntype == "Seq Scan" and rel and not node.get("Filter") and rows >= BIG_SCAN_ROWS:
+            key = ("seqscan", stmt.idx, rel)
+            msg = (f"Seq Scan без фильтра: {rel} — {fmt_rows_width(rows, width)} "
+                   f"({format_bytes(est_bytes)}). {anchor()}")
+            note("WARN", key, msg, {"rows":rows,"width":width,"bytes":est_bytes})
+
+        if "Motion Type" in node:
+            mtype = node["Motion Type"]
+            lvl = "WARN" if est_bytes >= BIG_MOTION_MB*SIZE_1MB else "INFO"
+            key = ("motion", stmt.idx, mtype, int(est_bytes//SIZE_1MB))
+            msg = (f"{mtype} Motion — {fmt_rows_width(rows, width)} ({format_bytes(est_bytes)}). {anchor()}")
+            note(lvl, key, msg, {"bytes":est_bytes})
+
+        if ntype in ("Hash", "Aggregate", "Sort"):
+            lvl = "WARN" if est_bytes >= HEAVY_NODE_MB*SIZE_1MB else "INFO"
+            key = ("heavy", stmt.idx, ntype, int(est_bytes//SIZE_1MB))
+            msg = (f"Узел {ntype} — {fmt_rows_width(rows, width)} ({format_bytes(est_bytes)}). {anchor()}")
+            note(lvl, key, msg, {"bytes":est_bytes})
+
+        if "Join" in ntype:
+            cond = node.get("Hash Cond") or node.get("Merge Cond") or node.get("Join Filter") or "—"
+            left  = node.get("Plans", [{}])[0] if node.get("Plans") else None
+            right = node.get("Plans", [{},{}])[1] if node.get("Plans") and len(node["Plans"])>1 else None
+            left_rels  = collect_base_rels(left)  if left  else []
+            right_rels = collect_base_rels(right) if right else []
+            key = ("join", stmt.idx, _normalize_rel_list(left_rels), _normalize_rel_list(right_rels), cond)
+            msg = (f"JOIN: left={{ {', '.join(left_rels)} }} "
+                   f"right={{ {', '.join(right_rels)} }} on=({cond}) — {fmt_rows_width(rows, width)} ({format_bytes(est_bytes)}).")
+            hit = find_join_in_sql(stmt.sql, left_rels, right_rels)
+            meta = {"bytes": rows*max(width,1.0), "cond": cond, "left": left_rels, "right": right_rels}
+            if hit:
+                s,e,snip = hit
+                msg += f"\n  SQL место: {stmt.file_path} строки {s}–{e}:\n{snip}"
+            note("WARN" if est_bytes >= HEAVY_NODE_MB*SIZE_1MB else "INFO", key, msg, meta)
+
+        for k in ("Plans","Inner","Outer"):
+            ch = node.get(k)
+            if isinstance(ch, list):
+                for c in ch: walk(c)
+            elif isinstance(ch, dict):
+                walk(ch)
+
+    try:
+        root = plan_json[0]["Plan"]
+    except Exception:
+        return []
+    walk(root)
+    return findings
+
+
+def analyze_temp_create(stmt: Stmt) -> Optional[Tuple[str,str,str,str]]:
+    s = strip_leading_comments(stmt.sql)
+    low = s.lower()
+    if not (low.startswith("create") and (" temporary table" in low or " temp table" in low)):
+        return None
+    on_commit_drop = bool(re.search(r"on\s+commit\s+drop", low))
+    m_dist = re.search(r"distributed\s+(?:by\s*\((.*?)\)|replicated|randomly)", low, re.IGNORECASE | re.DOTALL)
+    if m_dist:
+        if "replicated" in m_dist.group(0).lower(): distributed = "REPLICATED"
+        elif "randomly" in m_dist.group(0).lower(): distributed = "RANDOMLY"
+        else:
+            cols = (m_dist.group(1) or "").strip()
+            distributed = "BY (" + re.sub(r"\s+", " ", cols) + ")"
+    else:
+        distributed = "RANDOMLY"
+
+    comp = None
+    m_with = re.search(r"with\s*\((.*?)\)", s, re.IGNORECASE | re.DOTALL)
+    if m_with: comp = re.sub(r"\s+", " ", m_with.group(1).strip())
+    m_name = re.search(r"create\s+(?:temporary|temp)\s+table\s+([^\s(]+)", s, re.IGNORECASE)
+    tname = (m_name.group(1) if m_name else "<temp>").strip('"').lower()
+
+    tips, level = [], "INFO"
+    if distributed == "RANDOMLY" and TEMP_RANDOM_WARN:
+        level = "WARN"; tips.append("Нет явного DISTRIBUTED BY → будет RANDOMLY.")
+    if distributed == "REPLICATED":
+        level = "WARN"; tips.append("REPLICATED: проверь, что результат компактный (< ~256 MB).")
+    if comp:
+        tips.append(f"WITH({comp}) ок для AO/column/zstd.")
+    if on_commit_drop: tips.append("ON COMMIT DROP.")
+    level_tag = level if level in ("WARN", "ERROR") else "INFO"
+    msg = (
+        f"[{level_tag}] TEMP {tname}: DISTRIBUTED {distributed}. {' '.join(tips)}\n"
+        f"  SQL место: {stmt.file_path} строки {stmt.start_line}–{stmt.end_line}"
+    )
+    return (level, f"temp:{stmt.idx}:{tname}", msg, tname)
+
+
+def detect_left_to_inner_antipattern(stmt: Stmt) -> Optional[Tuple[str,str,str]]:
+    sql, low = stmt.sql, stmt.sql.lower()
+    if " left join " not in low: return None
+    join_iter = re.finditer(
+        r"left\s+join\s+([^\s]+)\s+(?:as\s+)?([a-zA-Z_][\w]*)\s+on\s+(.*?)(?:(?:left|right|inner|full|cross)\s+join|\bwhere\b|;|$)",
+        sql, re.IGNORECASE | re.DOTALL)
+    where_block = re.search(r"\bwhere\b(.*)$", sql, re.IGNORECASE | re.DOTALL)
+    where_block = where_block.group(1) if where_block else ""
+    for jm in join_iter:
+        right_alias = jm.group(2)
+        if right_alias and re.search(rf"\b{re.escape(right_alias)}\.", where_block):
+            msg = (f"LEFT JOIN → фактически INNER: предикаты по правой таблице '{right_alias}' в WHERE.\n"
+                   f"  Замена: перенеси предикаты по '{right_alias}' из WHERE в ON ИЛИ используй INNER JOIN.\n"
+                   f"  SQL место: {stmt.file_path} строки {stmt.start_line}–{stmt.end_line}")
+            return ("WARN", f"left2inner:{stmt.idx}:{right_alias}", msg)
+    return None
+
+
+# ---------- схлопывание отчёта ----------
+def collapse_messages(items: List[Tuple[str, tuple, str, dict]], max_per_bucket: int = 5):
+    buckets: Dict[Tuple, List[Tuple[str, tuple, str, dict]]] = {}
+    for lvl, key, msg, meta in items:
+        k0 = key[0]
+        if k0 == "join":
+            norm = (k0, key[1], key[2], key[3])
+        elif k0 in ("seqscan", "heavy", "motion"):
+            norm = (k0, key[1], key[2] if len(key)>2 else None)
+        else:
+            norm = key
+        buckets.setdefault(norm, []).append((lvl, key, msg, meta or {}))
+
+    out_lines: List[str] = []
+    for norm_key, group in buckets.items():
+        group_sorted = sorted(group, key=lambda x: (x[0] != "WARN", -int((x[3] or {}).get("bytes", 0))))
+        show = group_sorted[:max_per_bucket]
+        rest = len(group_sorted) - len(show)
+        for _, _, msg, _ in show:
+            out_lines.append("  " + msg.strip())
+        if rest > 0:
+            title = norm_key[0]
+            if title == "join":
+                left_set = ", ".join(norm_key[2])
+                right_set = ", ".join(norm_key[3])
+                out_lines.append(f"  …и ещё {rest} похожих JOIN между {{{left_set}}} и {{{right_set}}}.")
+            elif title == "seqscan":
+                out_lines.append(f"  …и ещё {rest} похожих Seq Scan без фильтра.")
+            elif title == "motion":
+                out_lines.append(f"  …и ещё {rest} похожих крупных Motion.")
+            elif title == "heavy":
+                out_lines.append(f"  …и ещё {rest} похожих тяжёлых узлов (Hash/Agg/Sort).")
+    return out_lines
+
+
+def print_report(errors: List[str],
+                 warns_full: List[Tuple[str, tuple, str, dict]],
+                 infos_full: List[Tuple[str, tuple, str, dict]]):
+    print("\n" + "="*110)
+    print("GREENPLUM PLAN DOCTOR — СВОДКА (умное ревью)")
+    print("="*110)
+    print(f"— Итоги: ERROR={len(errors)} | WARN={sum(1 for _ in warns_full)} | INFO={sum(1 for _ in infos_full)}")
+
+    top_candidates = []
+    for lvl, key, msg, meta in warns_full:
+        score = int((meta or {}).get("bytes", 0))
+        top_candidates.append((score, key, msg))
+    top = [t for _,_,t in sorted(top_candidates, key=lambda x: -x[0])[:10]]
+    if top:
+        print("— ТОП сигналы:")
+        for i, t in enumerate(top, 1):
+            print(f"  {i}. {t.strip()}")
+
+    if errors:
+        print("\n— Ошибки:")
+        for e in errors:
+            print("  " + (e if isinstance(e,str) else str(e)))
+
+    warns_collapsed = collapse_messages(warns_full, max_per_bucket=4)
+    if warns_collapsed:
+        print("\n— Предупреждения (схлопнуто):")
+        for line in warns_collapsed:
+            print(line)
+
+    infos_collapsed = collapse_messages(infos_full, max_per_bucket=2)
+    if infos_collapsed:
+        print("\n— Инфо (схлопнуто):")
+        for line in infos_collapsed:
+            print(line)
+
+    actions: List[str] = []
+    if any(k[0]=="seqscan" for _,k,_,_ in warns_full):
+        actions.append("Поставь селективные фильтры/предфильтр во временные таблицы перед крупными Seq Scan.")
+    if any(k[0]=="join" for _,k,_,_ in warns_full):
+        actions.append("Согласуй DISTRIBUTED BY с ключами JOIN; малые таблицы можно REPLICATE (<~256MB).")
+    if any(k[0]=="motion" for _,k,_,_ in warns_full):
+        actions.append("Избегай лишних Motion: выровняй распределение по ключам соединения.")
+    if any(k[0]=="heavy" for _,k,_,_ in warns_full):
+        actions.append("Предагрегируй/сужай строки до Hash/Aggregate/Sort; точечно увеличь statement_mem.")
+    if any(isinstance(k, str) and k.startswith("temp:") for _,k,_,_ in infos_full):
+        actions.append("Для TEMP указывай явный DISTRIBUTED BY; избегай RANDOMLY.")
+    if actions:
+        print("\n— Что сделать в первую очередь:")
+        for i, a in enumerate(actions, 1):
+            print(f"  {i}) {a}")
+    print()
+
+
+# ---------- основной цикл ----------
+def run(sql_path: str, dsn: str):
+    with open(sql_path, "r", encoding="utf-8") as f:
+        full_sql = f.read()
+    stmts = split_sql_with_lines(full_sql, sql_path)
+
+    errors: List[str] = []
+    warns_full:  List[Tuple[str, tuple, str, dict]] = []
+    infos_full:  List[Tuple[str, tuple, str, dict]] = []
+
+    # карта CREATE TEMP: имя_таблицы -> Stmt
+    temp_creates: Dict[str, Stmt] = {}
     for st in stmts:
-        if is_temp_create(st.sql):
-            name = temp_name_from_create(st.sql)
-            if not name: continue
-            dist, cols = parse_distribution(st.sql)
-            td = TempDef(name=name, ddl_stmt=st, distributed=dist, dist_cols=cols, is_ctas=is_ctas(st.sql))
-            temp_defs[name] = td
+        meta = analyze_temp_create(st)
+        if meta:
+            _, _, _, tname = meta
+            temp_creates[tname] = st
 
-    conn = psycopg2.connect(dsn); conn.autocommit=False
-    cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = False
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    def sp(tag): cur.execute(f"SAVEPOINT {tag}")
-    def spr(tag):
-        try: cur.execute(f"ROLLBACK TO SAVEPOINT {tag}")
+    print(f"[i] File: {sql_path}\n")
+
+    executed_temps: Set[str] = set()
+
+    def sp(name: str):
+        cur.execute(f"SAVEPOINT {name}")
+
+    def spr(name: str):
+        try: cur.execute(f"ROLLBACK TO SAVEPOINT {name}")
         except Exception: pass
 
-    created: Set[str] = set()
-    errors: List[str] = []
-    reports_temp: Dict[str, Dict] = {t: {
-        "ddl_lines": (temp_defs[t].ddl_stmt.start, temp_defs[t].ddl_stmt.end),
-        "distributed": temp_defs[t].distributed,
-        "dist_cols": temp_defs[t].dist_cols,
-        "uses": [],
-        "plans": [],
-        "notes": []
-    } for t in temp_defs}
-
-    for tname, td in temp_defs.items():
-        sql = td.ddl_stmt.sql
-        try:
-            sp(f"ct_{tname}")
-            if td.is_ctas:
-                cur.execute(as_limit0(sql))
-            else:
-                cur.execute(sql)
-            created.add(tname)
-        except Exception as e:
-            spr(f"ct_{tname}")
-            errors.append(f"[CREATE TEMP {tname}] {e}")
-
-    def is_safe_for_temp_explain(st: Stmt) -> bool:
-        if is_drop(st.sql): return False
-        if is_set(st.sql):  return True
-        if not is_explainable(st.sql): return False
-        tgt = insert_target_name(st.sql) or update_target_name(st.sql) or delete_target_name(st.sql)
-        if tgt and tgt not in temp_defs:
-            return False
-        tabs = mentioned_tables(st.sql)
-        return any(t in temp_defs for t in tabs)
-
-    def explain_collect(st: Stmt):
-        tag = f"exp_{st.idx}"
+    def exec_sql_safe(sql: str, lbl: str, st: Optional[Stmt]=None) -> bool:
+        tag = f"sp_{lbl}_{(st.idx if st else 'x')}"
         try:
             sp(tag)
-            cur.execute(build_explain(st.sql))
-            rows = cur.fetchall()
-            cur.execute(f"RELEASE SAVEPOINT {tag}")
+            cur.execute(sql)
+            return True
         except Exception as e:
             spr(tag)
-            errors.append(f"[EXPLAIN stmt#{st.idx}] {e} [{st.path} {st.start}–{st.end}]")
-            return None
-        if not rows: return None
-        return rows[0]["QUERY PLAN"]
+            if st:
+                errors.append(f"[!] stmt#{st.idx} error: {str(e).strip()}\n  SQL место: {st.file_path} строки {st.start_line}–{st.end_line}")
+            else:
+                errors.append(f"[!] {lbl} error: {str(e).strip()}")
+            return False
 
-    def analyze_plan(plan_json, stmt: Stmt):
-        out_notes = []
-        involved_temps: Set[str] = set()
+    def exec_temp_create_for(name_l: str):
+        if not name_l: return False
+        if name_l in executed_temps: return True
+        stc = temp_creates.get(name_l)
+        if not stc: return False
+        sql_exec = stc.sql
+        if is_ctas(sql_exec) and EXECUTE_CTAS_LIMIT:
+            sql_exec = inject_limit_into_ctas(sql_exec, EXECUTE_CTAS_LIMIT)
+        ok = exec_sql_safe(sql_exec, f"create_{name_l}", stc)
+        if ok:
+            executed_temps.add(name_l)
+            infos_full.append(("INFO", f"create_temp:{stc.idx}", f"CREATE TEMP {name_l} выполнен.", {}))
+        return ok
 
+    def warmup_temps_mentioned(sql_text: str):
+        lower = strip_leading_comments(sql_text).lower()
+        for tname in list(temp_creates.keys()):
+            if tname in executed_temps: continue
+            if re.search(rf"\b{re.escape(tname)}\b", lower):
+                exec_temp_create_for(tname)
+
+    def explain_and_collect(sql_text: str, st: Stmt):
+        tag = f"sp_exp_{st.idx}"
         try:
-            root = plan_json[0]["Plan"]
-        except Exception:
-            return out_notes, involved_temps, {}
+            sp(tag)
+            cur.execute(build_explain(sql_text))
+            rows = cur.fetchall()
+            cur.execute(f"RELEASE SAVEPOINT {tag}")
+            plan = rows[0]["QUERY PLAN"]
+            for lvl, key, msg, meta in collect_findings_from_plan(plan, st):
+                (warns_full if lvl=="WARN" else infos_full).append((lvl, key, msg, meta or {}))
+            return True
+        except Exception as e:
+            spr(tag)
+            msg = str(e).strip()
 
-        heavy_motions = []
-        table_estimates = {}
+            # Подстраховка: если не хватает TEMP — создаём и пробуем ещё раз
+            m = re.search(r'relation\s+"?([a-zA-Z_][\w]*)"?\s+does not exist', msg, re.IGNORECASE)
+            if m:
+                missing = m.group(1).lower()
+                if exec_temp_create_for(missing):
+                    try:
+                        sp(tag)
+                        cur.execute(build_explain(sql_text))
+                        rows = cur.fetchall()
+                        cur.execute(f"RELEASE SAVEPOINT {tag}")
+                        plan = rows[0]["QUERY PLAN"]
+                        for lvl, key, msg2, meta in collect_findings_from_plan(plan, st):
+                            (warns_full if lvl=="WARN" else infos_full).append((lvl, key, msg2, meta or {}))
+                        return True
+                    except Exception as e2:
+                        spr(tag)
+                        errors.append(f"[!] stmt#{st.idx} EXPLAIN error: {str(e2).strip()}\n  SQL место: {st.file_path} строки {st.start_line}–{st.end_line}")
+                        return False
 
-        def walk(n):
-            if not isinstance(n, dict): return
-            ntype = n.get("Node Type","")
-            rows  = float(n.get("Plan Rows", 0) or 0)
-            width = float(n.get("Plan Width", 0) or 0)
-            est_mb = rows*max(width,1)/1024/1024
+            errors.append(f"[!] stmt#{st.idx} EXPLAIN error: {msg}\n  SQL место: {st.file_path} строки {st.start_line}–{st.end_line}")
+            return False
 
-            rel  = n.get("Relation Name")
-            alias= n.get("Alias")
+    # === явный PREWARM ===
+    def prewarm_all_temps():
+        # 1) CREATE TEMP (включая 'CREATE TEMP (...columns...)')
+        if EXECUTE_TEMPS:
+            for st in stmts:
+                if is_temp_create(st.sql):
+                    name_m = re.search(r"create\s+(?:temporary|temp)\s+table\s+([^\s(]+)",
+                                       strip_leading_comments(st.sql), re.IGNORECASE)
+                    name_l = name_m.group(1).strip('"').lower() if name_m else None
+                    sql_exec = st.sql
+                    if is_ctas(st.sql) and EXECUTE_CTAS_LIMIT:
+                        sql_exec = inject_limit_into_ctas(st.sql, EXECUTE_CTAS_LIMIT)
+                    if exec_sql_safe(sql_exec, f"prewarm_create_{name_l or 'temp'}", st):
+                        if name_l: executed_temps.add(name_l)
+                        infos_full.append(("INFO", f"prewarm_create:{st.idx}", f"PREWARM CREATE TEMP выполнен.", {}))
+        # 2) INSERT INTO temp_* (прогрев наполнением)
+        if EXECUTE_INSERT_INTO_TEMP:
+            for st in stmts:
+                if is_insert(st.sql) and is_target_temp_table(st.sql):
+                    # убедись, что цель существует
+                    tgt = target_table_name_from_insert(st.sql)
+                    tgt_short = tgt.split(".")[-1] if tgt else None
+                    if tgt_short and tgt_short not in executed_temps:
+                        exec_temp_create_for(tgt_short)
+                    exec_sql = st.sql
+                    if INSERT_TEMP_LIMIT:
+                        exec_sql = wrap_insert_select_with_limit(st.sql, INSERT_TEMP_LIMIT)
+                    if exec_sql_safe(exec_sql, "prewarm_insert_temp", st):
+                        infos_full.append(("INFO", f"prewarm_insert:{st.idx}",
+                                           f"PREWARM INSERT INTO TEMP выполнен. [{st.file_path} строки {st.start_line}–{st.end_line}]",
+                                           {}))
 
-            if rel and rel.lower() in temp_defs:
-                involved_temps.add(rel.lower())
-                table_estimates[rel.lower()] = (rows, width)
-
-            if ntype == "Seq Scan" and not n.get("Filter"):
-                lvl = "WARN" if est_mb >= SIZE_MB_SEQSCAN_WARN else "INFO"
-                out_notes.append(f"[{lvl}] Seq Scan без фильтра: {rel or alias or '?'} — ~{rows:,.0f} × {int(width)} B/row ({est_mb:.2f} MB).".replace(","," "))
-
-            if ntype in ("Hash","Aggregate","Sort"):
-                lvl = "WARN" if est_mb >= SIZE_MB_HEAVY_WARN else "INFO"
-                out_notes.append(f"[{lvl}] Тяжёлый узел {ntype} — ~{est_mb:.1f} MB.")
-
-            if "Motion Type" in n:
-                lvl = "WARN" if est_mb >= SIZE_MB_MOTION_WARN else "INFO"
-                mt = n.get("Motion Type")
-                heavy_motions.append((mt, est_mb))
-                out_notes.append(f"[{lvl}] {mt} — ~{est_mb:.1f} MB.")
-
-            for k in ("Plans","Inner","Outer"):
-                ch = n.get(k)
-                if isinstance(ch, list):
-                    for c in ch: walk(c)
-                elif isinstance(ch, dict):
-                    walk(ch)
-
-        walk(root)
-        if heavy_motions:
-            worst = max(heavy_motions, key=lambda x: x[1])
-            out_notes.append(f"[INFO] Motion суммарно: {len(heavy_motions)} узлов, худший {worst[0]} ~{worst[1]:.1f} MB.")
-
-        return out_notes, involved_temps, table_estimates
-
-    for st in stmts:
-        if is_set(st.sql):
-            try:
-                sp(f"set_{st.idx}"); cur.execute(st.sql)
-            except Exception:
-                spr(f"set_{st.idx}")
-            continue
-        if not is_safe_for_temp_explain(st):
-            continue
-
-        plan = explain_collect(st)
-        if not plan: continue
-        notes, temps, ests = analyze_plan(plan, st)
-        for t in temps:
-            rep = reports_temp[t]
-            rep["uses"].append((st.idx, low(st.sql).split()[0], f"{st.path} {st.start}–{st.end}"))
-            rep["plans"].append(plan)
-            rep["notes"].extend(notes)
-            if "est" not in rep:
-                rep["est"] = {}
-            rep["est"][st.idx] = ests.get(t, (0,0))
-
-    def evaluate_distribution_heuristic(rep: Dict, tname: str):
-        dist = rep.get("distributed")
-        dcols= rep.get("dist_cols", tuple())
-        notes= rep["notes"]
-
-        est_rows, est_width = 0, 0
-        if "est" in rep and rep["est"]:
-            mx = 0
-            for (_sid,(r,w)) in rep["est"].items():
-                vol = r*max(w,1)
-                if vol>mx: mx, est_rows, est_width = vol, r, w
-        vol_mb = est_rows*max(est_width,1)/1024/1024
-
-        if dist == "REPLICATED":
-            if vol_mb > SMALL_REPLICATE_CEILMB:
-                notes.append(f"[WARN] {tname}: REPLICATED и объём ~{vol_mb:.1f} MB — рассмотрите DISTRIBUTED BY по ключам JOIN.")
-            else:
-                notes.append(f"[INFO] {tname}: REPLICATED — малый объём (~{vol_mb:.1f} MB) допустим.")
-            return
-        if dist == "RANDOMLY":
-            notes.append(f"[WARN] {tname}: DISTRIBUTED RANDOMLY — вероятны Redistribute Motion на JOIN; лучше BY по ключу(ам) JOIN.")
-            return
-        if dist == "BY":
-            if not dcols:
-                notes.append(f"[WARN] {tname}: DISTRIBUTED BY без колонок? Проверьте DDL.")
-                return
-            has_motion_warn = any(n.startswith("[WARN]") and "Motion" in n for n in notes)
-            if has_motion_warn:
-                notes.append(f"[WARN] {tname}: есть тяжёлые Motion; проверьте, совпадают ли DISTRIBUTED BY {list(dcols)} с равенственными ключами JOIN.")
-            else:
-                notes.append(f"[INFO] {tname}: DISTRIBUTED BY {list(dcols)} — выглядит разумно (явных тяжёлых Motion не найдено).")
-
-    for tname, rep in (reports_temp.items()):
-        evaluate_distribution_heuristic(rep, tname)
-
-    def print_section(title: str):
-        print("\n" + title)
-        print("="*len(title))
-
-    print_section("GREENPLUM PLAN DOCTOR — TEMP SUMMARY")
-    print(f"Файл: {SQL_FILE_PATH}")
-    print(f"Найдено временных таблиц: {len(temp_defs)}")
-
-    for tname, rep in reports_temp.items():
-        print_section(f"TEMP {tname}")
-        dl = rep["ddl_lines"]
-        print(f"DDL строки: {dl[0]}–{dl[1]}")
-        dist = rep.get("distributed") or "—"
-        dcols= list(rep.get("dist_cols") or [])
-        print(f"DISTRIBUTION: {dist} {(' ' + str(dcols)) if dcols else ''}")
-
-        uses = rep["uses"]
-        if uses:
-            print(f"Использования ({len(uses)}):")
-            for (sid, kind, where) in uses[:20]:
-                print(f"  stmt#{sid:>3}  {kind:6}  @ {where}")
-            if len(uses) > 20:
-                print(f"  … ещё {len(uses)-20} операторов")
-
-        notes = rep["notes"]
-        if notes:
-            print("Подсказки:")
-            for n in sorted(notes, key=lambda x: 0 if x.startswith("[WARN]") else 1):
-                print("  " + n)
-        else:
-            print("Подсказки: нет явных проблем (по планам).")
-
-    print("\nГотово. Все изменения откатятся автоматически.")
     try:
-        conn.rollback()
+        # Глобальные SET/RESET
+        for st in stmts:
+            if is_set(st.sql):
+                if exec_sql_safe(st.sql, "set", st):
+                    infos_full.append(("INFO", f"set:{st.idx}", f"SET/RESET выполнен.", {}))
+
+        # Прогрев TEMP
+        prewarm_all_temps()
+
+        # Основной проход — эвристики + EXPLAIN
+        for st in stmts:
+            anti = detect_left_to_inner_antipattern(st)
+            if anti:
+                warns_full.append(("WARN", ("left2inner", st.idx), anti[-1], {}))
+            meta = analyze_temp_create(st)
+            if meta:
+                lvl, key, msg, _ = meta
+                (warns_full if lvl=="WARN" else infos_full).append((lvl, key, msg, {}))
+
+            if is_drop(st.sql):
+                if exec_sql_safe(st.sql, "drop", st):
+                    infos_full.append(("INFO", f"drop:{st.idx}", f"DROP выполнен.", {}))
+                continue
+
+            if is_temp_create(st.sql):
+                # уже прогрето
+                continue
+
+            if is_insert(st.sql):
+                # Если целевая — TEMP, убедимся, что она создана (подстраховка) и делаем EXPLAIN по INSERT.
+                tgt = target_table_name_from_insert(st.sql)
+                tgt_short = tgt.split(".")[-1] if tgt else None
+                if tgt_short and is_target_temp_table(st.sql):
+                    if tgt_short not in executed_temps:
+                        exec_temp_create_for(tgt_short)
+
+                # 1) EXPLAIN по полному INSERT (даёт реальный план записи)
+                explain_and_collect(st.sql, st)
+
+                # 2) EXPLAIN отдельно по SELECT-части (как и прежде)
+                sel = extract_insert_select(st.sql)
+                if sel:
+                    explain_and_collect(sel, st)
+                continue
+
+            if is_select_like(st.sql) or is_ctas(st.sql) or is_explainable(st.sql):
+                warmup_temps_mentioned(st.sql)
+                explain_and_collect(st.sql, st)
+            else:
+                infos_full.append(("INFO", f"skip:{st.idx}", f"Пропущен (не TEMP и небезопасный).", {}))
     finally:
-        cur.close(); conn.close()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        cur.close()
+        conn.close()
+
+    # ====== отчёт ======
+    print_report(errors, warns_full, infos_full)
+
 
 if __name__ == "__main__":
-    main(SQL_FILE_PATH, DEFAULT_DSN)
+    run(SQL_FILE_PATH, DEFAULT_DSN)
+
+

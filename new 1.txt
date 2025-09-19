@@ -1,372 +1,12 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 6,
-      "Receivers": 1,
-      "Slice": 5,
-      "Segments": 6,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 236827.50,
-      "Plan Rows": 173880275,
-      "Plan Width": 84,
-      "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "(COALESCE(((lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone))", "ckmlcr_ral.vprsv", "ckmlcr_ral.stprs", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "(CASE WHEN (((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((((ckmlcr_ral.stprs / (NULLIF(ckmlcr_ral.peinh, 0))::numeric) * (ckmlpp_ral.umkumo + ckmlpp_ral.abkumo)) + COALESCE(ckmlcr_ral.abprd_o, '0'::numeric)) + COALESCE(ckmlcr_ral.abprd_mo, '0'::numeric)) + COALESCE(mlcd_agg.salk3, '0'::numeric)) + COALESCE(mlcd_agg.estprd, '0'::numeric)) + COALESCE(mlcd_agg.mstprd, '0'::numeric)), 2), 2621464) / ((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo)), 15) END)", "(CASE WHEN (((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((((COALESCE(ckmlcr_next.salk3, '0'::numeric) + COALESCE(mlcd_agg.salk3, '0'::numeric)) + COALESCE(mlcd_agg.estprd, '0'::numeric)) + COALESCE(mlcd_agg.mstprd, '0'::numeric)), 2621464) / ((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo)), 15) ELSE '0'::numeric END)", "(CASE WHEN (ckmlpp_ral.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(COALESCE(ckmlcr_ral.salk3, '0'::numeric), 2621464) / ckmlpp_ral.lbkum), 15) ELSE '0'::numeric END)", "material_ledger_header.price_rule_code"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 5,
-          "Segments": 6,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 193545.23,
-          "Plan Rows": 173880275,
-          "Plan Width": 84,
-          "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "COALESCE(((lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)", "ckmlcr_ral.vprsv", "ckmlcr_ral.stprs", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "CASE WHEN (((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((((ckmlcr_ral.stprs / (NULLIF(ckmlcr_ral.peinh, 0))::numeric) * (ckmlpp_ral.umkumo + ckmlpp_ral.abkumo)) + COALESCE(ckmlcr_ral.abprd_o, '0'::numeric)) + COALESCE(ckmlcr_ral.abprd_mo, '0'::numeric)) + COALESCE(mlcd_agg.salk3, '0'::numeric)) + COALESCE(mlcd_agg.estprd, '0'::numeric)) + COALESCE(mlcd_agg.mstprd, '0'::numeric)), 2), 2621464) / ((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo)), 15) END", "CASE WHEN (((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((((COALESCE(ckmlcr_next.salk3, '0'::numeric) + COALESCE(mlcd_agg.salk3, '0'::numeric)) + COALESCE(mlcd_agg.estprd, '0'::numeric)) + COALESCE(mlcd_agg.mstprd, '0'::numeric)), 2621464) / ((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo)), 15) ELSE '0'::numeric END", "CASE WHEN (ckmlpp_ral.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(COALESCE(ckmlcr_ral.salk3, '0'::numeric), 2621464) / ckmlpp_ral.lbkum), 15) ELSE '0'::numeric END", "material_ledger_header.price_rule_code"],
-          "Plans": [
-            {
-              "Node Type": "Hash Join",
-              "Parent Relationship": "Outer",
-              "Slice": 5,
-              "Segments": 6,
-              "Gang Type": "primary reader",
-              "Join Type": "Left",
-              "Startup Cost": 0.00,
-              "Total Cost": 191110.90,
-              "Plan Rows": 173880275,
-              "Plan Width": 87,
-              "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "(lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?))", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo", "ckmlcr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd", "material_ledger_header.price_rule_code"],
-              "Hash Cond": "((ckmlpp_ral.kalnr)::text = (material_ledger_header.calculation_code)::text)",
-              "Plans": [
-                {
-                  "Node Type": "Hash Join",
-                  "Parent Relationship": "Outer",
-                  "Slice": 5,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Join Type": "Left",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 178300.73,
-                  "Plan Rows": 86940137,
-                  "Plan Width": 85,
-                  "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "(lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?))", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo", "ckmlcr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
-                  "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (mlcd_agg.kalnr)::text) AND ((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1)) = mlcd_agg.dt_period))",
-                  "Plans": [
-                    {
-                      "Node Type": "Hash Join",
-                      "Parent Relationship": "Outer",
-                      "Slice": 5,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Left",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 166604.52,
-                      "Plan Rows": 86940137,
-                      "Plan Width": 69,
-                      "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "(lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?))", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo", "ckmlcr_next.salk3"],
-                      "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (ckmlcr_next.kalnr)::text) AND ((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1)) = ckmlcr_next.dt_next))",
-                      "Plans": [
-                        {
-                          "Node Type": "Hash Join",
-                          "Parent Relationship": "Outer",
-                          "Slice": 5,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Join Type": "Left",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 135457.02,
-                          "Plan Rows": 86079344,
-                          "Plan Width": 65,
-                          "Output": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "(lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?))", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo"],
-                          "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (ckmlcr_ral.kalnr)::text) AND ((ckmlpp_ral.bdatj)::text = (ckmlcr_ral.bdatj)::text) AND ((ckmlpp_ral.poper)::text = (ckmlcr_ral.poper)::text))",
-                          "Plans": [
-                            {
-                              "Node Type": "WindowAgg",
-                              "Parent Relationship": "Outer",
-                              "Slice": 5,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 80522.66,
-                              "Plan Rows": 86079344,
-                              "Plan Width": 42,
-                              "Output": ["lead((make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))) OVER (?)", "ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo"],
-                              "Partition By": ["ckmlpp_ral.kalnr"],
-                              "Order By": ["(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Sort",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 5,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 79977.49,
-                                  "Plan Rows": 86079344,
-                                  "Plan Width": 38,
-                                  "Output": ["(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))", "ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo"],
-                                  "Sort Key": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1))"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Result",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 5,
-                                      "Segments": 6,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 6488.83,
-                                      "Plan Rows": 86079344,
-                                      "Plan Width": 38,
-                                      "Output": ["make_date((ckmlpp_ral.bdatj)::integer, (btrim((ckmlpp_ral.poper)::text))::integer, 1)", "ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 6,
-                                          "Receivers": 6,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 6,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 4509.01,
-                                          "Plan Rows": 86079344,
-                                          "Plan Width": 34,
-                                          "Output": ["ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo"],
-                                          "Hash Key": "ckmlpp_ral.kalnr",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 1,
-                                              "Segments": 6,
-                                              "Gang Type": "primary reader",
-                                              "Relation Name": "ckmlpp_ral",
-                                              "Schema": "ods",
-                                              "Alias": "ckmlpp_ral",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 2982.25,
-                                              "Plan Rows": 86079344,
-                                              "Plan Width": 34,
-                                              "Output": ["ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "ckmlpp_ral.lbkum", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo"],
-                                              "Filter": "((ckmlpp_ral.untper)::text = '000'::text)"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "Node Type": "Hash",
-                              "Parent Relationship": "Inner",
-                              "Slice": 5,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 7952.55,
-                              "Total Cost": 7952.55,
-                              "Plan Rows": 86100947,
-                              "Plan Width": 54,
-                              "Output": ["ckmlcr_ral.bdatj", "ckmlcr_ral.kalnr", "ckmlcr_ral.poper", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Redistribute Motion",
-                                  "Senders": 6,
-                                  "Receivers": 6,
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 2,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 7952.55,
-                                  "Plan Rows": 86100947,
-                                  "Plan Width": 54,
-                                  "Output": ["ckmlcr_ral.bdatj", "ckmlcr_ral.kalnr", "ckmlcr_ral.poper", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo"],
-                                  "Hash Key": "ckmlcr_ral.kalnr",
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 2,
-                                      "Segments": 6,
-                                      "Gang Type": "primary reader",
-                                      "Relation Name": "ckmlcr_ral",
-                                      "Schema": "ods",
-                                      "Alias": "ckmlcr_ral",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 5527.09,
-                                      "Plan Rows": 86100947,
-                                      "Plan Width": 54,
-                                      "Output": ["ckmlcr_ral.bdatj", "ckmlcr_ral.kalnr", "ckmlcr_ral.poper", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo"],
-                                      "Filter": "(((ckmlcr_ral.untper)::text = '000'::text) AND ((ckmlcr_ral.curtp)::text = '10'::text))"
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "Node Type": "Hash",
-                          "Parent Relationship": "Inner",
-                          "Slice": 5,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 2337.73,
-                          "Total Cost": 2337.73,
-                          "Plan Rows": 86121472,
-                          "Plan Width": 21,
-                          "Output": ["ckmlcr_next.kalnr", "ckmlcr_next.dt_next", "ckmlcr_next.salk3"],
-                          "Plans": [
-                            {
-                              "Node Type": "Redistribute Motion",
-                              "Senders": 6,
-                              "Receivers": 6,
-                              "Parent Relationship": "Outer",
-                              "Slice": 3,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 2337.73,
-                              "Plan Rows": 86121472,
-                              "Plan Width": 21,
-                              "Output": ["ckmlcr_next.kalnr", "ckmlcr_next.dt_next", "ckmlcr_next.salk3"],
-                              "Hash Key": "ckmlcr_next.kalnr",
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 3,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "ckmlcr_next",
-                                  "Schema": "pg_temp_2816766",
-                                  "Alias": "ckmlcr_next",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 833.62,
-                                  "Plan Rows": 86121472,
-                                  "Plan Width": 21,
-                                  "Output": ["ckmlcr_next.kalnr", "ckmlcr_next.dt_next", "ckmlcr_next.salk3"]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "Node Type": "Hash",
-                      "Parent Relationship": "Inner",
-                      "Slice": 5,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 658.16,
-                      "Total Cost": 658.16,
-                      "Plan Rows": 6837935,
-                      "Plan Width": 33,
-                      "Output": ["mlcd_agg.kalnr", "mlcd_agg.dt_period", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
-                      "Plans": [
-                        {
-                          "Node Type": "Redistribute Motion",
-                          "Senders": 6,
-                          "Receivers": 6,
-                          "Parent Relationship": "Outer",
-                          "Slice": 4,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 658.16,
-                          "Plan Rows": 6837935,
-                          "Plan Width": 33,
-                          "Output": ["mlcd_agg.kalnr", "mlcd_agg.dt_period", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
-                          "Hash Key": "mlcd_agg.kalnr",
-                          "Plans": [
-                            {
-                              "Node Type": "Seq Scan",
-                              "Parent Relationship": "Outer",
-                              "Slice": 4,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Relation Name": "mlcd_agg",
-                              "Schema": "pg_temp_2816766",
-                              "Alias": "mlcd_agg",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 470.49,
-                              "Plan Rows": 6837935,
-                              "Plan Width": 33,
-                              "Output": ["mlcd_agg.kalnr", "mlcd_agg.dt_period", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Hash",
-                  "Parent Relationship": "Inner",
-                  "Slice": 5,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 469.42,
-                  "Total Cost": 469.42,
-                  "Plan Rows": 3175345,
-                  "Plan Width": 15,
-                  "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"],
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 5,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "material_ledger_header",
-                      "Schema": "dds",
-                      "Alias": "material_ledger_header",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 469.42,
-                      "Plan Rows": 3175345,
-                      "Plan Width": 15,
-                      "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
-
-
-[i] File: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql
-
-
 ==============================================================================================================
 GREENPLUM PLAN DOCTOR — СВОДКА
 ==============================================================================================================
-— Итоги: ERROR=4 | WARN=1 | INFO=6
-
+— Итоги: ERROR=2 | WARN=1 | INFO=10
 — ТОП сигналы:
-  1. [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: убедись, что результат небольшого объёма (<~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  1. [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
 
 — Ошибки:
-  [!] stmt#2 error: syntax error at or near "LIMIT"
-LINE 11: LIMIT 200000
-         ^
-  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21
-  [!] stmt#3 error: syntax error at or near "LIMIT"
-LINE 13: LIMIT 200000
-         ^
-  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
   [!] stmt#6 error: relation "tmp_1" does not exist
 LINE 185:  cross join tmp_1
                       ^
@@ -377,15 +17,710 @@ LINE 160:  left join ckmlpp_2
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 443–685
 
 — Предупреждения:
-  [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: убедись, что результат небольшого объёма (<~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
+  [WARN] stmt#3 TEMP muom: DISTRIBUTED REPLICATED. REPLICATED: проверь, что результат компактный (< ~256 MB). ON COMMIT DROP — ок для промежуточных витрин.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 21–35
 
 — Инфо:
-  [INFO] stmt#1 Пропущен (не TEMP и небезопасный для исполнения).
+  [INFO] stmt#1 TEMP tmp_1: DISTRIBUTED BY (currency_code). ON COMMIT DROP — ок для промежуточных витрин.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 1–10
+  [INFO] stmt#1 CREATE TEMP выполнен.
   [INFO] stmt#2 TEMP pawad: DISTRIBUTED BY (plant_code, warehouse_code). ON COMMIT DROP — ок для промежуточных витрин.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 10–21
-  [INFO] stmt#4 Пропущен (не TEMP и небезопасный для исполнения).
+  [INFO] stmt#2 CREATE TEMP выполнен.
+  [INFO] stmt#3 CREATE TEMP выполнен.
+  [INFO] stmt#4 DROP выполнен.
   [INFO] stmt#5 TEMP base: DISTRIBUTED BY (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, non_liquid_asset_type_code, material_costing_system_code). WITH(appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) — ок для AO/column/zstd, проверь compresslevel.
   SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 38–106
   [INFO] stmt#5 CREATE TEMP выполнен.
-  [INFO] stmt#7 Пропущен (не TEMP и небезопасный для исполнения).
+  [INFO] stmt#7 TEMP ckmlpp_2: DISTRIBUTED BY (calculation_code). ON COMMIT DROP — ок для промежуточных витрин.
+  SQL место: C:\Users\SuvorovND\GIT\table-dependency-viewer\SALES_MM\dm\material_stock_balance\sql_query_insert_init.sql строки 431–443
+  [INFO] stmt#7 CREATE TEMP выполнен.
+
+
+
+--временные таблицы для base
+create temporary table tmp_1 ON COMMIT DROP as (
+	select 
+		currency_code 
+	from 
+		dict_dds.mandant 
+	where 
+		mandant_code = '400'
+)
+distributed by (currency_code);
+
+create temporary table pawad ON COMMIT DROP as (
+	select 
+		paw.plant_code as plant_code,
+		paw.warehouse_code as warehouse_code,
+		max(paw.address_code) as address_code 
+	from 
+		dict_dds.plant_and_warehouse_address_definition as paw
+	group by paw.plant_code, paw.warehouse_code
+)
+distributed by (plant_code, warehouse_code);
+
+
+create temporary table muom ON COMMIT DROP as (
+		select
+			material_code,
+			material_alternative_uom_code
+		from
+			dict_dds.material_unit_of_measure as mum
+			left join dict_dds.internal_characteristic as ich
+				on mum.internal_characteristic_code = ich.internal_characteristic_code
+		where
+			ich.internal_characteristic_title_code = 'COEF_TRANS'
+)
+distributed replicated;
+
+--формирование base
+drop table if exists base;
+
+create temporary table base (
+	dt_posting date null, -- Дата выбора запасов
+	material_code varchar(18) NULL, -- Материал
+	material_uom_code varchar(90) NULL,
+	plant_code varchar(4) null, -- Завод
+	warehouse_code varchar(4) NULL, -- Склад
+	batch_code varchar(10) NULL, -- Партия
+	valuation_type_code varchar(10) NULL, -- Вид оценки
+	stock_type_code varchar(1) NULL, -- Особый запас
+	sales_document_code varchar(10) NULL, -- Заказ клиента MAT_KDAUF
+	sales_document_position_line_item_code varchar(6) NULL, -- ПозЗаказКлиента MAT_KDPOS
+	wbs_element_code varchar(24) NULL, -- СПП-элемент
+	supplier_code varchar(30) NULL,
+	customer_code varchar(30) NULL,
+	-------------------------------------------------------------------
+	total_stock_quantity numeric(16, 3) NULL,
+	---------------------------------------------------------------------
+	unit_balance_currency_code varchar(15) NULL, -- Валюта
+	material_costing_system_code varchar(12) NULL, -- Номер калькуляции
+	price_rule_code varchar(1) NULL,
+	dt_posting_next date NULL,
+	plant_name varchar(30) NULL,
+	valuation_assessment_code varchar(4) NULL,
+	warehouse_name varchar(16) NULL,
+	warehouse_type_code varchar(4) NULL,
+	warehouse_type_name varchar(30) NULL,
+	storage_bin_code varchar(10) NULL,
+	material_full_name varchar(260) NULL,
+	material_kubal_code varchar(30) NULL,
+	is_batch_mandatory varchar(1) NULL,
+	material_type_code varchar(4) NULL,
+	material_group_code varchar(9) NULL,
+	sector_code varchar(2) NULL,
+	material_category_code varchar(30) NULL,
+	material_short_name varchar(60) NULL,
+	material_alternative_uom_code varchar(3) NULL,
+	material_alternative_uom_name varchar(3) NULL,
+	material_tnved_eas_code varchar(17) NULL,
+	material_okpd2_code varchar(16) NULL,
+	purchase_responsible_department_code varchar(3) NULL,
+	material_planning_controller_code varchar(4) NULL,
+	head_of_production_code varchar(3) NULL,
+	material_type_name varchar(25) NULL,
+	material_group_name varchar(20) NULL,
+	purchase_responsible_department_name varchar(18) NULL,
+	material_planning_controller_name varchar(18) NULL,
+	holding_currency_code varchar(3) NULL,
+	wbs_element_short_name varchar(40) NULL,
+	unit_balance_code varchar(4) NULL,
+	material_category_name varchar(240) NULL,
+	counterparty_wbs_element_code varchar(72) NULL,
+	valuation_class_code varchar(12) NULL,
+	external_contract_number varchar(35) NULL,
+	supplier_extended_name varchar(100) NULL,
+	customer_extended_name varchar(100) NULL,
+	non_liquid_asset_type_code varchar(1) NULL,
+	uom_to_alternative_uom_coefficient_amount float8 NULL,
+	base_uom_name varchar(3) NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (valuation_class_code, valuation_assessment_code, unit_balance_code, counterparty_wbs_element_code, 
+	non_liquid_asset_type_code, material_costing_system_code);
+
+
+
+insert into base(
+	dt_posting,
+	material_code,
+	material_uom_code,
+	plant_code,
+	warehouse_code,
+	batch_code,
+	valuation_type_code,
+	stock_type_code,
+	sales_document_code,
+	sales_document_position_line_item_code,
+	wbs_element_code,
+	supplier_code,
+	customer_code,
+	total_stock_quantity,
+	unit_balance_currency_code,
+	material_costing_system_code,
+	price_rule_code,
+	dt_posting_next,
+	plant_name,
+	valuation_assessment_code,
+	warehouse_name,
+	warehouse_type_code,
+	warehouse_type_name,
+	storage_bin_code,
+	material_full_name,
+	material_kubal_code,
+	is_batch_mandatory,
+	material_type_code,
+	material_group_code,
+	sector_code,
+	material_category_code,
+	material_short_name,
+	material_alternative_uom_code,
+	material_alternative_uom_name,
+	material_tnved_eas_code,
+	material_okpd2_code,
+	purchase_responsible_department_code,
+	material_planning_controller_code,
+	head_of_production_code,
+	material_type_name,
+	material_group_name,
+	purchase_responsible_department_name,
+	material_planning_controller_name,
+	holding_currency_code,
+	wbs_element_short_name,
+	unit_balance_code,
+	material_category_name,
+	counterparty_wbs_element_code,
+	valuation_class_code,
+	external_contract_number,
+	supplier_extended_name,
+	customer_extended_name,
+	non_liquid_asset_type_code,
+	uom_to_alternative_uom_coefficient_amount,
+	base_uom_name
+)
+select 
+	base.dt_posting,
+	base.material_code,
+	base.material_uom_code,
+	base.plant_code,
+	base.warehouse_code,
+	base.batch_code,
+	base.valuation_type_code,
+	base.stock_type_code,
+	base.sales_document_code,
+	base.sales_document_position_line_item_code,
+	wbs_sprav.wbs_element_number as wbs_element_code,
+	base.supplier_code,
+	base.customer_code,
+	-------------------------------------------------------------------
+	base.total_stock_quantity as total_stock_quantity,
+	---------------------------------------------------------------------
+	base.unit_balance_currency_code,
+	base.material_costing_system_code,
+	base.price_rule_code,
+	base.dt_posting_next,
+	pas.plant_short_name as plant_name,
+	pas.valuation_area_code as valuation_assessment_code,
+	ware.warehouse_name as warehouse_name,
+	addr.title_code as warehouse_type_code,
+	titt.title_name as warehouse_type_name,
+	mabw.storage_bin_code as storage_bin_code,
+	matt.material_full_name as material_full_name,
+	mara.material_kubal_code as material_kubal_code,
+	mara.is_batch_mandatory as is_batch_mandatory,
+	mara.material_type_code as material_type_code,
+	mara.material_group_code as material_group_code,
+	mara.sector_code as sector_code,
+	mara.material_category_code as material_category_code,
+	case 
+		when mara.is_batch_mandatory is not null 
+			and ksk.object_class_code is not null 
+			and mat_bat.material_detailed_name is not null 
+		then mat_bat.material_detailed_name 
+		else matt.material_name 
+	end as material_short_name,
+	muom.material_alternative_uom_code as material_alternative_uom_code, -- Альтернативная ЕИ
+	ueft.uom_external_format_code as material_alternative_uom_name,
+	mabp.tnved_code as material_tnved_eas_code,	
+	mabp.excise_tax_foreign_trade_control_code as material_okpd2_code,
+	mabp.purchase_group_code as purchase_responsible_department_code,
+	mabp.material_planning_controller_code as material_planning_controller_code,
+	mabp.head_of_production_code as head_of_production_code,
+	mtt.material_type_name as material_type_name,
+	mgt.material_group_short_name as material_group_name,
+	pgn.purchase_group_name as purchase_responsible_department_name,
+	mpc.material_planning_controller_name as material_planning_controller_name,
+	tmp_1.currency_code as holding_currency_code,
+	wbs_sprav.wbs_element_short_name as wbs_element_short_name,
+	vaar.unit_balance_code as unit_balance_code,
+	mcmdt.material_category_name as material_category_name,
+	case 
+		when base.wbs_element_code is null 
+			and base.sales_document_code is not null
+			and base.sales_document_position_line_item_code is not null 
+			and coalesce(
+				vbap_1.sales_request_for_proposal_position_wbs_element_code, 
+				vbap_2.sales_contract_position_wbs_element_code, 
+				vbap_3.sales_order_position_wbs_element_code,
+				vbap_4.sales_proposal_position_wbs_element_code) is not null
+		then coalesce(
+				vbap_1.sales_request_for_proposal_position_wbs_element_code,
+				vbap_2.sales_contract_position_wbs_element_code,
+				vbap_3.sales_order_position_wbs_element_code,
+				vbap_4.sales_proposal_position_wbs_element_code)
+		else coalesce(
+				vbak_1.sales_request_for_proposal_wbs_element_code,
+				vbak_2.sales_contract_wbs_element_code,
+				vbak_3.sales_order_wbs_element_code,
+				vbak_4.sales_proposal_wbs_element_code) 
+	end as counterparty_wbs_element_code,
+	case
+		when base.sales_document_code is not null
+			and ebh.valuation_class_code is not null
+			and ebh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then ebh.valuation_class_code
+		when base.sales_document_code is not null
+			and ebn.valuation_class_code is not null 
+		then ebn.valuation_class_code
+		when base.sales_document_code is not null
+			and ebn.valuation_class_code is null
+		then ebh.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbh.valuation_class_code is not null
+			and qbh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then qbh.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbn.valuation_class_code is not null
+		then qbn.valuation_class_code
+		when base.wbs_element_code is not null
+			and qbn.valuation_class_code is null
+		then qbh.valuation_class_code	
+		when mbh.valuation_class_code is not null
+			and mbh.dt_valid_from = date_trunc('month', base.dt_posting)
+		then mbh.valuation_class_code
+		when mbn.valuation_class_code is not null
+		then mbn.valuation_class_code
+		when mbn.valuation_class_code is null
+		then mbh.valuation_class_code
+	else null
+	end as valuation_class_code, -- Класс оценки
+	coalesce(
+		vbak_1.sales_order_external_number,
+		vbak_2.sales_order_external_number,
+		vbak_3.sales_order_external_number,
+		vbak_4.sales_order_external_number
+	) as external_contract_number,
+	countr_1.counterparty_full_name as supplier_extended_name,
+	countr_2.counterparty_full_name as customer_extended_name,
+	case
+		when base.wbs_element_code is not null
+			and wbs_sprav.project_type_code = '99'
+		then substring(wbs_sprav.wbs_element_code, 6, 1)
+		when base.wbs_element_code is null
+			and base.valuation_type_code like 'U%'
+		then mat_bat.nonliquid_asset_type_code--aup3.ATWRT
+		else null
+	end as non_liquid_asset_type_code,
+	mat_bat.uom_to_alternative_uom_coefficient_amount as uom_to_alternative_uom_coefficient_amount,
+	t006a.uom_external_format_code as base_uom_name
+from 
+	dm_calc.material_stock_balance as base 
+	cross join tmp_1
+	left join dict_dds.wbs_element_master_data_detail as wbs_sprav 
+		on wbs_sprav.wbs_element_code = base.wbs_element_code
+	left join dict_dds.plant_and_subsidiary as pas
+		on pas.plant_code = base.plant_code
+	left join dict_dds.warehouse as ware
+		on ware.warehouse_code = base.warehouse_code
+		and ware.plant_code = base.plant_code
+	left join pawad
+		on pawad.plant_code = base.plant_code
+		and pawad.warehouse_code = base.warehouse_code
+	left join dict_dds.address as addr
+		on addr.address_code = pawad.address_code
+	left join dict_dds.title_texts as titt
+		on titt.title_code = addr.title_code
+		and titt.language_code = 'R'
+	left join dict_dds.material_by_warehouse as mabw
+		on mabw.material_code = base.material_code
+		and mabw.plant_code = base.plant_code
+		and mabw.warehouse_code = base.warehouse_code
+	left join dict_dds.material_texts as matt
+		on matt.material_code = base.material_code
+		and matt.language_code = 'R'
+	left join dict_dds.material as mara
+		on mara.material_code = base.material_code			
+	left join dict_dds.map_object_to_class as ksk
+		on ksk.object_class_code = mara.material_classification_system_code
+		and ksk.object_or_class_code = 'O'
+		and ksk.class_type_code = (
+			select
+				range_low_value 
+			from
+				dict_dds.settings_and_parameters_sap
+			where 
+				abap_program_code = '/RUSAL/CO360M'
+				and parameter_code = 'KLART')
+	left join dds.material_batch as mat_bat
+		on mat_bat.material_code = base.material_code
+		and mat_bat.batch_code = base.batch_code
+	left join muom
+		on muom.material_code = base.material_code
+	left join dict_dds.uom_external_format_texts as ueft
+		on ueft.uom_code = muom.material_alternative_uom_code
+		and ueft.language_code = 'R'
+	left join dict_dds.material_by_plant as mabp
+		on mabp.material_code = base.material_code
+		and mabp.plant_code = base.plant_code
+	left join dict_dds.material_type_texts as mtt	
+		on mtt.material_type_code = mara.material_type_code
+		and mtt.language_code = 'R'
+	left join dict_dds.material_group_texts as mgt	
+		on mgt.material_group_code = mara.material_group_code
+		and mgt.language_code = 'R'
+	left join dict_dds.purchase_group as pgn	
+		on pgn.purchase_group_code = mabp.purchase_group_code 
+	left join dict_dds.material_planning_controller as mpc	
+		on mpc.plant_code = base.plant_code
+		and mpc.material_planning_controller_code = mabp.material_planning_controller_code
+	left join dict_dds.valuation_area as vaar	
+		on vaar.valuation_area_code = base.plant_code
+	left join dict_dds.material_category_main_data_texts as mcmdt
+		on mcmdt.material_category_code = mara.material_category_code
+		and mcmdt.language_code = 'R'
+	left join dds.sales_request_for_proposal_position as vbap_1
+		on vbap_1.sales_request_for_proposal_code = base.sales_document_code 
+		and vbap_1.sales_request_for_proposal_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_contract_position as vbap_2
+		on vbap_2.sales_contract_code = base.sales_document_code
+		and vbap_2.sales_contract_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_order_position as vbap_3
+		on vbap_3.sales_order_code = base.sales_document_code
+		and vbap_3.sales_order_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_proposal_position as vbap_4
+		on vbap_4.sales_proposal_code = base.sales_document_code
+		and vbap_4.sales_proposal_position_code = base.sales_document_position_line_item_code
+	left join dds.sales_request_for_proposal_header as vbak_1
+		on vbak_1.sales_request_for_proposal_code = base.sales_document_code
+	left join dds.sales_contract_header as vbak_2
+		on vbak_2.sales_contract_code = base.sales_document_code
+	left join dds.sales_order_header as vbak_3
+		on vbak_3.sales_order_code = base.sales_document_code
+	left join dds.sales_proposal_header as vbak_4
+		on vbak_4.sales_proposal_code = base.sales_document_code	
+	left join dict_dds.counterparty as countr_1
+		on countr_1.counterparty_code = base.supplier_code
+	left join dict_dds.counterparty as countr_2
+		on countr_2.counterparty_code = base.customer_code
+	left join dict_dds.uom_external_format_texts as t006a
+		on t006a.uom_code = base.material_uom_code
+		and t006a.language_code = 'R'		
+	left join dds.valuation_class_to_free_stock as mbh
+		on mbh.material_code = base.material_code
+		and mbh.valuation_area_code = pas.valuation_area_code 
+		and mbh.valuation_type_code = base.valuation_type_code
+		and mbh.dt_valid_from <= base.dt_posting
+		and mbh.dt_valid_to >= base.dt_posting
+		and mbh.is_period_closed is not null
+	left join dds.valuation_class_to_free_stock as mbn
+		on mbn.material_code = base.material_code
+		and mbn.valuation_area_code = pas.valuation_area_code 
+		and mbn.valuation_type_code = base.valuation_type_code
+		and mbn.dt_valid_from <= base.dt_posting
+		and mbn.dt_valid_to >= base.dt_posting
+		and mbn.is_period_closed is null
+	left join dds.valuation_class_to_project as qbh
+		on qbh.material_code = base.material_code
+		and qbh.valuation_area_code = pas.valuation_area_code
+		and qbh.valuation_type_code = base.valuation_type_code
+		and qbh.wbs_element_code = base.wbs_element_code
+		and qbh.dt_valid_from <= base.dt_posting 
+		and qbh.dt_valid_to >= base.dt_posting
+		and qbh.is_period_closed is not null
+	left join dds.valuation_class_to_project as qbn
+		on qbn.material_code = base.material_code
+		and qbn.valuation_area_code = pas.valuation_area_code
+		and qbn.valuation_type_code = base.valuation_type_code
+		and qbn.wbs_element_code = base.wbs_element_code
+		and qbn.dt_valid_from <= base.dt_posting 
+		and qbn.dt_valid_to >= base.dt_posting
+		and qbn.is_period_closed is null
+	left join dds.valuation_class_to_sales_order as ebh
+		on ebh.material_code = base.material_code
+		and ebh.valuation_area_code = pas.valuation_area_code 
+		and ebh.valuation_type_code = base.valuation_type_code
+		and ebh.sales_document_code = base.sales_document_code 
+		and ebh.sales_document_position_code = base.sales_document_position_line_item_code
+		and ebh.dt_valid_from <= base.dt_posting
+		and ebh.dt_valid_to >= base.dt_posting
+		and ebh.is_period_closed is not null
+	left join dds.valuation_class_to_sales_order as ebn
+		on ebn.material_code = base.material_code
+		and ebn.valuation_area_code = pas.valuation_area_code 
+		and ebn.valuation_type_code = base.valuation_type_code
+		and ebn.sales_document_code = base.sales_document_code 
+		and ebn.sales_document_position_code = base.sales_document_position_line_item_code
+		and	ebn.dt_valid_from <= base.dt_posting
+		and ebn.dt_valid_to >= base.dt_posting
+		and ebn.is_period_closed is null;
+
+
+-----------------------------------------------------
+create temporary table ckmlpp_2 ON COMMIT DROP as (
+		select
+			calculation_code,
+			max(dt_valid_from) as max_ckmlpp
+		from
+			dm.material_price_calculation
+		group by calculation_code
+)
+distributed by (calculation_code);
+
+
+insert into dm.material_stock_balance (
+	dt_posting,
+	material_code,
+	material_uom_code,
+	plant_code,
+	warehouse_code,
+	batch_code,
+	valuation_type_code,
+	stock_type_code,
+	sales_document_code,
+	sales_document_position_line_item_code,
+	wbs_element_code,
+	supplier_code,
+	customer_code,
+	total_stock_quantity,
+	unit_balance_currency_code,
+	material_costing_system_code,
+	price_rule_code,
+	dt_posting_next,
+	plant_name,
+	valuation_assessment_code,
+	warehouse_name,
+	warehouse_type_code,
+	warehouse_type_name,
+	storage_bin_code,
+	material_full_name,
+	material_kubal_code,
+	is_batch_mandatory,
+	material_type_code,
+	material_group_code,
+	sector_code,
+	material_category_code,
+	material_short_name,
+	material_alternative_uom_code,
+	material_alternative_uom_name,
+	material_tnved_eas_code,
+	material_okpd2_code,
+	purchase_responsible_department_code,
+	material_planning_controller_code,
+	head_of_production_code,
+	material_type_name,
+	material_group_name,
+	purchase_responsible_department_name,
+	material_planning_controller_name,
+	holding_currency_code,
+	wbs_element_short_name,
+	unit_balance_code,
+	material_category_name,
+	counterparty_wbs_element_code,
+	valuation_class_code,
+	external_contract_number,
+	supplier_extended_name,
+	customer_extended_name,
+	non_liquid_asset_type_code,
+	uom_to_alternative_uom_coefficient_amount,
+	base_uom_name,
+	valuation_class_name,
+	general_ledger_account_code,
+	general_ledger_account_name,
+	general_ledger_alternative_account_code,
+	general_ledger_alternative_account_name,
+	counterparty_wbs_element_name,
+	non_liquid_asset_type_name,
+	material_search_name,
+	material_group_search_name,
+	warehouse_search_name,
+	purchase_responsible_department_search_name,
+	valuation_class_search_name,
+	material_planning_controller_search_name,
+	plant_search_name,
+	material_trimmed_code,
+	material_truncated_code,
+	dt_last_material_movement_and_calculation,
+	dt_last_material_movement_and_calculation_shifted,
+	dt_last_existed_material_movement_and_calculation
+)
+select
+	base.dt_posting,
+	base.material_code,
+	base.material_uom_code,
+	base.plant_code,
+	base.warehouse_code,
+	base.batch_code,
+	base.valuation_type_code,
+	base.stock_type_code,
+	base.sales_document_code,
+	base.sales_document_position_line_item_code,
+	base.wbs_element_code,
+	base.supplier_code,
+	base.customer_code,
+	base.total_stock_quantity,
+	base.unit_balance_currency_code,
+	base.material_costing_system_code,
+	base.price_rule_code,
+	base.dt_posting_next,
+	base.plant_name,
+	base.valuation_assessment_code,
+	base.warehouse_name,
+	base.warehouse_type_code,
+	base.warehouse_type_name,
+	base.storage_bin_code,
+	base.material_full_name,
+	base.material_kubal_code,
+	base.is_batch_mandatory,
+	base.material_type_code,
+	base.material_group_code,
+	base.sector_code,
+	base.material_category_code,
+	base.material_short_name,
+	base.material_alternative_uom_code,
+	base.material_alternative_uom_name,
+	base.material_tnved_eas_code,
+	base.material_okpd2_code,
+	base.purchase_responsible_department_code,
+	base.material_planning_controller_code,
+	base.head_of_production_code,
+	base.material_type_name,
+	base.material_group_name,
+	base.purchase_responsible_department_name,
+	base.material_planning_controller_name,
+	base.holding_currency_code,
+	base.wbs_element_short_name,
+	base.unit_balance_code,
+	base.material_category_name,
+	wem.wbs_element_number as counterparty_wbs_element_code,
+	base.valuation_class_code,
+	base.external_contract_number,
+	base.supplier_extended_name,
+	base.customer_extended_name,
+	base.non_liquid_asset_type_code,
+	base.uom_to_alternative_uom_coefficient_amount, 
+	base.base_uom_name,
+	vct.valuation_class_name as valuation_class_name,
+	coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code) as general_ledger_account_code,
+	glact_1.general_ledger_account_short_name as general_ledger_account_name,
+	glamd.general_ledger_alternative_account_code as general_ledger_alternative_account_code,
+	glact_2.general_ledger_account_short_name as general_ledger_alternative_account_name,
+	wem.wbs_element_short_name as counterparty_wbs_element_name,
+	case
+		when base.wbs_element_code is not null 
+			and wem.project_type_code = '99'
+		then rait.reason_of_allocation_to_illiquid_name
+		when base.wbs_element_code is null 
+			and base.valuation_type_code like 'U%'
+		then icvt.internal_characteristic_value_name
+		else null 
+	end as non_liquid_asset_type_name,
+	concat(ltrim(base.material_code, '0'), ' ', base.material_short_name) as material_search_name,
+	concat(base.material_group_code, ' ', base.material_group_name) as material_group_search_name,
+	concat(base.warehouse_code, ' ', base.warehouse_name) as warehouse_search_name,
+	concat(base.purchase_responsible_department_code, ' ', base.purchase_responsible_department_name) as purchase_responsible_department_search_name,
+	concat(base.valuation_class_code, ' ', vct.valuation_class_name) as valuation_class_search_name,
+	concat(base.material_planning_controller_code, ' ', base.material_planning_controller_name) as material_planning_controller_search_name,
+	concat(base.plant_code, ' ', base.plant_name) as plant_search_name,
+	case 
+		when length(base.material_code) <= 14
+		then base.material_code
+		else substring(base.material_code, length(base.material_code) - 13, length(base.material_code)) 
+	end as material_trimmed_code,
+	ltrim(base.material_code, '0') as material_truncated_code,
+	coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from) as dt_last_material_movement_and_calculation, -- base_dt,
+	ckmlpp_1.dt_valid_from as dt_last_material_movement_and_calculation_shifted, --ckmlpp_1_dt 
+	ckmlpp_2.max_ckmlpp as dt_last_existed_material_movement_and_calculation --max_ckmlpp
+from base
+	left join dict_dds.valuation_class_texts as vct
+		on vct.valuation_class_code = base.valuation_class_code
+		and vct.language_code = 'R'
+	left join dict_dds.valuation_area as vala
+		on vala.valuation_area_code = base.valuation_assessment_code
+	left join dict_dds.general_ledger_account_standard as glas
+		on glas.valuation_group_code = vala.valuation_group_code
+		and glas.valuation_class_code = base.valuation_class_code
+		and glas.account_modification_code is null
+		and glas.transaction_key_code = 'BSX'
+		and glas.account_chart_code = '1000'
+	left join dict_dds.general_ledger_account_standard_td as glast
+		on glast.valuation_grouping_code = vala.valuation_group_code
+		and glast.valuation_class_code = base.valuation_class_code
+		and base.dt_posting between glast.dt_valid_from and glast.dt_valid_to
+		and glast.account_modification_code is null
+		and glast.transaction_code = 'BSX'
+		and glast.account_chart_code = '1000'
+	left join dict_dds.unit_balance as unb
+		on unb.unit_balance_code = base.unit_balance_code
+	left join dict_dds.general_ledger_account_chart_texts as glact_1
+		on glact_1.account_chart_code = unb.account_chart_code
+		and glact_1.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
+		and glact_1.language_code = 'R'
+	left join dict_dds.general_ledger_accounts_main_data as glamd
+		on glamd.unit_balance_code = base.unit_balance_code 
+		and glamd.general_ledger_account_code = coalesce(glas.general_ledger_account_code, glast.general_ledger_account_code)
+	left join dict_dds.general_ledger_account_chart_texts as glact_2
+		on glact_2.account_chart_code = unb.country_specific_account_chart_code
+		and glact_2.general_ledger_account_code = glamd.general_ledger_alternative_account_code
+		and glact_2.language_code = 'R'
+	left join dict_dds.wbs_element_master_data_detail as wem
+		on wem.wbs_element_code = base.counterparty_wbs_element_code
+	left join dict_dds.reason_of_allocation_to_illiquid_texts as rait
+		on rait.reason_of_allocation_to_illiquid_code = base.non_liquid_asset_type_code
+		and rait.language_code = 'R'
+	left join dict_dds.internal_characteristic_value as icv
+		on icv.internal_characteristic_value_code = base.non_liquid_asset_type_code
+		and icv.internal_characteristic_code in (
+			select
+				internal_characteristic_code
+			from
+				dict_dds.internal_characteristic
+			where
+				internal_characteristic_title_code in ('NLQREASON'))
+	left join dict_dds.internal_characteristic_value_texts as icvt
+		on icvt.internal_subsequent_code = icv.internal_subsequent_code
+		and icvt.language_code = 'R'
+		and icvt.internal_characteristic_code in (
+			select
+				internal_characteristic_code
+			from
+				dict_dds.internal_characteristic
+			where
+				internal_characteristic_title_code in ('NLQREASON'))
+	left join dds.valuation_class_to_free_stock as mbew
+		on mbew.calculation_code = base.material_costing_system_code
+		and mbew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dds.valuation_class_to_sales_order as ebew
+		on ebew.calculation_code = base.material_costing_system_code
+		and ebew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dds.valuation_class_to_project as qbew
+		on qbew.calculation_code = base.material_costing_system_code
+		and qbew.is_period_closed is null
+		and base.price_rule_code = '2'
+	left join dm.material_price_calculation as ckmlpp_1
+		on ckmlpp_1.calculation_code = base.material_costing_system_code
+		and ckmlpp_1.dt_valid_from - interval '1 month' = coalesce(mbew.dt_valid_from, ebew.dt_valid_from, qbew.dt_valid_from)
+		and base.price_rule_code = '2'
+	left join ckmlpp_2
+		on ckmlpp_2.calculation_code =  base.material_costing_system_code
+		and ckmlpp_1.calculation_code is null
+		and base.price_rule_code = '2'
+;
+

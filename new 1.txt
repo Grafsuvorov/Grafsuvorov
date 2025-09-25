@@ -185,3 +185,105 @@
     "Execution Time": 1693388.181
   }
 ]
+
+
+select
+tech_etl.util_text_to_null_validation("EBELN") as ebeln,
+tech_etl.util_text_to_null_validation("CHARG") as charg,
+tech_etl.util_text_to_null_validation("MATNR") as matnr,
+tech_etl.util_text_to_null_validation("WERKS") as werks,
+tech_etl.util_text_to_null_validation("EBELP") as ebelp,
+tech_etl.util_text_to_null_validation("BELNR") as belnr,
+tech_etl.util_text_to_null_validation("GJAHR") as gjahr,
+tech_etl.util_text_to_null_validation("BUZEI") as buzei,
+tech_etl.util_text_to_null_validation("ZEKKN") as zekkn,
+"DMBTR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as dmbtr,				--преобразовываем сумму по формуле
+"WRBTR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as wrbtr,				--преобразовываем сумму по формуле
+"MENGE" as menge,
+"AREWR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as arewr,				--преобразовываем сумму по формуле
+tech_etl.util_text_to_null_validation("LFBNR") as lfbnr,
+tech_etl.util_text_to_null_validation("LFGJA") as lfgja,
+tech_etl.util_text_to_null_validation("LFPOS") as lfpos,
+tech_etl.util_text_to_null_validation("VGABE") as vgabe,
+tech_etl.util_text_to_null_validation("SHKZG") as shkzg,
+tech_etl.util_text_to_date_validation("BUDAT") as budat
+from stg."EKBE" e
+left join dict_dds.currency_decimal_place_ral cdpr						 			--джойн с TCURX RAL (таблица курсов, по которым просиходит преобразование)
+on cdpr.currency_code = e."WAERS"
+where "MANDT" = '400'
+;
+
+
+CREATE OR REPLACE FUNCTION tech_etl.util_text_to_null_validation(v_text_value text)
+	RETURNS varchar
+	LANGUAGE plpgsql
+	IMMUTABLE
+AS $$
+	
+	
+	
+	
+	
+	
+	
+declare 
+l_result date;
+
+
+begin
+	if trim(v_text_value) = '' then 
+		return null; 
+	elseif trim(v_text_value) !='' and trim(v_text_value) is not null then 
+		return v_text_value;
+	else 
+		return null;
+	end if;
+end;
+--if trim(v_text_value) != '' then return v_text_value; end if;
+ --if null then null
+
+
+
+
+
+
+$$
+EXECUTE ON ANY;
+
+
+
+CREATE OR REPLACE FUNCTION tech_etl.util_text_to_date_validation(v_text_value text)
+	RETURNS date
+	LANGUAGE plpgsql
+	IMMUTABLE
+AS $$
+	
+	
+	
+	
+	
+declare 
+l_result date;
+
+
+begin
+if v_text_value = '00000000' then return null; end if; --if null then null
+if v_text_value = ' ' then return null; end if;
+if v_text_value !~ '^\d{8}$' then return to_date('19000101', 'YYYYMMDD'); --if not date then min date
+end if;
+if v_text_value < '19000101' then return to_date('19000101', 'YYYYMMDD'); --uf loweer than min return min date
+elsif v_text_value >= '22991231' then return to_date('22991231', 'YYYYMMDD');  --if higher than max return max date
+end if;
+return v_text_value::date; --conversation
+
+exception
+when others 
+then
+return to_date('19000101', 'YYYYMMDD'); -- if error return min date
+end;
+
+
+
+$$
+EXECUTE ON ANY;
+

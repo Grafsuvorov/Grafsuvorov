@@ -1,112 +1,187 @@
-Приоритизация задач и планирование релизов
-
-В команде разработки и аналитики часто возникает проблема: все задачи считаются приоритетными. В итоге релизы перегружены, инженеры не успевают оптимизировать код, а пользователи сталкиваются с некорректными данными.
-
-Чтобы исправить это, вводим единый подход к оценке и планированию задач.
-
-1. Единый скоринг задач
-
-Каждая задача оценивается по трём критериям:
-
-Value (ценность)
-
-5 — критично для бизнеса (финансовая отчётность, KPI, данные топ-менеджменту)
-
-3 — важно для отдела, влияет на часть пользователей
-
-1 — косметическая правка или nice-to-have
-
-Risk (риск/неопределённость)
-
-5 — новые сложные источники, много зависимостей, мало документации
-
-3 — доработка существующих витрин
-
-1 — простая корректировка колонок
-
-⚠️ Чем выше риск, тем ниже итоговый приоритет.
-
-Effort (затраты, “футболки”)
-
-S = 0.5–1 день (1 поинт)
-
-M = 2–3 дня (2 поинта)
-
-L = 4–6 дней (3 поинта)
-
-XL = >1 недели (5 поинтов)
-
-2. Формула приоритета
-Приоритет = Value × (1 / Risk) ÷ Effort
-
-
-Пример
-
-Задача А: Value=5, Risk=2, Effort=S (1) → Приоритет = 2.5
-
-Задача B: Value=3, Risk=1, Effort=M (2) → Приоритет = 1.5
-➡️ Задача А выше.
-
-3. Capacity-план на релиз
-
-Чтобы не перегружать релизы, вводится корзина задач:
-
-Вместимость корзины на направление объявляет лид инженеров (например, 12 S-поинтов).
-
-Складываем Effort всех задач → если превышает вместимость, лишние задачи переносятся в следующий релиз.
-
-Пример
-
-4 задачи S = 4 поинта
-
-3 задачи M = 6 поинтов
-
-1 задача L = 3 поинта
-Итого = 13 поинтов → переносим одну задачу.
-
-4. Срочные задачи
-
-По умолчанию задача не срочная.
-
-“Срочная” = отдельный класс с:
-
-SLA (например, 24 часа)
-
-обязательным пост-мортем (почему появилась вне плана, можно ли было предусмотреть).
-
-5. Процесс на практике
-
-Аналитик приносит задачу.
-
-Вместе с инженером оценивают Value, Risk, Effort.
-
-В backlog заносится задача с этими параметрами.
-
-На планировании задачи сортируются по приоритету.
-
-Лид инженеров “отрезает” корзину (например, 12 S-поинтов).
-
-Остальные задачи переносятся в следующий релиз.
-
-Срочные задачи идут отдельным треком.
-
-Результат
-
-Инженеры понимают реальный объём.
-
-Аналитики видят прозрачные правила приоритизации.
-
-Срочность перестаёт ломать процесс.
-
-Релизы становятся предсказуемыми и управляемыми.
-
-
-Шаблон скоринга задачи
-Поле	Значение	Комментарий
-Value (ценность)	1 / 3 / 5	5 — критично (KPI, финансы), 3 — важно для отдела, 1 — косметика
-Risk (риск/неопределённость)	1 / 3 / 5	5 — новые источники/сильные зависимости, 3 — доработка витрин, 1 — простая правка
-Effort (затраты, “футболка”)	S / M / L / XL	S = 0.5–1 дн., M = 2–3 дн., L = 4–6 дн., XL = >1 недели
-Приоритет (авторасчёт)	Value × (1/Risk) ÷ Effort	Используется при сортировке задач
-Срочность	Да / Нет	Срочные задачи идут отдельным треком с SLA
-SLA (если срочная)	Часы/дни	Например: выполнить ≤ 24 часов
-Пост-мортем (если срочная)	ссылка/описание	Обязательно заполняется после закрытия задачи
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 862.01,
+      "Plan Rows": 2,
+      "Plan Width": 148,
+      "Actual Startup Time": 22181.990,
+      "Actual Total Time": 1691345.531,
+      "Actual Rows": 60506689,
+      "Actual Loops": 1,
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 862.01,
+          "Plan Rows": 2,
+          "Plan Width": 148,
+          "Actual Startup Time": 22174.223,
+          "Actual Total Time": 1642434.444,
+          "Actual Rows": 51878497,
+          "Actual Loops": 1,
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Join Type": "Right",
+              "Startup Cost": 0.00,
+              "Total Cost": 862.01,
+              "Plan Rows": 2,
+              "Plan Width": 160,
+              "Actual Startup Time": 22169.954,
+              "Actual Total Time": 61677.710,
+              "Actual Rows": 51878497,
+              "Actual Loops": 1,
+              "Hash Cond": "((currency_decimal_place_ral.currency_code)::text = (\"EKBE\".\"WAERS\")::text)",
+              "Extra Text": [
+                {
+                  "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 8836528K bytes to inner workfile.\n(seg2)     Wrote 1K bytes to outer workfile.\n(seg2)   Overflow batch 1:\n(seg2)     Read 8836528K bytes from inner workfile.\n(seg2)     Wrote 8836073K bytes to inner workfile.\n(seg2)     Read 1K bytes from outer workfile.\n(seg2)     Wrote 1K bytes to outer workfile.\n(seg2)   Secondary Overflow batches 2..15:\n(seg2)     Read 8836650K bytes from inner workfile: 2945550K avg x 3 nonempty batches, 8836073K max.\n(seg2)     Wrote 577K bytes to inner workfile: 289K avg x 2 overflowing batches, 574K max.\n(seg2)     Read 1K bytes from outer workfile.\n(seg2)   Work file set: 2 files (0 compressed), avg file size 4524294144, compression buffer size 0 bytes\n(seg2)   Hash chain length 12969624.2 avg, 51871650 max, using 4 of 327680 buckets.  Skipped 11 empty batches."
+                }
+              ],
+              "Plans": [
+                {
+                  "Node Type": "Result",
+                  "Parent Relationship": "Outer",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 431.00,
+                  "Plan Rows": 41,
+                  "Plan Width": 12,
+                  "Actual Startup Time": 2.289,
+                  "Actual Total Time": 2.303,
+                  "Actual Rows": 7,
+                  "Actual Loops": 1,
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 2,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "currency_decimal_place_ral",
+                      "Alias": "currency_decimal_place_ral",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 431.00,
+                      "Plan Rows": 328,
+                      "Plan Width": 12,
+                      "Actual Startup Time": 2.563,
+                      "Actual Total Time": 2.569,
+                      "Actual Rows": 41,
+                      "Actual Loops": 1
+                    }
+                  ]
+                },
+                {
+                  "Node Type": "Hash",
+                  "Parent Relationship": "Inner",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 431.00,
+                  "Total Cost": 431.00,
+                  "Plan Rows": 1,
+                  "Plan Width": 160,
+                  "Actual Startup Time": 22166.502,
+                  "Actual Total Time": 22166.502,
+                  "Actual Rows": 51878497,
+                  "Actual Loops": 1,
+                  "Plans": [
+                    {
+                      "Node Type": "Redistribute Motion",
+                      "Senders": 8,
+                      "Receivers": 8,
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 431.00,
+                      "Plan Rows": 1,
+                      "Plan Width": 160,
+                      "Actual Startup Time": 19.730,
+                      "Actual Total Time": 12771.925,
+                      "Actual Rows": 51878497,
+                      "Actual Loops": 1,
+                      "Hash Key": "\"EKBE\".\"WAERS\"",
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "EKBE",
+                          "Alias": "EKBE",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 431.00,
+                          "Plan Rows": 1,
+                          "Plan Width": 160,
+                          "Actual Startup Time": 23.987,
+                          "Actual Total Time": 4047.656,
+                          "Actual Rows": 7567657,
+                          "Actual Loops": 1,
+                          "Filter": "((\"MANDT\")::text = '400'::text)",
+                          "Rows Removed by Filter": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 9.562,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 2897816
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 3082896,
+          "Workers": 8,
+          "Maximum Memory Used": 3082896
+        }
+      },
+      {
+        "Slice": 2,
+        "Executor Memory": {
+          "Average": 1986742464,
+          "Workers": 8,
+          "Maximum Memory Used": -2147483648
+        },
+        "Work Maximum Memory": -2147483648
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 126976,
+      "Memory wanted": 18889815
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    },
+    "Execution Time": 1693388.181
+  }
+]

@@ -1,61 +1,53 @@
-WITH cdpr AS (
-  SELECT currency_code, coalesce(decimal_place_number, 2) AS dplaces
-  FROM dict_dds.currency_decimal_place_ral
+-- Коэффициент скью (чем ближе к 1, тем лучше)
+SELECT * 
+FROM gp_toolkit.gp_skew_coefficients 
+WHERE schemaname='ods' AND tablename='ekbe_ral_v2';
+
+-- Скью по диску (полезно для AO/columnstore)
+SELECT * 
+FROM gp_toolkit.gp_skew_disk
+WHERE sdsschemaname='ods' AND sdstablename='ekbe_ral_v2';
+
+
+SELECT gp_segment_id, COUNT(*) AS rows, 
+       100.0 * COUNT(*) / SUM(COUNT(*)) OVER () AS pct
+FROM ods.ekbe_ral_v2
+GROUP BY gp_segment_id
+ORDER BY gp_segment_id;
+
+
+WITH k AS (
+  SELECT ebeln, ebelp, belnr, gjahr, buzei  -- <== твой ключ
 )
 SELECT
-  NULLIF(btrim(e."EBELN"), '') AS ebeln,
-  NULLIF(btrim(e."CHARG"), '') AS charg,
-  NULLIF(btrim(e."MATNR"), '') AS matnr,
-  NULLIF(btrim(e."WERKS"), '') AS werks,
-  NULLIF(btrim(e."EBELP"), '') AS ebelp,
-  NULLIF(btrim(e."BELNR"), '') AS belnr,
-  NULLIF(btrim(e."GJAHR"), '') AS gjahr,
-  NULLIF(btrim(e."BUZEI"), '') AS buzei,
-  NULLIF(btrim(e."ZEKKN"), '') AS zekkn,
-
-  -- коэффициент считаем ОДИН раз и правильно
-  -- numeric, чтобы не ловить int-арифметику
-  e."DMBTR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS dmbtr,
-  e."WRBTR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS wrbtr,
-  e."MENGE" AS menge,
-  e."AREWR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS arewr,
-
-  NULLIF(btrim(e."LFBNR"), '') AS lfbnr,
-  NULLIF(btrim(e."LFGJA"), '') AS lfgja,
-  NULLIF(btrim(e."LFPOS"), '') AS lfpos,
-  NULLIF(btrim(e."VGABE"), '') AS vgabe,
-  NULLIF(btrim(e."SHKZG"), '') AS shkzg,
-
-  CASE
-    WHEN e."BUDAT" IS NULL OR btrim(e."BUDAT") IN ('', '00000000') THEN NULL
-    WHEN e."BUDAT" ~ '^\d{8}$'
-         AND e."BUDAT" >= '19000101' AND e."BUDAT" < '22991231'
-      THEN to_date(e."BUDAT",'YYYYMMDD')
-    ELSE DATE '1900-01-01'
-  END AS budat
-
-FROM stg."EKBE" e
-LEFT JOIN cdpr c
-  ON c.currency_code = e."WAERS"
-WHERE e."MANDT" = '400';
+  COALESCE(v2.ebeln, v1.ebeln) AS ebeln,
+  COUNT(*) FILTER (WHERE v1 IS NULL) AS only_in_v2,
+  COUNT(*) FILTER (WHERE v2 IS NULL) AS only_in_old,
+  COUNT(*) FILTER (WHERE v1 IS NOT NULL AND v2 IS NOT NULL AND (v1.dmbtr IS DISTINCT FROM v2.dmbtr)) AS dmbtr_diff,
+  COUNT(*) FILTER (WHERE v1 IS NOT NULL AND v2 IS NOT NULL AND (v1.wrbtr IS DISTINCT FROM v2.wrbtr)) AS wrbtr_diff,
+  COUNT(*) FILTER (WHERE v1 IS NOT NULL AND v2 IS NOT NULL AND (v1.arewr IS DISTINCT FROM v2.arewr)) AS arewr_diff
+FROM ods.ekbe_ral v1
+FULL JOIN ods.ekbe_ral_v2 v2
+  USING (ebeln, ebelp, belnr, gjahr, buzei)
+GROUP BY 1
+HAVING
+  COUNT(*) FILTER (WHERE v1 IS NULL OR v2 IS NULL) > 0
+  OR COUNT(*) FILTER (WHERE v1 IS NOT NULL AND v2 IS NOT NULL AND (v1.dmbtr IS DISTINCT FROM v2.dmbtr OR v1.wrbtr IS DISTINCT FROM v2.wrbtr OR v1.arewr IS DISTINCT FROM v2.arewr)) > 0
+LIMIT 100;
 
 
--- строка -> NULL, если пусто
-CREATE OR REPLACE FUNCTION tech_etl.nullif_blank(text)
-RETURNS text
-LANGUAGE sql IMMUTABLE AS
-$$ SELECT NULLIF(btrim($1),'') $$;
+-- строки, которые есть в v2, но нет в старой
+SELECT COUNT(*) AS only_in_v2
+FROM (
+  SELECT <cols> FROM ods.ekbe_ral_v2
+  EXCEPT ALL
+  SELECT <cols> FROM ods.ekbe_ral
+) t;
 
--- дата YYYYMMDD с граничными условиями
-CREATE OR REPLACE FUNCTION tech_etl.to_date_yyyymmdd_safe(text)
-RETURNS date
-LANGUAGE sql IMMUTABLE AS
-$$
-SELECT CASE
-  WHEN $1 IS NULL OR btrim($1) IN ('', '00000000') THEN NULL
-  WHEN $1 ~ '^\d{8}$' THEN
-    GREATEST(DATE '1900-01-01',
-      LEAST(DATE '2299-12-31', to_date($1,'YYYYMMDD')))
-  ELSE DATE '1900-01-01'
-END
-$$;
+-- строки, которые есть в старой, но нет в v2
+SELECT COUNT(*) AS only_in_old
+FROM (
+  SELECT <cols> FROM ods.ekbe_ral
+  EXCEPT ALL
+  SELECT <cols> FROM ods.ekbe_ral_v2
+) t;

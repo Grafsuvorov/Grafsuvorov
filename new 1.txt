@@ -1,289 +1,61 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 2,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 862.01,
-      "Plan Rows": 2,
-      "Plan Width": 148,
-      "Actual Startup Time": 22181.990,
-      "Actual Total Time": 1691345.531,
-      "Actual Rows": 60506689,
-      "Actual Loops": 1,
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 2,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 862.01,
-          "Plan Rows": 2,
-          "Plan Width": 148,
-          "Actual Startup Time": 22174.223,
-          "Actual Total Time": 1642434.444,
-          "Actual Rows": 51878497,
-          "Actual Loops": 1,
-          "Plans": [
-            {
-              "Node Type": "Hash Join",
-              "Parent Relationship": "Outer",
-              "Slice": 2,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Join Type": "Right",
-              "Startup Cost": 0.00,
-              "Total Cost": 862.01,
-              "Plan Rows": 2,
-              "Plan Width": 160,
-              "Actual Startup Time": 22169.954,
-              "Actual Total Time": 61677.710,
-              "Actual Rows": 51878497,
-              "Actual Loops": 1,
-              "Hash Cond": "((currency_decimal_place_ral.currency_code)::text = (\"EKBE\".\"WAERS\")::text)",
-              "Extra Text": [
-                {
-                  "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 8836528K bytes to inner workfile.\n(seg2)     Wrote 1K bytes to outer workfile.\n(seg2)   Overflow batch 1:\n(seg2)     Read 8836528K bytes from inner workfile.\n(seg2)     Wrote 8836073K bytes to inner workfile.\n(seg2)     Read 1K bytes from outer workfile.\n(seg2)     Wrote 1K bytes to outer workfile.\n(seg2)   Secondary Overflow batches 2..15:\n(seg2)     Read 8836650K bytes from inner workfile: 2945550K avg x 3 nonempty batches, 8836073K max.\n(seg2)     Wrote 577K bytes to inner workfile: 289K avg x 2 overflowing batches, 574K max.\n(seg2)     Read 1K bytes from outer workfile.\n(seg2)   Work file set: 2 files (0 compressed), avg file size 4524294144, compression buffer size 0 bytes\n(seg2)   Hash chain length 12969624.2 avg, 51871650 max, using 4 of 327680 buckets.  Skipped 11 empty batches."
-                }
-              ],
-              "Plans": [
-                {
-                  "Node Type": "Result",
-                  "Parent Relationship": "Outer",
-                  "Slice": 2,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 431.00,
-                  "Plan Rows": 41,
-                  "Plan Width": 12,
-                  "Actual Startup Time": 2.289,
-                  "Actual Total Time": 2.303,
-                  "Actual Rows": 7,
-                  "Actual Loops": 1,
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 2,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "currency_decimal_place_ral",
-                      "Alias": "currency_decimal_place_ral",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 431.00,
-                      "Plan Rows": 328,
-                      "Plan Width": 12,
-                      "Actual Startup Time": 2.563,
-                      "Actual Total Time": 2.569,
-                      "Actual Rows": 41,
-                      "Actual Loops": 1
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Hash",
-                  "Parent Relationship": "Inner",
-                  "Slice": 2,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 431.00,
-                  "Total Cost": 431.00,
-                  "Plan Rows": 1,
-                  "Plan Width": 160,
-                  "Actual Startup Time": 22166.502,
-                  "Actual Total Time": 22166.502,
-                  "Actual Rows": 51878497,
-                  "Actual Loops": 1,
-                  "Plans": [
-                    {
-                      "Node Type": "Redistribute Motion",
-                      "Senders": 8,
-                      "Receivers": 8,
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 431.00,
-                      "Plan Rows": 1,
-                      "Plan Width": 160,
-                      "Actual Startup Time": 19.730,
-                      "Actual Total Time": 12771.925,
-                      "Actual Rows": 51878497,
-                      "Actual Loops": 1,
-                      "Hash Key": "\"EKBE\".\"WAERS\"",
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 1,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "EKBE",
-                          "Alias": "EKBE",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 431.00,
-                          "Plan Rows": 1,
-                          "Plan Width": 160,
-                          "Actual Startup Time": 23.987,
-                          "Actual Total Time": 4047.656,
-                          "Actual Rows": 7567657,
-                          "Actual Loops": 1,
-                          "Filter": "((\"MANDT\")::text = '400'::text)",
-                          "Rows Removed by Filter": 0
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Planning Time": 9.562,
-    "Triggers": [
-    ],
-    "Slice statistics": [
-      {
-        "Slice": 0,
-        "Executor Memory": 2897816
-      },
-      {
-        "Slice": 1,
-        "Executor Memory": {
-          "Average": 3082896,
-          "Workers": 8,
-          "Maximum Memory Used": 3082896
-        }
-      },
-      {
-        "Slice": 2,
-        "Executor Memory": {
-          "Average": 1986742464,
-          "Workers": 8,
-          "Maximum Memory Used": -2147483648
-        },
-        "Work Maximum Memory": -2147483648
-      }
-    ],
-    "Statement statistics": {
-      "Memory used": 126976,
-      "Memory wanted": 18889815
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    },
-    "Execution Time": 1693388.181
-  }
-]
+WITH cdpr AS (
+  SELECT currency_code, coalesce(decimal_place_number, 2) AS dplaces
+  FROM dict_dds.currency_decimal_place_ral
+)
+SELECT
+  NULLIF(btrim(e."EBELN"), '') AS ebeln,
+  NULLIF(btrim(e."CHARG"), '') AS charg,
+  NULLIF(btrim(e."MATNR"), '') AS matnr,
+  NULLIF(btrim(e."WERKS"), '') AS werks,
+  NULLIF(btrim(e."EBELP"), '') AS ebelp,
+  NULLIF(btrim(e."BELNR"), '') AS belnr,
+  NULLIF(btrim(e."GJAHR"), '') AS gjahr,
+  NULLIF(btrim(e."BUZEI"), '') AS buzei,
+  NULLIF(btrim(e."ZEKKN"), '') AS zekkn,
+
+  -- коэффициент считаем ОДИН раз и правильно
+  -- numeric, чтобы не ловить int-арифметику
+  e."DMBTR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS dmbtr,
+  e."WRBTR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS wrbtr,
+  e."MENGE" AS menge,
+  e."AREWR" * power(10::numeric, (2 - coalesce(c.dplaces, 2))) AS arewr,
+
+  NULLIF(btrim(e."LFBNR"), '') AS lfbnr,
+  NULLIF(btrim(e."LFGJA"), '') AS lfgja,
+  NULLIF(btrim(e."LFPOS"), '') AS lfpos,
+  NULLIF(btrim(e."VGABE"), '') AS vgabe,
+  NULLIF(btrim(e."SHKZG"), '') AS shkzg,
+
+  CASE
+    WHEN e."BUDAT" IS NULL OR btrim(e."BUDAT") IN ('', '00000000') THEN NULL
+    WHEN e."BUDAT" ~ '^\d{8}$'
+         AND e."BUDAT" >= '19000101' AND e."BUDAT" < '22991231'
+      THEN to_date(e."BUDAT",'YYYYMMDD')
+    ELSE DATE '1900-01-01'
+  END AS budat
+
+FROM stg."EKBE" e
+LEFT JOIN cdpr c
+  ON c.currency_code = e."WAERS"
+WHERE e."MANDT" = '400';
 
 
-select
-tech_etl.util_text_to_null_validation("EBELN") as ebeln,
-tech_etl.util_text_to_null_validation("CHARG") as charg,
-tech_etl.util_text_to_null_validation("MATNR") as matnr,
-tech_etl.util_text_to_null_validation("WERKS") as werks,
-tech_etl.util_text_to_null_validation("EBELP") as ebelp,
-tech_etl.util_text_to_null_validation("BELNR") as belnr,
-tech_etl.util_text_to_null_validation("GJAHR") as gjahr,
-tech_etl.util_text_to_null_validation("BUZEI") as buzei,
-tech_etl.util_text_to_null_validation("ZEKKN") as zekkn,
-"DMBTR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as dmbtr,				--преобразовываем сумму по формуле
-"WRBTR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as wrbtr,				--преобразовываем сумму по формуле
-"MENGE" as menge,
-"AREWR" * (10 ^ (2 - coalesce(cdpr.decimal_place_number,2))) as arewr,				--преобразовываем сумму по формуле
-tech_etl.util_text_to_null_validation("LFBNR") as lfbnr,
-tech_etl.util_text_to_null_validation("LFGJA") as lfgja,
-tech_etl.util_text_to_null_validation("LFPOS") as lfpos,
-tech_etl.util_text_to_null_validation("VGABE") as vgabe,
-tech_etl.util_text_to_null_validation("SHKZG") as shkzg,
-tech_etl.util_text_to_date_validation("BUDAT") as budat
-from stg."EKBE" e
-left join dict_dds.currency_decimal_place_ral cdpr						 			--джойн с TCURX RAL (таблица курсов, по которым просиходит преобразование)
-on cdpr.currency_code = e."WAERS"
-where "MANDT" = '400'
-;
+-- строка -> NULL, если пусто
+CREATE OR REPLACE FUNCTION tech_etl.nullif_blank(text)
+RETURNS text
+LANGUAGE sql IMMUTABLE AS
+$$ SELECT NULLIF(btrim($1),'') $$;
 
-
-CREATE OR REPLACE FUNCTION tech_etl.util_text_to_null_validation(v_text_value text)
-	RETURNS varchar
-	LANGUAGE plpgsql
-	IMMUTABLE
-AS $$
-	
-	
-	
-	
-	
-	
-	
-declare 
-l_result date;
-
-
-begin
-	if trim(v_text_value) = '' then 
-		return null; 
-	elseif trim(v_text_value) !='' and trim(v_text_value) is not null then 
-		return v_text_value;
-	else 
-		return null;
-	end if;
-end;
---if trim(v_text_value) != '' then return v_text_value; end if;
- --if null then null
-
-
-
-
-
-
+-- дата YYYYMMDD с граничными условиями
+CREATE OR REPLACE FUNCTION tech_etl.to_date_yyyymmdd_safe(text)
+RETURNS date
+LANGUAGE sql IMMUTABLE AS
 $$
-EXECUTE ON ANY;
-
-
-
-CREATE OR REPLACE FUNCTION tech_etl.util_text_to_date_validation(v_text_value text)
-	RETURNS date
-	LANGUAGE plpgsql
-	IMMUTABLE
-AS $$
-	
-	
-	
-	
-	
-declare 
-l_result date;
-
-
-begin
-if v_text_value = '00000000' then return null; end if; --if null then null
-if v_text_value = ' ' then return null; end if;
-if v_text_value !~ '^\d{8}$' then return to_date('19000101', 'YYYYMMDD'); --if not date then min date
-end if;
-if v_text_value < '19000101' then return to_date('19000101', 'YYYYMMDD'); --uf loweer than min return min date
-elsif v_text_value >= '22991231' then return to_date('22991231', 'YYYYMMDD');  --if higher than max return max date
-end if;
-return v_text_value::date; --conversation
-
-exception
-when others 
-then
-return to_date('19000101', 'YYYYMMDD'); -- if error return min date
-end;
-
-
-
-$$
-EXECUTE ON ANY;
-
+SELECT CASE
+  WHEN $1 IS NULL OR btrim($1) IN ('', '00000000') THEN NULL
+  WHEN $1 ~ '^\d{8}$' THEN
+    GREATEST(DATE '1900-01-01',
+      LEAST(DATE '2299-12-31', to_date($1,'YYYYMMDD')))
+  ELSE DATE '1900-01-01'
+END
+$$;

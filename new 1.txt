@@ -2,43 +2,44 @@
 # -*- coding: utf-8 -*-
 
 """
-Lineage extractor for proto_*.sql
-- Поиск файлов: рекурсивно, case-insensitive, маска proto_*.sql
-- Цели: INSERT INTO / CREATE [MATERIALIZED] VIEW|TABLE / MERGE INTO
-- Источники: FROM / JOIN / USING / UPDATE ... FROM / DELETE FROM
-- Игнор временных таблиц: если объект без схемы (нет точки) — пропускаем
-- Исключаем CTE: имена из WITH ... AS (...) не считаем источниками
-- Сохраняет итог в lineage.json и lineage.csv
+Lineage extractor for proto_*.sql → JSON/CSV/XLSX
+
+Что делает:
+- Рекурсивно ищет файлы по маске proto_*.sql (без учёта регистра)
+- Цели: INSERT INTO / CREATE [MATERIALIZED] VIEW|TABLE / MERGE INTO / DELETE FROM / UPDATE
+- Источники: FROM / JOIN / USING / UPDATE ... FROM
+- Игнорирует:
+    • конструкции "IS DISTINCT FROM ..." (не путать с FROM/JOIN)
+    • CTE из WITH ... AS (...)
+    • всё без схемы (schema.table) — считаем «временным/локальным» и пропускаем
+- Вывод: lineage.json, lineage.csv и lineage.xlsx (3 листа: lineage_edges, catalog, summary)
 """
 
 import argparse
 import json
 import os
 import re
-from collections import defaultdict
+from collections import defaultdict, Counter
 from typing import Dict, List, Set, Tuple
 
-# ---------- утилиты нормализации ----------
+try:
+    import pandas as pd
+except Exception:
+    pd = None  # XLSX будет недоступен, если нет pandas/openpyxl
+
+# ---------- утилиты ----------
 
 def _strip_quotes(name: str) -> str:
-    # убираем двойные кавычки вокруг частей идентификатора
     return name.replace('"', '').replace("`", "").strip()
 
 def _norm_ident(raw: str) -> str:
-    """
-    Нормализуем идентификатор:
-    - убираем кавычки
-    - схлопываем пробелы вокруг точки
-    - приводим к нижнему регистру
-    """
     s = _strip_quotes(raw)
     s = re.sub(r'\s*\.\s*', '.', s)
     s = re.sub(r'\s+', ' ', s).strip()
     return s.lower()
 
 def _has_schema(obj: str) -> bool:
-    """Считаем объект «реальным», если есть схема (schema.table)."""
-    return '.' in obj
+    return '.' in obj  # только schema.table считаем «реальным» объектом
 
 # ---------- регэкспы ----------
 
@@ -47,19 +48,27 @@ RE_INSERT_INTO = re.compile(r'(?is)\binsert\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[
 RE_CREATE_TBL  = re.compile(r'(?is)\bcreate\s+table\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_CREATE_VIEW = re.compile(r'(?is)\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_MERGE_INTO  = re.compile(r'(?is)\bmerge\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-
-# Источники
-RE_FROM_JOIN   = re.compile(r'(?is)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_USING       = re.compile(r'(?is)\busing\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_UPDATE_FROM = re.compile(r'(?is)\bupdate\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s+set\b.*?\bfrom\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)', re.S)
 RE_DELETE_FROM = re.compile(r'(?is)\bdelete\s+from\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+# UPDATE ... SET ... FROM src
+RE_UPDATE_FROM = re.compile(
+    r'(?is)\bupdate\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s+set\b.*?\bfrom\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)',
+    re.S
+)
+
+# Источники (только настоящие источники после FROM/JOIN/USING, но не «distinct from»):
+RE_FROM_JOIN = re.compile(
+    r'(?is)(?<!\bdistinct\s)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)'
+)
+RE_USING     = re.compile(
+    r'(?is)\busing\s*\(\s*([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s*\)'
+)
 
 # CTE
-RE_WITH_CTE    = re.compile(r'(?is)\bwith\s+(.+?)\bselect\b', re.S)
-RE_CTE_NAME    = re.compile(r'(?is)\b([a-z0-9_."`$]+)\s+as\s*\(')
+RE_WITH_CTE = re.compile(r'(?is)\bwith\s+(.+?)\bselect\b', re.S)
+RE_CTE_NAME = re.compile(r'(?is)\b([a-z0-9_."`$]+)\s+as\s*\(')
 
 # Комментарии
-RE_LINE_COMMENT = re.compile(r'--.*?$', re.M)
+RE_LINE_COMMENT  = re.compile(r'--.*?$', re.M)
 RE_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.S)
 
 def _remove_comments(sql: str) -> str:
@@ -67,55 +76,59 @@ def _remove_comments(sql: str) -> str:
     sql = RE_LINE_COMMENT.sub(' ', sql)
     return sql
 
-# ---------- парсер одного SQL ----------
+# ---------- парсер SQL ----------
 
-def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
-    """
-    Возвращает (targets, sources) — множество целевых и исходных объектов со схемой.
-    """
-    sql = _remove_comments(sql_text)
-
-    # соберём CTE-имена, чтобы потом исключить из источников
-    cte_names: Set[str] = set()
+def _collect_cte_names(sql: str) -> Set[str]:
+    names: Set[str] = set()
     for with_block in RE_WITH_CTE.findall(sql):
         for m in RE_CTE_NAME.finditer(with_block):
             nm = _norm_ident(m.group(1))
-            # CTE — всегда без схемы, но исключим по имени
-            cte_names.add(_strip_quotes(nm).lower())
+            names.add(_strip_quotes(nm).split('.')[-1])  # база имени
+    return names
+
+def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
+    """
+    Возвращает (targets, sources) — только schema.table, без CTE/колонок/алиасов.
+    """
+    sql = _remove_comments(sql_text)
+    cte_names = _collect_cte_names(sql)
 
     targets: Set[str] = set()
     sources: Set[str] = set()
 
-    # цели
-    for rx in (RE_INSERT_INTO, RE_CREATE_TBL, RE_CREATE_VIEW, RE_MERGE_INTO):
+    # Цели
+    for rx in (RE_INSERT_INTO, RE_CREATE_TBL, RE_CREATE_VIEW, RE_MERGE_INTO, RE_DELETE_FROM):
         for m in rx.finditer(sql):
             obj = _norm_ident(m.group(1))
             if _has_schema(obj):
                 targets.add(obj)
 
-    # источники: FROM/JOIN/USING
+    # Источники после FROM/JOIN
     for m in RE_FROM_JOIN.finditer(sql):
-        obj = _norm_ident(m.group(1))
-        if '(' in obj:  # защита от вызовов функций/подзапросов
+        tok = _norm_ident(m.group(1))
+        # отсекаем функции/подзапросы
+        if '(' in tok:
             continue
-        if not _has_schema(obj):
+        # игнор без схемы
+        if not _has_schema(tok):
             continue
-        # исключим, если совпадает с CTE (бывает, когда пишут schema.cte? редко, но на всякий случай)
-        base = obj.split('.')[-1]
+        base = tok.split('.')[-1]
+        # игнор ссылок на CTE
         if base in cte_names:
             continue
-        sources.add(obj)
+        sources.add(tok)
 
+    # USING (если указан объект внутри скобок — редко, но бывает)
     for m in RE_USING.finditer(sql):
-        obj = _norm_ident(m.group(1))
-        if '(' in obj:
+        tok = _norm_ident(m.group(1))
+        if '(' in tok:
             continue
-        if not _has_schema(obj):
+        if not _has_schema(tok):
             continue
-        base = obj.split('.')[-1]
+        base = tok.split('.')[-1]
         if base in cte_names:
             continue
-        sources.add(obj)
+        sources.add(tok)
 
     # UPDATE ... FROM
     for m in RE_UPDATE_FROM.finditer(sql):
@@ -128,44 +141,26 @@ def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
             if base not in cte_names:
                 sources.add(src)
 
-    # DELETE FROM (цель — таблица, но источников может не быть)
-    for m in RE_DELETE_FROM.finditer(sql):
-        tgt = _norm_ident(m.group(1))
-        if _has_schema(tgt):
-            targets.add(tgt)
-
-    # Убираем случаи, где цель и источник совпали (самообновления не информативны для «из чего собирается»)
+    # Уберём самообновления (источник==цель)
     sources -= targets
-
     return targets, sources
 
 # ---------- обход файлов ----------
 
 def iter_proto_sql_files(root: str) -> List[str]:
     out = []
-    for dirpath, dirnames, filenames in os.walk(root):
+    for dirpath, _, filenames in os.walk(root):
         for fn in filenames:
             fl = fn.lower()
             if fl.startswith('proto_') and fl.endswith('.sql'):
                 out.append(os.path.join(dirpath, fn))
     return sorted(out)
 
-# ---------- основной сбор lineage ----------
+# ---------- сбор lineage ----------
 
 def build_lineage(root: str) -> Dict[str, Dict]:
-    """
-    Возвращает словарь:
-    {
-      "schema.table": {
-        "file": "путь/к/файлу.sql",
-        "sources": ["schema.src1", "schema.src2", ...]
-      },
-      ...
-    }
-    """
     lineage: Dict[str, Dict] = {}
     files = iter_proto_sql_files(root)
-
     for path in files:
         try:
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -175,30 +170,24 @@ def build_lineage(root: str) -> Dict[str, Dict]:
             continue
 
         targets, sources = parse_sql(text)
-
-        # Для каждого таргета — привязываем источники, агрегируем
         for tgt in targets:
             entry = lineage.setdefault(tgt, {"file": path, "sources": set()})
             entry["file"] = entry.get("file") or path
             entry["sources"].update(sources)
 
-    # Приводим множества к спискам и сортируем
     for tgt, data in list(lineage.items()):
-        srcs = sorted(data["sources"])
-        data["sources"] = srcs
-
+        data["sources"] = sorted(data["sources"])
     return lineage
 
-# ---------- вывод ----------
+# ---------- выводы ----------
 
-def save_outputs(lineage: Dict[str, Dict], out_prefix: str) -> None:
+def save_json_csv(lineage: Dict[str, Dict], out_prefix: str) -> None:
     json_path = f"{out_prefix}.json"
     csv_path  = f"{out_prefix}.csv"
 
     with open(json_path, 'w', encoding='utf-8') as jf:
         json.dump(lineage, jf, ensure_ascii=False, indent=2)
 
-    # CSV: target,source (многострочно, по одной строке на зависимость; если источников нет — одиночная строка)
     with open(csv_path, 'w', encoding='utf-8') as cf:
         cf.write("target,source,file\n")
         for tgt, data in sorted(lineage.items()):
@@ -208,36 +197,102 @@ def save_outputs(lineage: Dict[str, Dict], out_prefix: str) -> None:
             else:
                 cf.write(f"{tgt},,{data['file']}\n")
 
-    print(f"[OK] Сохранено:\n  - {json_path}\n  - {csv_path}")
+    print(f"[OK] Saved JSON/CSV:\n  - {json_path}\n  - {csv_path}")
+
+def _split_schema_name(full: str) -> Tuple[str, str]:
+    if '.' in full:
+        sch, nm = full.split('.', 1)
+        return sch, nm
+    return '', full
+
+def save_excel(lineage: Dict[str, Dict], out_xlsx: str) -> None:
+    if pd is None:
+        print("[WARN] pandas не установлен — XLSX не будет создан. Установи pandas и openpyxl.")
+        return
+
+    # edges
+    rows_edges = []
+    for tgt, data in lineage.items():
+        if data["sources"]:
+            for src in data["sources"]:
+                rows_edges.append({"target": tgt, "source": src, "file": data["file"]})
+        else:
+            rows_edges.append({"target": tgt, "source": "", "file": data["file"]})
+    df_edges = pd.DataFrame(rows_edges).sort_values(["target", "source"], ignore_index=True)
+
+    # catalog (только цели)
+    rows_cat = []
+    for tgt, data in lineage.items():
+        sch, nm = _split_schema_name(tgt)
+        rows_cat.append({
+            "schema": sch,
+            "name": nm,
+            "full_name": tgt,
+            "file": data["file"]
+        })
+    df_cat = pd.DataFrame(rows_cat).sort_values(["schema", "name"], ignore_index=True)
+
+    # summary: по схемам
+    # 1) сколько целей на схему
+    df_targets_per_schema = (df_cat.groupby("schema", dropna=False)["full_name"]
+                             .count().rename("targets_count").reset_index())
+
+    # 2) матрица target_schema × source_schema
+    if not df_edges.empty:
+        def get_schema(x):
+            return x.split('.', 1)[0] if isinstance(x, str) and '.' in x else ""
+        tmp = df_edges.copy()
+        tmp["target_schema"] = tmp["target"].map(get_schema)
+        tmp["source_schema"] = tmp["source"].map(get_schema)
+        df_flow = (tmp.groupby(["target_schema", "source_schema"])["target"]
+                   .count().rename("edges").reset_index())
+        pivot = df_flow.pivot_table(index="target_schema", columns="source_schema",
+                                    values="edges", fill_value=0, aggfunc="sum")
+    else:
+        df_flow = pd.DataFrame(columns=["target_schema", "source_schema", "edges"])
+        pivot = pd.DataFrame()
+
+    with pd.ExcelWriter(out_xlsx, engine="openpyxl") as xlw:
+        df_edges.to_excel(xlw, index=False, sheet_name="lineage_edges")
+        df_cat.to_excel(xlw, index=False, sheet_name="catalog")
+        # summary лист: три таблички подряд
+        start_row = 0
+        df_targets_per_schema.to_excel(xlw, index=False, sheet_name="summary", startrow=start_row)
+        start_row += len(df_targets_per_schema) + 3
+        df_flow.to_excel(xlw, index=False, sheet_name="summary", startrow=start_row)
+        start_row += len(df_flow) + 3
+        pivot.to_excel(xlw, sheet_name="summary", startrow=start_row)
+
+    print(f"[OK] Saved Excel:\n  - {out_xlsx}")
 
 def print_summary(lineage: Dict[str, Dict]) -> None:
+    total_targets = len(lineage)
+    schemas = Counter([t.split('.', 1)[0] for t in lineage.keys() if '.' in t])
     print("\n=== Lineage summary ===")
-    print(f"Целей (таблиц/представлений): {len(lineage)}")
-    for tgt, data in sorted(lineage.items()):
-        srcs = ", ".join(data["sources"]) if data["sources"] else "—"
-        print(f"- {tgt}  <=  {srcs}")
+    print(f"Целей (таблиц/представлений): {total_targets}")
+    for sch, cnt in sorted(schemas.items()):
+        print(f"- {sch}: {cnt}")
 
 # ---------- CLI ----------
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Сбор lineage для proto_*.sql (игнор временных таблиц: без схемы)."
+        description="Сбор lineage для proto_*.sql (игнор без-схемных объектов; учитывает DISTINCT FROM)."
     )
-    ap.add_argument(
-        "root", nargs="?", default=os.getcwd(),
-        help="Корневая папка проекта (по умолчанию — текущая директория)"
-    )
-    ap.add_argument(
-        "--out", default="lineage",
-        help="Префикс для выходных файлов (JSON/CSV). По умолчанию: lineage"
-    )
+    ap.add_argument("root", nargs="?", default=os.getcwd(),
+                    help="Корневой каталог проекта (по умолчанию — текущая папка)")
+    ap.add_argument("--out", default="lineage",
+                    help="Префикс для JSON/CSV (по умолчанию: lineage)")
+    ap.add_argument("--xlsx", default="lineage.xlsx",
+                    help="Путь к XLSX-отчёту (по умолчанию: lineage.xlsx)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
     print(f"[INFO] Корневая папка: {root}")
 
     lineage = build_lineage(root)
-    save_outputs(lineage, args.out)
+    save_json_csv(lineage, args.out)
+    save_excel(lineage, args.xlsx)
     print_summary(lineage)
 
 if __name__ == "__main__":

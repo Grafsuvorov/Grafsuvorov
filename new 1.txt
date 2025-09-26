@@ -1,5 +1,32 @@
 explain(analyze, format json)
-select * from dm.sb_wuc_test
+select 
+	"ID" as id,
+	"ID_HIM" as id_him,
+	"VBELN" as vbeln,
+	"POSNR" as posnr,
+	tech_etl.util_text_to_null_validation("DEL_ID") as del_id,
+	tech_etl.util_text_to_null_validation("CHARG") as charg,
+	"WEIGHT_N" as weight_n,
+	tech_etl.util_text_to_date_validation("LDDAT") as lddat,
+	tech_etl.util_text_to_null_validation("KNANF") as knanf,
+	tech_etl.util_text_to_null_validation("KNEND") as knend,
+	tech_etl.util_text_to_null_validation("STAGE") as stage,
+	tech_etl.util_text_to_date_validation("ERDAT") as erdat,
+	tech_etl.util_text_to_date_validation("AEDAT") as aedat,
+	tech_etl.util_text_to_null_validation("MATNR") as matnr,
+	tech_etl.util_text_to_null_validation("LASTS") as lasts,
+	--tech_etl.util_text_to_date_validation("DAT_ARRIVED") as dat_arrived, --поле удалено
+	--case when "ERZET" between '000000' and '235959' then cast("ERZET" as time) else null end as erzet_old,
+	case when "ERZET" > '000000' and "ERZET" <= '235959' then cast("ERZET" as time) else null end as erzet,
+	tech_etl.util_text_to_null_validation("ERNAM") as ernam,
+	--case when "AEZET" between '000000' and '235959' then cast("AEZET" as time) else null end as aezet_old,
+	case when "AEZET" > '000000' and "AEZET" <= '235959' then cast("AEZET" as time) else null end as aezet,
+	tech_etl.util_text_to_date_validation("AENAM") as aenam,
+	tech_etl.util_text_to_null_validation("LOCKED") as locked
+from stg."/RUSAL/SD4798M"
+where "MANDT" = '400'
+;
+
 [
   {
     "Plan": {
@@ -10,47 +37,66 @@ select * from dm.sb_wuc_test
       "Segments": 8,
       "Gang Type": "primary reader",
       "Startup Cost": 0.00,
-      "Total Cost": 244532.26,
-      "Plan Rows": 27930376,
-      "Plan Width": 2843,
-      "Actual Startup Time": 32.611,
-      "Actual Total Time": 209643.292,
-      "Actual Rows": 27930375,
+      "Total Cost": 96295.11,
+      "Plan Rows": 197497120,
+      "Plan Width": 144,
+      "Actual Startup Time": 3.471,
+      "Actual Total Time": 784068.775,
+      "Actual Rows": 197497113,
       "Actual Loops": 1,
       "Plans": [
         {
-          "Node Type": "Seq Scan",
+          "Node Type": "Result",
           "Parent Relationship": "Outer",
           "Slice": 1,
           "Segments": 8,
           "Gang Type": "primary reader",
-          "Relation Name": "sb_wuc_test",
-          "Alias": "sb_wuc_test",
           "Startup Cost": 0.00,
-          "Total Cost": 5917.05,
-          "Plan Rows": 27930376,
-          "Plan Width": 2843,
-          "Actual Startup Time": 27.988,
-          "Actual Total Time": 23125.455,
-          "Actual Rows": 3493850,
-          "Actual Loops": 1
+          "Total Cost": 17446.36,
+          "Plan Rows": 197497120,
+          "Plan Width": 144,
+          "Actual Startup Time": 1.697,
+          "Actual Total Time": 748514.560,
+          "Actual Rows": 24697689,
+          "Actual Loops": 1,
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Relation Name": "/RUSAL/SD4798M",
+              "Alias": "/RUSAL/SD4798M",
+              "Startup Cost": 0.00,
+              "Total Cost": 11422.70,
+              "Plan Rows": 197497120,
+              "Plan Width": 155,
+              "Actual Startup Time": 1.574,
+              "Actual Total Time": 15027.521,
+              "Actual Rows": 24697689,
+              "Actual Loops": 1,
+              "Filter": "((\"MANDT\")::text = '400'::text)",
+              "Rows Removed by Filter": 0
+            }
+          ]
         }
       ]
     },
-    "Planning Time": 34.119,
+    "Planning Time": 43.213,
     "Triggers": [
     ],
     "Slice statistics": [
       {
         "Slice": 0,
-        "Executor Memory": 58593408
+        "Executor Memory": 2377880
       },
       {
         "Slice": 1,
         "Executor Memory": {
-          "Average": 74591421,
+          "Average": 3148432,
           "Workers": 8,
-          "Maximum Memory Used": 74598144
+          "Maximum Memory Used": 3148432
         }
       }
     ],
@@ -60,7 +106,7 @@ select * from dm.sb_wuc_test
     "Settings": {
       "Optimizer": "Pivotal Optimizer (GPORCA)"
     },
-    "Execution Time": 210922.536
+    "Execution Time": 790726.995
   }
 ]
 
@@ -69,8 +115,6 @@ select * from dm.sb_wuc_test
 
 
 
-
-
 [
   {
     "Plan": {
@@ -81,47 +125,66 @@ select * from dm.sb_wuc_test
       "Segments": 8,
       "Gang Type": "primary reader",
       "Startup Cost": 0.00,
-      "Total Cost": 247107.79,
-      "Plan Rows": 27930376,
-      "Plan Width": 2873,
-      "Actual Startup Time": 21.094,
-      "Actual Total Time": 193363.795,
-      "Actual Rows": 27930375,
+      "Total Cost": 96321.03,
+      "Plan Rows": 197550512,
+      "Plan Width": 144,
+      "Actual Startup Time": 6.026,
+      "Actual Total Time": 770197.948,
+      "Actual Rows": 197550515,
       "Actual Loops": 1,
       "Plans": [
         {
-          "Node Type": "Seq Scan",
+          "Node Type": "Result",
           "Parent Relationship": "Outer",
           "Slice": 1,
           "Segments": 8,
           "Gang Type": "primary reader",
-          "Relation Name": "sb_wuc",
-          "Alias": "sb_wuc",
           "Startup Cost": 0.00,
-          "Total Cost": 5974.66,
-          "Plan Rows": 27930376,
-          "Plan Width": 2873,
-          "Actual Startup Time": 16.786,
-          "Actual Total Time": 23931.608,
-          "Actual Rows": 3493850,
-          "Actual Loops": 1
+          "Total Cost": 17450.96,
+          "Plan Rows": 197550512,
+          "Plan Width": 144,
+          "Actual Startup Time": 3.605,
+          "Actual Total Time": 732131.117,
+          "Actual Rows": 24701938,
+          "Actual Loops": 1,
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Relation Name": "/RUSAL/SD4798M_v2",
+              "Alias": "/RUSAL/SD4798M_v2",
+              "Startup Cost": 0.00,
+              "Total Cost": 11425.67,
+              "Plan Rows": 197550512,
+              "Plan Width": 155,
+              "Actual Startup Time": 1.862,
+              "Actual Total Time": 14197.171,
+              "Actual Rows": 24701938,
+              "Actual Loops": 1,
+              "Filter": "((\"MANDT\")::text = '400'::text)",
+              "Rows Removed by Filter": 0
+            }
+          ]
         }
       ]
     },
-    "Planning Time": 33.496,
+    "Planning Time": 6.358,
     "Triggers": [
     ],
     "Slice statistics": [
       {
         "Slice": 0,
-        "Executor Memory": 30478456
+        "Executor Memory": 4442264
       },
       {
         "Slice": 1,
         "Executor Memory": {
-          "Average": 39133243,
+          "Average": 5786330,
           "Workers": 8,
-          "Maximum Memory Used": 39140400
+          "Maximum Memory Used": 5786376
         }
       }
     ],
@@ -131,6 +194,6 @@ select * from dm.sb_wuc_test
     "Settings": {
       "Optimizer": "Pivotal Optimizer (GPORCA)"
     },
-    "Execution Time": 194611.444
+    "Execution Time": 776611.131
   }
 ]

@@ -1,199 +1,299 @@
-explain(analyze, format json)
-select 
-	"ID" as id,
-	"ID_HIM" as id_him,
-	"VBELN" as vbeln,
-	"POSNR" as posnr,
-	tech_etl.util_text_to_null_validation("DEL_ID") as del_id,
-	tech_etl.util_text_to_null_validation("CHARG") as charg,
-	"WEIGHT_N" as weight_n,
-	tech_etl.util_text_to_date_validation("LDDAT") as lddat,
-	tech_etl.util_text_to_null_validation("KNANF") as knanf,
-	tech_etl.util_text_to_null_validation("KNEND") as knend,
-	tech_etl.util_text_to_null_validation("STAGE") as stage,
-	tech_etl.util_text_to_date_validation("ERDAT") as erdat,
-	tech_etl.util_text_to_date_validation("AEDAT") as aedat,
-	tech_etl.util_text_to_null_validation("MATNR") as matnr,
-	tech_etl.util_text_to_null_validation("LASTS") as lasts,
-	--tech_etl.util_text_to_date_validation("DAT_ARRIVED") as dat_arrived, --поле удалено
-	--case when "ERZET" between '000000' and '235959' then cast("ERZET" as time) else null end as erzet_old,
-	case when "ERZET" > '000000' and "ERZET" <= '235959' then cast("ERZET" as time) else null end as erzet,
-	tech_etl.util_text_to_null_validation("ERNAM") as ernam,
-	--case when "AEZET" between '000000' and '235959' then cast("AEZET" as time) else null end as aezet_old,
-	case when "AEZET" > '000000' and "AEZET" <= '235959' then cast("AEZET" as time) else null end as aezet,
-	tech_etl.util_text_to_date_validation("AENAM") as aenam,
-	tech_etl.util_text_to_null_validation("LOCKED") as locked
-from stg."/RUSAL/SD4798M"
-where "MANDT" = '400'
-;
+# lineage_proto_sql.py
+# -*- coding: utf-8 -*-
+import os
+import re
+import json
+import argparse
+from collections import defaultdict
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 1,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 96295.11,
-      "Plan Rows": 197497120,
-      "Plan Width": 144,
-      "Actual Startup Time": 3.471,
-      "Actual Total Time": 784068.775,
-      "Actual Rows": 197497113,
-      "Actual Loops": 1,
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 1,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 17446.36,
-          "Plan Rows": 197497120,
-          "Plan Width": 144,
-          "Actual Startup Time": 1.697,
-          "Actual Total Time": 748514.560,
-          "Actual Rows": 24697689,
-          "Actual Loops": 1,
-          "Plans": [
-            {
-              "Node Type": "Seq Scan",
-              "Parent Relationship": "Outer",
-              "Slice": 1,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Relation Name": "/RUSAL/SD4798M",
-              "Alias": "/RUSAL/SD4798M",
-              "Startup Cost": 0.00,
-              "Total Cost": 11422.70,
-              "Plan Rows": 197497120,
-              "Plan Width": 155,
-              "Actual Startup Time": 1.574,
-              "Actual Total Time": 15027.521,
-              "Actual Rows": 24697689,
-              "Actual Loops": 1,
-              "Filter": "((\"MANDT\")::text = '400'::text)",
-              "Rows Removed by Filter": 0
-            }
-          ]
+# -------------------------------
+# Помощники по именам объектов
+# -------------------------------
+
+QUALIFIED_RE = re.compile(
+    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'           # schema or table (quoted or bare)
+    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'  # optional ".table"
+    , re.IGNORECASE)
+
+KW_BOUNDARY_RE = re.compile(
+    r'\b(where|group\s+by|having|qualify|window|connect|minus|union|intersect|order\s+by|limit|on|using)\b',
+    re.IGNORECASE | re.DOTALL)
+
+STMT_SPLIT_RE = re.compile(r';')
+
+COMMENT_LINE_RE = re.compile(r'--.*?$',
+                             re.MULTILINE)
+COMMENT_BLOCK_RE = re.compile(r'/\*.*?\*/',
+                              re.DOTALL)
+
+# -------------------------------
+# Нормализация/разбор имён
+# -------------------------------
+
+def unquote_ident(x: str) -> str:
+    if x is None:
+        return None
+    x = x.strip()
+    if len(x) >= 2 and x[0] == '"' and x[-1] == '"':
+        return x[1:-1]
+    return x
+
+def parse_qualified_name(token: str):
+    """
+    Возвращает (schema, table) в нижнем регистре.
+    Если схема не указана → (None, table_lower).
+    """
+    if not token:
+        return (None, None)
+    token = token.strip()
+    # отбрасываем скобочные подзапросы или функции
+    if token.startswith('('):
+        return (None, None)
+    # отрезаем алиас: берём первую «часть», которая похожа на имя
+    m = QUALIFIED_RE.match(token)
+    if not m:
+        return (None, None)
+    name = m.group(0)
+    # убедимся, что это не функция: после имени не должно идти '('
+    after = token[m.end():].lstrip()
+    if after.startswith('('):
+        return (None, None)
+
+    # schema.table или просто table
+    if '.' in name:
+        s, t = [unquote_ident(p.strip()) for p in re.split(r'\s*\.\s*', name, maxsplit=1)]
+        return (s.lower(), t.lower())
+    else:
+        t = unquote_ident(name)
+        return (None, t.lower() if t else None)
+
+def looks_temp(schema: str, table: str) -> bool:
+    """
+    Простое правило из вашей просьбы:
+    - если схема не указана → считаем временной и игнорируем
+    """
+    if table is None:
+        return True
+    return (schema is None)
+
+# -------------------------------
+# Очистка SQL и сплит
+# -------------------------------
+
+def strip_comments(sql: str) -> str:
+    sql = COMMENT_BLOCK_RE.sub(' ', sql)
+    sql = COMMENT_LINE_RE.sub(' ', sql)
+    return sql
+
+def split_statements(sql: str):
+    # очень простой сплит по ';' (в подавляющем большинстве ETL скриптов ок)
+    parts = STMT_SPLIT_RE.split(sql)
+    out = []
+    for p in parts:
+        s = p.strip()
+        if s:
+            out.append(s)
+    return out
+
+# -------------------------------
+# Извлечение destination
+# -------------------------------
+
+CREATE_TABLE_AS_RE = re.compile(
+    r'^\s*create\s+(?:or\s+replace\s+)?table\s+('
+    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'           # schema or table
+    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'  # optional ".table"
+    r')\s+as\b',
+    re.IGNORECASE | re.DOTALL)
+
+INSERT_INTO_RE = re.compile(
+    r'^\s*insert\s+into\s+('
+    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'
+    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'
+    r')\b',
+    re.IGNORECASE | re.DOTALL)
+
+UPDATE_RE = re.compile(
+    r'^\s*update\s+('
+    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'
+    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'
+    r')\b',
+    re.IGNORECASE | re.DOTALL)
+
+def extract_destination(stmt: str):
+    m = CREATE_TABLE_AS_RE.search(stmt)
+    if m:
+        return parse_qualified_name(m.group(1))
+    m = INSERT_INTO_RE.search(stmt)
+    if m:
+        return parse_qualified_name(m.group(1))
+    m = UPDATE_RE.search(stmt)
+    if m:
+        return parse_qualified_name(m.group(1))
+    return (None, None)
+
+# -------------------------------
+# Извлечение источников
+# -------------------------------
+
+def _sub_until_boundary(sql: str, start_idx: int) -> str:
+    """
+    Вырезает участок после FROM/JOIN до первого ключевого слова (WHERE/ON/…)
+    с учётом простого подсчёта скобок, чтобы не порезать внутри подзапроса.
+    """
+    n = len(sql)
+    i = start_idx
+    depth = 0
+    while i < n:
+        ch = sql[i]
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+        if depth == 0:
+            # видим «ключевое» слово — останавливаемся
+            kb = KW_BOUNDARY_RE.match(sql, i)
+            if kb:
+                break
+        i += 1
+    return sql[start_idx:i]
+
+def _split_top_level_commas(chunk: str):
+    """
+    Делит по запятым верхнего уровня: "a, (subquery), b join c" → ["a", "(subquery)", "b join c"]
+    """
+    parts = []
+    buf = []
+    depth = 0
+    for ch in chunk:
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth = max(0, depth - 1)
+        if ch == ',' and depth == 0:
+            s = ''.join(buf).strip()
+            if s:
+                parts.append(s)
+            buf = []
+        else:
+            buf.append(ch)
+    s = ''.join(buf).strip()
+    if s:
+        parts.append(s)
+    return parts
+
+def extract_sources(stmt: str):
+    sources = set()
+    # Ищем позиции ключевых слов FROM/JOIN
+    for m in re.finditer(r'\b(from|join)\b', stmt, flags=re.IGNORECASE):
+        section = _sub_until_boundary(stmt, m.end())
+        # для FROM секция может содержать "a, b join c" → делим запятыми верхнего уровня
+        candidates = _split_top_level_commas(section)
+        for cand in candidates:
+            cand = cand.strip()
+            if not cand or cand.startswith('('):   # подзапрос
+                continue
+            # Берём первый токен как имя источника
+            name_match = QUALIFIED_RE.match(cand)
+            if not name_match:
+                continue
+            name = name_match.group(0)
+            # не функция
+            after = cand[name_match.end():].lstrip()
+            if after.startswith('('):
+                continue
+            sch, tab = parse_qualified_name(name)
+            if tab and not looks_temp(sch, tab):
+                sources.add((sch, tab))
+    return sorted(sources)
+
+# -------------------------------
+# Основная логика
+# -------------------------------
+
+def find_proto_sql_files(root: str):
+    files = []
+    for dirpath, _, filenames in os.walk(root):
+        for fn in filenames:
+            low = fn.lower()
+            if low.startswith('proto_') and low.endswith('.sql'):
+                files.append(os.path.join(dirpath, fn))
+    return sorted(files)
+
+def build_lineage(root: str):
+    edges = []   # (dst_schema, dst_table, src_schema, src_table, file, stmt_idx)
+    files = find_proto_sql_files(root)
+    for path in files:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                raw = f.read()
+        except Exception as e:
+            print(f"[WARN] Cannot read {path}: {e}")
+            continue
+
+        sql = strip_comments(raw)
+        statements = split_statements(sql)
+
+        for idx, stmt in enumerate(statements, 1):
+            dst_s, dst_t = extract_destination(stmt)
+            # игнорим временные цели (без схемы) или если цели нет
+            if dst_t is None or looks_temp(dst_s, dst_t):
+                continue
+            sources = extract_sources(stmt)
+            for src_s, src_t in sources:
+                # На всякий случай отфильтруем петли/дубликаты
+                if (src_s, src_t) == (dst_s, dst_t):
+                    continue
+                edges.append((dst_s, dst_t, src_s, src_t, os.path.relpath(path, root), idx))
+    return edges
+
+def save_outputs(edges, out_dir='.'):
+    # CSV
+    csv_path = os.path.join(out_dir, 'lineage_edges.csv')
+    with open(csv_path, 'w', encoding='utf-8') as f:
+        f.write('target_schema,target_table,source_schema,source_table,file,statement_index\n')
+        for dst_s, dst_t, src_s, src_t, rel, i in edges:
+            f.write(f'{dst_s},{dst_t},{src_s},{src_t},{rel},{i}\n')
+
+    # JSON граф: для удобной визуализации
+    graph = defaultdict(lambda: {"sources": set(), "files": set()})
+    for dst_s, dst_t, src_s, src_t, rel, _ in edges:
+        dst = f'{dst_s}.{dst_t}'
+        src = f'{src_s}.{src_t}'
+        graph[dst]["sources"].add(src)
+        graph[dst]["files"].add(rel)
+
+    graph_json = {
+        "nodes": sorted(graph.keys()),
+        "edges": sorted([(dst, src) for dst, v in graph.items() for src in v["sources"]]),
+        "by_target": {
+            dst: {
+                "sources": sorted(v["sources"]),
+                "files": sorted(v["files"])
+            } for dst, v in graph.items()
         }
-      ]
-    },
-    "Planning Time": 43.213,
-    "Triggers": [
-    ],
-    "Slice statistics": [
-      {
-        "Slice": 0,
-        "Executor Memory": 2377880
-      },
-      {
-        "Slice": 1,
-        "Executor Memory": {
-          "Average": 3148432,
-          "Workers": 8,
-          "Maximum Memory Used": 3148432
-        }
-      }
-    ],
-    "Statement statistics": {
-      "Memory used": 126976
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    },
-    "Execution Time": 790726.995
-  }
-]
+    }
+    json_path = os.path.join(out_dir, 'lineage_graph.json')
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(graph_json, f, ensure_ascii=False, indent=2)
 
+    return csv_path, json_path
 
+def main():
+    ap = argparse.ArgumentParser(description="Сбор lineage для proto_*.sql (игнорируя временные таблицы без схемы).")
+    ap.add_argument("root", help="Корневая папка проекта")
+    ap.add_argument("--out", default=".", help="Куда сохранить результаты (по умолчанию — текущая папка)")
+    args = ap.parse_args()
 
+    edges = build_lineage(args.root)
+    csv_path, json_path = save_outputs(edges, args.out)
 
+    # Короткая сводка
+    targets = sorted({(e[0], e[1]) for e in edges})
+    print(f"[OK] Собрано рёбер: {len(edges)}")
+    print(f"[OK] Целей (витрин): {len(targets)}")
+    print(f"[OK] CSV:  {csv_path}")
+    print(f"[OK] JSON: {json_path}")
 
-
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 1,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 96321.03,
-      "Plan Rows": 197550512,
-      "Plan Width": 144,
-      "Actual Startup Time": 6.026,
-      "Actual Total Time": 770197.948,
-      "Actual Rows": 197550515,
-      "Actual Loops": 1,
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 1,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 17450.96,
-          "Plan Rows": 197550512,
-          "Plan Width": 144,
-          "Actual Startup Time": 3.605,
-          "Actual Total Time": 732131.117,
-          "Actual Rows": 24701938,
-          "Actual Loops": 1,
-          "Plans": [
-            {
-              "Node Type": "Seq Scan",
-              "Parent Relationship": "Outer",
-              "Slice": 1,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Relation Name": "/RUSAL/SD4798M_v2",
-              "Alias": "/RUSAL/SD4798M_v2",
-              "Startup Cost": 0.00,
-              "Total Cost": 11425.67,
-              "Plan Rows": 197550512,
-              "Plan Width": 155,
-              "Actual Startup Time": 1.862,
-              "Actual Total Time": 14197.171,
-              "Actual Rows": 24701938,
-              "Actual Loops": 1,
-              "Filter": "((\"MANDT\")::text = '400'::text)",
-              "Rows Removed by Filter": 0
-            }
-          ]
-        }
-      ]
-    },
-    "Planning Time": 6.358,
-    "Triggers": [
-    ],
-    "Slice statistics": [
-      {
-        "Slice": 0,
-        "Executor Memory": 4442264
-      },
-      {
-        "Slice": 1,
-        "Executor Memory": {
-          "Average": 5786330,
-          "Workers": 8,
-          "Maximum Memory Used": 5786376
-        }
-      }
-    ],
-    "Statement statistics": {
-      "Memory used": 126976
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    },
-    "Execution Time": 776611.131
-  }
-]
+if __name__ == "__main__":
+    main()

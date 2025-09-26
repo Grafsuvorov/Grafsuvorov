@@ -1,299 +1,244 @@
-# lineage_proto_sql.py
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+"""
+Lineage extractor for proto_*.sql
+- Поиск файлов: рекурсивно, case-insensitive, маска proto_*.sql
+- Цели: INSERT INTO / CREATE [MATERIALIZED] VIEW|TABLE / MERGE INTO
+- Источники: FROM / JOIN / USING / UPDATE ... FROM / DELETE FROM
+- Игнор временных таблиц: если объект без схемы (нет точки) — пропускаем
+- Исключаем CTE: имена из WITH ... AS (...) не считаем источниками
+- Сохраняет итог в lineage.json и lineage.csv
+"""
+
+import argparse
+import json
 import os
 import re
-import json
-import argparse
 from collections import defaultdict
+from typing import Dict, List, Set, Tuple
 
-# -------------------------------
-# Помощники по именам объектов
-# -------------------------------
+# ---------- утилиты нормализации ----------
 
-QUALIFIED_RE = re.compile(
-    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'           # schema or table (quoted or bare)
-    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'  # optional ".table"
-    , re.IGNORECASE)
+def _strip_quotes(name: str) -> str:
+    # убираем двойные кавычки вокруг частей идентификатора
+    return name.replace('"', '').replace("`", "").strip()
 
-KW_BOUNDARY_RE = re.compile(
-    r'\b(where|group\s+by|having|qualify|window|connect|minus|union|intersect|order\s+by|limit|on|using)\b',
-    re.IGNORECASE | re.DOTALL)
-
-STMT_SPLIT_RE = re.compile(r';')
-
-COMMENT_LINE_RE = re.compile(r'--.*?$',
-                             re.MULTILINE)
-COMMENT_BLOCK_RE = re.compile(r'/\*.*?\*/',
-                              re.DOTALL)
-
-# -------------------------------
-# Нормализация/разбор имён
-# -------------------------------
-
-def unquote_ident(x: str) -> str:
-    if x is None:
-        return None
-    x = x.strip()
-    if len(x) >= 2 and x[0] == '"' and x[-1] == '"':
-        return x[1:-1]
-    return x
-
-def parse_qualified_name(token: str):
+def _norm_ident(raw: str) -> str:
     """
-    Возвращает (schema, table) в нижнем регистре.
-    Если схема не указана → (None, table_lower).
+    Нормализуем идентификатор:
+    - убираем кавычки
+    - схлопываем пробелы вокруг точки
+    - приводим к нижнему регистру
     """
-    if not token:
-        return (None, None)
-    token = token.strip()
-    # отбрасываем скобочные подзапросы или функции
-    if token.startswith('('):
-        return (None, None)
-    # отрезаем алиас: берём первую «часть», которая похожа на имя
-    m = QUALIFIED_RE.match(token)
-    if not m:
-        return (None, None)
-    name = m.group(0)
-    # убедимся, что это не функция: после имени не должно идти '('
-    after = token[m.end():].lstrip()
-    if after.startswith('('):
-        return (None, None)
+    s = _strip_quotes(raw)
+    s = re.sub(r'\s*\.\s*', '.', s)
+    s = re.sub(r'\s+', ' ', s).strip()
+    return s.lower()
 
-    # schema.table или просто table
-    if '.' in name:
-        s, t = [unquote_ident(p.strip()) for p in re.split(r'\s*\.\s*', name, maxsplit=1)]
-        return (s.lower(), t.lower())
-    else:
-        t = unquote_ident(name)
-        return (None, t.lower() if t else None)
+def _has_schema(obj: str) -> bool:
+    """Считаем объект «реальным», если есть схема (schema.table)."""
+    return '.' in obj
 
-def looks_temp(schema: str, table: str) -> bool:
-    """
-    Простое правило из вашей просьбы:
-    - если схема не указана → считаем временной и игнорируем
-    """
-    if table is None:
-        return True
-    return (schema is None)
+# ---------- регэкспы ----------
 
-# -------------------------------
-# Очистка SQL и сплит
-# -------------------------------
+# Цели
+RE_INSERT_INTO = re.compile(r'(?is)\binsert\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_CREATE_TBL  = re.compile(r'(?is)\bcreate\s+table\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_CREATE_VIEW = re.compile(r'(?is)\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_MERGE_INTO  = re.compile(r'(?is)\bmerge\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 
-def strip_comments(sql: str) -> str:
-    sql = COMMENT_BLOCK_RE.sub(' ', sql)
-    sql = COMMENT_LINE_RE.sub(' ', sql)
+# Источники
+RE_FROM_JOIN   = re.compile(r'(?is)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_USING       = re.compile(r'(?is)\busing\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_UPDATE_FROM = re.compile(r'(?is)\bupdate\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s+set\b.*?\bfrom\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)', re.S)
+RE_DELETE_FROM = re.compile(r'(?is)\bdelete\s+from\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+
+# CTE
+RE_WITH_CTE    = re.compile(r'(?is)\bwith\s+(.+?)\bselect\b', re.S)
+RE_CTE_NAME    = re.compile(r'(?is)\b([a-z0-9_."`$]+)\s+as\s*\(')
+
+# Комментарии
+RE_LINE_COMMENT = re.compile(r'--.*?$', re.M)
+RE_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.S)
+
+def _remove_comments(sql: str) -> str:
+    sql = RE_BLOCK_COMMENT.sub(' ', sql)
+    sql = RE_LINE_COMMENT.sub(' ', sql)
     return sql
 
-def split_statements(sql: str):
-    # очень простой сплит по ';' (в подавляющем большинстве ETL скриптов ок)
-    parts = STMT_SPLIT_RE.split(sql)
+# ---------- парсер одного SQL ----------
+
+def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
+    """
+    Возвращает (targets, sources) — множество целевых и исходных объектов со схемой.
+    """
+    sql = _remove_comments(sql_text)
+
+    # соберём CTE-имена, чтобы потом исключить из источников
+    cte_names: Set[str] = set()
+    for with_block in RE_WITH_CTE.findall(sql):
+        for m in RE_CTE_NAME.finditer(with_block):
+            nm = _norm_ident(m.group(1))
+            # CTE — всегда без схемы, но исключим по имени
+            cte_names.add(_strip_quotes(nm).lower())
+
+    targets: Set[str] = set()
+    sources: Set[str] = set()
+
+    # цели
+    for rx in (RE_INSERT_INTO, RE_CREATE_TBL, RE_CREATE_VIEW, RE_MERGE_INTO):
+        for m in rx.finditer(sql):
+            obj = _norm_ident(m.group(1))
+            if _has_schema(obj):
+                targets.add(obj)
+
+    # источники: FROM/JOIN/USING
+    for m in RE_FROM_JOIN.finditer(sql):
+        obj = _norm_ident(m.group(1))
+        if '(' in obj:  # защита от вызовов функций/подзапросов
+            continue
+        if not _has_schema(obj):
+            continue
+        # исключим, если совпадает с CTE (бывает, когда пишут schema.cte? редко, но на всякий случай)
+        base = obj.split('.')[-1]
+        if base in cte_names:
+            continue
+        sources.add(obj)
+
+    for m in RE_USING.finditer(sql):
+        obj = _norm_ident(m.group(1))
+        if '(' in obj:
+            continue
+        if not _has_schema(obj):
+            continue
+        base = obj.split('.')[-1]
+        if base in cte_names:
+            continue
+        sources.add(obj)
+
+    # UPDATE ... FROM
+    for m in RE_UPDATE_FROM.finditer(sql):
+        tgt = _norm_ident(m.group(1))
+        src = _norm_ident(m.group(2))
+        if _has_schema(tgt):
+            targets.add(tgt)
+        if _has_schema(src):
+            base = src.split('.')[-1]
+            if base not in cte_names:
+                sources.add(src)
+
+    # DELETE FROM (цель — таблица, но источников может не быть)
+    for m in RE_DELETE_FROM.finditer(sql):
+        tgt = _norm_ident(m.group(1))
+        if _has_schema(tgt):
+            targets.add(tgt)
+
+    # Убираем случаи, где цель и источник совпали (самообновления не информативны для «из чего собирается»)
+    sources -= targets
+
+    return targets, sources
+
+# ---------- обход файлов ----------
+
+def iter_proto_sql_files(root: str) -> List[str]:
     out = []
-    for p in parts:
-        s = p.strip()
-        if s:
-            out.append(s)
-    return out
-
-# -------------------------------
-# Извлечение destination
-# -------------------------------
-
-CREATE_TABLE_AS_RE = re.compile(
-    r'^\s*create\s+(?:or\s+replace\s+)?table\s+('
-    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'           # schema or table
-    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'  # optional ".table"
-    r')\s+as\b',
-    re.IGNORECASE | re.DOTALL)
-
-INSERT_INTO_RE = re.compile(
-    r'^\s*insert\s+into\s+('
-    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'
-    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'
-    r')\b',
-    re.IGNORECASE | re.DOTALL)
-
-UPDATE_RE = re.compile(
-    r'^\s*update\s+('
-    r'(?:"[^"]+"|[A-Za-z_][\w$]*)'
-    r'(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?'
-    r')\b',
-    re.IGNORECASE | re.DOTALL)
-
-def extract_destination(stmt: str):
-    m = CREATE_TABLE_AS_RE.search(stmt)
-    if m:
-        return parse_qualified_name(m.group(1))
-    m = INSERT_INTO_RE.search(stmt)
-    if m:
-        return parse_qualified_name(m.group(1))
-    m = UPDATE_RE.search(stmt)
-    if m:
-        return parse_qualified_name(m.group(1))
-    return (None, None)
-
-# -------------------------------
-# Извлечение источников
-# -------------------------------
-
-def _sub_until_boundary(sql: str, start_idx: int) -> str:
-    """
-    Вырезает участок после FROM/JOIN до первого ключевого слова (WHERE/ON/…)
-    с учётом простого подсчёта скобок, чтобы не порезать внутри подзапроса.
-    """
-    n = len(sql)
-    i = start_idx
-    depth = 0
-    while i < n:
-        ch = sql[i]
-        if ch == '(':
-            depth += 1
-        elif ch == ')':
-            depth = max(0, depth - 1)
-        if depth == 0:
-            # видим «ключевое» слово — останавливаемся
-            kb = KW_BOUNDARY_RE.match(sql, i)
-            if kb:
-                break
-        i += 1
-    return sql[start_idx:i]
-
-def _split_top_level_commas(chunk: str):
-    """
-    Делит по запятым верхнего уровня: "a, (subquery), b join c" → ["a", "(subquery)", "b join c"]
-    """
-    parts = []
-    buf = []
-    depth = 0
-    for ch in chunk:
-        if ch == '(':
-            depth += 1
-        elif ch == ')':
-            depth = max(0, depth - 1)
-        if ch == ',' and depth == 0:
-            s = ''.join(buf).strip()
-            if s:
-                parts.append(s)
-            buf = []
-        else:
-            buf.append(ch)
-    s = ''.join(buf).strip()
-    if s:
-        parts.append(s)
-    return parts
-
-def extract_sources(stmt: str):
-    sources = set()
-    # Ищем позиции ключевых слов FROM/JOIN
-    for m in re.finditer(r'\b(from|join)\b', stmt, flags=re.IGNORECASE):
-        section = _sub_until_boundary(stmt, m.end())
-        # для FROM секция может содержать "a, b join c" → делим запятыми верхнего уровня
-        candidates = _split_top_level_commas(section)
-        for cand in candidates:
-            cand = cand.strip()
-            if not cand or cand.startswith('('):   # подзапрос
-                continue
-            # Берём первый токен как имя источника
-            name_match = QUALIFIED_RE.match(cand)
-            if not name_match:
-                continue
-            name = name_match.group(0)
-            # не функция
-            after = cand[name_match.end():].lstrip()
-            if after.startswith('('):
-                continue
-            sch, tab = parse_qualified_name(name)
-            if tab and not looks_temp(sch, tab):
-                sources.add((sch, tab))
-    return sorted(sources)
-
-# -------------------------------
-# Основная логика
-# -------------------------------
-
-def find_proto_sql_files(root: str):
-    files = []
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
         for fn in filenames:
-            low = fn.lower()
-            if low.startswith('proto_') and low.endswith('.sql'):
-                files.append(os.path.join(dirpath, fn))
-    return sorted(files)
+            fl = fn.lower()
+            if fl.startswith('proto_') and fl.endswith('.sql'):
+                out.append(os.path.join(dirpath, fn))
+    return sorted(out)
 
-def build_lineage(root: str):
-    edges = []   # (dst_schema, dst_table, src_schema, src_table, file, stmt_idx)
-    files = find_proto_sql_files(root)
+# ---------- основной сбор lineage ----------
+
+def build_lineage(root: str) -> Dict[str, Dict]:
+    """
+    Возвращает словарь:
+    {
+      "schema.table": {
+        "file": "путь/к/файлу.sql",
+        "sources": ["schema.src1", "schema.src2", ...]
+      },
+      ...
+    }
+    """
+    lineage: Dict[str, Dict] = {}
+    files = iter_proto_sql_files(root)
+
     for path in files:
         try:
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                raw = f.read()
+                text = f.read()
         except Exception as e:
-            print(f"[WARN] Cannot read {path}: {e}")
+            print(f"[WARN] Не удалось прочитать {path}: {e}")
             continue
 
-        sql = strip_comments(raw)
-        statements = split_statements(sql)
+        targets, sources = parse_sql(text)
 
-        for idx, stmt in enumerate(statements, 1):
-            dst_s, dst_t = extract_destination(stmt)
-            # игнорим временные цели (без схемы) или если цели нет
-            if dst_t is None or looks_temp(dst_s, dst_t):
-                continue
-            sources = extract_sources(stmt)
-            for src_s, src_t in sources:
-                # На всякий случай отфильтруем петли/дубликаты
-                if (src_s, src_t) == (dst_s, dst_t):
-                    continue
-                edges.append((dst_s, dst_t, src_s, src_t, os.path.relpath(path, root), idx))
-    return edges
+        # Для каждого таргета — привязываем источники, агрегируем
+        for tgt in targets:
+            entry = lineage.setdefault(tgt, {"file": path, "sources": set()})
+            entry["file"] = entry.get("file") or path
+            entry["sources"].update(sources)
 
-def save_outputs(edges, out_dir='.'):
-    # CSV
-    csv_path = os.path.join(out_dir, 'lineage_edges.csv')
-    with open(csv_path, 'w', encoding='utf-8') as f:
-        f.write('target_schema,target_table,source_schema,source_table,file,statement_index\n')
-        for dst_s, dst_t, src_s, src_t, rel, i in edges:
-            f.write(f'{dst_s},{dst_t},{src_s},{src_t},{rel},{i}\n')
+    # Приводим множества к спискам и сортируем
+    for tgt, data in list(lineage.items()):
+        srcs = sorted(data["sources"])
+        data["sources"] = srcs
 
-    # JSON граф: для удобной визуализации
-    graph = defaultdict(lambda: {"sources": set(), "files": set()})
-    for dst_s, dst_t, src_s, src_t, rel, _ in edges:
-        dst = f'{dst_s}.{dst_t}'
-        src = f'{src_s}.{src_t}'
-        graph[dst]["sources"].add(src)
-        graph[dst]["files"].add(rel)
+    return lineage
 
-    graph_json = {
-        "nodes": sorted(graph.keys()),
-        "edges": sorted([(dst, src) for dst, v in graph.items() for src in v["sources"]]),
-        "by_target": {
-            dst: {
-                "sources": sorted(v["sources"]),
-                "files": sorted(v["files"])
-            } for dst, v in graph.items()
-        }
-    }
-    json_path = os.path.join(out_dir, 'lineage_graph.json')
-    with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(graph_json, f, ensure_ascii=False, indent=2)
+# ---------- вывод ----------
 
-    return csv_path, json_path
+def save_outputs(lineage: Dict[str, Dict], out_prefix: str) -> None:
+    json_path = f"{out_prefix}.json"
+    csv_path  = f"{out_prefix}.csv"
+
+    with open(json_path, 'w', encoding='utf-8') as jf:
+        json.dump(lineage, jf, ensure_ascii=False, indent=2)
+
+    # CSV: target,source (многострочно, по одной строке на зависимость; если источников нет — одиночная строка)
+    with open(csv_path, 'w', encoding='utf-8') as cf:
+        cf.write("target,source,file\n")
+        for tgt, data in sorted(lineage.items()):
+            if data["sources"]:
+                for src in data["sources"]:
+                    cf.write(f"{tgt},{src},{data['file']}\n")
+            else:
+                cf.write(f"{tgt},,{data['file']}\n")
+
+    print(f"[OK] Сохранено:\n  - {json_path}\n  - {csv_path}")
+
+def print_summary(lineage: Dict[str, Dict]) -> None:
+    print("\n=== Lineage summary ===")
+    print(f"Целей (таблиц/представлений): {len(lineage)}")
+    for tgt, data in sorted(lineage.items()):
+        srcs = ", ".join(data["sources"]) if data["sources"] else "—"
+        print(f"- {tgt}  <=  {srcs}")
+
+# ---------- CLI ----------
 
 def main():
-    ap = argparse.ArgumentParser(description="Сбор lineage для proto_*.sql (игнорируя временные таблицы без схемы).")
-    ap.add_argument("root", help="Корневая папка проекта")
-    ap.add_argument("--out", default=".", help="Куда сохранить результаты (по умолчанию — текущая папка)")
+    ap = argparse.ArgumentParser(
+        description="Сбор lineage для proto_*.sql (игнор временных таблиц: без схемы)."
+    )
+    ap.add_argument(
+        "root", nargs="?", default=os.getcwd(),
+        help="Корневая папка проекта (по умолчанию — текущая директория)"
+    )
+    ap.add_argument(
+        "--out", default="lineage",
+        help="Префикс для выходных файлов (JSON/CSV). По умолчанию: lineage"
+    )
     args = ap.parse_args()
 
-    edges = build_lineage(args.root)
-    csv_path, json_path = save_outputs(edges, args.out)
+    root = os.path.abspath(args.root)
+    print(f"[INFO] Корневая папка: {root}")
 
-    # Короткая сводка
-    targets = sorted({(e[0], e[1]) for e in edges})
-    print(f"[OK] Собрано рёбер: {len(edges)}")
-    print(f"[OK] Целей (витрин): {len(targets)}")
-    print(f"[OK] CSV:  {csv_path}")
-    print(f"[OK] JSON: {json_path}")
+    lineage = build_lineage(root)
+    save_outputs(lineage, args.out)
+    print_summary(lineage)
 
 if __name__ == "__main__":
     main()

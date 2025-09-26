@@ -2,30 +2,31 @@
 # -*- coding: utf-8 -*-
 
 """
-Lineage extractor for proto_*.sql → JSON/CSV/XLSX
+Lineage extractor → lineage.json / lineage.csv / lineage.xlsx (без pandas)
 
-Что делает:
-- Рекурсивно ищет файлы по маске proto_*.sql (без учёта регистра)
-- Цели: INSERT INTO / CREATE [MATERIALIZED] VIEW|TABLE / MERGE INTO / DELETE FROM / UPDATE
-- Источники: FROM / JOIN / USING / UPDATE ... FROM
-- Игнорирует:
-    • конструкции "IS DISTINCT FROM ..." (не путать с FROM/JOIN)
-    • CTE из WITH ... AS (...)
-    • всё без схемы (schema.table) — считаем «временным/локальным» и пропускаем
-- Вывод: lineage.json, lineage.csv и lineage.xlsx (3 листа: lineage_edges, catalog, summary)
+Ищет proto_*.sql (без учёта регистра) рекурсивно от root.
+Цели: INSERT INTO / CREATE [MATERIALIZED] VIEW|TABLE / MERGE INTO / DELETE FROM / UPDATE ... FROM
+Источники: FROM / JOIN / USING / UPDATE ... FROM
+Особенности:
+- Отличает FROM/JOIN от 'IS DISTINCT FROM' (негативный lookbehind).
+- Игнорирует CTE (WITH ... AS (...)).
+- Берёт только объекты с явной схемой (schema.table).
+- XLSX создаётся через openpyxl (pandas не нужен).
 """
 
 import argparse
 import json
 import os
 import re
-from collections import defaultdict, Counter
 from typing import Dict, List, Set, Tuple
+from collections import Counter
 
+# ---- XLSX через openpyxl (минимальная зависимость) ----
 try:
-    import pandas as pd
-except Exception:
-    pd = None  # XLSX будет недоступен, если нет pandas/openpyxl
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+except Exception as e:
+    Workbook = None
 
 # ---------- утилиты ----------
 
@@ -39,29 +40,23 @@ def _norm_ident(raw: str) -> str:
     return s.lower()
 
 def _has_schema(obj: str) -> bool:
-    return '.' in obj  # только schema.table считаем «реальным» объектом
+    return '.' in obj
 
 # ---------- регэкспы ----------
 
-# Цели
 RE_INSERT_INTO = re.compile(r'(?is)\binsert\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_CREATE_TBL  = re.compile(r'(?is)\bcreate\s+table\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_CREATE_VIEW = re.compile(r'(?is)\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_MERGE_INTO  = re.compile(r'(?is)\bmerge\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
 RE_DELETE_FROM = re.compile(r'(?is)\bdelete\s+from\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-# UPDATE ... SET ... FROM src
 RE_UPDATE_FROM = re.compile(
     r'(?is)\bupdate\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s+set\b.*?\bfrom\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)',
     re.S
 )
 
-# Источники (только настоящие источники после FROM/JOIN/USING, но не «distinct from»):
-RE_FROM_JOIN = re.compile(
-    r'(?is)(?<!\bdistinct\s)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)'
-)
-RE_USING     = re.compile(
-    r'(?is)\busing\s*\(\s*([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s*\)'
-)
+# Источники: FROM / JOIN (но не 'IS DISTINCT FROM'), + USING(...)
+RE_FROM_JOIN = re.compile(r'(?is)(?<!\bdistinct\s)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
+RE_USING     = re.compile(r'(?is)\busing\s*\(\s*([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s*\)')
 
 # CTE
 RE_WITH_CTE = re.compile(r'(?is)\bwith\s+(.+?)\bselect\b', re.S)
@@ -76,49 +71,41 @@ def _remove_comments(sql: str) -> str:
     sql = RE_LINE_COMMENT.sub(' ', sql)
     return sql
 
-# ---------- парсер SQL ----------
+# ---------- парсер ----------
 
 def _collect_cte_names(sql: str) -> Set[str]:
     names: Set[str] = set()
     for with_block in RE_WITH_CTE.findall(sql):
         for m in RE_CTE_NAME.finditer(with_block):
             nm = _norm_ident(m.group(1))
-            names.add(_strip_quotes(nm).split('.')[-1])  # база имени
+            names.add(_strip_quotes(nm).split('.')[-1])
     return names
 
 def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
-    """
-    Возвращает (targets, sources) — только schema.table, без CTE/колонок/алиасов.
-    """
     sql = _remove_comments(sql_text)
     cte_names = _collect_cte_names(sql)
-
     targets: Set[str] = set()
     sources: Set[str] = set()
 
-    # Цели
+    # цели
     for rx in (RE_INSERT_INTO, RE_CREATE_TBL, RE_CREATE_VIEW, RE_MERGE_INTO, RE_DELETE_FROM):
         for m in rx.finditer(sql):
             obj = _norm_ident(m.group(1))
             if _has_schema(obj):
                 targets.add(obj)
 
-    # Источники после FROM/JOIN
+    # источники
     for m in RE_FROM_JOIN.finditer(sql):
         tok = _norm_ident(m.group(1))
-        # отсекаем функции/подзапросы
-        if '(' in tok:
+        if '(' in tok:  # функция/подзапрос
             continue
-        # игнор без схемы
         if not _has_schema(tok):
             continue
         base = tok.split('.')[-1]
-        # игнор ссылок на CTE
         if base in cte_names:
             continue
         sources.add(tok)
 
-    # USING (если указан объект внутри скобок — редко, но бывает)
     for m in RE_USING.finditer(sql):
         tok = _norm_ident(m.group(1))
         if '(' in tok:
@@ -130,7 +117,6 @@ def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
             continue
         sources.add(tok)
 
-    # UPDATE ... FROM
     for m in RE_UPDATE_FROM.finditer(sql):
         tgt = _norm_ident(m.group(1))
         src = _norm_ident(m.group(2))
@@ -141,11 +127,11 @@ def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
             if base not in cte_names:
                 sources.add(src)
 
-    # Уберём самообновления (источник==цель)
+    # исключим само-ссылки
     sources -= targets
     return targets, sources
 
-# ---------- обход файлов ----------
+# ---------- файлы ----------
 
 def iter_proto_sql_files(root: str) -> List[str]:
     out = []
@@ -156,7 +142,7 @@ def iter_proto_sql_files(root: str) -> List[str]:
                 out.append(os.path.join(dirpath, fn))
     return sorted(out)
 
-# ---------- сбор lineage ----------
+# ---------- сбор ----------
 
 def build_lineage(root: str) -> Dict[str, Dict]:
     lineage: Dict[str, Dict] = {}
@@ -166,7 +152,7 @@ def build_lineage(root: str) -> Dict[str, Dict]:
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 text = f.read()
         except Exception as e:
-            print(f"[WARN] Не удалось прочитать {path}: {e}")
+            print(f"[WARN] {path}: {e}")
             continue
 
         targets, sources = parse_sql(text)
@@ -179,121 +165,94 @@ def build_lineage(root: str) -> Dict[str, Dict]:
         data["sources"] = sorted(data["sources"])
     return lineage
 
-# ---------- выводы ----------
+# ---------- вывод JSON/CSV ----------
 
 def save_json_csv(lineage: Dict[str, Dict], out_prefix: str) -> None:
-    json_path = f"{out_prefix}.json"
-    csv_path  = f"{out_prefix}.csv"
-
-    with open(json_path, 'w', encoding='utf-8') as jf:
+    with open(f"{out_prefix}.json", 'w', encoding='utf-8') as jf:
         json.dump(lineage, jf, ensure_ascii=False, indent=2)
 
-    with open(csv_path, 'w', encoding='utf-8') as cf:
-        cf.write("target,source,file\n")
+    with open(f"{out_prefix}.csv", 'w', encoding='utf-8') as cf:
+        cf.write("target,source\n")
         for tgt, data in sorted(lineage.items()):
             if data["sources"]:
                 for src in data["sources"]:
-                    cf.write(f"{tgt},{src},{data['file']}\n")
+                    cf.write(f"{tgt},{src}\n")
             else:
-                cf.write(f"{tgt},,{data['file']}\n")
+                cf.write(f"{tgt},\n")
 
-    print(f"[OK] Saved JSON/CSV:\n  - {json_path}\n  - {csv_path}")
+# ---------- вывод XLSX через openpyxl ----------
 
-def _split_schema_name(full: str) -> Tuple[str, str]:
-    if '.' in full:
-        sch, nm = full.split('.', 1)
-        return sch, nm
-    return '', full
+def _auto_width(ws):
+    widths = {}
+    for row in ws.iter_rows():
+        for cell in row:
+            val = "" if cell.value is None else str(cell.value)
+            widths[cell.column_letter] = max(widths.get(cell.column_letter, 0), len(val))
+    for col, w in widths.items():
+        ws.column_dimensions[col].width = min(max(w + 2, 12), 80)
 
-def save_excel(lineage: Dict[str, Dict], out_xlsx: str) -> None:
-    if pd is None:
-        print("[WARN] pandas не установлен — XLSX не будет создан. Установи pandas и openpyxl.")
+def save_excel(lineage: Dict[str, Dict], xlsx_path: str) -> None:
+    if Workbook is None:
+        print("[WARN] openpyxl не установлен — XLSX пропущен")
         return
 
-    # edges
-    rows_edges = []
-    for tgt, data in lineage.items():
+    wb = Workbook()
+
+    # 1) targets_sources (2 колонки: target, sources)
+    ws1 = wb.active
+    ws1.title = "targets_sources"
+    ws1.append(["target", "sources"])
+    for tgt, data in sorted(lineage.items()):
+        srcs = ", ".join(data["sources"]) if data["sources"] else ""
+        ws1.append([tgt, srcs])
+    _auto_width(ws1)
+
+    # 2) edges (по строке на связку target-source)
+    ws2 = wb.create_sheet("edges")
+    ws2.append(["target", "source"])
+    for tgt, data in sorted(lineage.items()):
         if data["sources"]:
             for src in data["sources"]:
-                rows_edges.append({"target": tgt, "source": src, "file": data["file"]})
+                ws2.append([tgt, src])
         else:
-            rows_edges.append({"target": tgt, "source": "", "file": data["file"]})
-    df_edges = pd.DataFrame(rows_edges).sort_values(["target", "source"], ignore_index=True)
+            ws2.append([tgt, ""])
+    _auto_width(ws2)
 
-    # catalog (только цели)
-    rows_cat = []
-    for tgt, data in lineage.items():
-        sch, nm = _split_schema_name(tgt)
-        rows_cat.append({
-            "schema": sch,
-            "name": nm,
-            "full_name": tgt,
-            "file": data["file"]
-        })
-    df_cat = pd.DataFrame(rows_cat).sort_values(["schema", "name"], ignore_index=True)
+    # 3) usage_summary (по источникам: schema, table, full_name, used_as_source_count)
+    ws3 = wb.create_sheet("usage_summary")
+    ws3.append(["schema", "table", "full_name", "used_as_source_count"])
+    # посчитаем сколько раз каждый источник встречается
+    cnt = Counter()
+    for data in lineage.values():
+        cnt.update(data["sources"])
+    for full, n in sorted(cnt.items(), key=lambda x: (-x[1], x[0])):
+        if '.' in full:
+            sch, tbl = full.split('.', 1)
+        else:
+            sch, tbl = "", full
+        ws3.append([sch, tbl, full, n])
+    _auto_width(ws3)
 
-    # summary: по схемам
-    # 1) сколько целей на схему
-    df_targets_per_schema = (df_cat.groupby("schema", dropna=False)["full_name"]
-                             .count().rename("targets_count").reset_index())
-
-    # 2) матрица target_schema × source_schema
-    if not df_edges.empty:
-        def get_schema(x):
-            return x.split('.', 1)[0] if isinstance(x, str) and '.' in x else ""
-        tmp = df_edges.copy()
-        tmp["target_schema"] = tmp["target"].map(get_schema)
-        tmp["source_schema"] = tmp["source"].map(get_schema)
-        df_flow = (tmp.groupby(["target_schema", "source_schema"])["target"]
-                   .count().rename("edges").reset_index())
-        pivot = df_flow.pivot_table(index="target_schema", columns="source_schema",
-                                    values="edges", fill_value=0, aggfunc="sum")
-    else:
-        df_flow = pd.DataFrame(columns=["target_schema", "source_schema", "edges"])
-        pivot = pd.DataFrame()
-
-    with pd.ExcelWriter(out_xlsx, engine="openpyxl") as xlw:
-        df_edges.to_excel(xlw, index=False, sheet_name="lineage_edges")
-        df_cat.to_excel(xlw, index=False, sheet_name="catalog")
-        # summary лист: три таблички подряд
-        start_row = 0
-        df_targets_per_schema.to_excel(xlw, index=False, sheet_name="summary", startrow=start_row)
-        start_row += len(df_targets_per_schema) + 3
-        df_flow.to_excel(xlw, index=False, sheet_name="summary", startrow=start_row)
-        start_row += len(df_flow) + 3
-        pivot.to_excel(xlw, sheet_name="summary", startrow=start_row)
-
-    print(f"[OK] Saved Excel:\n  - {out_xlsx}")
-
-def print_summary(lineage: Dict[str, Dict]) -> None:
-    total_targets = len(lineage)
-    schemas = Counter([t.split('.', 1)[0] for t in lineage.keys() if '.' in t])
-    print("\n=== Lineage summary ===")
-    print(f"Целей (таблиц/представлений): {total_targets}")
-    for sch, cnt in sorted(schemas.items()):
-        print(f"- {sch}: {cnt}")
+    wb.save(xlsx_path)
+    print(f"[OK] XLSX → {xlsx_path}")
 
 # ---------- CLI ----------
 
 def main():
-    ap = argparse.ArgumentParser(
-        description="Сбор lineage для proto_*.sql (игнор без-схемных объектов; учитывает DISTINCT FROM)."
-    )
-    ap.add_argument("root", nargs="?", default=os.getcwd(),
-                    help="Корневой каталог проекта (по умолчанию — текущая папка)")
-    ap.add_argument("--out", default="lineage",
-                    help="Префикс для JSON/CSV (по умолчанию: lineage)")
-    ap.add_argument("--xlsx", default="lineage.xlsx",
-                    help="Путь к XLSX-отчёту (по умолчанию: lineage.xlsx)")
+    ap = argparse.ArgumentParser(description="Extract lineage from proto_*.sql into CSV/JSON/XLSX")
+    ap.add_argument("root", nargs="?", default=os.getcwd(), help="Корень проекта (по умолчанию — текущая папка)")
+    ap.add_argument("--out", default="lineage", help="Префикс для JSON/CSV (по умолчанию: lineage)")
+    ap.add_argument("--xlsx", default="lineage.xlsx", help="Путь к XLSX (по умолчанию: lineage.xlsx)")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
-    print(f"[INFO] Корневая папка: {root}")
-
+    print(f"[INFO] root: {root}")
     lineage = build_lineage(root)
+
     save_json_csv(lineage, args.out)
     save_excel(lineage, args.xlsx)
-    print_summary(lineage)
+
+    print(f"[DONE] Targets: {len(lineage)}")
 
 if __name__ == "__main__":
     main()

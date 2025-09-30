@@ -1,33 +1,45 @@
 # -*- coding: utf-8 -*-
 """
-Быстрая выгрузка SELECT в CSV с разделителем ';' (опционально .gz) через server-side COPY.
-Подходит для больших выборок (миллионы строк).
+Экспорт SELECT в CSV с ';' и корректной кириллицей (utf-8-sig).
+Опционально режет на несколько файлов по N строк (каждый файл с заголовком).
+
+psycopg2-binary требуется.
 """
 
 import os
 import time
 import gzip
 import psycopg2
+from typing import Optional, TextIO
 
-# --- НАСТРОЙКИ ПОД СЕБЯ ---
+# ---- НАСТРОЙКИ ----
 DB_HOST = "127.0.0.1"
 DB_PORT = 5432
 DB_NAME = "dwh"
 DB_USER = "postgres"
 DB_PASSWORD = "0506"
 
-# Куда сохранять
-OUTPUT_PATH = r"C:\temp\account_debt_2025.csv"   # или "C:/temp/account_debt_2025.csv"
-COMPRESS_GZIP = False                             # True -> запишет .csv.gz (меньше места)
+# БАЗОВОЕ имя файла (если включена нарезка, получатся *_part001.csv, *_part002.csv, ...)
+OUTPUT_PATH = r"C:\temp\account_debt_2025.csv"
 
-# Сам запрос (можно менять при необходимости)
+# Кодировка для Excel: UTF-8 с BOM
+CSV_ENCODING = "utf-8-sig"
+
+# Сжимать ли gzip (True -> .csv.gz)
+COMPRESS_GZIP = False
+
+# Нарезать на части по N строк (только строки данных, заголовок в каждом файле).
+# None -> один файл целиком. Пример для Excel: 1_000_000
+SPLIT_ROWS_PER_FILE: Optional[int] = None  # например, 1_000_000
+
+# Сам запрос
 QUERY = """
 SELECT *
 FROM dm.account_debt a
 WHERE a.dt >= DATE '2025-01-01'
 """
 
-# --- НЕ ТРОГАТЬ НИЖЕ, ЕСЛИ НЕ НУЖНО ---
+# COPY с нужными опциями
 COPY_SQL = f"""
 COPY (
     {QUERY}
@@ -40,9 +52,99 @@ QUOTE '"'
 ESCAPE '"'
 """
 
+# ---- Реализация нарезки ----
+class SplitWriter:
+    """
+    Обёртка над файлом для copy_expert, которая режет вывод на несколько файлов
+    по N строк данных. Заголовок автоматически пишется в каждый файл.
+    """
+    def __init__(self, base_path: str, rows_per_file: int, encoding: str, gzip_mode: bool):
+        self.base_path = base_path
+        self.rows_per_file = rows_per_file
+        self.encoding = encoding
+        self.gzip_mode = gzip_mode
+
+        self.part_idx = 0
+        self.current_rows = 0  # только строки данных (без заголовка)
+        self.header_line: Optional[str] = None
+        self.buffer = ""  # копим до '\n'
+        self.fh: Optional[TextIO] = None
+        self.total_rows = 0
+
+    def _next_filename(self) -> str:
+        root, ext = os.path.splitext(self.base_path)
+        if self.gzip_mode and ext != ".gz":
+            # если сжатие включено, итог будет .gz
+            ext = ".csv.gz" if ext.lower() != ".csv" else ".csv.gz"
+        elif not self.gzip_mode and ext.lower() != ".csv":
+            # гарантируем .csv, если нужен
+            pass
+        return f"{root}_part{self.part_idx:03d}{ext if ext else '.csv'}"
+
+    def _open_new_file(self):
+        if self.fh:
+            self.fh.close()
+        self.part_idx += 1
+        path = self._next_filename()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if self.gzip_mode:
+            self.fh = gzip.open(path, mode="wt", encoding=self.encoding, newline="")
+        else:
+            self.fh = open(path, mode="w", encoding=self.encoding, newline="")
+        self.current_rows = 0
+        # при открытии нового файла пишем заголовок
+        if self.header_line is not None:
+            self.fh.write(self.header_line)
+
+    def write(self, data: str):
+        """
+        Получаем chunks от copy_expert, режем по строкам и пишем
+        с учётом header и лимита строк на файл.
+        """
+        self.buffer += data
+        while True:
+            nl_pos = self.buffer.find("\n")
+            if nl_pos == -1:
+                break
+            line = self.buffer[:nl_pos + 1]  # включая '\n'
+            self.buffer = self.buffer[nl_pos + 1:]
+
+            if self.header_line is None:
+                # первая строка потока — это заголовок
+                self.header_line = line
+                # открыть первый файл и вписать заголовок
+                self._open_new_file()
+                continue
+
+            # это строка данных
+            if self.rows_per_file and self.current_rows >= self.rows_per_file:
+                # открыть новый файл и снова вписать заголовок
+                self._open_new_file()
+
+            self.fh.write(line)
+            self.current_rows += 1
+            self.total_rows += 1
+
+    def close(self):
+        # на случай, если остался хвост без '\n' (редко, но обработаем)
+        if self.buffer:
+            if self.header_line is None:
+                # если почему-то пришёл поток без '\n' — считаем это заголовком
+                self.header_line = self.buffer
+                self._open_new_file()
+            else:
+                if self.rows_per_file and self.current_rows >= self.rows_per_file:
+                    self._open_new_file()
+                self.fh.write(self.buffer)
+                self.current_rows += 1
+                self.total_rows += 1
+            self.buffer = ""
+        if self.fh:
+            self.fh.close()
+            self.fh = None
+
 def main():
     t0 = time.time()
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
     conn = psycopg2.connect(
         host=DB_HOST,
@@ -57,23 +159,34 @@ def main():
 
     try:
         with conn.cursor() as cur:
-            if COMPRESS_GZIP:
-                # Пишем в gzip (txt-режим, чтобы copy_expert писал строки)
-                gz_path = OUTPUT_PATH if OUTPUT_PATH.endswith(".gz") else OUTPUT_PATH + ".gz"
-                with gzip.open(gz_path, mode="wt", encoding="utf-8", newline="") as f:
-                    cur.copy_expert(COPY_SQL, f)
-                out_path = gz_path
+            if SPLIT_ROWS_PER_FILE:
+                writer = SplitWriter(
+                    base_path=OUTPUT_PATH,
+                    rows_per_file=SPLIT_ROWS_PER_FILE,
+                    encoding=CSV_ENCODING,
+                    gzip_mode=COMPRESS_GZIP,
+                )
+                try:
+                    cur.copy_expert(COPY_SQL, writer)
+                finally:
+                    writer.close()
+                print(f"[OK] Экспорт завершён. Всего строк данных: {writer.total_rows}. "
+                      f"Файлов: {writer.part_idx:03d}.")
             else:
-                # Обычный CSV
-                with open(OUTPUT_PATH, mode="w", encoding="utf-8", newline="") as f:
-                    cur.copy_expert(COPY_SQL, f)
-                out_path = OUTPUT_PATH
+                # один файл целиком
+                os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+                if COMPRESS_GZIP:
+                    path = OUTPUT_PATH if OUTPUT_PATH.endswith(".gz") else OUTPUT_PATH + ".gz"
+                    with gzip.open(path, mode="wt", encoding=CSV_ENCODING, newline="") as f:
+                        cur.copy_expert(COPY_SQL, f)
+                else:
+                    with open(OUTPUT_PATH, mode="w", encoding=CSV_ENCODING, newline="") as f:
+                        cur.copy_expert(COPY_SQL, f)
+                print(f"[OK] Экспорт завершён: {OUTPUT_PATH}")
     finally:
         conn.close()
 
-    dt = time.time() - t0
-    print(f"[OK] Экспорт завершён: {out_path}")
-    print(f"[INFO] Время: {dt:.1f} сек")
+    print(f"[INFO] Время: {time.time() - t0:.1f} сек")
 
 if __name__ == "__main__":
     main()

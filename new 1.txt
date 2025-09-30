@@ -1,192 +1,210 @@
-# -*- coding: utf-8 -*-
-"""
-Экспорт SELECT в CSV с ';' и корректной кириллицей (utf-8-sig).
-Опционально режет на несколько файлов по N строк (каждый файл с заголовком).
+create table dm.account_debt (	
+	dt date not null,
+	is_second_friday bool null,
+	unit_balance_code varchar(4) not null, 
+	fiscal_year numeric(4,0) not null, 
+	accounting_document_code varchar(10) not null,	
+	dt_debt date null,
+	dt_overdue date null,
+	dt_clearing date null,
+	contract_number varchar(13) null, 
+	counterparty_code varchar(10) null,
+	debit_or_credit bpchar(1) null, 
+	account_type bpchar(1) null, 
+	general_ledger_account_code varchar(10) null, 
+	debt_balance_document_currency_amount numeric(17,2) default 0, 
+	debt_balance_local_currency_amount numeric(17,2) default 0, 
+	debt_balance_second_local_currency_amount numeric(17,2) default 0, 
+	debt_balance_with_revaluation_diff_second_currency_amount numeric(17,2) default 0, 
+	document_currency_code varchar(5) null, 
+	local_currency_code varchar(5) null, 
+	second_local_currency_code varchar(5) null, 
+	accounting_document_type varchar(2) null,
+	position_line_item numeric(3,0) null, 
+	reverse_document_code varchar(10) null, 
+	reference_document_number varchar(16) null, 
+	accounting_document_status_code bpchar(1) null, 
+	clearing_document_code varchar(10) null, 
+	tax_code varchar(2) null, 
+	position_line_item_text varchar(50) null, 
+	special_general_ledger_indicator bpchar(1) null,
+	dt_baseline_due_date_calculation date null, 
+	assignment_number varchar(18) null, 
+	dt_accounting_document date null, 
+	plant_code varchar(4) null, 
+	plant_name varchar(90) null,
+	general_ledger_account_full_name varchar(50) null,
+	unit_balance_name varchar(75) null, 
+	counterparty_full_name varchar(140) null, 
+	external_contract_number varchar(60) null,
+	dt_external_contract date null,	
+	contract_trader_code numeric(8,0),
+	contract_trader_name varchar(40),
+	terms_of_payment_code varchar(4) null,
+	terms_of_payment_name varchar(150) null, 
+	responsibility_center_code varchar(16) null, 
+	responsibility_center_name varchar(40) null, 
+	budget_subtype_code varchar(4) null, 
+	contract_supervisor_employee_number varchar(10) null, 
+	contract_supervisor_name varchar(120) null, 
+	--Замена для куратора из интеграционной таблицы
+	---calc_contract_supervisor_employee_number varchar(10) null, 
+	---calc_contract_supervisor_name varchar(120) null,
+	purchase_or_sales_group_code varchar(3) null,
+	purchase_or_sales_group_name varchar(20) null, 
+	funds_center_code varchar(16) null, 
+	funds_center_name varchar(40) null, 
+	debt_subposition_number numeric(3,0) null,
+	debt_subposition_local_currency_amount numeric(17,2) default 0,          -- 22.05.2024 default 0
+	debt_subposition_document_currency_amount numeric(17,2) default 0,       -- 22.05.2024 default 0
+	debt_subposition_second_local_currency_amount 	numeric(17,2) default 0, -- 22.05.2024 default 0
+	is_debt_daily_calculated bpchar(1) null,
+	country_code varchar(3) null,
+	counterparty_hfm_code varchar(10) null,
+	counterparty_mdm_code varchar(10) null,
+	is_related_party_tco bpchar(1) null,
+	is_group_company_affiliated bpchar(1) null,
+	is_related_party_rsbo bpchar(1) null,
+	is_bankrupt bpchar(1) null,
+	is_lawsuit_exist bpchar(1) null,
+	is_fns_restriction_list_exist bpchar(1) null,
+	document_currency_amount 	 								numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	local_currency_amount 		 								numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	second_local_currency_amount 								numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	counterparty_tin_code 		 								varchar(16) null,		 -- s2t v.14 21.05.2024
+	reverse_document_fiscal_year 								numeric(4) null,         -- s2t v.13 21.05.2024
+	reason_for_reversal 										varchar(2) null,         -- s2t v.13 21.05.2024
+	debt_balance_subposition_document_currency_amount	 		numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	debt_balance_subposition_local_currency_amount				numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	debt_balance_subposition_second_local_currency_amount	 	numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	debt_balance_subpos_second_local_currency_amount_reval	numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	debt_balance_subposition_usd_amount							numeric(17,2) default 0, -- s2t v.14 21.05.2024
+	invoice_document_code varchar(10) null,
+	fiscal_year_of_relevant_invoice numeric(4) null,
+	position_number_of_relevant_invoice numeric(3) null,
+	final_position_line_item numeric(3,0) null,
+	final_fiscal_year numeric(4,0) not null,
+ 	final_accounting_document_code varchar(10) null,
+ 	exchange_diff_local_currency_amount numeric(17,2) ,
+ 	debt_balance_exchange_diff_local_currency_amount numeric(17,2) ,
+ 	debt_balance_subpos_exch_diff_local_currency_amount numeric(17,2) ,
+ 	exchange_diff_second_local_currency_amount numeric(17,2) ,
+ 	debt_balance_exchange_diff_second_local_currency_amount  numeric(17,2) , 
+ 	debt_balance_subpos_exch_diff_second_local_curr_amount numeric(17,2) , 
+	counterparty_truncated_code varchar(10) null,
+    counterparty_search_name varchar(150) null,
+    responsibility_center_level1_code  varchar(10) null,
+    responsibility_center_level1_name varchar(100) null,
+    financial_position_code            varchar(14) null,
+    financial_position_name      varchar(150) null,
+    usd_amount 	numeric(17,2) default 0,
+	dttm_inserted 		timestamp not null default now(),
+	dttm_updated 		timestamp not null default now(),
+	job_name 			varchar(60) not null default 'airflow'::character varying,
+	deleted_flag		bool not null default false
+)
+with (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (unit_balance_code, fiscal_year, accounting_document_code);
 
-psycopg2-binary требуется.
-"""
-
-import os
-import time
-import gzip
-import psycopg2
-from typing import Optional, TextIO
-
-# ---- НАСТРОЙКИ ----
-DB_HOST = "127.0.0.1"
-DB_PORT = 5432
-DB_NAME = "dwh"
-DB_USER = "postgres"
-DB_PASSWORD = "0506"
-
-# БАЗОВОЕ имя файла (если включена нарезка, получатся *_part001.csv, *_part002.csv, ...)
-OUTPUT_PATH = r"C:\temp\account_debt_2025.csv"
-
-# Кодировка для Excel: UTF-8 с BOM
-CSV_ENCODING = "utf-8-sig"
-
-# Сжимать ли gzip (True -> .csv.gz)
-COMPRESS_GZIP = False
-
-# Нарезать на части по N строк (только строки данных, заголовок в каждом файле).
-# None -> один файл целиком. Пример для Excel: 1_000_000
-SPLIT_ROWS_PER_FILE: Optional[int] = None  # например, 1_000_000
-
-# Сам запрос
-QUERY = """
-SELECT *
-FROM dm.account_debt a
-WHERE a.dt >= DATE '2025-01-01'
-"""
-
-# COPY с нужными опциями
-COPY_SQL = f"""
-COPY (
-    {QUERY}
-) TO STDOUT
-WITH CSV
-DELIMITER ';'
-HEADER
-NULL ''
-QUOTE '"'
-ESCAPE '"'
-"""
-
-# ---- Реализация нарезки ----
-class SplitWriter:
-    """
-    Обёртка над файлом для copy_expert, которая режет вывод на несколько файлов
-    по N строк данных. Заголовок автоматически пишется в каждый файл.
-    """
-    def __init__(self, base_path: str, rows_per_file: int, encoding: str, gzip_mode: bool):
-        self.base_path = base_path
-        self.rows_per_file = rows_per_file
-        self.encoding = encoding
-        self.gzip_mode = gzip_mode
-
-        self.part_idx = 0
-        self.current_rows = 0  # только строки данных (без заголовка)
-        self.header_line: Optional[str] = None
-        self.buffer = ""  # копим до '\n'
-        self.fh: Optional[TextIO] = None
-        self.total_rows = 0
-
-    def _next_filename(self) -> str:
-        root, ext = os.path.splitext(self.base_path)
-        if self.gzip_mode and ext != ".gz":
-            # если сжатие включено, итог будет .gz
-            ext = ".csv.gz" if ext.lower() != ".csv" else ".csv.gz"
-        elif not self.gzip_mode and ext.lower() != ".csv":
-            # гарантируем .csv, если нужен
-            pass
-        return f"{root}_part{self.part_idx:03d}{ext if ext else '.csv'}"
-
-    def _open_new_file(self):
-        if self.fh:
-            self.fh.close()
-        self.part_idx += 1
-        path = self._next_filename()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        if self.gzip_mode:
-            self.fh = gzip.open(path, mode="wt", encoding=self.encoding, newline="")
-        else:
-            self.fh = open(path, mode="w", encoding=self.encoding, newline="")
-        self.current_rows = 0
-        # при открытии нового файла пишем заголовок
-        if self.header_line is not None:
-            self.fh.write(self.header_line)
-
-    def write(self, data: str):
-        """
-        Получаем chunks от copy_expert, режем по строкам и пишем
-        с учётом header и лимита строк на файл.
-        """
-        self.buffer += data
-        while True:
-            nl_pos = self.buffer.find("\n")
-            if nl_pos == -1:
-                break
-            line = self.buffer[:nl_pos + 1]  # включая '\n'
-            self.buffer = self.buffer[nl_pos + 1:]
-
-            if self.header_line is None:
-                # первая строка потока — это заголовок
-                self.header_line = line
-                # открыть первый файл и вписать заголовок
-                self._open_new_file()
-                continue
-
-            # это строка данных
-            if self.rows_per_file and self.current_rows >= self.rows_per_file:
-                # открыть новый файл и снова вписать заголовок
-                self._open_new_file()
-
-            self.fh.write(line)
-            self.current_rows += 1
-            self.total_rows += 1
-
-    def close(self):
-        # на случай, если остался хвост без '\n' (редко, но обработаем)
-        if self.buffer:
-            if self.header_line is None:
-                # если почему-то пришёл поток без '\n' — считаем это заголовком
-                self.header_line = self.buffer
-                self._open_new_file()
-            else:
-                if self.rows_per_file and self.current_rows >= self.rows_per_file:
-                    self._open_new_file()
-                self.fh.write(self.buffer)
-                self.current_rows += 1
-                self.total_rows += 1
-            self.buffer = ""
-        if self.fh:
-            self.fh.close()
-            self.fh = None
-
-def main():
-    t0 = time.time()
-
-    conn = psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        application_name="csv_export_account_debt"
-    )
-    conn.set_session(readonly=True, autocommit=True)
-    conn.set_client_encoding("UTF8")
-
-    try:
-        with conn.cursor() as cur:
-            if SPLIT_ROWS_PER_FILE:
-                writer = SplitWriter(
-                    base_path=OUTPUT_PATH,
-                    rows_per_file=SPLIT_ROWS_PER_FILE,
-                    encoding=CSV_ENCODING,
-                    gzip_mode=COMPRESS_GZIP,
-                )
-                try:
-                    cur.copy_expert(COPY_SQL, writer)
-                finally:
-                    writer.close()
-                print(f"[OK] Экспорт завершён. Всего строк данных: {writer.total_rows}. "
-                      f"Файлов: {writer.part_idx:03d}.")
-            else:
-                # один файл целиком
-                os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-                if COMPRESS_GZIP:
-                    path = OUTPUT_PATH if OUTPUT_PATH.endswith(".gz") else OUTPUT_PATH + ".gz"
-                    with gzip.open(path, mode="wt", encoding=CSV_ENCODING, newline="") as f:
-                        cur.copy_expert(COPY_SQL, f)
-                else:
-                    with open(OUTPUT_PATH, mode="w", encoding=CSV_ENCODING, newline="") as f:
-                        cur.copy_expert(COPY_SQL, f)
-                print(f"[OK] Экспорт завершён: {OUTPUT_PATH}")
-    finally:
-        conn.close()
-
-    print(f"[INFO] Время: {time.time() - t0:.1f} сек")
-
-if __name__ == "__main__":
-    main()
+comment on table dm.account_debt is 'Бухгалтерия, Задолженность контрагентов. Штрафы';
+comment on column dm.account_debt.dt is 'Дата | На какую дату указан остаток | dm_calc.account_debt.dt';
+comment on column dm.account_debt.is_second_friday is 'Флаг:вторая пятница месяца | Флаг:вторая пятница месяца | dm_calc.account_debt.is_second_friday';
+comment on column dm.account_debt.unit_balance_code is 'Балансовая единица | Балансовая единица | dm_calc.account_debt.unit_balance_code';
+comment on column dm.account_debt.fiscal_year is 'Финансовый год | Финансовый год | dm_calc.account_debt.fiscal_year';
+comment on column dm.account_debt.accounting_document_code is 'Номер бухгалтерского документа | Номер бухгалтерского документа | dm_calc.account_debt.accounting_document_code';
+comment on column dm.account_debt.dt_debt is 'Дата возникновения задолженности | Дата возникновения задолженности | dm_calc.account_debt.dt_posting';
+comment on column dm.account_debt.dt_overdue is 'Дата, когда задолженность станет просроченной | Дата, когда задолженность станет просроченной | ods.map_zfi_kntr_data_keys.dt_outstanding';
+comment on column dm.account_debt.dt_clearing is 'Дата выравнивания | Дата выравнивания | dm_calc.account_debt.dt_clearing';
+comment on column dm.account_debt.contract_number is 'Номер договора | Номер договора | dm_calc.account_debt.contract_number';
+comment on column dm.account_debt.counterparty_code is 'Контрагент (код) | Код кредитора, задолженность перед которым отражает позиция | dm_calc.accounting_debt.counterparty_code';
+comment on column dm.account_debt.debit_or_credit is 'Индикатор дебета/кредита | Индикатор дебета/кредита | dm_calc.account_debt.debit_or_credit';
+comment on column dm.account_debt.account_type is 'Вид счета | Вид счета | dm_calc.account_debt.account_type';
+comment on column dm.account_debt.general_ledger_account_code is 'Основной счет главной книги | Основной счет главной книги | dm_calc.account_debt.general_ledger_account_code';
+comment on column dm.account_debt.debt_balance_document_currency_amount is 'Остаток задолженности в валюте документа | Остаток задолженности в валюте документа | dm_calc.account_debt.document_currency_amount';
+comment on column dm.account_debt.debt_balance_local_currency_amount is 'Остаток задолженности в валюте организации | Остаток задолженности в валюте организации | dm_calc.account_debt.local_currency_amount';
+comment on column dm.account_debt.debt_balance_second_local_currency_amount is 'Остаток задолженности во второй валюте | Остаток задолженности во второй валюте | dm_calc.account_debt.second_local_currency_amount';
+comment on column dm.account_debt.debt_balance_with_revaluation_diff_second_currency_amount is 'Остаток задолженности, во второй валюте, с учётом последней переоценки | Остаток задолженности, во второй валюте, с учётом последней переоценки | dm_calc.account_debt.second_local_currency_amount + valuation_difference_second_local_currency_amount';
+comment on column dm.account_debt.document_currency_code is 'Код валюты документа | Код валюты документа | dm_calc.account_debt.document_currency_code';
+comment on column dm.account_debt.local_currency_code is 'Код внутренней валюты | Код внутренней валюты | dm_calc.account_debt.local_currency_code';
+comment on column dm.account_debt.second_local_currency_code is 'Код второй внутренней валюты | Код второй внутренней валюты | dm_calc.account_debt.second_local_currency_code';
+comment on column dm.account_debt.accounting_document_type is 'Вид документа | Вид документа | dm_calc.account_debt.accounting_document_type';
+comment on column dm.account_debt.position_line_item is 'Номер строки проводки в рамках бухгалтерского документа | Номер строки проводки в рамках бухгалтерского документа | dm_calc.account_debt.position_line_item';
+comment on column dm.account_debt.reverse_document_code is '№ документа сторно | № документа сторно | dm_calc.account_debt.reverse_document_code';
+comment on column dm.account_debt.reference_document_number is 'Ссылочный номер документа | Ссылочный номер документа | dm_calc.account_debt.reference_document_number';
+comment on column dm.account_debt.accounting_document_status_code is 'Статус документа | Статус документа | dm_calc.account_debt.accounting_document_status_code';
+comment on column dm.account_debt.clearing_document_code is 'Номер документа выравнивания | Номер документа выравнивания | dm_calc.account_debt.clearing_document_code';
+comment on column dm.account_debt.tax_code is 'Код налога с оборота | Код налога с оборота | dm_calc.account_debt.tax_code';
+comment on column dm.account_debt.position_line_item_text is 'Текст к позиции | Текст к позиции | dm_calc.account_debt.position_line_item_text';
+comment on column dm.account_debt.special_general_ledger_indicator is 'Код Особой главной книги | Код Особой главной книги | dm_calc.account_debt.special_general_ledger_indicator';
+comment on column dm.account_debt.dt_baseline_due_date_calculation is 'Базовая дата для расчета срока оплаты | Базовая дата для расчета срока оплаты | dm_calc.account_debt.dt_baseline_due_date_calculation';
+comment on column dm.account_debt.assignment_number is 'Номер присвоения | Номер присвоения | dm_calc.account_debt.assignment_number';
+comment on column dm.account_debt.dt_accounting_document is 'Дата документа | Дата документа | dm_calc.account_debt.dt_accounting_document';
+comment on column dm.account_debt.plant_code is 'Завод | Завод | Алгоритм по 3 полям';
+comment on column dm.account_debt.plant_name is 'Название филиала | Название филиала | dict_dds.plant_and_subsidiary.plant_full_name';
+comment on column dm.account_debt.general_ledger_account_full_name is 'Подробный текст к основному счету на русском | Подробный текст к основному счету на русском | dict_dds.general_ledger_account_chart.general_ledger_account_full_name_rus';
+comment on column dm.account_debt.unit_balance_name is 'Название БЕ  | Название БЕ  | unit_balance.unit_balance_name';
+comment on column dm.account_debt.counterparty_full_name is 'Наименование контрагента | Наименование контрагента | dm_calc.accounting_counterparty.counterparty_full_name';
+comment on column dm.account_debt.external_contract_number is 'Внешний номер договора | Внешний номер договора | dm_calc.accounting_external_contracts.external_contract_number';
+comment on column dm.account_debt.dt_external_contract is 'Дата внешнего договора | Дата внешнего договора | dm_calc.accounting_external_contracts.dt_external_contract';
+comment on column dm.account_debt.contract_trader_code is 'Табельный номер трейдера договора | Табельный номер трейдера договора | dm_calc.accounting_external_contracts.contract_trader_code';
+comment on column dm.account_debt.contract_trader_name is 'ФИО трейдера договора | ФИО трейдера договора | dict_dds.personnel_main_data.employee_full_name';
+comment on column dm.account_debt.terms_of_payment_code is 'Код условий платежа | Код условий платежа | dm_calc.account_debt.terms_of_payment_code';
+comment on column dm.account_debt.terms_of_payment_name is 'Наименование условия платежа | Наименование условия платежа | condition_payment_comment."comment"';
+comment on column dm.account_debt.responsibility_center_code is 'Центр ответственности, код | Центр ответственности, код | ods.map_zfi_kntr_data_keys.responsibility_center_code';
+comment on column dm.account_debt.responsibility_center_name is 'Центр ответственности, наименование | Центр ответственности, наименование | ods.map_zfi_kntr_data_keys.responsibility_center_name';
+comment on column dm.account_debt.budget_subtype_code is 'Подвид бюджета | Подвид бюджета | ods.map_zfi_kntr_data_keys.budget_subtype_code';
+comment on column dm.account_debt.contract_supervisor_employee_number is 'Куратор договора, таб № | Куратор договора, таб № | ods.map_zfi_kntr_data_keys.contract_supervisor_employee_number';
+comment on column dm.account_debt.contract_supervisor_name is 'Куратор договора, ФИО | Куратор договора, ФИО | ods.map_zfi_kntr_data_keys.contract_supervisor_name';
+comment on column dm.account_debt.purchase_or_sales_group_code is 'Группа закупок/сбыта, Код | dm_calc.accounting_external_contracts.purchase_or_sales_group_code';
+comment on column dm.account_debt.purchase_or_sales_group_name is 'Группа закупок/сбыта, Наименование | dm_calc.accounting_external_contracts.purchase_or_sales_group_name';
+comment on column dm.account_debt.funds_center_code is 'Подразделение финансового менеджмента, код | Подразделение финансового менеджмента, код | ods.map_zfi_kntr_data_keys.funds_center_code';
+comment on column dm.account_debt.funds_center_name is 'Подразделение финансового менеджмента, название | Подразделение финансового менеджмента, название | ods.map_zfi_kntr_data_keys.funds_center_name';
+comment on column dm.account_debt.debt_subposition_number is 'Номер подпозиции задолженности | Номер подпозиции задолженности | ods.map_zfi_kntr_data_keys.debt_subposition_number';
+comment on column dm.account_debt.debt_subposition_local_currency_amount is 'Сумма задолженности подпозиции в местной валюте | Сумма задолженности подпозиции в местной валюте | ods.map_zfi_kntr_data_keys.debt_subposition_local_currency_amount';
+comment on column dm.account_debt.debt_subposition_document_currency_amount is 'Сумма задолженности подпозиции в валюте документа | Сумма задолженности подпозиции в валюте документа | ods.map_zfi_kntr_data_keys.debt_subposition_document_currency_amount';
+comment on column dm.account_debt.debt_subposition_second_local_currency_amount is 'Сумма задолженности подпозиции во второй местной валюте | Сумма задолженности подпозиции во второй местной валюте | ods.map_zfi_kntr_data_keys.debt_subposition_second_local_currency_amount';
+comment on column dm.account_debt.is_debt_daily_calculated is 'Признак текущего остатка | Признак текущего остатка | Алгоритм';
+comment on column dm.account_debt.country_code is 'Страна регистрации контрагента | Страна регистрации контрагента | dm_calc.accounting_counterparty.country_code';
+comment on column dm.account_debt.counterparty_hfm_code is 'Код HFM | Код HFM | dm_calc.accounting_counterparty.counterparty_hfm_code';
+comment on column dm.account_debt.counterparty_mdm_code is 'Код MDM | Код MDM | dm_calc.accounting_counterparty.counterparty_mdm_code';
+comment on column dm.account_debt.is_related_party_tco is 'Связанность по ТЦО | Связанность по ТЦО | dm_calc.accounting_counterparty.is_related_party_tco';
+comment on column dm.account_debt.is_group_company_affiliated is 'Входит в ОК | Входит в ОК | dm_calc.accounting_counterparty.is_group_company_affiliated';
+comment on column dm.account_debt.is_related_party_rsbo is 'Связанность по РСБО | Связанность по РСБО | dm_calc.accounting_counterparty.is_related_party_rsbo';
+comment on column dm.account_debt.is_bankrupt is 'Статус контрагента по банкротству | Статус контрагента по банкротству | dm_calc.accounting_counterparty.is_bankrupt';
+comment on column dm.account_debt.is_lawsuit_exist is 'Наличие у контрагента судебных исков | Наличие у контрагента судебных исков | dm_calc.accounting_counterparty.is_lawsuit_exist';
+comment on column dm.account_debt.is_fns_restriction_list_exist is 'Контрагент входит в негативные списки ФНС | Контрагент входит в негативные списки ФНС | dm_calc.accounting_counterparty.is_fns_restriction_list_exist';
+comment on column dm.account_debt.document_currency_amount is 'Сумма в валюте документа | Сумма в валюте документа | dm_calc.account_debt.document_currency_amount';
+comment on column dm.account_debt.local_currency_amount is 'Сумма во внутренней валюте | Сумма во внутренней валюте | dm_calc.account_debt.local_currency_amount';
+comment on column dm.account_debt.second_local_currency_amount is 'Сумма во второй ВнутрВалюте | Сумма во второй ВнутрВалюте | dm_calc.account_debt.second_local_currency_amount';
+comment on column dm.account_debt.counterparty_tin_code is 'Идентификационный налоговый номер РФ (код) | Идентификационный налоговый номер РФ (код) | dm_calc.accounting_counterparty.counterparty_tin_code';
+comment on column dm.account_debt.reverse_document_fiscal_year is 'Финансовый год документа сторно | Финансовый год документа сторно | dm_calc.account_debt.reverse_document_fiscal_year';
+comment on column dm.account_debt.reason_for_reversal is 'Причина сторно или обратной проводки | Причина сторно или обратной проводки | dm_calc.account_debt.reason_for_reversal';
+comment on column dm.account_debt.debt_balance_subposition_document_currency_amount is 'Остаток КЗ по данной позиции, в валюте документа | Остаток КЗ по данной позиции, в валюте документа | Алгоритм';
+comment on column dm.account_debt.debt_balance_subposition_local_currency_amount is 'Остаток КЗ по данной позиции, в валюте БЕ | Остаток КЗ по данной позиции, в валюте БЕ | Алгоритм';
+comment on column dm.account_debt.debt_balance_subposition_second_local_currency_amount is 'Остаток КЗ по данной позиции, во второй валюте | Остаток КЗ по данной позиции, во второй валюте | Алгоритм';
+comment on column dm.account_debt.debt_balance_subpos_second_local_currency_amount_reval is 'Остаток КЗ по данной позиции, в валюте организации, с учётом последней переоценки | Остаток КЗ по данной позиции, в валюте организации, с учётом последней переоценки | Алгоритм';
+comment on column dm.account_debt.debt_balance_subposition_usd_amount is 'Остаток КЗ по данной позиции, приведенный к USD | Остаток КЗ по данной позиции, приведенный к USD | Алгоритм';
+comment on column dm.account_debt.invoice_document_code is 'Ссылочный инвойс (№) | Ссылочный инвойс (№) | dm_calc.account_debt.invoice_document_code';
+comment on column dm.account_debt.fiscal_year_of_relevant_invoice is 'Ссылочный инвойс (Год) | Ссылочный инвойс (Год)  | dm_calc.account_debt.fiscal_year_of_relevant_invoice';
+comment on column dm.account_debt.position_number_of_relevant_invoice is 'Ссылочный инвойс (Позиция) | Ссылочный инвойс (Позиция) | dm_calc.account_debt.position_number_of_relevant_invoice';
+comment on column dm.account_debt.final_position_line_item is 'Позиция документа задолженности | Позиция документа задолженности  | coalesce (position_number_of_relevant_invoice,position_line_item)';
+comment on column dm.account_debt.final_fiscal_year is 'Год документа задолженности | Год документа задолженности | coalesce (fiscal_year_of_relevant_invoice, fiscal_year)';
+comment on column dm.account_debt.final_accounting_document_code is 'Номер документа задолженности | Номер документа задолженности  | coalesce (invoice_document_code, accounting_document_code)';
+comment on column dm.account_debt.exchange_diff_local_currency_amount is 'ВВ Курсовая разница позиции| ВВ Курсовая разница позиции | dm_calc.account_debt.local_currency_amount';
+comment on column dm.account_debt.debt_balance_exchange_diff_local_currency_amount is 'ВВ Курсовая разница остатка позиции | ВВ Курсовая разница остатка позиции  | dm_calc.account_debt.local_currency_amount';
+comment on column dm.account_debt.debt_balance_subpos_exch_diff_local_currency_amount is 'ВВ Курсовая разница остатка подпозиции | ВВ Курсовая разница остатка подпозиции  | dm_calc.account_debt.local_currency_amount';
+comment on column dm.account_debt.exchange_diff_second_local_currency_amount is 'ВВ2 Курсовая разница позиции | ВВ2 Курсовая разница позиции | dm_calc.account_debt.second_local_currency_amount';
+comment on column dm.account_debt.debt_balance_exchange_diff_second_local_currency_amount is 'ВВ2 Курсовая разница остатка позиции | ВВ2 Курсовая разница остатка позиции | dm_calc.account_debt.second_local_currency_amount';
+comment on column dm.account_debt.debt_balance_subpos_exch_diff_second_local_curr_amount is 'ВВ2 Курсовая разница остатка подпозиции | ВВ2 Курсовая разница остатка подпозиции| dm_calc.account_debt.second_local_currency_amount';
+comment on column dm.account_debt.counterparty_truncated_code is 'Контрагент (код, без лидирующих нулей) | Контрагент (код, без лидирующих нулей) | dm_calc.accounting_counterparty.counterparty_truncated_code';
+comment on column dm.account_debt.counterparty_search_name is 'Название контрагента (для поиска) | Название контрагента (для поиска) |dm_calc.accounting_counterparty.counterparty_search_name';
+comment on column dm.account_debt.responsibility_center_level1_code is 'Центр ответственности верхнеуровневый (код) | Центр ответственности верхнеуровневый (код)  | dict_dds.map_responsibility_center_to_funds_center.responsibility_center_level1_code';
+comment on column dm.account_debt.responsibility_center_level1_name is 'Центр ответственности верхнеуровневый, название | Центр ответственности верхнеуровневый, название |dict_dds.responsibility_center_texts.responsibility_center_name';
+comment on column dm.account_debt.financial_position_code IS 'Расчётная ФП код | Расчётная ФП код | ods.map_zfi_kntr_data_keys.financial_position_code';
+comment on column dm.account_debt.financial_position_name is 'Расчётная ФП название | Расчётная ФП название |dict_dds.financial_position_master_data_texts.financial_position_full_name';
+comment on column dm.account_debt.usd_amount is 'Сумма задолженности в долларах | Сумма задолженности в долларах |dm_calc.accounting_receivables_and_payables.counterparty_search_name';

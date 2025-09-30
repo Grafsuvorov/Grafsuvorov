@@ -1,291 +1,79 @@
 # -*- coding: utf-8 -*-
 """
-Извлекаем реальные таблицы из tech_etl.tables_meta.query_insert_init
-и сохраняем в XLSX (лист all_items и лист unique_tables).
-
-Фильтры:
-- исключаем temp (pg_temp*, tmp_/temp_/tt_/t_*), CTE, функции, ключевые слова,
-  системные схемы (pg_catalog, information_schema, gp_toolkit, pg_toast и т.п.),
-  а также всё, что содержит '$' (например, "$user").
-- валидируем через каталог: берём только существующие таблицы (information_schema.tables).
-
-Требуется: sqlalchemy, psycopg2-binary, pandas, openpyxl
+Быстрая выгрузка SELECT в CSV с разделителем ';' (опционально .gz) через server-side COPY.
+Подходит для больших выборок (миллионы строк).
 """
 
-import re
-import sys
-import pandas as pd
-from sqlalchemy import create_engine, text
+import os
+import time
+import gzip
+import psycopg2
 
-# ---------------------- НАСТРОЙКИ ----------------------
-DB_URL = "postgresql+psycopg2://postgres:0506@localhost:5432/dwh"
-OUTPUT_XLSX = "tables_meta_dependencies.xlsx"
+# --- НАСТРОЙКИ ПОД СЕБЯ ---
+DB_HOST = "127.0.0.1"
+DB_PORT = 5432
+DB_NAME = "dwh"
+DB_USER = "postgres"
+DB_PASSWORD = "0506"
 
-# если нужен search_path прямо в URL:
-# DB_URL += "?options=-csearch_path%3Dtech_etl,public"
+# Куда сохранять
+OUTPUT_PATH = r"C:\temp\account_debt_2025.csv"   # или "C:/temp/account_debt_2025.csv"
+COMPRESS_GZIP = False                             # True -> запишет .csv.gz (меньше места)
 
-# системные схемы, которые игнорируем
-SYSTEM_SCHEMAS = {
-    "pg_catalog", "information_schema", "pg_toast",
-    "gp_toolkit", "pg_temp", "pg_aoseg", "pg_bitmapindex", "pg_aocsseg"
-}
+# Сам запрос (можно менять при необходимости)
+QUERY = """
+SELECT *
+FROM dm.account_debt a
+WHERE a.dt >= DATE '2025-01-01'
+"""
 
-# regexp по lower() для временных схем и имён
-IGNORE_SCHEMAS = [r"pg_temp", r"pg_temp_\d+", r"pg_toast_temp_\d+"]
-IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]
-
-SQL_KEYWORDS = {
-    "select","from","join","left","right","full","inner","outer","cross","natural",
-    "on","using","where","group","by","order","limit","offset","union","intersect",
-    "except","all","distinct","and","or","not","as","with","having","values","into",
-    "update","set","delete","insert"
-}
-
-FUNCTION_PREFIXES = (
-    "unnest(", "generate_series(", "regexp_split_to_table(",
-    "json_each(", "jsonb_each(", "json_each_text(", "jsonb_each_text(",
-    "json_to_record(", "jsonb_to_record(", "json_to_recordset(", "jsonb_to_recordset(",
-)
-
-RE_INSERT = re.compile(r"insert\s+into\s+(?:only\s+)?([^\s(]+)", re.IGNORECASE | re.MULTILINE)
-RE_FROM_JOIN = re.compile(r"(?:from|join)\s+([^\s,()]+)", re.IGNORECASE | re.MULTILINE)
-
-def unquote_ident(s: str) -> str:
-    s = re.split(r"::", s, maxsplit=1)[0]
-    s = s.strip("() \t\n\r")
-    if s.startswith('"') and s.endswith('"') and s.count('"') == 2:
-        return s[1:-1]
-    parts = s.split(".")
-    clean_parts = []
-    for p in parts:
-        p = p.strip()
-        if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
-            clean_parts.append(p[1:-1])
-        else:
-            clean_parts.append(p)
-    return ".".join(clean_parts)
-
-def split_schema_table(token: str):
-    token = token.strip()
-    token = unquote_ident(token)
-    token = token.split()[0]  # отрезаем алиас
-    if "." in token:
-        schema, table = token.split(".", 1)
-        return (schema, table)
-    return (None, token)
-
-def is_function_like(token: str) -> bool:
-    t = token.strip().lower()
-    return any(t.startswith(fp) for fp in FUNCTION_PREFIXES)
-
-def is_subquery_token(token: str) -> bool:
-    return token.strip().startswith("(")
-
-def is_temp_schema(schema: str) -> bool:
-    if not schema:
-        return False
-    s = schema.lower()
-    return any(re.fullmatch(pat, s) for pat in IGNORE_SCHEMAS)
-
-def is_temp_table_name(table: str) -> bool:
-    if not table:
-        return False
-    t = table.lower()
-    return any(re.fullmatch(pat, t) for pat in IGNORE_TABLE_PATTERNS)
-
-def is_keyword(token: str) -> bool:
-    return token.lower() in SQL_KEYWORDS
-
-def is_system_schema(schema: str) -> bool:
-    return (schema or "").lower() in SYSTEM_SCHEMAS
-
-def collect_cte_names(sql_text: str):
-    # Берём все шаблоны "<name> AS (" в зоне WITH (грубый, но практичный метод).
-    ctes = set()
-    for name in re.findall(r'\bwith\b\s+(.*?)\bselect\b', sql_text, flags=re.IGNORECASE | re.DOTALL):
-        for cte in re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_$]*)\s+AS\s*\(', name, flags=re.IGNORECASE):
-            ctes.add(unquote_ident(cte).lower())
-    return ctes
-
-def load_real_tables(conn):
-    """
-    Возвращает множество реальных таблиц в виде 'schema.table' (только BASE TABLE),
-    плюс маппинг table->множество схем (для разрешения неуказанных схем).
-    """
-    # information_schema.tables: table_type = 'BASE TABLE' — реальные таблицы.
-    # (в GP партиционированные тоже попадают как BASE TABLE)
-    sql = """
-        SELECT table_schema, table_name
-        FROM information_schema.tables
-        WHERE table_type = 'BASE TABLE'
-          AND table_schema NOT IN ('pg_catalog','information_schema')
-    """
-    rows = conn.execute(text(sql)).fetchall()
-    full = set()
-    by_name = {}
-    for sch, tbl in rows:
-        key = f"{sch}.{tbl}"
-        full.add(key)
-        by_name.setdefault(tbl, set()).add(sch)
-    return full, by_name
-
-def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=None):
-    """
-    Возвращает (schema, table, full_name) если существует в каталоге, иначе None.
-    - если schema есть: проверяем схему.таблицу в каталоге;
-    - если schema None: пытаемся определить по by_name:
-        * если ровно одна схема — берём её;
-        * если несколько — используем default_schema, если там есть такая таблица;
-        * иначе — None (неоднозначно).
-    """
-    if not table or is_keyword(table) or "$" in (schema or "") or "$" in table:
-        return None
-    if schema:
-        if is_system_schema(schema) or is_temp_schema(schema):
-            return None
-        full = f"{schema}.{table}"
-        return (schema, table, full) if full in full_catalog_set else None
-    # без схемы — пытаемся найти единственную
-    schemas = by_name.get(table, set())
-    if len(schemas) == 1:
-        sch = next(iter(schemas))
-        return (sch, table, f"{sch}.{table}")
-    if default_schema and table in by_name and default_schema in by_name[table]:
-        return (default_schema, table, f"{default_schema}.{table}")
-    return None
+# --- НЕ ТРОГАТЬ НИЖЕ, ЕСЛИ НЕ НУЖНО ---
+COPY_SQL = f"""
+COPY (
+    {QUERY}
+) TO STDOUT
+WITH CSV
+DELIMITER ';'
+HEADER
+NULL ''
+QUOTE '"'
+ESCAPE '"'
+"""
 
 def main():
-    engine = create_engine(DB_URL)
-    with engine.connect() as conn:
-        # search_path — возьмём первую «обычную» схему как дефолт
-        sp = (conn.execute(text("SHOW search_path")).scalar() or "")
-        default_schema = None
-        if sp:
-            for raw in [s.strip() for s in sp.split(",")]:
-                if raw and raw != "$user" and not raw.startswith("pg_") and raw not in SYSTEM_SCHEMAS:
-                    default_schema = raw
-                    break
+    t0 = time.time()
+    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
 
-        full_catalog_set, by_name = load_real_tables(conn)
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        application_name="csv_export_account_debt"
+    )
+    conn.set_session(readonly=True, autocommit=True)
+    conn.set_client_encoding("UTF8")
 
-        df = pd.read_sql("SELECT * FROM tech_etl.tables_meta", con=conn)
-
-    rows = []
-    seen = set()
-
-    for idx, row in df.iterrows():
-        meta_id = row.get("id", idx)
-        obj_name = row.get("name") or row.get("table_name") or ""
-        sql_text = row.get("query_insert_init")
-        if not isinstance(sql_text, str) or not sql_text.strip():
-            continue
-
-        cte_names = collect_cte_names(sql_text)
-
-        # ---- INSERT target
-        m = RE_INSERT.search(sql_text)
-        if m:
-            token = m.group(1).strip()
-            # отрезаем ONLY/LATERAL префиксы, если вдруг
-            for kw in ("only", "lateral"):
-                if token.lower().startswith(kw + " "):
-                    token = token[len(kw):].strip()
-                    break
-            schema, table = split_schema_table(token)
-            if table and not is_function_like(table) and not is_temp_table_name(table):
-                if schema and is_temp_schema(schema):
-                    pass  # игнор
-                else:
-                    resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
-                    if resolved:
-                        sch, tbl, full = resolved
-                        key = ("insert_target", full)
-                        if key not in seen:
-                            seen.add(key)
-                            rows.append({
-                                "meta_id": meta_id,
-                                "meta_name": obj_name,
-                                "source_type": "insert_target",
-                                "schema": sch,
-                                "table": tbl,
-                                "full_name": full
-                            })
-
-        # ---- FROM/JOIN sources
-        for m in RE_FROM_JOIN.finditer(sql_text):
-            token = m.group(1)
-            low = token.strip().lower()
-            for kw in ("only", "lateral"):
-                if low.startswith(kw + " "):
-                    token = token[len(kw):].strip()
-                    break
-
-            if is_subquery_token(token) or is_function_like(token):
-                continue
-
-            schema, table = split_schema_table(token)
-            if not table:
-                continue
-
-            # CTE?
-            if unquote_ident(table).lower() in cte_names:
-                continue
-
-            # фильтры
-            if is_keyword(table) or (schema and is_keyword(schema)):
-                continue
-            if "$" in (schema or "") or "$" in table:
-                continue
-            if is_temp_table_name(table) or (schema and is_temp_schema(schema)):
-                continue
-
-            resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
-            if not resolved:
-                continue
-            sch, tbl, full = resolved
-
-            key = ("select_source", full)
-            if key in seen:
-                continue
-            seen.add(key)
-
-            rows.append({
-                "meta_id": meta_id,
-                "meta_name": obj_name,
-                "source_type": "select_source",
-                "schema": sch,
-                "table": tbl,
-                "full_name": full
-            })
-
-    out = pd.DataFrame(rows)
-
-    # итог: уникальные реальные таблицы
-    if out.empty:
-        print("[WARN] Ничего не найдено после фильтров/валидации.")
-        # всё равно создадим пустой файл с пустыми листами
-        with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as xw:
-            out.to_excel(xw, sheet_name="all_items", index=False)
-            out.head(0).to_excel(xw, sheet_name="unique_tables", index=False)
-        print(f"[SAVE] {OUTPUT_XLSX}")
-        return
-
-    uniq = (out[["schema", "table", "full_name"]]
-            .drop_duplicates()
-            .sort_values(["schema", "table"], na_position="last"))
-
-    # Сохраняем в XLSX с двумя листами
-    with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as xw:
-        out.to_excel(xw, sheet_name="all_items", index=False)
-        uniq.to_excel(xw, sheet_name="unique_tables", index=False)
-
-    print(f"[OK] Строк (детально): {len(out)}")
-    print(f"[OK] Уникальных таблиц: {len(uniq)}")
-    print(f"[SAVE] {OUTPUT_XLSX} (листы: all_items, unique_tables)")
-    
-if __name__ == "__main__":
     try:
-        main()
-    except Exception as e:
-        print("[ERROR]", e, file=sys.stderr)
-        sys.exit(1)
+        with conn.cursor() as cur:
+            if COMPRESS_GZIP:
+                # Пишем в gzip (txt-режим, чтобы copy_expert писал строки)
+                gz_path = OUTPUT_PATH if OUTPUT_PATH.endswith(".gz") else OUTPUT_PATH + ".gz"
+                with gzip.open(gz_path, mode="wt", encoding="utf-8", newline="") as f:
+                    cur.copy_expert(COPY_SQL, f)
+                out_path = gz_path
+            else:
+                # Обычный CSV
+                with open(OUTPUT_PATH, mode="w", encoding="utf-8", newline="") as f:
+                    cur.copy_expert(COPY_SQL, f)
+                out_path = OUTPUT_PATH
+    finally:
+        conn.close()
+
+    dt = time.time() - t0
+    print(f"[OK] Экспорт завершён: {out_path}")
+    print(f"[INFO] Время: {dt:.1f} сек")
+
+if __name__ == "__main__":
+    main()

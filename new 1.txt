@@ -1,234 +1,244 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+Извлечение таблиц из tech_etl.tables_meta.query_insert_init с игнором временных таблиц:
+- цель INSERT INTO (кроме temp)
+- таблицы из FROM/JOIN (кроме temp и CTE)
+Сохраняет результат в CSV и печатает итоги.
 
-import argparse
-import json
-import os
+Требуются: sqlalchemy, psycopg2-binary, pandas
+"""
+
 import re
-from collections import Counter
-from typing import Dict, List, Set, Tuple
+import sys
+import pandas as pd
+from sqlalchemy import create_engine, text
 
-try:
-    from openpyxl import Workbook
-    from openpyxl.utils import get_column_letter
-except Exception:
-    Workbook = None
+# ---- НАСТРОЙКИ ---------------------------------------------------------------
+DB_URL = "postgresql+psycopg2://postgres:0506@localhost:5432/dwh"
+OUTPUT_CSV = "tables_meta_dependencies.csv"
 
-# ---------- utils ----------
-def _strip_quotes(name: str) -> str:
-    return name.replace('"', '').replace("`", "").strip()
+# Игнорируемые схемы (паттерны re.fullmatch по lower())
+IGNORE_SCHEMAS = [
+    r"pg_temp",           # иногда так
+    r"pg_temp_\d+",       # чаще так
+    r"pg_toast_temp_\d+",
+]
 
-def _norm_ident(raw: str) -> str:
-    s = _strip_quotes(raw)
-    s = re.sub(r'\s*\.\s*', '.', s)
-    s = re.sub(r'\s+', ' ', s).strip()
-    return s.lower()
+# Игнорируемые имена таблиц (паттерны re.fullmatch по lower())
+IGNORE_TABLE_PATTERNS = [
+    r"#.*",               # sql-server style временные (если вдруг встретится в тексте)
+    r"(tmp|temp|tt|t)_.+",# распространённые префиксы
+]
 
-def _has_schema(obj: str) -> bool:
-    return '.' in obj
+# ---- Регексы и утилиты -------------------------------------------------------
 
-# ---------- regex ----------
-RE_INSERT_INTO = re.compile(r'(?is)\binsert\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_CREATE_TBL  = re.compile(r'(?is)\bcreate\s+table\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_CREATE_VIEW = re.compile(r'(?is)\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_MERGE_INTO  = re.compile(r'(?is)\bmerge\s+into\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_DELETE_FROM = re.compile(r'(?is)\bdelete\s+from\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-
-# UPDATE tgt SET ... FROM src
-RE_UPDATE_FROM = re.compile(
-    r'(?is)\bupdate\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s+set\b.*?\bfrom\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)',
-    re.S
+RE_INSERT = re.compile(
+    r"insert\s+into\s+([^\s(]+)",
+    flags=re.IGNORECASE | re.MULTILINE,
 )
 
-# Источники: FROM/JOIN, но не 'IS DISTINCT FROM'
-RE_FROM_JOIN = re.compile(r'(?is)(?<!\bdistinct\s)\b(?:from|join)\s+([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)')
-RE_USING     = re.compile(r'(?is)\busing\s*\(\s*([a-z0-9_."`$]+\s*(?:\.\s*[a-z0-9_."`$]+)?)\s*\)')
+RE_FROM_JOIN = re.compile(
+    r"(?:from|join)\s+([^\s,()]+)",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
 
-# CTE
-RE_WITH_CTE = re.compile(r'(?is)\bwith\s+(.+?)\bselect\b', re.S)
-RE_CTE_NAME = re.compile(r'(?is)\b([a-z0-9_."`$]+)\s+as\s*\(')
+# WITH cte_name AS ( ... ), cte2 AS ( ... )
+RE_WITH_CTES = re.compile(
+    r"\bwith\b\s+(.+?)\)\s*select\b",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
-# comments
-RE_LINE_COMMENT  = re.compile(r'--.*?$', re.M)
-RE_BLOCK_COMMENT = re.compile(r'/\*.*?\*/', re.S)
+LEADING_KEYWORDS = {"only", "lateral"}
 
-def _remove_comments(sql: str) -> str:
-    sql = RE_BLOCK_COMMENT.sub(' ', sql)
-    sql = RE_LINE_COMMENT.sub(' ', sql)
-    return sql
+FUNCTION_PREFIXES = (
+    "unnest(", "generate_series(", "regexp_split_to_table(",
+    "json_each(", "jsonb_each(", "json_each_text(", "jsonb_each_text(",
+    "json_to_record(", "jsonb_to_record(", "json_to_recordset(", "jsonb_to_recordset(",
+)
 
-def _collect_cte_names(sql: str) -> Set[str]:
-    names: Set[str] = set()
-    for with_block in RE_WITH_CTE.findall(sql):
-        for m in RE_CTE_NAME.finditer(with_block):
-            nm = _norm_ident(m.group(1))
-            names.add(_strip_quotes(nm).split('.')[-1])
-    return names
-
-# ---------- parse one file ----------
-def parse_sql(sql_text: str) -> Tuple[Set[str], Set[str]]:
-    sql = _remove_comments(sql_text)
-    cte_names = _collect_cte_names(sql)
-    targets: Set[str] = set()
-    sources: Set[str] = set()
-
-    for rx in (RE_INSERT_INTO, RE_CREATE_TBL, RE_CREATE_VIEW, RE_MERGE_INTO, RE_DELETE_FROM):
-        for m in rx.finditer(sql):
-            obj = _norm_ident(m.group(1))
-            if _has_schema(obj):
-                targets.add(obj)
-
-    for m in RE_FROM_JOIN.finditer(sql):
-        tok = _norm_ident(m.group(1))
-        if '(' in tok:    # функция/подзапрос
-            continue
-        if not _has_schema(tok):
-            continue
-        base = tok.split('.')[-1]
-        if base in cte_names:
-            continue
-        sources.add(tok)
-
-    for m in RE_USING.finditer(sql):
-        tok = _norm_ident(m.group(1))
-        if '(' in tok:
-            continue
-        if not _has_schema(tok):
-            continue
-        base = tok.split('.')[-1]
-        if base in cte_names:
-            continue
-        sources.add(tok)
-
-    for m in RE_UPDATE_FROM.finditer(sql):
-        tgt = _norm_ident(m.group(1))
-        src = _norm_ident(m.group(2))
-        if _has_schema(tgt):
-            targets.add(tgt)
-        if _has_schema(src):
-            base = src.split('.')[-1]
-            if base not in cte_names:
-                sources.add(src)
-
-    sources -= targets   # не считаем self-source
-    return targets, sources
-
-# ---------- scan files ----------
-def iter_proto_sql_files(root: str) -> List[str]:
-    out = []
-    for dirpath, _, filenames in os.walk(root):
-        for fn in filenames:
-            fl = fn.lower()
-            if fl.startswith('proto_') and fl.endswith('.sql'):
-                out.append(os.path.join(dirpath, fn))
-    return sorted(out)
-
-# ---------- lineage build ----------
-def build_lineage(root: str) -> Dict[str, Dict]:
-    lineage: Dict[str, Dict] = {}
-    for path in iter_proto_sql_files(root):
-        try:
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                text = f.read()
-        except Exception as e:
-            print(f"[WARN] {path}: {e}")
-            continue
-
-        targets, sources = parse_sql(text)
-        for tgt in targets:
-            entry = lineage.setdefault(tgt, {"file": os.path.basename(path), "sources": set()})
-            entry["file"] = entry.get("file") or os.path.basename(path)
-            entry["sources"].update(sources)
-
-    for tgt, data in lineage.items():
-        data["sources"] = sorted(data["sources"])
-    return lineage
-
-# ---------- save JSON/CSV ----------
-def save_json_csv(lineage: Dict[str, Dict], out_prefix: str) -> None:
-    with open(f"{out_prefix}.json", 'w', encoding='utf-8') as jf:
-        json.dump(lineage, jf, ensure_ascii=False, indent=2)
-
-    with open(f"{out_prefix}.csv", 'w', encoding='utf-8') as cf:
-        cf.write("target,source\n")
-        for tgt, data in sorted(lineage.items()):
-            if data["sources"]:
-                for src in data["sources"]:
-                    cf.write(f"{tgt},{src}\n")
-            else:
-                cf.write(f"{tgt},\n")
-
-# ---------- Excel ----------
-def _auto_width(ws):
-    widths = {}
-    for row in ws.iter_rows():
-        for cell in row:
-            val = "" if cell.value is None else str(cell.value)
-            widths[cell.column_letter] = max(widths.get(cell.column_letter, 0), len(val))
-    for col, w in widths.items():
-        ws.column_dimensions[col].width = min(max(w + 2, 12), 80)
-
-def save_excel(lineage: Dict[str, Dict], xlsx_path: str) -> None:
-    if Workbook is None:
-        print("[WARN] openpyxl не установлен — XLSX пропущен")
-        return
-
-    wb = Workbook()
-
-    # 1) edges — по одной строке на каждую пару target-source
-    ws_edges = wb.active
-    ws_edges.title = "edges"
-    ws_edges.append(["target", "source", "target_file"])
-    for tgt, data in sorted(lineage.items()):
-        file_name = data.get("file", "")
-        if data["sources"]:
-            for src in data["sources"]:
-                ws_edges.append([tgt, src, file_name])
+def unquote_ident(s: str) -> str:
+    s = re.split(r"::", s, maxsplit=1)[0]
+    s = s.strip("() \t\n\r")
+    if s.startswith('"') and s.endswith('"') and s.count('"') == 2:
+        return s[1:-1]
+    parts = s.split(".")
+    clean_parts = []
+    for p in parts:
+        p = p.strip()
+        if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
+            clean_parts.append(p[1:-1])
         else:
-            ws_edges.append([tgt, "", file_name])
-    _auto_width(ws_edges)
+            clean_parts.append(p)
+    return ".".join(clean_parts)
 
-    # 2) targets_sources — то же, сгруппировано по target (без склейки в одну ячейку)
-    ws_ts = wb.create_sheet("targets_sources")
-    ws_ts.append(["target", "source"])
-    for tgt, data in sorted(lineage.items()):
-        if data["sources"]:
-            for src in data["sources"]:
-                ws_ts.append([tgt, src])
-        else:
-            ws_ts.append([tgt, ""])
-    _auto_width(ws_ts)
+def split_schema_table(token: str):
+    token = token.strip()
+    token = unquote_ident(token)
+    token = token.split()[0]  # отрезаем алиас
+    if "." in token:
+        schema, table = token.split(".", 1)
+        return (schema, table)
+    return (None, token)
 
-    # 3) usage_summary — сводная по источникам
-    ws_sum = wb.create_sheet("usage_summary")
-    ws_sum.append(["schema", "table", "full_name", "used_as_source_count"])
-    cnt = Counter()
-    for data in lineage.values():
-        cnt.update(data["sources"])
-    for full, n in sorted(cnt.items(), key=lambda x: (-x[1], x[0])):
-        sch, tbl = (full.split('.', 1) + [""])[:2] if '.' in full else ("", full)
-        ws_sum.append([sch, tbl, full, n])
-    _auto_width(ws_sum)
+def is_function_like(token: str) -> bool:
+    t = token.strip().lower()
+    return any(t.startswith(fp) for fp in FUNCTION_PREFIXES)
 
-    wb.save(xlsx_path)
-    print(f"[OK] XLSX → {xlsx_path}")
+def is_subquery_token(token: str) -> bool:
+    return token.strip().startswith("(")
 
-# ---------- CLI ----------
+def is_temp_schema(schema: str) -> bool:
+    if not schema:
+        return False
+    s = schema.lower()
+    return any(re.fullmatch(pat, s) for pat in IGNORE_SCHEMAS)
+
+def is_temp_table_name(table: str) -> bool:
+    if not table:
+        return False
+    t = table.lower()
+    return any(re.fullmatch(pat, t) for pat in IGNORE_TABLE_PATTERNS)
+
+def is_temp_like(schema: str, table: str) -> bool:
+    return is_temp_schema(schema) or is_temp_table_name(table)
+
+def collect_cte_names(sql_text: str):
+    """
+    Возвращает множество имён CTE из секции WITH ... AS (...), чтобы не считать их таблицами.
+    Работает по простому разбору: берем всё между WITH и ближайшим ') select'.
+    """
+    ctes = set()
+    text_lower = sql_text.lower()
+    # Попробуем найти секции WITH ... AS ( ... ) [, ...] SELECT
+    # Если такой «блок» есть несколько раз, возьмем первый — на практике обычно один на запрос.
+    m = RE_WITH_CTES.search(text_lower + " select")  # защита на конец строки
+    if not m:
+        return ctes
+
+    block = sql_text[m.start():m.end()]  # оригинальный регистр
+    # Примерно распилим по запятым вне скобок: пойдём проще — найдём все шаблоны "<name> AS ("
+    for name in re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_$]*)\s+AS\s*\(', block, flags=re.IGNORECASE):
+        ctes.add(unquote_ident(name))
+    return ctes
+
+# ---- Основная логика ---------------------------------------------------------
+
 def main():
-    ap = argparse.ArgumentParser(description="Extract lineage from proto_*.sql into CSV/JSON/XLSX")
-    ap.add_argument("root", nargs="?", default=os.getcwd(), help="Корень проекта (по умолчанию — текущая папка)")
-    ap.add_argument("--out", default="lineage", help="Префикс для JSON/CSV (по умолчанию: lineage)")
-    ap.add_argument("--xlsx", default="lineage.xlsx", help="Путь к XLSX (по умолчанию: lineage.xlsx)")
-    args = ap.parse_args()
+    engine = create_engine(DB_URL)
 
-    root = os.path.abspath(args.root)
-    print(f"[INFO] root: {root}")
-    lineage = build_lineage(root)
+    with engine.connect() as conn:
+        rp = conn.execute(text("SHOW search_path"))
+        search_path = rp.scalar() or ""
+    default_schema = None
+    if search_path:
+        for raw in [s.strip() for s in search_path.split(",")]:
+            if raw and raw != "$user":
+                default_schema = raw
+                break
 
-    save_json_csv(lineage, args.out)
-    save_excel(lineage, args.xlsx)
+    df = pd.read_sql("SELECT * FROM tech_etl.tables_meta", con=engine)
 
-    print(f"[DONE] Targets: {len(lineage)}")
+    rows = []
+    uniq_fullnames = set()
+    dropped_temp = 0
+    dropped_cte = 0
+
+    for idx, row in df.iterrows():
+        meta_id = row.get("id") if "id" in df.columns else idx
+        obj_name = row.get("name") or row.get("table_name") or ""
+        sql_text = row.get("query_insert_init")
+        if not isinstance(sql_text, str) or not sql_text.strip():
+            continue
+
+        cte_names = collect_cte_names(sql_text)
+
+        # ---- 1) Цель INSERT INTO
+        m = RE_INSERT.search(sql_text)
+        if m:
+            raw_target = m.group(1)
+            first_token = raw_target.strip()
+            for kw in LEADING_KEYWORDS:
+                if first_token.lower().startswith(kw + " "):
+                    first_token = first_token[len(kw):].strip()
+            schema, table = split_schema_table(first_token)
+            if schema is None:
+                schema = default_schema
+
+            if table and not is_function_like(table):
+                if is_temp_like(schema, table):
+                    dropped_temp += 1
+                else:
+                    full = f'{schema+"." if schema else ""}{table}'
+                    if full not in uniq_fullnames:
+                        uniq_fullnames.add(full)
+                    rows.append({
+                        "meta_id": meta_id,
+                        "meta_name": obj_name,
+                        "source_type": "insert_target",
+                        "schema": schema,
+                        "table": table,
+                        "full_name": full
+                    })
+
+        # ---- 2) Источники FROM/JOIN
+        for m in RE_FROM_JOIN.finditer(sql_text):
+            token = m.group(1)
+
+            low = token.strip().lower()
+            for kw in LEADING_KEYWORDS:
+                if low.startswith(kw + " "):
+                    token = token[len(kw):].strip()
+                    break
+
+            if is_subquery_token(token) or is_function_like(token):
+                continue
+
+            schema, table = split_schema_table(token)
+            if not table:
+                continue
+            # CTE?
+            if table and unquote_ident(table).lower() in {c.lower() for c in cte_names}:
+                dropped_cte += 1
+                continue
+
+            if schema is None:
+                schema = default_schema
+
+            if is_temp_like(schema, table):
+                dropped_temp += 1
+                continue
+
+            full = f'{schema+"." if schema else ""}{table}'
+            if full not in uniq_fullnames:
+                uniq_fullnames.add(full)
+            rows.append({
+                "meta_id": meta_id,
+                "meta_name": obj_name,
+                "source_type": "select_source",
+                "schema": schema,
+                "table": table,
+                "full_name": full
+            })
+
+    out = pd.DataFrame(rows)
+
+    uniq = None
+    if not out.empty:
+        uniq = (out[["schema", "table", "full_name"]]
+                .drop_duplicates()
+                .sort_values(["schema", "table"], na_position="last"))
+
+    out.to_csv(OUTPUT_CSV, index=False, encoding="utf-8")
+    print(f"[OK] Строк в детальном выводе: {len(out)}")
+    print(f"[OK] Уникальных таблиц: {len(uniq) if uniq is not None else 0}")
+    print(f"[INFO] Отфильтровано temp/pg_temp: {dropped_temp}, CTE: {dropped_cte}")
+    if uniq is not None:
+        print(uniq.head(30).to_string(index=False))
+    print(f"[SAVE] CSV: {OUTPUT_CSV}")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        print("[ERROR]", e, file=sys.stderr)
+        sys.exit(1)

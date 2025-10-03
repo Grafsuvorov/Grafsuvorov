@@ -1,14 +1,12 @@
-# gp_copy_schema.py
+# gp_copy_table_min.py
 # -*- coding: utf-8 -*-
 """
-Копирование ВСЕХ таблиц указанной схемы из прод-Greenplum в препрод потоком через COPY.
-- Никаких CLI-параметров: при запуске спросит только имя схемы.
-- Для стабильности делает REPEATABLE READ-снимок на источнике (единый на всю схему).
-- На приёмнике по каждой таблице: TRUNCATE -> COPY FROM STDIN -> ANALYZE.
-- Порядок колонок берётся из целевой таблицы (препрод), чтобы точно совпало.
+Ручной перенос одной таблицы из prod-Greenplum в preprod потоком через COPY.
+— Меняешь TABLE_FQTN = "schema.table" и запускаешь.
+— Без REPEATABLE READ и без information_schema.
+— Делает TRUNCATE целевой таблицы, COPY и ANALYZE (настраивается флагами ниже).
 
-Зависимости: psycopg2-binary
-pip install psycopg2-binary
+Зависимости: pip install psycopg2-binary
 """
 
 import os
@@ -18,101 +16,51 @@ import threading
 import psycopg2
 
 
-# --- НАСТРОЙКИ ПОД ТЕБЯ ---------------------------------------------
-# Можно задать тут, а можно через переменные окружения GP_SRC_DSN / GP_DST_DSN
-SRC_DSN = os.getenv("GP_SRC_DSN", "postgresql://user:pass@prod-host:5432/prod_db")
-DST_DSN = os.getenv("GP_DST_DSN", "postgresql://user:pass@preprod-host:5432/preprod_db")
+# ===== НАСТРОЙКИ =====
+SRC_DSN    = os.getenv("GP_SRC_DSN", "postgresql://user:pass@prod-host:5432/prod_db")
+DST_DSN    = os.getenv("GP_DST_DSN", "postgresql://user:pass@preprod-host:5432/preprod_db")
+TABLE_FQTN = "football.stats_match_fbref_v2"   # <<< поменяй на нужную таблицу schema.table
 
-# Если какие-то таблицы копировать не надо — добавь сюда (имена без схемы)
-EXCLUDE_TABLES = set([
-    # "big_log_table",
-])
-
-# Включить/выключить ANALYZE после копирования каждой таблицы
-DO_ANALYZE = True
-# --------------------------------------------------------------------
+DO_TRUNCATE = True   # очистить целевую таблицу перед заливкой
+DO_ANALYZE  = True   # ANALYZE после заливки
+QUEUE_SIZE  = 64     # размер буфера стрима
+# =====================
 
 
 def qi(ident: str) -> str:
+    """Quote identifier."""
     return '"' + ident.replace('"', '""') + '"'
 
 
-def qname(schema: str, table: str) -> str:
-    return f"{qi(schema)}.{qi(table)}"
-
-
-def list_tables(dsn: str, schema: str) -> list[str]:
-    sql = """
-    SELECT table_name
-    FROM information_schema.tables
-    WHERE table_schema = %s AND table_type = 'BASE TABLE'
-    ORDER BY table_name
-    """
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(sql, (schema,))
-        return [r[0] for r in cur.fetchall()]
-
-
-def dest_has_table(dsn: str, schema: str, table: str) -> bool:
-    sql = """
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = %s AND table_name = %s AND table_type='BASE TABLE'
-    """
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(sql, (schema, table))
-        return cur.fetchone() is not None
-
-
-def get_dest_columns(dsn: str, schema: str, table: str) -> list[str]:
-    sql = """
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = %s AND table_name = %s
-    ORDER BY ordinal_position
-    """
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(sql, (schema, table))
-        rows = cur.fetchall()
-        if not rows:
-            raise RuntimeError(f"Целевая таблица {schema}.{table} не найдена.")
-        return [r[0] for r in rows]
-
-
-def truncate_table(dsn: str, schema: str, table: str):
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(f"TRUNCATE TABLE {qname(schema, table)}")
-        conn.commit()
-
-
-def analyze_table(dsn: str, schema: str, table: str):
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(f"ANALYZE {qname(schema, table)}")
-        conn.commit()
+def parse_fqtn(s: str):
+    if not s or "." not in s:
+        raise ValueError("TABLE_FQTN должен быть в формате schema.table")
+    schema, table = s.split(".", 1)
+    schema, table = schema.strip(), table.strip()
+    if not schema or not table:
+        raise ValueError("Неверный TABLE_FQTN. Нужен schema.table")
+    return schema, table
 
 
 class QueueWriter:
-    """file-like для COPY TO STDOUT (источник)"""
+    """file-like writer для COPY TO STDOUT (источник)"""
     def __init__(self, q: queue.Queue):
         self.q = q
-
     def write(self, b):
         if isinstance(b, str):
             b = b.encode("utf-8")
         self.q.put(b)
-
     def flush(self):  # noqa
         pass
 
 
 class QueueReader:
-    """file-like для COPY FROM STDIN (приёмник)"""
+    """file-like reader для COPY FROM STDIN (приёмник)"""
     def __init__(self, q: queue.Queue, sentinel):
         self.q = q
         self.buf = bytearray()
         self.sentinel = sentinel
         self.closed = False
-
     def read(self, n=-1):
         while not self.closed and (n < 0 or len(self.buf) < n):
             chunk = self.q.get()
@@ -127,105 +75,77 @@ class QueueReader:
         return out
 
 
-def copy_one_table(src_conn, dst_dsn: str, schema: str, table: str, cols: list[str]):
-    """
-    Копирует одну таблицу: TRUNCATE -> COPY -> ANALYZE (опционально).
-    src_conn — ОБЩЕЕ подключение к источнику (уже в REPEATABLE READ).
-    """
-    print(f"  → {schema}.{table} …", flush=True)
+def truncate_table(dsn: str, schema: str, table: str):
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(f"TRUNCATE TABLE {qi(schema)}.{qi(table)}")
+        conn.commit()
 
-    # Очередь и поток для приёмника
-    q = queue.Queue(maxsize=64)
+
+def analyze_table(dsn: str, schema: str, table: str):
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(f"ANALYZE {qi(schema)}.{qi(table)}")
+        conn.commit()
+
+
+def copy_table(schema: str, table: str):
+    print("=== COPY prod → preprod ===")
+    print(f"SRC:   {SRC_DSN}")
+    print(f"DST:   {DST_DSN}")
+    print(f"TABLE: {schema}.{table}")
+    print("===========================")
+
+    q = queue.Queue(maxsize=QUEUE_SIZE)
     sentinel = object()
 
+    # Поток-приёмник (preprod)
     def dest_copy():
-        reader = QueueReader(q, sentinel)
         copy_in_sql = (
-            f"COPY {qname(schema, table)} ({', '.join(qi(c) for c in cols)}) "
+            f"COPY {qi(schema)}.{qi(table)} "
             "FROM STDIN WITH (FORMAT csv, DELIMITER ',', QUOTE '\"', ESCAPE '\"', NULL '\\N')"
         )
-        with psycopg2.connect(dst_dsn) as conn, conn.cursor() as cur:
+        with psycopg2.connect(DST_DSN) as conn, conn.cursor() as cur:
             cur.execute("SET client_encoding TO 'UTF8'")
+            reader = QueueReader(q, sentinel)
             cur.copy_expert(copy_in_sql, reader)
             conn.commit()
 
-    # TRUNCATE на приёмнике
-    truncate_table(dst_dsn, schema, table)
+    if DO_TRUNCATE:
+        print("[DST] TRUNCATE…")
+        truncate_table(DST_DSN, schema, table)
 
-    # Старт приёмника
+    print("[DST] COPY FROM STDIN — старт…")
     t = threading.Thread(target=dest_copy, daemon=True)
     t.start()
 
-    # Источник: COPY (SELECT …) TO STDOUT
-    select_cols = ", ".join(qi(c) for c in cols)
+    # Источник (prod): COPY всей таблицы TO STDOUT (без колонок; структура должна совпадать)
     copy_out_sql = (
-        f"COPY (SELECT {select_cols} FROM {qname(schema, table)}) TO STDOUT "
-        "WITH (FORMAT csv, DELIMITER ',', QUOTE '\"', ESCAPE '\"', NULL '\\N')"
+        f"COPY {qi(schema)}.{qi(table)} "
+        "TO STDOUT WITH (FORMAT csv, DELIMITER ',', QUOTE '\"', ESCAPE '\"', NULL '\\N')"
     )
-    with src_conn.cursor() as cur:
+    print("[SRC] COPY TO STDOUT…")
+    with psycopg2.connect(SRC_DSN) as src_conn, src_conn.cursor() as cur:
         cur.execute("SET client_encoding TO 'UTF8'")
         writer = QueueWriter(q)
         cur.copy_expert(copy_out_sql, writer)
-        q.put(sentinel)  # сигнал конца
+        q.put(sentinel)  # завершение потока
 
     t.join()
+    print("[OK] COPY завершён.")
 
     if DO_ANALYZE:
-        analyze_table(dst_dsn, schema, table)
-
-    print(f"  ✓ {schema}.{table} — done", flush=True)
+        print("[DST] ANALYZE…")
+        analyze_table(DST_DSN, schema, table)
+        print("[OK] ANALYZE done.")
 
 
 def main():
-    print("=== GP Schema COPY (prod → preprod) ===")
-    print(f"SRC: {SRC_DSN}")
-    print(f"DST: {DST_DSN}")
-    schema = input("Введите имя схемы для копирования: ").strip()
-    if not schema:
-        print("Схема не указана.", file=sys.stderr)
-        sys.exit(2)
-
-    # Список таблиц в источнике
-    src_tables = list_tables(SRC_DSN, schema)
-    if not src_tables:
-        print(f"В источнике нет таблиц в схеме {schema}.", file=sys.stderr)
-        sys.exit(3)
-
-    # Открываем единое соединение к источнику и берём снимок
-    with psycopg2.connect(SRC_DSN) as src_conn, src_conn.cursor() as cur:
-        src_conn.autocommit = False
-        cur.execute("BEGIN")
-        cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        print("Источник: REPEATABLE READ snapshot установлен.")
-
-        for tbl in src_tables:
-            if tbl in EXCLUDE_TABLES:
-                print(f"  • {schema}.{tbl} — пропущена (в EXCLUDE_TABLES).")
-                continue
-            if not dest_has_table(DST_DSN, schema, tbl):
-                print(f"  ! {schema}.{tbl} — нет в приёмнике, пропуск.", flush=True)
-                continue
-            try:
-                cols = get_dest_columns(DST_DSN, schema, tbl)
-                if not cols:
-                    print(f"  ! {schema}.{tbl} — нет колонок на приёмнике, пропуск.")
-                    continue
-                copy_one_table(src_conn, DST_DSN, schema, tbl, cols)
-            except Exception as e:
-                print(f"  ✗ {schema}.{tbl} — ошибка: {e}", file=sys.stderr)
-
-        # фиксация не обязательна (чтение), но завершим чисто
-        src_conn.commit()
-
-    print("=== Готово. ===")
-
-
-if __name__ == "__main__":
     try:
-        main()
-    except KeyboardInterrupt:
-        print("\nInterrupted.", file=sys.stderr)
-        sys.exit(130)
+        schema, table = parse_fqtn(TABLE_FQTN)
+        copy_table(schema, table)
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

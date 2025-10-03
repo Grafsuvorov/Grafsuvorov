@@ -1,39 +1,30 @@
-# gp_copy_table_align_where_unlogged.py
+# gp_copy_table_align_where_unlogged_py39.py
 # -*- coding: utf-8 -*-
-"""
-Перелив одной таблицы prod -> preprod через COPY:
-- Без information_schema: имена колонок забираем через SELECT * LIMIT 0.
-- Копируем ИНТЕРСЕКЦИЮ колонок в порядке приёмника (preprod).
-- Можно задать WHERE_CLAUSE (например, dt_report >= DATE '2025-01-01').
-- На приёмнике можно сделать таблицу UNLOGGED перед заливкой (меньше WAL).
-"""
 
 import os
 import sys
 import queue
 import threading
 import psycopg2
+from typing import Optional, List  # <<< добавили
 
 # ===== НАСТРОЙКИ =====
 SRC_DSN    = os.getenv("GP_SRC_DSN", "postgresql://user:pass@prod-host:5432/prod_db")
 DST_DSN    = os.getenv("GP_DST_DSN", "postgresql://user:pass@preprod-host:5432/preprod_db")
-TABLE_FQTN = "dm.sales_stock_balance_with_forecast"   # <<< укажи schema.table
+TABLE_FQTN = "dm.sales_stock_balance_with_forecast"
 
-# Пример фильтра: только записи с 2025-01-01 и позже
-WHERE_CLAUSE = "dt_report >= DATE '2025-01-01'"       # либо None, чтобы копировать всё
+WHERE_CLAUSE = "dt_report >= DATE '2025-01-01'"
 
-DO_TRUNCATE       = True   # чистим целевую таблицу перед заливкой
-DO_ANALYZE        = True   # ANALYZE после заливки
+DO_TRUNCATE       = True
+DO_ANALYZE        = True
 QUEUE_SIZE        = 64
-STRICT_MATCH      = False  # True -> падать, если в источнике нет какой-либо колонки приёмника
-MAKE_UNLOGGED     = True   # перед заливкой: ALTER TABLE ... SET UNLOGGED
-REVERT_TO_LOGGED  = False  # после заливки вернуть LOGGED (если надо)
+STRICT_MATCH      = False
+MAKE_UNLOGGED     = True
+REVERT_TO_LOGGED  = False
 # =====================
-
 
 def qi(ident: str) -> str:
     return '"' + ident.replace('"', '""') + '"'
-
 
 def parse_fqtn(s: str):
     if not s or "." not in s:
@@ -44,39 +35,32 @@ def parse_fqtn(s: str):
         raise ValueError("Неверный TABLE_FQTN")
     return a, b
 
-
-def get_cols_via_limit0(dsn: str, schema: str, table: str):
+def get_cols_via_limit0(dsn: str, schema: str, table: str) -> List[str]:  # <<< List[str]
     sql = f"SELECT * FROM {qi(schema)}.{qi(table)} LIMIT 0"
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(sql)
         return [d.name for d in cur.description]
 
-
 def validate_where_clause_on_source(dsn: str, schema: str, table: str, where_clause: str):
-    """Быстрая проверка, что WHERE корректен для источника (не падает по синтаксису/колонкам)."""
     sql = f"SELECT 1 FROM {qi(schema)}.{qi(table)} WHERE {where_clause} LIMIT 0"
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(sql)  # если что-то не так — тут упадёт
-
+        cur.execute(sql)
 
 def truncate_table(dsn: str, schema: str, table: str):
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(f"TRUNCATE TABLE {qi(schema)}.{qi(table)}")
         conn.commit()
 
-
 def analyze_table(dsn: str, schema: str, table: str):
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(f"ANALYZE {qi(schema)}.{qi(table)}")
         conn.commit()
-
 
 def set_logged_mode(dsn: str, schema: str, table: str, *, unlogged: bool):
     mode = "UNLOGGED" if unlogged else "LOGGED"
     with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
         cur.execute(f"ALTER TABLE {qi(schema)}.{qi(table)} SET {mode}")
         conn.commit()
-
 
 class QueueWriter:
     def __init__(self, q: queue.Queue):
@@ -87,7 +71,6 @@ class QueueWriter:
         self.q.put(b)
     def flush(self):
         pass
-
 
 class QueueReader:
     def __init__(self, q: queue.Queue, sentinel):
@@ -108,13 +91,11 @@ class QueueReader:
         del self.buf[:n]
         return out
 
-
-def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None):
-    # 1) Собираем перечень колонок
-    dst_cols = get_cols_via_limit0(DST_DSN, schema, table)  # порядок приёмника
+def copy_with_aligned_columns(schema: str, table: str, where_clause: Optional[str]):  # <<< Optional[str]
+    dst_cols = get_cols_via_limit0(DST_DSN, schema, table)
     src_cols = get_cols_via_limit0(SRC_DSN, schema, table)
     src_set = set(src_cols)
-    common = [c for c in dst_cols if c in src_set]          # пересечение в порядке приёмника
+    common = [c for c in dst_cols if c in src_set]
 
     if STRICT_MATCH and len(common) != len(dst_cols):
         missing = [c for c in dst_cols if c not in src_set]
@@ -129,17 +110,14 @@ def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None)
 
     print(f"[INFO] Будем копировать колонки ({len(common)} шт.): {common}")
 
-    # 2) Валидируем WHERE на источнике (если задан)
     if where_clause:
         print(f"[INFO] WHERE: {where_clause}")
         validate_where_clause_on_source(SRC_DSN, schema, table, where_clause)
 
-    # 3) Настраиваем пайп
     q = queue.Queue(maxsize=QUEUE_SIZE)
     sentinel = object()
-    thread_err: list[BaseException] = []
+    thread_err: List[BaseException] = []  # <<< List[...,] для 3.9
 
-    # 4) Поток-приёмник
     def dest_copy():
         try:
             copy_in_sql = (
@@ -156,7 +134,6 @@ def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None)
             thread_err.append(e)
             raise
 
-    # 5) Подготовка приёмника: UNLOGGED/LOGGED, TRUNCATE
     if MAKE_UNLOGGED:
         print("[DST] ALTER TABLE … SET UNLOGGED")
         set_logged_mode(DST_DSN, schema, table, unlogged=True)
@@ -169,7 +146,6 @@ def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None)
     t = threading.Thread(target=dest_copy, daemon=True)
     t.start()
 
-    # 6) Источник: COPY (SELECT ... WHERE ...) TO STDOUT
     select_cols = ", ".join(qi(c) for c in common)
     src_sql = f"SELECT {select_cols} FROM {qi(schema)}.{qi(table)}"
     if where_clause:
@@ -186,14 +162,12 @@ def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None)
         cur.copy_expert(copy_out_sql, writer)
         q.put(sentinel)
 
-    # 7) Дожидаемся приёмника и пробрасываем ошибку, если была
     t.join()
     if thread_err:
         raise thread_err[0]
 
     print("[OK] COPY завершён.")
 
-    # 8) Логгирование обратно (опционально) и ANALYZE
     if REVERT_TO_LOGGED:
         print("[DST] ALTER TABLE … SET LOGGED")
         set_logged_mode(DST_DSN, schema, table, unlogged=False)
@@ -202,7 +176,6 @@ def copy_with_aligned_columns(schema: str, table: str, where_clause: str | None)
         print("[DST] ANALYZE…")
         analyze_table(DST_DSN, schema, table)
         print("[OK] ANALYZE done.")
-
 
 def main():
     try:
@@ -216,7 +189,6 @@ def main():
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()

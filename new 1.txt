@@ -1,151 +1,248 @@
-# gp_copy_table_min.py
-# -*- coding: utf-8 -*-
-"""
-Ручной перенос одной таблицы из prod-Greenplum в preprod потоком через COPY.
-— Меняешь TABLE_FQTN = "schema.table" и запускаешь.
-— Без REPEATABLE READ и без information_schema.
-— Делает TRUNCATE целевой таблицы, COPY и ANALYZE (настраивается флагами ниже).
+import json
+import logging
+import pandas as pd
+import requests
 
-Зависимости: pip install psycopg2-binary
-"""
+from airflow.models import Variable
+from datetime import datetime, timedelta
+from io import BytesIO
+
+logger = logging.getLogger(__name__)
+COLUMNS = [
+        "date_trunc", "producttypename", "clearname", "smelter", "amount_sgp",
+        "obrazovano", "amount_sgp_fb", "summ_all_reject", "fact_techn_wast_all"
+    ]
+LOAD_TYPE = Variable.get('load_type')
+
+def get_token_api(login_url, login_payload):
+    login = requests.post(login_url, data=json.dumps(login_payload), headers={"Content-Type": "application/json"})
+
+    if login.status_code == 200:
+        bearer_token = login.json()["token"]
+        return bearer_token
+    else:
+        raise Exception(f"Failed to get data: {login.status_code}: {login.text}")
+
+def date_range(start_date, end_date, delta):
+    current_date = start_date
+    while current_date < end_date:
+        yield current_date, min(current_date + timedelta(days=delta -1), end_date)
+        current_date += timedelta(days=delta)
+
+def get_data_api(**kwargs):
+    api_dt_start = kwargs['params']['api_dt_start']
+    api_dt_end = kwargs['params']['api_dt_end']
+    api_url = kwargs['api_url']
+
+    start_date = datetime.strptime(api_dt_start, "%m.%d.%Y %H:%M:%S")
+    end_date = datetime.strptime(api_dt_end, "%m.%d.%Y %H:%M:%S")
+
+    if LOAD_TYPE == 'full':
+        start_date = start_date
+    else:
+        start_date = end_date - timedelta(days=1)
+
+    bearer_token = get_token_api(api_url, kwargs['payload'])
+
+    logger.info("Getting hist data from API (60 days)")
+
+    headers = {"Authorization": f"Bearer {bearer_token}"}
+    df_list = []
+
+    hist_start = start_date
+    hist_end = min(start_date + timedelta(days=59), end_date)
+
+    for chunk_start, chunk_end in date_range(hist_start, hist_end, 60):
+        params = {
+            'l_date_beg': chunk_start.strftime("%m.%d.%Y %H:%M:%S"),
+            'l_date_end': chunk_end.strftime("%m.%d.%Y %H:%M:%S")
+        }
+        resp = requests.get(api_url, params=params, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+        df_list.append(pd.DataFrame(data))
+
+    if hist_end < end_date:
+        next_start = hist_end + timedelta(days=1)
+        next_end = end_date
+        logger.info("Getting data from API (45 days)")
+
+        for chunk_start, chunk_end in date_range(next_start, next_end, 45):
+            params = {
+                'l_date_beg': chunk_start.strftime("%m-%d-%Y %H:%M:%S"),
+                'l_date_end': chunk_end.strftime("%m-%d-%Y %H:%M:%S")
+            }
+            resp = requests.get(api_url, params=params, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            df_list.append(pd.DataFrame(data))
+
+    full_df = pd.concat(df_list, ignore_index=True)
+
+    return full_df
+
+def save_to_parquet(df):
+    df = df[COLUMNS]
+    buffer = BytesIO()
+    df.to_parquet(buffer, engine='pyarrow', index=False)
+    buffer.seek(0)
+
+    if LOAD_TYPE == 'full':
+        Variable.set('load_type', 'incremental')
+
+    return buffer
+
 
 import os
-import sys
-import queue
-import threading
-import psycopg2
+from airflow.utils.dates import days_ago
+from airflow.models import Variable
+from yaml import safe_load
+from generation_utility.dag_generator import *
+
+# CFG_FOLDER = Variable.get('CFG_FOLDER_PG')
+CFG_FOLDER = f'{os.environ.get("AIRFLOW_HOME")}/config_files/PG'
+default_args = {
+    'owner': 'BlinovD',
+    'start_date': '2023-12-01',
+    'depends_on_past': False,
+    'email_on_failure': True,
+    'email': ['Dmitriy.Blinov@rusal.com'],
+    'email_on_retry': False,
+    'retries': 1,
+    'retry_delay': 5,
+    'catchup': False
+}
+
+general_config = []
+tasks = []
+dags = []
+
+for dags_dirs in os.scandir(CFG_FOLDER):
+    if dags_dirs.is_dir():
+        dag_config = {
+            'dags': [],
+            'tasks': []
+        }
+        
+        for config in os.scandir(dags_dirs):
+            if config.is_file() and "yaml" == config.name.split(".")[-1]:
+                with open(config, 'r') as stream:
+                    config_dict = safe_load(stream)
+
+                for dag in config_dict.get('dags', []):
+                    dag_config['dags'].append(dag)
+
+                for task in config_dict.get('tasks', []):
+                    dag_config['tasks'].append(task)
+        if dag_config != {'dags': [], 'tasks': []}:
+            general_config.append(dag_config)
+
+for dag_one in general_config:
+    for dag_config in dag_one['dags']:
+        dag = generate_dag(dag_config.get('default_args', default_args),
+                           dag_one,
+                           dag_config)
 
 
-# ===== НАСТРОЙКИ =====
-SRC_DSN    = os.getenv("GP_SRC_DSN", "postgresql://user:pass@prod-host:5432/prod_db")
-DST_DSN    = os.getenv("GP_DST_DSN", "postgresql://user:pass@preprod-host:5432/preprod_db")
-TABLE_FQTN = "football.stats_match_fbref_v2"   # <<< поменяй на нужную таблицу schema.table
 
-DO_TRUNCATE = True   # очистить целевую таблицу перед заливкой
-DO_ANALYZE  = True   # ANALYZE после заливки
-QUEUE_SIZE  = 64     # размер буфера стрима
-# =====================
-
-
-def qi(ident: str) -> str:
-    """Quote identifier."""
-    return '"' + ident.replace('"', '""') + '"'
-
-
-def parse_fqtn(s: str):
-    if not s or "." not in s:
-        raise ValueError("TABLE_FQTN должен быть в формате schema.table")
-    schema, table = s.split(".", 1)
-    schema, table = schema.strip(), table.strip()
-    if not schema or not table:
-        raise ValueError("Неверный TABLE_FQTN. Нужен schema.table")
-    return schema, table
-
-
-class QueueWriter:
-    """file-like writer для COPY TO STDOUT (источник)"""
-    def __init__(self, q: queue.Queue):
-        self.q = q
-    def write(self, b):
-        if isinstance(b, str):
-            b = b.encode("utf-8")
-        self.q.put(b)
-    def flush(self):  # noqa
-        pass
-
-
-class QueueReader:
-    """file-like reader для COPY FROM STDIN (приёмник)"""
-    def __init__(self, q: queue.Queue, sentinel):
-        self.q = q
-        self.buf = bytearray()
-        self.sentinel = sentinel
-        self.closed = False
-    def read(self, n=-1):
-        while not self.closed and (n < 0 or len(self.buf) < n):
-            chunk = self.q.get()
-            if chunk is self.sentinel:
-                self.closed = True
-                break
-            self.buf.extend(chunk)
-        if n < 0:
-            n = len(self.buf)
-        out = bytes(self.buf[:n])
-        del self.buf[:n]
-        return out
-
-
-def truncate_table(dsn: str, schema: str, table: str):
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(f"TRUNCATE TABLE {qi(schema)}.{qi(table)}")
-        conn.commit()
-
-
-def analyze_table(dsn: str, schema: str, table: str):
-    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute(f"ANALYZE {qi(schema)}.{qi(table)}")
-        conn.commit()
-
-
-def copy_table(schema: str, table: str):
-    print("=== COPY prod → preprod ===")
-    print(f"SRC:   {SRC_DSN}")
-    print(f"DST:   {DST_DSN}")
-    print(f"TABLE: {schema}.{table}")
-    print("===========================")
-
-    q = queue.Queue(maxsize=QUEUE_SIZE)
-    sentinel = object()
-
-    # Поток-приёмник (preprod)
-    def dest_copy():
-        copy_in_sql = (
-            f"COPY {qi(schema)}.{qi(table)} "
-            "FROM STDIN WITH (FORMAT csv, DELIMITER ',', QUOTE '\"', ESCAPE '\"', NULL '\\N')"
-        )
-        with psycopg2.connect(DST_DSN) as conn, conn.cursor() as cur:
-            cur.execute("SET client_encoding TO 'UTF8'")
-            reader = QueueReader(q, sentinel)
-            cur.copy_expert(copy_in_sql, reader)
-            conn.commit()
-
-    if DO_TRUNCATE:
-        print("[DST] TRUNCATE…")
-        truncate_table(DST_DSN, schema, table)
-
-    print("[DST] COPY FROM STDIN — старт…")
-    t = threading.Thread(target=dest_copy, daemon=True)
-    t.start()
-
-    # Источник (prod): COPY всей таблицы TO STDOUT (без колонок; структура должна совпадать)
-    copy_out_sql = (
-        f"COPY {qi(schema)}.{qi(table)} "
-        "TO STDOUT WITH (FORMAT csv, DELIMITER ',', QUOTE '\"', ESCAPE '\"', NULL '\\N')"
-    )
-    print("[SRC] COPY TO STDOUT…")
-    with psycopg2.connect(SRC_DSN) as src_conn, src_conn.cursor() as cur:
-        cur.execute("SET client_encoding TO 'UTF8'")
-        writer = QueueWriter(q)
-        cur.copy_expert(copy_out_sql, writer)
-        q.put(sentinel)  # завершение потока
-
-    t.join()
-    print("[OK] COPY завершён.")
-
-    if DO_ANALYZE:
-        print("[DST] ANALYZE…")
-        analyze_table(DST_DSN, schema, table)
-        print("[OK] ANALYZE done.")
-
-
-def main():
-    try:
-        schema, table = parse_fqtn(TABLE_FQTN)
-        copy_table(schema, table)
-    except Exception as e:
-        print(f"ERROR: {e}", file=sys.stderr)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()
+rgm-s-khair01.hq.root.ad
+*** Found local files:
+***   * /data/airflow/logs/dag_id=dag_sapxi_production_waste_report_load_api/run_id=manual__2025-10-03T12:55:29+03:00/task_id=load_to_s3/attempt=2.log
+[2025-10-03, 13:02:59 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: dag_sapxi_production_waste_report_load_api.load_to_s3 manual__2025-10-03T12:55:29+03:00 [queued]>
+[2025-10-03, 13:02:59 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: dag_sapxi_production_waste_report_load_api.load_to_s3 manual__2025-10-03T12:55:29+03:00 [queued]>
+[2025-10-03, 13:02:59 MSK] {taskinstance.py:1361} INFO - Starting attempt 2 of 2
+[2025-10-03, 13:02:59 MSK] {taskinstance.py:1382} INFO - Executing <Task(ApiS3Operator): load_to_s3> on 2025-10-03 09:55:29+00:00
+[2025-10-03, 13:02:59 MSK] {standard_task_runner.py:57} INFO - Started process 2796443 to run task
+[2025-10-03, 13:02:59 MSK] {standard_task_runner.py:84} INFO - Running: ['airflow', 'tasks', 'run', 'dag_sapxi_production_waste_report_load_api', 'load_to_s3', 'manual__2025-10-03T12:55:29+03:00', '--job-id', '3584530', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmphd_2_pmj']
+[2025-10-03, 13:02:59 MSK] {standard_task_runner.py:85} INFO - Job 3584530: Subtask load_to_s3
+[2025-10-03, 13:03:00 MSK] {task_command.py:416} INFO - Running <TaskInstance: dag_sapxi_production_waste_report_load_api.load_to_s3 manual__2025-10-03T12:55:29+03:00 [running]> on host rgm-s-khair01.hq.root.ad
+[2025-10-03, 13:03:00 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='BlinovDA' AIRFLOW_CTX_DAG_ID='dag_sapxi_production_waste_report_load_api' AIRFLOW_CTX_TASK_ID='load_to_s3' AIRFLOW_CTX_EXECUTION_DATE='2025-10-03T09:55:29+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-03T12:55:29+03:00'
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} INFO - /home/airflow/airflow/dags/plugins/help_utility/sapxi_production_waste_report_load_api.py
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'execution_date' from the template is deprecated and will be removed in a future version. Please use 'data_interval_start' or 'logical_date' instead.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'next_ds' from the template is deprecated and will be removed in a future version. Please use '{{ data_interval_end | ds }}' instead.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'next_ds_nodash' from the template is deprecated and will be removed in a future version. Please use '{{ data_interval_end | ds_nodash }}' instead.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'next_execution_date' from the template is deprecated and will be removed in a future version. Please use 'data_interval_end' instead.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'prev_ds' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'prev_ds_nodash' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'prev_execution_date' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'prev_execution_date_success' from the template is deprecated and will be removed in a future version. Please use 'prev_data_interval_start_success' instead.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'tomorrow_ds' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'tomorrow_ds_nodash' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'yesterday_ds' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:03:00 MSK] {logging_mixin.py:154} WARNING - /home/airflow/.local/lib/python3.11/site-packages/airflow/utils/context.py:206 AirflowContextDeprecationWarning: Accessing 'yesterday_ds_nodash' from the template is deprecated and will be removed in a future version.
+[2025-10-03, 13:05:08 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connection.py", line 174, in _new_conn
+    conn = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/util/connection.py", line 95, in create_connection
+    raise err
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    sock.connect(sa)
+TimeoutError: [Errno 110] Connection timed out
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connectionpool.py", line 715, in urlopen
+    httplib_response = self._make_request(
+                       ^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connectionpool.py", line 416, in _make_request
+    conn.request(method, url, **httplib_request_kw)
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connection.py", line 244, in request
+    super(HTTPConnection, self).request(method, url, body=body, headers=headers)
+  File "/usr/lib64/python3.11/http/client.py", line 1294, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "/usr/lib64/python3.11/http/client.py", line 1340, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "/usr/lib64/python3.11/http/client.py", line 1289, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/usr/lib64/python3.11/http/client.py", line 1048, in _send_output
+    self.send(msg)
+  File "/usr/lib64/python3.11/http/client.py", line 986, in send
+    self.connect()
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connection.py", line 205, in connect
+    conn = self._new_conn()
+           ^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connection.py", line 179, in _new_conn
+    raise ConnectTimeoutError(
+urllib3.exceptions.ConnectTimeoutError: (<urllib3.connection.HTTPConnection object at 0x7f2259e74ed0>, 'Connection to components-api.dw.mes.rual.ru timed out. (connect timeout=None)')
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/adapters.py", line 486, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/connectionpool.py", line 799, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/urllib3/util/retry.py", line 592, in increment
+    raise MaxRetryError(_pool, url, error or ResponseError(cause))
+urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='components-api.dw.mes.rual.ru', port=80): Max retries exceeded with url: /api/Login/CreateTokenByLogin (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f2259e74ed0>, 'Connection to components-api.dw.mes.rual.ru timed out. (connect timeout=None)'))
+During handling of the above exception, another exception occurred:
+Traceback (most recent call last):
+  File "/home/airflow/airflow/dags/plugins/custom_operators/ApiS3Operator.py", line 59, in execute
+    raw_data = extract(**context)
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/airflow/dags/plugins/help_utility/sapxi_production_waste_report_load_api.py", line 49, in get_data_api
+    bearer_token = get_token_api(login_url, payload)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/airflow/dags/plugins/help_utility/sapxi_production_waste_report_load_api.py", line 25, in get_token_api
+    login = requests.post(login_url, data=json.dumps(login_payload), headers={"Content-Type": "application/json"})
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/api.py", line 115, in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/api.py", line 59, in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/airflow/.local/lib/python3.11/site-packages/requests/adapters.py", line 507, in send
+    raise ConnectTimeout(e, request=request)
+requests.exceptions.ConnectTimeout: HTTPConnectionPool(host='components-api.dw.mes.rual.ru', port=80): Max retries exceeded with url: /api/Login/CreateTokenByLogin (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f2259e74ed0>, 'Connection to components-api.dw.mes.rual.ru timed out. (connect timeout=None)'))
+[2025-10-03, 13:05:08 MSK] {taskinstance.py:1400} INFO - Marking task as FAILED. dag_id=dag_sapxi_production_waste_report_load_api, task_id=load_to_s3, execution_date=20251003T095529, start_date=20251003T100259, end_date=20251003T100508
+[2025-10-03, 13:05:08 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 3584530 for task load_to_s3 (HTTPConnectionPool(host='components-api.dw.mes.rual.ru', port=80): Max retries exceeded with url: /api/Login/CreateTokenByLogin (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7f2259e74ed0>, 'Connection to components-api.dw.mes.rual.ru timed out. (connect timeout=None)')); 2796443)
+[2025-10-03, 13:05:08 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
+[2025-10-03, 13:05:08 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check

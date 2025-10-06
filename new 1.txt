@@ -1,11 +1,10 @@
 import os
-from airflow.utils.dates import days_ago
-from airflow.models import Variable
+import copy
 from yaml import safe_load
+from generation_utility.config_generator import dynamic_generate_task
 from generation_utility.dag_generator import *
 
-# CFG_FOLDER = Variable.get('CFG_FOLDER_PG')
-CFG_FOLDER = f'{os.environ.get("AIRFLOW_HOME")}/config_files/PG'
+CFG_FOLDER = f'{os.environ.get("AIRFLOW_HOME")}/config_files/clickhouse_S3'
 default_args = {
     'owner': 'BlinovD',
     'start_date': '2023-12-01',
@@ -20,132 +19,63 @@ default_args = {
 
 general_config = []
 tasks = []
-dags = []
+dags_template = {
+        "dag_id": "dag_dag",
+        "schedule_interval": None,
+        "for_test_schedule": False,
+        "tags": [
+            'CLICKHOUSE',
+            'S3'
+        ],
+        "template_searchpath": "template_dir/clickhouse_s3",
+        "default_args": {
+            "owner": 'BlinovD',
+            "start_date": '2024-04-01',
+            "depends_on_past": False,
+            "email_on_failure": False,
+            "email": ['Dmitriy.Blinov@rusal.com'],
+            "email_on_retry": False,
+            "retries": 1,
+            "retry_delay": 5,
+            "catchup": False
+        }
+    }
 
-for dags_dirs in os.scandir(CFG_FOLDER):
-    if dags_dirs.is_dir():
+for config in os.scandir(CFG_FOLDER): # Смотрим есть ли в директории другой шаблон для дага
+    if config.is_file() and "yaml" == config.name.split(".")[-1]:
+        with open(config, 'r') as stream:
+            config_dict = safe_load(stream)
+            if config_dict.get('dags'): # Если есть, заменяем дефолтный шаблон на файл
+                dags_template = config_dict.get('dags')[0]
+               
+
+for config in os.scandir(CFG_FOLDER):
+    if config.is_file() and "yaml" == config.name.split(".")[-1]:
+
+        name = config.name.split(".")[0]
+        dags = copy.deepcopy(dags_template)
+        dags["dag_id"] = name
         dag_config = {
-            'dags': [],
+            'dags': dags,
             'tasks': []
         }
-        
-        for config in os.scandir(dags_dirs):
-            if config.is_file() and "yaml" == config.name.split(".")[-1]:
-                with open(config, 'r') as stream:
-                    config_dict = safe_load(stream)
+        with open(config, 'r') as stream:
+            config_dict = safe_load(stream)
+            if config_dict.get('dags'):
+                continue
+            for task in config_dict.get('tasks', []):
+                dag_config['tasks'].append(task)
+        general_config.append(dag_config)
 
-                for dag in config_dict.get('dags', []):
-                    dag_config['dags'].append(dag)
+errorlist = []
 
-                for task in config_dict.get('tasks', []):
-                    dag_config['tasks'].append(task)
-        if dag_config != {'dags': [], 'tasks': []}:
-            general_config.append(dag_config)
-
-for dag_one in general_config:
-    for dag_config in dag_one['dags']:
-        dag = generate_dag(dag_config.get('default_args', default_args),
+try:
+    for dag_one in general_config:
+        dag = generate_dag(dag_one['dags'].get('default_args', default_args),
                            dag_one,
-                           dag_config)
+                           dag_one['dags'])
+except Exception as e:
+    errorlist.append(e)
 
-
-
-
-rgm-s-khair01.hq.root.ad
-*** Found local files:
-***   * /data/airflow/logs/dag_id=dag_sapxi_production_waste_report_load_api/run_id=manual__2025-10-06T05:57:52.956179+00:00/task_id=load_tp_gp/attempt=2.log
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: dag_sapxi_production_waste_report_load_api.load_tp_gp manual__2025-10-06T05:57:52.956179+00:00 [queued]>
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: dag_sapxi_production_waste_report_load_api.load_tp_gp manual__2025-10-06T05:57:52.956179+00:00 [queued]>
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1361} INFO - Starting attempt 2 of 2
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1382} INFO - Executing <Task(SQLExecuteQueryOperator): load_tp_gp> on 2025-10-06 05:57:52.956179+00:00
-[2025-10-06, 09:07:02 MSK] {standard_task_runner.py:57} INFO - Started process 2271349 to run task
-[2025-10-06, 09:07:02 MSK] {standard_task_runner.py:84} INFO - Running: ['airflow', 'tasks', 'run', 'dag_sapxi_production_waste_report_load_api', 'load_tp_gp', 'manual__2025-10-06T05:57:52.956179+00:00', '--job-id', '3613995', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmpve4qc6at']
-[2025-10-06, 09:07:02 MSK] {standard_task_runner.py:85} INFO - Job 3613995: Subtask load_tp_gp
-[2025-10-06, 09:07:02 MSK] {task_command.py:416} INFO - Running <TaskInstance: dag_sapxi_production_waste_report_load_api.load_tp_gp manual__2025-10-06T05:57:52.956179+00:00 [running]> on host rgm-s-khair01.hq.root.ad
-[2025-10-06, 09:07:02 MSK] {abstractoperator.py:709} ERROR - Exception rendering Jinja template for task 'load_tp_gp', field 'sql'. Template: ['DROP EXTERNAL TABLE IF EXISTS stg.sapxi_production_waste_report_ext;\n\nCREATE EXTERNAL TABLE stg.sapxi_production_waste_report_ext\n(\n    "date_trunc" date,\n    "producttypename" VARCHAR(50),\n    "clearname" VARCHAR(50),\n    "smelter" VARCHAR(50),\n    "amount_sgp" FLOAT,\n    "obrazovano" FLOAT,\n    "amount_sgp_fb" FLOAT,\n    "summ_all_reject" FLOAT,\n    "fact_techn_wast_all" FLOAT\n)\nLOCATION (\n    \'pxf://sapxi-production-waste-report-load-api/dwh/stg/{%- if params.IS_PROD %}{{ date_of_create }}{% else %}1737590400{% endif -%}/*.parquet?PROFILE=s3:parquet&SERVER=minioprod&S3_SELECT=AUTO\'\n) ON ALL\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_import\') ENCODING \'UTF8\';', 'DROP TABLE IF EXISTS stg.sapxi_production_waste_report_tmp;\n\nCREATE TABLE IF NOT EXISTS stg.sapxi_production_waste_report_tmp\n(\n    "date_trunc" date NULL,\n    "producttypename" VARCHAR(50) NULL,\n    "clearname" VARCHAR(50) NULL,\n    "smelter" VARCHAR(50) NULL,\n    "amount_sgp" FLOAT NULL,\n    "obrazovano" FLOAT NULL,\n    "amount_sgp_fb" FLOAT NULL,\n    "summ_all_reject" FLOAT NULL,\n    "fact_techn_wast_all" FLOAT NULL\n);', 'INSERT INTO stg.sapxi_production_waste_report_tmp\n(\n    "date_trunc",\n    "producttypename",\n    "clearname",\n    "smelter",\n    "amount_sgp",\n    "obrazovano",\n    "amount_sgp_fb",\n    "summ_all_reject",\n    "fact_techn_wast_all"\n)\nSELECT\n    "date_trunc",\n    "producttypename",\n    "clearname",\n    "smelter",\n    "amount_sgp",\n    "obrazovano",\n    "amount_sgp_fb",\n    "summ_all_reject",\n    "fact_techn_wast_all"\nFROM stg.sapxi_production_waste_report_ext;', 'TRUNCATE TABLE stg.sapxi_production_waste_report;', 'INSERT INTO stg.sapxi_production_waste_report\n(\n    "date_trunc",\n    "producttypename",\n    "clearname",\n    "smelter",\n    "amount_sgp",\n    "obrazovano",\n    "amount_sgp_fb",\n    "summ_all_reject",\n    "fact_techn_wast_all"\n)\nSELECT\n    "date_trunc",\n    "producttypename",\n    "clearname",\n    "smelter",\n    "amount_sgp",\n    "obrazovano",\n    "amount_sgp_fb",\n    "summ_all_reject",\n    "fact_techn_wast_all"\nFROM stg.sapxi_production_waste_report_tmp;', 'DROP EXTERNAL TABLE IF EXISTS stg.sapxi_production_waste_report_ext;\n\nDROP TABLE IF EXISTS stg.sapxi_production_waste_report_tmp;']
-Traceback (most recent call last):
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-                       ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-           ^^^^^^^^^^^^^^
-  File "<template>", line 16, in root
-  File "/home/airflow/.local/lib/python3.11/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'date_of_create' is undefined
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1518, in _run_raw_task
-    self._execute_task_with_callbacks(context, test_mode, session=session)
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 1647, in _execute_task_with_callbacks
-    task_orig = self.render_templates(context=context)
-                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/taskinstance.py", line 2285, in render_templates
-    original_task.render_template_fields(context)
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/baseoperator.py", line 1243, in render_template_fields
-    self._do_render_template_fields(self, self.template_fields, context, jinja_env, set())
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/utils/session.py", line 79, in wrapper
-    return func(*args, session=session, **kwargs)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-                       ^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/airflow/.local/lib/python3.11/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-           ^^^^^^^^^^^^^^
-  File "<template>", line 16, in root
-  File "/home/airflow/.local/lib/python3.11/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'date_of_create' is undefined
-[2025-10-06, 09:07:02 MSK] {taskinstance.py:1400} INFO - Marking task as FAILED. dag_id=dag_sapxi_production_waste_report_load_api, task_id=load_tp_gp, execution_date=20251006T055752, start_date=20251006T060702, end_date=20251006T060702
-[2025-10-06, 09:07:02 MSK] {logging_mixin.py:154} INFO - Ошибка при выполнении задачи:
-Попытка 2 из 2
-DAG: dag_sapxi_production_waste_report_load_api
-Task Id: load_tp_gp
-Ошибка: 'date_of_create' is undefined
-Log: [Link](https://rgm-s-khair01.hq.root.ad/log?execution_date=2025-10-06T05%3A57%3A52.956179%2B00%3A00&task_id=load_tp_gp&dag_id=dag_sapxi_production_waste_report_load_api&map_index=-1)
-Host: rgm-s-khair01.hq.root.ad
-[2025-10-06, 09:07:02 MSK] {logging_mixin.py:154} INFO - <Response [202]>
-[2025-10-06, 09:07:02 MSK] {configuration.py:1050} WARNING - section/key [smtp/smtp_user] not found in config
-[2025-10-06, 09:07:02 MSK] {email.py:270} INFO - Email alerting: attempt 1
-[2025-10-06, 09:07:02 MSK] {email.py:281} INFO - Sent an alert email to ['DE_DWH@ROOT.AD']
-[2025-10-06, 09:07:03 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 3613995 for task load_tp_gp ('date_of_create' is undefined; 2271349)
-[2025-10-06, 09:07:03 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-10-06, 09:07:03 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check
+for er in errorlist:
+    raise er

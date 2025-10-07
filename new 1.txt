@@ -8,10 +8,10 @@
       "Segments": 8,
       "Gang Type": "primary reader",
       "Startup Cost": 0.00,
-      "Total Cost": 10292620.41,
-      "Plan Rows": 30794666711,
+      "Total Cost": 7054572.78,
+      "Plan Rows": 21491874770,
       "Plan Width": 80,
-      "Output": ["pp_1.kalnr", "pp_1.dt_valid_from", "(date(COALESCE(((lead(pp_1.dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))", "cr_curr.vprsv", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "(CASE WHEN (((pp.umkumo + pp.abkumo) + pp.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((cr_curr.stprs / (cr_curr.peinh)::numeric) * (pp.umkumo + pp.abkumo)) + cr_curr.abprd_o) + cr_curr.abprd_mo) + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2), 2621464) / ((pp.umkumo + pp.abkumo) + pp.zukumo)), 15) END)", "(CASE WHEN (((pp.abkumo + pp.umkumo) + pp.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((cr_next.salk3 + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2621464) / ((pp.abkumo + pp.umkumo) + pp.zukumo)), 15) ELSE '0'::numeric END)", "(CASE WHEN (pp.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(cr_curr.salk3, 2621464) / pp.lbkum), 15) ELSE '0'::numeric END)", "material_ledger_header.price_rule_code"],
+      "Output": ["pp_w.kalnr", "pp_w.dt_valid_from", "pp_w.dt_valid_to", "cr_curr.vprsv", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "(CASE WHEN (((pp_w.umkumo + pp_w.abkumo) + pp_w.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((cr_curr.stprs / (cr_curr.peinh)::numeric) * (pp_w.umkumo + pp_w.abkumo)) + cr_curr.abprd_o) + cr_curr.abprd_mo) + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2), 2621464) / ((pp_w.umkumo + pp_w.abkumo) + pp_w.zukumo)), 15) END)", "(CASE WHEN (((pp_w.abkumo + pp_w.umkumo) + pp_w.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((cr_next.salk3 + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2621464) / ((pp_w.abkumo + pp_w.umkumo) + pp_w.zukumo)), 15) ELSE '0'::numeric END)", "(CASE WHEN (pp_w.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(cr_curr.salk3, 2621464) / pp_w.lbkum), 15) ELSE '0'::numeric END)", "material_ledger_header.price_rule_code"],
       "Plans": [
         {
           "Node Type": "Result",
@@ -20,10 +20,10 @@
           "Segments": 8,
           "Gang Type": "primary reader",
           "Startup Cost": 0.00,
-          "Total Cost": 3462363.33,
-          "Plan Rows": 30794666711,
+          "Total Cost": 2287674.95,
+          "Plan Rows": 21491874770,
           "Plan Width": 80,
-          "Output": ["pp_1.kalnr", "pp_1.dt_valid_from", "(date(COALESCE(((lead(pp_1.dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))", "cr_curr.vprsv", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "CASE WHEN (((pp.umkumo + pp.abkumo) + pp.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((cr_curr.stprs / (cr_curr.peinh)::numeric) * (pp.umkumo + pp.abkumo)) + cr_curr.abprd_o) + cr_curr.abprd_mo) + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2), 2621464) / ((pp.umkumo + pp.abkumo) + pp.zukumo)), 15) END", "CASE WHEN (((pp.abkumo + pp.umkumo) + pp.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((cr_next.salk3 + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2621464) / ((pp.abkumo + pp.umkumo) + pp.zukumo)), 15) ELSE '0'::numeric END", "CASE WHEN (pp.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(cr_curr.salk3, 2621464) / pp.lbkum), 15) ELSE '0'::numeric END", "material_ledger_header.price_rule_code"],
+          "Output": ["pp_w.kalnr", "pp_w.dt_valid_from", "pp_w.dt_valid_to", "cr_curr.vprsv", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "CASE WHEN (((pp_w.umkumo + pp_w.abkumo) + pp_w.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((cr_curr.stprs / (cr_curr.peinh)::numeric) * (pp_w.umkumo + pp_w.abkumo)) + cr_curr.abprd_o) + cr_curr.abprd_mo) + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2), 2621464) / ((pp_w.umkumo + pp_w.abkumo) + pp_w.zukumo)), 15) END", "CASE WHEN (((pp_w.abkumo + pp_w.umkumo) + pp_w.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((cr_next.salk3 + COALESCE(((mlcd_agg.salk3 + mlcd_agg.estprd) + mlcd_agg.mstprd), '0'::numeric)), 2621464) / ((pp_w.abkumo + pp_w.umkumo) + pp_w.zukumo)), 15) ELSE '0'::numeric END", "CASE WHEN (pp_w.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(cr_curr.salk3, 2621464) / pp_w.lbkum), 15) ELSE '0'::numeric END", "material_ledger_header.price_rule_code"],
           "Plans": [
             {
               "Node Type": "Hash Join",
@@ -31,13 +31,13 @@
               "Slice": 1,
               "Segments": 8,
               "Gang Type": "primary reader",
-              "Join Type": "Inner",
+              "Join Type": "Left",
               "Startup Cost": 0.00,
-              "Total Cost": 3154416.67,
-              "Plan Rows": 30794666711,
+              "Total Cost": 2072756.21,
+              "Plan Rows": 21491874770,
               "Plan Width": 87,
-              "Output": ["pp_1.kalnr", "pp_1.dt_valid_from", "(date(COALESCE(((lead(pp_1.dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd", "material_ledger_header.price_rule_code"],
-              "Hash Cond": "(((pp.kalnr)::text = (pp_1.kalnr)::text) AND (pp.dt_valid_from = pp_1.dt_valid_from))",
+              "Output": ["pp_w.kalnr", "pp_w.dt_valid_from", "pp_w.umkumo", "pp_w.abkumo", "pp_w.zukumo", "pp_w.lbkum", "pp_w.dt_valid_to", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd", "material_ledger_header.price_rule_code"],
+              "Hash Cond": "((pp_w.kalnr)::text = (material_ledger_header.calculation_code)::text)",
               "Plans": [
                 {
                   "Node Type": "Hash Join",
@@ -47,11 +47,11 @@
                   "Gang Type": "primary reader",
                   "Join Type": "Left",
                   "Startup Cost": 0.00,
-                  "Total Cost": 1015316.84,
-                  "Plan Rows": 7183482339,
-                  "Plan Width": 83,
-                  "Output": ["pp.kalnr", "pp.dt_valid_from", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd", "material_ledger_header.price_rule_code"],
-                  "Hash Cond": "((pp.kalnr)::text = (material_ledger_header.calculation_code)::text)",
+                  "Total Cost": 951078.30,
+                  "Plan Rows": 10745937385,
+                  "Plan Width": 85,
+                  "Output": ["pp_w.kalnr", "pp_w.dt_valid_from", "pp_w.umkumo", "pp_w.abkumo", "pp_w.zukumo", "pp_w.lbkum", "pp_w.dt_valid_to", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
+                  "Hash Cond": "(((pp_w.kalnr)::text = (mlcd_agg.kalnr)::text) AND ((pp_w.bdatj)::text = (mlcd_agg.bdatj)::text) AND ((pp_w.poper)::text = (mlcd_agg.poper)::text))",
                   "Plans": [
                     {
                       "Node Type": "Hash Join",
@@ -61,11 +61,11 @@
                       "Gang Type": "primary reader",
                       "Join Type": "Left",
                       "Startup Cost": 0.00,
-                      "Total Cost": 653633.94,
-                      "Plan Rows": 3591741170,
-                      "Plan Width": 81,
-                      "Output": ["pp.kalnr", "pp.dt_valid_from", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
-                      "Hash Cond": "(((pp.kalnr)::text = (mlcd_agg.kalnr)::text) AND ((pp.bdatj)::text = (mlcd_agg.bdatj)::text) AND ((pp.poper)::text = (mlcd_agg.poper)::text))",
+                      "Total Cost": 285529.54,
+                      "Plan Rows": 3717848406,
+                      "Plan Width": 78,
+                      "Output": ["pp_w.kalnr", "pp_w.bdatj", "pp_w.poper", "pp_w.dt_valid_from", "pp_w.umkumo", "pp_w.abkumo", "pp_w.zukumo", "pp_w.lbkum", "pp_w.dt_valid_to", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3"],
+                      "Hash Cond": "(((pp_w.kalnr)::text = (cr_next.kalnr)::text) AND (pp_w.dt_valid_from = cr_next.dt_posting))",
                       "Plans": [
                         {
                           "Node Type": "Hash Join",
@@ -75,71 +75,26 @@
                           "Gang Type": "primary reader",
                           "Join Type": "Left",
                           "Startup Cost": 0.00,
-                          "Total Cost": 270478.91,
-                          "Plan Rows": 3591741170,
+                          "Total Cost": 59985.88,
+                          "Plan Rows": 703421296,
                           "Plan Width": 74,
-                          "Output": ["pp.kalnr", "pp.bdatj", "pp.poper", "pp.dt_valid_from", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3", "cr_next.salk3"],
-                          "Hash Cond": "(((pp.kalnr)::text = (cr_next.kalnr)::text) AND (pp.dt_valid_from = cr_next.dt_posting))",
+                          "Output": ["pp_w.kalnr", "pp_w.bdatj", "pp_w.poper", "pp_w.dt_valid_from", "pp_w.umkumo", "pp_w.abkumo", "pp_w.zukumo", "pp_w.lbkum", "pp_w.dt_valid_to", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"],
+                          "Hash Cond": "(((pp_w.kalnr)::text = (cr_curr.kalnr)::text) AND ((pp_w.bdatj)::text = (cr_curr.bdatj)::text) AND ((pp_w.poper)::text = (cr_curr.poper)::text))",
                           "Plans": [
                             {
-                              "Node Type": "Hash Join",
+                              "Node Type": "Seq Scan",
                               "Parent Relationship": "Outer",
                               "Slice": 1,
                               "Segments": 8,
                               "Gang Type": "primary reader",
-                              "Join Type": "Left",
+                              "Relation Name": "pp_w",
+                              "Schema": "pg_temp_4546048",
+                              "Alias": "pp_w",
                               "Startup Cost": 0.00,
-                              "Total Cost": 58135.27,
-                              "Plan Rows": 690947532,
-                              "Plan Width": 70,
-                              "Output": ["pp.kalnr", "pp.bdatj", "pp.poper", "pp.dt_valid_from", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"],
-                              "Hash Cond": "(((pp.kalnr)::text = (cr_curr.kalnr)::text) AND ((pp.bdatj)::text = (cr_curr.bdatj)::text) AND ((pp.poper)::text = (cr_curr.poper)::text))",
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 1,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "pp",
-                                  "Schema": "pg_temp_4537637",
-                                  "Alias": "pp",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 837.97,
-                                  "Plan Rows": 87051912,
-                                  "Plan Width": 38,
-                                  "Output": ["pp.kalnr", "pp.bdatj", "pp.poper", "pp.dt_valid_from", "pp.umkumo", "pp.abkumo", "pp.zukumo", "pp.lbkum"]
-                                },
-                                {
-                                  "Node Type": "Hash",
-                                  "Parent Relationship": "Inner",
-                                  "Slice": 1,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 938.64,
-                                  "Total Cost": 938.64,
-                                  "Plan Rows": 87902664,
-                                  "Plan Width": 54,
-                                  "Output": ["cr_curr.kalnr", "cr_curr.bdatj", "cr_curr.poper", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 1,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Relation Name": "cr_curr",
-                                      "Schema": "pg_temp_4537637",
-                                      "Alias": "cr_curr",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 938.64,
-                                      "Plan Rows": 87902664,
-                                      "Plan Width": 54,
-                                      "Output": ["cr_curr.kalnr", "cr_curr.bdatj", "cr_curr.poper", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"]
-                                    }
-                                  ]
-                                }
-                              ]
+                              "Total Cost": 861.95,
+                              "Plan Rows": 87059648,
+                              "Plan Width": 42,
+                              "Output": ["pp_w.kalnr", "pp_w.bdatj", "pp_w.poper", "pp_w.dt_valid_from", "pp_w.umkumo", "pp_w.abkumo", "pp_w.zukumo", "pp_w.lbkum", "pp_w.dt_valid_to"]
                             },
                             {
                               "Node Type": "Hash",
@@ -147,11 +102,11 @@
                               "Slice": 1,
                               "Segments": 8,
                               "Gang Type": "primary reader",
-                              "Startup Cost": 739.21,
-                              "Total Cost": 739.21,
-                              "Plan Rows": 87902608,
-                              "Plan Width": 21,
-                              "Output": ["cr_next.kalnr", "cr_next.dt_posting", "cr_next.salk3"],
+                              "Startup Cost": 938.66,
+                              "Total Cost": 938.66,
+                              "Plan Rows": 87905944,
+                              "Plan Width": 54,
+                              "Output": ["cr_curr.kalnr", "cr_curr.bdatj", "cr_curr.poper", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"],
                               "Plans": [
                                 {
                                   "Node Type": "Seq Scan",
@@ -159,14 +114,14 @@
                                   "Slice": 1,
                                   "Segments": 8,
                                   "Gang Type": "primary reader",
-                                  "Relation Name": "cr_next",
-                                  "Schema": "pg_temp_4537637",
-                                  "Alias": "cr_next",
+                                  "Relation Name": "cr_curr",
+                                  "Schema": "pg_temp_4546048",
+                                  "Alias": "cr_curr",
                                   "Startup Cost": 0.00,
-                                  "Total Cost": 739.21,
-                                  "Plan Rows": 87902608,
-                                  "Plan Width": 21,
-                                  "Output": ["cr_next.kalnr", "cr_next.dt_posting", "cr_next.salk3"]
+                                  "Total Cost": 938.66,
+                                  "Plan Rows": 87905944,
+                                  "Plan Width": 54,
+                                  "Output": ["cr_curr.kalnr", "cr_curr.bdatj", "cr_curr.poper", "cr_curr.stprs", "cr_curr.peinh", "cr_curr.pvprs", "cr_curr.abprd_o", "cr_curr.abprd_mo", "cr_curr.vprsv", "cr_curr.salk3"]
                                 }
                               ]
                             }
@@ -178,11 +133,11 @@
                           "Slice": 1,
                           "Segments": 8,
                           "Gang Type": "primary reader",
-                          "Startup Cost": 463.87,
-                          "Total Cost": 463.87,
-                          "Plan Rows": 7031150,
-                          "Plan Width": 38,
-                          "Output": ["mlcd_agg.kalnr", "mlcd_agg.bdatj", "mlcd_agg.poper", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
+                          "Startup Cost": 739.20,
+                          "Total Cost": 739.20,
+                          "Plan Rows": 87900944,
+                          "Plan Width": 21,
+                          "Output": ["cr_next.kalnr", "cr_next.dt_posting", "cr_next.salk3"],
                           "Plans": [
                             {
                               "Node Type": "Seq Scan",
@@ -190,14 +145,14 @@
                               "Slice": 1,
                               "Segments": 8,
                               "Gang Type": "primary reader",
-                              "Relation Name": "mlcd_agg",
-                              "Schema": "pg_temp_4537637",
-                              "Alias": "mlcd_agg",
+                              "Relation Name": "cr_next",
+                              "Schema": "pg_temp_4546048",
+                              "Alias": "cr_next",
                               "Startup Cost": 0.00,
-                              "Total Cost": 463.87,
-                              "Plan Rows": 7031150,
-                              "Plan Width": 38,
-                              "Output": ["mlcd_agg.kalnr", "mlcd_agg.bdatj", "mlcd_agg.poper", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"]
+                              "Total Cost": 739.20,
+                              "Plan Rows": 87900944,
+                              "Plan Width": 21,
+                              "Output": ["cr_next.kalnr", "cr_next.dt_posting", "cr_next.salk3"]
                             }
                           ]
                         }
@@ -209,11 +164,11 @@
                       "Slice": 1,
                       "Segments": 8,
                       "Gang Type": "primary reader",
-                      "Startup Cost": 461.06,
-                      "Total Cost": 461.06,
-                      "Plan Rows": 3312373,
-                      "Plan Width": 15,
-                      "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"],
+                      "Startup Cost": 463.87,
+                      "Total Cost": 463.87,
+                      "Plan Rows": 7031150,
+                      "Plan Width": 38,
+                      "Output": ["mlcd_agg.kalnr", "mlcd_agg.bdatj", "mlcd_agg.poper", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"],
                       "Plans": [
                         {
                           "Node Type": "Seq Scan",
@@ -221,14 +176,14 @@
                           "Slice": 1,
                           "Segments": 8,
                           "Gang Type": "primary reader",
-                          "Relation Name": "material_ledger_header",
-                          "Schema": "dds",
-                          "Alias": "material_ledger_header",
+                          "Relation Name": "mlcd_agg",
+                          "Schema": "pg_temp_4546048",
+                          "Alias": "mlcd_agg",
                           "Startup Cost": 0.00,
-                          "Total Cost": 461.06,
-                          "Plan Rows": 3312373,
-                          "Plan Width": 15,
-                          "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"]
+                          "Total Cost": 463.87,
+                          "Plan Rows": 7031150,
+                          "Plan Width": 38,
+                          "Output": ["mlcd_agg.kalnr", "mlcd_agg.bdatj", "mlcd_agg.poper", "mlcd_agg.salk3", "mlcd_agg.estprd", "mlcd_agg.mstprd"]
                         }
                       ]
                     }
@@ -240,71 +195,26 @@
                   "Slice": 1,
                   "Segments": 8,
                   "Gang Type": "primary reader",
-                  "Startup Cost": 27201.34,
-                  "Total Cost": 27201.34,
-                  "Plan Rows": 87051912,
-                  "Plan Width": 21,
-                  "Output": ["(date(COALESCE(((lead(pp_1.dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))", "pp_1.kalnr", "pp_1.dt_valid_from"],
+                  "Startup Cost": 461.06,
+                  "Total Cost": 461.06,
+                  "Plan Rows": 3312373,
+                  "Plan Width": 15,
+                  "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"],
                   "Plans": [
                     {
-                      "Node Type": "Result",
+                      "Node Type": "Seq Scan",
                       "Parent Relationship": "Outer",
                       "Slice": 1,
                       "Segments": 8,
                       "Gang Type": "primary reader",
+                      "Relation Name": "material_ledger_header",
+                      "Schema": "dds",
+                      "Alias": "material_ledger_header",
                       "Startup Cost": 0.00,
-                      "Total Cost": 27201.34,
-                      "Plan Rows": 87051912,
-                      "Plan Width": 21,
-                      "Output": ["date(COALESCE(((lead(pp_1.dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone))", "pp_1.kalnr", "pp_1.dt_valid_from"],
-                      "Plans": [
-                        {
-                          "Node Type": "WindowAgg",
-                          "Parent Relationship": "Outer",
-                          "Slice": 1,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 25884.68,
-                          "Plan Rows": 87051912,
-                          "Plan Width": 21,
-                          "Output": ["lead(pp_1.dt_valid_from) OVER (?)", "pp_1.kalnr", "pp_1.dt_valid_from"],
-                          "Partition By": ["pp_1.kalnr"],
-                          "Order By": ["pp_1.dt_valid_from"],
-                          "Plans": [
-                            {
-                              "Node Type": "Sort",
-                              "Parent Relationship": "Outer",
-                              "Slice": 1,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 25699.69,
-                              "Plan Rows": 87051912,
-                              "Plan Width": 17,
-                              "Output": ["pp_1.kalnr", "pp_1.dt_valid_from"],
-                              "Sort Key": ["pp_1.kalnr", "pp_1.dt_valid_from"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 1,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "pp",
-                                  "Schema": "pg_temp_4537637",
-                                  "Alias": "pp_1",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 837.97,
-                                  "Plan Rows": 87051912,
-                                  "Plan Width": 17,
-                                  "Output": ["pp_1.kalnr", "pp_1.dt_valid_from"]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
+                      "Total Cost": 461.06,
+                      "Plan Rows": 3312373,
+                      "Plan Width": 15,
+                      "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"]
                     }
                   ]
                 }

@@ -1,11 +1,4 @@
--- опционально, чуть больше памяти под хэши
-SET optimizer = on;
-SET statement_mem = '3GB';
-SET gp_workfile_compression = on;
-
--- 1) PP + окно (один проход)
-CREATE TEMP TABLE pp_w
-ON COMMIT DROP AS
+explain(verbose, format json)
 SELECT
   kalnr,
   bdatj,
@@ -24,108 +17,222 @@ SELECT
 FROM ods.ckmlpp_ral
 WHERE untper='000'
 GROUP BY kalnr,bdatj,poper
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_w;
 
--- 2) Уникальные ключи для урезания больших источников
-CREATE TEMP TABLE pp_keys
-ON COMMIT DROP AS
 SELECT DISTINCT kalnr,bdatj,poper
 FROM pp_w
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_keys;
 
--- 3) Текущий CR (по ключам из pp_w)
-CREATE TEMP TABLE cr_curr
-ON COMMIT DROP AS
-SELECT
-  c.kalnr, c.bdatj, c.poper,
-  MAX(stprs)    AS stprs,
-  MAX(peinh)    AS peinh,
-  MAX(pvprs)    AS pvprs,
-  MAX(abprd_o)  AS abprd_o,
-  MAX(abprd_mo) AS abprd_mo,
-  MAX(vprsv)    AS vprsv,
-  MAX(salk3)    AS salk3   -- если это поток, замени на SUM
-FROM ods.ckmlcr_ral c
-JOIN pp_keys k
-  ON k.kalnr=c.kalnr AND k.bdatj=c.bdatj AND k.poper=c.poper
-WHERE c.untper='000' AND c.curtp='10'
-GROUP BY c.kalnr,c.bdatj,c.poper
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_curr;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 3,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 95258.13,
+      "Plan Rows": 78239857,
+      "Plan Width": 64,
+      "Output": ["kalnr", "bdatj", "poper", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "(date(COALESCE(((lead(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1)) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 3,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 81375.25,
+          "Plan Rows": 78239857,
+          "Plan Width": 64,
+          "Output": ["kalnr", "bdatj", "poper", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "date(COALESCE(((lead(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1)) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone))"],
+          "Plans": [
+            {
+              "Node Type": "WindowAgg",
+              "Parent Relationship": "Outer",
+              "Slice": 3,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 79771.34,
+              "Plan Rows": 78239857,
+              "Plan Width": 64,
+              "Output": ["lead(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1)) OVER (?)", "bdatj", "kalnr", "poper", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))"],
+              "Partition By": ["ckmlpp_ral.kalnr"],
+              "Order By": ["(make_date((ckmlpp_ral.bdatj)::integer, (\"substring\"((ckmlpp_ral.poper)::text, 2, 2))::integer, 1))"],
+              "Plans": [
+                {
+                  "Node Type": "Sort",
+                  "Parent Relationship": "Outer",
+                  "Slice": 3,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 79253.00,
+                  "Plan Rows": 78239857,
+                  "Plan Width": 53,
+                  "Output": ["bdatj", "kalnr", "poper", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))"],
+                  "Sort Key": ["ckmlpp_ral.kalnr", "(make_date((ckmlpp_ral.bdatj)::integer, (\"substring\"((ckmlpp_ral.poper)::text, 2, 2))::integer, 1))"],
+                  "Plans": [
+                    {
+                      "Node Type": "Redistribute Motion",
+                      "Senders": 8,
+                      "Receivers": 8,
+                      "Parent Relationship": "Outer",
+                      "Slice": 2,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 11005.71,
+                      "Plan Rows": 78239857,
+                      "Plan Width": 53,
+                      "Output": ["bdatj", "kalnr", "poper", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))"],
+                      "Hash Key": "kalnr",
+                      "Plans": [
+                        {
+                          "Node Type": "Result",
+                          "Parent Relationship": "Outer",
+                          "Slice": 2,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 9383.31,
+                          "Plan Rows": 78239857,
+                          "Plan Width": 53,
+                          "Output": ["bdatj", "kalnr", "poper", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))", "(make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1))"],
+                          "Plans": [
+                            {
+                              "Node Type": "Result",
+                              "Parent Relationship": "Outer",
+                              "Slice": 2,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 9383.31,
+                              "Plan Rows": 78239857,
+                              "Plan Width": 53,
+                              "Output": ["make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1)", "bdatj", "kalnr", "poper", "(max(umkumo))", "(max(abkumo))", "(max(zukumo))", "(max(lbkum))"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Aggregate",
+                                  "Strategy": "Hashed",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 2,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 7886.97,
+                                  "Plan Rows": 78239857,
+                                  "Plan Width": 54,
+                                  "Output": ["max(umkumo)", "max(abkumo)", "max(zukumo)", "max(lbkum)", "bdatj", "kalnr", "poper"],
+                                  "Group Key": ["ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Redistribute Motion",
+                                      "Senders": 8,
+                                      "Receivers": 8,
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 3476.08,
+                                      "Plan Rows": 87048792,
+                                      "Plan Width": 34,
+                                      "Output": ["bdatj", "kalnr", "poper", "abkumo", "lbkum", "umkumo", "zukumo"],
+                                      "Hash Key": "kalnr, bdatj, poper",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "ckmlpp_ral",
+                                          "Schema": "ods",
+                                          "Alias": "ckmlpp_ral",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 2318.11,
+                                          "Plan Rows": 87048792,
+                                          "Plan Width": 34,
+                                          "Output": ["bdatj", "kalnr", "poper", "abkumo", "lbkum", "umkumo", "zukumo"],
+                                          "Filter": "((ckmlpp_ral.untper)::text = '000'::text)"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]
 
--- 4) CR на следующее 1-е число (только нужные даты)
-CREATE TEMP TABLE cr_next
-ON COMMIT DROP AS
-SELECT
-  c.kalnr,
-  (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-  MAX(c.salk3) AS salk3
-FROM ods.ckmlcr_ral c
-JOIN (
-  SELECT DISTINCT kalnr, dt_valid_from AS dt_posting
-  FROM pp_w
-) p
-  ON p.kalnr=c.kalnr
- AND p.dt_posting = (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
-WHERE c.untper='000' AND c.curtp='10'
-GROUP BY c.kalnr, (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_next;
-
--- 5) MLCD (только нужные ключи)
-CREATE TEMP TABLE mlcd_agg
-ON COMMIT DROP AS
-SELECT
-  m.kalnr, m.bdatj, m.poper,
-  SUM(m.salk3)  AS salk3,
-  SUM(m.estprd) AS estprd,
-  SUM(m.mstprd) AS mstprd
-FROM ods.mlcd_ral m
-JOIN pp_keys k USING (kalnr,bdatj,poper)
-WHERE m.curtp='10' AND m.categ IN ('ZU','VP','PC')
-GROUP BY m.kalnr,m.bdatj,m.poper
-DISTRIBUTED BY (kalnr);
-ANALYZE mlcd_agg;
-
--- 6) Финальный селект
-SELECT
-  p.kalnr AS calculation_code,
-  p.dt_valid_from,
-  p.dt_valid_to,
-
-  c.vprsv AS price_valuation_type_code,
-  c.stprs AS standard_price_amount,
-  c.peinh AS price_unit_code,
-  c.pvprs AS moving_average_price_amount,
-
-  CASE WHEN (p.umkumo + p.abkumo + p.zukumo)=0 THEN 0
-       ELSE TRUNC(
-              CAST(ROUND(
-                    (c.stprs / c.peinh) * (p.umkumo + p.abkumo)
-                  + c.abprd_o + c.abprd_mo
-                  + COALESCE(m.salk3 + m.estprd + m.mstprd, 0)
-              ,2) AS NUMERIC(40,20))
-              / (p.umkumo + p.abkumo + p.zukumo), 15)
-  END AS average_weighted_stock_price_rule3_amount,
-
-  CASE WHEN (p.abkumo + p.umkumo + p.zukumo)<>0
-       THEN TRUNC(
-              CAST(COALESCE(n.salk3,0) + COALESCE(m.salk3,0) + COALESCE(m.estprd,0) + COALESCE(m.mstprd,0) AS NUMERIC(40,20))
-              / (p.abkumo + p.umkumo + p.zukumo), 15)
-       ELSE 0
-  END AS average_weighted_stock_price_rule2_prev_date_amount,
-
-  CASE WHEN p.lbkum<>0
-       THEN TRUNC(CAST(COALESCE(c.salk3,0) AS NUMERIC(40,20)) / p.lbkum, 15)
-       ELSE 0
-  END AS average_weighted_stock_price_rule2_next_date_amount,
-
-  h.price_rule_code
-FROM pp_w p
-LEFT JOIN cr_curr  c ON c.kalnr=p.kalnr AND c.bdatj=p.bdatj AND c.poper=p.poper
-LEFT JOIN cr_next  n ON n.kalnr=p.kalnr AND n.dt_posting=p.dt_valid_from
-LEFT JOIN mlcd_agg m ON m.kalnr=p.kalnr AND m.bdatj=p.bdatj AND m.poper=p.poper
-LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code=p.kalnr;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 6163.00,
+      "Plan Rows": 13714062,
+      "Plan Width": 22,
+      "Output": ["kalnr", "bdatj", "poper"],
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Hashed",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 5326.51,
+          "Plan Rows": 13714062,
+          "Plan Width": 22,
+          "Output": ["kalnr", "bdatj", "poper"],
+          "Group Key": ["pp_w.kalnr", "pp_w.bdatj", "pp_w.poper"],
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Relation Name": "pp_w",
+              "Schema": "pg_temp_4620046",
+              "Alias": "pp_w",
+              "Startup Cost": 0.00,
+              "Total Cost": 861.94,
+              "Plan Rows": 87059072,
+              "Plan Width": 22,
+              "Output": ["kalnr", "bdatj", "poper"]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

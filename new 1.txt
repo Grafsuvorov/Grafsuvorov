@@ -1,15 +1,10 @@
--- ===========================================
--- Greenplum: 2-фазная версия БЕЗ индексов
--- ===========================================
-
--- (на сессию — безопасно, можно опустить)
+-- опционально, чуть больше памяти под хэши
 SET optimizer = on;
 SET statement_mem = '3GB';
 SET gp_workfile_compression = on;
-SET default_statistics_target = 500;
 
--- ---------- ФАЗА A: окно и ключи (распределение по kalnr) ----------
-CREATE TEMP TABLE pp
+-- 1) PP + окно (один проход)
+CREATE TEMP TABLE pp_w
 ON COMMIT DROP AS
 SELECT
   kalnr,
@@ -19,42 +14,29 @@ SELECT
   MAX(umkumo) AS umkumo,
   MAX(abkumo) AS abkumo,
   MAX(zukumo) AS zukumo,
-  MAX(lbkum)  AS lbkum
+  MAX(lbkum)  AS lbkum,
+  COALESCE(
+    LEAD(make_date(bdatj::int, substring(poper,2,2)::int, 1))
+      OVER (PARTITION BY kalnr ORDER BY make_date(bdatj::int, substring(poper,2,2)::int, 1))
+    - INTERVAL '1 day',
+    DATE '2299-12-31'
+  )::date AS dt_valid_to
 FROM ods.ckmlpp_ral
 WHERE untper='000'
 GROUP BY kalnr,bdatj,poper
 DISTRIBUTED BY (kalnr);
-ANALYZE pp;
-
-CREATE TEMP TABLE pp_w
-ON COMMIT DROP AS
-SELECT
-  p.*,
-  COALESCE(
-    LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
-    DATE '2299-12-31'
-  )::date AS dt_valid_to
-FROM pp p
-DISTRIBUTED BY (kalnr);
 ANALYZE pp_w;
 
--- ключи, которыми режем большие источники
+-- 2) Уникальные ключи для урезания больших источников
 CREATE TEMP TABLE pp_keys
 ON COMMIT DROP AS
 SELECT DISTINCT kalnr,bdatj,poper
-FROM pp
+FROM pp_w
 DISTRIBUTED BY (kalnr);
 ANALYZE pp_keys;
 
-CREATE TEMP TABLE pp_postings
-ON COMMIT DROP AS
-SELECT DISTINCT kalnr, dt_valid_from AS dt_posting
-FROM pp_w
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_postings;
-
--- ---------- ФАЗА A: урезанные агрегаты из больших таблиц (по ключам) ----------
-CREATE TEMP TABLE cr_curr_a
+-- 3) Текущий CR (по ключам из pp_w)
+CREATE TEMP TABLE cr_curr
 ON COMMIT DROP AS
 SELECT
   c.kalnr, c.bdatj, c.poper,
@@ -64,31 +46,36 @@ SELECT
   MAX(abprd_o)  AS abprd_o,
   MAX(abprd_mo) AS abprd_mo,
   MAX(vprsv)    AS vprsv,
-  MAX(salk3)    AS salk3          -- если это поток — поменяй на SUM
+  MAX(salk3)    AS salk3   -- если это поток, замени на SUM
 FROM ods.ckmlcr_ral c
 JOIN pp_keys k
   ON k.kalnr=c.kalnr AND k.bdatj=c.bdatj AND k.poper=c.poper
 WHERE c.untper='000' AND c.curtp='10'
 GROUP BY c.kalnr,c.bdatj,c.poper
 DISTRIBUTED BY (kalnr);
-ANALYZE cr_curr_a;
+ANALYZE cr_curr;
 
-CREATE TEMP TABLE cr_next_a
+-- 4) CR на следующее 1-е число (только нужные даты)
+CREATE TEMP TABLE cr_next
 ON COMMIT DROP AS
 SELECT
   c.kalnr,
   (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
   MAX(c.salk3) AS salk3
 FROM ods.ckmlcr_ral c
-JOIN pp_postings p
+JOIN (
+  SELECT DISTINCT kalnr, dt_valid_from AS dt_posting
+  FROM pp_w
+) p
   ON p.kalnr=c.kalnr
  AND p.dt_posting = (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
 WHERE c.untper='000' AND c.curtp='10'
 GROUP BY c.kalnr, (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
 DISTRIBUTED BY (kalnr);
-ANALYZE cr_next_a;
+ANALYZE cr_next;
 
-CREATE TEMP TABLE mlcd_agg_a
+-- 5) MLCD (только нужные ключи)
+CREATE TEMP TABLE mlcd_agg
 ON COMMIT DROP AS
 SELECT
   m.kalnr, m.bdatj, m.poper,
@@ -100,108 +87,45 @@ JOIN pp_keys k USING (kalnr,bdatj,poper)
 WHERE m.curtp='10' AND m.categ IN ('ZU','VP','PC')
 GROUP BY m.kalnr,m.bdatj,m.poper
 DISTRIBUTED BY (kalnr);
-ANALYZE mlcd_agg_a;
+ANALYZE mlcd_agg;
 
--- ---------- ФАЗА B: «раскладка под джойн» на тройной ключ ----------
--- материализуем «ядро» с тройным ключом, чтобы все большие джойны были локальные и 1:1
-CREATE TEMP TABLE pp_w3
-ON COMMIT DROP AS
-SELECT kalnr,bdatj,poper,dt_valid_from,dt_valid_to,umkumo,abkumo,zukumo,lbkum
-FROM pp_w
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE pp_w3;
-
-CREATE TEMP TABLE cr_curr3
-ON COMMIT DROP AS
-SELECT * FROM cr_curr_a
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE cr_curr3;
-
-CREATE TEMP TABLE mlcd_agg3
-ON COMMIT DROP AS
-SELECT * FROM mlcd_agg_a
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE mlcd_agg3;
-
-CREATE TEMP TABLE cr_next3
-ON COMMIT DROP AS
-SELECT * FROM cr_next_a
-DISTRIBUTED BY (kalnr,dt_posting);
-ANALYZE cr_next3;
-
--- ---------- ФИНАЛ: фиксируем порядок джойнов через поэтапную материализацию ----------
--- Шаг 1: pp_w3 ⟕ cr_curr3 (локальный джойн по тройке, 1:1)
-CREATE TEMP TABLE core1
-ON COMMIT DROP AS
+-- 6) Финальный селект
 SELECT
-  p.*,
-  c.vprsv, c.stprs, c.peinh, c.pvprs, c.abprd_o, c.abprd_mo, c.salk3 AS salk3_curr
-FROM pp_w3 p
-LEFT JOIN cr_curr3 c
-  ON c.kalnr=p.kalnr AND c.bdatj=p.bdatj AND c.poper=p.poper
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE core1;
+  p.kalnr AS calculation_code,
+  p.dt_valid_from,
+  p.dt_valid_to,
 
--- Шаг 2: core1 ⟕ mlcd_agg3 (тоже локально по тройке)
-CREATE TEMP TABLE core2
-ON COMMIT DROP AS
-SELECT
-  x.*,
-  m.salk3 AS mlcd_salk3,
-  m.estprd,
-  m.mstprd
-FROM core1 x
-LEFT JOIN mlcd_agg3 m
-  ON m.kalnr=x.kalnr AND m.bdatj=x.bdatj AND m.poper=x.poper
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE core2;
+  c.vprsv AS price_valuation_type_code,
+  c.stprs AS standard_price_amount,
+  c.peinh AS price_unit_code,
+  c.pvprs AS moving_average_price_amount,
 
--- Шаг 3: core2 ⟕ cr_next3 (локально по (kalnr,dt_posting))
-CREATE TEMP TABLE core3
-ON COMMIT DROP AS
-SELECT
-  x.*,
-  n.salk3 AS salk3_next
-FROM core2 x
-LEFT JOIN cr_next3 n
-  ON n.kalnr=x.kalnr AND n.dt_posting=x.dt_valid_from
-DISTRIBUTED BY (kalnr,bdatj,poper);
-ANALYZE core3;
-
--- Финальный селект (минимум вычислений прямо здесь)
-SELECT
-  c.kalnr AS calculation_code,
-  c.dt_valid_from,
-  c.dt_valid_to,
-
-  c.vprsv  AS price_valuation_type_code,
-  c.stprs  AS standard_price_amount,
-  c.peinh  AS price_unit_code,
-  c.pvprs  AS moving_average_price_amount,
-
-  CASE WHEN (c.umkumo + c.abkumo + c.zukumo)=0 THEN 0
+  CASE WHEN (p.umkumo + p.abkumo + p.zukumo)=0 THEN 0
        ELSE TRUNC(
               CAST(ROUND(
-                    (c.stprs / c.peinh) * (c.umkumo + c.abkumo)
+                    (c.stprs / c.peinh) * (p.umkumo + p.abkumo)
                   + c.abprd_o + c.abprd_mo
-                  + COALESCE(c.mlcd_salk3 + c.estprd + c.mstprd, 0)
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd, 0)
               ,2) AS NUMERIC(40,20))
-              / (c.umkumo + c.abkumo + c.zukumo), 15)
+              / (p.umkumo + p.abkumo + p.zukumo), 15)
   END AS average_weighted_stock_price_rule3_amount,
 
-  CASE WHEN (c.abkumo + c.umkumo + c.zukumo)<>0
+  CASE WHEN (p.abkumo + p.umkumo + p.zukumo)<>0
        THEN TRUNC(
-              CAST(COALESCE(c.salk3_next,0) + COALESCE(c.mlcd_salk3,0) + COALESCE(c.estprd,0) + COALESCE(c.mstprd,0) AS NUMERIC(40,20))
-              / (c.abkumo + c.umkumo + c.zukumo), 15)
+              CAST(COALESCE(n.salk3,0) + COALESCE(m.salk3,0) + COALESCE(m.estprd,0) + COALESCE(m.mstprd,0) AS NUMERIC(40,20))
+              / (p.abkumo + p.umkumo + p.zukumo), 15)
        ELSE 0
   END AS average_weighted_stock_price_rule2_prev_date_amount,
 
-  CASE WHEN c.lbkum<>0
-       THEN TRUNC(CAST(COALESCE(c.salk3_curr,0) AS NUMERIC(40,20)) / c.lbkum, 15)
+  CASE WHEN p.lbkum<>0
+       THEN TRUNC(CAST(COALESCE(c.salk3,0) AS NUMERIC(40,20)) / p.lbkum, 15)
        ELSE 0
   END AS average_weighted_stock_price_rule2_next_date_amount,
 
   h.price_rule_code
-FROM core3 c
+FROM pp_w p
+LEFT JOIN cr_curr  c ON c.kalnr=p.kalnr AND c.bdatj=p.bdatj AND c.poper=p.poper
+LEFT JOIN cr_next  n ON n.kalnr=p.kalnr AND n.dt_posting=p.dt_valid_from
+LEFT JOIN mlcd_agg m ON m.kalnr=p.kalnr AND m.bdatj=p.bdatj AND m.poper=p.poper
 LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = c.kalnr;
+  ON h.calculation_code=p.kalnr;

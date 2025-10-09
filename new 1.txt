@@ -1,277 +1,135 @@
-WITH base AS (
-    /* 1) Replicate FA by valuation areas (from parameters), FA own starts, and non-liquid tech state linkage */
-    SELECT
-        fix.unit_balance_code,
-        fix.asset_main_code,
-        fix.asset_sub_code,
-        q.depreciation_area_code,
-        fix.dt_from
-    FROM dict_dds.fixed_asset_td_v2 AS fix
-    JOIN dict_dds.fixed_asset_depreciation_parameters_td_v2 AS q
-      ON q.unit_balance_code = fix.unit_balance_code
-     AND q.asset_main_code   = fix.asset_main_code
-     AND q.asset_sub_code    = fix.asset_sub_code
-
-    UNION ALL
-    SELECT
-        q.unit_balance_code,
-        q.asset_main_code,
-        q.asset_sub_code,
-        q.depreciation_area_code,
-        q.dt_valid_from AS dt_from
-    FROM dict_dds.fixed_asset_depreciation_parameters_td_v2 AS q
-
-    UNION ALL
-    SELECT
-        COALESCE(liq.unit_balance_code, q.unit_balance_code) AS unit_balance_code,
-        COALESCE(liq.asset_main_code, q.asset_main_code)     AS asset_main_code,
-        COALESCE(liq.asset_sub_code, q.asset_sub_code)       AS asset_sub_code,
-        q.depreciation_area_code,
-        COALESCE(liq.dt_valid_from, q.dt_valid_from)         AS dt_from
-    FROM dict_dds.fixed_asset_depreciation_parameters_td_v2 AS q
-    JOIN (
-        SELECT
-            t1.unit_balance_code,
-            t1.asset_main_code,
-            t1.asset_sub_code,
-            t1.asset_inventory_number,
-            t2.dt_valid_from,
-            t2.dt_valid_to
-        FROM dict_dds.fixed_asset_td_v2 AS t1
-        JOIN dict_dds.fixed_asset_non_liquid_technical_state_td AS t2
-          ON t2.unit_balance_code    = t1.unit_balance_code
-         AND t2.asset_inventory_code = t1.asset_inventory_number
-    ) AS liq
-      ON q.unit_balance_code = liq.unit_balance_code
-     AND q.asset_main_code   = liq.asset_main_code
-     AND q.asset_sub_code    = liq.asset_sub_code
-),
-dedup AS (
-    /* 2) Deduplicate BEFORE window to reduce sort+window volume */
-    SELECT
-        unit_balance_code,
-        asset_main_code,
-        asset_sub_code,
-        depreciation_area_code,
-        dt_from
-    FROM base
-    GROUP BY 1,2,3,4,5
-),
-rng AS (
-    /* 3) Intervals via LEAD() in one pass */
-    SELECT
-        unit_balance_code,
-        asset_main_code,
-        asset_sub_code,
-        depreciation_area_code,
-        COALESCE(dt_from, DATE '1900-01-01') AS dt_valid_from,
-        COALESCE(
-            (LEAD(dt_from) OVER (
-                PARTITION BY unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code
-                ORDER BY dt_from
-            ) - INTERVAL '1 day')::date,
-            DATE '2299-12-31'
-        ) AS dt_valid_to
-    FROM dedup
-),
-sep_int AS (
-    SELECT * FROM rng
-)
-
+CREATE TEMP TABLE pp ON COMMIT DROP AS
 SELECT
-    si.unit_balance_code,
-    ub.unit_balance_name,
-    si.asset_main_code,
-    si.asset_sub_code,
-    si.dt_valid_from,
-    si.dt_valid_to,
-    si.depreciation_area_code AS valuation_area_code,
-    favat.fixed_asset_valuation_area_full_name AS valuation_area_name,
-    tb.valuation_area_currency_code,
-    ct.currency_full_name AS valuation_area_currency_name,
-    ub.asset_depreciation_rule_code,
-    favpt.fixed_asset_valuation_plan_name AS asset_depreciation_rule_name,
-    fa.asset_class_code,
-    fact.fixed_asset_class_full_name AS asset_class_name,
-    fa.asset_inventory_number,
-    fa.asset_name,
-    fa.created_by,
-    fa.dt_created,
-    fa.changed_by,
-    fa.dt_changed,
-    fa.is_marked_for_delete,
-    fa.is_locked_for_operations,
-    fa.general_ledger_reference_rule_code,
-    t095.asset_acquisition_cost_account_code,
-    t095.asset_depreciation_account_code,
-    fa.dt_asset_acquisition_yyyy,
-    fa.dt_asset_acquisition,
-    fa.dt_asset_acquisition_reference,
-    fa.dt_asset_put_into_operation AS dt_asset_recognized,
-    fa.dt_reference_asset_write_off,
-    fa.dt_asset_write_off,
-    fa.industry_code,
-    fait.fixed_asset_industry_name AS industry_name,
-    fa.asset_type_for_stat_reporting_code,
-    fatfsrt.fixed_asset_type_for_stat_reporting_name AS asset_type_for_stat_reporting_name,
-    fa.accelerated_depreciation_reason_code,
-    faadrt.accelerated_depreciation_reason_name AS accelerated_depreciation_reason_name,
-    fa.depreciation_group_code,
-    fadgt.depreciation_group_name,
-    fa.base_uom_code,
-    uom_text.uom_full_name AS base_uom_name,
-    fa.asset_quantity,
-    fa.asset_initial_number,
-    fa.asset_initial_subnumber,
-    fa.okof_code,
-    fa.asset_passport_number,
-    fa.dt_asset_manufacture_yyyy,
-    fa.asset_serial_number,
-    fa.asset_put_into_operation_code AS asset_recognition_code,
-    fa.investment_activity_profile_code,
-    fa.dt_assignment_valid_from,
-    fa.dt_assignment_valid_to,
-    fa.cost_center_code,
-    cct.cost_center_full_name AS cost_center_name,
-    fa.plant_code,
-    pas.plant_short_name AS plant_name,
-    fa.multiple_shift_coefficient_amount,
-    fa.is_asset_temporary_shutdown,
-    fa.asset_location_code,
-    ts.location_name AS asset_location_name,
-    fa.internal_order_code,
-    ord.order_short_name AS internal_order_name,
-    fa.personnel_code,
-    pmd.employee_full_name AS personnel_name,
-    fa.is_asset_conservated,
-    fa.dt_conservated_from,
-    fa.dt_conservated_to,
-    fa.dt_conservated_actual,
-    fa.document_type_code,
-    facdtt.conservation_document_type_name AS document_type_name,
-    fa.special_order_for_conservation_number,
-    fa.dt_special_order_for_conservation,
-    fa.special_order_for_cancelling_conservation_number,
-    fa.dt_special_order_for_cancelling_conservation,
-    fa.dt_conservation_cancelled_actual,
-    rfm.dt_valid_from AS dt_approved_of_techical_state,
-    rfm.non_liquid_asset_technical_state_code,
-    rfm02.non_liquid_asset_technical_state_name,
-    rfm.is_non_liquid_asset_record_created_manually,
-    rfm.dt_valid_to AS dt_asset_status_reverse_from_non_liquid,
-    fadp.dt_valid_from AS dt_depreciation_parameters_valid_from,
-    fadp.dt_valid_to   AS dt_depreciation_parameters_valid_to,
-    fadp.dt_depreciation_calculation_start,
-    fadp.depreciation_method_code,
-    fadmt.depreciation_method_name,
-    fadp.planned_useful_life_in_years,
-    fadp.planned_useful_life_in_periods
-FROM sep_int AS si
+    kalnr,
+    bdatj,
+    poper,
+    make_date(bdatj::int, substring(poper, 2, 2)::int, 1) AS dt_valid_from,
+    umkumo, abkumo, zukumo, lbkum
+FROM ods.ckmlpp_ral
+WHERE untper = '000'
+DISTRIBUTED BY (kalnr);
+ANALYZE pp;
 
-LEFT JOIN dict_dds.fixed_asset_td_V2 AS fa
-  ON si.unit_balance_code = fa.unit_balance_code
- AND si.asset_main_code   = fa.asset_main_code
- AND si.asset_sub_code    = fa.asset_sub_code
- AND si.dt_valid_from BETWEEN fa.dt_from AND fa.dt_to
+--------------------------
+-- 2) CKMLCR (текущий период): гарантируем 1 строку на (kalnr,bdatj,poper)
+--    Если в источнике встречаются дубляжи, выберите бизнес-правило:
+--    SUM(...) / MAX(...) / LAST_VALUE по нужному полю (пример ниже: MAX для “параметров”, SUM для потоков).
+--------------------------
+CREATE TEMP TABLE cr_curr ON COMMIT DROP AS
+SELECT
+    kalnr, bdatj, poper,
+    -- при необходимости заменить на агрегаты, согласованные с бизнесом
+    MAX(stprs)    AS stprs,
+    MAX(peinh)    AS peinh,
+    MAX(pvprs)    AS pvprs,
+    MAX(abprd_o)  AS abprd_o,
+    MAX(abprd_mo) AS abprd_mo,
+    MAX(vprsv)    AS vprsv,
+    MAX(salk3)    AS salk3   -- или SUM(...) если это поток/движение, а не срез
+FROM ods.ckmlcr_ral
+WHERE untper = '000' AND curtp = '10'
+GROUP BY kalnr, bdatj, poper
+DISTRIBUTED BY (kalnr);
+ANALYZE cr_curr;
 
-LEFT JOIN dict_dds.fixed_asset_depreciation_parameters_td_v2 AS fadp
-  ON si.unit_balance_code       = fadp.unit_balance_code
- AND si.asset_main_code         = fadp.asset_main_code
- AND si.asset_sub_code          = fadp.asset_sub_code
- AND si.depreciation_area_code  = fadp.depreciation_area_code
- AND si.dt_valid_from BETWEEN fadp.dt_valid_from AND fadp.dt_valid_to
+--------------------------
+-- 3) CKMLCR (следующий месяц): salk3 на dt_posting = 1-е число следующего месяца (DATE!)
+--------------------------
+CREATE TEMP TABLE cr_next ON COMMIT DROP AS
+SELECT
+    kalnr,
+    (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
+    -- если бывают дубли на один и тот же dt_posting — также агрегируйте
+    MAX(salk3) AS salk3
+FROM ods.ckmlcr_ral
+WHERE untper = '000' AND curtp = '10'
+GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
+DISTRIBUTED BY (kalnr);
+ANALYZE cr_next;
 
-LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_td AS rfm
-  ON rfm.unit_balance_code    = si.unit_balance_code
- AND rfm.asset_inventory_code = fa.asset_inventory_number
- AND si.dt_valid_from BETWEEN rfm.dt_valid_from AND rfm.dt_valid_to
+--------------------------
+-- 4) MLCD агрегаты
+--------------------------
+CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
+SELECT
+    kalnr, bdatj, poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+FROM ods.mlcd_ral
+WHERE curtp = '10'
+  AND categ IN ('ZU','VP','PC')
+GROUP BY kalnr, bdatj, poper
+DISTRIBUTED BY (kalnr);
+ANALYZE mlcd_agg;
 
-/* Dictionaries/texts — REPLICATED recommended */
-LEFT JOIN dict_dds.unit_balance ub
-  ON ub.unit_balance_code = si.unit_balance_code
- AND ub.language_code = 'R'
+--------------------------
+-- 5) Один WindowAgg для границ действия
+--------------------------
+--explain(verbose, format json)
+insert into    userdata.material_price_calculation
+WITH ranges AS (
+    SELECT
+        kalnr,
+        dt_valid_from,
+        COALESCE(
+            LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+            DATE '2299-12-31'
+        )::date AS dt_valid_to
+    FROM pp
+)
+SELECT
+    r.kalnr AS calculation_code,
+    r.dt_valid_from,
+    r.dt_valid_to,
+    cr_curr.vprsv AS price_valuation_type_code,
+    cr_curr.stprs  AS standard_price_amount,
+    cr_curr.peinh  AS price_unit_code,
+    cr_curr.pvprs  AS moving_average_price_amount,
 
-LEFT JOIN dict_dds.unit_balance_valuation_area AS tb
-  ON tb.unit_balance_code = si.unit_balance_code
- AND tb.valuation_area_code = si.depreciation_area_code
+    /* rule3 */
+    CASE WHEN (pp.umkumo + pp.abkumo + pp.zukumo) = 0 THEN 0
+         ELSE TRUNC(
+                CAST(ROUND(
+                      (cr_curr.stprs / cr_curr.peinh) * (pp.umkumo + pp.abkumo)
+                    + cr_curr.abprd_o + cr_curr.abprd_mo
+                    + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd, 0)
+                , 2) AS NUMERIC(40,20))
+                / (pp.umkumo + pp.abkumo + pp.zukumo), 15)
+    END AS average_weighted_stock_price_rule3_amount,
 
-LEFT JOIN dict_dds.currency_texts AS ct
-  ON ct.currency_code = tb.valuation_area_currency_code
- AND ct.language_code = 'R'
+    /* rule2_prev_date */
+    CASE WHEN (pp.abkumo + pp.umkumo + pp.zukumo) <> 0
+         THEN TRUNC(
+                CAST(
+                    cr_next.salk3 + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd, 0)
+                AS NUMERIC(40,20))
+                / (pp.abkumo + pp.umkumo + pp.zukumo), 15)
+         ELSE 0
+    END AS average_weighted_stock_price_rule2_prev_date_amount,
 
-LEFT JOIN dict_dds.fixed_asset_valuation_area_texts AS favat
-  ON favat.fixed_asset_valuation_area_code = si.depreciation_area_code
- AND favat.language_code = 'R'
- AND ub.asset_depreciation_rule_code = favat.fixed_asset_valuation_plan_code
+    /* rule2_next_date */
+    CASE WHEN pp.lbkum <> 0
+         THEN TRUNC(CAST(cr_curr.salk3 AS NUMERIC(40,20)) / pp.lbkum, 15)
+         ELSE 0
+    END AS average_weighted_stock_price_rule2_next_date_amount,
 
-LEFT JOIN dict_dds.fixed_asset_valuation_plan_texts AS favpt
-  ON favpt.fixed_asset_valuation_plan_code = ub.asset_depreciation_rule_code
- AND favpt.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_class_texts AS fact
-  ON fact.fixed_asset_class_code = fa.asset_class_code
- AND fact.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_general_ledger_account_link AS t095
-  ON t095.general_ledger_reference_rule_code = fa.general_ledger_reference_rule_code
- AND t095.valuation_area_code = si.depreciation_area_code
- AND t095.account_chart_code  = ub.account_chart_code
-
-LEFT JOIN dict_dds.fixed_asset_industry_texts AS fait
-  ON fait.fixed_asset_industry_code = fa.industry_code
- AND fait.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_type_for_stat_reporting_texts AS fatfsrt
-  ON fatfsrt.fixed_asset_type_for_stat_reporting_code = fa.asset_type_for_stat_reporting_code
- AND fatfsrt.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_accelerated_depreciation_reason_texts AS faadrt
-  ON faadrt.accelerated_depreciation_reason_code = fa.accelerated_depreciation_reason_code
- AND faadrt.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_depreciation_group_texts AS fadgt
-  ON fadgt.depreciation_group_code = fa.depreciation_group_code
- AND fadgt.language_code = 'R'
-
-LEFT JOIN dict_dds.uom_external_format_texts AS uom_text
-  ON uom_text.uom_code = fa.base_uom_code
- AND uom_text.language_code = 'R'
-
-LEFT JOIN dict_dds.plant_and_subsidiary AS pas
-  ON pas.plant_code = fa.plant_code
-
-LEFT JOIN dict_dds.fixed_asset_location AS ts
-  ON ts.plant_code = fa.plant_code
- AND ts.location_code = fa.asset_location_code
-
-LEFT JOIN dict_dds.personnel_main_data AS pmd
-  ON pmd.employee_code = fa.personnel_code
- AND CURRENT_DATE BETWEEN pmd.dt_valid_from AND pmd.dt_valid_to
-
-LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_texts AS rfm02
-  ON rfm02.non_liquid_asset_technical_state_code = rfm.non_liquid_asset_technical_state_code
- AND rfm02.language_code = 'R'
-
-LEFT JOIN dict_dds.fixed_asset_depreciation_method_texts AS fadmt
-  ON fadmt.depreciation_method_code = fadp.depreciation_method_code
- AND fadmt.fixed_asset_valuation_plan_code = ub.asset_depreciation_rule_code
- AND fadmt.language_code = 'R'
-
-LEFT JOIN dict_dds.map_controlling_area_to_unit_balance cab
-  ON cab.unit_balance_code = ub.unit_balance_code
-
-LEFT JOIN dict_dds.cost_center_texts AS cct
-  ON cct.cost_center_code = fa.cost_center_code
- AND cct.controlling_area_code = cab.controlling_area_code
- AND cct.language_code = 'R'
- AND cct.dt_valid_to >= CURRENT_DATE
-
-LEFT JOIN dict_dds.order_controlling AS ord
-  ON ord.unit_balance_code = si.unit_balance_code
- AND ord.order_code = fa.internal_order_code
-
-/* Conservation document type texts */
-LEFT JOIN dict_dds.fixed_asset_conservation_document_type_texts AS facdtt
-  ON facdtt.unit_balance_code = fa.unit_balance_code
- AND facdtt.conservation_document_type_code = fa.document_type_code
- AND facdtt.language_code = 'R';
+    ckmlhd.price_rule_code
+FROM ranges r
+JOIN pp
+  ON pp.kalnr = r.kalnr
+ AND pp.dt_valid_from = r.dt_valid_from
+LEFT JOIN cr_curr
+  ON cr_curr.kalnr = pp.kalnr
+ AND cr_curr.bdatj = pp.bdatj
+ AND cr_curr.poper = pp.poper
+LEFT JOIN cr_next
+  ON cr_next.kalnr = pp.kalnr
+ AND cr_next.dt_posting = pp.dt_valid_from
+LEFT JOIN mlcd_agg
+  ON mlcd_agg.kalnr = pp.kalnr
+ AND mlcd_agg.bdatj = pp.bdatj
+ AND mlcd_agg.poper = pp.poper
+LEFT JOIN dds.material_ledger_header ckmlhd
+  ON ckmlhd.calculation_code = pp.kalnr
+;

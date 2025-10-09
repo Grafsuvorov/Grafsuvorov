@@ -1,11 +1,3 @@
-
-/* Optimized rewrite for Greenplum 6+
-   Key changes:
-   - Build intervals with LEAD() (no self-joins on rn).
-   - Deduplicate early before window.
-   - Defer dictionary/text joins until after interval + fact join.
-*/
-
 WITH base AS (
     /* 1) Replicate FA by valuation areas (from parameters), FA own starts, and non-liquid tech state linkage */
     SELECT
@@ -175,7 +167,7 @@ SELECT
     fadp.planned_useful_life_in_years,
     fadp.planned_useful_life_in_periods
 FROM sep_int AS si
-/* Join the fact table only now; date-band on dt_valid_from */
+
 LEFT JOIN dict_dds.fixed_asset_td_V2 AS fa
   ON si.unit_balance_code = fa.unit_balance_code
  AND si.asset_main_code   = fa.asset_main_code
@@ -185,12 +177,12 @@ LEFT JOIN dict_dds.fixed_asset_td_V2 AS fa
 LEFT JOIN dict_dds.fixed_asset_depreciation_parameters_td_v2 AS fadp
   ON si.unit_balance_code       = fadp.unit_balance_code
  AND si.asset_main_code         = fadp.asset_main_code
- And si.asset_sub_code          = fadp.asset_sub_code
+ AND si.asset_sub_code          = fadp.asset_sub_code
  AND si.depreciation_area_code  = fadp.depreciation_area_code
  AND si.dt_valid_from BETWEEN fadp.dt_valid_from AND fadp.dt_valid_to
 
 LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_td AS rfm
-  ON rfm.unit_balance_code   = si.unit_balance_code
+  ON rfm.unit_balance_code    = si.unit_balance_code
  AND rfm.asset_inventory_code = fa.asset_inventory_number
  AND si.dt_valid_from BETWEEN rfm.dt_valid_from AND rfm.dt_valid_to
 
@@ -276,5 +268,10 @@ LEFT JOIN dict_dds.cost_center_texts AS cct
 
 LEFT JOIN dict_dds.order_controlling AS ord
   ON ord.unit_balance_code = si.unit_balance_code
- AND ord.order_code = fa.internal_order_code;
+ AND ord.order_code = fa.internal_order_code
 
+/* Conservation document type texts */
+LEFT JOIN dict_dds.fixed_asset_conservation_document_type_texts AS facdtt
+  ON facdtt.unit_balance_code = fa.unit_balance_code
+ AND facdtt.conservation_document_type_code = fa.document_type_code
+ AND facdtt.language_code = 'R';

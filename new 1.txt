@@ -1,135 +1,366 @@
-CREATE TEMP TABLE pp ON COMMIT DROP AS
-SELECT
-    kalnr,
-    bdatj,
-    poper,
-    make_date(bdatj::int, substring(poper, 2, 2)::int, 1) AS dt_valid_from,
-    umkumo, abkumo, zukumo, lbkum
-FROM ods.ckmlpp_ral
-WHERE untper = '000'
-DISTRIBUTED BY (kalnr);
-ANALYZE pp;
+Изначальный 
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+select kalnr, (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, salk3
+from ods.ckmlcr_ral as ckmlcr_2
+where ckmlcr_2.untper = '000' and ckmlcr_2.curtp = '10')
+distributed by (kalnr);
 
---------------------------
--- 2) CKMLCR (текущий период): гарантируем 1 строку на (kalnr,bdatj,poper)
---    Если в источнике встречаются дубляжи, выберите бизнес-правило:
---    SUM(...) / MAX(...) / LAST_VALUE по нужному полю (пример ниже: MAX для “параметров”, SUM для потоков).
---------------------------
-CREATE TEMP TABLE cr_curr ON COMMIT DROP AS
-SELECT
-    kalnr, bdatj, poper,
-    -- при необходимости заменить на агрегаты, согласованные с бизнесом
-    MAX(stprs)    AS stprs,
-    MAX(peinh)    AS peinh,
-    MAX(pvprs)    AS pvprs,
-    MAX(abprd_o)  AS abprd_o,
-    MAX(abprd_mo) AS abprd_mo,
-    MAX(vprsv)    AS vprsv,
-    MAX(salk3)    AS salk3   -- или SUM(...) если это поток/движение, а не срез
-FROM ods.ckmlcr_ral
-WHERE untper = '000' AND curtp = '10'
-GROUP BY kalnr, bdatj, poper
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_curr;
+create temporary table mlcd ON COMMIT DROP as (
+select kalnr, bdatj, poper, sum(salk3) as salk3, sum(estprd) as estprd, sum(mstprd) as mstprd 
+from ods.mlcd_ral where categ in ('ZU', 'VP', 'PC') and curtp = '10' 
+group by kalnr, bdatj, poper)
+distributed by (kalnr);
 
---------------------------
--- 3) CKMLCR (следующий месяц): salk3 на dt_posting = 1-е число следующего месяца (DATE!)
---------------------------
-CREATE TEMP TABLE cr_next ON COMMIT DROP AS
-SELECT
-    kalnr,
-    (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-    -- если бывают дубли на один и тот же dt_posting — также агрегируйте
-    MAX(salk3) AS salk3
-FROM ods.ckmlcr_ral
-WHERE untper = '000' AND curtp = '10'
-GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_next;
+insert into dm.material_price_calculation
+select ckmlpp.kalnr as calculation_code,
+(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date as dt_valid_from,
+case when lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+is null then '22991231'::date
+else lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date) - interval '1 day' 
+end as dt_valid_to,
+ckmlcr.vprsv as price_valuation_type_code, 
+ckmlcr.stprs as standard_price_amount, 
+ckmlcr.peinh as price_unit_code, 
+ckmlcr.pvprs as moving_average_price_amount, 
+case when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0 then 0
+	else trunc(cast(round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+	then trunc(cast(ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case when (ckmlpp.lbkum) <> 0 then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd.price_rule_code as price_rule_code
+from ods.ckmlpp_ral as ckmlpp
+left join ods.ckmlcr_ral as ckmlcr 
+on ckmlcr.kalnr = ckmlpp.kalnr and ckmlcr.bdatj = ckmlpp.bdatj and ckmlcr.poper = ckmlpp.poper and ckmlcr.untper = '000' and ckmlcr.curtp = '10'
+left join ckmlcr_2 on ckmlcr_2.kalnr = ckmlpp.kalnr and ckmlcr_2.dt_posting = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date
+left join mlcd on mlcd.kalnr = ckmlpp.kalnr and mlcd.bdatj = ckmlpp.bdatj and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000';
 
---------------------------
--- 4) MLCD агрегаты
---------------------------
-CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
-SELECT
-    kalnr, bdatj, poper,
-    SUM(salk3)  AS salk3,
-    SUM(estprd) AS estprd,
-    SUM(mstprd) AS mstprd
-FROM ods.mlcd_ral
-WHERE curtp = '10'
-  AND categ IN ('ZU','VP','PC')
-GROUP BY kalnr, bdatj, poper
-DISTRIBUTED BY (kalnr);
-ANALYZE mlcd_agg;
 
---------------------------
--- 5) Один WindowAgg для границ действия
---------------------------
---explain(verbose, format json)
-insert into    userdata.material_price_calculation
-WITH ranges AS (
-    SELECT
-        kalnr,
-        dt_valid_from,
-        COALESCE(
-            LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
-            DATE '2299-12-31'
-        )::date AS dt_valid_to
-    FROM pp
+-- количество строк 86 123 859
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+  select kalnr, 
+	     (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, 
+		 salk3
+	from ods.ckmlcr_ral as ckmlcr_2
+   where ckmlcr_2.untper = '000' 
+     and ckmlcr_2.curtp = '10') 
+distributed by (kalnr);
+
+
+-- количество строк 6 837 935
+create temporary table mlcd ON COMMIT DROP as (
+	select kalnr, 
+	       bdatj, 
+	       poper, 
+	       sum(salk3) as salk3, 
+	       sum(estprd) as estprd, 
+	       sum(mstprd) as mstprd 
+      from ods.mlcd_ral 
+     where categ in ('ZU', 'VP', 'PC') 
+       and curtp = '10' 
+     group by kalnr, bdatj, poper)
+distributed by (kalnr);
+
+
+create temporary table ckmlpp on commit drop as (
+select 
+	ckmlpp.abkumo as ckmlpp_abkumo,
+	ckmlcr.peinh as ckmlcr_peinh,
+	ckmlpp.untper as ckmlpp_untper,
+	ckmlpp.kalnr as ckmlpp_kalnr,
+	ckmlcr.pvprs as ckmlcr_pvprs,
+	mlcd.mstprd as mlcd_mstprd,
+	ckmlcr.vprsv as ckmlcr_vprsv,
+	mlcd.estprd as mlcd_estprd,
+	mlcd.salk3 as mlcd_salk3,
+	ckmlcr_2.salk3 as ckmlcr_2_salk3,
+	ckmlpp.lbkum as ckmlpp_lbkum,
+	ckmlcr.abprd_mo as ckmlcr_abprd_mo,
+	ckmlcr.salk3 as ckmlcr_salk3,
+	ckmlpp.bdatj::text as ckmlpp_bdatj,
+	ckmlhd.price_rule_code as ckmlhd_price_rule_code,
+	ckmlcr.abprd_o as ckmlcr_abprd_o,
+	ckmlpp.umkumo as ckmlpp_umkumo,
+	ckmlpp.poper::text as ckmlpp_poper,
+	ckmlpp.zukumo as ckmlpp_zukumo,
+	ckmlcr.stprs as ckmlcr_stprs
+from ods.ckmlpp_ral as ckmlpp
+left join ods.ckmlcr_ral as ckmlcr 
+       on ckmlcr.kalnr = ckmlpp.kalnr 
+      and ckmlcr.bdatj = ckmlpp.bdatj 
+      and ckmlcr.poper = ckmlpp.poper 
+      and ckmlcr.untper = '000' 
+      and ckmlcr.curtp = '10'
+left join ckmlcr_2 
+       on ckmlcr_2.kalnr = ckmlpp.kalnr
+      and ckmlcr_2.dt_posting::date = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date
+left join mlcd 
+       on mlcd.kalnr = ckmlpp.kalnr 
+      and mlcd.bdatj = ckmlpp.bdatj 
+      and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd 
+       on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000')
+distributed randomly;
+
+
+
+--4:28
+Костя
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+select kalnr, (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, salk3
+from ods.ckmlcr_ral as ckmlcr_2
+where ckmlcr_2.untper = '000' and ckmlcr_2.curtp = '10')
+distributed by (kalnr);
+
+
+create temporary table mlcd ON COMMIT DROP as (
+select kalnr, bdatj, poper, sum(salk3) as salk3, sum(estprd) as estprd, sum(mstprd) as mstprd 
+from ods.mlcd_ral where categ in ('ZU', 'VP', 'PC') and curtp = '10' 
+group by kalnr, bdatj, poper)
+distributed by (kalnr);
+
+
+
+
+select ckmlpp.kalnr as calculation_code,
+(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date as dt_valid_from,
+
+coalesce(lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date) - interval '1 day', '22991231'::date) as dt_valid_to,
+ckmlcr.vprsv as price_valuation_type_code, 
+ckmlcr.stprs as standard_price_amount, 
+ckmlcr.peinh as price_unit_code, 
+ckmlcr.pvprs as moving_average_price_amount, 
+case when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0 then 0
+	else trunc(cast(round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+	then trunc(cast(ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case when (ckmlpp.lbkum) <> 0 then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd.price_rule_code as price_rule_code
+from ods.ckmlpp_ral as ckmlpp
+left join ods.ckmlcr_ral as ckmlcr 
+on ckmlcr.kalnr = ckmlpp.kalnr and ckmlcr.bdatj = ckmlpp.bdatj and ckmlcr.poper = ckmlpp.poper and ckmlcr.untper = '000' and ckmlcr.curtp = '10'
+left join ckmlcr_2 on ckmlcr_2.kalnr = ckmlpp.kalnr and ckmlcr_2.dt_posting = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date
+left join mlcd on mlcd.kalnr = ckmlpp.kalnr and mlcd.bdatj = ckmlpp.bdatj and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000';
+
+Анатолий
+-- колияество строк  86 079 343
+insert into  dm.material_price_calculation_v2
+select ckmlpp_kalnr as calculation_code,
+(ckmlpp_bdatj || substring(ckmlpp_poper, 2, 2) || '01') ::date as dt_valid_from,
+case 
+	when 
+		lead(tech_etl.util_text_to_date_validation(ckmlpp_bdatj || substring(ckmlpp_poper, 2, 2) || '01')) 
+		over (partition by ckmlpp_kalnr, ckmlpp_untper = '000' 
+			  order by tech_etl.util_text_to_date_validation(ckmlpp_bdatj || substring(ckmlpp_poper, 2, 2) || '01')) is null then '22991231'::date
+    else 
+        lead(tech_etl.util_text_to_date_validation(ckmlpp_bdatj || substring(ckmlpp_poper, 2, 2) || '01'))
+        over (partition by ckmlpp_kalnr, ckmlpp_untper = '000' 
+              order by (ckmlpp_bdatj || substring(ckmlpp_poper, 2, 2) || '01')::date) - interval '1 day' end as dt_valid_to,
+ckmlcr_vprsv as price_valuation_type_code, 
+ckmlcr_stprs as standard_price_amount, 
+ckmlcr_peinh as price_unit_code, 
+ckmlcr_pvprs as moving_average_price_amount, 
+case 
+	when ckmlpp_umkumo + ckmlpp_abkumo + ckmlpp_zukumo = 0 
+	then 0
+	else trunc(cast(round(ckmlcr_stprs / ckmlcr_peinh * (ckmlpp_umkumo + ckmlpp_abkumo) + ckmlcr_abprd_o + ckmlcr_abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd_salk3 + mlcd_estprd + mlcd_mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp_umkumo + ckmlpp_abkumo + ckmlpp_zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case 
+	when (ckmlpp_abkumo + ckmlpp_umkumo + ckmlpp_zukumo) <> 0 
+	then trunc(cast(ckmlcr_2_salk3 + coalesce(mlcd_salk3 + mlcd_estprd + mlcd_mstprd, 0) as numeric(40, 20)) / (ckmlpp_abkumo + ckmlpp_umkumo + ckmlpp_zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case 
+	when (ckmlpp_lbkum) <> 0 
+	then trunc(cast(ckmlcr_salk3 as numeric(40, 20)) / (ckmlpp_lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd_price_rule_code as price_rule_code
+from ckmlpp;
+
+
+Настя
+/*
+ вынесла предрасчет (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date по таблице ods.ckmlpp_ral во временную таблицу,
+ убрала этот расчет в теле скрипта
+ поменяла джойн left join ods.ckmlcr_ral as ckmlcr на left join ckmlcr_2 ckmlcr
+ расширила временную таблицу ckmlcr_2 на недостающие поля
+ перенесла все фильтры во временные таблицы
+ */
+
+
+
+
+drop table if exists userdata.saa_material_price_calculation cascade;
+create table userdata.saa_material_price_calculation(
+	calculation_code varchar(12) null,
+	dt_valid_from date null,
+	dt_valid_to date null,
+	price_valuation_type_code varchar(1) null,
+	standard_price_amount numeric(12, 3) null,
+	price_unit_code int8 null,
+	moving_average_price_amount numeric(12, 3) null,
+	average_weighted_stock_price_rule3_amount numeric(31, 14) null,
+	average_weighted_stock_price_rule2_prev_date_amount numeric(31, 14) null,
+	average_weighted_stock_price_rule2_next_date_amount numeric(31, 14) null,
+	price_rule_code varchar(1) null,
+	"dttm_inserted" timestamp NOT NULL DEFAULT now(),
+	"dttm_updated" timestamp NOT NULL DEFAULT now(),
+	"job_name" varchar(60) NOT NULL DEFAULT 'airflow'::character varying,
+	"deleted_flag" bool NOT NULL DEFAULT false
 )
-SELECT
-    r.kalnr AS calculation_code,
-    r.dt_valid_from,
-    r.dt_valid_to,
-    cr_curr.vprsv AS price_valuation_type_code,
-    cr_curr.stprs  AS standard_price_amount,
-    cr_curr.peinh  AS price_unit_code,
-    cr_curr.pvprs  AS moving_average_price_amount,
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (calculation_code, dt_valid_from);
 
-    /* rule3 */
-    CASE WHEN (pp.umkumo + pp.abkumo + pp.zukumo) = 0 THEN 0
-         ELSE TRUNC(
-                CAST(ROUND(
-                      (cr_curr.stprs / cr_curr.peinh) * (pp.umkumo + pp.abkumo)
-                    + cr_curr.abprd_o + cr_curr.abprd_mo
-                    + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd, 0)
-                , 2) AS NUMERIC(40,20))
-                / (pp.umkumo + pp.abkumo + pp.zukumo), 15)
-    END AS average_weighted_stock_price_rule3_amount,
+------------------------------------------
 
-    /* rule2_prev_date */
-    CASE WHEN (pp.abkumo + pp.umkumo + pp.zukumo) <> 0
-         THEN TRUNC(
-                CAST(
-                    cr_next.salk3 + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd, 0)
-                AS NUMERIC(40,20))
-                / (pp.abkumo + pp.umkumo + pp.zukumo), 15)
-         ELSE 0
-    END AS average_weighted_stock_price_rule2_prev_date_amount,
+select count(*) from userdata.saa_material_price_calculation; --86079343   11m / 5m10s
 
-    /* rule2_next_date */
-    CASE WHEN pp.lbkum <> 0
-         THEN TRUNC(CAST(cr_curr.salk3 AS NUMERIC(40,20)) / pp.lbkum, 15)
-         ELSE 0
-    END AS average_weighted_stock_price_rule2_next_date_amount,
+truncate userdata.saa_material_price_calculation;
 
-    ckmlhd.price_rule_code
-FROM ranges r
-JOIN pp
-  ON pp.kalnr = r.kalnr
- AND pp.dt_valid_from = r.dt_valid_from
-LEFT JOIN cr_curr
-  ON cr_curr.kalnr = pp.kalnr
- AND cr_curr.bdatj = pp.bdatj
- AND cr_curr.poper = pp.poper
-LEFT JOIN cr_next
-  ON cr_next.kalnr = pp.kalnr
- AND cr_next.dt_posting = pp.dt_valid_from
-LEFT JOIN mlcd_agg
-  ON mlcd_agg.kalnr = pp.kalnr
- AND mlcd_agg.bdatj = pp.bdatj
- AND mlcd_agg.poper = pp.poper
-LEFT JOIN dds.material_ledger_header ckmlhd
-  ON ckmlhd.calculation_code = pp.kalnr
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+	select
+		kalnr,
+		(ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting,
+		salk3,
+		poper,
+		bdatj,
+		stprs,
+		vprsv,
+		peinh,
+		abprd_o,
+		abprd_mo,
+		pvprs 
+	from
+		ods.ckmlcr_ral as ckmlcr_2
+	where
+		ckmlcr_2.untper = '000'
+		and ckmlcr_2.curtp = '10'
+)
+distributed by (kalnr);
+
+
+create temporary table mlcd ON COMMIT DROP as (
+	select
+		kalnr,
+		bdatj,
+		poper,
+		sum(salk3) as salk3,
+		sum(estprd) as estprd,
+		sum(mstprd) as mstprd 
+	from
+		ods.mlcd_ral
+	where
+		categ in ('ZU', 'VP', 'PC')
+		and curtp = '10' 
+	group by kalnr, bdatj, poper
+)
+distributed by (kalnr);
+
+
+create temporary table ckmlpp ON COMMIT DROP as (
+	select
+	    ckmlpp.kalnr,
+	    ckmlpp.bdatj,
+		ckmlpp.poper,
+		(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date as dt_valid_from,
+		ckmlpp.umkumo,
+		ckmlpp.abkumo,
+		ckmlpp.zukumo,
+		ckmlpp.lbkum,
+		ckmlpp.untper
+	from
+		ods.ckmlpp_ral as ckmlpp
+	where
+		ckmlpp.untper = '000'
+)
+distributed by (kalnr, bdatj, poper);
+
+--insert into dm.material_price_calculation
+--insert into userdata.saa_material_price_calculation
+explain
+select
+	ckmlpp.kalnr as calculation_code,
+	ckmlpp.dt_valid_from,
+	case
+		when lead(ckmlpp.dt_valid_from) over (partition by ckmlpp.kalnr order by ckmlpp.dt_valid_from) is null
+		then '22991231'::date
+		else lead(ckmlpp.dt_valid_from) over (partition by ckmlpp.kalnr order by ckmlpp.dt_valid_from - interval '1 day' )
+	end as dt_valid_to,
+	ckmlcr.vprsv as price_valuation_type_code, 
+	ckmlcr.stprs as standard_price_amount, 
+	ckmlcr.peinh as price_unit_code, 
+	ckmlcr.pvprs as moving_average_price_amount, 
+	case 
+		when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0
+		then 0
+		else
+			trunc(
+				cast(
+					round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo /*стоймость остатков на начало*/
+						+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0), 2
+					) as numeric(40, 20)
+				) /*стоймость куммулютивного запаса*/ / (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15
+			)
+	end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+	------------- цена куммулютивного запаса для равной даты
+	case
+		when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+		then
+			trunc(
+				cast(
+					ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)
+				) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15
+			)
+		else 0
+	end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+	------------- цена куммулютивного запаса для не равной даты
+	case
+		when ckmlpp.lbkum <> 0
+		then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+		else 0
+	end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+	ckmlhd.price_rule_code as price_rule_code
+from
+	ckmlpp
+	left join ckmlcr_2 ckmlcr
+		on ckmlcr.kalnr = ckmlpp.kalnr
+		and ckmlcr.bdatj = ckmlpp.bdatj
+		and ckmlcr.poper = ckmlpp.poper
+	left join ckmlcr_2
+		on ckmlcr_2.kalnr = ckmlpp.kalnr
+		and ckmlcr_2.dt_posting = ckmlpp.dt_valid_from
+	left join mlcd
+		on mlcd.kalnr = ckmlpp.kalnr
+		and mlcd.bdatj = ckmlpp.bdatj
+		and mlcd.poper = ckmlpp.poper
+	left join dds.material_ledger_header as ckmlhd
+		on ckmlhd.calculation_code = ckmlpp.kalnr
 ;
+
+

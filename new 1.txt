@@ -1,70 +1,76 @@
--- ВАЖНО: выполнять в простой транзакции и после — ANALYZE
-ALTER TABLE dict_dds.fixed_asset_td
-  SET DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code);
-
-ALTER TABLE dict_dds.fixed_asset_depreciation_parameters_td
-  SET DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code);
-
-ALTER TABLE dict_dds.fixed_asset_non_liquid_technical_state_td
-  SET DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code);
-
-участвуют в джоинах,
-
-являются partition-ключами для окон,
-
-гарантируют, что WindowAgg/LEAD() и джоины пойдут параллельно, а не в singleton
-
 -- ============================================================================
--- NEW PIPELINE: Расчёт периодов и присоединение атрибутов
--- Ключевые идеи:
---   1) Сначала — ЛИШЬ ключи и даты (узкий слой), распараллеленный по ключам.
---   2) Интервалы через LEAD(), БЕЗ self-join (минимум движений и сортировок).
---   3) Материализуем "ядро" (keys+dates) в колоночную TEMP с нужным DISTRIBUTED BY.
---   4) Лишь затем — присоединяем "красоту": тексты/планы/методы (обычно REPLICATED).
+-- NEW: Интервалы по ОС с учётом области амортизации
+-- Идея:
+--   1) Собираем все "поворотные" даты (dt_from) по ТРИАДЕ + ОБЛАСТИ:
+--      - dt_from из fixed_asset_td (размножаем по всем областям из fadp для триады)
+--      - dt_valid_from из fadp
+--      - dt_valid_from из non_liquid, размноженный по областям fadp для триады
+--   2) Делаем LEAD() по (triad + area) → получаем dt_valid_to
+--   3) Материализуем "ядро" и только потом присоединяем тяжёлые таблицы + тексты
 -- ============================================================================
 
--- (по желанию) включить сессионную память под тяжелый шаг, если это принято у вас:
--- SET statement_mem = '2048MB';
+-- Рекомендуется выровнять типы ключей в исходных таблицах, чтобы не было ::text в joinах
+-- SET statement_mem = '2048MB'; -- при необходимости
 
--- 0) Базовый UNION ключевых "поворотных" дат из трех источников
+-- 0) Поворотные точки
 WITH base_union AS (
-    -- Берем только ключи + dt_from (поворотные начала интервалов)
-    -- ВНИМАНИЕ: используйте реальные имена полей начала валидности (ниже предполагается dt_from)
+    -- 0.1 dt_from из ОС, РАЗМНОЖЕННЫЙ по областям из fadp (т.к. области в fixed_asset_td нет)
     SELECT DISTINCT
-        unit_balance_code,
-        asset_main_code,
-        asset_sub_code,
-        depreciation_area_code,
-        dt_from
-    FROM dict_dds.fixed_asset_td
+        fix.unit_balance_code,
+        fix.asset_main_code,
+        fix.asset_sub_code,
+        fadp.depreciation_area_code,
+        fix.dt_from AS dt_from
+    FROM dict_dds.fixed_asset_td                 AS fix
+    JOIN dict_dds.fixed_asset_depreciation_parameters_td AS fadp
+      ON  fadp.unit_balance_code = fix.unit_balance_code
+      AND fadp.asset_main_code   = fix.asset_main_code
+      AND fadp.asset_sub_code    = fix.asset_sub_code
 
     UNION ALL
+    -- 0.2 dt_valid_from самой строки параметров амортизации
     SELECT DISTINCT
-        unit_balance_code,
-        asset_main_code,
-        asset_sub_code,
-        depreciation_area_code,
-        dt_from
-    FROM dict_dds.fixed_asset_depreciation_parameters_td
+        fadp.unit_balance_code,
+        fadp.asset_main_code,
+        fadp.asset_sub_code,
+        fadp.depreciation_area_code,
+        fadp.dt_valid_from AS dt_from
+    FROM dict_dds.fixed_asset_depreciation_parameters_td AS fadp
 
     UNION ALL
+    -- 0.3 non-liquid даты, размноженные по областям fadp для той же триады
     SELECT DISTINCT
-        unit_balance_code,
-        asset_main_code,
-        asset_sub_code,
-        depreciation_area_code,
-        dt_from
-    FROM dict_dds.fixed_asset_non_liquid_technical_state_td
+        fadp.unit_balance_code,
+        fadp.asset_main_code,
+        fadp.asset_sub_code,
+        fadp.depreciation_area_code,
+        liq.dt_valid_from AS dt_from
+    FROM dict_dds.fixed_asset_depreciation_parameters_td AS fadp
+    JOIN (
+        SELECT
+            t1.unit_balance_code,
+            t1.asset_main_code,
+            t1.asset_sub_code,
+            t2.dt_valid_from,
+            t2.dt_valid_to,
+            t1.asset_inventory_number
+        FROM dict_dds.fixed_asset_td AS t1
+        JOIN dict_dds.fixed_asset_non_liquid_technical_state_td AS t2
+          ON  t2.unit_balance_code    = t1.unit_balance_code
+          AND t2.asset_inventory_code = t1.asset_inventory_number
+    ) AS liq
+      ON  liq.unit_balance_code = fadp.unit_balance_code
+      AND liq.asset_main_code   = fadp.asset_main_code
+      AND liq.asset_sub_code    = fadp.asset_sub_code
 ),
 
--- 1) Приводим к единому набору "поворотных" моментов по ключам
+-- 1) Интервалы по каждой (триада + область)
 rng AS (
     SELECT
         unit_balance_code,
         asset_main_code,
         asset_sub_code,
         depreciation_area_code,
-        -- дефолт, если где-то встречается null
         COALESCE(dt_from, DATE '1900-01-01')::date AS dt_valid_from,
         COALESCE(
             LEAD(dt_from) OVER (
@@ -74,17 +80,9 @@ rng AS (
             DATE '2299-12-31'
         )::date AS dt_valid_to
     FROM base_union
-),
-
--- 2) Материализуем узкое "ядро" (ключи+даты) в TEMP-таблицу с правильной раздачей по сегментам
-core_materialized AS (
-    SELECT * FROM rng
 )
 
--- Создаем TEMP таблицу (колонночная, сжатие zstd) и задаем DISTRIBUTED BY по ключам
--- ВАЖНО: Greenplum не позволяет задать распределение прямо из CTE,
--- поэтому создаем через CREATE TABLE AS с DISTRIBUTED BY:
--- (при повторных запусках можно DROP TABLE IF EXISTS)
+-- 2) Материализация "ядра" в TEMP-таблицу с правильным DISTRIBUTED BY
 ;
 DROP TABLE IF EXISTS tmp_fa_core;
 
@@ -92,13 +90,18 @@ CREATE TEMP TABLE tmp_fa_core
 WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
 DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code)
 AS
-SELECT * FROM core_materialized;
+SELECT DISTINCT
+    unit_balance_code,
+    asset_main_code,
+    asset_sub_code,
+    depreciation_area_code,
+    dt_valid_from,
+    dt_valid_to
+FROM rng;
 
-ANALYZE tmp_fa_core;  -- статистика критична для хорошего плана
+ANALYZE tmp_fa_core;
 
--- 3) Присоединяем "тяжёлые" таблицы по ключам и интервалам.
---    Ниже — пример, откорректируйте реальные имена колонок дат/валидности.
---    Старайтесь НЕ кастовать ключи (уберите ::text в joinах — выровняйте типы полей в схемах).
+-- 3) Присоединяем тяжёлые источники по триаде/области и интервалам
 DROP TABLE IF EXISTS tmp_fa_joined;
 
 CREATE TEMP TABLE tmp_fa_joined
@@ -113,91 +116,282 @@ SELECT
     c.dt_valid_from,
     c.dt_valid_to,
 
-    -- Примеры числовых/флаговых атрибутов из тяжёлых таблиц:
-    -- (Подставьте нужные поля из ваших источников)
-    p.depreciation_method          AS dep_method_code,
-    p.useful_life_months           AS useful_life_months,
-    p.depreciation_rate            AS depreciation_rate,
-    fa.capitalization_flag         AS capitalization_flag,
-    nl.non_liquid_state_code       AS non_liquid_state_code
+    -- из ОС
+    fa.asset_class_code,
+    fa.asset_inventory_number,
+    fa.asset_name,
+    fa.created_by,
+    fa.dt_created,
+    fa.changed_by,
+    fa.dt_changed,
+    fa.is_marked_for_delete,
+    fa.is_locked_for_operations,
+    fa.general_ledger_reference_rule_code,
+    fa.dt_asset_acquisition_yyyy,
+    fa.dt_asset_acquisition,
+    fa.dt_asset_acquisition_reference,
+    fa.dt_asset_put_into_operation       AS dt_asset_recognized,
+    fa.dt_reference_asset_write_off,
+    fa.dt_asset_write_off,
+    fa.industry_code,
+    fa.asset_type_for_stat_reporting_code,
+    fa.accelerated_depreciation_reason_code,
+    fa.depreciation_group_code,
+    fa.base_uom_code,
+    fa.asset_quantity,
+    fa.asset_initial_number,
+    fa.asset_initial_subnumber,
+    fa.okof_code,
+    fa.asset_passport_number,
+    fa.dt_asset_manufacture_yyyy,
+    fa.asset_serial_number,
+    fa.asset_put_into_operation_code      AS asset_recognition_code,
+    fa.investment_activity_profile_code,
+    fa.dt_assignment_valid_from,
+    fa.dt_assignment_valid_to,
+    fa.cost_center_code,
+    fa.plant_code,
+    fa.multiple_shift_coefficient_amount,
+    fa.is_asset_temporary_shutdown,
+    fa.asset_location_code,
+    fa.internal_order_code,
+    fa.personnel_code,
+    fa.is_asset_conservated,
+    fa.dt_conservated_from,
+    fa.dt_conservated_to,
+    fa.dt_conservated_actual,
+    fa.document_type_code,
+
+    -- из параметров амортизации (fadp)
+    p.dt_valid_from                      AS dep_params_valid_from,
+    p.dt_valid_to                        AS dep_params_valid_to,
+    p.dt_depreciation_calculation_start,
+    p.depreciation_method_code,
+    p.planned_useful_life_in_years,
+    p.planned_useful_life_in_periods,
+
+    -- из non-liquid статуса (rfm)
+    rfm.dt_valid_from                    AS dt_approved_of_techical_state,
+    rfm.non_liquid_asset_technical_state_code,
+    rfm.is_non_liquid_asset_record_created_manually,
+    rfm.dt_valid_to                      AS dt_asset_status_reverse_from_non_liquid
 
 FROM tmp_fa_core c
 
-LEFT JOIN dict_dds.fixed_asset_depreciation_parameters_td p
+LEFT JOIN dict_dds.fixed_asset_td AS fa
+  ON  fa.unit_balance_code = c.unit_balance_code
+  AND fa.asset_main_code   = c.asset_main_code
+  AND fa.asset_sub_code    = c.asset_sub_code
+  AND c.dt_valid_from BETWEEN fa.dt_from AND COALESCE(fa.dt_to, DATE '2299-12-31')
+
+LEFT JOIN dict_dds.fixed_asset_depreciation_parameters_td AS p
   ON  p.unit_balance_code      = c.unit_balance_code
   AND p.asset_main_code        = c.asset_main_code
   AND p.asset_sub_code         = c.asset_sub_code
   AND p.depreciation_area_code = c.depreciation_area_code
-  -- интервал включенности: корректируйте согласно реальной логике валидности в источнике p
-  AND c.dt_valid_from BETWEEN p.dt_from AND COALESCE(p.dt_to, DATE '2299-12-31')
+  AND c.dt_valid_from BETWEEN p.dt_valid_from AND COALESCE(p.dt_valid_to, DATE '2299-12-31')
 
-LEFT JOIN dict_dds.fixed_asset_td fa
-  ON  fa.unit_balance_code      = c.unit_balance_code
-  AND fa.asset_main_code        = c.asset_main_code
-  AND fa.asset_sub_code         = c.asset_sub_code
-  AND fa.depreciation_area_code = c.depreciation_area_code
-  AND c.dt_valid_from BETWEEN fa.dt_from AND COALESCE(fa.dt_to, DATE '2299-12-31')
-
-LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_td nl
-  ON  nl.unit_balance_code      = c.unit_balance_code
-  AND nl.asset_main_code        = c.asset_main_code
-  AND nl.asset_sub_code         = c.asset_sub_code
-  AND nl.depreciation_area_code = c.depreciation_area_code
-  AND c.dt_valid_from BETWEEN nl.dt_from AND COALESCE(nl.dt_to, DATE '2299-12-31')
+LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_td AS rfm
+  ON  rfm.unit_balance_code    = c.unit_balance_code
+  AND rfm.asset_inventory_code = fa.asset_inventory_number
+  AND c.dt_valid_from BETWEEN rfm.dt_valid_from AND COALESCE(rfm.dt_valid_to, DATE '2299-12-31')
 ;
 
 ANALYZE tmp_fa_joined;
 
--- 4) Присоединяем "красоту": тексты/планы/методы (обычно небольшие REPLICATED-таблицы).
---    Обратите внимание на фильтры селективности (например, language_code = 'R').
-DROP TABLE IF EXISTS tmp_fa_enriched;
-
-CREATE TEMP TABLE tmp_fa_enriched
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
-DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code)
-AS
+-- 4) Присоединяем словари (обычно REPLICATED) и отдаем финал
+--    Фильтры language_code='R' оставляем селективно
 SELECT
-    j.*,
+    j.unit_balance_code,
+    ub.unit_balance_name,
+    j.asset_main_code,
+    j.asset_sub_code,
 
-    -- Примеры справочных текстов/наименований:
-    dmt.method_name                  AS depreciation_method_name,
-    vp.plan_name                     AS valuation_plan_name,
-    cur.currency_name                AS currency_name
+    j.dt_valid_from,
+    j.dt_valid_to,
+
+    j.depreciation_area_code           AS valuation_area_code,
+    favat.fixed_asset_valuation_area_full_name AS valuation_area_name,
+
+    tb.valuation_area_currency_code,
+    ct.currency_full_name              AS valuation_area_currency_name,
+
+    ub.asset_depreciation_rule_code,
+    favpt.fixed_asset_valuation_plan_name AS asset_depreciation_rule_name,
+
+    j.asset_class_code,
+    fact.fixed_asset_class_full_name   AS asset_class_name,
+
+    j.asset_inventory_number,
+    j.asset_name,
+    j.created_by,
+    j.dt_created,
+    j.changed_by,
+    j.dt_changed,
+    j.is_marked_for_delete,
+    j.is_locked_for_operations,
+    j.general_ledger_reference_rule_code,
+    t095.asset_acquisition_cost_account_code,
+    t095.asset_depreciation_account_code,
+
+    j.dt_asset_acquisition_yyyy,
+    j.dt_asset_acquisition,
+    j.dt_asset_acquisition_reference,
+    j.dt_asset_recognized,
+    j.dt_reference_asset_write_off,
+    j.dt_asset_write_off,
+    j.industry_code,
+    fait.fixed_asset_industry_name     AS industry_name,
+
+    j.asset_type_for_stat_reporting_code,
+    fatfsrt.fixed_asset_type_for_stat_reporting_name AS asset_type_for_stat_reporting_name,
+
+    j.accelerated_depreciation_reason_code,
+    faadrt.accelerated_depreciation_reason_name AS accelerated_depreciation_reason_name,
+
+    j.depreciation_group_code,
+    fadgt.depreciation_group_name,
+
+    j.base_uom_code,
+    uom_text.uom_full_name             AS base_uom_name,
+
+    j.asset_quantity,
+    j.asset_initial_number,
+    j.asset_initial_subnumber,
+    j.okof_code,
+    j.asset_passport_number,
+    j.dt_asset_manufacture_yyyy,
+    j.asset_serial_number,
+    j.asset_recognition_code,
+    j.investment_activity_profile_code,
+    j.dt_assignment_valid_from,
+    j.dt_assignment_valid_to,
+
+    j.cost_center_code,
+    cct.cost_center_full_name          AS cost_center_name,
+
+    j.plant_code,
+    pas.plant_short_name               AS plant_name,
+
+    j.multiple_shift_coefficient_amount,
+    j.is_asset_temporary_shutdown,
+    j.asset_location_code,
+    ts.location_name                   AS asset_location_name,
+
+    j.internal_order_code,
+    ord.order_short_name               AS internal_order_name,
+
+    j.personnel_code,
+    pmd.employee_full_name             AS personnel_name,
+
+    j.is_asset_conservated,
+    j.dt_conservated_from,
+    j.dt_conservated_to,
+    j.dt_conservated_actual,
+
+    j.document_type_code,
+    facdtt.conservation_document_type_name AS document_type_name,
+
+    j.dt_approved_of_techical_state,
+    j.non_liquid_asset_technical_state_code,
+    rfm02.non_liquid_asset_technical_state_name,
+
+    j.dep_params_valid_from            AS dt_depreciation_parameters_valid_from,
+    j.dep_params_valid_to              AS dt_depreciation_parameters_valid_to,
+    j.dt_depreciation_calculation_start,
+    j.depreciation_method_code,
+    fadmt.depreciation_method_name,
+    j.planned_useful_life_in_years,
+    j.planned_useful_life_in_periods
 
 FROM tmp_fa_joined j
 
--- Пример: словарь методов амортизации
-LEFT JOIN dict_dds.fixed_asset_depreciation_method_texts dmt
-  ON dmt.depreciation_method = j.dep_method_code
- AND dmt.language_code = 'R'          -- селективный фильтр
+LEFT JOIN dict_dds.unit_balance ub
+  ON ub.unit_balance_code = j.unit_balance_code
+ AND ub.language_code = 'R'
 
--- Пример: словарь планов оценки
-LEFT JOIN dict_dds.fixed_asset_valuation_plan_texts vp
-  ON vp.plan_code = j.dep_method_code  -- пример, замените на реальный ключ
- AND vp.language_code = 'R'
+LEFT JOIN dict_dds.unit_balance_valuation_area tb
+  ON tb.unit_balance_code = j.unit_balance_code
+ AND tb.valuation_area_code = j.depreciation_area_code
 
--- Пример: справочник валют
-LEFT JOIN dict_dds.currency_texts cur
-  ON cur.currency_code = 'RUB'         -- пример, если нужна валюта из данных — замените
- AND cur.language_code = 'R'
+LEFT JOIN dict_dds.currency_texts ct
+  ON ct.currency_code = tb.valuation_area_currency_code
+ AND ct.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_valuation_area_texts favat
+  ON favat.fixed_asset_valuation_area_code = j.depreciation_area_code
+ AND favat.language_code = 'R'
+ -- В исходнике у тебя было ещё условие на plan_code = ub.asset_depreciation_rule_code.
+ -- Если это действительно требование бизнес-логики — верни его сюда.
+
+LEFT JOIN dict_dds.fixed_asset_valuation_plan_texts favpt
+  ON favpt.fixed_asset_valuation_plan_code = ub.asset_depreciation_rule_code
+ AND favpt.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_class_texts fact
+  ON fact.fixed_asset_class_code = j.asset_class_code
+ AND fact.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_general_ledger_account_link t095
+  ON t095.general_ledger_reference_rule_code = j.general_ledger_reference_rule_code
+ AND t095.valuation_area_code = j.depreciation_area_code
+ AND t095.account_chart_code  = ub.account_chart_code
+
+LEFT JOIN dict_dds.fixed_asset_industry_texts fait
+  ON fait.fixed_asset_industry_code = j.industry_code
+ AND fait.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_type_for_stat_reporting_texts fatfsrt
+  ON fatfsrt.fixed_asset_type_for_stat_reporting_code = j.asset_type_for_stat_reporting_code
+ AND fatfsrt.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_accelerated_depreciation_reason_texts faadrt
+  ON faadrt.accelerated_depreciation_reason_code = j.accelerated_depreciation_reason_code
+ AND faadrt.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_depreciation_group_texts fadgt
+  ON fadgt.depreciation_group_code = j.depreciation_group_code
+ AND fadgt.language_code = 'R'
+
+LEFT JOIN dict_dds.uom_external_format_texts uom_text
+  ON uom_text.uom_code = j.base_uom_code
+ AND uom_text.language_code = 'R'
+
+LEFT JOIN dict_dds.plant_and_subsidiary pas
+  ON pas.plant_code = j.plant_code
+
+LEFT JOIN dict_dds.fixed_asset_location ts
+  ON ts.plant_code = j.plant_code
+ AND ts.location_code = j.asset_location_code
+
+LEFT JOIN dict_dds.personnel_main_data pmd
+  ON pmd.employee_code = j.personnel_code
+ AND current_date BETWEEN pmd.dt_valid_from AND pmd.dt_valid_to
+
+LEFT JOIN dict_dds.fixed_asset_non_liquid_technical_state_texts rfm02
+  ON rfm02.non_liquid_asset_technical_state_code = j.non_liquid_asset_technical_state_code
+ AND rfm02.language_code = 'R'
+
+LEFT JOIN dict_dds.fixed_asset_depreciation_method_texts fadmt
+  ON fadmt.depreciation_method_code = j.depreciation_method_code
+ AND fadmt.fixed_asset_valuation_plan_code = ub.asset_depreciation_rule_code
+ AND fadmt.language_code = 'R'
+
+LEFT JOIN dict_dds.map_controlling_area_to_unit_balance cab
+  ON cab.unit_balance_code = ub.unit_balance_code
+
+LEFT JOIN dict_dds.cost_center_texts cct
+  ON cct.cost_center_code = j.cost_center_code
+ AND cct.controlling_area_code = cab.controlling_area_code
+ AND cct.language_code = 'R'
+ AND cct.dt_valid_to >= current_date
+
+LEFT JOIN dict_dds.order_controlling ord
+  ON ord.unit_balance_code = j.unit_balance_code
+ AND ord.order_code = j.internal_order_code
+
+LEFT JOIN dict_dds.fixed_asset_conservation_document_type_texts facdtt
+  ON facdtt.unit_balance_code = j.unit_balance_code
+ AND facdtt.conservation_document_type_code = j.document_type_code
+ AND facdtt.language_code = 'R'
 ;
-
-ANALYZE tmp_fa_enriched;
-
--- 5) Итоговый SELECT/INSERT во "вью/витрину" или возврат результата
---    Здесь можно дополнительно нормализовать значения, обрезать столбцы, добавить индексы на TEMP.
-SELECT * FROM tmp_fa_enriched;
-
--- По желанию: индекс на TEMP под частые фильтры (если у вас включены bitmap-индексы в GP)
--- CREATE INDEX ON tmp_fa_enriched (unit_balance_code, asset_main_code, asset_sub_code, depreciation_area_code, dt_valid_from);
-
-
-LEAD() вместо self-join: в 1 проход даёт dt_valid_to — без двойных сортировок и огромных джоинов на себя.
-
-DISTRIBUTED BY по ключам окна: WindowAgg распараллеливается; никакого singleton slice для окна.
-
-Материализация “ядра”: мы сначала сужаем данные до ключей+дат, затем присоединяем тяжёлые таблицы интервалами (всё распараллелено общим ключом), и только потом добавляем лёгкие REPLICATED-словари.
-
-Без кастов ::text в join: позволяет GP использовать нормальные hash-join и минимизировать перераздачи.
-
-ANALYZE после ключевых шагов: оптимизатор выбирает адекватные планы.

@@ -1,201 +1,121 @@
-# /home/airflow/plugins/custom_operators/SqlExecuteOperator.py
-from __future__ import annotations
+rgm-s-dwhair01
+*** Found local files:
+***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.dm_sensor/attempt=3.log
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.dm_sensor manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.dm_sensor manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1361} INFO - Starting attempt 3 of 4
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlSensor): counterparty.dm_sensor> on 2025-10-09 07:45:53.440259+00:00
+[2025-10-10, 13:49:00 MSK] {standard_task_runner.py:57} INFO - Started process 101021 to run task
+[2025-10-10, 13:49:00 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.dm_sensor', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1935262', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp4tm3bzsm']
+[2025-10-10, 13:49:00 MSK] {standard_task_runner.py:85} INFO - Job 1935262: Subtask counterparty.dm_sensor
+[2025-10-10, 13:49:00 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.dm_sensor manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='Ryzhova' AIRFLOW_CTX_DAG_ID='DAG_CLICKHOUSE_DM' AIRFLOW_CTX_TASK_ID='counterparty.dm_sensor' AIRFLOW_CTX_EXECUTION_DATE='2025-10-09T07:45:53.440259+00:00' AIRFLOW_CTX_TRY_NUMBER='3' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-09T07:45:53.440259+00:00'
+[2025-10-10, 13:49:00 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 13:49:00 MSK] {sql.py:95} INFO - Poking: select
+    case
+        when (tm.table_last_load>=ctm.table_last_upload or ctm.manual_loading_flg) and ctm.flag_active
+            then 1
+        when not ctm.flag_active
+            then -1
+        else 0
+    end res
+from
+	tech_etl.tables_meta_clickhouse_upload ctm
+join tech_etl.tables_meta tm on
+	tm.hash_id = ctm.hash_id
+where ctm.table_name = 'counterparty'
+    and ctm.table_schema = 'dict_dds'
+    and ctm.entity_id = '12'
+; (with parameters None)
+[2025-10-10, 13:49:00 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 13:49:00 MSK] {sql.py:418} INFO - Running statement: select
+    case
+        when (tm.table_last_load>=ctm.table_last_upload or ctm.manual_loading_flg) and ctm.flag_active
+            then 1
+        when not ctm.flag_active
+            then -1
+        else 0
+    end res
+from
+	tech_etl.tables_meta_clickhouse_upload ctm
+join tech_etl.tables_meta tm on
+	tm.hash_id = ctm.hash_id
+where ctm.table_name = 'counterparty'
+    and ctm.table_schema = 'dict_dds'
+    and ctm.entity_id = '12'
+;, parameters: None
+[2025-10-10, 13:49:00 MSK] {sql.py:427} INFO - Rows affected: 1
+[2025-10-10, 13:49:00 MSK] {base.py:287} INFO - Success criteria met. Exiting.
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:1400} INFO - Marking task as SUCCESS. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.dm_sensor, execution_date=20251009T074553, start_date=20251010T104900, end_date=20251010T104900
+[2025-10-10, 13:49:00 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 0
+[2025-10-10, 13:49:00 MSK] {taskinstance.py:2778} INFO - 1 downstream tasks scheduled from follow-on schedule check
 
-import logging
-from typing import Any, Optional
-
-from airflow.models.baseoperator import BaseOperator        # ВАЖНО: правильный импорт для AF 2.x
-from airflow.hooks.base import BaseHook                     # нужен для get_db_hook
-from airflow.utils.decorators import apply_defaults         # если хотите сохранить декоратор
-
-class SqlExecuteOperator(BaseOperator):
-    """
-    Performs checks against a DB. Expects a SQL returning one row.
-    get_db_hook() must return a DB hook.
-    """
-    template_fields = ('sql',)
-    template_ext = ('.hql', '.sql',)
-    ui_color = '#fff7e6'
-
-    @apply_defaults
-    def __init__(
-            self,
-            sql: str,
-            conn_id: Optional[str] = None,
-            *args, **kwargs
-    ):
-        super(SqlExecuteOperator, self).__init__(*args, **kwargs)
-        self.conn_id = conn_id
-        self.sql = sql
-
-    def get_db_hook(self):
-        return BaseHook.get_hook(conn_id=self.conn_id)
-
-    def execute(self, context: Any = None) -> int:
-        logging.info('Executing SQL statement: %s', self.sql)
-        records = self.get_db_hook().get_first(self.sql)
-        logging.info("Record: %s", records)
-        return int(records[0]) if records and records[0] is not None else 0
-
-
-
-from typing import Any, Sequence, Dict
-from airflow.hooks.base import BaseHook
-from airflow.hooks.postgres_hook import PostgresHook  # оставляю как было у вас
-from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.models import Variable
-from airflow.utils.context import Context
-from minio import Minio
-from plugins.help_utility.help_utility import get_parquet_dir_with_ts
-import os
-import yaml
-
-
-class SqlMetaMinioOperator(SQLExecuteQueryOperator):
-    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
-    template_ext: Sequence[str] = (".sql",)
-    template_fields_renderers = {"columns": "sql",}
-    ui_color = "#89d3f5"
-    
-    def __init__(
-            self,
-            sql: str,
-            autocommit: bool,
-            conn_id: str,
-            minio_conn: str,
-            secure=bool,     # оставил как у вас; (хотя лучше secure: bool = False)
-            **kwargs
-    ):
-        super().__init__(sql=sql, **kwargs)
-        self.sql = sql
-        self.autocommit = autocommit
-        self.conn_id = conn_id
-        self.minio_conn = minio_conn
-        self.secure = secure
-        self.params.update()
-
-    # === FIX: готовим params ДО рендера Jinja, чтобы {{ params.columns }} существовал ===
-    def prepare_template_context(self, context: Context) -> dict:
-        ctx = super().prepare_template_context(context)
-
-        # берём базовые params из self и из ctx, объединяем (ctx перекрывает self)
-        base_params: Dict[str, Any] = (getattr(self, "params", {}) or {}).copy()
-        ctx.setdefault("params", {})
-        p_in_ctx: Dict[str, Any] = ctx["params"] or {}
-        p: Dict[str, Any] = {**base_params, **p_in_ctx}
-
-        # дефолты (шаблон не упадёт, даже если YAML пустой)
-        p.setdefault("columns", "")
-        p.setdefault("settings_external_table", "")
-
-        # из чего строим путь к YAML
-        schema = p.get("table_schema")
-        table = p.get("table_name")
-        if not schema or not table:
-            # ключей пока нет — отдаём пустые поля; Jinja не упадёт
-            ctx["params"] = p
-            return ctx
-
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            'meta_info',
-            'database',
-            'clickhouse',
-            'schema_name',
-            schema,
-            'table' if schema != 'dm_view' else 'view',
-            table,
-            'meta_data_file.yaml'
-        )
-
-        yaml_data = {}
-        if os.path.exists(meta_path):
-            with open(meta_path, 'r') as file:
-                yaml_data = yaml.safe_load(file) or {}
-
-            # собираем columns в вашем формате (с одинарными кавычками и переносами)
-            columns = ""
-            for att in yaml_data.get('attributes', []):
-                columns += "'" + att['column_name_click'] + "',\n"
-            p['columns'] = columns[:-2] if columns else ""
-
-            # опциональные settings
-            if yaml_data.get('settings_external_table'):
-                _set = yaml_data.get('settings_external_table')
-                p['settings_external_table'] = 'settings ' + ', '.join(
-                    [f"{key} = {value}" for key, value in _set.items()]
-                )
-
-        ctx["params"] = p
-        return ctx
-    # === /FIX ===
-    
-    def remove_file(self, client, load_dir):
-        for removed_object in client.list_objects(
-                bucket_name=self.params.get('minio_bucket'),
-                prefix=f"{load_dir}",
-                recursive=True
-        ):
-            self.log.info(f'Delete {removed_object.object_name}')
-            client.remove_object(
-                bucket_name=self.params.get('minio_bucket'),
-                object_name=removed_object.object_name
-            )
-    
-    def execute(self, context) -> Any:
-        ts_date = get_parquet_dir_with_ts()
-        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev'
-        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
-        
-        hook = BaseHook.get_connection(self.minio_conn)
-        client = Minio(
-            f'{hook.host}:{hook.port}',
-            access_key=hook.login,
-            secret_key=hook.password,
-            secure=self.secure
-        )
-        self.remove_file(client=client, load_dir=minio_dir)
-        
-        load_obj = client.list_objects(
-            bucket_name=self.params.get('minio_bucket'),
-            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
-        )
-        
-        load_dirs = [x.object_name for x in load_obj]
-        load_dirs.sort(reverse=True)
-        if len(load_dirs) > 2:
-            for load_dir in load_dirs[2:]:
-                self.remove_file(client=client, load_dir=load_dir)
-        
-        
-        meta_path = os.path.join(os.environ.get("AIRFLOW_HOME"),
-                                 'meta_info',
-                                 'database',
-                                 'clickhouse',
-                                 'schema_name',
-                                 self.params['table_schema'],
-                                 'table' if self.params['table_schema'] != 'dm_view' else 'view',
-                                 self.params['table_name'],
-                                 'meta_data_file.yaml')
-        print('meta_path', meta_path)
-        self.params['columns'] = ''
-        self.params['settings_external_table'] = ''
-        with open(meta_path, 'r') as file:
-            yaml_data = yaml.safe_load(file) or {}
-        
-            columns = ""
-            for att in yaml_data.get('attributes', []):
-                columns += '\'' + att['column_name_click'] + '\',\n'
-            columns = columns[:-2] if columns else ""
-            self.params['columns'] = columns
-            print(columns)
-            if yaml_data.get('settings_external_table'):
-                _set = yaml_data.get('settings_external_table')
-                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in _set.items()])
-                print('settings_external_table -', settings_external_table)
-                self.params['settings_external_table'] = settings_external_table
-        print('context', context['params'])        
-        self.render_template_fields(
-            context,
-        )
-        super().execute(context=context)
+rgm-s-dwhair01
+*** Found local files:
+***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.clear_minio_insert_into_s3/attempt=50.log
+[2025-10-10, 13:54:06 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:1361} INFO - Starting attempt 50 of 50
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlMetaMinioOperator): counterparty.clear_minio_insert_into_s3> on 2025-10-09 07:45:53.440259+00:00
+[2025-10-10, 13:54:07 MSK] {standard_task_runner.py:57} INFO - Started process 115055 to run task
+[2025-10-10, 13:54:07 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.clear_minio_insert_into_s3', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1935397', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp3d88poj9']
+[2025-10-10, 13:54:07 MSK] {standard_task_runner.py:85} INFO - Job 1935397: Subtask counterparty.clear_minio_insert_into_s3
+[2025-10-10, 13:54:07 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
+[2025-10-10, 13:54:07 MSK] {abstractoperator.py:709} ERROR - Exception rendering Jinja template for task 'counterparty.clear_minio_insert_into_s3', field 'sql'. Template: ['DROP EXTERNAL TABLE IF EXISTS "raw_ext"."{{ params.table_name }}_write_s3";', 'CREATE WRITABLE EXTERNAL TABLE "raw_ext"."{{ params.table_name }}_write_s3"(\r\nlike "{{ params.table_schema }}"."{{ params.table_name }}"\r\n)\r\nLOCATION (\r\n   \'pxf://{{ params.minio_bucket }}/{% if params.cluster == \'PROD\' %}gp_prod{% else %}gp_dev{% endif %}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}?PROFILE=s3:parquet&SERVER=minioprod\'\r\n) ON ALL\r\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_export\')\r\nENCODING \'UTF8\'\r\n{%- if params.table_schema == \'dict_dds\' %}\r\nDISTRIBUTED RANDOMLY\r\n{%- endif -%}\r\n;', '--INSERT INTO raw_ext."{{ params.table_name }}_write_s3"(\r\n--  \r\n--)\r\nSELECT\r\n    \'{{ params.cluster }}\', \'{{ params.IS_PROD }}\', \'{{ params.columns }}\'\r\n;']
+Traceback (most recent call last):
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
+    rendered_content = self.render_template(
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
+    return [self.render_template(element, context, jinja_env, oids) for element in value]
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
+    return [self.render_template(element, context, jinja_env, oids) for element in value]
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
+    return self._render(template, context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
+    return super()._render(template, context, dag=dag)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
+    return render_template_to_string(template, context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
+    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
+    return "".join(nodes)
+  File "<template>", line 19, in root
+  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
+    raise self._undefined_exception(self._undefined_message)
+jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'columns'
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1518, in _run_raw_task
+    self._execute_task_with_callbacks(context, test_mode, session=session)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1647, in _execute_task_with_callbacks
+    task_orig = self.render_templates(context=context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 2285, in render_templates
+    original_task.render_template_fields(context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/baseoperator.py", line 1243, in render_template_fields
+    self._do_render_template_fields(self, self.template_fields, context, jinja_env, set())
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/session.py", line 79, in wrapper
+    return func(*args, session=session, **kwargs)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
+    rendered_content = self.render_template(
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
+    return [self.render_template(element, context, jinja_env, oids) for element in value]
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
+    return [self.render_template(element, context, jinja_env, oids) for element in value]
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
+    return self._render(template, context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
+    return super()._render(template, context, dag=dag)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
+    return render_template_to_string(template, context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
+    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
+    return "".join(nodes)
+  File "<template>", line 19, in root
+  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
+    raise self._undefined_exception(self._undefined_message)
+jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'columns'
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:1400} INFO - Marking task as FAILED. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.clear_minio_insert_into_s3, execution_date=20251009T074553, start_date=20251010T105406, end_date=20251010T105407
+[2025-10-10, 13:54:07 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1935397 for task counterparty.clear_minio_insert_into_s3 ('dict object' has no attribute 'columns'; 115055)
+[2025-10-10, 13:54:07 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
+[2025-10-10, 13:54:07 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check

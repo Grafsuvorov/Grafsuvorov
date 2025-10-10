@@ -1,71 +1,162 @@
-rgm-s-dwhair01
-*** Found local files:
-***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.insert_into_clickhouse/attempt=13.log
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1361} INFO - Starting attempt 13 of 14
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1382} INFO - Executing <Task(ClickhouseOperator): counterparty.insert_into_clickhouse> on 2025-10-09 07:45:53.440259+00:00
-[2025-10-10, 17:01:56 MSK] {standard_task_runner.py:57} INFO - Started process 101270 to run task
-[2025-10-10, 17:01:56 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.insert_into_clickhouse', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1936779', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp6yv66nje']
-[2025-10-10, 17:01:56 MSK] {standard_task_runner.py:85} INFO - Job 1936779: Subtask counterparty.insert_into_clickhouse
-[2025-10-10, 17:01:56 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
-[2025-10-10, 17:01:56 MSK] {abstractoperator.py:709} ERROR - Exception rendering Jinja template for task 'counterparty.insert_into_clickhouse', field 'sql'. Template: ['\r\nTRUNCATE TABLE {{ params.schema_name_click }}."{{ params.table_name }}_test" SYNC;', 'INSERT INTO {{ params.schema_name_click }}."{{ params.table_name }}_test" ( {{ params.columns }} )\r\nSELECT {{ params.columns }}\r\nFROM s3(\r\n    {% if params.cluster == \'PROD\' %}\r\n    \'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_prod/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*\',\r\n    \'{{ conn.minio_prod.login }}\',\r\n    \'{{ conn.minio_prod.password }}\',\r\n    \'Parquet\'\r\n    {% else %}\r\n    \'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*\',\r\n    \'{{ conn.minio_prod.login }}\',\r\n    \'{{ conn.minio_prod.password }}\',\r\n    \'Parquet\'\r\n    {% endif %}\r\n);']
-Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-  File "<template>", line 13, in root
-  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'schema_name_click'
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1518, in _run_raw_task
-    self._execute_task_with_callbacks(context, test_mode, session=session)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1647, in _execute_task_with_callbacks
-    task_orig = self.render_templates(context=context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 2285, in render_templates
-    original_task.render_template_fields(context)
-  File "/home/airflow/dags/plugins/custom_operators/ClickhouseOperator.py", line 84, in render_template_fields
-    super().render_template_fields(context, jinja_env)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/baseoperator.py", line 1243, in render_template_fields
-    self._do_render_template_fields(self, self.template_fields, context, jinja_env, set())
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/session.py", line 79, in wrapper
-    return func(*args, session=session, **kwargs)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-  File "<template>", line 13, in root
-  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'schema_name_click'
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:1400} INFO - Marking task as UP_FOR_RETRY. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.insert_into_clickhouse, execution_date=20251009T074553, start_date=20251010T140156, end_date=20251010T140156
-[2025-10-10, 17:01:56 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1936779 for task counterparty.insert_into_clickhouse ('dict object' has no attribute 'schema_name_click'; 101270)
-[2025-10-10, 17:01:56 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-10-10, 17:01:56 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check
+# /home/airflow/dags/plugins/custom_operators/ClickhouseOperator.py
+
+from typing import Sequence, Any, Dict, List
+import os
+import yaml
+import clickhouse_driver
+
+from airflow.hooks.base import BaseHook
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.models import Variable
+from airflow.utils.context import Context
+
+
+class ClickhouseOperator(SQLExecuteQueryOperator):
+    """
+    Оператор для выполнения SQL в ClickHouse c поддержкой Jinja-шаблонов и
+    автоподстановкой параметров из meta_data_file.yaml:
+      - params.schema_name_click
+      - params.columns (список колонок из attributes[column_name_click])
+      - params.settings_external_table (если есть)
+      - params.cluster / params.IS_PROD (по Variable('cluster'))
+
+    В DAG можно прокидывать:
+        local_variables:
+            table_schema: <строка>
+            table_name:   <строка>
+            minio_bucket: <строка>
+        # всё это будет доступно как params.*
+    """
+
+    # что рендерим Jinja’ой
+    template_fields: Sequence[str] = ("sql", "parameters", *SQLExecuteQueryOperator.template_fields)
+    template_ext: Sequence[str] = (".sql", ".json")
+    ui_color = "#Edaaed"
+
+    def __init__(
+        self,
+        sql: Any,
+        conn_id: str,
+        **kwargs
+    ):
+        # ---- [ВАЖНО] Схлопываем local_variables -> params ДО super().__init__ ----
+        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
+        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
+        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
+
+        super().__init__(conn_id=conn_id, sql=sql, params=merged_params, **kwargs)
+
+        self.conn_id = conn_id
+        self.sql = sql
+
+    # ---------- Служебное: наполняем self.params из Variable + meta_data_file.yaml ----------
+    def _ensure_params_enriched(self) -> None:
+        p: Dict[str, Any] = dict(getattr(self, "params", {}) or {})
+
+        # дефолты
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
+
+        # cluster / IS_PROD (чтобы в шаблонах работал выбор PROD/DEV)
+        cluster_var = Variable.get("cluster", "dev")
+        p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
+        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+
+        schema = p.get("table_schema")
+        table = p.get("table_name")
+        if schema and table:
+            meta_path = os.path.join(
+                os.environ.get("AIRFLOW_HOME"),
+                "meta_info", "database", "clickhouse", "schema_name",
+                schema,
+                "table" if schema != "dm_view" else "view",
+                table,
+                "meta_data_file.yaml",
+            )
+
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    y = yaml.safe_load(f) or {}
+
+                # schema_name_click из YAML или дефолт dm
+                p.setdefault("schema_name_click", y.get("schema_name_click", "dm"))
+
+                # соберём список колонок из attributes[].column_name_click
+                cols: List[str] = []
+                for att in y.get("attributes", []):
+                    name = att.get("column_name_click")
+                    if name:
+                        cols.append(f'"{name}"')
+                # если в YAML пусто — оставим пустую строку, чтобы шаблон не падал
+                p["columns"] = ", ".join(cols) if cols else p.get("columns", "")
+
+                # settings_external_table (опционально)
+                if y.get("settings_external_table"):
+                    st = y["settings_external_table"]
+                    p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
+            else:
+                # YAML не найден — подстрахуемся дефолтами
+                p.setdefault("schema_name_click", "dm")
+        else:
+            # нет schema/table — всё равно дадим дефолт на случай, если шаблон его использует
+            p.setdefault("schema_name_click", "dm")
+
+        self.params = p
+
+    # Airflow 2.x дергает это для подготовки контекста — добавляем наши params
+    def get_template_context(self) -> dict:
+        self._ensure_params_enriched()
+        ctx = super().get_template_context()
+        # dag.params (если есть) должен перекрыть наши значения — аккуратно склеим
+        ctx["params"] = {**self.params, **(ctx.get("params") or {})}
+        return ctx
+
+    # Доп. страховка: если рендерят через render_template_fields
+    def render_template_fields(self, context: dict, jinja_env=None) -> None:
+        self._ensure_params_enriched()
+        context.setdefault("params", {})
+        context["params"] = {**self.params, **context["params"]}
+        super().render_template_fields(context, jinja_env)
+
+    # ---------- Выполнение в ClickHouse ----------
+    def execute(self, context: Context):
+        self.log.info("Executing: %s", self.sql)
+
+        # поддержка как строки, так и списка SQL
+        if not isinstance(self.sql, list):
+            self.sql = [self.sql]
+
+        # коннект в CH из Airflow Connection (conn_id)
+        hook = BaseHook.get_connection(self.conn_id)
+        with clickhouse_driver.connect(
+            database=hook.schema,
+            user=hook.login,
+            password=hook.password,
+            host=hook.host,
+            port=hook.port,
+            secure=None,
+        ) as conn:
+            with conn.cursor() as cur:
+                for v_sql in self.sql:
+                    # для прозрачности в логах
+                    self.log.info(v_sql)
+                    cur.execute(v_sql)
+
+
+TRUNCATE TABLE {{ params.schema_name_click | default('dm') }}."{{ params.table_name }}_test" SYNC;
+
+INSERT INTO {{ params.schema_name_click | default('dm') }}."{{ params.table_name }}_test" ( {{ params.columns }} )
+SELECT {{ params.columns }}
+FROM s3(
+    {% if params.cluster == 'PROD' %}
+    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_prod/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    '{{ conn.minio_prod.login }}',
+    '{{ conn.minio_prod.password }}',
+    'Parquet'
+    {% else %}
+    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    '{{ conn.minio_prod.login }}',
+    '{{ conn.minio_prod.password }}',
+    'Parquet'
+    {% endif %}
+);

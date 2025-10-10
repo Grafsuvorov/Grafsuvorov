@@ -1,71 +1,124 @@
-from typing import Any
+# /home/airflow/plugins/custom_operators/SqlMinioOperator.py
+
+from typing import Any, Sequence, Dict
 from airflow.hooks.base import BaseHook
-from airflow.hooks.postgres_hook import PostgresHook
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.models import Variable
 from airflow.utils.context import Context
 from minio import Minio
-from plugins.help_utility.help_utility import get_parquet_dir_with_ts
+import os
+import yaml
 
 class SqlMinioOperator(SQLExecuteQueryOperator):
-    template_fields = ("sql",)
+    # даём Airflow право рендерить список sql и наследуем стандартные поля
+    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
+    template_ext: Sequence[str] = (".sql",)
+    template_fields_renderers = {"columns": "sql"}
+    ui_color = "#89d3f5"
 
     def __init__(
-            self,
-            sql: str,
-            autocommit: bool,
-            conn_id: str,
-            minio_conn: str,
-            secure = bool,
-            **kwargs
+        self,
+        sql: Any,
+        minio_conn: str,
+        secure: bool = False,
+        **kwargs
     ):
-        super().__init__(sql=sql, **kwargs)
-        self.sql = sql
-        self.autocommit = autocommit
-        self.conn_id = conn_id
+        # <<< ВАЖНО: переносим local_variables в params, чтобы schema/name попали в рендер >>> 
+        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
+        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
+        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
+
+        # conn_id/… передаются дальше через kwargs как есть
+        super().__init__(sql=sql, params=merged_params, **kwargs)
+
         self.minio_conn = minio_conn
         self.secure = secure
-        self.params.update()
 
-    def remove_file(self, client, load_dir):
-        for removed_object in client.list_objects(
-                bucket_name=self.params.get('minio_bucket'),
-                prefix=f"{load_dir}",
-                recursive=True
-        ):
-            self.log.info(f'Delete {removed_object.object_name}')
-            client.remove_object(
-                bucket_name=self.params.get('minio_bucket'),
-                object_name=removed_object.object_name
+    # ---- наполняем params ДО рендера Jinja ----
+    def _ensure_params_enriched(self) -> None:
+        p = getattr(self, "params", {}) or {}
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
+
+        # cluster/IS_PROD
+        cluster_var = Variable.get("cluster", "dev")
+        p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
+        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+
+        schema = p.get("table_schema")
+        table = p.get("table_name")
+        if schema and table:
+            meta_path = os.path.join(
+                os.environ.get("AIRFLOW_HOME"),
+                "meta_info", "database", "clickhouse", "schema_name",
+                schema,
+                "table" if schema != "dm_view" else "view",
+                table,
+                "meta_data_file.yaml",
             )
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    y = yaml.safe_load(f) or {}
 
-    def execute(self, context: Context) -> Any:
-        ts_date = get_parquet_dir_with_ts()
-        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev' 
-        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
+                # 'col1', 'col2', ... -> используем кавычки как в GP/CH
+                cols = []
+                for att in y.get("attributes", []):
+                    name = att.get("column_name_click")
+                    if name:
+                        cols.append(f'"{name}"')
+                p["columns"] = ", ".join(cols)
 
+                if y.get("settings_external_table"):
+                    st = y["settings_external_table"]
+                    p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
+
+        self.params = p
+
+    # Airflow 2.x — гарантируем, что к моменту рендера всё готово
+    def get_template_context(self) -> dict:
+        self._ensure_params_enriched()
+        ctx = super().get_template_context()
+        ctx["params"] = {**self.params, **(ctx.get("params") or {})}
+        return ctx
+
+    def render_template_fields(self, context: dict, jinja_env=None) -> None:
+        self._ensure_params_enriched()
+        context.setdefault("params", {})
+        context["params"] = {**self.params, **context["params"]}
+        super().render_template_fields(context, jinja_env)
+
+    # --- если нужна чистка старых префиксов в MinIO, оставь логику ниже; иначе можно убрать ---
+    def _cleanup_minio_prefixes(self) -> None:
         hook = BaseHook.get_connection(self.minio_conn)
         client = Minio(
-            f'{hook.host}:{hook.port}',
+            f"{hook.host}:{hook.port}",
             access_key=hook.login,
             secret_key=hook.password,
             secure=self.secure
         )
-        self.remove_file(client=client, load_dir=minio_dir)
+        bucket = self.params.get("minio_bucket")
+        schema = self.params.get("table_schema")
+        table = self.params.get("table_name")
+        cluster_prefix = "gp_prod" if self.params.get("IS_PROD") else "gp_dev"
+        if not all([bucket, schema, table]):
+            return
 
         load_obj = client.list_objects(
-            bucket_name=self.params.get('minio_bucket'),
-            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
+            bucket_name=bucket,
+            prefix=f"{cluster_prefix}/{schema}/{table}/",
         )
         load_dirs = [x.object_name for x in load_obj]
         load_dirs.sort(reverse=True)
         if len(load_dirs) > 2:
             for load_dir in load_dirs[2:]:
-                self.remove_file(client=client, load_dir=load_dir)
+                for removed in client.list_objects(bucket_name=bucket, prefix=load_dir, recursive=True):
+                    client.remove_object(bucket_name=bucket, object_name=removed.object_name)
 
-        super().execute(context=context)
+    def execute(self, context: Context) -> Any:
+        # по желанию: self._cleanup_minio_prefixes()
+        return super().execute(context=context)
 
 
-
-
-
+INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ params.get("columns", "*") }} )
+SELECT {{ params.get("columns", "*") }}
+FROM "{{ params.table_schema }}"."{{ params.table_name }}";

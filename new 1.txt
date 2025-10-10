@@ -1,9 +1,53 @@
--- ✅ ПИШЕМ ДАННЫЕ В S3 через внешнюю таблицу PXF
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3"
-SELECT *
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-
-
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ params.get("columns","") }} )
-SELECT {{ params.get("columns","") }}
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
+rgm-s-dwhair01
+*** Found local files:
+***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.clear_minio_insert_into_s3/attempt=56.log
+[2025-10-10, 15:47:26 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 15:47:26 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 15:47:26 MSK] {taskinstance.py:1361} INFO - Starting attempt 56 of 57
+[2025-10-10, 15:47:26 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlMinioOperator): counterparty.clear_minio_insert_into_s3> on 2025-10-09 07:45:53.440259+00:00
+[2025-10-10, 15:47:26 MSK] {standard_task_runner.py:57} INFO - Started process 30073 to run task
+[2025-10-10, 15:47:26 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.clear_minio_insert_into_s3', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1936174', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp0baczsm8']
+[2025-10-10, 15:47:26 MSK] {standard_task_runner.py:85} INFO - Job 1936174: Subtask counterparty.clear_minio_insert_into_s3
+[2025-10-10, 15:47:26 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
+[2025-10-10, 15:47:26 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='Ryzhova' AIRFLOW_CTX_DAG_ID='DAG_CLICKHOUSE_DM' AIRFLOW_CTX_TASK_ID='counterparty.clear_minio_insert_into_s3' AIRFLOW_CTX_EXECUTION_DATE='2025-10-09T07:45:53.440259+00:00' AIRFLOW_CTX_TRY_NUMBER='56' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-09T07:45:53.440259+00:00'
+[2025-10-10, 15:47:26 MSK] {base.py:73} INFO - Using connection ID 'minio_prod' for task execution.
+[2025-10-10, 15:47:26 MSK] {sql.py:274} INFO - Executing: ['DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";', 'CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(\nlike "dict_dds"."counterparty"\n)\nLOCATION (\n   \'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod\'\n) ON ALL\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_export\')\nENCODING \'UTF8\'\nDISTRIBUTED RANDOMLY;', '--INSERT INTO raw_ext."counterparty_write_s3"(\n--  \n--)\nINSERT INTO raw_ext."counterparty_write_s3" (  )\nSELECT \nFROM "dict_dds"."counterparty";\n']
+[2025-10-10, 15:47:26 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 15:47:26 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 15:47:26 MSK] {sql.py:418} INFO - Running statement: DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";, parameters: None
+[2025-10-10, 15:47:27 MSK] {sql.py:418} INFO - Running statement: CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(
+like "dict_dds"."counterparty"
+)
+LOCATION (
+   'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod'
+) ON ALL
+FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
+ENCODING 'UTF8'
+DISTRIBUTED RANDOMLY;, parameters: None
+[2025-10-10, 15:47:27 MSK] {sql.py:418} INFO - Running statement: --INSERT INTO raw_ext."counterparty_write_s3"(
+--  
+--)
+INSERT INTO raw_ext."counterparty_write_s3" (  )
+SELECT 
+FROM "dict_dds"."counterparty";
+, parameters: None
+[2025-10-10, 15:47:27 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/dags/plugins/custom_operators/SqlMinioOperator.py", line 66, in execute
+    super().execute(context=context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/operators/sql.py", line 280, in execute
+    output = hook.run(
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/hooks/sql.py", line 392, in run
+    self._run_command(cur, sql_statement, parameters)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/hooks/sql.py", line 423, in _run_command
+    cur.execute(sql_statement)
+psycopg2.errors.SyntaxError: syntax error at or near ")"
+LINE 4: INSERT INTO raw_ext."counterparty_write_s3" (  )
+                                                       ^
+[2025-10-10, 15:47:27 MSK] {taskinstance.py:1400} INFO - Marking task as UP_FOR_RETRY. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.clear_minio_insert_into_s3, execution_date=20251009T074553, start_date=20251010T124726, end_date=20251010T124727
+[2025-10-10, 15:47:27 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1936174 for task counterparty.clear_minio_insert_into_s3 (syntax error at or near ")"
+LINE 4: INSERT INTO raw_ext."counterparty_write_s3" (  )
+                                                       ^
+; 30073)
+[2025-10-10, 15:47:27 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
+[2025-10-10, 15:47:27 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check

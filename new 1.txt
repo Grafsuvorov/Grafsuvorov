@@ -1,181 +1,149 @@
-# sql_meta_minio_operator.py
-# Notes: Custom operator that prepares Jinja params BEFORE rendering.
-# FIX marks show what was changed compared to your original snippet.
-
-from typing import Any, Sequence, Dict
+from typing import Any
 from airflow.hooks.base import BaseHook
-from airflow.models import Variable
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.models import Variable
 from airflow.utils.context import Context
+from typing import Sequence
 from minio import Minio
 from plugins.help_utility.help_utility import get_parquet_dir_with_ts
 import os
 import yaml
 
+
 class SqlMetaMinioOperator(SQLExecuteQueryOperator):
-    # FIX: leave only 'sql' in template_fields; other fields don't need templating here
-    template_fields: Sequence[str] = ("sql",)
+    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
     template_ext: Sequence[str] = (".sql",)
+    template_fields_renderers = {"columns": "sql",}
     ui_color = "#89d3f5"
-
+    
     def __init__(
-        self,
-        sql: Any,
-        conn_id: str = None,
-        postgres_conn_id: str = None,   # FIX: bridge for YAML using postgres_conn_id
-        minio_conn: str = None,
-        secure: bool = False,           # FIX: default bool, not class 'bool'
-        **kwargs,
+            self,
+            sql: str,
+            autocommit: bool,
+            conn_id: str,
+            minio_conn: str,
+            secure=bool,
+            **kwargs
     ):
-        # FIX: map postgres_conn_id -> conn_id if needed
-        if conn_id is None and postgres_conn_id is not None:
-            conn_id = postgres_conn_id
-
-        super().__init__(sql=sql, conn_id=conn_id, **kwargs)
+        super().__init__(sql=sql, **kwargs)
+        self.sql = sql
+        self.autocommit = autocommit
+        self.conn_id = conn_id
         self.minio_conn = minio_conn
-        self.secure = bool(secure)      # FIX: cast to bool
-        # FIX: removed self.params.update() (it did nothing)
+        self.secure = secure
+        self.params.update()
 
-    # --- helpers -------------------------------------------------------------
-    def _build_meta_from_yaml(self, p: Dict[str, Any]) -> Dict[str, Any]:
-        """Read meta_data_file.yaml and build columns/settings strings."""
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME", "/opt/airflow"),
-            "meta_info", "database", "clickhouse", "schema_name",
-            p["table_schema"],
-            "table" if p["table_schema"] != "dm_view" else "view",
-            p["table_name"],
-            "meta_data_file.yaml",
-        )
-        # Safety: missing file -> empty config
-        yaml_data = {}
-        if os.path.exists(meta_path):
-            with open(meta_path, "r") as f:
-                yaml_data = yaml.safe_load(f) or {}
-
-        # FIX: build identifiers WITHOUT single quotes (were strings before)
-        # If you truly need quoted identifiers, use double quotes.
-        attrs = yaml_data.get("attributes") or []
-        cols_ident = ",\n".join(a.get("column_name_click") for a in attrs if a.get("column_name_click"))
-
-        # Optional settings string
-        setts = yaml_data.get("settings_external_table") or {}
-        settings_external_table = ""
-        if setts:
-            settings_external_table = "settings " + ", ".join(f"{k} = {v}" for k, v in setts.items())
-
-        return {
-            "columns": cols_ident,  # FIX: was a list of single-quoted strings -> now identifiers
-            "settings_external_table": settings_external_table,
-            "meta_path": meta_path,
-        }
-
-    def _get_minio_client(self) -> Minio:
-        hook = BaseHook.get_connection(self.minio_conn)
-        return Minio(
-            f"{hook.host}:{hook.port}",
-            access_key=hook.login,
-            secret_key=hook.password,
-            secure=self.secure,
-        )
-
-    def remove_file(self, client: Minio, load_dir: str):
-        for removed_object in client.list_objects(
-            bucket_name=self.params.get("minio_bucket"),
-            prefix=f"{load_dir}",
-            recursive=True,
-        ):
-            self.log.info(f"Delete {removed_object.object_name}")
-            client.remove_object(
-                bucket_name=self.params.get("minio_bucket"),
-                object_name=removed_object.object_name,
-            )
-
-    # FIX: compute all required params BEFORE Jinja rendering happens
+    # FIX: готовим нужные поля params ДО рендера Jinja, чтобы {{ params.columns }} и др. существовали
     def prepare_template_context(self, context: Context) -> dict:
         ctx = super().prepare_template_context(context)
-        p = dict(ctx.get("params", {}))
 
-        # Required params guard (fail early with clear message)
-        required = ["table_schema", "table_name", "minio_bucket"]
-        missing = [k for k in required if not p.get(k)]
-        if missing:
-            raise ValueError(f"Missing required params for SqlMetaMinioOperator: {missing}")
+        # гарантируем наличие словаря params
+        if "params" not in ctx or ctx["params"] is None:
+            ctx["params"] = {}
+        p = ctx["params"]
 
-        # Cluster flags (from Airflow Variable 'cluster')
-        cluster_var = Variable.get("cluster", "dev")
-        p["cluster"] = "PROD" if cluster_var.lower() == "prod" else "DEV"
-        p["IS_PROD"] = (p["cluster"] == "PROD")
+        # дефолты, чтобы не падало если YAML пустой
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
 
-        # Timestamped directory used by templates (replacement for parquet_date())
-        p["ts_date"] = get_parquet_dir_with_ts()  # e.g., 1759985153440
+        # строим путь к meta_data_file.yaml (как в execute)
+        meta_path = os.path.join(
+            os.environ.get("AIRFLOW_HOME"),
+            'meta_info',
+            'database',
+            'clickhouse',
+            'schema_name',
+            p['table_schema'],
+            'table' if p['table_schema'] != 'dm_view' else 'view',
+            p['table_name'],
+            'meta_data_file.yaml'
+        )
 
-        # Read YAML -> columns + settings
-        meta = self._build_meta_from_yaml(p)
-        p.update(meta)
+        with open(meta_path, 'r') as file:
+            yaml_data = yaml.safe_load(file) or {}
 
-        ctx["params"] = p
+            # собираем columns В ТОЧНОМ ФОРМАТЕ КАК У ТЕБЯ (в одинарных кавычках и с переводами строк)
+            columns = ""
+            for att in yaml_data.get('attributes', []):
+                columns += "'" + att['column_name_click'] + "',\n"
+            columns = columns[:-2] if columns else ""
+            p['columns'] = columns
+
+            # settings_external_table — если есть в YAML
+            if yaml_data.get('settings_external_table'):
+                _set = yaml_data.get('settings_external_table')
+                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in _set.items()])
+                p['settings_external_table'] = settings_external_table
+
         return ctx
-
-    def execute(self, context: Context) -> Any:
-        # Minio housekeeping uses params prepared above
-        cluster_prefix = "gp_prod" if self.params.get("cluster") == "PROD" else "gp_dev"
-        ts_date = self.params.get("ts_date")
-        minio_dir = f"{cluster_prefix}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
-
-        client = self._get_minio_client()
-        # drop current partition dir (if exists)
+    
+    def remove_file(self, client, load_dir):
+        for removed_object in client.list_objects(
+                bucket_name=self.params.get('minio_bucket'),
+                prefix=f"{load_dir}",
+                recursive=True
+        ):
+            self.log.info(f'Delete {removed_object.object_name}')
+            client.remove_object(
+                bucket_name=self.params.get('minio_bucket'),
+                object_name=removed_object.object_name
+            )
+    
+    def execute(self, context) -> Any:
+        ts_date = get_parquet_dir_with_ts()
+        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev'
+        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
+        
+        hook = BaseHook.get_connection(self.minio_conn)
+        client = Minio(
+            f'{hook.host}:{hook.port}',
+            access_key=hook.login,
+            secret_key=hook.password,
+            secure=self.secure
+        )
         self.remove_file(client=client, load_dir=minio_dir)
-
-        # keep last two partitions only
-        prefix = f"{cluster_prefix}/{self.params.get('table_schema')}/{self.params.get('table_name')}/"
-        load_obj = client.list_objects(bucket_name=self.params.get("minio_bucket"), prefix=prefix)
-        load_dirs = sorted((x.object_name for x in load_obj), reverse=True)
+        
+        load_obj = client.list_objects(
+            bucket_name=self.params.get('minio_bucket'),
+            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
+        )
+        
+        load_dirs = [x.object_name for x in load_obj]
+        load_dirs.sort(reverse=True)
         if len(load_dirs) > 2:
             for load_dir in load_dirs[2:]:
                 self.remove_file(client=client, load_dir=load_dir)
-
-        # Execute SQL via parent (templates are now safe to render)
-        return super().execute(context=context)
-
-
--- drop_external_table.sql
-DROP EXTERNAL TABLE IF EXISTS "raw_ext"."{{ params.table_name }}_write_s3";
-
--- create_ext_table.sql
-CREATE WRITABLE EXTERNAL TABLE "raw_ext"."{{ params.table_name }}_write_s3"(
-    LIKE "{{ params.table_schema }}"."{{ params.table_name }}"
-)
-LOCATION (
-   'pxf://{{ params.minio_bucket }}/{{ "gp_prod" if params.cluster == "PROD" else "gp_dev" }}/{{ params.table_schema }}/{{ params.table_name }}/{{ params.ts_date }}?PROFILE=s3:parquet&SERVER=minioprod'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
-ENCODING 'UTF8'
-{%- if params.table_schema == 'dict_dds' %}
-DISTRIBUTED RANDOMLY
-{%- endif -%}
-;
-
--- insert_into_write.sql
--- FIX: use identifiers from params.columns (no single quotes).
---      Here we write data from the source table into the writable external table.
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3"
-SELECT
-    {{ params.columns }}
-FROM "{{ params.table_schema }}"."{{ params.table_name }}"
-;
-Что именно я поправил (суммарно)
-
-FIX: prepare_template_context() — готовлю params.columns, params.settings_external_table, params.ts_date, params.cluster, params.IS_PROD до рендера.
-
-FIX: secure: bool = False и self.secure = bool(secure).
-
-FIX: поддержка postgres_conn_id → маппинг на conn_id.
-
-FIX: убрал template_fields_renderers и лишние поля из template_fields.
-
-FIX: формирование columns без одинарных кавычек (идентификаторы, а не строки).
-
-FIX: в шаблонах вместо parquet_date() использую {{ params.ts_date }}.
-
-Если хочешь, могу под тебя подстроить columns (например, двойные кавычки для чувствительных имён или маппинг GP→CH, если в YAML есть оба названия).
+        
+        
+        meta_path = os.path.join(os.environ.get("AIRFLOW_HOME"),
+                                 'meta_info',
+                                 'database',
+                                 'clickhouse',
+                                 'schema_name',
+                                 self.params['table_schema'],
+                                 'table' if self.params['table_schema'] != 'dm_view' else 'view',
+                                 self.params['table_name'],
+                                 'meta_data_file.yaml')
+        print('meta_path', meta_path)
+        self.params['columns'] = ''
+        self.params['settings_external_table'] = ''
+        with open(meta_path, 'r') as file:
+            yaml_data = yaml.safe_load(file)
+        
+            columns = ""
+            for att in yaml_data['attributes']:
+                columns += '\'' + att['column_name_click'] + '\',\n'
+            columns = columns[:-2]
+            self.params['columns'] = columns
+            print(columns)
+            if yaml_data.get('settings_external_table'):
+                set = yaml_data.get('settings_external_table')
+                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in set.items()])
+                print('settings_external_table -', settings_external_table)
+                self.params['settings_external_table'] = settings_external_table
+        print('context', context['params'])        
+        self.render_template_fields(
+            context,
+        )
+        super().execute(context=context)

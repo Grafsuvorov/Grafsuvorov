@@ -1,192 +1,53 @@
-# /home/airflow/plugins/custom_operators/SqlExecuteOperator.py
-import logging
-
-from airflow.models import BaseOperator
-from airflow.hooks.base import BaseHook
-try:
-    # AF2.x: декоратор есть, но помечен deprecated — можно не использовать.
-    from airflow.utils.decorators import apply_defaults
-except Exception:  # если вдруг нет — просто не используем
-    def apply_defaults(f):
-        return f
 
 
-class SqlExecuteOperator(BaseOperator):
-    """
-    Простой оператор, исполняющий SQL и возвращающий первое значение первой строки
-    через get_first() у соответствующего hook.
-    """
-    template_fields = ('sql',)
-    template_ext = ('.hql', '.sql',)
-    ui_color = '#fff7e6'
-
-    @apply_defaults
-    def __init__(self, sql, conn_id=None, *args, **kwargs):
-        super(SqlExecuteOperator, self).__init__(*args, **kwargs)
-        self.conn_id = conn_id
-        self.sql = sql
-
-    def execute(self, context=None):
-        logging.info('Executing SQL statement: %s', self.sql)
-        records = self.get_db_hook().get_first(self.sql)
-        logging.info("Record: %s", records)
-        # Защита от None и пустых ответов
-        if records and records[0] is not None:
-            try:
-                return int(records[0])
-            except Exception:
-                return records[0]
-        return 0
-
-    def get_db_hook(self):
-        return BaseHook.get_hook(conn_id=self.conn_id)
-
-
-
-# /home/airflow/dags/plugins/custom_operators/SqlMetaMinioOperator.py
-from typing import Any, Sequence, Dict
-
-from airflow.hooks.base import BaseHook
-from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.models import Variable
-from airflow.utils.context import Context
-
-from minio import Minio
-import os
-import yaml
-
-
-class SqlMetaMinioOperator(SQLExecuteQueryOperator):
-    """
-    Готовит params (columns, settings_external_table, cluster/IS_PROD) ДО рендера Jinja,
-    опционально чистит старые префиксы в MinIO, затем запускает список SQL-шаблонов.
-    Совместимо с Airflow 2.x.
-    """
-    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
-    template_ext: Sequence[str] = (".sql",)
-    template_fields_renderers = {"columns": "sql"}
-    ui_color = "#89d3f5"
-
-    def __init__(
-        self,
-        sql: Any,
-        minio_conn: str,
-        secure: bool = False,
-        **kwargs
-    ):
-        # 1) local_variables -> params (чтобы schema/name попали в params до рендера)
-        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
-        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
-        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
-
-        super().__init__(sql=sql, params=merged_params, **kwargs)
-
-        self.minio_conn = minio_conn
-        self.secure = secure
-
-    # ---------- Подготовка params ДО рендера ----------
-    def _ensure_params_enriched(self) -> None:
-        p = getattr(self, "params", {}) or {}
-        p.setdefault("columns", "")
-        p.setdefault("settings_external_table", "")
-
-        # cluster/IS_PROD
-        cluster_var = Variable.get("cluster", "dev")
-        p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
-        p.setdefault("IS_PROD", p["cluster"] == "PROD")
-
-        schema = p.get("table_schema")
-        table = p.get("table_name")
-        if not (schema and table):
-            self.params = p
-            return
-
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            "meta_info", "database", "clickhouse", "schema_name",
-            schema,
-            "table" if schema != "dm_view" else "view",
-            table,
-            "meta_data_file.yaml",
-        )
-
-        if os.path.exists(meta_path):
-            with open(meta_path, "r") as f:
-                y = yaml.safe_load(f) or {}
-
-            # Список колонок в виде: "col1", "col2", ...
-            cols = []
-            for att in y.get("attributes", []):
-                name = att.get("column_name_click")
-                if name:
-                    cols.append(f'"{name}"')
-            p["columns"] = ", ".join(cols)
-
-            if y.get("settings_external_table"):
-                st = y["settings_external_table"]
-                p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
-
-        self.params = p
-
-    # Airflow 2.x: основной путь
-    def get_template_context(self) -> dict:
-        self._ensure_params_enriched()
-        ctx = super().get_template_context()
-        # не даём dag.params перетереть наши значения
-        ctx["params"] = {**self.params, **(ctx.get("params") or {})}
-        return ctx
-
-    # подстраховка (если кто-то зовёт рендер напрямую)
-    def render_template_fields(self, context: dict, jinja_env=None) -> None:
-        self._ensure_params_enriched()
-        context.setdefault("params", {})
-        context["params"] = {**self.params, **context["params"]}
-        super().render_template_fields(context, jinja_env)
-
-    # --- при необходимости можно подключить чистку префиксов MinIO ---
-    def _cleanup_minio_prefixes(self) -> None:
-        hook = BaseHook.get_connection(self.minio_conn)
-        client = Minio(
-            f"{hook.host}:{hook.port}",
-            access_key=hook.login,
-            secret_key=hook.password,
-            secure=self.secure
-        )
-
-        bucket = self.params.get("minio_bucket")
-        schema = self.params.get("table_schema")
-        table = self.params.get("table_name")
-        cluster_prefix = "gp_prod" if self.params.get("IS_PROD") else "gp_dev"
-        if not all([bucket, schema, table]):
-            return
-
-        load_obj = client.list_objects(
-            bucket_name=bucket,
-            prefix=f"{cluster_prefix}/{schema}/{table}/",
-        )
-        load_dirs = [x.object_name for x in load_obj]
-        load_dirs.sort(reverse=True)
-        if len(load_dirs) > 2:
-            for load_dir in load_dirs[2:]:
-                for removed in client.list_objects(bucket_name=bucket, prefix=load_dir, recursive=True):
-                    client.remove_object(bucket_name=bucket, object_name=removed.object_name)
-
-    def execute(self, context: Context) -> Any:
-        # при желании — чистка старых наборов (закомментировано, чтобы не мешать отладке)
-        # self._cleanup_minio_prefixes()
-        return super().execute(context=context)
-
-
-{# template_dir/dag_clickhouse_dm/insert_into_write.sql #}
-{%- set cols = (params.get('columns') or '') | trim -%}
-
-{%- if cols %}
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ cols }} )
-SELECT {{ cols }}
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-{%- else %}
--- Fallback: если columns пуст — грузим все поля, чтобы не падать
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3"
-SELECT *
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-{%- endif %}
+rgm-s-dwhair01
+*** Found local files:
+***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.clear_minio_insert_into_s3/attempt=59.log
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1361} INFO - Starting attempt 59 of 60
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlMinioOperator): counterparty.clear_minio_insert_into_s3> on 2025-10-09 07:45:53.440259+00:00
+[2025-10-10, 16:23:49 MSK] {standard_task_runner.py:57} INFO - Started process 128490 to run task
+[2025-10-10, 16:23:49 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.clear_minio_insert_into_s3', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1936476', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmpp2iils_6']
+[2025-10-10, 16:23:49 MSK] {standard_task_runner.py:85} INFO - Job 1936476: Subtask counterparty.clear_minio_insert_into_s3
+[2025-10-10, 16:23:49 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='Ryzhova' AIRFLOW_CTX_DAG_ID='DAG_CLICKHOUSE_DM' AIRFLOW_CTX_TASK_ID='counterparty.clear_minio_insert_into_s3' AIRFLOW_CTX_EXECUTION_DATE='2025-10-09T07:45:53.440259+00:00' AIRFLOW_CTX_TRY_NUMBER='59' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-09T07:45:53.440259+00:00'
+[2025-10-10, 16:23:49 MSK] {base.py:73} INFO - Using connection ID 'minio_prod' for task execution.
+[2025-10-10, 16:23:49 MSK] {sql.py:274} INFO - Executing: ['DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";', 'CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(\nlike "dict_dds"."counterparty"\n)\nLOCATION (\n   \'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod\'\n) ON ALL\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_export\')\nENCODING \'UTF8\'\nDISTRIBUTED RANDOMLY;', '\nINSERT INTO raw_ext."counterparty_write_s3" (  )\nSELECT \nFROM "dict_dds"."counterparty";\n']
+[2025-10-10, 16:23:49 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 16:23:49 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2025-10-10, 16:23:49 MSK] {sql.py:418} INFO - Running statement: DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";, parameters: None
+[2025-10-10, 16:23:49 MSK] {sql.py:418} INFO - Running statement: CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(
+like "dict_dds"."counterparty"
+)
+LOCATION (
+   'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod'
+) ON ALL
+FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
+ENCODING 'UTF8'
+DISTRIBUTED RANDOMLY;, parameters: None
+[2025-10-10, 16:23:49 MSK] {sql.py:418} INFO - Running statement: 
+INSERT INTO raw_ext."counterparty_write_s3" (  )
+SELECT 
+FROM "dict_dds"."counterparty";
+, parameters: None
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/dags/plugins/custom_operators/SqlMinioOperator.py", line 66, in execute
+    super().execute(context=context)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/operators/sql.py", line 280, in execute
+    output = hook.run(
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/hooks/sql.py", line 392, in run
+    self._run_command(cur, sql_statement, parameters)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/providers/common/sql/hooks/sql.py", line 423, in _run_command
+    cur.execute(sql_statement)
+psycopg2.errors.SyntaxError: syntax error at or near ")"
+LINE 2: INSERT INTO raw_ext."counterparty_write_s3" (  )
+                                                       ^
+[2025-10-10, 16:23:49 MSK] {taskinstance.py:1400} INFO - Marking task as UP_FOR_RETRY. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.clear_minio_insert_into_s3, execution_date=20251009T074553, start_date=20251010T132349, end_date=20251010T132349
+[2025-10-10, 16:23:49 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1936476 for task counterparty.clear_minio_insert_into_s3 (syntax error at or near ")"
+LINE 2: INSERT INTO raw_ext."counterparty_write_s3" (  )
+                                                       ^
+; 128490)
+[2025-10-10, 16:23:49 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
+[2025-10-10, 16:23:50 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check

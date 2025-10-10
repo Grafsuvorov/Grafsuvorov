@@ -1,312 +1,153 @@
-CREATE WRITABLE EXTERNAL TABLE "raw_ext"."{{ params.table_name }}_write_s3"(
-like "{{ params.table_schema }}"."{{ params.table_name }}"
-)
-LOCATION (
-   'pxf://{{ params.minio_bucket }}/{% if params.cluster == 'PROD' %}gp_prod{% else %}gp_dev{% endif %}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}?PROFILE=s3:parquet&SERVER=minioprod'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
-ENCODING 'UTF8'
-{%- if params.table_schema == 'dict_dds' %}
-DISTRIBUTED RANDOMLY
-{%- endif -%}
-;
+from typing import Any, Sequence, Dict
+from airflow.hooks.base import BaseHook
+from airflow.hooks.postgres_hook import PostgresHook  # оставляю как было
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.models import Variable
+from airflow.utils.context import Context
+from minio import Minio
+from plugins.help_utility.help_utility import get_parquet_dir_with_ts
+import os
+import yaml
 
 
-INSERT INTO dm."{{ params.table_name }}_test"(
-    "counterparty_code",
-    "counterparty_truncated_code",
-    "counterparty_search_name",
-    "dt_from",
-    "dt_to",
-    "counterparty_short_name",
-    "counterparty_full_name",
-    "counterparty_extended_name",
-    "address_code",
-    "is_order_locked_for_customer",
-    "industry_code",
-    "dt_created",
-    "created_by",
-    "is_billing_locked_for_customer",
-    "counterparty_group_code",
-    "counterparty_account_group_code",
-    "is_delivery_locked_for_customer",
-    "city_location_code",
-    "is_deleted",
-    "is_posting_locked",
-    "language_code",
-    "counterparty_tin_code",
-    "okpo_code",
-    "is_liable_for_vat",
-    "transport_zone_for_delivery_code",
-    "is_alternative_payer_allowed",
-    "counterparty_tin_nonresident_code",
-    "industry_second_code",
-    "is_person",
-    "is_none_military_used",
-    "term_group_3_code",
-    "is_alternative_payer_account_allowed",
-    "kpp_code",
-    "ogrn_code",
-    "almer_bank_code",
-    "is_sales_locked_for_customer",
-    "is_blocked_for_delete",
-    "counterparty_mdm_code",
-    "person_passport_number",
-    "person_snils_code",
-    "dt_person_date_of_birth",
-    "ifns_code",
-    "dt_updated",
-    "customer_crm_code",
-    "counterparty_category_code",
-    "market_in_sales_order_code",
-    "is_used_in_eits",
-    "counterparty_status_code",
-    "counterparty_bankrupt_status_code",
-    "is_house_program_participant",
-    "is_purchase_locked_for_supplier",
-    "is_functionality_locked",
-    "is_alternative_payee_account",
-    "service_agent_scheme_group_code",
-    "producer_external_code",
-    "counterparty_hfm_code",
-    "is_related_party_tco",
-    "is_group_company_affiliated",
-    "is_related_party_rsbo",
-    "is_bankrupt",
-    "is_lawsuit_exist",
-    "is_fns_restriction_list_exist",
-    "relation_type_code",
-    "is_active",
-    "id",
-    "dttm_inserted",
-    "dttm_updated",
-    "job_name",
-    "deleted_flag")
-SELECT
-    "counterparty_code",
-    "counterparty_truncated_code",
-    "counterparty_search_name",
-    "dt_from",
-    "dt_to",
-    "counterparty_short_name",
-    "counterparty_full_name",
-    "counterparty_extended_name",
-    "address_code",
-    "is_order_locked_for_customer",
-    "industry_code",
-    "dt_created",
-    "created_by",
-    "is_billing_locked_for_customer",
-    "counterparty_group_code",
-    "counterparty_account_group_code",
-    "is_delivery_locked_for_customer",
-    "city_location_code",
-    "is_deleted",
-    "is_posting_locked",
-    "language_code",
-    "counterparty_tin_code",
-    "okpo_code",
-    "is_liable_for_vat",
-    "transport_zone_for_delivery_code",
-    "is_alternative_payer_allowed",
-    "counterparty_tin_nonresident_code",
-    "industry_second_code",
-    "is_person",
-    "is_none_military_used",
-    "term_group_3_code",
-    "is_alternative_payer_account_allowed",
-    "kpp_code",
-    "ogrn_code",
-    "almer_bank_code",
-    "is_sales_locked_for_customer",
-    "is_blocked_for_delete",
-    "counterparty_mdm_code",
-    "person_passport_number",
-    "person_snils_code",
-    "dt_person_date_of_birth",
-    "ifns_code",
-    "dt_updated",
-    "customer_crm_code",
-    "counterparty_category_code",
-    "market_in_sales_order_code",
-    "is_used_in_eits",
-    "counterparty_status_code",
-    "counterparty_bankrupt_status_code",
-    "is_house_program_participant",
-    "is_purchase_locked_for_supplier",
-    "is_functionality_locked",
-    "is_alternative_payee_account",
-    "service_agent_scheme_group_code",
-    "producer_external_code",
-    "counterparty_hfm_code",
-    "is_related_party_tco",
-    "is_group_company_affiliated",
-    "is_related_party_rsbo",
-    "is_bankrupt",
-    "is_lawsuit_exist",
-    "is_fns_restriction_list_exist",
-    "relation_type_code",
-    "is_active",
-    "id",
-    "dttm_inserted",
-    "dttm_updated",
-    "job_name",
-    "deleted_flag"
-FROM s3(
-    {%- if params.cluster == 'PROD' %}
-    minio,
-    url='https://{{ conn.minio.host }}:{{ conn.minio.port }}/{{ params.minio_bucket }}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
-    format='PARQUET'
-    {%- else %}
-    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
-    '{{ conn.minio_prod.login }}',
-    '{{ conn.minio_prod.password }}',
-    'Parquet'
-    {%- endif -%}
-)
-settings max_threads=20, max_insert_threads=20, input_format_parallel_parsing=0;
+class SqlMetaMinioOperator(SQLExecuteQueryOperator):
+    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
+    template_ext: Sequence[str] = (".sql",)
+    template_fields_renderers = {"columns": "sql",}
+    ui_color = "#89d3f5"
+    
+    def __init__(
+            self,
+            sql: Any,
+            autocommit: bool,
+            conn_id: str,
+            minio_conn: str,
+            secure=bool,     # как у тебя
+            **kwargs
+    ):
+        super().__init__(sql=sql, **kwargs)
+        self.sql = sql
+        self.autocommit = autocommit
+        self.conn_id = conn_id
+        self.minio_conn = minio_conn
+        self.secure = secure
+        self.params.update()
 
+    # === ВАЖНО: используем get_template_context (он точно вызывается в AF 2.x) ===
+    def get_template_context(self, context: Context) -> dict:
+        ctx = super().get_template_context(context)
 
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3"(
-    "counterparty_code",
-    "counterparty_truncated_code",
-    "counterparty_search_name",
-    "dt_from",
-    "dt_to",
-    "counterparty_short_name",
-    "counterparty_full_name",
-    "counterparty_extended_name",
-    "address_code",
-    "is_order_locked_for_customer",
-    "industry_code",
-    "dt_created",
-    "created_by",
-    "is_billing_locked_for_customer",
-    "counterparty_group_code",
-    "counterparty_account_group_code",
-    "is_delivery_locked_for_customer",
-    "city_location_code",
-    "is_deleted",
-    "is_posting_locked",
-    "language_code",
-    "counterparty_tin_code",
-    "okpo_code",
-    "is_liable_for_vat",
-    "transport_zone_for_delivery_code",
-    "is_alternative_payer_allowed",
-    "counterparty_tin_nonresident_code",
-    "industry_second_code",
-    "is_person",
-    "is_none_military_used",
-    "term_group_3_code",
-    "is_alternative_payer_account_allowed",
-    "kpp_code",
-    "ogrn_code",
-    "almer_bank_code",
-    "is_sales_locked_for_customer",
-    "is_blocked_for_delete",
-    "counterparty_mdm_code",
-    "person_passport_number",
-    "person_snils_code",
-    "dt_person_date_of_birth",
-    "ifns_code",
-    "dt_updated",
-    "customer_crm_code",
-    "counterparty_category_code",
-    "market_in_sales_order_code",
-    "is_used_in_eits",
-    "counterparty_status_code",
-    "counterparty_bankrupt_status_code",
-    "is_house_program_participant",
-    "is_purchase_locked_for_supplier",
-    "is_functionality_locked",
-    "is_alternative_payee_account",
-    "service_agent_scheme_group_code",
-    "producer_external_code",
-    "counterparty_hfm_code",
-    "is_related_party_tco",
-    "is_group_company_affiliated",
-    "is_related_party_rsbo",
-    "is_bankrupt",
-    "is_lawsuit_exist",
-    "is_fns_restriction_list_exist",
-    "relation_type_code",
-    "is_active",
-    "id",
-    "dttm_inserted",
-    "dttm_updated",
-    "job_name",
-    "deleted_flag")
-SELECT
-    "counterparty_code",
-    "counterparty_truncated_code",
-    "counterparty_search_name",
-    tech_etl.validate_date("dt_from"),
-    tech_etl.validate_date("dt_to"),
-    "counterparty_short_name",
-    "counterparty_full_name",
-    "counterparty_extended_name",
-    "address_code",
-    "is_order_locked_for_customer",
-    "industry_code",
-    tech_etl.validate_date("dt_created"),
-    "created_by",
-    "is_billing_locked_for_customer",
-    "counterparty_group_code",
-    "counterparty_account_group_code",
-    "is_delivery_locked_for_customer",
-    "city_location_code",
-    "is_deleted",
-    "is_posting_locked",
-    "language_code",
-    "counterparty_tin_code",
-    "okpo_code",
-    "is_liable_for_vat",
-    "transport_zone_for_delivery_code",
-    "is_alternative_payer_allowed",
-    "counterparty_tin_nonresident_code",
-    "industry_second_code",
-    "is_person",
-    "is_none_military_used",
-    "term_group_3_code",
-    "is_alternative_payer_account_allowed",
-    "kpp_code",
-    "ogrn_code",
-    "almer_bank_code",
-    "is_sales_locked_for_customer",
-    "is_blocked_for_delete",
-    "counterparty_mdm_code",
-    "person_passport_number",
-    "person_snils_code",
-    "dt_person_date_of_birth",
-    "ifns_code",
-    tech_etl.validate_date("dt_updated"),
-    "customer_crm_code",
-    "counterparty_category_code",
-    "market_in_sales_order_code",
-    "is_used_in_eits",
-    "counterparty_status_code",
-    "counterparty_bankrupt_status_code",
-    "is_house_program_participant",
-    "is_purchase_locked_for_supplier",
-    "is_functionality_locked",
-    "is_alternative_payee_account",
-    "service_agent_scheme_group_code",
-    "producer_external_code",
-    "counterparty_hfm_code",
-    "is_related_party_tco",
-    "is_group_company_affiliated",
-    "is_related_party_rsbo",
-    "is_bankrupt",
-    "is_lawsuit_exist",
-    "is_fns_restriction_list_exist",
-    "relation_type_code",
-    "is_active",
-    "id",
-    "dttm_inserted",
-    "dttm_updated",
-    "job_name",
-    "deleted_flag"
-FROM "{{ params.table_schema }}"."{{ params.table_name }}" where 1=1 ;
-truncate table dm."{{ params.table_name }}_test" sync;
-DROP EXTERNAL TABLE IF EXISTS "raw_ext"."{{ params.table_name }}_write_s3";
+        # сливаем params из self и из текущего контекста (что положил генератор)
+        base_params: Dict[str, Any] = (getattr(self, "params", {}) or {}).copy()
+        ctx.setdefault("params", {})
+        p_in_ctx: Dict[str, Any] = ctx["params"] or {}
+        p: Dict[str, Any] = {**base_params, **p_in_ctx}
+
+        # дефолты, чтобы рендер не падал
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
+        p.setdefault("cluster", "PROD" if Variable.get("cluster", "dev").lower() == "prod" else "DEV")
+        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+
+        schema = p.get("table_schema")
+        table = p.get("table_name")
+        if schema and table:
+            meta_path = os.path.join(
+                os.environ.get("AIRFLOW_HOME"),
+                'meta_info',
+                'database',
+                'clickhouse',
+                'schema_name',
+                schema,
+                'table' if schema != 'dm_view' else 'view',
+                table,
+                'meta_data_file.yaml'
+            )
+
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r') as file:
+                    yaml_data = yaml.safe_load(file) or {}
+
+                # columns — как у тебя: в одинарных кавычках и через переносы
+                cols = ""
+                for att in yaml_data.get('attributes', []):
+                    cols += "'" + att['column_name_click'] + "',\n"
+                p['columns'] = cols[:-2] if cols else ""
+
+                if yaml_data.get('settings_external_table'):
+                    _set = yaml_data.get('settings_external_table')
+                    p['settings_external_table'] = 'settings ' + ', '.join(
+                        f"{key} = {value}" for key, value in _set.items()
+                    )
+
+        ctx["params"] = p
+        return ctx
+    # === /ВАЖНО ===
+    
+    def remove_file(self, client, load_dir):
+        for removed_object in client.list_objects(
+                bucket_name=self.params.get('minio_bucket'),
+                prefix=f"{load_dir}",
+                recursive=True
+        ):
+            self.log.info(f'Delete {removed_object.object_name}')
+            client.remove_object(
+                bucket_name=self.params.get('minio_bucket'),
+                object_name=removed_object.object_name
+            )
+    
+    def execute(self, context) -> Any:
+        ts_date = get_parquet_dir_with_ts()
+        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev'
+        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
+        
+        hook = BaseHook.get_connection(self.minio_conn)
+        client = Minio(
+            f'{hook.host}:{hook.port}',
+            access_key=hook.login,
+            secret_key=hook.password,
+            secure=self.secure
+        )
+        self.remove_file(client=client, load_dir=minio_dir)
+        
+        load_obj = client.list_objects(
+            bucket_name=self.params.get('minio_bucket'),
+            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
+        )
+        
+        load_dirs = [x.object_name for x in load_obj]
+        load_dirs.sort(reverse=True)
+        if len(load_dirs) > 2:
+            for load_dir in load_dirs[2:]:
+                self.remove_file(client=client, load_dir=load_dir)
+        
+        # ниже твой прежний код — он уже не влияет на рендер
+        meta_path = os.path.join(os.environ.get("AIRFLOW_HOME"),
+                                 'meta_info',
+                                 'database',
+                                 'clickhouse',
+                                 'schema_name',
+                                 self.params['table_schema'],
+                                 'table' if self.params['table_schema'] != 'dm_view' else 'view',
+                                 self.params['table_name'],
+                                 'meta_data_file.yaml')
+        print('meta_path', meta_path)
+        self.params['columns'] = ''
+        self.params['settings_external_table'] = ''
+        with open(meta_path, 'r') as file:
+            yaml_data = yaml.safe_load(file) or {}
+        
+            columns = ""
+            for att in yaml_data.get('attributes', []):
+                columns += '\'' + att['column_name_click'] + '\',\n'
+            columns = columns[:-2] if columns else ""
+            self.params['columns'] = columns
+            print(columns)
+            if yaml_data.get('settings_external_table'):
+                _set = yaml_data.get('settings_external_table')
+                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in _set.items()])
+                print('settings_external_table -', settings_external_table)
+                self.params['settings_external_table'] = settings_external_table
+        print('context', context['params'])        
+        self.render_template_fields(context)
+        super().execute(context=context)

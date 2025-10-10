@@ -1,8 +1,249 @@
-CREATE MATERIALIZED VIEW rpt_sales_mv
-DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code)
-AS
-SELECT ... -- ваш тяжёлый запрос
-WITH NO DATA;
+Кто что подметил / пропустил
 
--- Первичное заполнение и регулярный пересчёт:
-REFRESH MATERIALIZED VIEW rpt_sales_mv;  -- без CONCURRENTLY в GP
+Изначальный скрипт
+
+✅ Простая логика, всё «в лоб».
+
+❌ Сканирует и джойнит весь ods.ckmlcr_ral и ods.mlcd_ral (десятки/сотни млн строк) — перерассылки и огромные HashAgg/HashJoin.
+
+❌ LEAD(...) прямо по сырому ckmlpp со строковыми конкатенациями дат.
+
+❌ Много вычислений в одном большом запросе → ORCA долго планирует.
+
+Костя
+
+✅ Схлопнул CASE ... THEN lead(...) ELSE ... в COALESCE(lead(...) - '1 day', '2299-12-31') — чище и чуть проще оптимизатору.
+
+❌ Архитектурно всё то же: джойним полный ODS, нет урезания по ключам.
+
+Анатолий
+
+✅ Вынес предварительную вытяжку полей во временную ckmlpp → читаемее финальный insert.
+
+❌ distributed randomly у широкой промежуточной — ломает локальность джойнов; лишние движения данных.
+
+❌ Всё равно нет урезания ckmlcr/mlcd по ключам из pp, окно по широкой таблице.
+
+Настя
+
+✅ Вынесла расчет дат в temp-таблицу ckmlpp (меньше дублирования вычислений).
+
+✅ Перенесла фильтры untper/curtp/categ «вниз», ближе к источникам.
+
+❌ Использует два join’а к ckmlcr_2 (один как «текущий», один как «следующий») — фактически делает две копии того же источника (дорого по I/O).
+Идея правильная (разные роли), но лучше: для «текущего» взять урезанный cr_curr, а для «следующего» — отдельный урезанный cr_next.
+
+❌ В формуле dt_valid_to есть логическая опечатка: order by dt_valid_from - interval '1 day' (минус стоит в ORDER BY, а не при вычитании из lead(...)).
+
+Быстрый «идеальный» вариант
+
+Идея:
+
+Сначала делаем «узкое ядро» pp_base (агрегат/дедуп по (kalnr,bdatj,poper) + dt_valid_from).
+
+Из него получаем тонкие ключи для урезания больших ODS (тройной ключ и «постинг-даты»).
+
+Считаем окно LEAD только на (kalnr, dt_valid_from) — узко и быстро.
+
+Урезаем ckmlcr и mlcd по ключам из п.2.
+
+Финально собираем (при необходимости отключаем ORCA только на финальном шаге).
+
+Все временные — AOCO + ZSTD, распределение подобрано под локальные джойны.
+
+-- Сессия/память
+SET gp_workfile_compression = on;
+SET statement_mem = '4GB';
+SET optimizer = on;                   -- ORCA включен
+SET gp_autostats_mode = 'NONE';
+
+--------------------------
+-- 1) База PP (узкое ядро)
+--------------------------
+CREATE TEMP TABLE pp_base
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT
+  kalnr,
+  bdatj,
+  poper,
+  make_date(bdatj::int, substring(poper,2,2)::int, 1) AS dt_valid_from,
+  MAX(umkumo) AS umkumo,          -- если возможны дубли по тройке — согласуй правило
+  MAX(abkumo) AS abkumo,
+  MAX(zukumo) AS zukumo,
+  MAX(lbkum)  AS lbkum
+FROM ods.ckmlpp_ral
+WHERE untper = '000'
+GROUP BY kalnr,bdatj,poper
+DISTRIBUTED BY (kalnr,bdatj,poper);
+
+ALTER TABLE pp_base
+  ALTER COLUMN kalnr SET STATISTICS 200,
+  ALTER COLUMN dt_valid_from SET STATISTICS 200;
+ANALYZE pp_base (kalnr, dt_valid_from, bdatj, poper);
+
+-----------------------------------------
+-- 2) Тонкие ключи для урезания больших ODS
+-----------------------------------------
+CREATE TEMP TABLE pp_keys3
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT DISTINCT kalnr,bdatj,poper
+FROM pp_base
+DISTRIBUTED BY (kalnr);
+ANALYZE pp_keys3 (kalnr);
+
+CREATE TEMP TABLE pp_postings
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT DISTINCT kalnr, dt_valid_from AS dt_posting
+FROM pp_base
+DISTRIBUTED BY (kalnr);
+ANALYZE pp_postings (kalnr, dt_posting);
+
+-----------------------------------------
+-- 3) Узкое окно LEAD на (kalnr, dt_valid_from)
+-----------------------------------------
+CREATE TEMP TABLE pp_dates
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT
+  kalnr,
+  dt_valid_from,
+  COALESCE(
+    LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+    DATE '2299-12-31'
+  )::date AS dt_valid_to
+FROM (
+  SELECT kalnr, dt_valid_from
+  FROM pp_base
+  GROUP BY kalnr, dt_valid_from      -- убрали дубли дат
+) s
+DISTRIBUTED BY (kalnr);
+ANALYZE pp_dates (kalnr, dt_valid_from);
+
+-----------------------------------------
+-- 4) Урезанные агрегаты из больших таблиц
+-----------------------------------------
+-- 4.1 Текущий CR по тройному ключу
+CREATE TEMP TABLE cr_curr
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT
+  c.kalnr, c.bdatj, c.poper,
+  MAX(c.stprs)    AS stprs,
+  MAX(c.peinh)    AS peinh,
+  MAX(c.pvprs)    AS pvprs,
+  MAX(c.abprd_o)  AS abprd_o,
+  MAX(c.abprd_mo) AS abprd_mo,
+  MAX(c.vprsv)    AS vprsv,
+  MAX(c.salk3)    AS salk3
+FROM ods.ckmlcr_ral c
+JOIN pp_keys3 k
+  ON k.kalnr=c.kalnr AND k.bdatj=c.bdatj AND k.poper=c.poper
+WHERE c.untper='000' AND c.curtp='10'
+GROUP BY c.kalnr,c.bdatj,c.poper
+DISTRIBUTED BY (kalnr,bdatj,poper);
+ANALYZE cr_curr (kalnr,bdatj,poper);
+
+-- 4.2 Следующий CR на первое число следующего месяца (только нужные постинги)
+CREATE TEMP TABLE cr_next
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT
+  c.kalnr,
+  (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
+  MAX(c.salk3) AS salk3
+FROM ods.ckmlcr_ral c
+JOIN pp_postings p
+  ON p.kalnr=c.kalnr
+ AND p.dt_posting = (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
+WHERE c.untper='000' AND c.curtp='10'
+GROUP BY c.kalnr, (make_date(c.bdatj::int, substring(c.poper,2,2)::int, 1) + INTERVAL '1 month')::date
+DISTRIBUTED BY (kalnr,dt_posting);
+ANALYZE cr_next (kalnr, dt_posting);
+
+-- 4.3 MLCD по тройке
+CREATE TEMP TABLE mlcd_agg
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
+ON COMMIT DROP AS
+SELECT
+  m.kalnr, m.bdatj, m.poper,
+  SUM(m.salk3)  AS salk3,
+  SUM(m.estprd) AS estprd,
+  SUM(m.mstprd) AS mstprd
+FROM ods.mlcd_ral m
+JOIN pp_keys3 k USING (kalnr,bdatj,poper)
+WHERE m.curtp='10' AND m.categ IN ('ZU','VP','PC')
+GROUP BY m.kalnr,m.bdatj,m.poper
+DISTRIBUTED BY (kalnr,bdatj,poper);
+ANALYZE mlcd_agg (kalnr,bdatj,poper);
+
+-----------------------------------------
+-- 5) Финальная сборка (минимум вычислений, предсказуемые джойны)
+--    Если ORCA долго мыслит на этом шаге — можно временно отключить.
+-----------------------------------------
+-- SET optimizer = off;  -- включи при долгом планировании финала
+
+INSERT INTO dm.material_price_calculation
+SELECT
+  b.kalnr               AS calculation_code,
+  b.dt_valid_from,
+  d.dt_valid_to,
+
+  c.vprsv               AS price_valuation_type_code,
+  c.stprs               AS standard_price_amount,
+  c.peinh               AS price_unit_code,
+  c.pvprs               AS moving_average_price_amount,
+
+  CASE WHEN (b.umkumo + b.abkumo + b.zukumo)=0 THEN 0
+       ELSE TRUNC(
+              CAST(ROUND(
+                    (c.stprs / c.peinh) * (b.umkumo + b.abkumo)
+                  + c.abprd_o + c.abprd_mo
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd, 0)
+              ,2) AS NUMERIC(40,20))
+              / (b.umkumo + b.abkumo + b.zukumo), 15)
+  END AS average_weighted_stock_price_rule3_amount,
+
+  CASE WHEN (b.abkumo + b.umkumo + b.zukumo)<>0
+       THEN TRUNC(
+              CAST(COALESCE(n.salk3,0) + COALESCE(m.salk3,0) + COALESCE(m.estprd,0) + COALESCE(m.mstprd,0) AS NUMERIC(40,20))
+              / (b.abkumo + b.umkumo + b.zukumo), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_prev_date_amount,
+
+  CASE WHEN b.lbkum<>0
+       THEN TRUNC(CAST(COALESCE(c.salk3,0) AS NUMERIC(40,20)) / b.lbkum, 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_next_date_amount,
+
+  h.price_rule_code
+FROM pp_base b
+JOIN pp_dates d
+  ON d.kalnr=b.kalnr AND d.dt_valid_from=b.dt_valid_from
+LEFT JOIN cr_curr  c ON c.kalnr=b.kalnr AND c.bdatj=b.bdatj AND c.poper=b.poper
+LEFT JOIN cr_next  n ON n.kalnr=b.kalnr AND n.dt_posting=b.dt_valid_from
+LEFT JOIN mlcd_agg m ON m.kalnr=b.kalnr AND m.bdatj=b.bdatj AND m.poper=b.poper
+LEFT JOIN dds.material_ledger_header h
+  ON h.calculation_code=b.kalnr;
+
+Почему это быстрее
+
+Большие ckmlcr_ral и mlcd_ral урезаем по ключам из pp_base → на порядки меньше строк в Join/Agg и в сетевых Motion’ах.
+
+Окно LEAD считаем на узкой выборке (kalnr, dt_valid_from) → сорт и WindowAgg существенно дешевле.
+
+Распределение DISTRIBUTED BY подобрано так, чтобы все тяжёлые джойны были локальные:
+
+по тройке (kalnr,bdatj,poper) для cr_curr и mlcd_agg;
+
+по (kalnr,dt_posting) для cr_next;
+
+по (kalnr,dt_valid_from) для pp_base ↔ pp_dates.
+
+AOCO+ZSTD для всех темпов → меньше I/O на материализациях.
+
+ANALYZE на нужных колонках → стабильнее планы.
+
+При необходимости финальный шаг делаем с optimizer=off или разбиваем на 2–3 простых шага — план строится мгновенно.

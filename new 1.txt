@@ -1,6 +1,47 @@
+# /home/airflow/plugins/custom_operators/SqlExecuteOperator.py
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional
+
+from airflow.models.baseoperator import BaseOperator        # ВАЖНО: правильный импорт для AF 2.x
+from airflow.hooks.base import BaseHook                     # нужен для get_db_hook
+from airflow.utils.decorators import apply_defaults         # если хотите сохранить декоратор
+
+class SqlExecuteOperator(BaseOperator):
+    """
+    Performs checks against a DB. Expects a SQL returning one row.
+    get_db_hook() must return a DB hook.
+    """
+    template_fields = ('sql',)
+    template_ext = ('.hql', '.sql',)
+    ui_color = '#fff7e6'
+
+    @apply_defaults
+    def __init__(
+            self,
+            sql: str,
+            conn_id: Optional[str] = None,
+            *args, **kwargs
+    ):
+        super(SqlExecuteOperator, self).__init__(*args, **kwargs)
+        self.conn_id = conn_id
+        self.sql = sql
+
+    def get_db_hook(self):
+        return BaseHook.get_hook(conn_id=self.conn_id)
+
+    def execute(self, context: Any = None) -> int:
+        logging.info('Executing SQL statement: %s', self.sql)
+        records = self.get_db_hook().get_first(self.sql)
+        logging.info("Record: %s", records)
+        return int(records[0]) if records and records[0] is not None else 0
+
+
+
 from typing import Any, Sequence, Dict
 from airflow.hooks.base import BaseHook
-from airflow.hooks.postgres_hook import PostgresHook  # оставил как было
+from airflow.hooks.postgres_hook import PostgresHook  # оставляю как было у вас
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.models import Variable
 from airflow.utils.context import Context
@@ -13,17 +54,17 @@ import yaml
 class SqlMetaMinioOperator(SQLExecuteQueryOperator):
     template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
     template_ext: Sequence[str] = (".sql",)
-    template_fields_renderers = {"columns": "sql"}
+    template_fields_renderers = {"columns": "sql",}
     ui_color = "#89d3f5"
-
+    
     def __init__(
-        self,
-        sql: Any,
-        autocommit: bool,
-        conn_id: str,
-        minio_conn: str,
-        secure=bool,   # оставляю как у вас (хотя лучше secure: bool = False)
-        **kwargs,
+            self,
+            sql: str,
+            autocommit: bool,
+            conn_id: str,
+            minio_conn: str,
+            secure=bool,     # оставил как у вас; (хотя лучше secure: bool = False)
+            **kwargs
     ):
         super().__init__(sql=sql, **kwargs)
         self.sql = sql
@@ -33,213 +74,128 @@ class SqlMetaMinioOperator(SQLExecuteQueryOperator):
         self.secure = secure
         self.params.update()
 
-    # === FIX: готовим params ДО рендера, чтобы {{ params.columns }} и др. существовали ===
+    # === FIX: готовим params ДО рендера Jinja, чтобы {{ params.columns }} существовал ===
     def prepare_template_context(self, context: Context) -> dict:
         ctx = super().prepare_template_context(context)
 
-        # берём базовые params из self.params и то, что уже есть в ctx
+        # берём базовые params из self и из ctx, объединяем (ctx перекрывает self)
         base_params: Dict[str, Any] = (getattr(self, "params", {}) or {}).copy()
         ctx.setdefault("params", {})
         p_in_ctx: Dict[str, Any] = ctx["params"] or {}
-
-        # аккуратно объединяем (значения из контекста имеют приоритет)
         p: Dict[str, Any] = {**base_params, **p_in_ctx}
 
-        # дефолты — чтобы шаблон не падал даже если YAML пустой/ключей нет
+        # дефолты (шаблон не упадёт, даже если YAML пустой)
         p.setdefault("columns", "")
         p.setdefault("settings_external_table", "")
 
-        # table_schema/table_name могут прийти из YAML-конфига генератора
+        # из чего строим путь к YAML
         schema = p.get("table_schema")
         table = p.get("table_name")
         if not schema or not table:
-            # ключи ещё не притащили — вернём пустые поля, но НЕ падаем
+            # ключей пока нет — отдаём пустые поля; Jinja не упадёт
             ctx["params"] = p
             return ctx
 
-        # читаем YAML метаданных (как у вас)
         meta_path = os.path.join(
             os.environ.get("AIRFLOW_HOME"),
-            "meta_info",
-            "database",
-            "clickhouse",
-            "schema_name",
+            'meta_info',
+            'database',
+            'clickhouse',
+            'schema_name',
             schema,
-            "table" if schema != "dm_view" else "view",
+            'table' if schema != 'dm_view' else 'view',
             table,
-            "meta_data_file.yaml",
+            'meta_data_file.yaml'
         )
 
         yaml_data = {}
         if os.path.exists(meta_path):
-            with open(meta_path, "r") as file:
+            with open(meta_path, 'r') as file:
                 yaml_data = yaml.safe_load(file) or {}
 
-            # формируем columns ТОЧНО В ВАШЕМ ФОРМАТЕ — в одинарных кавычках и через переносы
+            # собираем columns в вашем формате (с одинарными кавычками и переносами)
             columns = ""
-            for att in yaml_data.get("attributes", []):
-                columns += "'" + att["column_name_click"] + "',\n"
-            p["columns"] = columns[:-2] if columns else ""
+            for att in yaml_data.get('attributes', []):
+                columns += "'" + att['column_name_click'] + "',\n"
+            p['columns'] = columns[:-2] if columns else ""
 
-            # settings_external_table — если есть в YAML
-            if yaml_data.get("settings_external_table"):
-                _set = yaml_data.get("settings_external_table")
-                settings_external_table = "settings " + ", ".join(
+            # опциональные settings
+            if yaml_data.get('settings_external_table'):
+                _set = yaml_data.get('settings_external_table')
+                p['settings_external_table'] = 'settings ' + ', '.join(
                     [f"{key} = {value}" for key, value in _set.items()]
                 )
-                p["settings_external_table"] = settings_external_table
 
-        # кладём объединённые/дополненные параметры обратно в контекст
         ctx["params"] = p
         return ctx
     # === /FIX ===
-
+    
     def remove_file(self, client, load_dir):
         for removed_object in client.list_objects(
-            bucket_name=self.params.get("minio_bucket"),
-            prefix=f"{load_dir}",
-            recursive=True,
+                bucket_name=self.params.get('minio_bucket'),
+                prefix=f"{load_dir}",
+                recursive=True
         ):
-            self.log.info(f"Delete {removed_object.object_name}")
+            self.log.info(f'Delete {removed_object.object_name}')
             client.remove_object(
-                bucket_name=self.params.get("minio_bucket"),
-                object_name=removed_object.object_name,
+                bucket_name=self.params.get('minio_bucket'),
+                object_name=removed_object.object_name
             )
-
+    
     def execute(self, context) -> Any:
         ts_date = get_parquet_dir_with_ts()
-        cluster = "gp_prod" if Variable.get("cluster").lower() == "prod" else "gp_dev"
+        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev'
         minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
-
+        
         hook = BaseHook.get_connection(self.minio_conn)
         client = Minio(
-            f"{hook.host}:{hook.port}",
+            f'{hook.host}:{hook.port}',
             access_key=hook.login,
             secret_key=hook.password,
-            secure=self.secure,
+            secure=self.secure
         )
         self.remove_file(client=client, load_dir=minio_dir)
-
+        
         load_obj = client.list_objects(
-            bucket_name=self.params.get("minio_bucket"),
+            bucket_name=self.params.get('minio_bucket'),
             prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
         )
-
+        
         load_dirs = [x.object_name for x in load_obj]
         load_dirs.sort(reverse=True)
         if len(load_dirs) > 2:
             for load_dir in load_dirs[2:]:
                 self.remove_file(client=client, load_dir=load_dir)
-
-        # ниже — ваш старый блок, он уже не ломает рендер (поля подготовлены выше)
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            "meta_info",
-            "database",
-            "clickhouse",
-            "schema_name",
-            self.params["table_schema"],
-            "table" if self.params["table_schema"] != "dm_view" else "view",
-            self.params["table_name"],
-            "meta_data_file.yaml",
-        )
-        print("meta_path", meta_path)
-        self.params["columns"] = ""
-        self.params["settings_external_table"] = ""
-        with open(meta_path, "r") as file:
+        
+        
+        meta_path = os.path.join(os.environ.get("AIRFLOW_HOME"),
+                                 'meta_info',
+                                 'database',
+                                 'clickhouse',
+                                 'schema_name',
+                                 self.params['table_schema'],
+                                 'table' if self.params['table_schema'] != 'dm_view' else 'view',
+                                 self.params['table_name'],
+                                 'meta_data_file.yaml')
+        print('meta_path', meta_path)
+        self.params['columns'] = ''
+        self.params['settings_external_table'] = ''
+        with open(meta_path, 'r') as file:
             yaml_data = yaml.safe_load(file) or {}
-
+        
             columns = ""
-            for att in yaml_data.get("attributes", []):
-                columns += "'" + att["column_name_click"] + "',\n"
+            for att in yaml_data.get('attributes', []):
+                columns += '\'' + att['column_name_click'] + '\',\n'
             columns = columns[:-2] if columns else ""
-            self.params["columns"] = columns
+            self.params['columns'] = columns
             print(columns)
-            if yaml_data.get("settings_external_table"):
-                _set = yaml_data.get("settings_external_table")
-                settings_external_table = "settings " + ", ".join([f"{key} = {value}" for key, value in _set.items()])
-                print("settings_external_table -", settings_external_table)
-                self.params["settings_external_table"] = settings_external_table
-
-        print("context", context["params"])
-        self.render_template_fields(context)
+            if yaml_data.get('settings_external_table'):
+                _set = yaml_data.get('settings_external_table')
+                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in _set.items()])
+                print('settings_external_table -', settings_external_table)
+                self.params['settings_external_table'] = settings_external_table
+        print('context', context['params'])        
+        self.render_template_fields(
+            context,
+        )
         super().execute(context=context)
-
-
-# /home/airflow/plugins/custom_operators/SqlExecuteOperator.py
-
-from __future__ import annotations
-
-from typing import Any
-from airflow.models.baseoperator import BaseOperator   # <-- правильный импорт
-from airflow.utils.context import Context              # если используете контекст
-from airflow.models import Variable                    # если нужно
-# другие ваши импорты...
-
-class SqlExecuteOperator(BaseOperator):
-    template_fields = ("sql",)
-
-    def __init__(self, sql: Any, **kwargs):
-        super().__init__(**kwargs)
-        self.sql = sql
-
-    def execute(self, context: Context):
-        # ваша логика...
-        return
-
-Полные шаблоны SQL (микро-правка, чтобы не падало)
-
-Ваши файлы лежат в template_dir/dag_clickhouse_dm/. Ниже «чистые» варианты; ключевая правка только одна — безопасный геттер для колонок.
-
-drop_external_table.sql
-
-DROP EXTERNAL TABLE IF EXISTS "raw_ext"."{{ params.table_name }}_write_s3";
-
-
-create_ext_table.sql
-
-CREATE WRITABLE EXTERNAL TABLE "raw_ext"."{{ params.table_name }}_write_s3"(
-    like "{{ params.table_schema }}"."{{ params.table_name }}"
-)
-LOCATION (
-   'pxf://{{ params.minio_bucket }}/{% if params.cluster == 'PROD' %}gp_prod{% else %}gp_dev{% endif %}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}?PROFILE=s3:parquet&SERVER=minioprod'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
-ENCODING 'UTF8'
-{%- if params.table_schema == 'dict_dds' %}
-DISTRIBUTED RANDOMLY
-{%- endif -%}
-;
-
-
-insert_into_write.sql
-
--- тут вы, судя по логам, тестово вставляете строки; ключевая правка — безопасный геттер
--- чтобы рендер не падал, даже если 'columns' вдруг пустой.
---INSERT INTO raw_ext."{{ params.table_name }}_write_s3"(
---)
-SELECT
-    '{{ params.cluster }}', '{{ params.IS_PROD }}', '{{ params.get("columns","") }}'
-;
-
-
-Если у вас эта вставка должна быть реальной (внешняя таблица и т.д.), и вы хотите подставлять именно список колонок как идентификаторы, то не нужно оборачивать весь список в одинарные кавычки. Тогда пишите без кавычек и без SELECT строк:
-
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ params.get("columns","") }} )
-SELECT {{ params.get("columns","") }} FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-
-Почему раньше не передавались колонки
-
-Airflow рендерит Jinja до execute().
-
-Вы формировали self.params['columns'] в execute() — слишком поздно, к моменту рендера ключа не было → UndefinedError: 'columns'.
-
-Даже после добавления prepare_template_context() он у вас опирался на ctx['params'], где ещё могло не быть table_schema/table_name. Мы это закрыли: теперь берутся значения из self.params и ctx['params'], а если ключей нет — метод не падает и возвращает безопасные дефолты.
-
-После подмены файлов и репарсинга DAG:
-
-баннер Broken plugin уйдёт, когда пофиксите импорт в SqlExecuteOperator.py;
-
-Jinja перестанет падать по columns;
-
-колонки будут подставляться стабильно.

@@ -1,35 +1,66 @@
-{# template_dir/dag_clickhouse_dm/insert_into_write.sql #}
-{%- set cols = params.get('columns') | trim -%}
+# /home/airflow/plugins/custom_operators/SqlExecuteOperator.py
+import logging
 
-{%- if cols %}
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ cols }} )
-SELECT {{ cols }}
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-{%- else %}
--- fallback если params.columns пусто: пишем все колонки как есть
-INSERT INTO raw_ext."{{ params.table_name }}_write_s3"
-SELECT *
-FROM "{{ params.table_schema }}"."{{ params.table_name }}";
-{%- endif %}
+from airflow.models import BaseOperator
+from airflow.hooks.base import BaseHook
+try:
+    # AF2.x: декоратор есть, но помечен deprecated — можно не использовать.
+    from airflow.utils.decorators import apply_defaults
+except Exception:  # если вдруг нет — просто не используем
+    def apply_defaults(f):
+        return f
 
-# plugins/custom_operators/SqlMinioOperator.py
+
+class SqlExecuteOperator(BaseOperator):
+    """
+    Простой оператор, исполняющий SQL и возвращающий первое значение первой строки
+    через get_first() у соответствующего hook.
+    """
+    template_fields = ('sql',)
+    template_ext = ('.hql', '.sql',)
+    ui_color = '#fff7e6'
+
+    @apply_defaults
+    def __init__(self, sql, conn_id=None, *args, **kwargs):
+        super(SqlExecuteOperator, self).__init__(*args, **kwargs)
+        self.conn_id = conn_id
+        self.sql = sql
+
+    def execute(self, context=None):
+        logging.info('Executing SQL statement: %s', self.sql)
+        records = self.get_db_hook().get_first(self.sql)
+        logging.info("Record: %s", records)
+        # Защита от None и пустых ответов
+        if records and records[0] is not None:
+            try:
+                return int(records[0])
+            except Exception:
+                return records[0]
+        return 0
+
+    def get_db_hook(self):
+        return BaseHook.get_hook(conn_id=self.conn_id)
+
+
+
+# /home/airflow/dags/plugins/custom_operators/SqlMetaMinioOperator.py
 from typing import Any, Sequence, Dict
+
 from airflow.hooks.base import BaseHook
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.models import Variable
 from airflow.utils.context import Context
+
 from minio import Minio
 import os
 import yaml
 
-# если нужен твой util — раскомментируй:
-# from plugins.help_utility.help_utility import get_parquet_dir_with_ts
 
-class SqlMinioOperator(SQLExecuteQueryOperator):
+class SqlMetaMinioOperator(SQLExecuteQueryOperator):
     """
-    Оператор для подготовки params (columns, settings_external_table и др.),
-    чистки старых префиксов в MinIO и выполнения SQL-скриптов (DROP/CREATE EXT + INSERT).
-    Совместим с Airflow 2.x.
+    Готовит params (columns, settings_external_table, cluster/IS_PROD) ДО рендера Jinja,
+    опционально чистит старые префиксы в MinIO, затем запускает список SQL-шаблонов.
+    Совместимо с Airflow 2.x.
     """
     template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
     template_ext: Sequence[str] = (".sql",)
@@ -43,7 +74,7 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
         secure: bool = False,
         **kwargs
     ):
-        # 1) local_variables -> params (чтобы schema/name были в params при рендере)
+        # 1) local_variables -> params (чтобы schema/name попали в params до рендера)
         local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
         incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
         merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
@@ -53,18 +84,19 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
         self.minio_conn = minio_conn
         self.secure = secure
 
-    # ---------- подготовка params ДО рендера ----------
-    def _enrich_params(self) -> None:
+    # ---------- Подготовка params ДО рендера ----------
+    def _ensure_params_enriched(self) -> None:
         p = getattr(self, "params", {}) or {}
         p.setdefault("columns", "")
         p.setdefault("settings_external_table", "")
-        # кластер и флаг
+
+        # cluster/IS_PROD
         cluster_var = Variable.get("cluster", "dev")
         p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
         p.setdefault("IS_PROD", p["cluster"] == "PROD")
 
         schema = p.get("table_schema")
-        table  = p.get("table_name")
+        table = p.get("table_name")
         if not (schema and table):
             self.params = p
             return
@@ -81,13 +113,14 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
         if os.path.exists(meta_path):
             with open(meta_path, "r") as f:
                 y = yaml.safe_load(f) or {}
-            # "id", "counterparty_code", ...
+
+            # Список колонок в виде: "col1", "col2", ...
             cols = []
             for att in y.get("attributes", []):
                 name = att.get("column_name_click")
                 if name:
                     cols.append(f'"{name}"')
-            p["columns"] = ", ".join(cols)  # ВАЖНО: без одинарных кавычек вокруг всего блока
+            p["columns"] = ", ".join(cols)
 
             if y.get("settings_external_table"):
                 st = y["settings_external_table"]
@@ -95,27 +128,23 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
 
         self.params = p
 
-    # Airflow 2.x — основной путь для подготовки контекста
+    # Airflow 2.x: основной путь
     def get_template_context(self) -> dict:
-        self._enrich_params()
+        self._ensure_params_enriched()
         ctx = super().get_template_context()
         # не даём dag.params перетереть наши значения
         ctx["params"] = {**self.params, **(ctx.get("params") or {})}
         return ctx
 
-    # подстраховка, если где-то вызывают render_template_fields напрямую
+    # подстраховка (если кто-то зовёт рендер напрямую)
     def render_template_fields(self, context: dict, jinja_env=None) -> None:
-        self._enrich_params()
+        self._ensure_params_enriched()
         context.setdefault("params", {})
         context["params"] = {**self.params, **context["params"]}
         super().render_template_fields(context, jinja_env)
 
-    # ----------- доп. логика работы с MinIO (по желанию) -----------
+    # --- при необходимости можно подключить чистку префиксов MinIO ---
     def _cleanup_minio_prefixes(self) -> None:
-        """
-        Опциональная чистка старых директорий — если тебе это нужно.
-        Оставлено «болванкой»; вызывай из execute() при необходимости.
-        """
         hook = BaseHook.get_connection(self.minio_conn)
         client = Minio(
             f"{hook.host}:{hook.port}",
@@ -126,12 +155,11 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
 
         bucket = self.params.get("minio_bucket")
         schema = self.params.get("table_schema")
-        table  = self.params.get("table_name")
+        table = self.params.get("table_name")
         cluster_prefix = "gp_prod" if self.params.get("IS_PROD") else "gp_dev"
         if not all([bucket, schema, table]):
             return
 
-        # Пример: список префиксов и чистка старых
         load_obj = client.list_objects(
             bucket_name=bucket,
             prefix=f"{cluster_prefix}/{schema}/{table}/",
@@ -143,10 +171,22 @@ class SqlMinioOperator(SQLExecuteQueryOperator):
                 for removed in client.list_objects(bucket_name=bucket, prefix=load_dir, recursive=True):
                     client.remove_object(bucket_name=bucket, object_name=removed.object_name)
 
-    # основной execute — оставляем выполнение SQL за родителем
     def execute(self, context: Context) -> Any:
-        # если нужна чистка — раскомментируй следующую строку
+        # при желании — чистка старых наборов (закомментировано, чтобы не мешать отладке)
         # self._cleanup_minio_prefixes()
-
-        # просто выполняем SQL (он уже срендерится с нужными params)
         return super().execute(context=context)
+
+
+{# template_dir/dag_clickhouse_dm/insert_into_write.sql #}
+{%- set cols = (params.get('columns') or '') | trim -%}
+
+{%- if cols %}
+INSERT INTO raw_ext."{{ params.table_name }}_write_s3" ( {{ cols }} )
+SELECT {{ cols }}
+FROM "{{ params.table_schema }}"."{{ params.table_name }}";
+{%- else %}
+-- Fallback: если columns пуст — грузим все поля, чтобы не падать
+INSERT INTO raw_ext."{{ params.table_name }}_write_s3"
+SELECT *
+FROM "{{ params.table_schema }}"."{{ params.table_name }}";
+{%- endif %}

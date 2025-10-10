@@ -1,504 +1,159 @@
-rgm-s-dwhair01
-*** Found local files:
-***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.clear_minio_insert_into_s3/attempt=52.log
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1361} INFO - Starting attempt 52 of 52
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlMetaMinioOperator): counterparty.clear_minio_insert_into_s3> on 2025-10-09 07:45:53.440259+00:00
-[2025-10-10, 14:31:32 MSK] {standard_task_runner.py:57} INFO - Started process 86447 to run task
-[2025-10-10, 14:31:32 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.clear_minio_insert_into_s3', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1935688', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmpztppwyd4']
-[2025-10-10, 14:31:32 MSK] {standard_task_runner.py:85} INFO - Job 1935688: Subtask counterparty.clear_minio_insert_into_s3
-[2025-10-10, 14:31:32 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
-[2025-10-10, 14:31:32 MSK] {abstractoperator.py:709} ERROR - Exception rendering Jinja template for task 'counterparty.clear_minio_insert_into_s3', field 'sql'. Template: ['DROP EXTERNAL TABLE IF EXISTS "raw_ext"."{{ params.table_name }}_write_s3";', 'CREATE WRITABLE EXTERNAL TABLE "raw_ext"."{{ params.table_name }}_write_s3"(\r\nlike "{{ params.table_schema }}"."{{ params.table_name }}"\r\n)\r\nLOCATION (\r\n   \'pxf://{{ params.minio_bucket }}/{% if params.cluster == \'PROD\' %}gp_prod{% else %}gp_dev{% endif %}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}?PROFILE=s3:parquet&SERVER=minioprod\'\r\n) ON ALL\r\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_export\')\r\nENCODING \'UTF8\'\r\n{%- if params.table_schema == \'dict_dds\' %}\r\nDISTRIBUTED RANDOMLY\r\n{%- endif -%}\r\n;', '--INSERT INTO raw_ext."{{ params.table_name }}_write_s3"(\r\n--  \r\n--)\r\nSELECT\r\n    \'{{ params.columns }}\'\r\n;']
-Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-  File "<template>", line 15, in root
-  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'columns'
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1518, in _run_raw_task
-    self._execute_task_with_callbacks(context, test_mode, session=session)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 1647, in _execute_task_with_callbacks
-    task_orig = self.render_templates(context=context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/taskinstance.py", line 2285, in render_templates
-    original_task.render_template_fields(context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/baseoperator.py", line 1243, in render_template_fields
-    self._do_render_template_fields(self, self.template_fields, context, jinja_env, set())
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/session.py", line 79, in wrapper
-    return func(*args, session=session, **kwargs)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 701, in _do_render_template_fields
-    rendered_content = self.render_template(
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in render_template
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 165, in <listcomp>
-    return [self.render_template(element, context, jinja_env, oids) for element in value]
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 155, in render_template
-    return self._render(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/abstractoperator.py", line 655, in _render
-    return super()._render(template, context, dag=dag)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/template/templater.py", line 112, in _render
-    return render_template_to_string(template, context)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 289, in render_template_to_string
-    return render_template(template, cast(MutableMapping[str, Any], context), native=False)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/helpers.py", line 284, in render_template
-    return "".join(nodes)
-  File "<template>", line 15, in root
-  File "/u01/arf-venv/lib/python3.8/site-packages/jinja2/runtime.py", line 852, in _fail_with_undefined_error
-    raise self._undefined_exception(self._undefined_message)
-jinja2.exceptions.UndefinedError: 'dict object' has no attribute 'columns'
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:1400} INFO - Marking task as FAILED. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.clear_minio_insert_into_s3, execution_date=20251009T074553, start_date=20251010T113132, end_date=20251010T113132
-[2025-10-10, 14:31:32 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1935688 for task counterparty.clear_minio_insert_into_s3 ('dict object' has no attribute 'columns'; 86447)
-[2025-10-10, 14:31:32 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-10-10, 14:31:32 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check
+from typing import Any, Sequence, Dict
+from airflow.hooks.base import BaseHook
+from airflow.hooks.postgres_hook import PostgresHook
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.models import Variable
+from airflow.utils.context import Context
+from minio import Minio
+from plugins.help_utility.help_utility import get_parquet_dir_with_ts
+import os
+import yaml
 
 
+class SqlMetaMinioOperator(SQLExecuteQueryOperator):
+    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
+    template_ext: Sequence[str] = (".sql",)
+    template_fields_renderers = {"columns": "sql",}
+    ui_color = "#89d3f5"
+    
+    def __init__(
+            self,
+            sql: Any,
+            autocommit: bool,
+            conn_id: str,
+            minio_conn: str,
+            secure=bool,
+            **kwargs
+    ):
+        # FIX(1): аккуратно слить local_variables -> params,
+        #         чтобы table_schema/table_name были в params на этапе рендера
+        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
+        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
+        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
 
+        super().__init__(sql=sql, params=merged_params, **kwargs)
 
-schema_name_gp: dict_dds
-schema_name_click: dm
-object_name: counterparty
-segment_options:
-  appendonly: 'true'
-  orientation: column
-  compresstype: zstd
-  compresslevel: '3'
-object_type: table
-engine: ReplicatedMergeTree
-order_by:
-  - counterparty_code
-primary_key:
-  - counterparty_code
-distributed:
-  - REPLICATED
-partitions: null
-settings_external_table:
-  max_threads: 20
-  max_insert_threads: 20
-  input_format_parallel_parsing: 0
-load_type: full
-recreate_mode: drop_create
-attributes:
-  - column_name_click: id
-    column_name_gp: id
-    data_type_click: Int32
-    data_type_gp: int4(32,0)
-    is_nullable: 'false'
-    description: Комментария нет
-  - column_name_click: counterparty_code
-    column_name_gp: counterparty_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'false'
-    description: Комментария нет
-  - column_name_click: counterparty_truncated_code
-    column_name_gp: counterparty_truncated_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_search_name
-    column_name_gp: counterparty_search_name
-    data_type_click: String
-    data_type_gp: varchar(311)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_short_name
-    column_name_gp: counterparty_short_name
-    data_type_click: String
-    data_type_gp: varchar(35)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_full_name
-    column_name_gp: counterparty_full_name
-    data_type_click: String
-    data_type_gp: varchar(300)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_extended_name
-    column_name_gp: counterparty_extended_name
-    data_type_click: String
-    data_type_gp: varchar(300)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: address_code
-    column_name_gp: address_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_order_locked_for_customer
-    column_name_gp: is_order_locked_for_customer
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: industry_code
-    column_name_gp: industry_code
-    data_type_click: String
-    data_type_gp: varchar(4)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dt_created
-    column_name_gp: dt_created
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: created_by
-    column_name_gp: created_by
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_billing_locked_for_customer
-    column_name_gp: is_billing_locked_for_customer
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_group_code
-    column_name_gp: counterparty_group_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_account_group_code
-    column_name_gp: counterparty_account_group_code
-    data_type_click: String
-    data_type_gp: varchar(4)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_delivery_locked_for_customer
-    column_name_gp: is_delivery_locked_for_customer
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: city_location_code
-    column_name_gp: city_location_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_deleted
-    column_name_gp: is_deleted
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_posting_locked
-    column_name_gp: is_posting_locked
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: language_code
-    column_name_gp: language_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_tin_code
-    column_name_gp: counterparty_tin_code
-    data_type_click: String
-    data_type_gp: varchar(16)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: okpo_code
-    column_name_gp: okpo_code
-    data_type_click: String
-    data_type_gp: varchar(11)
-    is_nullable: 'true'
-    description: Комментария нет
-    default: 'false'
-  - column_name_click: is_liable_for_vat
-    column_name_gp: is_liable_for_vat
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: transport_zone_for_delivery_code
-    column_name_gp: transport_zone_for_delivery_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_alternative_payer_allowed
-    column_name_gp: is_alternative_payer_allowed
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-    default: now()
-  - column_name_click: counterparty_tin_nonresident_code
-    column_name_gp: counterparty_tin_nonresident_code
-    data_type_click: String
-    data_type_gp: varchar(20)
-    is_nullable: 'true'
-    description: Комментария нет
-    default: now()
-  - column_name_click: industry_second_code
-    column_name_gp: industry_second_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_person
-    column_name_gp: is_person
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-    default: nextval('dict_dds.counterparty_id_seq'::regclass)
-  - column_name_click: is_none_military_used
-    column_name_gp: is_none_military_used
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: term_group_3_code
-    column_name_gp: term_group_3_code
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_alternative_payer_account_allowed
-    column_name_gp: is_alternative_payer_account_allowed
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: kpp_code
-    column_name_gp: kpp_code
-    data_type_click: String
-    data_type_gp: varchar(18)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: ogrn_code
-    column_name_gp: ogrn_code
-    data_type_click: String
-    data_type_gp: varchar(18)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: almer_bank_code
-    column_name_gp: almer_bank_code
-    data_type_click: String
-    data_type_gp: varchar(60)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_sales_locked_for_customer
-    column_name_gp: is_sales_locked_for_customer
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_blocked_for_delete
-    column_name_gp: is_blocked_for_delete
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_mdm_code
-    column_name_gp: counterparty_mdm_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: person_passport_number
-    column_name_gp: person_passport_number
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: person_snils_code
-    column_name_gp: person_snils_code
-    data_type_click: String
-    data_type_gp: varchar(14)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dt_person_date_of_birth
-    column_name_gp: dt_person_date_of_birth
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: ifns_code
-    column_name_gp: ifns_code
-    data_type_click: String
-    data_type_gp: varchar(6)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dt_updated
-    column_name_gp: dt_updated
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: customer_crm_code
-    column_name_gp: customer_crm_code
-    data_type_click: String
-    data_type_gp: varchar(37)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_category_code
-    column_name_gp: counterparty_category_code
-    data_type_click: String
-    data_type_gp: varchar(3)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: market_in_sales_order_code
-    column_name_gp: market_in_sales_order_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_used_in_eits
-    column_name_gp: is_used_in_eits
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_status_code
-    column_name_gp: counterparty_status_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_bankrupt_status_code
-    column_name_gp: counterparty_bankrupt_status_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_house_program_participant
-    column_name_gp: is_house_program_participant
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_purchase_locked_for_supplier
-    column_name_gp: is_purchase_locked_for_supplier
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_functionality_locked
-    column_name_gp: is_functionality_locked
-    data_type_click: String
-    data_type_gp: varchar(2)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_alternative_payee_account
-    column_name_gp: is_alternative_payee_account
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: service_agent_scheme_group_code
-    column_name_gp: service_agent_scheme_group_code
-    data_type_click: String
-    data_type_gp: varchar(4)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: producer_external_code
-    column_name_gp: producer_external_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_hfm_code
-    column_name_gp: counterparty_hfm_code
-    data_type_click: String
-    data_type_gp: varchar(30)
-    is_nullable: 'true'
-    description: Комментария нет
-    default: '''airflow''::character varying'
-  - column_name_click: is_related_party_tco
-    column_name_gp: is_related_party_tco
-    data_type_click: String
-    data_type_gp: varchar(3)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_group_company_affiliated
-    column_name_gp: is_group_company_affiliated
-    data_type_click: String
-    data_type_gp: varchar(3)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_related_party_rsbo
-    column_name_gp: is_related_party_rsbo
-    data_type_click: String
-    data_type_gp: varchar(3)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_bankrupt
-    column_name_gp: is_bankrupt
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_lawsuit_exist
-    column_name_gp: is_lawsuit_exist
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: is_fns_restriction_list_exist
-    column_name_gp: is_fns_restriction_list_exist
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: relation_type_code
-    column_name_gp: relation_type_code
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_kra_code
-    column_name_gp: counterparty_kra_code
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dttm_inserted
-    column_name_gp: dttm_inserted
-    data_type_click: DateTime
-    data_type_gp: timestamp
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dttm_updated
-    column_name_gp: dttm_updated
-    data_type_click: DateTime
-    data_type_gp: timestamp
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: job_name
-    column_name_gp: job_name
-    data_type_click: String
-    data_type_gp: varchar(50)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: deleted_flag
-    column_name_gp: deleted_flag
-    data_type_click: UInt8
-    data_type_gp: bool
-    is_nullable: 'true'
-    description: Комментария нет
+        self.sql = sql
+        self.autocommit = autocommit
+        self.conn_id = conn_id
+        self.minio_conn = minio_conn
+        self.secure = secure
+        # self.params.update()  # больше не нужно
+
+    # FIX(2): готовим params ДО рендера (это вызывается всегда в AF 2.x)
+    def get_template_context(self, context: Context) -> dict:
+        ctx = super().get_template_context(context)
+
+        # слить self.params и уже имеющиеся в ctx (если dag.params что-то даёт)
+        base_params: Dict[str, Any] = (getattr(self, "params", {}) or {}).copy()
+        ctx.setdefault("params", {})
+        p_in_ctx: Dict[str, Any] = ctx["params"] or {}
+        p: Dict[str, Any] = {**base_params, **p_in_ctx}
+
+        # дефолты, чтобы рендер не падал
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
+        p.setdefault("cluster", "PROD" if Variable.get("cluster", "dev").lower() == "prod" else "DEV")
+        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+
+        schema = p.get("table_schema")
+        table = p.get("table_name")
+        if schema and table:
+            meta_path = os.path.join(
+                os.environ.get("AIRFLOW_HOME"),
+                'meta_info',
+                'database',
+                'clickhouse',
+                'schema_name',
+                schema,
+                'table' if schema != 'dm_view' else 'view',
+                table,
+                'meta_data_file.yaml'
+            )
+
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r') as file:
+                    yaml_data = yaml.safe_load(file) or {}
+
+                # собрать список колонок в нужном формате: 'col1',\n'col2',...
+                cols = ""
+                for att in yaml_data.get('attributes', []):
+                    cols += "'" + att['column_name_click'] + "',\n"
+                p['columns'] = cols[:-2] if cols else ""
+
+                if yaml_data.get('settings_external_table'):
+                    _set = yaml_data.get('settings_external_table')
+                    p['settings_external_table'] = 'settings ' + ', '.join(
+                        f"{key} = {value}" for key, value in _set.items()
+                    )
+
+        ctx["params"] = p
+        return ctx
+    
+    def remove_file(self, client, load_dir):
+        for removed_object in client.list_objects(
+                bucket_name=self.params.get('minio_bucket'),
+                prefix=f"{load_dir}",
+                recursive=True
+        ):
+            self.log.info(f'Delete {removed_object.object_name}')
+            client.remove_object(
+                bucket_name=self.params.get('minio_bucket'),
+                object_name=removed_object.object_name
+            )
+    
+    def execute(self, context) -> Any:
+        ts_date = get_parquet_dir_with_ts()
+        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev'
+        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
+        
+        hook = BaseHook.get_connection(self.minio_conn)
+        client = Minio(
+            f'{hook.host}:{hook.port}',
+            access_key=hook.login,
+            secret_key=hook.password,
+            secure=self.secure
+        )
+        self.remove_file(client=client, load_dir=minio_dir)
+        
+        load_obj = client.list_objects(
+            bucket_name=self.params.get('minio_bucket'),
+            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
+        )
+        
+        load_dirs = [x.object_name for x in load_obj]
+        load_dirs.sort(reverse=True)
+        if len(load_dirs) > 2:
+            for load_dir in load_dirs[2:]:
+                self.remove_file(client=client, load_dir=load_dir)
+        
+        # ниже оставляю как у тебя — это уже ПОСЛЕ рендера и не влияет на падение
+        meta_path = os.path.join(os.environ.get("AIRFLOW_HOME"),
+                                 'meta_info',
+                                 'database',
+                                 'clickhouse',
+                                 'schema_name',
+                                 self.params['table_schema'],
+                                 'table' if self.params['table_schema'] != 'dm_view' else 'view',
+                                 self.params['table_name'],
+                                 'meta_data_file.yaml')
+        print('meta_path', meta_path)
+        self.params['columns'] = ''
+        self.params['settings_external_table'] = ''
+        with open(meta_path, 'r') as file:
+            yaml_data = yaml.safe_load(file) or {}
+        
+            columns = ""
+            for att in yaml_data.get('attributes', []):
+                columns += '\'' + att['column_name_click'] + '\',\n'
+            columns = columns[:-2] if columns else ""
+            self.params['columns'] = columns
+            print(columns)
+            if yaml_data.get('settings_external_table'):
+                _set = yaml_data.get('settings_external_table')
+                settings_external_table = 'settings ' + ', '.join([f"{key} = {value}" for key, value in _set.items()])
+                print('settings_external_table -', settings_external_table)
+                self.params['settings_external_table'] = settings_external_table
+        print('context', context['params'])        
+        self.render_template_fields(context)
+        super().execute(context=context)

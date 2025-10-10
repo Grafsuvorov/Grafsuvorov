@@ -1,2 +1,7 @@
-DAG "DAG_CLICKHOUSE_DM" seems to be missing from DagBag.
-×Broken plugin: [/home/airflow/plugins/custom_operators/SqlExecuteOperator.py] name 'BaseOperator' is not defined
+# ДОБАВИТЬ (или заменить старый некорректный импорт):
+try:
+    # Airflow 2.x (корректный путь)
+    from airflow.models.baseoperator import BaseOperator
+except Exception:
+    # Фоллбек для старых окружений, где реэкспорт ещё есть
+    from airflow.models import BaseOperator

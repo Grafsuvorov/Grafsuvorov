@@ -1,149 +1,38 @@
-rgm-s-dwhair01
-*** Found local files:
-***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.clear_minio_insert_into_s3/attempt=61.log
-[2025-10-10, 16:48:07 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 16:48:07 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 16:48:07 MSK] {taskinstance.py:1361} INFO - Starting attempt 61 of 62
-[2025-10-10, 16:48:07 MSK] {taskinstance.py:1382} INFO - Executing <Task(SqlMinioOperator): counterparty.clear_minio_insert_into_s3> on 2025-10-09 07:45:53.440259+00:00
-[2025-10-10, 16:48:07 MSK] {standard_task_runner.py:57} INFO - Started process 63718 to run task
-[2025-10-10, 16:48:07 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.clear_minio_insert_into_s3', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1936627', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmpkzatohd1']
-[2025-10-10, 16:48:07 MSK] {standard_task_runner.py:85} INFO - Job 1936627: Subtask counterparty.clear_minio_insert_into_s3
-[2025-10-10, 16:48:07 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.clear_minio_insert_into_s3 manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
-[2025-10-10, 16:48:07 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='Ryzhova' AIRFLOW_CTX_DAG_ID='DAG_CLICKHOUSE_DM' AIRFLOW_CTX_TASK_ID='counterparty.clear_minio_insert_into_s3' AIRFLOW_CTX_EXECUTION_DATE='2025-10-09T07:45:53.440259+00:00' AIRFLOW_CTX_TRY_NUMBER='61' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-09T07:45:53.440259+00:00'
-[2025-10-10, 16:48:07 MSK] {sql.py:274} INFO - Executing: ['DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";', 'CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(\nlike "dict_dds"."counterparty"\n)\nLOCATION (\n   \'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod\'\n) ON ALL\nFORMAT \'CUSTOM\' (FORMATTER=\'pxfwritable_export\')\nENCODING \'UTF8\'\nDISTRIBUTED RANDOMLY;', '\nINSERT INTO raw_ext."counterparty_write_s3" ( "address_code", "almer_bank_code", "city_location_code", "counterparty_account_group_code", "counterparty_bankrupt_status_code", "counterparty_category_code", "counterparty_code", "counterparty_extended_name", "counterparty_full_name", "counterparty_group_code", "counterparty_hfm_code", "counterparty_kra_code", "counterparty_mdm_code", "counterparty_search_name", "counterparty_short_name", "counterparty_status_code", "counterparty_tin_code", "counterparty_tin_nonresident_code", "counterparty_truncated_code", "created_by", "customer_crm_code", "deleted_flag", "dt_created", "dt_person_date_of_birth", "dt_updated" )\nSELECT "address_code", "almer_bank_code", "city_location_code", "counterparty_account_group_code", "counterparty_bankrupt_status_code", "counterparty_category_code", "counterparty_code", "counterparty_extended_name", "counterparty_full_name", "counterparty_group_code", "counterparty_hfm_code", "counterparty_kra_code", "counterparty_mdm_code", "counterparty_search_name", "counterparty_short_name", "counterparty_status_code", "counterparty_tin_code", "counterparty_tin_nonresident_code", "counterparty_truncated_code", "created_by", "customer_crm_code", "deleted_flag", "dt_created", "dt_person_date_of_birth", "dt_updated"\nFROM "dict_dds"."counterparty";']
-[2025-10-10, 16:48:07 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
-[2025-10-10, 16:48:07 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
-[2025-10-10, 16:48:07 MSK] {sql.py:418} INFO - Running statement: DROP EXTERNAL TABLE IF EXISTS "raw_ext"."counterparty_write_s3";, parameters: None
-[2025-10-10, 16:48:07 MSK] {sql.py:418} INFO - Running statement: CREATE WRITABLE EXTERNAL TABLE "raw_ext"."counterparty_write_s3"(
-like "dict_dds"."counterparty"
-)
-LOCATION (
-   'pxf://datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440?PROFILE=s3:parquet&SERVER=minioprod'
-) ON ALL
-FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
-ENCODING 'UTF8'
-DISTRIBUTED RANDOMLY;, parameters: None
-[2025-10-10, 16:48:07 MSK] {sql.py:418} INFO - Running statement: 
-INSERT INTO raw_ext."counterparty_write_s3" ( "address_code", "almer_bank_code", "city_location_code", "counterparty_account_group_code", "counterparty_bankrupt_status_code", "counterparty_category_code", "counterparty_code", "counterparty_extended_name", "counterparty_full_name", "counterparty_group_code", "counterparty_hfm_code", "counterparty_kra_code", "counterparty_mdm_code", "counterparty_search_name", "counterparty_short_name", "counterparty_status_code", "counterparty_tin_code", "counterparty_tin_nonresident_code", "counterparty_truncated_code", "created_by", "customer_crm_code", "deleted_flag", "dt_created", "dt_person_date_of_birth", "dt_updated" )
-SELECT "address_code", "almer_bank_code", "city_location_code", "counterparty_account_group_code", "counterparty_bankrupt_status_code", "counterparty_category_code", "counterparty_code", "counterparty_extended_name", "counterparty_full_name", "counterparty_group_code", "counterparty_hfm_code", "counterparty_kra_code", "counterparty_mdm_code", "counterparty_search_name", "counterparty_short_name", "counterparty_status_code", "counterparty_tin_code", "counterparty_tin_nonresident_code", "counterparty_truncated_code", "created_by", "customer_crm_code", "deleted_flag", "dt_created", "dt_person_date_of_birth", "dt_updated"
-FROM "dict_dds"."counterparty";, parameters: None
-[2025-10-10, 16:48:09 MSK] {sql.py:427} INFO - Rows affected: 424217
-[2025-10-10, 16:48:09 MSK] {taskinstance.py:1400} INFO - Marking task as SUCCESS. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.clear_minio_insert_into_s3, execution_date=20251009T074553, start_date=20251010T134807, end_date=20251010T134809
-[2025-10-10, 16:48:09 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 0
-[2025-10-10, 16:48:09 MSK] {taskinstance.py:2778} INFO - 1 downstream tasks scheduled from follow-on schedule check
+from typing import Sequence
 
-rgm-s-dwhair01
-*** Found local files:
-***   * /u01/airflow/logs/dag_id=DAG_CLICKHOUSE_DM/run_id=manual__2025-10-09T07:45:53.440259+00:00/task_id=counterparty.insert_into_clickhouse/attempt=11.log
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [queued]>
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1361} INFO - Starting attempt 11 of 12
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1382} INFO - Executing <Task(ClickhouseOperator): counterparty.insert_into_clickhouse> on 2025-10-09 07:45:53.440259+00:00
-[2025-10-10, 16:48:14 MSK] {standard_task_runner.py:57} INFO - Started process 63937 to run task
-[2025-10-10, 16:48:14 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'DAG_CLICKHOUSE_DM', 'counterparty.insert_into_clickhouse', 'manual__2025-10-09T07:45:53.440259+00:00', '--job-id', '1936628', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp6rj0ivyg']
-[2025-10-10, 16:48:14 MSK] {standard_task_runner.py:85} INFO - Job 1936628: Subtask counterparty.insert_into_clickhouse
-[2025-10-10, 16:48:14 MSK] {task_command.py:416} INFO - Running <TaskInstance: DAG_CLICKHOUSE_DM.counterparty.insert_into_clickhouse manual__2025-10-09T07:45:53.440259+00:00 [running]> on host rgm-s-dwhair01
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='Ryzhova' AIRFLOW_CTX_DAG_ID='DAG_CLICKHOUSE_DM' AIRFLOW_CTX_TASK_ID='counterparty.insert_into_clickhouse' AIRFLOW_CTX_EXECUTION_DATE='2025-10-09T07:45:53.440259+00:00' AIRFLOW_CTX_TRY_NUMBER='11' AIRFLOW_CTX_DAG_RUN_ID='manual__2025-10-09T07:45:53.440259+00:00'
-[2025-10-10, 16:48:14 MSK] {ClickhouseOperator.py:23} INFO - Executing: ['truncate table dm."counterparty_test" sync;', 'INSERT INTO dm."counterparty_test"(\n\t\n)\nSELECT\n    \nFROM s3(\n    \'https://rgm-s-khs3.hq.root.ad:9000/datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440/*\',\n    \'sapetl\',\n    \'***\',\n    \'Parquet\')\n;']
-[2025-10-10, 16:48:14 MSK] {base.py:73} INFO - Using connection ID 'clickhouse' for task execution.
-[2025-10-10, 16:48:14 MSK] {ClickhouseOperator.py:37} INFO - truncate table dm."counterparty_test" sync;
-[2025-10-10, 16:48:14 MSK] {ClickhouseOperator.py:37} INFO - INSERT INTO dm."counterparty_test"(
-	
-)
-SELECT
-    
-FROM s3(
-    'https://rgm-s-khs3.hq.root.ad:9000/datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440/*',
-    'sapetl',
-    '***',
-    'Parquet')
-;
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
-Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/dbapi/cursor.py", line 111, in execute
-    response = execute(
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/client.py", line 357, in execute
-    rv = self.process_ordinary_query(
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/client.py", line 551, in process_ordinary_query
-    return self.receive_result(with_column_types=with_column_types,
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/client.py", line 188, in receive_result
-    return result.get_result()
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/result.py", line 50, in get_result
-    for packet in self.packet_generator:
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/client.py", line 204, in packet_generator
-    packet = self.receive_packet()
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/client.py", line 221, in receive_packet
-    raise packet.exception
-clickhouse_driver.errors.ServerException: Code: 62.
-DB::Exception: Syntax error: failed at position 39 (')') (line 3, col 1): )
-SELECT
-    
-FROM s3(
-    'https://rgm-s-khs3.hq.root.ad:9000/datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440/*',
-    'sapetl',
-    'KQch43kt@R*9',
-. Expected one of: list of elements, insert element, COLUMNS matcher, COLUMNS, qualified asterisk, compound identifier, identifier, asterisk. Stack trace:
-0. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, int, bool) in /usr/bin/clickhouse
-1. DB::parseQueryAndMovePosition(DB::IParser&, char const*&, char const*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, bool, unsigned long, unsigned long) in /usr/bin/clickhouse
-2. ? in /usr/bin/clickhouse
-3. DB::executeQuery(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::shared_ptr<DB::Context>, bool, DB::QueryProcessingStage::Enum) in /usr/bin/clickhouse
-4. DB::TCPHandler::runImpl() in /usr/bin/clickhouse
-5. DB::TCPHandler::run() in /usr/bin/clickhouse
-6. Poco::Net::TCPServerConnection::start() in /usr/bin/clickhouse
-7. Poco::Net::TCPServerDispatcher::run() in /usr/bin/clickhouse
-8. Poco::PooledThread::run() in /usr/bin/clickhouse
-9. Poco::ThreadImpl::runnableEntry(void*) in /usr/bin/clickhouse
-10. start_thread in /usr/lib64/libpthread-2.17.so
-11. __clone in /usr/lib64/libc-2.17.so
-During handling of the above exception, another exception occurred:
-Traceback (most recent call last):
-  File "/home/airflow/dags/plugins/custom_operators/ClickhouseOperator.py", line 38, in execute
-    cur.execute(v_sql)
-  File "/u01/arf-venv/lib/python3.8/site-packages/clickhouse_driver/dbapi/cursor.py", line 117, in execute
-    raise OperationalError(orig)
-clickhouse_driver.dbapi.errors.OperationalError: Code: 62.
-DB::Exception: Syntax error: failed at position 39 (')') (line 3, col 1): )
-SELECT
-    
-FROM s3(
-    'https://rgm-s-khs3.hq.root.ad:9000/datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440/*',
-    'sapetl',
-    'KQch43kt@R*9',
-. Expected one of: list of elements, insert element, COLUMNS matcher, COLUMNS, qualified asterisk, compound identifier, identifier, asterisk. Stack trace:
-0. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, int, bool) in /usr/bin/clickhouse
-1. DB::parseQueryAndMovePosition(DB::IParser&, char const*&, char const*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, bool, unsigned long, unsigned long) in /usr/bin/clickhouse
-2. ? in /usr/bin/clickhouse
-3. DB::executeQuery(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::shared_ptr<DB::Context>, bool, DB::QueryProcessingStage::Enum) in /usr/bin/clickhouse
-4. DB::TCPHandler::runImpl() in /usr/bin/clickhouse
-5. DB::TCPHandler::run() in /usr/bin/clickhouse
-6. Poco::Net::TCPServerConnection::start() in /usr/bin/clickhouse
-7. Poco::Net::TCPServerDispatcher::run() in /usr/bin/clickhouse
-8. Poco::PooledThread::run() in /usr/bin/clickhouse
-9. Poco::ThreadImpl::runnableEntry(void*) in /usr/bin/clickhouse
-10. start_thread in /usr/lib64/libpthread-2.17.so
-11. __clone in /usr/lib64/libc-2.17.so
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:1400} INFO - Marking task as UP_FOR_RETRY. dag_id=DAG_CLICKHOUSE_DM, task_id=counterparty.insert_into_clickhouse, execution_date=20251009T074553, start_date=20251010T134814, end_date=20251010T134814
-[2025-10-10, 16:48:14 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 1936628 for task counterparty.insert_into_clickhouse (Code: 62.
-DB::Exception: Syntax error: failed at position 39 (')') (line 3, col 1): )
-SELECT
-    
-FROM s3(
-    'https://rgm-s-khs3.hq.root.ad:9000/datamart-bucket/gp_dev/dict_dds/counterparty/1759985153440/*',
-    'sapetl',
-    'KQch43kt@R*9',
-. Expected one of: list of elements, insert element, COLUMNS matcher, COLUMNS, qualified asterisk, compound identifier, identifier, asterisk. Stack trace:
-0. DB::Exception::Exception(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, int, bool) in /usr/bin/clickhouse
-1. DB::parseQueryAndMovePosition(DB::IParser&, char const*&, char const*, std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, bool, unsigned long, unsigned long) in /usr/bin/clickhouse
-2. ? in /usr/bin/clickhouse
-3. DB::executeQuery(std::__1::basic_string<char, std::__1::char_traits<char>, std::__1::allocator<char>> const&, std::__1::shared_ptr<DB::Context>, bool, DB::QueryProcessingStage::Enum) in /usr/bin/clickhouse
-4. DB::TCPHandler::runImpl() in /usr/bin/clickhouse
-5. DB::TCPHandler::run() in /usr/bin/clickhouse
-6. Poco::Net::TCPServerConnection::start() in /usr/bin/clickhouse
-7. Poco::Net::TCPServerDispatcher::run() in /usr/bin/clickhouse
-8. Poco::PooledThread::run() in /usr/bin/clickhouse
-9. Poco::ThreadImpl::runnableEntry(void*) in /usr/bin/clickhouse
-10. start_thread in /usr/lib64/libpthread-2.17.so
-11. __clone in /usr/lib64/libc-2.17.so
-; 63937)
-[2025-10-10, 16:48:14 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
-[2025-10-10, 16:48:14 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check
+import clickhouse_driver
+from airflow.hooks.base import BaseHook
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+
+
+class ClickhouseOperator(SQLExecuteQueryOperator):
+    template_fields: Sequence[str] = ("sql", "parameters", *SQLExecuteQueryOperator.template_fields)
+    template_ext: Sequence[str] = (".sql", ".json")
+
+    ui_color = "#Edaaed"
+
+    def __init__(
+            self,
+            sql,
+            conn_id: str,
+            **kwargs
+    ):
+        super().__init__(conn_id=conn_id, sql=sql, **kwargs)
+
+    def execute(self, context):
+        self.log.info("Executing: %s", self.sql)
+        if not isinstance(self.sql, list):
+            self.sql = [self.sql]
+        hook = BaseHook.get_connection(self.conn_id)
+        with clickhouse_driver.connect(
+                database=hook.schema,
+                user=hook.login,
+                password=hook.password,
+                host=hook.host,
+                port=hook.port,
+                secure=None,
+        ) as conn:
+            with conn.cursor() as cur:
+                for v_sql in self.sql:
+                    self.logger().info(v_sql)
+                    cur.execute(v_sql)

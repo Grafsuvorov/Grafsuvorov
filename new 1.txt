@@ -1,169 +1,150 @@
-from typing import Any, Sequence, Dict
-from airflow.hooks.base import BaseHook
-from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
-from airflow.models import Variable
-from airflow.utils.context import Context
-from minio import Minio
-from plugins.help_utility.help_utility import get_parquet_dir_with_ts
-import os
-import yaml
-
-
-class SqlMetaMinioOperator(SQLExecuteQueryOperator):
-    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
-    template_ext: Sequence[str] = (".sql",)
-    template_fields_renderers = {"columns": "sql"}
-    ui_color = "#89d3f5"
-
-    def __init__(
-        self,
-        sql: Any,
-        autocommit: bool,
-        conn_id: str,
-        minio_conn: str,
-        secure=bool,
-        **kwargs
-    ):
-        # 1) local_variables -> params (чтобы schema/name были в params при рендере)
-        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
-        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
-        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
-
-        super().__init__(sql=sql, params=merged_params, **kwargs)
-
-        self.sql = sql
-        self.autocommit = autocommit
-        self.conn_id = conn_id
-        self.minio_conn = minio_conn
-        self.secure = secure
-
-    # ---------- ВНУТРЕННЕЕ: наполняем params нужными ключами ДО рендера ----------
-    def _ensure_params_enriched(self) -> None:
-        p = getattr(self, "params", None) or {}
-        # дефолты — чтобы шаблон не падал
-        p.setdefault("columns", "")
-        p.setdefault("settings_external_table", "")
-        p.setdefault("cluster", "PROD" if Variable.get("cluster", "dev").lower() == "prod" else "DEV")
-        p.setdefault("IS_PROD", p["cluster"] == "PROD")
-
-        schema = p.get("table_schema")
-        table = p.get("table_name")
-        if not (schema and table):
-            self.params = p
-            return
-
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            "meta_info",
-            "database",
-            "clickhouse",
-            "schema_name",
-            schema,
-            "table" if schema != "dm_view" else "view",
-            table,
-            "meta_data_file.yaml",
-        )
-
-        if os.path.exists(meta_path):
-            with open(meta_path, "r") as f:
-                yaml_data = yaml.safe_load(f) or {}
-            # формируем список колонок: 'col1',\n'col2',...
-            cols = ""
-            for att in yaml_data.get("attributes", []):
-                cols += "'" + att["column_name_click"] + "',\n"
-            p["columns"] = cols[:-2] if cols else ""
-
-            if yaml_data.get("settings_external_table"):
-                st = yaml_data["settings_external_table"]
-                p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
-
-        self.params = p
-
-    # AF 2.x всегда вызывает это при рендере
-    def get_template_context(self) -> dict:
-        # подготовим params заранее
-        self._ensure_params_enriched()
-        ctx = super().get_template_context()
-        # объединим dag.params (если есть) поверх наших
-        merged = {**self.params, **(ctx.get("params") or {})}
-        ctx["params"] = merged
-        return ctx
-
-    # Подстраховка: если где-то идёт прямой рендер без get_template_context
-    def render_template_fields(self, context: dict, jinja_env=None) -> None:
-        self._ensure_params_enriched()
-        # ещё раз — объединим
-        context.setdefault("params", {})
-        context["params"] = {**self.params, **context["params"]}
-        super().render_template_fields(context, jinja_env)
-
-    # ---------- остальное — как было ----------
-    def remove_file(self, client, load_dir):
-        for removed_object in client.list_objects(
-            bucket_name=self.params.get("minio_bucket"),
-            prefix=f"{load_dir}",
-            recursive=True
-        ):
-            self.log.info(f"Delete {removed_object.object_name}")
-            client.remove_object(
-                bucket_name=self.params.get("minio_bucket"),
-                object_name=removed_object.object_name
-            )
-
-    def execute(self, context: Context) -> Any:
-        ts_date = get_parquet_dir_with_ts()
-        cluster = "gp_prod" if Variable.get("cluster").lower() == "prod" else "gp_dev"
-        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
-
-        hook = BaseHook.get_connection(self.minio_conn)
-        client = Minio(
-            f"{hook.host}:{hook.port}",
-            access_key=hook.login,
-            secret_key=hook.password,
-            secure=self.secure
-        )
-        self.remove_file(client=client, load_dir=minio_dir)
-
-        load_obj = client.list_objects(
-            bucket_name=self.params.get("minio_bucket"),
-            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
-        )
-        load_dirs = [x.object_name for x in load_obj]
-        load_dirs.sort(reverse=True)
-        if len(load_dirs) > 2:
-            for load_dir in load_dirs[2:]:
-                self.remove_file(client=client, load_dir=load_dir)
-
-        # всё что ниже — уже после рендера, оставляю как у тебя
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            "meta_info",
-            "database",
-            "clickhouse",
-            "schema_name",
-            self.params["table_schema"],
-            "table" if self.params["table_schema"] != "dm_view" else "view",
-            self.params["table_name"],
-            "meta_data_file.yaml",
-        )
-        print("meta_path", meta_path)
-        self.params["columns"] = ""
-        self.params["settings_external_table"] = ""
-        with open(meta_path, "r") as file:
-            yaml_data = yaml.safe_load(file) or {}
-
-            columns = ""
-            for att in yaml_data.get("attributes", []):
-                columns += "'" + att["column_name_click"] + "',\n"
-            columns = columns[:-2] if columns else ""
-            self.params["columns"] = columns
-            print(columns)
-            if yaml_data.get("settings_external_table"):
-                st = yaml_data.get("settings_external_table")
-                settings_external_table = "settings " + ", ".join([f"{k} = {v}" for k, v in st.items()])
-                print("settings_external_table -", settings_external_table)
-                self.params["settings_external_table"] = settings_external_table
-
-        print("context", context["params"])
-        super().execute(context=context)
-'{{ params.get("columns","") }}'
+INSERT INTO dm."{{ params.table_name }}_test"(
+    "id",
+    "counterparty_code",
+    "counterparty_truncated_code",
+    "counterparty_search_name",
+    "counterparty_short_name",
+    "counterparty_full_name",
+    "counterparty_extended_name",
+    "address_code",
+    "is_order_locked_for_customer",
+    "industry_code",
+    "dt_created",
+    "created_by",
+    "is_billing_locked_for_customer",
+    "counterparty_group_code",
+    "counterparty_account_group_code",
+    "is_delivery_locked_for_customer",
+    "city_location_code",
+    "is_deleted",
+    "is_posting_locked",
+    "language_code",
+    "counterparty_tin_code",
+    "okpo_code",
+    "is_liable_for_vat",
+    "transport_zone_for_delivery_code",
+    "is_alternative_payer_allowed",
+    "counterparty_tin_nonresident_code",
+    "industry_second_code",
+    "is_person",
+    "is_none_military_used",
+    "term_group_3_code",
+    "is_alternative_payer_account_allowed",
+    "kpp_code",
+    "ogrn_code",
+    "almer_bank_code",
+    "is_sales_locked_for_customer",
+    "is_blocked_for_delete",
+    "counterparty_mdm_code",
+    "person_passport_number",
+    "person_snils_code",
+    "dt_person_date_of_birth",
+    "ifns_code",
+    "dt_updated",
+    "customer_crm_code",
+    "counterparty_category_code",
+    "market_in_sales_order_code",
+    "is_used_in_eits",
+    "counterparty_status_code",
+    "counterparty_bankrupt_status_code",
+    "is_house_program_participant",
+    "is_purchase_locked_for_supplier",
+    "is_functionality_locked",
+    "is_alternative_payee_account",
+    "service_agent_scheme_group_code",
+    "producer_external_code",
+    "counterparty_hfm_code",
+    "is_related_party_tco",
+    "is_group_company_affiliated",
+    "is_related_party_rsbo",
+    "is_bankrupt",
+    "is_lawsuit_exist",
+    "is_fns_restriction_list_exist",
+    "relation_type_code",
+    "counterparty_kra_code",
+    "dttm_inserted",
+    "dttm_updated",
+    "job_name",
+    "deleted_flag"
+)
+SELECT
+    "id",
+    "counterparty_code",
+    "counterparty_truncated_code",
+    "counterparty_search_name",
+    "counterparty_short_name",
+    "counterparty_full_name",
+    "counterparty_extended_name",
+    "address_code",
+    "is_order_locked_for_customer",
+    "industry_code",
+    "dt_created",
+    "created_by",
+    "is_billing_locked_for_customer",
+    "counterparty_group_code",
+    "counterparty_account_group_code",
+    "is_delivery_locked_for_customer",
+    "city_location_code",
+    "is_deleted",
+    "is_posting_locked",
+    "language_code",
+    "counterparty_tin_code",
+    "okpo_code",
+    "is_liable_for_vat",
+    "transport_zone_for_delivery_code",
+    "is_alternative_payer_allowed",
+    "counterparty_tin_nonresident_code",
+    "industry_second_code",
+    "is_person",
+    "is_none_military_used",
+    "term_group_3_code",
+    "is_alternative_payer_account_allowed",
+    "kpp_code",
+    "ogrn_code",
+    "almer_bank_code",
+    "is_sales_locked_for_customer",
+    "is_blocked_for_delete",
+    "counterparty_mdm_code",
+    "person_passport_number",
+    "person_snils_code",
+    "dt_person_date_of_birth",
+    "ifns_code",
+    "dt_updated",
+    "customer_crm_code",
+    "counterparty_category_code",
+    "market_in_sales_order_code",
+    "is_used_in_eits",
+    "counterparty_status_code",
+    "counterparty_bankrupt_status_code",
+    "is_house_program_participant",
+    "is_purchase_locked_for_supplier",
+    "is_functionality_locked",
+    "is_alternative_payee_account",
+    "service_agent_scheme_group_code",
+    "producer_external_code",
+    "counterparty_hfm_code",
+    "is_related_party_tco",
+    "is_group_company_affiliated",
+    "is_related_party_rsbo",
+    "is_bankrupt",
+    "is_lawsuit_exist",
+    "is_fns_restriction_list_exist",
+    "relation_type_code",
+    "counterparty_kra_code",
+    "dttm_inserted",
+    "dttm_updated",
+    "job_name",
+    "deleted_flag"
+FROM s3(
+    {%- if params.cluster == 'PROD' %}
+    minio,
+    url='https://{{ conn.minio.host }}:{{ conn.minio.port }}/{{ params.minio_bucket }}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    format='PARQUET'
+    {%- else %}
+    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    '{{ conn.minio_prod.login }}',
+    '{{ conn.minio_prod.password }}',
+    'Parquet'
+    {%- endif -%}
+)
+settings max_threads=20, max_insert_threads=20, input_format_parallel_parsing=0;

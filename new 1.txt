@@ -1,4 +1,4 @@
-INSERT INTO dm."{{ params.table_name }}_test"(
+INSERT INTO raw_ext."{{ params.table_name }}_write_s3"(
     "id",
     "counterparty_code",
     "counterparty_truncated_code",
@@ -78,7 +78,7 @@ SELECT
     "address_code",
     "is_order_locked_for_customer",
     "industry_code",
-    "dt_created",
+    tech_etl.validate_date("dt_created"),
     "created_by",
     "is_billing_locked_for_customer",
     "counterparty_group_code",
@@ -107,9 +107,9 @@ SELECT
     "counterparty_mdm_code",
     "person_passport_number",
     "person_snils_code",
-    "dt_person_date_of_birth",
+    tech_etl.validate_date("dt_person_date_of_birth"),
     "ifns_code",
-    "dt_updated",
+    tech_etl.validate_date("dt_updated"),
     "customer_crm_code",
     "counterparty_category_code",
     "market_in_sales_order_code",
@@ -135,16 +135,4 @@ SELECT
     "dttm_updated",
     "job_name",
     "deleted_flag"
-FROM s3(
-    {%- if params.cluster == 'PROD' %}
-    minio,
-    url='https://{{ conn.minio.host }}:{{ conn.minio.port }}/{{ params.minio_bucket }}/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
-    format='PARQUET'
-    {%- else %}
-    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
-    '{{ conn.minio_prod.login }}',
-    '{{ conn.minio_prod.password }}',
-    'Parquet'
-    {%- endif -%}
-)
-settings max_threads=20, max_insert_threads=20, input_format_parallel_parsing=0;
+FROM "{{ params.table_schema }}"."{{ params.table_name }}" where 1=1;

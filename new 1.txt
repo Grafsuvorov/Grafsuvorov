@@ -1,38 +1,125 @@
-from typing import Sequence
+# /home/airflow/dags/plugins/custom_operators/ClickhouseOperator.py
+
+from typing import Any, Sequence, Dict
+import os
+import yaml
 
 import clickhouse_driver
 from airflow.hooks.base import BaseHook
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.models import Variable
 
 
 class ClickhouseOperator(SQLExecuteQueryOperator):
-    template_fields: Sequence[str] = ("sql", "parameters", *SQLExecuteQueryOperator.template_fields)
+    # FIX: добавили "params" в template_fields, чтобы Jinja видел подставленные значения
+    template_fields: Sequence[str] = ("sql", "parameters", "params", *SQLExecuteQueryOperator.template_fields)
     template_ext: Sequence[str] = (".sql", ".json")
-
     ui_color = "#Edaaed"
 
     def __init__(
-            self,
-            sql,
-            conn_id: str,
-            **kwargs
+        self,
+        sql: Any,
+        conn_id: str,
+        **kwargs
     ):
-        super().__init__(conn_id=conn_id, sql=sql, **kwargs)
+        # ---------- FIX: переносим local_variables в params ещё в __init__ ----------
+        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
+        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
+        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
+
+        super().__init__(conn_id=conn_id, sql=sql, params=merged_params, **kwargs)
+        self.conn_id = conn_id
+
+    # ---------- FIX: обогащаем params ДО рендера (как в SqlMinioOperator) ----------
+    def _ensure_params_enriched(self) -> None:
+        p = getattr(self, "params", {}) or {}
+        p.setdefault("columns", "")
+        p.setdefault("settings_external_table", "")
+
+        # cluster / IS_PROD
+        cluster_var = Variable.get("cluster", "dev")
+        p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
+        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+
+        schema = p.get("table_schema")
+        table = p.get("table_name")
+
+        if schema and table:
+            meta_path = os.path.join(
+                os.environ.get("AIRFLOW_HOME"),
+                "meta_info", "database", "clickhouse", "schema_name",
+                schema,
+                "table" if schema != "dm_view" else "view",
+                table,
+                "meta_data_file.yaml",
+            )
+            if os.path.exists(meta_path):
+                with open(meta_path, "r") as f:
+                    y = yaml.safe_load(f) or {}
+
+                # список колонок в кавычках: "col1", "col2", ...
+                cols = []
+                for att in y.get("attributes", []):
+                    name = att.get("column_name_click")
+                    if name:
+                        cols.append(f'"{name}"')
+                p["columns"] = ", ".join(cols)
+
+                if y.get("settings_external_table"):
+                    st = y["settings_external_table"]
+                    p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
+
+        self.params = p
+
+    # ---------- FIX: гарантируем обогащение при получении контекста ----------
+    def get_template_context(self) -> dict:
+        self._ensure_params_enriched()
+        ctx = super().get_template_context()
+        # даём приоритет уже вычисленным self.params
+        ctx["params"] = {**self.params, **(ctx.get("params") or {})}
+        return ctx
+
+    # ---------- FIX: подстраховка для прямого рендера ----------
+    def render_template_fields(self, context: dict, jinja_env=None) -> None:
+        self._ensure_params_enriched()
+        context.setdefault("params", {})
+        context["params"] = {**self.params, **context["params"]}
+        super().render_template_fields(context, jinja_env)
 
     def execute(self, context):
+        # (sql уже отрендерен базовым оператором)
         self.log.info("Executing: %s", self.sql)
         if not isinstance(self.sql, list):
             self.sql = [self.sql]
+
         hook = BaseHook.get_connection(self.conn_id)
         with clickhouse_driver.connect(
-                database=hook.schema,
-                user=hook.login,
-                password=hook.password,
-                host=hook.host,
-                port=hook.port,
-                secure=None,
+            database=hook.schema,
+            user=hook.login,
+            password=hook.password,
+            host=hook.host,
+            port=hook.port,
+            secure=None,
         ) as conn:
             with conn.cursor() as cur:
                 for v_sql in self.sql:
-                    self.logger().info(v_sql)
+                    # FIX: корректный логгер
+                    self.log.info(v_sql)
                     cur.execute(v_sql)
+TRUNCATE TABLE {{ params.schema_name_click }}."{{ params.table_name }}_test" SYNC;
+
+INSERT INTO {{ params.schema_name_click }}."{{ params.table_name }}_test" ( {{ params.columns }} )
+SELECT {{ params.columns }}
+FROM s3(
+    {% if params.cluster == 'PROD' %}
+    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_prod/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    '{{ conn.minio_prod.login }}',
+    '{{ conn.minio_prod.password }}',
+    'Parquet'
+    {% else %}
+    'https://{{ conn.minio_prod.host }}:{{ conn.minio_prod.port }}/{{ params.minio_bucket }}/gp_dev/{{ params.table_schema }}/{{ params.table_name }}/{{ parquet_date() }}/*',
+    '{{ conn.minio_prod.login }}',
+    '{{ conn.minio_prod.password }}',
+    'Parquet'
+    {% endif %}
+);

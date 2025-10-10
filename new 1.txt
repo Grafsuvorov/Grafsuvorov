@@ -1,301 +1,71 @@
-schema_name_gp: dict_dds
-schema_name_click: dm
-object_name: counterparty
-segment_options:
-  appendonly: 'true'
-  orientation: column
-  compresstype: zstd
-  compresslevel: '3'
-object_type: table
-engine: ReplicatedMergeTree
-order_by:
-  - counterparty_code
-primary_key:
-  - counterparty_code
-distributed:
-  - REPLICATED
-partitions: null
-settings_external_table:
-  max_threads: 20
-  max_insert_threads: 20
-  input_format_parallel_parsing: 0
-load_type: full
-recreate_mode: drop_create
-attributes:
-  - column_name_click: address_code
-    column_name_gp: address_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: almer_bank_code
-    column_name_gp: almer_bank_code
-    data_type_click: String
-    data_type_gp: varchar(60)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: city_location_code
-    column_name_gp: city_location_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_account_group_code
-    column_name_gp: counterparty_account_group_code
-    data_type_click: String
-    data_type_gp: varchar(4)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_bankrupt_status_code
-    column_name_gp: counterparty_bankrupt_status_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_category_code
-    column_name_gp: counterparty_category_code
-    data_type_click: String
-    data_type_gp: varchar(3)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_code
-    column_name_gp: counterparty_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'false'
-    description: Комментария нет
-  - column_name_click: counterparty_extended_name
-    column_name_gp: counterparty_extended_name
-    data_type_click: String
-    data_type_gp: varchar(300)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_full_name
-    column_name_gp: counterparty_full_name
-    data_type_click: String
-    data_type_gp: varchar(300)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_group_code
-    column_name_gp: counterparty_group_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_hfm_code
-    column_name_gp: counterparty_hfm_code
-    data_type_click: String
-    data_type_gp: varchar(30)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_kra_code
-    column_name_gp: counterparty_kra_code
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_mdm_code
-    column_name_gp: counterparty_mdm_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_search_name
-    column_name_gp: counterparty_search_name
-    data_type_click: String
-    data_type_gp: varchar(311)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_short_name
-    column_name_gp: counterparty_short_name
-    data_type_click: String
-    data_type_gp: varchar(35)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_status_code
-    column_name_gp: counterparty_status_code
-    data_type_click: String
-    data_type_gp: varchar(1)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_tin_code
-    column_name_gp: counterparty_tin_code
-    data_type_click: String
-    data_type_gp: varchar(16)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_tin_nonresident_code
-    column_name_gp: counterparty_tin_nonresident_code
-    data_type_click: String
-    data_type_gp: varchar(20)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: counterparty_truncated_code
-    column_name_gp: counterparty_truncated_code
-    data_type_click: String
-    data_type_gp: varchar(10)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: created_by
-    column_name_gp: created_by
-    data_type_click: String
-    data_type_gp: varchar(12)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: customer_crm_code
-    column_name_gp: customer_crm_code
-    data_type_click: String
-    data_type_gp: varchar(37)
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: deleted_flag
-    column_name_gp: deleted_flag
-    data_type_click: UInt8
-    data_type_gp: bool
-    is_nullable: 'true'
-    description: Комментария нет
-    default: 'false'
-  - column_name_click: dt_created
-    column_name_gp: dt_created
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dt_person_date_of_birth
-    column_name_gp: dt_person_date_of_birth
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-  - column_name_click: dt_updated
-    column_name_gp: dt_updated
-    data_type_click: Date
-    data_type_gp: date
-    is_nullable: 'true'
-    description: Комментария нет
-from typing import Any, Sequence, Dict
-
+from typing import Any
 from airflow.hooks.base import BaseHook
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
 from airflow.models import Variable
 from airflow.utils.context import Context
-
 from minio import Minio
-import os
-import yaml
+from plugins.help_utility.help_utility import get_parquet_dir_with_ts
 
-
-class SqlMetaMinioOperator(SQLExecuteQueryOperator):
-    
-   
-    template_fields: Sequence[str] = ("sql", *SQLExecuteQueryOperator.template_fields)
-    template_ext: Sequence[str] = (".sql",)
-    template_fields_renderers = {"columns": "sql"}
-    ui_color = "#89d3f5"
+class SqlMinioOperator(SQLExecuteQueryOperator):
+    template_fields = ("sql",)
 
     def __init__(
-        self,
-        sql: Any,
-        minio_conn: str,
-        secure: bool = False,
-        **kwargs
+            self,
+            sql: str,
+            autocommit: bool,
+            conn_id: str,
+            minio_conn: str,
+            secure = bool,
+            **kwargs
     ):
-        
-        local_vars: Dict[str, Any] = kwargs.pop("local_variables", {}) or {}
-        incoming_params: Dict[str, Any] = kwargs.pop("params", {}) or {}
-        merged_params: Dict[str, Any] = {**incoming_params, **local_vars}
-
-        super().__init__(sql=sql, params=merged_params, **kwargs)
-
+        super().__init__(sql=sql, **kwargs)
+        self.sql = sql
+        self.autocommit = autocommit
+        self.conn_id = conn_id
         self.minio_conn = minio_conn
         self.secure = secure
+        self.params.update()
 
-  
-    def _ensure_params_enriched(self) -> None:
-        p = getattr(self, "params", {}) or {}
-        p.setdefault("columns", "")
-        p.setdefault("settings_external_table", "")
+    def remove_file(self, client, load_dir):
+        for removed_object in client.list_objects(
+                bucket_name=self.params.get('minio_bucket'),
+                prefix=f"{load_dir}",
+                recursive=True
+        ):
+            self.log.info(f'Delete {removed_object.object_name}')
+            client.remove_object(
+                bucket_name=self.params.get('minio_bucket'),
+                object_name=removed_object.object_name
+            )
 
-        # cluster/IS_PROD
-        cluster_var = Variable.get("cluster", "dev")
-        p.setdefault("cluster", "PROD" if cluster_var.lower() == "prod" else "DEV")
-        p.setdefault("IS_PROD", p["cluster"] == "PROD")
+    def execute(self, context: Context) -> Any:
+        ts_date = get_parquet_dir_with_ts()
+        cluster = 'gp_prod' if Variable.get('cluster').lower() == 'prod' else 'gp_dev' 
+        minio_dir = f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/{ts_date}"
 
-        schema = p.get("table_schema")
-        table = p.get("table_name")
-        if not (schema and table):
-            self.params = p
-            return
-
-        meta_path = os.path.join(
-            os.environ.get("AIRFLOW_HOME"),
-            "meta_info", "database", "clickhouse", "schema_name",
-            schema,
-            "table" if schema != "dm_view" else "view",
-            table,
-            "meta_data_file.yaml",
-        )
-
-        if os.path.exists(meta_path):
-            with open(meta_path, "r") as f:
-                y = yaml.safe_load(f) or {}
-
-            
-            cols = []
-            for att in y.get("attributes", []):
-                name = att.get("column_name_click")
-                if name:
-                    cols.append(f'"{name}"')
-            p["columns"] = ", ".join(cols)
-
-            if y.get("settings_external_table"):
-                st = y["settings_external_table"]
-                p["settings_external_table"] = "settings " + ", ".join(f"{k} = {v}" for k, v in st.items())
-
-        self.params = p
-
-    
-    def get_template_context(self) -> dict:
-        self._ensure_params_enriched()
-        ctx = super().get_template_context()
-        ctx["params"] = {**self.params, **(ctx.get("params") or {})}
-        return ctx
-
-    
-    def render_template_fields(self, context: dict, jinja_env=None) -> None:
-        self._ensure_params_enriched()
-        context.setdefault("params", {})
-        context["params"] = {**self.params, **context["params"]}
-        super().render_template_fields(context, jinja_env)
-
-   
-    def _cleanup_minio_prefixes(self) -> None:
         hook = BaseHook.get_connection(self.minio_conn)
         client = Minio(
-            f"{hook.host}:{hook.port}",
+            f'{hook.host}:{hook.port}',
             access_key=hook.login,
             secret_key=hook.password,
             secure=self.secure
         )
-
-        bucket = self.params.get("minio_bucket")
-        schema = self.params.get("table_schema")
-        table = self.params.get("table_name")
-        cluster_prefix = "gp_prod" if self.params.get("IS_PROD") else "gp_dev"
-        if not all([bucket, schema, table]):
-            return
+        self.remove_file(client=client, load_dir=minio_dir)
 
         load_obj = client.list_objects(
-            bucket_name=bucket,
-            prefix=f"{cluster_prefix}/{schema}/{table}/",
+            bucket_name=self.params.get('minio_bucket'),
+            prefix=f"{cluster}/{self.params.get('table_schema')}/{self.params.get('table_name')}/",
         )
         load_dirs = [x.object_name for x in load_obj]
         load_dirs.sort(reverse=True)
         if len(load_dirs) > 2:
             for load_dir in load_dirs[2:]:
-                for removed in client.list_objects(bucket_name=bucket, prefix=load_dir, recursive=True):
-                    client.remove_object(bucket_name=bucket, object_name=removed.object_name)
+                self.remove_file(client=client, load_dir=load_dir)
 
-    def execute(self, context: Context) -> Any:
-        
-        return super().execute(context=context)
+        super().execute(context=context)
+
+
+
+
+

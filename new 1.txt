@@ -1,674 +1,136 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 5,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 2368144.80,
-      "Plan Rows": 5055923369,
-      "Plan Width": 80,
-      "Actual Startup Time": 144615.643,
-      "Actual Total Time": 245246.179,
-      "Actual Rows": 87059296,
-      "Actual Loops": 1,
-      "Plans": [
-        {
-          "Node Type": "Sequence",
-          "Parent Relationship": "Outer",
-          "Slice": 5,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 1246741.00,
-          "Plan Rows": 5055923369,
-          "Plan Width": 80,
-          "Actual Startup Time": 144029.292,
-          "Actual Total Time": 230366.597,
-          "Actual Rows": 10933984,
-          "Actual Loops": 1,
-          "Plans": [
-            {
-              "Node Type": "Shared Scan",
-              "Parent Relationship": "Member",
-              "Slice": 5,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Share ID": 0,
-              "Slice ID": 5,
-              "Startup Cost": 0.00,
-              "Total Cost": 4070.40,
-              "Plan Rows": 87059168,
-              "Plan Width": 1,
-              "Actual Startup Time": 7977.645,
-              "Actual Total Time": 8449.035,
-              "Actual Rows": 10889320,
-              "Actual Loops": 1,
-              "Plans": [
-                {
-                  "Node Type": "Materialize",
-                  "Parent Relationship": "Outer",
-                  "Slice": 5,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 4070.40,
-                  "Plan Rows": 87059168,
-                  "Plan Width": 1,
-                  "Actual Startup Time": 0.000,
-                  "Actual Total Time": 8275.572,
-                  "Actual Rows": 0,
-                  "Actual Loops": 1,
-                  "Plans": [
-                    {
-                      "Node Type": "Result",
-                      "Parent Relationship": "Outer",
-                      "Slice": 5,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 4059.52,
-                      "Plan Rows": 87059168,
-                      "Plan Width": 60,
-                      "Actual Startup Time": 0.514,
-                      "Actual Total Time": 5716.958,
-                      "Actual Rows": 10889320,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 5,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "ckmlpp_ral",
-                          "Alias": "ckmlpp_ral",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 2318.33,
-                          "Plan Rows": 87059168,
-                          "Plan Width": 34,
-                          "Actual Startup Time": 0.489,
-                          "Actual Total Time": 2396.746,
-                          "Actual Rows": 10889320,
-                          "Actual Loops": 1,
-                          "Filter": "((untper)::text = '000'::text)",
-                          "Rows Removed by Filter": 0
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "Node Type": "Result",
-              "Parent Relationship": "Member",
-              "Slice": 5,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 1192111.37,
-              "Plan Rows": 5055923369,
-              "Plan Width": 80,
-              "Actual Startup Time": 135404.136,
-              "Actual Total Time": 220954.207,
-              "Actual Rows": 10933984,
-              "Actual Loops": 1,
-              "Plans": [
-                {
-                  "Node Type": "Hash Join",
-                  "Parent Relationship": "Outer",
-                  "Slice": 5,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Join Type": "Left",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 1141552.13,
-                  "Plan Rows": 5055923369,
-                  "Plan Width": 87,
-                  "Actual Startup Time": 135404.047,
-                  "Actual Total Time": 205152.734,
-                  "Actual Rows": 10933984,
-                  "Actual Loops": 1,
-                  "Hash Cond": "((share0_ref3.kalnr)::text = (material_ledger_header.calculation_code)::text)",
-                  "Extra Text": [
-                    {
-                      "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 5685K bytes to inner workfile.\n(seg2)     Wrote 608746K bytes to outer workfile.\n(seg2)   Initial batch 1:\n(seg2)     Read 5685K bytes from inner workfile.\n(seg2)     Read 608746K bytes from outer workfile.\n(seg2)   Work file set: 2 files (0 compressed), avg file size 314572800, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.0 avg, 10 max, using 208348 of 262144 buckets.Initial batch 0:\n"
-                    }
-                  ],
-                  "Plans": [
-                    {
-                      "Node Type": "Hash Join",
-                      "Parent Relationship": "Outer",
-                      "Slice": 5,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Left",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 877178.49,
-                      "Plan Rows": 2527961685,
-                      "Plan Width": 85,
-                      "Actual Startup Time": 135303.323,
-                      "Actual Total Time": 195194.945,
-                      "Actual Rows": 10933984,
-                      "Actual Loops": 1,
-                      "Hash Cond": "(((share0_ref3.kalnr)::text = (share0_ref2.kalnr)::text) AND (share0_ref3.dt_valid_from = share0_ref2.dt_valid_from))",
-                      "Extra Text": [
-                        {
-                          "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 378397K bytes to inner workfile.\n(seg2)     Wrote 1154559K bytes to outer workfile.\n(seg2)   Initial batches 1..63:\n(seg2)     Read 378397K bytes from inner workfile: 6007K avg x 63 nonempty batches, 6043K max.\n(seg2)     Read 1154559K bytes from outer workfile: 18327K avg x 63 nonempty batches, 18443K max.\n(seg2)   Work file set: 126 files (0 compressed), avg file size 12444298, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.8 avg, 15 max, using 3884128 of 4194304 buckets.Initial batch 0:\n"
-                        }
-                      ],
-                      "Plans": [
-                        {
-                          "Node Type": "Hash Join",
-                          "Parent Relationship": "Outer",
-                          "Slice": 5,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Join Type": "Left",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 417947.04,
-                          "Plan Rows": 2527961685,
-                          "Plan Width": 81,
-                          "Actual Startup Time": 10594.572,
-                          "Actual Total Time": 55869.186,
-                          "Actual Rows": 10933984,
-                          "Actual Loops": 1,
-                          "Hash Cond": "(((share0_ref3.kalnr)::text = (mlcd_agg.kalnr)::text) AND ((share0_ref3.bdatj)::text = (mlcd_agg.bdatj)::text) AND ((share0_ref3.poper)::text = (mlcd_agg.poper)::text))",
-                          "Extra Text": [
-                            {
-                              "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 47403K bytes to inner workfile.\n(seg2)     Wrote 1127417K bytes to outer workfile.\n(seg2)   Initial batches 1..3:\n(seg2)     Read 37896K bytes from inner workfile: 12632K avg x 3 nonempty batches, 12636K max.\n(seg2)     Wrote 17602K bytes to inner workfile: 5868K avg x 3 overflowing batches, 5875K max.\n(seg2)     Read 483085K bytes from outer workfile: 161029K avg x 3 nonempty batches, 161094K max.\n(seg2)   Overflow batches 4..7:\n(seg2)     Read 27109K bytes from inner workfile: 6778K avg x 4 nonempty batches, 6786K max.\n(seg2)     Read 644332K bytes from outer workfile: 161083K avg x 4 nonempty batches, 161145K max.\n(seg2)   Work file set: 14 files (0 compressed), avg file size 85915355, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.1 avg, 10 max, using 427870 of 524288 buckets.Initial batch 0:\n"
-                            }
-                          ],
-                          "Plans": [
-                            {
-                              "Node Type": "Hash Join",
-                              "Parent Relationship": "Outer",
-                              "Slice": 5,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Join Type": "Left",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 147813.51,
-                              "Plan Rows": 2527961685,
-                              "Plan Width": 74,
-                              "Actual Startup Time": 10243.642,
-                              "Actual Total Time": 46188.167,
-                              "Actual Rows": 10933984,
-                              "Actual Loops": 1,
-                              "Hash Cond": "(((share0_ref3.kalnr)::text = (cr_next.kalnr)::text) AND (share0_ref3.dt_valid_from = date((make_date((cr_next.bdatj)::integer, (\"substring\"((cr_next.poper)::text, 2, 2))::integer, 1) + '1 mon'::interval))))",
-                              "Extra Text": [
-                                {
-                                  "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 485564K bytes to inner workfile.\n(seg2)     Wrote 1216368K bytes to outer workfile.\n(seg2)   Initial batches 1..63:\n(seg2)     Read 485564K bytes from inner workfile: 7708K avg x 63 nonempty batches, 7754K max.\n(seg2)     Read 1216368K bytes from outer workfile: 19308K avg x 63 nonempty batches, 19429K max.\n(seg2)   Work file set: 126 files (0 compressed), avg file size 13815612, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.8 avg, 14 max, using 3892267 of 4194304 buckets.Initial batch 0:\n"
-                                }
-                              ],
-                              "Plans": [
-                                {
-                                  "Node Type": "Hash Join",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 5,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Join Type": "Right",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 40988.09,
-                                  "Plan Rows": 87059168,
-                                  "Plan Width": 70,
-                                  "Actual Startup Time": 3810.736,
-                                  "Actual Total Time": 24627.208,
-                                  "Actual Rows": 10933984,
-                                  "Actual Loops": 1,
-                                  "Hash Cond": "(((ckmlcr_ral.kalnr)::text = (share0_ref3.kalnr)::text) AND ((ckmlcr_ral.bdatj)::text = (share0_ref3.bdatj)::text) AND ((ckmlcr_ral.poper)::text = (share0_ref3.poper)::text))",
-                                  "Extra Text": [
-                                    {
-                                      "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 657411K bytes to inner workfile.\n(seg2)     Wrote 956842K bytes to outer workfile.\n(seg2)   Initial batches 1..63:\n(seg2)     Read 657411K bytes from inner workfile: 10436K avg x 63 nonempty batches, 10511K max.\n(seg2)     Read 956842K bytes from outer workfile: 15188K avg x 63 nonempty batches, 15297K max.\n(seg2)   Work file set: 126 files (0 compressed), avg file size 13102518, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.8 avg, 14 max, using 3884351 of 4194304 buckets.10886713 groups total in 32 batches; 1 overflows; 10886713 spill groups.\n"
-                                    }
-                                  ],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Redistribute Motion",
-                                      "Senders": 8,
-                                      "Receivers": 8,
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 1,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 6211.95,
-                                      "Plan Rows": 88520585,
-                                      "Plan Width": 54,
-                                      "Actual Startup Time": 0.070,
-                                      "Actual Total Time": 9022.827,
-                                      "Actual Rows": 11042816,
-                                      "Actual Loops": 1,
-                                      "Hash Key": "ckmlcr_ral.kalnr",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Relation Name": "ckmlcr_ral",
-                                          "Alias": "ckmlcr_ral",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 4341.74,
-                                          "Plan Rows": 88520585,
-                                          "Plan Width": 54,
-                                          "Actual Startup Time": 0.822,
-                                          "Actual Total Time": 6684.090,
-                                          "Actual Rows": 10994858,
-                                          "Actual Loops": 1,
-                                          "Filter": "(((untper)::text = '000'::text) AND ((curtp)::text = '10'::text))",
-                                          "Rows Removed by Filter": 0
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "Node Type": "Hash",
-                                      "Parent Relationship": "Inner",
-                                      "Slice": 5,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 2721.96,
-                                      "Total Cost": 2721.96,
-                                      "Plan Rows": 87059168,
-                                      "Plan Width": 38,
-                                      "Actual Startup Time": 3805.314,
-                                      "Actual Total Time": 3805.314,
-                                      "Actual Rows": 10933984,
-                                      "Actual Loops": 1,
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 8,
-                                          "Receivers": 8,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 2,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 2721.96,
-                                          "Plan Rows": 87059168,
-                                          "Plan Width": 38,
-                                          "Actual Startup Time": 0.034,
-                                          "Actual Total Time": 1984.809,
-                                          "Actual Rows": 10933984,
-                                          "Actual Loops": 1,
-                                          "Hash Key": "share0_ref3.kalnr",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Shared Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 2,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Share ID": 0,
-                                              "Slice ID": 2,
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 1427.61,
-                                              "Plan Rows": 87059168,
-                                              "Plan Width": 38,
-                                              "Actual Startup Time": 0.052,
-                                              "Actual Total Time": 703.563,
-                                              "Actual Rows": 10889320,
-                                              "Actual Loops": 1
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "Node Type": "Hash",
-                                  "Parent Relationship": "Inner",
-                                  "Slice": 5,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 769.51,
-                                  "Total Cost": 769.51,
-                                  "Plan Rows": 87923904,
-                                  "Plan Width": 26,
-                                  "Actual Startup Time": 6415.731,
-                                  "Actual Total Time": 6415.731,
-                                  "Actual Rows": 11042816,
-                                  "Actual Loops": 1,
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 5,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Relation Name": "cr_next",
-                                      "Alias": "cr_next",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 769.51,
-                                      "Plan Rows": 87923904,
-                                      "Plan Width": 26,
-                                      "Actual Startup Time": 0.048,
-                                      "Actual Total Time": 808.047,
-                                      "Actual Rows": 11042816,
-                                      "Actual Loops": 1
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "Node Type": "Hash",
-                              "Parent Relationship": "Inner",
-                              "Slice": 5,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 463.89,
-                              "Total Cost": 463.89,
-                              "Plan Rows": 7034603,
-                              "Plan Width": 38,
-                              "Actual Startup Time": 350.776,
-                              "Actual Total Time": 350.776,
-                              "Actual Rows": 888189,
-                              "Actual Loops": 1,
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 5,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "mlcd_agg",
-                                  "Alias": "mlcd_agg",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 463.89,
-                                  "Plan Rows": 7034603,
-                                  "Plan Width": 38,
-                                  "Actual Startup Time": 0.029,
-                                  "Actual Total Time": 55.383,
-                                  "Actual Rows": 888189,
-                                  "Actual Loops": 1
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "Node Type": "Hash",
-                          "Parent Relationship": "Inner",
-                          "Slice": 5,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 30813.55,
-                          "Total Cost": 30813.55,
-                          "Plan Rows": 87059168,
-                          "Plan Width": 21,
-                          "Actual Startup Time": 124708.577,
-                          "Actual Total Time": 124708.577,
-                          "Actual Rows": 10933984,
-                          "Actual Loops": 1,
-                          "Plans": [
-                            {
-                              "Node Type": "Result",
-                              "Parent Relationship": "Outer",
-                              "Slice": 5,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 30813.55,
-                              "Plan Rows": 87059168,
-                              "Plan Width": 21,
-                              "Actual Startup Time": 102720.101,
-                              "Actual Total Time": 122517.317,
-                              "Actual Rows": 10933984,
-                              "Actual Loops": 1,
-                              "Plans": [
-                                {
-                                  "Node Type": "WindowAgg",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 5,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 29496.78,
-                                  "Plan Rows": 87059168,
-                                  "Plan Width": 21,
-                                  "Actual Startup Time": 102720.066,
-                                  "Actual Total Time": 120078.734,
-                                  "Actual Rows": 10933984,
-                                  "Actual Loops": 1,
-                                  "Partition By": ["share0_ref2.kalnr"],
-                                  "Order By": ["share0_ref2.dt_valid_from"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Sort",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 5,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 29311.78,
-                                      "Plan Rows": 87059168,
-                                      "Plan Width": 17,
-                                      "Actual Startup Time": 102720.016,
-                                      "Actual Total Time": 116103.146,
-                                      "Actual Rows": 10933984,
-                                      "Actual Loops": 1,
-                                      "Sort Key": ["share0_ref2.kalnr", "share0_ref2.dt_valid_from"],
-                                      "Sort Method": "external merge",
-                                      "Sort Space Used": 2045920,
-                                      "Sort Space Type": "Disk",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 8,
-                                          "Receivers": 8,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 4,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 4791.96,
-                                          "Plan Rows": 87059168,
-                                          "Plan Width": 17,
-                                          "Actual Startup Time": 5448.363,
-                                          "Actual Total Time": 13636.755,
-                                          "Actual Rows": 10933984,
-                                          "Actual Loops": 1,
-                                          "Hash Key": "share0_ref2.kalnr",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Aggregate",
-                                              "Strategy": "Hashed",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 4,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 4212.90,
-                                              "Plan Rows": 87059168,
-                                              "Plan Width": 17,
-                                              "Actual Startup Time": 14199.054,
-                                              "Actual Total Time": 17886.864,
-                                              "Actual Rows": 10886713,
-                                              "Actual Loops": 1,
-                                              "Group Key": ["share0_ref2.kalnr", "share0_ref2.dt_valid_from"],
-                                              "Extra Text": [
-                                                {
-                                                  "Extra Text": "(seg7)   10886713 groups total in 32 batches; 1 overflows; 10886713 spill groups.\n(seg7)   Hash chain length 2.9 avg, 16 max, using 4010284 of 4325376 buckets; total 12 expansions.\n"
-                                                }
-                                              ],
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Redistribute Motion",
-                                                  "Senders": 8,
-                                                  "Receivers": 8,
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 3,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 1455.90,
-                                                  "Plan Rows": 87059168,
-                                                  "Plan Width": 17,
-                                                  "Actual Startup Time": 7809.243,
-                                                  "Actual Total Time": 9904.759,
-                                                  "Actual Rows": 10886713,
-                                                  "Actual Loops": 1,
-                                                  "Hash Key": "share0_ref2.kalnr, share0_ref2.dt_valid_from",
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Result",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 3,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 876.85,
-                                                      "Plan Rows": 87059168,
-                                                      "Plan Width": 17,
-                                                      "Actual Startup Time": 0.085,
-                                                      "Actual Total Time": 1763.881,
-                                                      "Actual Rows": 10889320,
-                                                      "Actual Loops": 1,
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Shared Scan",
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 3,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Share ID": 0,
-                                                          "Slice ID": 3,
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 876.85,
-                                                          "Plan Rows": 87059168,
-                                                          "Plan Width": 17,
-                                                          "Actual Startup Time": 0.065,
-                                                          "Actual Total Time": 528.317,
-                                                          "Actual Rows": 10889320,
-                                                          "Actual Loops": 1
-                                                        }
-                                                      ]
-                                                    }
-                                                  ]
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "Node Type": "Hash",
-                      "Parent Relationship": "Inner",
-                      "Slice": 5,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 461.07,
-                      "Total Cost": 461.07,
-                      "Plan Rows": 3313873,
-                      "Plan Width": 15,
-                      "Actual Startup Time": 100.497,
-                      "Actual Total Time": 100.497,
-                      "Actual Rows": 415637,
-                      "Actual Loops": 1,
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 5,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "material_ledger_header",
-                          "Alias": "material_ledger_header",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 461.07,
-                          "Plan Rows": 3313873,
-                          "Plan Width": 15,
-                          "Actual Startup Time": 0.180,
-                          "Actual Total Time": 39.709,
-                          "Actual Rows": 415637,
-                          "Actual Loops": 1
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Planning Time": 142.378,
-    "Triggers": [
-    ],
-    "Slice statistics": [
-      {
-        "Slice": 0,
-        "Executor Memory": 3346008
-      },
-      {
-        "Slice": 1,
-        "Executor Memory": {
-          "Average": 1769472,
-          "Workers": 8,
-          "Maximum Memory Used": 1769472
-        }
-      },
-      {
-        "Slice": 2,
-        "Executor Memory": {
-          "Average": 245024,
-          "Workers": 8,
-          "Maximum Memory Used": 245024
-        }
-      },
-      {
-        "Slice": 3,
-        "Executor Memory": {
-          "Average": 240928,
-          "Workers": 8,
-          "Maximum Memory Used": 240928
-        }
-      },
-      {
-        "Slice": 4,
-        "Executor Memory": {
-          "Average": 29970096,
-          "Workers": 8,
-          "Maximum Memory Used": 29970096
-        },
-        "Work Maximum Memory": 28756984
-      },
-      {
-        "Slice": 5,
-        "Executor Memory": {
-          "Average": 146115716,
-          "Workers": 8,
-          "Maximum Memory Used": 146158760
-        },
-        "Work Maximum Memory": 21825688
-      }
-    ],
-    "Statement statistics": {
-      "Memory used": 126976,
-      "Memory wanted": 17866714
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    },
-    "Execution Time": 248083.826
-  }
-]
+-- === общие сеттинги на сессию ===
+SET gp_workfile_compression = on;
+
+-- ==============================================
+-- ШАГ 1: cr_next — saldo на 1-е число след. месяца
+-- выражения в GROUP BY УБРАЛИ, но dt_posting считаем сразу
+-- ==============================================
+SET LOCAL statement_mem = '3GB';
+-- при спиллах HashAgg можно на время отключить:
+-- SET LOCAL enable_hashagg = off;
+
+DROP TABLE IF EXISTS cr_next;
+CREATE TEMP TABLE cr_next ON COMMIT DROP AS
+SELECT
+  kalnr,
+  (make_date(bdatj::int, substring(poper,2,2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
+  MAX(salk3) AS salk3
+FROM ods.ckmlcr_ral
+WHERE untper = '000' AND curtp = '10'
+GROUP BY kalnr, (make_date(bdatj::int, substring(poper,2,2)::int, 1) + INTERVAL '1 month')::date
+DISTRIBUTED BY (kalnr);
+
+ANALYZE cr_next;
+-- RESET enable_hashagg;
+
+-- ==============================================
+-- ШАГ 2: mlcd_agg — агрегаты по тройке
+-- ==============================================
+SET LOCAL statement_mem = '2GB';
+-- SET LOCAL enable_hashagg = off;  -- только если есть спиллы
+
+DROP TABLE IF EXISTS mlcd_agg;
+CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
+SELECT
+  kalnr, bdatj, poper,
+  SUM(salk3)  AS salk3,
+  SUM(estprd) AS estprd,
+  SUM(mstprd) AS mstprd
+FROM ods.mlcd_ral
+WHERE curtp = '10'
+  AND categ IN ('ZU','VP','PC')
+GROUP BY kalnr, bdatj, poper
+DISTRIBUTED BY (kalnr);
+
+ANALYZE mlcd_agg;
+-- RESET enable_hashagg;
+
+-- ==============================================
+-- ШАГ 3: финал — меньше дублей и без выражений в Hash Join
+-- ==============================================
+SET LOCAL statement_mem = '8GB';
+SET LOCAL optimizer_enable_broadcast = on;
+
+WITH
+pp AS (
+  /* сразу убираем дубли по дате: DISTINCT по (kalnr, bdatj, poper) */
+  SELECT DISTINCT
+    p.kalnr,
+    p.bdatj,
+    p.poper,
+    make_date(p.bdatj::int, substring(p.poper,2,2)::int, 1) AS dt_valid_from,
+    p.umkumo, p.abkumo, p.zukumo, p.lbkum
+  FROM ods.ckmlpp_ral p
+  WHERE p.untper = '000'
+),
+dates AS (
+  /* окно уже над "ужатым" pp — сорт/окно меньше и дешевле */
+  SELECT
+    kalnr,
+    dt_valid_from,
+    COALESCE(
+      LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+      DATE '2299-12-31'
+    )::date AS dt_valid_to
+  FROM pp
+)
+-- INSERT INTO dm.material_price_calculation
+SELECT
+  pp.kalnr AS calculation_code,
+  pp.dt_valid_from,
+  d.dt_valid_to,
+
+  cr.vprsv AS price_valuation_type_code,
+  cr.stprs AS standard_price_amount,
+  cr.peinh AS price_unit_code,
+  cr.pvprs AS moving_average_price_amount,
+
+  /* rule3 */
+  CASE WHEN (pp.umkumo + pp.abkumo + pp.zukumo) = 0 THEN 0
+       ELSE TRUNC(
+              CAST(ROUND(
+                    (cr.stprs / cr.peinh) * (pp.umkumo + pp.abkumo)
+                  + cr.abprd_o + cr.abprd_mo
+                  + COALESCE(ma.salk3 + ma.estprd + ma.mstprd, 0)
+              , 2) AS NUMERIC(40,20))
+              / (pp.umkumo + pp.abkumo + pp.zukumo), 15)
+  END AS average_weighted_stock_price_rule3_amount,
+
+  /* rule2_prev_date */
+  CASE WHEN (pp.abkumo + pp.umkumo + pp.zukumo) <> 0
+       THEN TRUNC(
+              CAST(
+                  COALESCE(n.salk3,0)
+                + COALESCE(ma.salk3,0) + COALESCE(ma.estprd,0) + COALESCE(ma.mstprd,0)
+              AS NUMERIC(40,20))
+              / (pp.abkumo + pp.umkumo + pp.zukumo), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_prev_date_amount,
+
+  /* rule2_next_date */
+  CASE WHEN pp.lbkum <> 0
+       THEN TRUNC(CAST(COALESCE(cr.salk3,0) AS NUMERIC(40,20)) / pp.lbkum, 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_next_date_amount,
+
+  h.price_rule_code
+FROM pp
+LEFT JOIN ods.ckmlcr_ral cr
+  ON cr.kalnr = pp.kalnr
+ AND cr.bdatj = pp.bdatj
+ AND cr.poper = pp.poper
+ AND cr.untper = '000'
+ AND cr.curtp  = '10'
+LEFT JOIN cr_next n
+  ON n.kalnr = pp.kalnr
+ AND n.dt_posting = pp.dt_valid_from      -- БЕЗ выражений в ON
+LEFT JOIN mlcd_agg ma
+  ON ma.kalnr = pp.kalnr
+ AND ma.bdatj = pp.bdatj
+ AND ma.poper = pp.poper
+LEFT JOIN dates d
+  ON d.kalnr = pp.kalnr
+ AND d.dt_valid_from = pp.dt_valid_from
+LEFT JOIN dds.material_ledger_header h
+  ON h.calculation_code = pp.kalnr
+;

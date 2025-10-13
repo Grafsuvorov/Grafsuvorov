@@ -1,3 +1,394 @@
+--------------------------
+-- 1) CKMLCR (следующий месяц): salk3 на 1-е число следующего месяца
+--------------------------
+DROP TABLE IF EXISTS cr_next;
+CREATE TEMP TABLE cr_next ON COMMIT DROP AS
+SELECT
+    kalnr,
+    (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
+    MAX(salk3) AS salk3              -- на случай дублей
+FROM ods.ckmlcr_ral
+WHERE untper = '000' AND curtp = '10'
+GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
+DISTRIBUTED BY (kalnr);
+ANALYZE cr_next;
+
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 14052.18,
+      "Plan Rows": 77434767,
+      "Plan Width": 25,
+      "Actual Startup Time": 17648.375,
+      "Actual Total Time": 28965.602,
+      "Actual Rows": 87923587,
+      "Actual Loops": 1,
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Hashed",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 8684.98,
+          "Plan Rows": 77434767,
+          "Plan Width": 25,
+          "Actual Startup Time": 17650.615,
+          "Actual Total Time": 22048.643,
+          "Actual Rows": 10994458,
+          "Actual Loops": 1,
+          "Group Key": ["kalnr", "(date((make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1) + '1 mon'::interval)))"],
+          "Extra Text": [
+            {
+              "Extra Text": "(seg0)   10994458 groups total in 32 batches; 1 overflows; 10994458 spill groups.\n(seg0)   Hash chain length 2.8 avg, 16 max, using 4136796 of 4456448 buckets; total 13 expansions.\n"
+            }
+          ],
+          "Plans": [
+            {
+              "Node Type": "Redistribute Motion",
+              "Senders": 8,
+              "Receivers": 8,
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 5831.65,
+              "Plan Rows": 88520585,
+              "Plan Width": 21,
+              "Actual Startup Time": 4.494,
+              "Actual Total Time": 9789.063,
+              "Actual Rows": 10994458,
+              "Actual Loops": 1,
+              "Hash Key": "kalnr, (date((make_date((bdatj)::integer, (\"substring\"((poper)::text, 2, 2))::integer, 1) + '1 mon'::interval)))",
+              "Plans": [
+                {
+                  "Node Type": "Result",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 5104.34,
+                  "Plan Rows": 88520585,
+                  "Plan Width": 21,
+                  "Actual Startup Time": 0.711,
+                  "Actual Total Time": 10695.384,
+                  "Actual Rows": 10994858,
+                  "Actual Loops": 1,
+                  "Plans": [
+                    {
+                      "Node Type": "Result",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 5104.34,
+                      "Plan Rows": 88520585,
+                      "Plan Width": 21,
+                      "Actual Startup Time": 0.698,
+                      "Actual Total Time": 9645.378,
+                      "Actual Rows": 10994858,
+                      "Actual Loops": 1,
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "ckmlcr_ral",
+                          "Alias": "ckmlcr_ral",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 3765.47,
+                          "Plan Rows": 88520585,
+                          "Plan Width": 26,
+                          "Actual Startup Time": 0.666,
+                          "Actual Total Time": 5008.327,
+                          "Actual Rows": 10994858,
+                          "Actual Loops": 1,
+                          "Filter": "(((untper)::text = '000'::text) AND ((curtp)::text = '10'::text))",
+                          "Rows Removed by Filter": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 26.226,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 892192
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 976430,
+          "Workers": 8,
+          "Maximum Memory Used": 978520
+        }
+      },
+      {
+        "Slice": 2,
+        "Executor Memory": {
+          "Average": 66105344,
+          "Workers": 8,
+          "Maximum Memory Used": 66105344
+        },
+        "Work Maximum Memory": 64858144
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 126976,
+      "Memory wanted": 1743888
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    },
+    "Execution Time": 31517.019
+  }
+]
+
+--------------------------
+-- 2) MLCD агрегаты (по тройке)
+--------------------------
+DROP TABLE IF EXISTS mlcd_agg;
+CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
+SELECT
+    kalnr, bdatj, poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+FROM ods.mlcd_ral
+WHERE curtp = '10'
+  AND categ IN ('ZU','VP','PC')
+GROUP BY kalnr, bdatj, poper
+DISTRIBUTED BY (kalnr);
+ANALYZE mlcd_agg;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 5078.21,
+      "Plan Rows": 11212735,
+      "Plan Width": 46,
+      "Actual Startup Time": 5054.837,
+      "Actual Total Time": 6747.425,
+      "Actual Rows": 7034603,
+      "Actual Loops": 1,
+      "Plans": [
+        {
+          "Node Type": "Aggregate",
+          "Strategy": "Hashed",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 3648.20,
+          "Plan Rows": 11212735,
+          "Plan Width": 46,
+          "Actual Startup Time": 5056.330,
+          "Actual Total Time": 6077.378,
+          "Actual Rows": 881474,
+          "Actual Loops": 1,
+          "Group Key": ["kalnr", "bdatj", "poper"],
+          "Extra Text": [
+            {
+              "Extra Text": "(seg1)   881474 groups total in 32 batches; 1 overflows; 884230 spill groups.\n(seg1)   Hash chain length 3.6 avg, 16 max, using 285444 of 294912 buckets; total 10 expansions.\n"
+            }
+          ],
+          "Plans": [
+            {
+              "Node Type": "Redistribute Motion",
+              "Senders": 8,
+              "Receivers": 8,
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 3010.97,
+              "Plan Rows": 12806951,
+              "Plan Width": 34,
+              "Actual Startup Time": 11.211,
+              "Actual Total Time": 3179.242,
+              "Actual Rows": 900801,
+              "Actual Loops": 1,
+              "Hash Key": "kalnr, bdatj, poper",
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Relation Name": "mlcd_ral",
+                  "Alias": "mlcd_ral",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 2840.61,
+                  "Plan Rows": 12806951,
+                  "Plan Width": 34,
+                  "Actual Startup Time": 0.633,
+                  "Actual Total Time": 3634.984,
+                  "Actual Rows": 899827,
+                  "Actual Loops": 1,
+                  "Filter": "(((curtp)::text = '10'::text) AND ((categ)::text = ANY ('{ZU,VP,PC}'::text[])))",
+                  "Rows Removed by Filter": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 47.599,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 966184
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 1175272,
+          "Workers": 8,
+          "Maximum Memory Used": 1175272
+        }
+      },
+      {
+        "Slice": 2,
+        "Executor Memory": {
+          "Average": 164993296,
+          "Workers": 8,
+          "Maximum Memory Used": 165008656
+        },
+        "Work Maximum Memory": 129819292
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 126976,
+      "Memory wanted": 214764
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    },
+    "Execution Time": 6966.778
+  }
+]
+
+--------------------------
+-- 3) ФИНАЛ: один INSERT
+--    все источники коллокированы по kalnr, heavy window только по ужатому набору
+--------------------------
+explain(analyze, format json)
+WITH pp AS (
+    SELECT
+        p.kalnr,
+        p.bdatj,
+        p.poper,
+        make_date(p.bdatj::int, substring(p.poper, 2, 2)::int, 1) AS dt_valid_from,
+        p.umkumo, p.abkumo, p.zukumo, p.lbkum
+    FROM ods.ckmlpp_ral p
+    WHERE p.untper = '000'
+),
+dates AS (
+    SELECT
+        kalnr,
+        dt_valid_from,
+        COALESCE(
+            LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+            DATE '2299-12-31'
+        )::date AS dt_valid_to
+    FROM (SELECT kalnr, dt_valid_from FROM pp GROUP BY kalnr, dt_valid_from) s
+)
+SELECT
+    pp.kalnr AS calculation_code,
+    pp.dt_valid_from,
+    d.dt_valid_to,
+
+    cr.vprsv AS price_valuation_type_code,
+    cr.stprs AS standard_price_amount,
+    cr.peinh AS price_unit_code,
+    cr.pvprs AS moving_average_price_amount,
+
+    /* rule3 */
+    CASE WHEN (pp.umkumo + pp.abkumo + pp.zukumo) = 0 THEN 0
+         ELSE TRUNC(
+                CAST(ROUND(
+                      (cr.stprs / cr.peinh) * (pp.umkumo + pp.abkumo)
+                    + cr.abprd_o + cr.abprd_mo
+                    + COALESCE(ma.salk3 + ma.estprd + ma.mstprd, 0)
+                , 2) AS NUMERIC(40,20))
+                / (pp.umkumo + pp.abkumo + pp.zukumo), 15)
+    END AS average_weighted_stock_price_rule3_amount,
+
+    /* rule2_prev_date */
+    CASE WHEN (pp.abkumo + pp.umkumo + pp.zukumo) <> 0
+         THEN TRUNC(
+                CAST(
+                    COALESCE(n.salk3,0)
+                  + COALESCE(ma.salk3,0) + COALESCE(ma.estprd,0) + COALESCE(ma.mstprd,0)
+                AS NUMERIC(40,20))
+                / (pp.abkumo + pp.umkumo + pp.zukumo), 15)
+         ELSE 0
+    END AS average_weighted_stock_price_rule2_prev_date_amount,
+
+    /* rule2_next_date */
+    CASE WHEN pp.lbkum <> 0
+         THEN TRUNC(CAST(COALESCE(cr.salk3,0) AS NUMERIC(40,20)) / pp.lbkum, 15)
+         ELSE 0
+    END AS average_weighted_stock_price_rule2_next_date_amount,
+
+    h.price_rule_code
+FROM pp
+LEFT JOIN ods.ckmlcr_ral cr
+  ON cr.kalnr = pp.kalnr
+ AND cr.bdatj = pp.bdatj
+ AND cr.poper = pp.poper
+ AND cr.untper = '000'
+ AND cr.curtp  = '10'
+LEFT JOIN cr_next n
+  ON n.kalnr = pp.kalnr
+ AND n.dt_posting = pp.dt_valid_from
+LEFT JOIN mlcd_agg ma
+  ON ma.kalnr = pp.kalnr
+ AND ma.bdatj = pp.bdatj
+ AND ma.poper = pp.poper
+LEFT JOIN dates d
+  ON d.kalnr = pp.kalnr
+ AND d.dt_valid_from = pp.dt_valid_from
+LEFT JOIN dds.material_ledger_header h
+  ON h.calculation_code = pp.kalnr
+;
+
+
 [
   {
     "Plan": {

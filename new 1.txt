@@ -236,3 +236,4 @@ LEFT JOIN cr_next  n ON n.kalnr=b.kalnr AND n.dt_posting=b.dt_valid_from
 LEFT JOIN mlcd_agg m ON m.kalnr=b.kalnr AND m.bdatj=b.bdatj AND m.poper=b.poper
 LEFT JOIN dds.material_ledger_header h
   ON h.calculation_code=b.kalnr;
+

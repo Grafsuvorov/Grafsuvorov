@@ -1,205 +1,129 @@
--- ================================
--- 0) cleanup
--- ================================
-DROP TABLE IF EXISTS cr_next;
-DROP TABLE IF EXISTS mlcd_agg;
-DROP TABLE IF EXISTS pp_base;
-DROP TABLE IF EXISTS cr_curr_small;
-DROP TABLE IF EXISTS pp_join_keys;
-
--- ===========================================================
--- 1) CKMLCR next-month salk3 на 1-е число следующего месяца
--- ===========================================================
-CREATE TEMP TABLE cr_next ON COMMIT DROP AS
-SELECT
-    c.kalnr,
-    (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-    MAX(c.salk3) AS salk3
-FROM ods.ckmlcr_ral c
-WHERE c.untper = '000'
-  AND c.curtp  = '10'
-GROUP BY c.kalnr,
-         (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);  -- по этому ключу идёт join с pp_base по (kalnr, dt_valid_from)
-ANALYZE cr_next;
-
--- =====================================
--- 2) MLCD агрегаты по (kalnr,bdatj,poper)
--- =====================================
-CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
-SELECT
-    m.kalnr, m.bdatj, m.poper,
-    SUM(m.salk3)  AS salk3,
-    SUM(m.estprd) AS estprd,
-    SUM(m.mstprd) AS mstprd
-FROM ods.mlcd_ral m
-WHERE m.curtp = '10'
-  AND m.categ IN ('ZU','VP','PC')
-GROUP BY m.kalnr, m.bdatj, m.poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE mlcd_agg;
-
--- =================================================
--- 3) pp_base: базовые поля + dt_valid_to (одна генерация)
--- =================================================
-CREATE TEMP TABLE pp_base ON COMMIT DROP AS
-WITH raw AS (
-  SELECT
-    p.kalnr,
-    p.bdatj,
-    p.poper,
-    make_date(p.bdatj::int, substring(p.poper, 2, 2)::int, 1) AS dt_valid_from,
-    p.umkumo, p.abkumo, p.zukumo, p.lbkum
-  FROM ods.ckmlpp_ral p
-  WHERE p.untper = '000'
-),
-dates AS (
-  SELECT
-    r.kalnr,
-    r.dt_valid_from,
-    COALESCE(
-      LEAD(r.dt_valid_from) OVER (PARTITION BY r.kalnr ORDER BY r.dt_valid_from) - INTERVAL '1 day',
-      DATE '2299-12-31'
-    )::date AS dt_valid_to
-  FROM (SELECT DISTINCT kalnr, dt_valid_from FROM raw) r
+CREATE TABLE ods.ckmlcr_ral (
+	bdatj varchar(4) NULL,
+	curtp varchar(2) NULL,
+	kalnr varchar(12) NULL,
+	poper varchar(3) NULL,
+	untper varchar(3) NULL,
+	peinh int8 NULL,
+	pvprs numeric(11, 2) NULL,
+	salk3 numeric(15, 2) NULL,
+	stprs numeric(11, 2) NULL,
+	vprsv varchar(1) NULL,
+	abprd_o numeric(15, 2) NULL,
+	abprd_mo numeric(15, 2) NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
 )
-SELECT r.kalnr, r.bdatj, r.poper, r.dt_valid_from, d.dt_valid_to,
-       r.umkumo, r.abkumo, r.zukumo, r.lbkum
-FROM raw   r
-JOIN dates d
-  ON d.kalnr = r.kalnr AND d.dt_valid_from = r.dt_valid_from
-DISTRIBUTED BY (kalnr, bdatj, poper);   -- КРИТИЧНО: чтобы коллокироваться с cr_curr_small и mlcd_agg
-ANALYZE pp_base;
-
--- ==========================================================
--- 4) Узкий CKMLCR: только нужные поля и только ключи из pp_base
---    распределение тоже по тройке, чтобы убрать Motion при join
--- ==========================================================
-CREATE TEMP TABLE cr_curr_small ON COMMIT DROP AS
-SELECT
-  c.kalnr, c.bdatj, c.poper,
-  c.vprsv, c.stprs, c.peinh, c.pvprs,
-  c.abprd_o, c.abprd_mo,
-  c.salk3
-FROM ods.ckmlcr_ral c
-JOIN (SELECT DISTINCT kalnr, bdatj, poper FROM pp_base) k
-  ON  k.kalnr = c.kalnr
-  AND k.bdatj = c.bdatj
-  AND k.poper = c.poper
-WHERE c.untper = '000'
-  AND c.curtp  = '10'
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE cr_curr_small;
-
--- =================================================================
--- 5) Узкая стадия объединения источников (все в одну «узкую» таблицу)
--- =================================================================
-CREATE TEMP TABLE pp_join_keys ON COMMIT DROP AS
-SELECT
-  pp.kalnr,
-  pp.bdatj,
-  pp.poper,
-  pp.dt_valid_from,
-  pp.dt_valid_to,
-  pp.umkumo,
-  pp.abkumo,
-  pp.zukumo,
-  pp.lbkum,
-
-  -- поля из текущего CR (для всех правил и витрины)
-  cr.vprsv,
-  cr.stprs,
-  cr.peinh,
-  cr.pvprs,
-  cr.abprd_o,
-  cr.abprd_mo,
-  cr.salk3     AS salk3_curr,   -- для rule2_next_date
-
-  -- поля из next-CR и MLCD
-  n.salk3      AS salk3_next,   -- для rule2_prev_date
-  ma.salk3     AS ma_salk3,
-  ma.estprd    AS ma_estprd,
-  ma.mstprd    AS ma_mstprd
-FROM pp_base pp
-LEFT JOIN cr_curr_small cr
-  ON cr.kalnr = pp.kalnr AND cr.bdatj = pp.bdatj AND cr.poper = pp.poper   -- коллокировано
-LEFT JOIN cr_next n
-  ON n.kalnr = pp.kalnr AND n.dt_posting = pp.dt_valid_from                -- по kalnr
-LEFT JOIN mlcd_agg ma
-  ON ma.kalnr = pp.kalnr AND ma.bdatj = pp.bdatj AND ma.poper = pp.poper    -- коллокировано
-DISTRIBUTED BY (kalnr, bdatj, poper);   -- сохраняем коллокацию
-ANALYZE pp_join_keys;
-
--- ==========================
--- 6) Финал (SELECT / INSERT)
--- ==========================
--- ВАЖНО: здесь НЕ делаем повторный JOIN к cr_curr_small —
--- всё уже в pp_join_keys. Присоединяем только справочник.
-WITH final AS (
-  SELECT
-    k.kalnr AS calculation_code,
-    k.dt_valid_from,
-    k.dt_valid_to,
-
-    k.vprsv  AS price_valuation_type_code,
-    k.stprs  AS standard_price_amount,
-    k.peinh  AS price_unit_code,
-    k.pvprs  AS moving_average_price_amount,
-
-    /* rule3 */
-    CASE WHEN (k.umkumo + k.abkumo + k.zukumo) = 0 THEN 0
-         ELSE TRUNC(
-                CAST(ROUND(
-                      (k.stprs / NULLIF(k.peinh,0)) * (k.umkumo + k.abkumo)
-                    + k.abprd_o + k.abprd_mo
-                    + COALESCE(k.ma_salk3,0) + COALESCE(k.ma_estprd,0) + COALESCE(k.ma_mstprd,0)
-                , 2) AS NUMERIC(40,20))
-                / (k.umkumo + k.abkumo + k.zukumo), 15)
-    END AS average_weighted_stock_price_rule3_amount,
-
-    /* rule2_prev_date */
-    CASE WHEN (k.abkumo + k.umkumo + k.zukumo) <> 0
-         THEN TRUNC(
-                CAST(
-                    COALESCE(k.salk3_next,0)
-                  + COALESCE(k.ma_salk3,0) + COALESCE(k.ma_estprd,0) + COALESCE(k.ma_mstprd,0)
-                AS NUMERIC(40,20))
-                / (k.abkumo + k.umkumo + k.zukumo), 15)
-         ELSE 0
-    END AS average_weighted_stock_price_rule2_prev_date_amount,
-
-    /* rule2_next_date */
-    CASE WHEN k.lbkum <> 0
-         THEN TRUNC(CAST(COALESCE(k.salk3_curr,0) AS NUMERIC(40,20)) / k.lbkum, 15)
-         ELSE 0
-    END AS average_weighted_stock_price_rule2_next_date_amount
-  FROM pp_join_keys k
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
 )
-SELECT
-  f.*,
-  h.price_rule_code
-FROM final f
-LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = f.calculation_code;
+DISTRIBUTED BY (bdatj, curtp, kalnr, poper, untper);
 
--- Вставка (раскомментируйте при необходимости):
-/*
-INSERT INTO dds.material_price_calculation (
-  calculation_code, dt_valid_from, dt_valid_to,
-  price_valuation_type_code, standard_price_amount, price_unit_code, moving_average_price_amount,
-  average_weighted_stock_price_rule3_amount,
-  average_weighted_stock_price_rule2_prev_date_amount,
-  average_weighted_stock_price_rule2_next_date_amount,
-  price_rule_code
+count - 175859442
+
+
+CREATE TABLE ods.mlcd_ral (
+	bdatj varchar(4) NULL,
+	bvalt varchar(12) NULL,
+	categ varchar(2) NULL,
+	curtp varchar(2) NULL,
+	kalnr varchar(12) NULL,
+	poper varchar(3) NULL,
+	ptyp varchar(4) NULL,
+	untper varchar(3) NULL,
+	estprd numeric(15, 2) NULL,
+	mstprd numeric(15, 2) NULL,
+	salk3 numeric(15, 2) NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
 )
-SELECT
-  f.calculation_code, f.dt_valid_from, f.dt_valid_to,
-  f.price_valuation_type_code, f.standard_price_amount, f.price_unit_code, f.moving_average_price_amount,
-  f.average_weighted_stock_price_rule3_amount,
-  f.average_weighted_stock_price_rule2_prev_date_amount,
-  f.average_weighted_stock_price_rule2_next_date_amount,
-  h.price_rule_code
-FROM final f
-LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = f.calculation_code;
-*/
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (bdatj, bvalt, categ, curtp, kalnr, poper, ptyp, untper);
+
+count - 152391222
+
+
+
+CREATE TABLE ods.ckmlpp_ral (
+	bdatj varchar(4) NULL,
+	kalnr varchar(12) NULL,
+	poper varchar(3) NULL,
+	untper varchar(3) NULL,
+	abkumo numeric(15, 3) NULL,
+	cd_ok varchar(1) NULL,
+	ekkuma numeric(15, 3) NULL,
+	ekkumo numeric(15, 3) NULL,
+	lbkum numeric(15, 3) NULL,
+	meins varchar(3) NULL,
+	pbkuma numeric(15, 3) NULL,
+	pbkumo numeric(15, 3) NULL,
+	pbpopo numeric(15, 3) NULL,
+	saprl varchar(4) NULL,
+	status varchar(2) NULL,
+	szkumo numeric(15, 3) NULL,
+	umkuma numeric(15, 3) NULL,
+	umkumo numeric(15, 3) NULL,
+	vnkumo numeric(15, 3) NULL,
+	vpkumo numeric(15, 3) NULL,
+	vppopo numeric(15, 3) NULL,
+	xerror varchar(1) NULL,
+	xnewccsnextmon varchar(1) NULL,
+	xvnb varchar(1) NULL,
+	zukuma numeric(15, 3) NULL,
+	zukumo numeric(15, 3) NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (bdatj, kalnr, poper, untper);
+
+count - 87060581
+
+
+CREATE TABLE dds.material_ledger_header (
+	calculation_code varchar(12) NOT NULL,
+	price_rule_code varchar(1) NULL,
+	dt_last_price_determination timestamp NULL,
+	material_code varchar(18) NULL,
+	valuation_area_code varchar(4) NULL,
+	valuation_type_code varchar(10) NULL,
+	special_stock_valuation_code varchar(1) NULL,
+	is_tolling_stock_valuated varchar(1) NULL,
+	special_stock_code varchar(1) NULL,
+	sales_document_code varchar(10) NULL,
+	sales_document_position_code varchar(6) NULL,
+	wbs_element_code varchar(8) NULL,
+	supplier_code varchar(10) NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (calculation_code);
+
+count(*) - 3314250

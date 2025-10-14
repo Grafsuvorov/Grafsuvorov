@@ -1,6 +1,6 @@
--- =========================================
--- 0) Чистим временные объекты
--- =========================================
+-- ================================
+-- 0) cleanup
+-- ================================
 DROP TABLE IF EXISTS cr_next;
 DROP TABLE IF EXISTS mlcd_agg;
 DROP TABLE IF EXISTS pp_base;
@@ -8,19 +8,19 @@ DROP TABLE IF EXISTS cr_curr_small;
 DROP TABLE IF EXISTS pp_join_keys;
 
 -- ===========================================================
--- 1) CKMLCR (следующий месяц): salk3 на 1-е число следующего месяца
+-- 1) CKMLCR next-month salk3 на 1-е число следующего месяца
 -- ===========================================================
 CREATE TEMP TABLE cr_next ON COMMIT DROP AS
 SELECT
     c.kalnr,
     (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-    MAX(c.salk3) AS salk3         -- на случай дублей
+    MAX(c.salk3) AS salk3
 FROM ods.ckmlcr_ral c
 WHERE c.untper = '000'
   AND c.curtp  = '10'
 GROUP BY c.kalnr,
          (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);
+DISTRIBUTED BY (kalnr);  -- по этому ключу идёт join с pp_base по (kalnr, dt_valid_from)
 ANALYZE cr_next;
 
 -- =====================================
@@ -36,12 +36,11 @@ FROM ods.mlcd_ral m
 WHERE m.curtp = '10'
   AND m.categ IN ('ZU','VP','PC')
 GROUP BY m.kalnr, m.bdatj, m.poper
-DISTRIBUTED BY (kalnr);
+DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE mlcd_agg;
 
 -- =================================================
--- 3) pp_base: базовые поля + dt_valid_to
---    (формируем один раз, чтобы не делать self-join в финале)
+-- 3) pp_base: базовые поля + dt_valid_to (одна генерация)
 -- =================================================
 CREATE TEMP TABLE pp_base ON COMMIT DROP AS
 WITH raw AS (
@@ -69,11 +68,12 @@ SELECT r.kalnr, r.bdatj, r.poper, r.dt_valid_from, d.dt_valid_to,
 FROM raw   r
 JOIN dates d
   ON d.kalnr = r.kalnr AND d.dt_valid_from = r.dt_valid_from
-DISTRIBUTED BY (kalnr);
+DISTRIBUTED BY (kalnr, bdatj, poper);   -- КРИТИЧНО: чтобы коллокироваться с cr_curr_small и mlcd_agg
 ANALYZE pp_base;
 
 -- ==========================================================
 -- 4) Узкий CKMLCR: только нужные поля и только ключи из pp_base
+--    распределение тоже по тройке, чтобы убрать Motion при join
 -- ==========================================================
 CREATE TEMP TABLE cr_curr_small ON COMMIT DROP AS
 SELECT
@@ -88,11 +88,11 @@ JOIN (SELECT DISTINCT kalnr, bdatj, poper FROM pp_base) k
   AND k.poper = c.poper
 WHERE c.untper = '000'
   AND c.curtp  = '10'
-DISTRIBUTED BY (kalnr);
+DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE cr_curr_small;
 
 -- =================================================================
--- 5) Узкая стадия объединения источников (только ON, без USING)
+-- 5) Узкая стадия объединения источников (все в одну «узкую» таблицу)
 -- =================================================================
 CREATE TEMP TABLE pp_join_keys ON COMMIT DROP AS
 SELECT
@@ -106,42 +106,52 @@ SELECT
   pp.zukumo,
   pp.lbkum,
 
-  cr.salk3  AS salk3_curr,     -- для rule2_next_date
-  n.salk3   AS salk3_next,     -- для rule2_prev_date
-  ma.salk3  AS ma_salk3,
-  ma.estprd AS ma_estprd,
-  ma.mstprd AS ma_mstprd
+  -- поля из текущего CR (для всех правил и витрины)
+  cr.vprsv,
+  cr.stprs,
+  cr.peinh,
+  cr.pvprs,
+  cr.abprd_o,
+  cr.abprd_mo,
+  cr.salk3     AS salk3_curr,   -- для rule2_next_date
+
+  -- поля из next-CR и MLCD
+  n.salk3      AS salk3_next,   -- для rule2_prev_date
+  ma.salk3     AS ma_salk3,
+  ma.estprd    AS ma_estprd,
+  ma.mstprd    AS ma_mstprd
 FROM pp_base pp
 LEFT JOIN cr_curr_small cr
-  ON cr.kalnr = pp.kalnr AND cr.bdatj = pp.bdatj AND cr.poper = pp.poper
+  ON cr.kalnr = pp.kalnr AND cr.bdatj = pp.bdatj AND cr.poper = pp.poper   -- коллокировано
 LEFT JOIN cr_next n
-  ON n.kalnr = pp.kalnr AND n.dt_posting = pp.dt_valid_from
+  ON n.kalnr = pp.kalnr AND n.dt_posting = pp.dt_valid_from                -- по kalnr
 LEFT JOIN mlcd_agg ma
-  ON ma.kalnr = pp.kalnr AND ma.bdatj = pp.bdatj AND ma.poper = pp.poper
-DISTRIBUTED BY (kalnr);
+  ON ma.kalnr = pp.kalnr AND ma.bdatj = pp.bdatj AND ma.poper = pp.poper    -- коллокировано
+DISTRIBUTED BY (kalnr, bdatj, poper);   -- сохраняем коллокацию
 ANALYZE pp_join_keys;
 
 -- ==========================
 -- 6) Финал (SELECT / INSERT)
 -- ==========================
--- Прогон как SELECT:
+-- ВАЖНО: здесь НЕ делаем повторный JOIN к cr_curr_small —
+-- всё уже в pp_join_keys. Присоединяем только справочник.
 WITH final AS (
   SELECT
-    k.kalnr       AS calculation_code,
+    k.kalnr AS calculation_code,
     k.dt_valid_from,
     k.dt_valid_to,
 
-    c.vprsv  AS price_valuation_type_code,
-    c.stprs  AS standard_price_amount,
-    c.peinh  AS price_unit_code,
-    c.pvprs  AS moving_average_price_amount,
+    k.vprsv  AS price_valuation_type_code,
+    k.stprs  AS standard_price_amount,
+    k.peinh  AS price_unit_code,
+    k.pvprs  AS moving_average_price_amount,
 
     /* rule3 */
     CASE WHEN (k.umkumo + k.abkumo + k.zukumo) = 0 THEN 0
          ELSE TRUNC(
                 CAST(ROUND(
-                      (c.stprs / NULLIF(c.peinh,0)) * (k.umkumo + k.abkumo)
-                    + c.abprd_o + c.abprd_mo
+                      (k.stprs / NULLIF(k.peinh,0)) * (k.umkumo + k.abkumo)
+                    + k.abprd_o + k.abprd_mo
                     + COALESCE(k.ma_salk3,0) + COALESCE(k.ma_estprd,0) + COALESCE(k.ma_mstprd,0)
                 , 2) AS NUMERIC(40,20))
                 / (k.umkumo + k.abkumo + k.zukumo), 15)
@@ -164,16 +174,13 @@ WITH final AS (
          ELSE 0
     END AS average_weighted_stock_price_rule2_next_date_amount
   FROM pp_join_keys k
-  LEFT JOIN cr_curr_small c
-    ON c.kalnr = k.kalnr AND c.bdatj = k.bdatj AND c.poper = k.poper
 )
 SELECT
   f.*,
   h.price_rule_code
 FROM final f
 LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = f.calculation_code
-;
+  ON h.calculation_code = f.calculation_code;
 
 -- Вставка (раскомментируйте при необходимости):
 /*

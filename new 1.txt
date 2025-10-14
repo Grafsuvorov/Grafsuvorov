@@ -1,95 +1,7 @@
--- =========================================================
--- 0) Чистим, на всякий случай
--- =========================================================
-DROP TABLE IF EXISTS pp_base;
-DROP TABLE IF EXISTS pp_dates;
-DROP TABLE IF EXISTS cr_curr_small;
-DROP TABLE IF EXISTS cr_next;
-DROP TABLE IF EXISTS mlcd_agg;
-DROP TABLE IF EXISTS pp_cr;
-DROP TABLE IF EXISTS pp_cr_mlcd;
-DROP TABLE IF EXISTS pp_fact;
-DROP TABLE IF EXISTS fact_with_dates;
-
--- =========================================================
--- 1) База периодов из PP: тройка + dt_valid_from
--- =========================================================
-CREATE TEMP TABLE pp_base ON COMMIT DROP AS
-SELECT
-    p.kalnr,
-    p.bdatj,
-    p.poper,
-    make_date(p.bdatj::int, substring(p.poper, 2, 2)::int, 1) AS dt_valid_from,
-    p.umkumo, p.abkumo, p.zukumo, p.lbkum
-FROM userdata.ckmlpp_ral p
-WHERE p.untper = '000'
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE pp_base;
-
--- Ужатый набор дат для построения интервалов (одна строка на (kalnr, dt_valid_from))
-CREATE TEMP TABLE pp_dates ON COMMIT DROP AS
-SELECT DISTINCT kalnr, dt_valid_from
-FROM pp_base
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_dates;
-
--- =========================================================
--- 2) CR текущего периода (к тройке)
--- =========================================================
-CREATE TEMP TABLE cr_curr_small ON COMMIT DROP AS
-SELECT
-    kalnr, bdatj, poper,
-    vprsv, stprs, peinh, pvprs,
-    COALESCE(abprd_o,0) AS abprd_o,
-    COALESCE(abprd_mo,0) AS abprd_mo,
-    COALESCE(salk3,0)   AS salk3
-FROM userdata.ckmlcr_ral
-WHERE untper = '000'
-  AND curtp  = '10'
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE cr_curr_small;
-
--- =========================================================
--- 3) CR на 1-е число следующего месяца (из уже отфильтрованного cr_curr_small)
--- =========================================================
-CREATE TEMP TABLE cr_next ON COMMIT DROP AS
-SELECT
-    kalnr,
-    (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-    MAX(salk3) AS salk3
-FROM (
-    -- используем те же bdatj/poper из pp_base, чтобы не перебирать «лишние» периоды
-    SELECT c.kalnr, c.salk3, p.bdatj, p.poper
-    FROM cr_curr_small c
-    JOIN pp_base p
-      ON p.kalnr = c.kalnr
-     AND p.bdatj = c.bdatj
-     AND p.poper = c.poper
-) s
-GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_next;
-
--- =========================================================
--- 4) MLCD агрегаты (по тройке)
--- =========================================================
-CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
-SELECT
-    kalnr, bdatj, poper,
-    SUM(COALESCE(salk3,0))  AS salk3,
-    SUM(COALESCE(estprd,0)) AS estprd,
-    SUM(COALESCE(mstprd,0)) AS mstprd
-FROM userdata.mlcd_ral
-WHERE curtp = '10'
-  AND categ IN ('ZU','VP','PC')
-GROUP BY kalnr, bdatj, poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE mlcd_agg;
-
--- =========================================================
--- 5) DATES через LEAD() (локально по kalnr; БЕЗ EXPLAIN внутри CTAS)
--- =========================================================
-CREATE TEMP TABLE dates ON COMMIT DROP AS
+CREATE TEMP TABLE 
+dates --ON COMMIT drop
+as
+explain(verbose, format json)
 SELECT
     kalnr,
     dt_valid_from,
@@ -97,119 +9,106 @@ SELECT
       LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
       DATE '2299-12-31'
     )::date AS dt_valid_to
-FROM pp_dates
+FROM pp_base
 DISTRIBUTED BY (kalnr);
 ANALYZE dates;
 
--- =========================================================
--- 6) Склеиваем PP с CR (локально по тройке), затем приклеиваем MLCD
--- =========================================================
-CREATE TEMP TABLE pp_cr ON COMMIT DROP AS
-SELECT
-    pp.kalnr, pp.bdatj, pp.poper, pp.dt_valid_from,
-    pp.umkumo, pp.abkumo, pp.zukumo, pp.lbkum,
-    cr.vprsv, cr.stprs, cr.peinh, cr.pvprs, cr.abprd_o, cr.abprd_mo,
-    cr.salk3 AS salk3_curr
-FROM pp_base pp
-LEFT JOIN cr_curr_small cr
-  ON cr.kalnr = pp.kalnr
- AND cr.bdatj = pp.bdatj
- AND cr.poper = pp.poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE pp_cr;
-
-CREATE TEMP TABLE pp_cr_mlcd ON COMMIT DROP AS
-SELECT
-  p.*,
-  ma.salk3  AS mlcd_salk3,
-  ma.estprd AS mlcd_estprd,
-  ma.mstprd AS mlcd_mstprd
-FROM pp_cr p
-LEFT JOIN mlcd_agg ma
-  ON ma.kalnr = p.kalnr
- AND ma.bdatj = p.bdatj
- AND ma.poper = p.poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE pp_cr_mlcd;
-
--- =========================================================
--- 7) Перераспределяем «факт» по kalnr, чтобы финальные JOIN-ы были коллокированы:
---    (pp_fact  ⋈ dates ⋈ cr_next ⋈ dds.material_ledger_header) — все по kalnr
--- =========================================================
-CREATE TEMP TABLE pp_fact ON COMMIT DROP AS
-SELECT
-    kalnr,
-    dt_valid_from,
-    umkumo, abkumo, zukumo, lbkum,
-    vprsv, stprs, peinh, pvprs, abprd_o, abprd_mo,
-    salk3_curr,
-    mlcd_salk3, mlcd_estprd, mlcd_mstprd
-FROM pp_cr_mlcd
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_fact;
-
--- заранее подливаем даты и salk3 следующего месяца — чтобы финальный запрос был максимально простой
-CREATE TEMP TABLE fact_with_dates ON COMMIT DROP AS
-SELECT
-    f.*,
-    d.dt_valid_to,
-    n.salk3 AS salk3_nextmonth
-FROM pp_fact f
-LEFT JOIN dates d
-  ON d.kalnr = f.kalnr
- AND d.dt_valid_from = f.dt_valid_from
-LEFT JOIN cr_next n
-  ON n.kalnr = f.kalnr
- AND n.dt_posting = f.dt_valid_from
-DISTRIBUTED BY (kalnr);
-ANALYZE fact_with_dates;
-
--- =========================================================
--- 8) ФИНАЛ: всё коллокировано по kalnr (минимум Motion).
---    при необходимости замените SELECT на INSERT INTO <schema.table> (...)
--- =========================================================
-SELECT
-    t.kalnr AS calculation_code,
-    t.dt_valid_from,
-    t.dt_valid_to,
-
-    t.vprsv  AS price_valuation_type_code,
-    t.stprs  AS standard_price_amount,
-    t.peinh  AS price_unit_code,
-    t.pvprs  AS moving_average_price_amount,
-
-    /* rule3 */
-    CASE
-      WHEN (t.umkumo + t.abkumo + t.zukumo) = 0 THEN 0
-      ELSE TRUNC(
-             CAST(ROUND(
-                   (t.stprs / NULLIF(t.peinh,0)) * (t.umkumo + t.abkumo)
-                 + COALESCE(t.abprd_o,0) + COALESCE(t.abprd_mo,0)
-                 + COALESCE(t.mlcd_salk3,0) + COALESCE(t.mlcd_estprd,0) + COALESCE(t.mlcd_mstprd,0)
-             , 2) AS NUMERIC(40,20))
-             / NULLIF((t.umkumo + t.abkumo + t.zukumo),0), 15)
-    END AS average_weighted_stock_price_rule3_amount,
-
-    /* rule2_prev_date */
-    CASE
-      WHEN (t.abkumo + t.umkumo + t.zukumo) <> 0
-      THEN TRUNC(
-             CAST(
-                 COALESCE(t.salk3_nextmonth,0)
-               + COALESCE(t.mlcd_salk3,0) + COALESCE(t.mlcd_estprd,0) + COALESCE(t.mlcd_mstprd,0)
-             AS NUMERIC(40,20))
-             / NULLIF((t.abkumo + t.umkumo + t.zukumo),0), 15)
-      ELSE 0
-    END AS average_weighted_stock_price_rule2_prev_date_amount,
-
-    /* rule2_next_date */
-    CASE
-      WHEN t.lbkum <> 0
-      THEN TRUNC(CAST(COALESCE(t.salk3_curr,0) AS NUMERIC(40,20)) / NULLIF(t.lbkum,0), 15)
-      ELSE 0
-    END AS average_weighted_stock_price_rule2_next_date_amount,
-
-    h.price_rule_code
-FROM fact_with_dates t
-LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = t.kalnr;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 31595.12,
+      "Plan Rows": 87072080,
+      "Plan Width": 16,
+      "Output": ["kalnr", "dt_valid_from", "(date(COALESCE(((lead(dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone)))"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 27732.61,
+          "Plan Rows": 87072080,
+          "Plan Width": 16,
+          "Output": ["kalnr", "dt_valid_from", "date(COALESCE(((lead(dt_valid_from) OVER (?)) - '1 day'::interval), '2299-12-31 00:00:00'::timestamp without time zone))"],
+          "Plans": [
+            {
+              "Node Type": "WindowAgg",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 26470.06,
+              "Plan Rows": 87072080,
+              "Plan Width": 16,
+              "Output": ["lead(dt_valid_from) OVER (?)", "kalnr", "dt_valid_from"],
+              "Partition By": ["pp_base.kalnr"],
+              "Order By": ["pp_base.dt_valid_from"],
+              "Plans": [
+                {
+                  "Node Type": "Sort",
+                  "Parent Relationship": "Outer",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 26285.03,
+                  "Plan Rows": 87072080,
+                  "Plan Width": 17,
+                  "Output": ["kalnr", "dt_valid_from"],
+                  "Sort Key": ["pp_base.kalnr", "pp_base.dt_valid_from"],
+                  "Plans": [
+                    {
+                      "Node Type": "Redistribute Motion",
+                      "Senders": 8,
+                      "Receivers": 8,
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 1761.35,
+                      "Plan Rows": 87072080,
+                      "Plan Width": 17,
+                      "Output": ["kalnr", "dt_valid_from"],
+                      "Hash Key": "kalnr",
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "pp_base",
+                          "Schema": "pg_temp_5058832",
+                          "Alias": "pp_base",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 838.06,
+                          "Plan Rows": 87072080,
+                          "Plan Width": 17,
+                          "Output": ["kalnr", "dt_valid_from"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

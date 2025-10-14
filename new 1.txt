@@ -1,7 +1,19 @@
 -- =========================================================
--- 1) База периодов из PP: тройка + dt_valid_from
+-- 0) Чистим, на всякий случай
 -- =========================================================
 DROP TABLE IF EXISTS pp_base;
+DROP TABLE IF EXISTS pp_dates;
+DROP TABLE IF EXISTS cr_curr_small;
+DROP TABLE IF EXISTS cr_next;
+DROP TABLE IF EXISTS mlcd_agg;
+DROP TABLE IF EXISTS pp_cr;
+DROP TABLE IF EXISTS pp_cr_mlcd;
+DROP TABLE IF EXISTS pp_fact;
+DROP TABLE IF EXISTS fact_with_dates;
+
+-- =========================================================
+-- 1) База периодов из PP: тройка + dt_valid_from
+-- =========================================================
 CREATE TEMP TABLE pp_base ON COMMIT DROP AS
 SELECT
     p.kalnr,
@@ -14,8 +26,7 @@ WHERE p.untper = '000'
 DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE pp_base;
 
--- Ужатый набор дат для построения интервалов
-DROP TABLE IF EXISTS pp_dates;
+-- Ужатый набор дат для построения интервалов (одна строка на (kalnr, dt_valid_from))
 CREATE TEMP TABLE pp_dates ON COMMIT DROP AS
 SELECT DISTINCT kalnr, dt_valid_from
 FROM pp_base
@@ -25,7 +36,6 @@ ANALYZE pp_dates;
 -- =========================================================
 -- 2) CR текущего периода (к тройке)
 -- =========================================================
-DROP TABLE IF EXISTS cr_curr_small;
 CREATE TEMP TABLE cr_curr_small ON COMMIT DROP AS
 SELECT
     kalnr, bdatj, poper,
@@ -40,17 +50,22 @@ DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE cr_curr_small;
 
 -- =========================================================
--- 3) CR на 1-е число следующего месяца
+-- 3) CR на 1-е число следующего месяца (из уже отфильтрованного cr_curr_small)
 -- =========================================================
-DROP TABLE IF EXISTS cr_next;
 CREATE TEMP TABLE cr_next ON COMMIT DROP AS
 SELECT
     kalnr,
     (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
     MAX(salk3) AS salk3
-FROM userdata.ckmlcr_ral
-WHERE untper = '000'
-  AND curtp  = '10'
+FROM (
+    -- используем те же bdatj/poper из pp_base, чтобы не перебирать «лишние» периоды
+    SELECT c.kalnr, c.salk3, p.bdatj, p.poper
+    FROM cr_curr_small c
+    JOIN pp_base p
+      ON p.kalnr = c.kalnr
+     AND p.bdatj = c.bdatj
+     AND p.poper = c.poper
+) s
 GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
 DISTRIBUTED BY (kalnr);
 ANALYZE cr_next;
@@ -58,7 +73,6 @@ ANALYZE cr_next;
 -- =========================================================
 -- 4) MLCD агрегаты (по тройке)
 -- =========================================================
-DROP TABLE IF EXISTS mlcd_agg;
 CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
 SELECT
     kalnr, bdatj, poper,
@@ -73,43 +87,23 @@ DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE mlcd_agg;
 
 -- =========================================================
--- 5) DATES без корреляции / без LATERAL
---    Шаг A: парные строки d1 × d2 по kalnr с более поздним dt_valid_from
---    Шаг B: берём MIN(next_from) как следующий старт
+-- 5) DATES через LEAD() (локально по kalnr; БЕЗ EXPLAIN внутри CTAS)
 -- =========================================================
-DROP TABLE IF EXISTS dates;
 CREATE TEMP TABLE dates ON COMMIT DROP AS
-WITH pairs AS (
-  SELECT
-      d1.kalnr,
-      d1.dt_valid_from,
-      d2.dt_valid_from AS next_from
-  FROM pp_dates d1
-  LEFT JOIN pp_dates d2
-    ON d2.kalnr = d1.kalnr
-   AND d2.dt_valid_from > d1.dt_valid_from
-),
-nexts AS (
-  SELECT
-      kalnr,
-      dt_valid_from,
-      MIN(next_from) AS next_from
-  FROM pairs
-  GROUP BY kalnr, dt_valid_from
-)
 SELECT
     kalnr,
     dt_valid_from,
-    COALESCE(next_from - INTERVAL '1 day', DATE '2299-12-31')::date AS dt_valid_to
-FROM nexts
+    COALESCE(
+      LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+      DATE '2299-12-31'
+    )::date AS dt_valid_to
+FROM pp_dates
 DISTRIBUTED BY (kalnr);
 ANALYZE dates;
 
 -- =========================================================
--- 6) Закрепляем коллокацию: pp_base ⋈ cr_curr_small (локально по тройке)
---    а затем приклеиваем MLCD (тоже локально по тройке)
+-- 6) Склеиваем PP с CR (локально по тройке), затем приклеиваем MLCD
 -- =========================================================
-DROP TABLE IF EXISTS pp_cr;
 CREATE TEMP TABLE pp_cr ON COMMIT DROP AS
 SELECT
     pp.kalnr, pp.bdatj, pp.poper, pp.dt_valid_from,
@@ -124,7 +118,6 @@ LEFT JOIN cr_curr_small cr
 DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE pp_cr;
 
-DROP TABLE IF EXISTS pp_cr_mlcd;
 CREATE TEMP TABLE pp_cr_mlcd ON COMMIT DROP AS
 SELECT
   p.*,
@@ -140,12 +133,45 @@ DISTRIBUTED BY (kalnr, bdatj, poper);
 ANALYZE pp_cr_mlcd;
 
 -- =========================================================
--- 7) ФИНАЛ (замени SELECT на INSERT INTO … при необходимости)
+-- 7) Перераспределяем «факт» по kalnr, чтобы финальные JOIN-ы были коллокированы:
+--    (pp_fact  ⋈ dates ⋈ cr_next ⋈ dds.material_ledger_header) — все по kalnr
+-- =========================================================
+CREATE TEMP TABLE pp_fact ON COMMIT DROP AS
+SELECT
+    kalnr,
+    dt_valid_from,
+    umkumo, abkumo, zukumo, lbkum,
+    vprsv, stprs, peinh, pvprs, abprd_o, abprd_mo,
+    salk3_curr,
+    mlcd_salk3, mlcd_estprd, mlcd_mstprd
+FROM pp_cr_mlcd
+DISTRIBUTED BY (kalnr);
+ANALYZE pp_fact;
+
+-- заранее подливаем даты и salk3 следующего месяца — чтобы финальный запрос был максимально простой
+CREATE TEMP TABLE fact_with_dates ON COMMIT DROP AS
+SELECT
+    f.*,
+    d.dt_valid_to,
+    n.salk3 AS salk3_nextmonth
+FROM pp_fact f
+LEFT JOIN dates d
+  ON d.kalnr = f.kalnr
+ AND d.dt_valid_from = f.dt_valid_from
+LEFT JOIN cr_next n
+  ON n.kalnr = f.kalnr
+ AND n.dt_posting = f.dt_valid_from
+DISTRIBUTED BY (kalnr);
+ANALYZE fact_with_dates;
+
+-- =========================================================
+-- 8) ФИНАЛ: всё коллокировано по kalnr (минимум Motion).
+--    при необходимости замените SELECT на INSERT INTO <schema.table> (...)
 -- =========================================================
 SELECT
     t.kalnr AS calculation_code,
     t.dt_valid_from,
-    d.dt_valid_to,
+    t.dt_valid_to,
 
     t.vprsv  AS price_valuation_type_code,
     t.stprs  AS standard_price_amount,
@@ -169,7 +195,7 @@ SELECT
       WHEN (t.abkumo + t.umkumo + t.zukumo) <> 0
       THEN TRUNC(
              CAST(
-                 COALESCE(n.salk3,0)
+                 COALESCE(t.salk3_nextmonth,0)
                + COALESCE(t.mlcd_salk3,0) + COALESCE(t.mlcd_estprd,0) + COALESCE(t.mlcd_mstprd,0)
              AS NUMERIC(40,20))
              / NULLIF((t.abkumo + t.umkumo + t.zukumo),0), 15)
@@ -184,12 +210,6 @@ SELECT
     END AS average_weighted_stock_price_rule2_next_date_amount,
 
     h.price_rule_code
-FROM pp_cr_mlcd t
-LEFT JOIN cr_next n
-  ON n.kalnr = t.kalnr
- AND n.dt_posting = t.dt_valid_from
-LEFT JOIN dates d
-  ON d.kalnr = t.kalnr
- AND d.dt_valid_from = t.dt_valid_from
+FROM fact_with_dates t
 LEFT JOIN dds.material_ledger_header h
   ON h.calculation_code = t.kalnr;

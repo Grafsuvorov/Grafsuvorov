@@ -1,237 +1,182 @@
--- ================================
--- 0) cleanup
--- ================================
-DROP TABLE IF EXISTS ods_work.ckmlpp_w;
-DROP TABLE IF EXISTS ods_work.ckmlcr_w;
-DROP TABLE IF EXISTS ods_work.mlcd_w;
-DROP TABLE IF EXISTS ods_work.cr_next_w;
-DROP TABLE IF EXISTS ods_work.pp_base_w;
-DROP TABLE IF EXISTS ods_work.pp_join_w;
+/*===============================================================
+  A) РАЗВОРАЧИВАЕМ ТЕСТОВЫЕ КОПИИ В userdata  (однократно)
+  ---------------------------------------------------------------
+  ВАЖНО: этот блок вы запускаете отдельно для разовой загрузки.
+================================================================*/
+CREATE SCHEMA IF NOT EXISTS userdata;
 
--- Создайте схемy-стейдж, если её нет
--- CREATE SCHEMA IF NOT EXISTS ods_work;
-
--- ===========================================================
--- 1) Узкая проекция PP: только нужные строки/поля, правильная коллокация
---    Ключ джойна с CR/MLCD: (kalnr,bdatj,poper)
--- ===========================================================
-CREATE TABLE ods_work.ckmlpp_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
-SELECT
-  p.kalnr,
-  p.bdatj,
-  p.poper,
-  p.umkumo, p.abkumo, p.zukumo, p.lbkum
-FROM ods.ckmlpp_ral p
-WHERE p.untper = '000'
+-- CKMLPP: распределяем по (kalnr, bdatj, poper) — ключ всех тяжёлых джойнов
+DROP TABLE IF EXISTS userdata.ckmlpp_ral_tst;
+CREATE TABLE userdata.ckmlpp_ral_tst
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+AS
+SELECT *
+FROM ods.ckmlpp_ral
 DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE userdata.ckmlpp_ral_tst;
 
-ANALYZE ods_work.ckmlpp_w;
-
--- ===========================================================
--- 2) Узкая проекция CR (current): те же ключи, только curtp=10/untper=000
--- ===========================================================
-CREATE TABLE ods_work.ckmlcr_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
-SELECT
-  c.kalnr, c.bdatj, c.poper,
-  c.vprsv, c.stprs, c.peinh, c.pvprs,
-  c.abprd_o, c.abprd_mo,
-  c.salk3
-FROM ods.ckmlcr_ral c
-WHERE c.untper = '000'
-  AND c.curtp  = '10'
+-- CKMLCR: то же распределение (коллокация с PP)
+DROP TABLE IF EXISTS userdata.ckmlcr_ral_tst;
+CREATE TABLE userdata.ckmlcr_ral_tst
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+AS
+SELECT *
+FROM ods.ckmlcr_ral
 DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE userdata.ckmlcr_ral_tst;
 
-ANALYZE ods_work.ckmlcr_w;
-
--- ===========================================================
--- 3) Узкая проекция MLCD: те же ключи
--- ===========================================================
-CREATE TABLE ods_work.mlcd_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
-SELECT
-  m.kalnr, m.bdatj, m.poper,
-  m.salk3, m.estprd, m.mstprd
-FROM ods.mlcd_ral m
-WHERE m.curtp = '10'
-  AND m.categ IN ('ZU','VP','PC')
+-- MLCD: агрегируем по тройке — тоже распределяем по (kalnr, bdatj, poper)
+DROP TABLE IF EXISTS userdata.mlcd_ral_tst;
+CREATE TABLE userdata.mlcd_ral_tst
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+AS
+SELECT *
+FROM ods.mlcd_ral
 DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE userdata.mlcd_ral_tst;
 
-ANALYZE ods_work.mlcd_w;
 
--- ===========================================================
--- 4) NEXT-CR: значение на 1-е число след. месяца
---    Джойн дальше идёт по (kalnr, dt_valid_from) — достаточно распределить по kalnr
--- ===========================================================
-CREATE TABLE ods_work.cr_next_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
+/*===============================================================
+  B) РАБОЧАЯ СЕССИЯ: ВРЕМЕННЫЕ ТАБЛИЦЫ + ФИНАЛЬНЫЙ ЗАПРОС
+  ---------------------------------------------------------------
+  Минимум подготовительных шагов, все распределения выровнены.
+================================================================*/
+
+-- 1) PP базовая выборка (сужаем ширину, считаем dt_valid_from)
+DROP TABLE IF EXISTS pp_base;
+CREATE TEMP TABLE pp_base ON COMMIT DROP AS
 SELECT
-  c.kalnr,
-  (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-  MAX(c.salk3) AS salk3
-FROM ods_work.ckmlcr_w c
-GROUP BY c.kalnr,
-         (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
-DISTRIBUTED BY (kalnr);
-
-ANALYZE ods_work.cr_next_w;
-
--- ===========================================================
--- 5) PP с датами валидности (LEAD по уникальным датам) + коллокация по тройке
--- ===========================================================
-CREATE TABLE ods_work.pp_base_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
-WITH raw AS (
-  SELECT
-    p.kalnr, p.bdatj, p.poper,
+    p.kalnr,
+    p.bdatj,
+    p.poper,
     make_date(p.bdatj::int, substring(p.poper, 2, 2)::int, 1) AS dt_valid_from,
     p.umkumo, p.abkumo, p.zukumo, p.lbkum
-  FROM ods_work.ckmlpp_w p
-),
-dates AS (
-  SELECT
-    r.kalnr,
-    r.dt_valid_from,
+FROM userdata.ckmlpp_ral_tst p
+WHERE p.untper = '000'
+DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE pp_base;
+
+-- 2) CR текущего периода (только нужные поля)
+DROP TABLE IF EXISTS cr_curr_small;
+CREATE TEMP TABLE cr_curr_small ON COMMIT DROP AS
+SELECT
+    kalnr, bdatj, poper,
+    vprsv, stprs, peinh, pvprs,
+    abprd_o, abprd_mo, salk3
+FROM userdata.ckmlcr_ral_tst
+WHERE untper = '000' AND curtp = '10'
+DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE cr_curr_small;
+
+-- 3) CR на 1-е число следующего месяца
+DROP TABLE IF EXISTS cr_next;
+CREATE TEMP TABLE cr_next ON COMMIT DROP AS
+SELECT
+    kalnr,
+    (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
+    MAX(salk3) AS salk3               -- страховка от дублей
+FROM userdata.ckmlcr_ral_tst
+WHERE untper = '000' AND curtp = '10'
+GROUP BY kalnr, (make_date(bdatj::int, substring(poper, 2, 2)::int, 1) + INTERVAL '1 month')::date
+DISTRIBUTED BY (kalnr);
+ANALYZE cr_next;
+
+-- 4) MLCD агрегаты по тройке
+DROP TABLE IF EXISTS mlcd_agg;
+CREATE TEMP TABLE mlcd_agg ON COMMIT DROP AS
+SELECT
+    kalnr, bdatj, poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+FROM userdata.mlcd_ral_tst
+WHERE curtp = '10'
+  AND categ IN ('ZU','VP','PC')
+GROUP BY kalnr, bdatj, poper
+DISTRIBUTED BY (kalnr, bdatj, poper);
+ANALYZE mlcd_agg;
+
+-- 5) distinct даты начала периода
+DROP TABLE IF EXISTS pp_dates;
+CREATE TEMP TABLE pp_dates ON COMMIT DROP AS
+SELECT kalnr, dt_valid_from
+FROM pp_base
+GROUP BY kalnr, dt_valid_from
+DISTRIBUTED BY (kalnr);
+ANALYZE pp_dates;
+
+-- 6) интервалы (LEAD по коллокированным данным)
+DROP TABLE IF EXISTS dates;
+CREATE TEMP TABLE dates ON COMMIT DROP AS
+SELECT
+    kalnr,
+    dt_valid_from,
     COALESCE(
-      LEAD(r.dt_valid_from) OVER (PARTITION BY r.kalnr ORDER BY r.dt_valid_from) - INTERVAL '1 day',
-      DATE '2299-12-31'
+        LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
+        DATE '2299-12-31'
     )::date AS dt_valid_to
-  FROM (SELECT DISTINCT kalnr, dt_valid_from FROM raw) r
-)
+FROM pp_dates
+DISTRIBUTED BY (kalnr);
+ANALYZE dates;
+
+-- 7) ФИНАЛ: один SELECT (или подмените на INSERT INTO <target> SELECT ...)
 SELECT
-  r.kalnr, r.bdatj, r.poper,
-  r.dt_valid_from, d.dt_valid_to,
-  r.umkumo, r.abkumo, r.zukumo, r.lbkum
-FROM raw r
-JOIN dates d
-  ON d.kalnr = r.kalnr AND d.dt_valid_from = r.dt_valid_from
-DISTRIBUTED BY (kalnr, bdatj, poper);
+    pp.kalnr AS calculation_code,
+    pp.dt_valid_from,
+    d.dt_valid_to,
 
-ANALYZE ods_work.pp_base_w;
+    cr.vprsv AS price_valuation_type_code,
+    cr.stprs AS standard_price_amount,
+    cr.peinh AS price_unit_code,
+    cr.pvprs AS moving_average_price_amount,
 
--- ===========================================================
--- 6) Узкая стадия объединения (всё коллокировано)
--- ===========================================================
-CREATE TABLE ods_work.pp_join_w
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3) AS
-SELECT
-  pp.kalnr,
-  pp.bdatj,
-  pp.poper,
-  pp.dt_valid_from,
-  pp.dt_valid_to,
-  pp.umkumo,
-  pp.abkumo,
-  pp.zukumo,
-  pp.lbkum,
+    /* rule3 */
+    CASE
+      WHEN (pp.umkumo + pp.abkumo + pp.zukumo) = 0 THEN 0
+      ELSE TRUNC(
+             CAST(ROUND(
+                   (cr.stprs / NULLIF(cr.peinh,0)) * (pp.umkumo + pp.abkumo)
+                 + COALESCE(cr.abprd_o,0) + COALESCE(cr.abprd_mo,0)
+                 + COALESCE(ma.salk3,0) + COALESCE(ma.estprd,0) + COALESCE(ma.mstprd,0)
+             , 2) AS NUMERIC(40,20))
+             / NULLIF((pp.umkumo + pp.abkumo + pp.zukumo),0), 15)
+    END AS average_weighted_stock_price_rule3_amount,
 
-  cr.vprsv,
-  cr.stprs,
-  cr.peinh,
-  cr.pvprs,
-  cr.abprd_o,
-  cr.abprd_mo,
-  cr.salk3     AS salk3_curr,   -- для rule2_next_date
+    /* rule2_prev_date */
+    CASE
+      WHEN (pp.abkumo + pp.umkumo + pp.zukumo) <> 0
+      THEN TRUNC(
+             CAST(
+                 COALESCE(n.salk3,0)
+               + COALESCE(ma.salk3,0) + COALESCE(ma.estprd,0) + COALESCE(ma.mstprd,0)
+             AS NUMERIC(40,20))
+             / NULLIF((pp.abkumo + pp.umkumo + pp.zukumo),0), 15)
+      ELSE 0
+    END AS average_weighted_stock_price_rule2_prev_date_amount,
 
-  n.salk3      AS salk3_next,   -- для rule2_prev_date
-  ml.salk3     AS ml_salk3,
-  ml.estprd    AS ml_estprd,
-  ml.mstprd    AS ml_mstprd
-FROM ods_work.pp_base_w pp
-LEFT JOIN ods_work.ckmlcr_w cr
-  ON cr.kalnr = pp.kalnr AND cr.bdatj = pp.bdatj AND cr.poper = pp.poper
-LEFT JOIN ods_work.mlcd_w   ml
-  ON ml.kalnr = pp.kalnr AND ml.bdatj = pp.bdatj AND ml.poper = pp.poper
-LEFT JOIN ods_work.cr_next_w n
-  ON n.kalnr = pp.kalnr AND n.dt_posting = pp.dt_valid_from
-DISTRIBUTED BY (kalnr, bdatj, poper);
+    /* rule2_next_date */
+    CASE
+      WHEN pp.lbkum <> 0
+      THEN TRUNC(CAST(COALESCE(cr.salk3,0) AS NUMERIC(40,20)) / NULLIF(pp.lbkum,0), 15)
+      ELSE 0
+    END AS average_weighted_stock_price_rule2_next_date_amount,
 
-ANALYZE ods_work.pp_join_w;
-
--- ===========================================================
--- 7) Финал: расчёты + лёгкий LEFT JOIN к справочнику (он уже по kalnr)
--- ===========================================================
--- SELECT-версия (посмотреть план/скорость)
-SELECT
-  k.kalnr AS calculation_code,
-  k.dt_valid_from,
-  k.dt_valid_to,
-
-  k.vprsv  AS price_valuation_type_code,
-  k.stprs  AS standard_price_amount,
-  k.peinh  AS price_unit_code,
-  k.pvprs  AS moving_average_price_amount,
-
-  /* rule3 */
-  CASE WHEN (k.umkumo + k.abkumo + k.zukumo) = 0 THEN 0
-       ELSE TRUNC(
-              CAST(ROUND(
-                    (k.stprs / NULLIF(k.peinh,0)) * (k.umkumo + k.abkumo)
-                  + k.abprd_o + k.abprd_mo
-                  + COALESCE(k.ml_salk3,0) + COALESCE(k.ml_estprd,0) + COALESCE(k.ml_mstprd,0)
-              , 2) AS NUMERIC(40,20))
-              / (k.umkumo + k.abkumo + k.zukumo), 15)
-  END AS average_weighted_stock_price_rule3_amount,
-
-  /* rule2_prev_date */
-  CASE WHEN (k.abkumo + k.umkumo + k.zukumo) <> 0
-       THEN TRUNC(
-              CAST(
-                  COALESCE(k.salk3_next,0)
-                + COALESCE(k.ml_salk3,0) + COALESCE(k.ml_estprd,0) + COALESCE(k.ml_mstprd,0)
-              AS NUMERIC(40,20))
-              / (k.abkumo + k.umkumo + k.zukumo), 15)
-       ELSE 0
-  END AS average_weighted_stock_price_rule2_prev_date_amount,
-
-  /* rule2_next_date */
-  CASE WHEN k.lbkum <> 0
-       THEN TRUNC(CAST(COALESCE(k.salk3_curr,0) AS NUMERIC(40,20)) / k.lbkum, 15)
-       ELSE 0
-  END AS average_weighted_stock_price_rule2_next_date_amount,
-
-  h.price_rule_code
-FROM ods_work.pp_join_w k
+    h.price_rule_code
+FROM pp_base pp
+LEFT JOIN cr_curr_small cr
+  ON cr.kalnr = pp.kalnr
+ AND cr.bdatj = pp.bdatj
+ AND cr.poper = pp.poper
+LEFT JOIN cr_next n
+  ON n.kalnr = pp.kalnr
+ AND n.dt_posting = pp.dt_valid_from
+LEFT JOIN mlcd_agg ma
+  ON ma.kalnr = pp.kalnr
+ AND ma.bdatj = pp.bdatj
+ AND ma.poper = pp.poper
+LEFT JOIN dates d
+  ON d.kalnr = pp.kalnr
+ AND d.dt_valid_from = pp.dt_valid_from
 LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = k.kalnr;
-
--- INSERT-версия (раскомментируйте по месту)
--- INSERT INTO dds.material_price_calculation (
---   calculation_code, dt_valid_from, dt_valid_to,
---   price_valuation_type_code, standard_price_amount, price_unit_code, moving_average_price_amount,
---   average_weighted_stock_price_rule3_amount,
---   average_weighted_stock_price_rule2_prev_date_amount,
---   average_weighted_stock_price_rule2_next_date_amount,
---   price_rule_code
--- )
--- SELECT
---   k.kalnr, k.dt_valid_from, k.dt_valid_to,
---   k.vprsv, k.stprs, k.peinh, k.pvprs,
---   /* три вычисленных поля */ 
---   CASE WHEN (k.umkumo + k.abkumo + k.zukumo) = 0 THEN 0
---        ELSE TRUNC(
---               CAST(ROUND(
---                     (k.stprs / NULLIF(k.peinh,0)) * (k.umkumo + k.abkumo)
---                   + k.abprd_o + k.abprd_mo
---                   + COALESCE(k.ml_salk3,0) + COALESCE(k.ml_estprd,0) + COALESCE(k.ml_mstprd,0)
---               , 2) AS NUMERIC(40,20))
---               / (k.umkumo + k.abkumo + k.zukumo), 15)
---   END,
---   CASE WHEN (k.abkumo + k.umkumo + k.zukumo) <> 0
---        THEN TRUNC(
---               CAST(
---                   COALESCE(k.salk3_next,0)
---                 + COALESCE(k.ml_salk3,0) + COALESCE(k.ml_estprd,0) + COALESCE(k.ml_mstprd,0)
---               AS NUMERIC(40,20))
---               / (k.abkumo + k.umkumo + k.zukumo), 15)
---        ELSE 0
---   END,
---   CASE WHEN k.lbkum <> 0
---        THEN TRUNC(CAST(COALESCE(k.salk3_curr,0) AS NUMERIC(40,20)) / k.lbkum, 15)
---        ELSE 0
---   END,
---   h.price_rule_code
--- FROM ods_work.pp_join_w k
--- LEFT JOIN dds.material_ledger_header h
---   ON h.calculation_code = k.kalnr;
+  ON h.calculation_code = pp.kalnr
+;

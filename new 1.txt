@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Извлекаем реальные таблицы из tech_etl.tables_meta.query_insert_init
-и сохраняем в XLSX (лист all_items и лист unique_tables).
+Парсим ВСЕ tech_etl.tables_meta.query_insert_init (без фильтров),
+находим реальные таблицы (через information_schema.tables),
+после чего для КАЖДОЙ таблицы агрегируем список entity_id / entity_name,
+которые её используют.
 
-Добавлено:
-- В обоих листах выводим entity_id и entity_name.
-- В unique_tables агрегируем список уникальных entity_id / entity_name по каждой таблице.
+Итоговый XLSX:
+- all_items: построчно (каждое вхождение таблицы с указанием meta_id/name и entity_id/name).
+- unique_tables: по одной строке на таблицу + агрегированные списки entity_id / entity_name.
 
 Требуется: sqlalchemy, psycopg2-binary, pandas, openpyxl
 """
@@ -101,6 +103,7 @@ def is_system_schema(schema: str) -> bool:
 
 
 def collect_cte_names(sql_text: str):
+    # грубо: имена CTE в зоне WITH ... SELECT
     ctes = set()
     for name in re.findall(r'\bwith\b\s+(.*?)\bselect\b', sql_text, flags=re.IGNORECASE | re.DOTALL):
         for cte in re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_$]*)\s+AS\s*\(', name, flags=re.IGNORECASE):
@@ -145,6 +148,7 @@ def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=N
 def main():
     engine = create_engine(DB_URL)
     with engine.connect() as conn:
+        # возьмём default_schema из search_path (если пригодится для неуказанных схем)
         sp = (conn.execute(text("SHOW search_path")).scalar() or "")
         default_schema = None
         if sp:
@@ -155,10 +159,10 @@ def main():
 
         full_catalog_set, by_name = load_real_tables(conn)
 
-        # тут можно сузить фильтр по entity_name/entity_id при желании
+        # БЕРЁМ ВЕСЬ СПИСОК БЕЗ ФИЛЬТРОВ
         df = pd.read_sql(
-            "SELECT * FROM tech_etl.tables_meta "
-            "WHERE entity_name IN ('BI_FI','BI_FI_FACT_PAYMENTS','FI_COUNTERPARTY','FI_FIXED_ASSETS')",
+            "SELECT id, name, table_name, entity_id, entity_name, query_insert_init "
+            "FROM tech_etl.tables_meta",
             con=conn
         )
 
@@ -187,13 +191,11 @@ def main():
                     break
             schema, table = split_schema_table(token)
             if table and not is_function_like(table) and not is_temp_table_name(table):
-                if schema and is_temp_schema(schema):
-                    pass
-                else:
+                if not (schema and is_temp_schema(schema)):
                     resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
                     if resolved:
                         sch, tbl, full = resolved
-                        key = ("insert_target", full)
+                        key = ("insert_target", full, meta_id)  # разрешаем дубликаты таблицы, но не одной меты
                         if key not in seen:
                             seen.add(key)
                             rows.append({
@@ -237,7 +239,7 @@ def main():
                 continue
             sch, tbl, full = resolved
 
-            key = ("select_source", full)
+            key = ("select_source", full, meta_id)
             if key in seen:
                 continue
             seen.add(key)
@@ -255,6 +257,7 @@ def main():
 
     out = pd.DataFrame(rows)
 
+    # Даже если пусто — сохраняем структуру
     if out.empty:
         print("[WARN] Ничего не найдено после фильтров/валидации.")
         with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as xw:
@@ -263,26 +266,26 @@ def main():
         print(f"[SAVE] {OUTPUT_XLSX}")
         return
 
-    # агрегируем уникальные таблицы + списки entity_id / entity_name
+    # --- ПОСЛЕ ПАРСИНГА: для КАЖДОЙ ТАБЛИЦЫ собираем её entity_id / entity_name ---
     def agg_uniq(series):
         vals = [str(x) for x in series if pd.notna(x)]
+        # упорядочим для стабильности вывода
         return ", ".join(sorted(set(vals), key=lambda v: (len(v), v))) if vals else None
 
     uniq = (
         out.groupby(["schema", "table", "full_name"], as_index=False)
            .agg({
-                "entity_id": agg_uniq,
-                "entity_name": agg_uniq
-            })
+               "entity_id": agg_uniq,
+               "entity_name": agg_uniq
+           })
            .sort_values(["schema", "table"], na_position="last")
     )
 
-    # порядок колонок для красоты
+    # порядок колонок
     out = out[[
         "meta_id", "meta_name", "entity_id", "entity_name",
         "source_type", "schema", "table", "full_name"
     ]]
-
     uniq = uniq[[
         "schema", "table", "full_name", "entity_id", "entity_name"
     ]]

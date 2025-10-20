@@ -1,92 +1,193 @@
--- Параметры
--- :base_entity  — ваша сущность (например, 36)
--- :run_date     — интересующая дата в мониторинге
--- примеры: \set base_entity 36
---          \set run_date '2025-10-20'
+-- витрина зависимостей: одна строка = сущность × таблица (источник или таргет)
+DROP TABLE IF EXISTS tech_etl.entity_table_deps_v2;
 
-with start_targets as (
-    select distinct d.target_full_name
-    from tech_etl.tables_dependencies d
-    where d.entity_id = :base_entity
-      and d.target_full_name is not null
-)
-select distinct
-    d2.entity_id                        as affected_entity_id,
-    coalesce(em.entity_name, '—')       as affected_entity_name,
-    d2.target_schema,
-    d2.target_table
-from start_targets st
-join tech_etl.tables_dependencies d2
-  on d2.source_full_name = st.target_full_name
-left join tech_etl.entities_meta em
-  on em.entity_id = d2.entity_id
-join tech_monitoring.table_compare tc         -- фильтруем только нужную дату
-  on tc.table_schema = d2.target_schema
- and tc.table_name  = d2.target_table
- and tc.date_id     = :run_date
--- если нужно отфильтровать по «окну» времени (пример 03:00–03:30), раскомментируйте:
--- and tc.curr_start_dttm::time <  time '03:30'
--- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
-order by affected_entity_id, affected_entity_name, d2.target_schema, d2.target_table;
+CREATE TABLE tech_etl.entity_table_deps_v2 (
+    date_id                  date            NOT NULL,
+    entity_id                int             NOT NULL,
+    entity_name              text            NOT NULL,
+    -- таблица (схема.имя), о которой идёт речь в строке:
+    table_schema             text            NOT NULL,
+    table_name               text            NOT NULL,
+    -- флаг: TRUE = эта (schema.table) является целевой таблицей сущности (INSERT INTO),
+    -- FALSE = это источник (читаемая таблица)
+    target                   boolean         NOT NULL DEFAULT false,
+    -- опционально: тип ребра, если нужно
+    edge_type                text            NULL,    -- 'insert_target' | 'select_source'
+
+    -- тайминг из мониторинга (если найден)
+    curr_start_dttm          timestamp       NULL,
+    curr_finish_dttm         timestamp       NULL,
+    prev_start_dttm          timestamp       NULL,
+    prev_finish_dttm         timestamp       NULL,
+
+    -- служебное
+    load_dttm                timestamp       NOT NULL DEFAULT now()
+);
+
+CREATE INDEX ON tech_etl.entity_table_deps_v2 (date_id);
+CREATE INDEX ON tech_etl.entity_table_deps_v2 (entity_id);
+CREATE INDEX ON tech_etl.entity_table_deps_v2 (table_schema, table_name);
+CREATE INDEX ON tech_etl.entity_table_deps_v2 (target);
 
 
-
--- Параметры
--- :base_entity  — ваша сущность (например, 36)
--- :run_date     — интересующая дата в мониторинге
-
-with start_targets as (
-    select distinct d.target_full_name
-    from tech_etl.tables_dependencies d
-    where d.entity_id = :base_entity
-      and d.target_full_name is not null
+-- параметр дня мониторинга
+WITH params AS (
+    SELECT DATE '2025-10-20' AS p_date
 ),
-rec as (
-    -- уровень 1
-    select
-        1 as lvl,
-        d2.entity_id                 as affected_entity_id,
-        d2.target_schema,
-        d2.target_table,
-        d2.target_full_name
-    from start_targets st
-    join tech_etl.tables_dependencies d2
-      on d2.source_full_name = st.target_full_name
-    join tech_monitoring.table_compare tc
-      on tc.table_schema = d2.target_schema
-     and tc.table_name  = d2.target_table
-     and tc.date_id     = :run_date
-    -- фильтр по времени — опционально:
-    -- and tc.curr_start_dttm::time <  time '03:30'
-    -- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
 
-    union all
+-- 2.1 parsed: результат парсинга query_insert_init (ИСТОЧНИК ДАННЫХ!)
+parsed AS (
+    SELECT
+        lower(t.schema)  AS table_schema,
+        lower(t.table)   AS table_name,
+        t.source_type    AS edge_type,          -- 'insert_target' | 'select_source'
+        t.meta_name      AS entity_name_raw
+    FROM tech_etl.tables_meta_parse t
+),
 
-    -- уровни 2+
-    select
-        r.lvl + 1,
-        d2.entity_id,
-        d2.target_schema,
-        d2.target_table,
-        d2.target_full_name
-    from rec r
-    join tech_etl.tables_dependencies d2
-      on d2.source_full_name = r.target_full_name
-    join tech_monitoring.table_compare tc
-      on tc.table_schema = d2.target_schema
-     and tc.table_name  = d2.target_table
-     and tc.date_id     = :run_date
-    -- фильтр по времени — опционально:
-    -- and tc.curr_start_dttm::time <  time '03:30'
-    -- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
+-- 2.2 entities: нормализуем названия и подтягиваем entity_id
+entities AS (
+    SELECT
+        em.entity_id,
+        em.entity_name,
+        em.entity_last_load,     -- расписание/последний запуск (если нужно)
+        em.entity_load_mode
+    FROM tech_etl.entities_meta em
+),
+
+-- 2.3 связка парсинга с entities по имени сущности
+parsed_with_entity AS (
+    SELECT
+        p.table_schema,
+        p.table_name,
+        p.edge_type,
+        COALESCE(e.entity_id, -1)        AS entity_id,        -- -1 если не нашли
+        COALESCE(e.entity_name, p.entity_name_raw) AS entity_name
+    FROM parsed p
+    LEFT JOIN entities e
+      ON e.entity_name = p.entity_name_raw
+),
+
+-- 2.4 мониторинг за нужный день: по сущности (entity_name) возьмём её тайминги всех таблиц
+mon_today AS (
+    SELECT
+        tc.entity_id,
+        tc.entity_name,
+        tc.table_schema,
+        tc.table_name,
+        tc.curr_start_dttm,
+        tc.curr_finish_dttm,
+        tc.prev_start_dttm,
+        tc.prev_finish_dttm
+    FROM tech_monitoring.table_compare tc
+    JOIN params p ON tc.date_id = p.p_date
 )
-select distinct
-    r.lvl,
-    r.affected_entity_id,
-    coalesce(em.entity_name, '—') as affected_entity_name,
-    r.target_schema,
-    r.target_table
-from rec r
-left join tech_etl.entities_meta em
-  on em.entity_id = r.affected_entity_id
-order by r.lvl, r.affected_entity_id, r.target_schema, r.target_table;
+
+-- 2.5 финальная загрузка
+INSERT INTO tech_etl.entity_table_deps_v2 (
+    date_id, entity_id, entity_name,
+    table_schema, table_name,
+    target, edge_type,
+    curr_start_dttm, curr_finish_dttm, prev_start_dttm, prev_finish_dttm
+)
+SELECT
+    (SELECT p_date FROM params)              AS date_id,
+    pwe.entity_id,
+    pwe.entity_name,
+    pwe.table_schema,
+    pwe.table_name,
+    CASE WHEN pwe.edge_type = 'insert_target' THEN TRUE ELSE FALSE END AS target,
+    pwe.edge_type,
+    mt.curr_start_dttm,
+    mt.curr_finish_dttm,
+    mt.prev_start_dttm,
+    mt.prev_finish_dttm
+FROM parsed_with_entity pwe
+LEFT JOIN mon_today mt
+  ON  mt.entity_name  = pwe.entity_name
+  AND mt.table_schema = pwe.table_schema
+  AND mt.table_name   = pwe.table_name
+-- уберём мусор: без схемы/имени
+WHERE pwe.table_schema IS NOT NULL
+  AND pwe.table_schema <> ''
+  AND pwe.table_name   IS NOT NULL
+  AND pwe.table_name   <> '';
+
+
+SELECT
+  date_id, table_schema, table_name, entity_id, entity_name,
+  target, edge_type, curr_start_dttm, curr_finish_dttm
+FROM tech_etl.entity_table_deps_v2
+WHERE date_id = DATE '2025-10-20'
+ORDER BY table_schema, table_name, entity_id;
+
+
+-- любые пересечения по таблицам (обычно смотрим источники)
+SELECT
+  table_schema,
+  table_name,
+  COUNT(DISTINCT entity_id)                            AS entities_cnt,
+  array_agg(DISTINCT entity_name ORDER BY entity_id)   AS entities
+FROM tech_etl.entity_table_deps_v2
+WHERE date_id = DATE '2025-10-20'
+  AND target = FALSE              -- только источники; уберите строку, если хотите вообще любые совпадения
+GROUP BY 1,2
+HAVING COUNT(DISTINCT entity_id) > 1
+ORDER BY table_schema, table_name;
+
+Чем “может задеть” изменение времени запуска entity_id = 36
+
+Шаг A: какие таргеты делает 36?
+
+Шаг B: какие другие сущности используют эти таргеты как источники?
+
+WITH my_targets AS (
+  SELECT table_schema, table_name
+  FROM tech_etl.entity_table_deps_v2
+  WHERE date_id = DATE '2025-10-20'
+    AND entity_id = 36
+    AND target = TRUE
+)
+SELECT
+  s.entity_id,
+  s.entity_name,
+  s.table_schema,
+  s.table_name,
+  s.curr_start_dttm, s.curr_finish_dttm
+FROM tech_etl.entity_table_deps_v2 s
+JOIN my_targets t
+  ON  s.table_schema = t.table_schema
+  AND s.table_name   = t.table_name
+WHERE s.date_id = DATE '2025-10-20'
+  AND s.target = FALSE             -- они читают наши таргеты
+  AND s.entity_id <> 36
+ORDER BY s.table_schema, s.table_name, s.entity_id;
+
+3.4 Что читает сама entity_id = 36 (её входы), и кто ещё это читает (конкуренты за те же источники)
+WITH my_sources AS (
+  SELECT table_schema, table_name
+  FROM tech_etl.entity_table_deps_v2
+  WHERE date_id = DATE '2025-10-20'
+    AND entity_id = 36
+    AND target = FALSE
+)
+SELECT
+  s.table_schema, s.table_name,
+  COUNT(DISTINCT s.entity_id) AS consumers_cnt,
+  array_agg(DISTINCT s.entity_name ORDER BY s.entity_id) AS consumers
+FROM tech_etl.entity_table_deps_v2 s
+JOIN my_sources ms
+  ON  s.table_schema = ms.table_schema
+  AND s.table_name   = ms.table_name
+WHERE s.date_id = DATE '2025-10-20'
+  AND s.target = FALSE
+GROUP BY 1,2
+ORDER BY table_schema, table_name;
+
+Примечания/замены под вашу среду
+
+Если у вас парсер пишет в другую таблицу (не tech_etl.tables_meta_parse) — просто поменяйте CTE parsed.
+
+Если связь parsed.meta_name → entities_meta.entity_name иногда расходится по регистру/пробелам — добавьте lower/trim по обе стороны.
+
+Если в мониторинге table_compare имена отличаются (table_schema NULL и всё хранится в table_name как schema.table) — разделите на две колонки перед JOIN.

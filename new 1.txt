@@ -1,520 +1,92 @@
-Таблица зависимостей (один раз подготовить)
+-- Параметры
+-- :base_entity  — ваша сущность (например, 36)
+-- :run_date     — интересующая дата в мониторинге
+-- примеры: \set base_entity 36
+--          \set run_date '2025-10-20'
 
-Лучший вариант — выгрузить результат парсинга SQL (как мы делали Python-скриптом) в БД, чтобы можно было джойнить обычным SQL.
-
-1) Создаём таблицу зависимостей
-create schema if not exists tech_etl;
-
-drop table if exists tech_etl.tables_dependencies;
-create table tech_etl.tables_dependencies (
-  -- чья это мета
-  entity_id         bigint,
-  entity_name       text,
-  -- таргет (куда INSERT INTO)
-  target_schema     text,
-  target_table      text,
-  target_full_name  text,
-  -- источник (FROM/JOIN)
-  source_schema     text,
-  source_table      text,
-  source_full_name  text
-);
-
-2) Заполняем её результатом парсера
-
-В вашем Python-скрипте вместо сохранения только в XLSX добавьте вставку в эту таблицу (insert). Если нужно — пришлю готовый фрагмент под sqlalchemy (он фактически возьмёт out из скрипта и сделает to_sql('tables_dependencies', schema='tech_etl', if_exists='replace')).
-
-Важно: в этой таблице каждая строка — это использование конкретной исходной таблицы source_* метой (entity) с её конкретным таргетом target_*. Так мы получим и upstream (все source_* у 36), и downstream (все, у кого source_* совпадает с таргетами 36).
-
-B) Аналитика влияния сдвига старта entity_id = 36
-Подготовка вспомогательных CTE
--- 1) Все таргет-таблицы entity 36 (то, что она пишет)
-with my_targets as (
-  select distinct
-         td.target_schema as schema_name,
-         td.target_table  as table_name
-  from tech_etl.tables_dependencies td
-  where td.entity_id = 36
-),
-
--- 2) Все источники entity 36 (то, что она читает)
-my_sources as (
-  select distinct
-         td.source_schema as schema_name,
-         td.source_table  as table_name
-  from tech_etl.tables_dependencies td
-  where td.entity_id = 36
-),
-
--- 3) Кто читает мои таргеты (downstream сущности)
-downstream_entities as (
-  select distinct
-         td.entity_id, td.entity_name
-  from tech_etl.tables_dependencies td
-  join my_targets t
-    on td.source_schema = t.schema_name
-   and td.source_table  = t.table_name
-),
-
--- 4) Кто производит мои источники (upstream сущности-поставщики)
-upstream_entities as (
-  select distinct
-         td.entity_id, td.entity_name
-  from tech_etl.tables_dependencies td
-  join my_sources s
-    on td.target_schema = s.schema_name
-   and td.target_table  = s.table_name
+with start_targets as (
+    select distinct d.target_full_name
+    from tech_etl.tables_dependencies d
+    where d.entity_id = :base_entity
+      and d.target_full_name is not null
 )
+select distinct
+    d2.entity_id                        as affected_entity_id,
+    coalesce(em.entity_name, '—')       as affected_entity_name,
+    d2.target_schema,
+    d2.target_table
+from start_targets st
+join tech_etl.tables_dependencies d2
+  on d2.source_full_name = st.target_full_name
+left join tech_etl.entities_meta em
+  on em.entity_id = d2.entity_id
+join tech_monitoring.table_compare tc         -- фильтруем только нужную дату
+  on tc.table_schema = d2.target_schema
+ and tc.table_name  = d2.target_table
+ and tc.date_id     = :run_date
+-- если нужно отфильтровать по «окну» времени (пример 03:00–03:30), раскомментируйте:
+-- and tc.curr_start_dttm::time <  time '03:30'
+-- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
+order by affected_entity_id, affected_entity_name, d2.target_schema, d2.target_table;
 
-select
-  (select count(*) from downstream_entities) as cnt_downstream,
-  (select count(*) from upstream_entities)   as cnt_upstream;
 
 
-Это быстро покажет, есть ли вообще “соседи”.
+-- Параметры
+-- :base_entity  — ваша сущность (например, 36)
+-- :run_date     — интересующая дата в мониторинге
 
-Проверка 1: Upstream-риск (успеют ли поставщики к 03:00?)
-
-Идея: берём все источники entity 36 ⇒ находим их производителей ⇒ по их таргет-таблицам смотрим фактические времена завершения в table_compare и считаем, как часто они заканчивают после 03:00.
-
-with my_sources as (
-  select distinct td.source_schema as schema_name, td.source_table as table_name
-  from tech_etl.tables_dependencies td
-  where td.entity_id = 36
+with start_targets as (
+    select distinct d.target_full_name
+    from tech_etl.tables_dependencies d
+    where d.entity_id = :base_entity
+      and d.target_full_name is not null
 ),
-upstream_entities as (
-  -- те, кто пишет мои источники
-  select distinct prod.entity_id, prod.entity_name,
-         prod.target_schema, prod.target_table
-  from tech_etl.tables_dependencies prod
-  join my_sources s
-    on prod.target_schema = s.schema_name
-   and prod.target_table  = s.table_name
-),
-upstream_tables as (
-  select distinct target_schema as table_schema,
-                  target_table  as table_name
-  from upstream_entities
-),
--- сопоставим с логами
-upstream_last_runs as (
-  select
-      tc.date_id,
-      tc.table_schema,
-      tc.table_name,
-      min(tc.curr_start_dttm)  as first_start,
-      max(tc.curr_finish_dttm) as last_finish
-  from tech_monitoring.table_compare tc
-  join upstream_tables ut
-    on ut.table_schema = tc.table_schema
-   and ut.table_name  = tc.table_name
-  -- при желании ограничьте периодом:
-  -- where tc.date_id >= current_date - interval '14 day'
-  group by 1,2,3
-),
-stats as (
-  select
-    date_id,
-    first_start,
-    last_finish,
-    (extract(hour from last_finish)*60 + extract(minute from last_finish))::int as last_finish_min
-  from upstream_last_runs
-)
-select
-  count(*)                                         as days_total,
-  sum(case when last_finish_min > 3*60 then 1 else 0 end) as days_finish_after_03_00,
-  round(100.0*sum(case when last_finish_min > 3*60 then 1 else 0 end)/nullif(count(*),0),2) as pct_after_03_00
-from stats;
-
-
-Если pct_after_03_00 значимо > 0 — риск: перенос старта на 03:00 может чаще приходить раньше готовности источников.
-
-Можно посмотреть детальнее по конкретным поставщикам:
-
-select
-  ue.entity_id,
-  ue.entity_name,
-  sum(case when s.last_finish_min > 3*60 then 1 else 0 end) as days_late_after_03_00,
-  count(*) as days_total,
-  round(100.0*sum(case when s.last_finish_min > 3*60 then 1 else 0 end)/nullif(count(*),0),2) as pct_after_03_00
-from (
-  -- last finishes по каждой upstream таблице/дню
-  with upstream_tables as (
-    select distinct prod.entity_id, prod.entity_name,
-                    prod.target_schema, prod.target_table
-    from tech_etl.tables_dependencies prod
-    join (
-      select distinct source_schema, source_table
-      from tech_etl.tables_dependencies
-      where entity_id = 36
-    ) s
-      on prod.target_schema = s.source_schema
-     and prod.target_table  = s.source_table
-  ),
-  upstream_last_runs as (
+rec as (
+    -- уровень 1
     select
-        tc.date_id,
-        ut.entity_id,
-        ut.entity_name,
-        max(tc.curr_finish_dttm) as last_finish
-    from tech_monitoring.table_compare tc
-    join upstream_tables ut
-      on ut.target_schema = tc.table_schema
-     and ut.target_table  = tc.table_name
-    group by 1,2,3
-  )
-  select
-    date_id,
-    entity_id,
-    entity_name,
-    (extract(hour from last_finish)*60 + extract(minute from last_finish))::int as last_finish_min
-  from upstream_last_runs
-) s
-join tech_etl.entities_meta ue using(entity_id, entity_name)
-group by 1,2
-order by pct_after_03_00 desc nulls last;
+        1 as lvl,
+        d2.entity_id                 as affected_entity_id,
+        d2.target_schema,
+        d2.target_table,
+        d2.target_full_name
+    from start_targets st
+    join tech_etl.tables_dependencies d2
+      on d2.source_full_name = st.target_full_name
+    join tech_monitoring.table_compare tc
+      on tc.table_schema = d2.target_schema
+     and tc.table_name  = d2.target_table
+     and tc.date_id     = :run_date
+    -- фильтр по времени — опционально:
+    -- and tc.curr_start_dttm::time <  time '03:30'
+    -- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
 
-Проверка 2: Downstream-безопасность (не “рано” ли для потребителей?)
+    union all
 
-Сдвиг на 03:00 чаще улучшает ситуацию для downstream, но можно проверить, не стартуют ли они раньше фактического окончания 36 (по логам) и где стоит ожидать выгоду.
-
--- Когда обычно заканчивает entity 36 (по её таргет-таблицам)
-with my_targets as (
-  select distinct td.target_schema as table_schema,
-                  td.target_table  as table_name
-  from tech_etl.tables_dependencies td
-  where td.entity_id = 36
-),
-my_finish_by_day as (
-  select
-    tc.date_id,
-    max(tc.curr_finish_dttm) as my_last_finish
-  from tech_monitoring.table_compare tc
-  join my_targets t
-    on t.table_schema = tc.table_schema
-   and t.table_name  = tc.table_name
-  group by 1
-),
--- кто меня читает
-downstream_entities as (
-  select distinct td.entity_id, td.entity_name
-  from tech_etl.tables_dependencies td
-  join my_targets t
-    on td.source_schema = t.table_schema
-   and td.source_table  = t.table_name
-),
--- старт downstream по дням
-downstream_starts as (
-  select
-    tc.date_id,
-    em.entity_id,
-    em.entity_name,
-    min(tc.curr_start_dttm) as ds_first_start
-  from tech_monitoring.table_compare tc
-  join tech_etl.entities_meta em
-    on em.entity_id = tc.entity_id
-  where (em.entity_id, em.entity_name) in (select entity_id, entity_name from downstream_entities)
-  group by 1,2,3
+    -- уровни 2+
+    select
+        r.lvl + 1,
+        d2.entity_id,
+        d2.target_schema,
+        d2.target_table,
+        d2.target_full_name
+    from rec r
+    join tech_etl.tables_dependencies d2
+      on d2.source_full_name = r.target_full_name
+    join tech_monitoring.table_compare tc
+      on tc.table_schema = d2.target_schema
+     and tc.table_name  = d2.target_table
+     and tc.date_id     = :run_date
+    -- фильтр по времени — опционально:
+    -- and tc.curr_start_dttm::time <  time '03:30'
+    -- and coalesce(tc.curr_finish_dttm::time, time '23:59') >= time '03:00'
 )
-select
-  ds.entity_id,
-  ds.entity_name,
-  count(*) as days_overlap_checks,
-  sum(case when ds.ds_first_start < mf.my_last_finish then 1 else 0 end) as days_started_before_me_finished,
-  round(100.0*sum(case when ds.ds_first_start < mf.my_last_finish then 1 else 0 end)/nullif(count(*),0),2) as pct_started_too_early
-from downstream_starts ds
-join my_finish_by_day mf using(date_id)
-group by 1,2
-order by pct_started_too_early desc nulls last;
-
-
-
-# -*- coding: utf-8 -*-
-"""
-Наполняем tech_etl.tables_dependencies по всем объектам из tech_etl.tables_meta.
-
-Требуется: sqlalchemy, psycopg2-binary
-"""
-
-import re
-import sys
-from typing import Optional, Tuple, Set, Dict, List
-from sqlalchemy import create_engine, text
-
-# ---------------------- НАСТРОЙКИ ----------------------
-DB_URL = "postgresql+psycopg2://user:pass@host:5432/dwh"
-
-# Таблица, откуда берём SQL и привязку к сущностям
-TABLES_META = "tech_etl.tables_meta"
-# Имена колонок в tables_meta (поправьте под свою схему)
-COL_ENTITY_ID = "entity_id"               # >>> если нет — поставьте None
-COL_ENTITY_NAME = "entity_name"           # >>> если нет — поставьте None
-COL_QUERY = "query_insert_init"           # текст SQL, откуда парсим
-# Доп. информативные поля (необязательно)
-COL_META_ID = "table_id"                  # внутренний id (если есть)
-COL_META_SCHEMA = "table_schema"          # если есть
-COL_META_NAME = "table_name"              # если есть
-
-# Поведение
-TRUNCATE_BEFORE_INSERT = True  # очищать таблицу перед загрузкой
-
-# ---------------------- ФИЛЬТРЫ И РЕГЕКСПЫ ----------------------
-SYSTEM_SCHEMAS = {
-    "pg_catalog", "information_schema", "pg_toast",
-    "gp_toolkit", "pg_temp", "pg_aoseg", "pg_bitmapindex", "pg_aocsseg"
-}
-IGNORE_SCHEMAS = [r"pg_temp", r"pg_temp_\d+", r"pg_toast_temp_\d+"]
-IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]
-SQL_KEYWORDS = {
-    "select","from","join","left","right","full","inner","outer","cross","natural",
-    "on","using","where","group","by","order","limit","offset","union","intersect",
-    "except","all","distinct","and","or","not","as","with","having","values","into",
-    "update","set","delete","insert"
-}
-FUNCTION_PREFIXES = (
-    "unnest(","generate_series(","regexp_split_to_table(",
-    "json_each(","jsonb_each(","json_each_text(","jsonb_each_text(",
-    "json_to_record(","jsonb_to_record(","json_to_recordset(","jsonb_to_recordset("
-)
-
-RE_INSERT   = re.compile(r"insert\s+into\s+(?:only\s+)?([^\s(]+)", re.IGNORECASE | re.MULTILINE)
-RE_FROMJOIN = re.compile(r"(?:from|join)\s+([^\s,()]+)", re.IGNORECASE | re.MULTILINE)
-
-# ---------------------- УТИЛИТЫ ПАРСЕРА ----------------------
-def unquote_ident(s: str) -> str:
-    s = re.split(r"::", s, maxsplit=1)[0]
-    s = s.strip("() \t\n\r")
-    if s.startswith('"') and s.endswith('"') and s.count('"') == 2:
-        return s[1:-1]
-    parts = s.split(".")
-    clean = []
-    for p in parts:
-        p = p.strip()
-        if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
-            clean.append(p[1:-1])
-        else:
-            clean.append(p)
-    return ".".join(clean)
-
-def split_schema_table(token: str) -> Tuple[Optional[str], str]:
-    token = unquote_ident(token.split()[0])
-    if "." in token:
-        sch, tbl = token.split(".", 1)
-        return sch, tbl
-    return None, token
-
-def is_function_like(token: str) -> bool:
-    t = token.strip().lower()
-    return any(t.startswith(fp) for fp in FUNCTION_PREFIXES)
-
-def is_subquery_token(token: str) -> bool:
-    return token.strip().startswith("(")
-
-def is_temp_schema(schema: Optional[str]) -> bool:
-    if not schema:
-        return False
-    s = schema.lower()
-    return any(re.fullmatch(p, s) for p in IGNORE_SCHEMAS)
-
-def is_temp_table_name(table: Optional[str]) -> bool:
-    if not table:
-        return False
-    t = table.lower()
-    return any(re.fullmatch(p, t) for p in IGNORE_TABLE_PATTERNS)
-
-def is_keyword(token: str) -> bool:
-    return token.lower() in SQL_KEYWORDS
-
-def is_system_schema(schema: Optional[str]) -> bool:
-    return (schema or "").lower() in SYSTEM_SCHEMAS
-
-def collect_cte_names(sql_text: str) -> Set[str]:
-    ctes = set()
-    for name in re.findall(r'\bwith\b\s+(.*?)\bselect\b', sql_text, flags=re.IGNORECASE | re.DOTALL):
-        for cte in re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_$]*)\s+AS\s*\(', name, flags=re.IGNORECASE):
-            ctes.add(unquote_ident(cte).lower())
-    return ctes
-
-# ---------------------- КАТАЛОГ ----------------------
-def load_real_tables(conn) -> Tuple[Set[str], Dict[str, Set[str]]]:
-    sql = """
-        SELECT table_schema, table_name
-        FROM information_schema.tables
-        WHERE table_type = 'BASE TABLE'
-          AND table_schema NOT IN ('pg_catalog','information_schema')
-    """
-    rows = conn.execute(text(sql)).fetchall()
-    full = set()
-    by_name: Dict[str, Set[str]] = {}
-    for sch, tbl in rows:
-        full_name = f"{sch}.{tbl}"
-        full.add(full_name)
-        by_name.setdefault(tbl, set()).add(sch)
-    return full, by_name
-
-def resolve_if_exists(schema: Optional[str], table: str,
-                      full_catalog_set: Set[str],
-                      by_name: Dict[str, Set[str]],
-                      default_schema: Optional[str]) -> Optional[Tuple[str,str,str]]:
-    if not table or is_keyword(table) or "$" in (schema or "") or "$" in table:
-        return None
-    if schema:
-        if is_system_schema(schema) or is_temp_schema(schema):
-            return None
-        full = f"{schema}.{table}"
-        return (schema, table, full) if full in full_catalog_set else None
-    # нет схемы — пытаемся определить
-    schemas = by_name.get(table, set())
-    if len(schemas) == 1:
-        sch = next(iter(schemas))
-        return (sch, table, f"{sch}.{table}")
-    if default_schema and table in by_name and default_schema in by_name[table]:
-        return (default_schema, table, f"{default_schema}.{table}")
-    return None
-
-# ---------------------- ГЛАВНАЯ ----------------------
-def main():
-    engine = create_engine(DB_URL)
-    with engine.begin() as conn:
-        # создаём таблицу-назначение
-        conn.execute(text("""
-        create schema if not exists tech_etl;
-        create table if not exists tech_etl.tables_dependencies (
-          entity_id        bigint,
-          entity_name      text,
-          target_schema    text,
-          target_table     text,
-          target_full_name text,
-          source_schema    text,
-          source_table     text,
-          source_full_name text
-        );
-        """))
-
-        if TRUNCATE_BEFORE_INSERT:
-            conn.execute(text("truncate table tech_etl.tables_dependencies"))
-
-        # default_schema
-        sp = (conn.execute(text("SHOW search_path")).scalar() or "")
-        default_schema = None
-        if sp:
-            for raw in [s.strip() for s in sp.split(",")]:
-                if raw and raw != "$user" and not raw.startswith("pg_") and raw not in SYSTEM_SCHEMAS:
-                    default_schema = raw
-                    break
-
-        full_catalog_set, by_name = load_real_tables(conn)
-
-        # вытаскиваем все строки meta
-        cols = [c for c in [COL_META_ID, COL_ENTITY_ID, COL_ENTITY_NAME, COL_META_SCHEMA, COL_META_NAME, COL_QUERY] if c]
-        sql = f"select {', '.join(cols)} from {TABLES_META}"
-        meta_rows = conn.execute(text(sql)).mappings().all()
-
-        inserts: List[dict] = []
-        seen_pairs = set()  # чтобы не плодить дубликаты одинаковых source для одного target/сущности
-
-        for r in meta_rows:
-            sql_text = r.get(COL_QUERY)
-            if not isinstance(sql_text, str) or not sql_text.strip():
-                continue
-
-            entity_id = r.get(COL_ENTITY_ID)
-            entity_name = r.get(COL_ENTITY_NAME)
-
-            cte_names = collect_cte_names(sql_text)
-
-            # --- целевой INSERT INTO (target)
-            target_schema = target_table = target_full = None
-            m_ins = RE_INSERT.search(sql_text)
-            if m_ins:
-                token = m_ins.group(1).strip()
-                for kw in ("only", "lateral"):
-                    if token.lower().startswith(kw + " "):
-                        token = token[len(kw):].strip()
-                        break
-                sch, tbl = split_schema_table(token)
-                if tbl and not is_function_like(tbl) and not is_temp_table_name(tbl):
-                    if not (sch and is_temp_schema(sch)):
-                        resolved = resolve_if_exists(sch, tbl, full_catalog_set, by_name, default_schema)
-                        if resolved:
-                            target_schema, target_table, target_full = resolved
-
-            # --- источники (FROM/JOIN)
-            local_sources = []
-            for m in RE_FROMJOIN.finditer(sql_text):
-                token = m.group(1)
-                low = token.strip().lower()
-                for kw in ("only","lateral"):
-                    if low.startswith(kw + " "):
-                        token = token[len(kw):].strip()
-                        break
-                if is_subquery_token(token) or is_function_like(token):
-                    continue
-                sch, tbl = split_schema_table(token)
-                if not tbl:
-                    continue
-                # CTE?
-                if unquote_ident(tbl).lower() in cte_names:
-                    continue
-                # фильтры
-                if is_keyword(tbl) or (sch and is_keyword(sch)):
-                    continue
-                if "$" in (sch or "") or "$" in tbl:
-                    continue
-                if is_temp_table_name(tbl) or (sch and is_temp_schema(sch)):
-                    continue
-
-                resolved = resolve_if_exists(sch, tbl, full_catalog_set, by_name, default_schema)
-                if not resolved:
-                    continue
-                s_sch, s_tbl, s_full = resolved
-                local_sources.append((s_sch, s_tbl, s_full))
-
-            # если target не найден — всё равно можно фиксировать dependency “UNKNOWN target”
-            # но обычно target есть. Запишем только если есть хотя бы один source.
-            if not local_sources:
-                continue
-
-            # если target не распознан — пусть будет None (но чаще он есть)
-            for s_sch, s_tbl, s_full in local_sources:
-                key = (entity_id, entity_name, target_schema, target_table, s_sch, s_tbl)
-                if key in seen_pairs:
-                    continue
-                seen_pairs.add(key)
-                inserts.append({
-                    "entity_id": entity_id,
-                    "entity_name": entity_name,
-                    "target_schema": target_schema,
-                    "target_table": target_table,
-                    "target_full_name": target_full,
-                    "source_schema": s_sch,
-                    "source_table": s_tbl,
-                    "source_full_name": s_full
-                })
-
-        if not inserts:
-            print("[WARN] Нечего вставлять — парсер не нашёл валидных зависимостей.")
-            return
-
-        # батч-вставка
-        conn.execute(
-            text("""
-            insert into tech_etl.tables_dependencies
-              (entity_id, entity_name,
-               target_schema, target_table, target_full_name,
-               source_schema, source_table, source_full_name)
-            values
-              (:entity_id, :entity_name,
-               :target_schema, :target_table, :target_full_name,
-               :source_schema, :source_table, :source_full_name)
-            """),
-            inserts
-        )
-        print(f"[OK] Загружено строк зависимостей: {len(inserts)}")
-
-if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        print("[ERROR]", e, file=sys.stderr)
-        sys.exit(1)
+select distinct
+    r.lvl,
+    r.affected_entity_id,
+    coalesce(em.entity_name, '—') as affected_entity_name,
+    r.target_schema,
+    r.target_table
+from rec r
+left join tech_etl.entities_meta em
+  on em.entity_id = r.affected_entity_id
+order by r.lvl, r.affected_entity_id, r.target_schema, r.target_table;

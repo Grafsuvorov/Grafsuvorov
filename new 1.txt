@@ -3,11 +3,9 @@
 Извлекаем реальные таблицы из tech_etl.tables_meta.query_insert_init
 и сохраняем в XLSX (лист all_items и лист unique_tables).
 
-Фильтры:
-- исключаем temp (pg_temp*, tmp_/temp_/tt_/t_*), CTE, функции, ключевые слова,
-  системные схемы (pg_catalog, information_schema, gp_toolkit, pg_toast и т.п.),
-  а также всё, что содержит '$' (например, "$user").
-- валидируем через каталог: берём только существующие таблицы (information_schema.tables).
+Добавлено:
+- В обоих листах выводим entity_id и entity_name.
+- В unique_tables агрегируем список уникальных entity_id / entity_name по каждой таблице.
 
 Требуется: sqlalchemy, psycopg2-binary, pandas, openpyxl
 """
@@ -18,19 +16,13 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 # ---------------------- НАСТРОЙКИ ----------------------
-DB_URL = "postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh"
+DB_URL = "postgresql+psycopg2://gpl:gpl@00.66.029.00:5432/dwh"
 OUTPUT_XLSX = "tables_meta_dependencies.xlsx"
 
-# если нужен search_path прямо в URL:
-# DB_URL += "?options=-csearch_path%3Dtech_etl,public"
-
-# системные схемы, которые игнорируем
 SYSTEM_SCHEMAS = {
     "pg_catalog", "information_schema", "pg_toast",
     "gp_toolkit", "pg_temp", "pg_aoseg", "pg_bitmapindex", "pg_aocsseg"
 }
-
-# regexp по lower() для временных схем и имён
 IGNORE_SCHEMAS = [r"pg_temp", r"pg_temp_\d+", r"pg_toast_temp_\d+"]
 IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]
 
@@ -109,7 +101,6 @@ def is_system_schema(schema: str) -> bool:
 
 
 def collect_cte_names(sql_text: str):
-    # Берём все шаблоны "<name> AS (" в зоне WITH (грубый, но практичный метод).
     ctes = set()
     for name in re.findall(r'\bwith\b\s+(.*?)\bselect\b', sql_text, flags=re.IGNORECASE | re.DOTALL):
         for cte in re.findall(r'\b([a-zA-Z_][a-zA-Z0-9_$]*)\s+AS\s*\(', name, flags=re.IGNORECASE):
@@ -118,12 +109,6 @@ def collect_cte_names(sql_text: str):
 
 
 def load_real_tables(conn):
-    """
-    Возвращает множество реальных таблиц в виде 'schema.table' (только BASE TABLE),
-    плюс маппинг table->множество схем (для разрешения неуказанных схем).
-    """
-    # information_schema.tables: table_type = 'BASE TABLE' — реальные таблицы.
-    # (в GP партиционированные тоже попадают как BASE TABLE)
     sql = """
         SELECT table_schema, table_name
         FROM information_schema.tables
@@ -141,14 +126,6 @@ def load_real_tables(conn):
 
 
 def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=None):
-    """
-    Возвращает (schema, table, full_name) если существует в каталоге, иначе None.
-    - если schema есть: проверяем схему.таблицу в каталоге;
-    - если schema None: пытаемся определить по by_name:
-        * если ровно одна схема — берём её;
-        * если несколько — используем default_schema, если там есть такая таблица;
-        * иначе — None (неоднозначно).
-    """
     if not table or is_keyword(table) or "$" in (schema or "") or "$" in table:
         return None
     if schema:
@@ -156,7 +133,6 @@ def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=N
             return None
         full = f"{schema}.{table}"
         return (schema, table, full) if full in full_catalog_set else None
-    # без схемы — пытаемся найти единственную
     schemas = by_name.get(table, set())
     if len(schemas) == 1:
         sch = next(iter(schemas))
@@ -169,7 +145,6 @@ def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=N
 def main():
     engine = create_engine(DB_URL)
     with engine.connect() as conn:
-        # search_path — возьмём первую «обычную» схему как дефолт
         sp = (conn.execute(text("SHOW search_path")).scalar() or "")
         default_schema = None
         if sp:
@@ -180,7 +155,12 @@ def main():
 
         full_catalog_set, by_name = load_real_tables(conn)
 
-        df = pd.read_sql("SELECT * FROM tech_etl.tables_meta where entity_name in ('BI_FI', 'BI_FI_FACT_PAYMENTS','FI_COUNTERPARTY','FI_FIXED_ASSETS')", con=conn)
+        # тут можно сузить фильтр по entity_name/entity_id при желании
+        df = pd.read_sql(
+            "SELECT * FROM tech_etl.tables_meta "
+            "WHERE entity_name IN ('BI_FI','BI_FI_FACT_PAYMENTS','FI_COUNTERPARTY','FI_FIXED_ASSETS')",
+            con=conn
+        )
 
     rows = []
     seen = set()
@@ -189,6 +169,9 @@ def main():
         meta_id = row.get("id", idx)
         obj_name = row.get("name") or row.get("table_name") or ""
         sql_text = row.get("query_insert_init")
+        entity_id = row.get("entity_id")
+        entity_name = row.get("entity_name")
+
         if not isinstance(sql_text, str) or not sql_text.strip():
             continue
 
@@ -198,7 +181,6 @@ def main():
         m = RE_INSERT.search(sql_text)
         if m:
             token = m.group(1).strip()
-            # отрезаем ONLY/LATERAL префиксы, если вдруг
             for kw in ("only", "lateral"):
                 if token.lower().startswith(kw + " "):
                     token = token[len(kw):].strip()
@@ -206,7 +188,7 @@ def main():
             schema, table = split_schema_table(token)
             if table and not is_function_like(table) and not is_temp_table_name(table):
                 if schema and is_temp_schema(schema):
-                    pass  # игнор
+                    pass
                 else:
                     resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
                     if resolved:
@@ -217,6 +199,8 @@ def main():
                             rows.append({
                                 "meta_id": meta_id,
                                 "meta_name": obj_name,
+                                "entity_id": entity_id,
+                                "entity_name": entity_name,
                                 "source_type": "insert_target",
                                 "schema": sch,
                                 "table": tbl,
@@ -239,11 +223,8 @@ def main():
             if not table:
                 continue
 
-            # CTE?
             if unquote_ident(table).lower() in cte_names:
                 continue
-
-            # фильтры
             if is_keyword(table) or (schema and is_keyword(schema)):
                 continue
             if "$" in (schema or "") or "$" in table:
@@ -264,6 +245,8 @@ def main():
             rows.append({
                 "meta_id": meta_id,
                 "meta_name": obj_name,
+                "entity_id": entity_id,
+                "entity_name": entity_name,
                 "source_type": "select_source",
                 "schema": sch,
                 "table": tbl,
@@ -272,21 +255,38 @@ def main():
 
     out = pd.DataFrame(rows)
 
-    # итог: уникальные реальные таблицы
     if out.empty:
         print("[WARN] Ничего не найдено после фильтров/валидации.")
-        # всё равно создадим пустой файл с пустыми листами
         with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as xw:
             out.to_excel(xw, sheet_name="all_items", index=False)
             out.head(0).to_excel(xw, sheet_name="unique_tables", index=False)
         print(f"[SAVE] {OUTPUT_XLSX}")
         return
 
-    uniq = (out[["schema", "table", "full_name"]]
-            .drop_duplicates()
-            .sort_values(["schema", "table"], na_position="last"))
+    # агрегируем уникальные таблицы + списки entity_id / entity_name
+    def agg_uniq(series):
+        vals = [str(x) for x in series if pd.notna(x)]
+        return ", ".join(sorted(set(vals), key=lambda v: (len(v), v))) if vals else None
 
-    # Сохраняем в XLSX с двумя листами
+    uniq = (
+        out.groupby(["schema", "table", "full_name"], as_index=False)
+           .agg({
+                "entity_id": agg_uniq,
+                "entity_name": agg_uniq
+            })
+           .sort_values(["schema", "table"], na_position="last")
+    )
+
+    # порядок колонок для красоты
+    out = out[[
+        "meta_id", "meta_name", "entity_id", "entity_name",
+        "source_type", "schema", "table", "full_name"
+    ]]
+
+    uniq = uniq[[
+        "schema", "table", "full_name", "entity_id", "entity_name"
+    ]]
+
     with pd.ExcelWriter(OUTPUT_XLSX, engine="openpyxl") as xw:
         out.to_excel(xw, sheet_name="all_items", index=False)
         uniq.to_excel(xw, sheet_name="unique_tables", index=False)
@@ -302,17 +302,3 @@ if __name__ == "__main__":
     except Exception as e:
         print("[ERROR]", e, file=sys.stderr)
         sys.exit(1)
-
-PS C:\Users\SuvorovND\GIT> python .\parse.py
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\parse.py", line 17, in <module>
-    import pandas as pd
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\pandas\__init__.py", line 80, in <module>
-    from pandas.core.api import (
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\pandas\core\api.py", line 28, in <module>
-    from pandas.core.arrays import Categorical
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\pandas\core\arrays\__init__.py", line 8, in <module>
-    from pandas.core.arrays.categorical import Categorical
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\pandas\core\arrays\categorical.py", line 3, in <module>
-    from csv import QUOTE_NONNUMERIC
-ImportError: cannot import name 'QUOTE_NONNUMERIC' from 'csv' (C:\Users\SuvorovND\GIT\csv.py)

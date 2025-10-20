@@ -1,246 +1,728 @@
--- =========================================================
--- 0) Чистим на всякий случай
--- =========================================================
-DROP TABLE IF EXISTS pp_base;
-DROP TABLE IF EXISTS pp_base_keys;
-DROP TABLE IF EXISTS pp_dates;
-DROP TABLE IF EXISTS cr_curr_small;
-DROP TABLE IF EXISTS cr_next;
-DROP TABLE IF EXISTS mlcd_agg;
-DROP TABLE IF EXISTS pp_fact;
-DROP TABLE IF EXISTS fact_with_dates;
+-- dm.account_debt_for_working_capital определение
 
--- =========================================================
--- 1) База периодов из PP: (kalnr,bdatj,poper) + dt_valid_from
--- =========================================================
-CREATE TEMP TABLE pp_base
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    p.kalnr,
-    p.bdatj,
-    p.poper,
-    make_date(p.bdatj::int, substring(p.poper, 2, 2)::int, 1) AS dt_valid_from,
-    p.umkumo, p.abkumo, p.zukumo, p.lbkum
-FROM userdata.ckmlpp_ral p
-WHERE p.untper = '000'
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE pp_base;
+-- Drop table
 
--- Мелкая таблица с ключами тройки — для раннего отсечения в CR/MLCD
-CREATE TEMP TABLE pp_base_keys
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT kalnr, bdatj, poper
-FROM pp_base
-GROUP BY kalnr, bdatj, poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE pp_base_keys;
+-- DROP TABLE dm.account_debt_for_working_capital;
 
--- =========================================================
--- 2) CR текущего периода — сразу фильтруем по нужным тройкам
--- =========================================================
-CREATE TEMP TABLE cr_curr_small
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    c.kalnr, c.bdatj, c.poper,
-    c.vprsv, c.stprs, c.peinh, c.pvprs,
-    COALESCE(c.abprd_o,0) AS abprd_o,
-    COALESCE(c.abprd_mo,0) AS abprd_mo,
-    COALESCE(c.salk3,0)   AS salk3
-FROM userdata.ckmlcr_ral c
-JOIN pp_base_keys k
-  ON k.kalnr = c.kalnr
- AND k.bdatj = c.bdatj
- AND k.poper = c.poper
-WHERE c.untper = '000'
-  AND c.curtp  = '10'
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE cr_curr_small;
+CREATE TABLE dm.account_debt_for_working_capital (
+	dt date NOT NULL,
+	is_second_friday bool NULL,
+	unit_balance_code varchar(4) NOT NULL,
+	fiscal_year numeric(4) NOT NULL,
+	accounting_document_code varchar(10) NOT NULL,
+	dt_debt date NULL,
+	dt_overdue date NULL,
+	dt_clearing date NULL,
+	contract_number varchar(13) NULL,
+	counterparty_code varchar(10) NULL,
+	debit_or_credit bpchar(1) NULL,
+	account_type bpchar(1) NULL,
+	general_ledger_account_code varchar(10) NULL,
+	debt_balance_document_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_second_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_with_revaluation_diff_second_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_position_usd_amount numeric(17, 2) DEFAULT 0 NULL,
+	document_currency_code varchar(5) NULL,
+	local_currency_code varchar(5) NULL,
+	second_local_currency_code varchar(5) NULL,
+	accounting_document_type varchar(2) NULL,
+	accounting_document_type_name varchar(60) NULL,
+	position_line_item numeric(3) NULL,
+	reverse_document_code varchar(10) NULL,
+	reference_document_number varchar(16) NULL,
+	accounting_document_status_code bpchar(1) NULL,
+	clearing_document_code varchar(10) NULL,
+	tax_code varchar(2) NULL,
+	position_line_item_text varchar(50) NULL,
+	special_general_ledger_indicator bpchar(1) NULL,
+	dt_baseline_due_date_calculation date NULL,
+	assignment_number varchar(18) NULL,
+	dt_accounting_document date NULL,
+	plant_code varchar(4) NULL,
+	plant_name varchar(90) NULL,
+	general_ledger_account_full_name varchar(50) NULL,
+	unit_balance_name varchar(75) NULL,
+	counterparty_full_name varchar(140) NULL,
+	external_contract_number varchar(60) NULL,
+	dt_external_contract date NULL,
+	contract_trader_code numeric(8) NULL,
+	contract_trader_name varchar(40) NULL,
+	terms_of_payment_code varchar(4) NULL,
+	terms_of_payment_name varchar(150) NULL,
+	responsibility_center_code varchar(16) NULL,
+	responsibility_center_name varchar(40) NULL,
+	budget_subtype_code varchar(4) NULL,
+	contract_supervisor_employee_number varchar(10) NULL,
+	contract_supervisor_name varchar(120) NULL,
+	purchase_or_sales_group_code varchar(3) NULL,
+	purchase_or_sales_group_name varchar(20) NULL,
+	funds_center_code varchar(16) NULL,
+	funds_center_name varchar(40) NULL,
+	debt_subposition_number numeric(3) NULL,
+	debt_subposition_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_subposition_document_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_subposition_second_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	is_debt_daily_calculated bpchar(1) NULL,
+	country_code varchar(3) NULL,
+	counterparty_hfm_code varchar(10) NULL,
+	counterparty_mdm_code varchar(10) NULL,
+	is_related_party_tco bpchar(1) NULL,
+	is_group_company_affiliated bpchar(1) NULL,
+	is_related_party_rsbo bpchar(1) NULL,
+	is_bankrupt bpchar(1) NULL,
+	is_lawsuit_exist bpchar(1) NULL,
+	is_fns_restriction_list_exist bpchar(1) NULL,
+	document_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	second_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	counterparty_tin_code varchar(16) NULL,
+	reverse_document_fiscal_year numeric(4) NULL,
+	reason_for_reversal varchar(2) NULL,
+	debt_balance_subposition_document_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subposition_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subposition_second_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subposition_usd_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subposition_document_currency_to_usd_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subpos_no_revaluation_local_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subpos_no_revaluation_sec_local_curr_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_subposition_no_revaluation_usd_amount numeric(17, 2) DEFAULT 0 NULL,
+	debt_balance_contract_usd_amount numeric(19, 2) DEFAULT 0 NULL,
+	debt_balance_contract_document_currency_to_usd_amount numeric(19, 2) DEFAULT 0 NULL,
+	debt_balance_contract_no_revaluation_usd_amount numeric(19, 2) DEFAULT 0 NULL,
+	paydox_credit_limit_usd_currency_amount numeric(17, 2) DEFAULT 0 NULL,
+	invoice_document_code varchar(10) NULL,
+	fiscal_year_of_relevant_invoice numeric(4) NULL,
+	position_number_of_relevant_invoice numeric(3) NULL,
+	final_position_line_item numeric(3) NULL,
+	final_fiscal_year numeric(4) NOT NULL,
+	final_accounting_document_code varchar(10) NULL,
+	exchange_diff_local_currency_amount numeric(17, 2) NULL,
+	debt_balance_exchange_diff_local_currency_amount numeric(17, 2) NULL,
+	debt_balance_subpos_exch_diff_local_currency_amount numeric(17, 4) NULL,
+	exchange_diff_second_local_currency_amount numeric(17, 2) NULL,
+	debt_balance_exchange_diff_second_local_currency_amount numeric(17, 2) NULL,
+	debt_balance_subpos_exch_diff_second_local_curr_amount numeric(17, 4) NULL,
+	counterparty_truncated_code varchar(10) NULL,
+	counterparty_search_name varchar(150) NULL,
+	responsibility_center_level1_code varchar(10) NULL,
+	responsibility_center_level1_name varchar(100) NULL,
+	financial_position_code varchar(14) NULL,
+	financial_position_name varchar(150) NULL,
+	usd_amount numeric(17, 2) DEFAULT 0 NULL,
+	realization_invoice_code varchar(10) NULL,
+	realization_document_code varchar(10) NULL,
+	country_of_end_user_code varchar(3) NULL,
+	country_of_end_user_name varchar(50) NULL,
+	region_of_end_user_code varchar(10) NULL,
+	region_of_end_user_name varchar(20) NULL,
+	sales_invoice_code varchar(10) NULL,
+	material_shape_code varchar(9) NULL,
+	material_shape_name varchar(90) NULL,
+	receivable_claim_number varchar(10) NULL,
+	receivable_claim_paydox_url varchar(256) NULL,
+	dt_receivable_claim date NULL,
+	reference_operation_type_code varchar(5) NULL,
+	reference_object_key_code varchar(20) NULL,
+	material_code varchar(18) NULL,
+	bank_as_counterparty_code varchar(10) NULL,
+	almer_bank_code varchar(60) NULL,
+	bank_as_counterparty_name varchar(300) NULL,
+	paydox_document_url text NULL,
+	contract_list text NULL,
+	contract_list_with_paydox_url text NULL,
+	external_contract_source_table_name varchar(30) NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (dt, unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
 
--- =========================================================
--- 3) CR на 1-е следующего месяца (дублей нет — без GROUP BY)
--- =========================================================
-CREATE TEMP TABLE cr_next
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    c.kalnr,
-    (make_date(c.bdatj::int, substring(c.poper, 2, 2)::int, 1) + INTERVAL '1 month')::date AS dt_posting,
-    c.salk3
-FROM cr_curr_small c
-DISTRIBUTED BY (kalnr);
-ANALYZE cr_next;
 
--- =========================================================
--- 4) MLCD — сразу фильтруем по нужным тройкам
---    (если всё-таки бывают дубли по тройке — включи агрегирование ниже)
--- =========================================================
-CREATE TEMP TABLE mlcd_agg
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    m.kalnr, m.bdatj, m.poper,
-    COALESCE(m.salk3,0)  AS salk3,
-    COALESCE(m.estprd,0) AS estprd,
-    COALESCE(m.mstprd,0) AS mstprd
-FROM userdata.mlcd_ral m
-JOIN pp_base_keys k
-  ON k.kalnr = m.kalnr
- AND k.bdatj = m.bdatj
- AND k.poper = m.poper
-WHERE m.curtp = '10'
-  AND m.categ IN ('ZU','VP','PC')
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE mlcd_agg;
+-- raw_ext.account_debt_for_working_capital_write определение
 
-/*  Если вдруг есть дубли по (kalnr,bdatj,poper), замените блок выше на:
+-- Drop table
 
-CREATE TEMP TABLE mlcd_agg
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    m.kalnr, m.bdatj, m.poper,
-    SUM(COALESCE(m.salk3,0))  AS salk3,
-    SUM(COALESCE(m.estprd,0)) AS estprd,
-    SUM(COALESCE(m.mstprd,0)) AS mstprd
-FROM userdata.mlcd_ral m
-JOIN pp_base_keys k
-  ON k.kalnr = m.kalnr
- AND k.bdatj = m.bdatj
- AND k.poper = m.poper
-WHERE m.curtp = '10'
-  AND m.categ IN ('ZU','VP','PC')
-GROUP BY m.kalnr, m.bdatj, m.poper
-DISTRIBUTED BY (kalnr, bdatj, poper);
-ANALYZE mlcd_agg;
-*/
+-- DROP EXTERNAL TABLE raw_ext.account_debt_for_working_capital_write;
 
--- =========================================================
--- 5) DATES: вычисляем интервалы через LEAD() по уникальным датам
---    (GROUP BY вместо DISTINCT даёт шанс hash-агрегации)
--- =========================================================
-CREATE TEMP TABLE pp_dates
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT kalnr, dt_valid_from
-FROM pp_base
-GROUP BY kalnr, dt_valid_from
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_dates;
+CREATE WRITABLE EXTERNAL TABLE dwh.raw_ext.account_debt_for_working_capital_write (
+	dt date,
+	is_second_friday bool,
+	unit_balance_code text,
+	fiscal_year numeric,
+	accounting_document_code text,
+	dt_debt date,
+	dt_overdue date,
+	dt_clearing date,
+	contract_number text,
+	counterparty_code text,
+	debit_or_credit text,
+	account_type text,
+	general_ledger_account_code text,
+	debt_balance_document_currency_amount numeric,
+	debt_balance_local_currency_amount numeric,
+	debt_balance_second_local_currency_amount numeric,
+	debt_balance_with_revaluation_diff_second_currency_amount numeric,
+	debt_balance_position_usd_amount numeric,
+	document_currency_code text,
+	local_currency_code text,
+	second_local_currency_code text,
+	accounting_document_type text,
+	accounting_document_type_name text,
+	position_line_item numeric,
+	reverse_document_code text,
+	reference_document_number text,
+	accounting_document_status_code text,
+	clearing_document_code text,
+	tax_code text,
+	position_line_item_text text,
+	special_general_ledger_indicator text,
+	dt_baseline_due_date_calculation date,
+	assignment_number text,
+	dt_accounting_document date,
+	plant_code text,
+	plant_name text,
+	general_ledger_account_full_name text,
+	unit_balance_name text,
+	counterparty_full_name text,
+	external_contract_number text,
+	dt_external_contract date,
+	contract_trader_code numeric,
+	contract_trader_name text,
+	terms_of_payment_code text,
+	terms_of_payment_name text,
+	responsibility_center_code text,
+	responsibility_center_name text,
+	budget_subtype_code text,
+	contract_supervisor_employee_number text,
+	contract_supervisor_name text,
+	purchase_or_sales_group_code text,
+	purchase_or_sales_group_name text,
+	funds_center_code text,
+	funds_center_name text,
+	debt_subposition_number numeric,
+	debt_subposition_local_currency_amount numeric,
+	debt_subposition_document_currency_amount numeric,
+	debt_subposition_second_local_currency_amount numeric,
+	is_debt_daily_calculated text,
+	country_code text,
+	counterparty_hfm_code text,
+	counterparty_mdm_code text,
+	is_related_party_tco text,
+	is_group_company_affiliated text,
+	is_related_party_rsbo text,
+	is_bankrupt text,
+	is_lawsuit_exist text,
+	is_fns_restriction_list_exist text,
+	document_currency_amount numeric,
+	local_currency_amount numeric,
+	second_local_currency_amount numeric,
+	counterparty_tin_code text,
+	reverse_document_fiscal_year numeric,
+	reason_for_reversal text,
+	debt_balance_subposition_document_currency_amount numeric,
+	debt_balance_subposition_local_currency_amount numeric,
+	debt_balance_subposition_second_local_currency_amount numeric,
+	debt_balance_subposition_usd_amount numeric,
+	debt_balance_subposition_document_currency_to_usd_amount numeric,
+	debt_balance_subpos_no_revaluation_local_currency_amount numeric,
+	debt_balance_subpos_no_revaluation_sec_local_curr_amount numeric,
+	debt_balance_subposition_no_revaluation_usd_amount numeric,
+	debt_balance_contract_usd_amount numeric,
+	debt_balance_contract_document_currency_to_usd_amount numeric,
+	debt_balance_contract_no_revaluation_usd_amount numeric,
+	paydox_credit_limit_usd_currency_amount numeric,
+	invoice_document_code text,
+	fiscal_year_of_relevant_invoice numeric,
+	position_number_of_relevant_invoice numeric,
+	final_position_line_item numeric,
+	final_fiscal_year numeric,
+	final_accounting_document_code text,
+	exchange_diff_local_currency_amount numeric,
+	debt_balance_exchange_diff_local_currency_amount numeric,
+	debt_balance_subpos_exch_diff_local_currency_amount numeric,
+	exchange_diff_second_local_currency_amount numeric,
+	debt_balance_exchange_diff_second_local_currency_amount numeric,
+	debt_balance_subpos_exch_diff_second_local_curr_amount numeric,
+	counterparty_truncated_code text,
+	counterparty_search_name text,
+	responsibility_center_level1_code text,
+	responsibility_center_level1_name text,
+	financial_position_code text,
+	financial_position_name text,
+	usd_amount numeric,
+	realization_invoice_code text,
+	realization_document_code text,
+	country_of_end_user_code text,
+	country_of_end_user_name text,
+	region_of_end_user_code text,
+	region_of_end_user_name text,
+	sales_invoice_code text,
+	material_shape_code text,
+	material_shape_name text,
+	receivable_claim_number text,
+	receivable_claim_paydox_url text,
+	dt_receivable_claim date,
+	reference_operation_type_code text,
+	reference_object_key_code text,
+	material_code text,
+	bank_as_counterparty_code text,
+	almer_bank_code text,
+	bank_as_counterparty_name text,
+	paydox_document_url text,
+	contract_list text,
+	contract_list_with_paydox_url text,
+	external_contract_source_table_name text,
+	dttm_inserted timestamp,
+	dttm_updated timestamp,
+	job_name text,
+	deleted_flag bool
+)
+LOCATION (
+	'pxf://dm.account_debt_for_working_capital?PROFILE=JDBC&SERVER=clickhouse_dwh&QUOTE_COLUMNS=true&BATCH_SIZE=10000&POOL_SIZE=6&custom_http_params=async_insert=1',
+	'wait_for_async_insert=1',
+	' async_insert_busy_timeout_ms =2000'
+) ON ALL
+FORMAT 'CUSTOM' ( FORMATTER='pxfwritable_export' )
+ENCODING 'UTF8';
 
-CREATE TEMP TABLE dates
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-ON COMMIT DROP AS
-SELECT
-    kalnr,
-    dt_valid_from,
-    COALESCE(
-      LEAD(dt_valid_from) OVER (PARTITION BY kalnr ORDER BY dt_valid_from) - INTERVAL '1 day',
-      DATE '2299-12-31'
-    )::date AS dt_valid_to
-FROM pp_dates
-DISTRIBUTED BY (kalnr);
-ANALYZE dates;
 
--- =========================================================
--- 6) Собираем факт: PP + CR + MLCD (локальные LEFT JOIN по тройке)
--- =========================================================
-CREATE TEMP TABLE pp_fact
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-AS
-SELECT
-    pp.kalnr, pp.bdatj, pp.poper, pp.dt_valid_from,
-    pp.umkumo, pp.abkumo, pp.zukumo, pp.lbkum,
-    cr.vprsv, cr.stprs, cr.peinh, cr.pvprs, cr.abprd_o, cr.abprd_mo,
-    cr.salk3 AS salk3_curr,
-    ma.salk3  AS mlcd_salk3,
-    ma.estprd AS mlcd_estprd,
-    ma.mstprd AS mlcd_mstprd
-FROM pp_base pp
-LEFT JOIN cr_curr_small cr
-  ON cr.kalnr = pp.kalnr
- AND cr.bdatj = pp.bdatj
- AND cr.poper = pp.poper
-LEFT JOIN mlcd_agg ma
-  ON ma.kalnr = pp.kalnr
- AND ma.bdatj = pp.bdatj
- AND ma.poper = pp.poper
-DISTRIBUTED BY (kalnr);
-ANALYZE pp_fact;
+[
+  {
+    "Plan": {
+      "Node Type": "DML",
+      "Operation": "Insert",
+      "Slice": 0,
+      "Segments": 6,
+      "Gang Type": "primary writer",
+      "Startup Cost": 0.00,
+      "Total Cost": 16916295.23,
+      "Plan Rows": 25775112,
+      "Plan Width": 1002,
+      "Output": ["account_debt_for_working_capital.dt", "account_debt_for_working_capital.is_second_friday", "((account_debt_for_working_capital.unit_balance_code)::text)", "account_debt_for_working_capital.fiscal_year", "((account_debt_for_working_capital.accounting_document_code)::text)", "account_debt_for_working_capital.dt_debt", "account_debt_for_working_capital.dt_overdue", "account_debt_for_working_capital.dt_clearing", "((account_debt_for_working_capital.contract_number)::text)", "((account_debt_for_working_capital.counterparty_code)::text)", "((account_debt_for_working_capital.debit_or_credit)::text)", "((account_debt_for_working_capital.account_type)::text)", "((account_debt_for_working_capital.general_ledger_account_code)::text)", "account_debt_for_working_capital.debt_balance_document_currency_amount", "account_debt_for_working_capital.debt_balance_local_currency_amount", "account_debt_for_working_capital.debt_balance_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_with_revaluation_diff_second_currency_amount", "account_debt_for_working_capital.debt_balance_position_usd_amount", "((account_debt_for_working_capital.document_currency_code)::text)", "((account_debt_for_working_capital.local_currency_code)::text)", "((account_debt_for_working_capital.second_local_currency_code)::text)", "((account_debt_for_working_capital.accounting_document_type)::text)", "((account_debt_for_working_capital.accounting_document_type_name)::text)", "account_debt_for_working_capital.position_line_item", "((account_debt_for_working_capital.reverse_document_code)::text)", "((account_debt_for_working_capital.reference_document_number)::text)", "((account_debt_for_working_capital.accounting_document_status_code)::text)", "((account_debt_for_working_capital.clearing_document_code)::text)", "((account_debt_for_working_capital.tax_code)::text)", "((account_debt_for_working_capital.position_line_item_text)::text)", "((account_debt_for_working_capital.special_general_ledger_indicator)::text)", "account_debt_for_working_capital.dt_baseline_due_date_calculation", "((account_debt_for_working_capital.assignment_number)::text)", "account_debt_for_working_capital.dt_accounting_document", "((account_debt_for_working_capital.plant_code)::text)", "((account_debt_for_working_capital.plant_name)::text)", "((account_debt_for_working_capital.general_ledger_account_full_name)::text)", "((account_debt_for_working_capital.unit_balance_name)::text)", "((account_debt_for_working_capital.counterparty_full_name)::text)", "((account_debt_for_working_capital.external_contract_number)::text)", "account_debt_for_working_capital.dt_external_contract", "account_debt_for_working_capital.contract_trader_code", "((account_debt_for_working_capital.contract_trader_name)::text)", "((account_debt_for_working_capital.terms_of_payment_code)::text)", "((account_debt_for_working_capital.terms_of_payment_name)::text)", "((account_debt_for_working_capital.responsibility_center_code)::text)", "((account_debt_for_working_capital.responsibility_center_name)::text)", "((account_debt_for_working_capital.budget_subtype_code)::text)", "((account_debt_for_working_capital.contract_supervisor_employee_number)::text)", "((account_debt_for_working_capital.contract_supervisor_name)::text)", "((account_debt_for_working_capital.purchase_or_sales_group_code)::text)", "((account_debt_for_working_capital.purchase_or_sales_group_name)::text)", "((account_debt_for_working_capital.funds_center_code)::text)", "((account_debt_for_working_capital.funds_center_name)::text)", "account_debt_for_working_capital.debt_subposition_number", "account_debt_for_working_capital.debt_subposition_local_currency_amount", "account_debt_for_working_capital.debt_subposition_document_currency_amount", "account_debt_for_working_capital.debt_subposition_second_local_currency_amount", "((account_debt_for_working_capital.is_debt_daily_calculated)::text)", "((account_debt_for_working_capital.country_code)::text)", "((account_debt_for_working_capital.counterparty_hfm_code)::text)", "((account_debt_for_working_capital.counterparty_mdm_code)::text)", "((account_debt_for_working_capital.is_related_party_tco)::text)", "((account_debt_for_working_capital.is_group_company_affiliated)::text)", "((account_debt_for_working_capital.is_related_party_rsbo)::text)", "((account_debt_for_working_capital.is_bankrupt)::text)", "((account_debt_for_working_capital.is_lawsuit_exist)::text)", "((account_debt_for_working_capital.is_fns_restriction_list_exist)::text)", "account_debt_for_working_capital.document_currency_amount", "account_debt_for_working_capital.local_currency_amount", "account_debt_for_working_capital.second_local_currency_amount", "((account_debt_for_working_capital.counterparty_tin_code)::text)", "account_debt_for_working_capital.reverse_document_fiscal_year", "((account_debt_for_working_capital.reason_for_reversal)::text)", "account_debt_for_working_capital.debt_balance_subposition_document_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_usd_amount", "account_debt_for_working_capital.debt_balance_subposition_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_sec_local_curr_amount", "account_debt_for_working_capital.debt_balance_subposition_no_revaluation_usd_amount", "account_debt_for_working_capital.debt_balance_contract_usd_amount", "account_debt_for_working_capital.debt_balance_contract_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_contract_no_revaluation_usd_amount", "account_debt_for_working_capital.paydox_credit_limit_usd_currency_amount", "((account_debt_for_working_capital.invoice_document_code)::text)", "account_debt_for_working_capital.fiscal_year_of_relevant_invoice", "account_debt_for_working_capital.position_number_of_relevant_invoice", "account_debt_for_working_capital.final_position_line_item", "account_debt_for_working_capital.final_fiscal_year", "((account_debt_for_working_capital.final_accounting_document_code)::text)", "account_debt_for_working_capital.exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_local_currency_amount", "account_debt_for_working_capital.exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_second_local_curr_amount", "((account_debt_for_working_capital.counterparty_truncated_code)::text)", "((account_debt_for_working_capital.counterparty_search_name)::text)", "((account_debt_for_working_capital.responsibility_center_level1_code)::text)", "((account_debt_for_working_capital.responsibility_center_level1_name)::text)", "((account_debt_for_working_capital.financial_position_code)::text)", "((account_debt_for_working_capital.financial_position_name)::text)", "account_debt_for_working_capital.usd_amount", "((account_debt_for_working_capital.realization_invoice_code)::text)", "((account_debt_for_working_capital.realization_document_code)::text)", "((account_debt_for_working_capital.country_of_end_user_code)::text)", "((account_debt_for_working_capital.country_of_end_user_name)::text)", "((account_debt_for_working_capital.region_of_end_user_code)::text)", "((account_debt_for_working_capital.region_of_end_user_name)::text)", "((account_debt_for_working_capital.sales_invoice_code)::text)", "((account_debt_for_working_capital.material_shape_code)::text)", "((account_debt_for_working_capital.material_shape_name)::text)", "((account_debt_for_working_capital.receivable_claim_number)::text)", "((account_debt_for_working_capital.receivable_claim_paydox_url)::text)", "account_debt_for_working_capital.dt_receivable_claim", "((account_debt_for_working_capital.reference_operation_type_code)::text)", "((account_debt_for_working_capital.reference_object_key_code)::text)", "((account_debt_for_working_capital.material_code)::text)", "((account_debt_for_working_capital.bank_as_counterparty_code)::text)", "((account_debt_for_working_capital.almer_bank_code)::text)", "((account_debt_for_working_capital.bank_as_counterparty_name)::text)", "account_debt_for_working_capital.paydox_document_url", "account_debt_for_working_capital.contract_list", "account_debt_for_working_capital.contract_list_with_paydox_url", "((account_debt_for_working_capital.external_contract_source_table_name)::text)", "account_debt_for_working_capital.dttm_inserted", "account_debt_for_working_capital.dttm_updated", "((account_debt_for_working_capital.job_name)::text)", "account_debt_for_working_capital.deleted_flag", "\"outer\".ColRef_0211", "account_debt_for_working_capital.dt"],
+      "Plans": [
+        {
+          "Node Type": "Redistribute Motion",
+          "Senders": 6,
+          "Receivers": 6,
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 34939.32,
+          "Plan Rows": 25775112,
+          "Plan Width": 1006,
+          "Output": ["account_debt_for_working_capital.dt", "account_debt_for_working_capital.is_second_friday", "((account_debt_for_working_capital.unit_balance_code)::text)", "account_debt_for_working_capital.fiscal_year", "((account_debt_for_working_capital.accounting_document_code)::text)", "account_debt_for_working_capital.dt_debt", "account_debt_for_working_capital.dt_overdue", "account_debt_for_working_capital.dt_clearing", "((account_debt_for_working_capital.contract_number)::text)", "((account_debt_for_working_capital.counterparty_code)::text)", "((account_debt_for_working_capital.debit_or_credit)::text)", "((account_debt_for_working_capital.account_type)::text)", "((account_debt_for_working_capital.general_ledger_account_code)::text)", "account_debt_for_working_capital.debt_balance_document_currency_amount", "account_debt_for_working_capital.debt_balance_local_currency_amount", "account_debt_for_working_capital.debt_balance_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_with_revaluation_diff_second_currency_amount", "account_debt_for_working_capital.debt_balance_position_usd_amount", "((account_debt_for_working_capital.document_currency_code)::text)", "((account_debt_for_working_capital.local_currency_code)::text)", "((account_debt_for_working_capital.second_local_currency_code)::text)", "((account_debt_for_working_capital.accounting_document_type)::text)", "((account_debt_for_working_capital.accounting_document_type_name)::text)", "account_debt_for_working_capital.position_line_item", "((account_debt_for_working_capital.reverse_document_code)::text)", "((account_debt_for_working_capital.reference_document_number)::text)", "((account_debt_for_working_capital.accounting_document_status_code)::text)", "((account_debt_for_working_capital.clearing_document_code)::text)", "((account_debt_for_working_capital.tax_code)::text)", "((account_debt_for_working_capital.position_line_item_text)::text)", "((account_debt_for_working_capital.special_general_ledger_indicator)::text)", "account_debt_for_working_capital.dt_baseline_due_date_calculation", "((account_debt_for_working_capital.assignment_number)::text)", "account_debt_for_working_capital.dt_accounting_document", "((account_debt_for_working_capital.plant_code)::text)", "((account_debt_for_working_capital.plant_name)::text)", "((account_debt_for_working_capital.general_ledger_account_full_name)::text)", "((account_debt_for_working_capital.unit_balance_name)::text)", "((account_debt_for_working_capital.counterparty_full_name)::text)", "((account_debt_for_working_capital.external_contract_number)::text)", "account_debt_for_working_capital.dt_external_contract", "account_debt_for_working_capital.contract_trader_code", "((account_debt_for_working_capital.contract_trader_name)::text)", "((account_debt_for_working_capital.terms_of_payment_code)::text)", "((account_debt_for_working_capital.terms_of_payment_name)::text)", "((account_debt_for_working_capital.responsibility_center_code)::text)", "((account_debt_for_working_capital.responsibility_center_name)::text)", "((account_debt_for_working_capital.budget_subtype_code)::text)", "((account_debt_for_working_capital.contract_supervisor_employee_number)::text)", "((account_debt_for_working_capital.contract_supervisor_name)::text)", "((account_debt_for_working_capital.purchase_or_sales_group_code)::text)", "((account_debt_for_working_capital.purchase_or_sales_group_name)::text)", "((account_debt_for_working_capital.funds_center_code)::text)", "((account_debt_for_working_capital.funds_center_name)::text)", "account_debt_for_working_capital.debt_subposition_number", "account_debt_for_working_capital.debt_subposition_local_currency_amount", "account_debt_for_working_capital.debt_subposition_document_currency_amount", "account_debt_for_working_capital.debt_subposition_second_local_currency_amount", "((account_debt_for_working_capital.is_debt_daily_calculated)::text)", "((account_debt_for_working_capital.country_code)::text)", "((account_debt_for_working_capital.counterparty_hfm_code)::text)", "((account_debt_for_working_capital.counterparty_mdm_code)::text)", "((account_debt_for_working_capital.is_related_party_tco)::text)", "((account_debt_for_working_capital.is_group_company_affiliated)::text)", "((account_debt_for_working_capital.is_related_party_rsbo)::text)", "((account_debt_for_working_capital.is_bankrupt)::text)", "((account_debt_for_working_capital.is_lawsuit_exist)::text)", "((account_debt_for_working_capital.is_fns_restriction_list_exist)::text)", "account_debt_for_working_capital.document_currency_amount", "account_debt_for_working_capital.local_currency_amount", "account_debt_for_working_capital.second_local_currency_amount", "((account_debt_for_working_capital.counterparty_tin_code)::text)", "account_debt_for_working_capital.reverse_document_fiscal_year", "((account_debt_for_working_capital.reason_for_reversal)::text)", "account_debt_for_working_capital.debt_balance_subposition_document_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_usd_amount", "account_debt_for_working_capital.debt_balance_subposition_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_sec_local_curr_amount", "account_debt_for_working_capital.debt_balance_subposition_no_revaluation_usd_amount", "account_debt_for_working_capital.debt_balance_contract_usd_amount", "account_debt_for_working_capital.debt_balance_contract_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_contract_no_revaluation_usd_amount", "account_debt_for_working_capital.paydox_credit_limit_usd_currency_amount", "((account_debt_for_working_capital.invoice_document_code)::text)", "account_debt_for_working_capital.fiscal_year_of_relevant_invoice", "account_debt_for_working_capital.position_number_of_relevant_invoice", "account_debt_for_working_capital.final_position_line_item", "account_debt_for_working_capital.final_fiscal_year", "((account_debt_for_working_capital.final_accounting_document_code)::text)", "account_debt_for_working_capital.exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_local_currency_amount", "account_debt_for_working_capital.exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_second_local_curr_amount", "((account_debt_for_working_capital.counterparty_truncated_code)::text)", "((account_debt_for_working_capital.counterparty_search_name)::text)", "((account_debt_for_working_capital.responsibility_center_level1_code)::text)", "((account_debt_for_working_capital.responsibility_center_level1_name)::text)", "((account_debt_for_working_capital.financial_position_code)::text)", "((account_debt_for_working_capital.financial_position_name)::text)", "account_debt_for_working_capital.usd_amount", "((account_debt_for_working_capital.realization_invoice_code)::text)", "((account_debt_for_working_capital.realization_document_code)::text)", "((account_debt_for_working_capital.country_of_end_user_code)::text)", "((account_debt_for_working_capital.country_of_end_user_name)::text)", "((account_debt_for_working_capital.region_of_end_user_code)::text)", "((account_debt_for_working_capital.region_of_end_user_name)::text)", "((account_debt_for_working_capital.sales_invoice_code)::text)", "((account_debt_for_working_capital.material_shape_code)::text)", "((account_debt_for_working_capital.material_shape_name)::text)", "((account_debt_for_working_capital.receivable_claim_number)::text)", "((account_debt_for_working_capital.receivable_claim_paydox_url)::text)", "account_debt_for_working_capital.dt_receivable_claim", "((account_debt_for_working_capital.reference_operation_type_code)::text)", "((account_debt_for_working_capital.reference_object_key_code)::text)", "((account_debt_for_working_capital.material_code)::text)", "((account_debt_for_working_capital.bank_as_counterparty_code)::text)", "((account_debt_for_working_capital.almer_bank_code)::text)", "((account_debt_for_working_capital.bank_as_counterparty_name)::text)", "account_debt_for_working_capital.paydox_document_url", "account_debt_for_working_capital.contract_list", "account_debt_for_working_capital.contract_list_with_paydox_url", "((account_debt_for_working_capital.external_contract_source_table_name)::text)", "account_debt_for_working_capital.dttm_inserted", "account_debt_for_working_capital.dttm_updated", "((account_debt_for_working_capital.job_name)::text)", "account_debt_for_working_capital.deleted_flag", "\"outer\".ColRef_0211"],
+          "Hash Key": "account_debt_for_working_capital.dt, ((account_debt_for_working_capital.unit_balance_code)::text), account_debt_for_working_capital.fiscal_year, ((account_debt_for_working_capital.accounting_document_code)::text), account_debt_for_working_capital.position_line_item",
+          "Plans": [
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 21412.63,
+              "Plan Rows": 25775112,
+              "Plan Width": 1006,
+              "Output": ["account_debt_for_working_capital.dt", "account_debt_for_working_capital.is_second_friday", "account_debt_for_working_capital.unit_balance_code", "account_debt_for_working_capital.fiscal_year", "account_debt_for_working_capital.accounting_document_code", "account_debt_for_working_capital.dt_debt", "account_debt_for_working_capital.dt_overdue", "account_debt_for_working_capital.dt_clearing", "account_debt_for_working_capital.contract_number", "account_debt_for_working_capital.counterparty_code", "account_debt_for_working_capital.debit_or_credit", "account_debt_for_working_capital.account_type", "account_debt_for_working_capital.general_ledger_account_code", "account_debt_for_working_capital.debt_balance_document_currency_amount", "account_debt_for_working_capital.debt_balance_local_currency_amount", "account_debt_for_working_capital.debt_balance_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_with_revaluation_diff_second_currency_amount", "account_debt_for_working_capital.debt_balance_position_usd_amount", "account_debt_for_working_capital.document_currency_code", "account_debt_for_working_capital.local_currency_code", "account_debt_for_working_capital.second_local_currency_code", "account_debt_for_working_capital.accounting_document_type", "account_debt_for_working_capital.accounting_document_type_name", "account_debt_for_working_capital.position_line_item", "account_debt_for_working_capital.reverse_document_code", "account_debt_for_working_capital.reference_document_number", "account_debt_for_working_capital.accounting_document_status_code", "account_debt_for_working_capital.clearing_document_code", "account_debt_for_working_capital.tax_code", "account_debt_for_working_capital.position_line_item_text", "account_debt_for_working_capital.special_general_ledger_indicator", "account_debt_for_working_capital.dt_baseline_due_date_calculation", "account_debt_for_working_capital.assignment_number", "account_debt_for_working_capital.dt_accounting_document", "account_debt_for_working_capital.plant_code", "account_debt_for_working_capital.plant_name", "account_debt_for_working_capital.general_ledger_account_full_name", "account_debt_for_working_capital.unit_balance_name", "account_debt_for_working_capital.counterparty_full_name", "account_debt_for_working_capital.external_contract_number", "account_debt_for_working_capital.dt_external_contract", "account_debt_for_working_capital.contract_trader_code", "account_debt_for_working_capital.contract_trader_name", "account_debt_for_working_capital.terms_of_payment_code", "account_debt_for_working_capital.terms_of_payment_name", "account_debt_for_working_capital.responsibility_center_code", "account_debt_for_working_capital.responsibility_center_name", "account_debt_for_working_capital.budget_subtype_code", "account_debt_for_working_capital.contract_supervisor_employee_number", "account_debt_for_working_capital.contract_supervisor_name", "account_debt_for_working_capital.purchase_or_sales_group_code", "account_debt_for_working_capital.purchase_or_sales_group_name", "account_debt_for_working_capital.funds_center_code", "account_debt_for_working_capital.funds_center_name", "account_debt_for_working_capital.debt_subposition_number", "account_debt_for_working_capital.debt_subposition_local_currency_amount", "account_debt_for_working_capital.debt_subposition_document_currency_amount", "account_debt_for_working_capital.debt_subposition_second_local_currency_amount", "account_debt_for_working_capital.is_debt_daily_calculated", "account_debt_for_working_capital.country_code", "account_debt_for_working_capital.counterparty_hfm_code", "account_debt_for_working_capital.counterparty_mdm_code", "account_debt_for_working_capital.is_related_party_tco", "account_debt_for_working_capital.is_group_company_affiliated", "account_debt_for_working_capital.is_related_party_rsbo", "account_debt_for_working_capital.is_bankrupt", "account_debt_for_working_capital.is_lawsuit_exist", "account_debt_for_working_capital.is_fns_restriction_list_exist", "account_debt_for_working_capital.document_currency_amount", "account_debt_for_working_capital.local_currency_amount", "account_debt_for_working_capital.second_local_currency_amount", "account_debt_for_working_capital.counterparty_tin_code", "account_debt_for_working_capital.reverse_document_fiscal_year", "account_debt_for_working_capital.reason_for_reversal", "account_debt_for_working_capital.debt_balance_subposition_document_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_usd_amount", "account_debt_for_working_capital.debt_balance_subposition_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_sec_local_curr_amount", "account_debt_for_working_capital.debt_balance_subposition_no_revaluation_usd_amount", "account_debt_for_working_capital.debt_balance_contract_usd_amount", "account_debt_for_working_capital.debt_balance_contract_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_contract_no_revaluation_usd_amount", "account_debt_for_working_capital.paydox_credit_limit_usd_currency_amount", "account_debt_for_working_capital.invoice_document_code", "account_debt_for_working_capital.fiscal_year_of_relevant_invoice", "account_debt_for_working_capital.position_number_of_relevant_invoice", "account_debt_for_working_capital.final_position_line_item", "account_debt_for_working_capital.final_fiscal_year", "account_debt_for_working_capital.final_accounting_document_code", "account_debt_for_working_capital.exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_local_currency_amount", "account_debt_for_working_capital.exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_second_local_curr_amount", "account_debt_for_working_capital.counterparty_truncated_code", "account_debt_for_working_capital.counterparty_search_name", "account_debt_for_working_capital.responsibility_center_level1_code", "account_debt_for_working_capital.responsibility_center_level1_name", "account_debt_for_working_capital.financial_position_code", "account_debt_for_working_capital.financial_position_name", "account_debt_for_working_capital.usd_amount", "account_debt_for_working_capital.realization_invoice_code", "account_debt_for_working_capital.realization_document_code", "account_debt_for_working_capital.country_of_end_user_code", "account_debt_for_working_capital.country_of_end_user_name", "account_debt_for_working_capital.region_of_end_user_code", "account_debt_for_working_capital.region_of_end_user_name", "account_debt_for_working_capital.sales_invoice_code", "account_debt_for_working_capital.material_shape_code", "account_debt_for_working_capital.material_shape_name", "account_debt_for_working_capital.receivable_claim_number", "account_debt_for_working_capital.receivable_claim_paydox_url", "account_debt_for_working_capital.dt_receivable_claim", "account_debt_for_working_capital.reference_operation_type_code", "account_debt_for_working_capital.reference_object_key_code", "account_debt_for_working_capital.material_code", "account_debt_for_working_capital.bank_as_counterparty_code", "account_debt_for_working_capital.almer_bank_code", "account_debt_for_working_capital.bank_as_counterparty_name", "account_debt_for_working_capital.paydox_document_url", "account_debt_for_working_capital.contract_list", "account_debt_for_working_capital.contract_list_with_paydox_url", "account_debt_for_working_capital.external_contract_source_table_name", "account_debt_for_working_capital.dttm_inserted", "account_debt_for_working_capital.dttm_updated", "account_debt_for_working_capital.job_name", "account_debt_for_working_capital.deleted_flag", "1"],
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Relation Name": "account_debt_for_working_capital",
+                  "Schema": "dm",
+                  "Alias": "account_debt_for_working_capital",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 4258.60,
+                  "Plan Rows": 25775112,
+                  "Plan Width": 1606,
+                  "Output": ["account_debt_for_working_capital.dt", "account_debt_for_working_capital.is_second_friday", "account_debt_for_working_capital.unit_balance_code", "account_debt_for_working_capital.fiscal_year", "account_debt_for_working_capital.accounting_document_code", "account_debt_for_working_capital.dt_debt", "account_debt_for_working_capital.dt_overdue", "account_debt_for_working_capital.dt_clearing", "account_debt_for_working_capital.contract_number", "account_debt_for_working_capital.counterparty_code", "account_debt_for_working_capital.debit_or_credit", "account_debt_for_working_capital.account_type", "account_debt_for_working_capital.general_ledger_account_code", "account_debt_for_working_capital.debt_balance_document_currency_amount", "account_debt_for_working_capital.debt_balance_local_currency_amount", "account_debt_for_working_capital.debt_balance_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_with_revaluation_diff_second_currency_amount", "account_debt_for_working_capital.debt_balance_position_usd_amount", "account_debt_for_working_capital.document_currency_code", "account_debt_for_working_capital.local_currency_code", "account_debt_for_working_capital.second_local_currency_code", "account_debt_for_working_capital.accounting_document_type", "account_debt_for_working_capital.accounting_document_type_name", "account_debt_for_working_capital.position_line_item", "account_debt_for_working_capital.reverse_document_code", "account_debt_for_working_capital.reference_document_number", "account_debt_for_working_capital.accounting_document_status_code", "account_debt_for_working_capital.clearing_document_code", "account_debt_for_working_capital.tax_code", "account_debt_for_working_capital.position_line_item_text", "account_debt_for_working_capital.special_general_ledger_indicator", "account_debt_for_working_capital.dt_baseline_due_date_calculation", "account_debt_for_working_capital.assignment_number", "account_debt_for_working_capital.dt_accounting_document", "account_debt_for_working_capital.plant_code", "account_debt_for_working_capital.plant_name", "account_debt_for_working_capital.general_ledger_account_full_name", "account_debt_for_working_capital.unit_balance_name", "account_debt_for_working_capital.counterparty_full_name", "account_debt_for_working_capital.external_contract_number", "account_debt_for_working_capital.dt_external_contract", "account_debt_for_working_capital.contract_trader_code", "account_debt_for_working_capital.contract_trader_name", "account_debt_for_working_capital.terms_of_payment_code", "account_debt_for_working_capital.terms_of_payment_name", "account_debt_for_working_capital.responsibility_center_code", "account_debt_for_working_capital.responsibility_center_name", "account_debt_for_working_capital.budget_subtype_code", "account_debt_for_working_capital.contract_supervisor_employee_number", "account_debt_for_working_capital.contract_supervisor_name", "account_debt_for_working_capital.purchase_or_sales_group_code", "account_debt_for_working_capital.purchase_or_sales_group_name", "account_debt_for_working_capital.funds_center_code", "account_debt_for_working_capital.funds_center_name", "account_debt_for_working_capital.debt_subposition_number", "account_debt_for_working_capital.debt_subposition_local_currency_amount", "account_debt_for_working_capital.debt_subposition_document_currency_amount", "account_debt_for_working_capital.debt_subposition_second_local_currency_amount", "account_debt_for_working_capital.is_debt_daily_calculated", "account_debt_for_working_capital.country_code", "account_debt_for_working_capital.counterparty_hfm_code", "account_debt_for_working_capital.counterparty_mdm_code", "account_debt_for_working_capital.is_related_party_tco", "account_debt_for_working_capital.is_group_company_affiliated", "account_debt_for_working_capital.is_related_party_rsbo", "account_debt_for_working_capital.is_bankrupt", "account_debt_for_working_capital.is_lawsuit_exist", "account_debt_for_working_capital.is_fns_restriction_list_exist", "account_debt_for_working_capital.document_currency_amount", "account_debt_for_working_capital.local_currency_amount", "account_debt_for_working_capital.second_local_currency_amount", "account_debt_for_working_capital.counterparty_tin_code", "account_debt_for_working_capital.reverse_document_fiscal_year", "account_debt_for_working_capital.reason_for_reversal", "account_debt_for_working_capital.debt_balance_subposition_document_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subposition_usd_amount", "account_debt_for_working_capital.debt_balance_subposition_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_no_revaluation_sec_local_curr_amount", "account_debt_for_working_capital.debt_balance_subposition_no_revaluation_usd_amount", "account_debt_for_working_capital.debt_balance_contract_usd_amount", "account_debt_for_working_capital.debt_balance_contract_document_currency_to_usd_amount", "account_debt_for_working_capital.debt_balance_contract_no_revaluation_usd_amount", "account_debt_for_working_capital.paydox_credit_limit_usd_currency_amount", "account_debt_for_working_capital.invoice_document_code", "account_debt_for_working_capital.fiscal_year_of_relevant_invoice", "account_debt_for_working_capital.position_number_of_relevant_invoice", "account_debt_for_working_capital.final_position_line_item", "account_debt_for_working_capital.final_fiscal_year", "account_debt_for_working_capital.final_accounting_document_code", "account_debt_for_working_capital.exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_local_currency_amount", "account_debt_for_working_capital.exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_exchange_diff_second_local_currency_amount", "account_debt_for_working_capital.debt_balance_subpos_exch_diff_second_local_curr_amount", "account_debt_for_working_capital.counterparty_truncated_code", "account_debt_for_working_capital.counterparty_search_name", "account_debt_for_working_capital.responsibility_center_level1_code", "account_debt_for_working_capital.responsibility_center_level1_name", "account_debt_for_working_capital.financial_position_code", "account_debt_for_working_capital.financial_position_name", "account_debt_for_working_capital.usd_amount", "account_debt_for_working_capital.realization_invoice_code", "account_debt_for_working_capital.realization_document_code", "account_debt_for_working_capital.country_of_end_user_code", "account_debt_for_working_capital.country_of_end_user_name", "account_debt_for_working_capital.region_of_end_user_code", "account_debt_for_working_capital.region_of_end_user_name", "account_debt_for_working_capital.sales_invoice_code", "account_debt_for_working_capital.material_shape_code", "account_debt_for_working_capital.material_shape_name", "account_debt_for_working_capital.receivable_claim_number", "account_debt_for_working_capital.receivable_claim_paydox_url", "account_debt_for_working_capital.dt_receivable_claim", "account_debt_for_working_capital.reference_operation_type_code", "account_debt_for_working_capital.reference_object_key_code", "account_debt_for_working_capital.material_code", "account_debt_for_working_capital.bank_as_counterparty_code", "account_debt_for_working_capital.almer_bank_code", "account_debt_for_working_capital.bank_as_counterparty_name", "account_debt_for_working_capital.paydox_document_url", "account_debt_for_working_capital.contract_list", "account_debt_for_working_capital.contract_list_with_paydox_url", "account_debt_for_working_capital.external_contract_source_table_name", "account_debt_for_working_capital.dttm_inserted", "account_debt_for_working_capital.dttm_updated", "account_debt_for_working_capital.job_name", "account_debt_for_working_capital.deleted_flag"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]
 
--- =========================================================
--- 7) Подливаем даты и salk3 след. месяца (всё по kalnr)
--- =========================================================
-CREATE TEMP TABLE fact_with_dates
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-AS
-SELECT
-    f.*,
-    d.dt_valid_to,
-    n.salk3 AS salk3_nextmonth
-FROM pp_fact f
-LEFT JOIN dates d
-  ON d.kalnr = f.kalnr
- AND d.dt_valid_from = f.dt_valid_from
-LEFT JOIN cr_next n
-  ON n.kalnr = f.kalnr
- AND n.dt_posting = f.dt_valid_from
-DISTRIBUTED BY (kalnr);
-ANALYZE fact_with_dates;
 
--- =========================================================
--- 8) ФИНАЛ (LEFT JOIN локально по kalnr) — готовый результат
--- =========================================================
-SELECT
-    t.kalnr AS calculation_code,
-    t.dt_valid_from,
-    t.dt_valid_to,
+click
+-- dm.account_debt_for_working_capital определение
 
-    t.vprsv  AS price_valuation_type_code,
-    t.stprs  AS standard_price_amount,
-    t.peinh  AS price_unit_code,
-    t.pvprs  AS moving_average_price_amount,
+CREATE TABLE dm.account_debt_for_working_capital
+(
 
-    /* rule3: приводим к numeric перед ROUND, чтобы избежать round(double precision, int) */
-    CASE
-      WHEN (t.umkumo + t.abkumo + t.zukumo) = 0 THEN 0
-      ELSE TRUNC(
-             CAST(
-               ROUND((
-                     (t.stprs / NULLIF(t.peinh,0)) * (t.umkumo + t.abkumo)
-                   + COALESCE(t.abprd_o,0)
-                   + COALESCE(t.abprd_mo,0)
-                   + COALESCE(t.mlcd_salk3,0)
-                   + COALESCE(t.mlcd_estprd,0)
-                   + COALESCE(t.mlcd_mstprd,0)
-               )::numeric, 2)
-               AS NUMERIC(40,20)
-             )
-             / NULLIF((t.umkumo + t.abkumo + t.zukumo),0), 15)
-    END AS average_weighted_stock_price_rule3_amount,
+    `dt` Date COMMENT 'Дата | На какую дату указан остаток | dm_calc.account_debt.dt' CODEC(ZSTD(9)),
 
-    /* rule2_prev_date */
-    CASE
-      WHEN (t.abkumo + t.umkumo + t.zukumo) <> 0
-      THEN TRUNC(
-             CAST(
-                 COALESCE(t.salk3_nextmonth,0)
-               + COALESCE(t.mlcd_salk3,0) + COALESCE(t.mlcd_estprd,0) + COALESCE(t.mlcd_mstprd,0)
-             AS NUMERIC(40,20))
-             / NULLIF((t.abkumo + t.umkumo + t.zukumo),0), 15)
-      ELSE 0
-    END AS average_weighted_stock_price_rule2_prev_date_amount,
+    `is_second_friday` Nullable(UInt8) COMMENT 'Флаг:вторая пятница месяца | Флаг:вторая пятница месяца | dm_calc.account_debt.is_second_friday' CODEC(ZSTD(9)),
 
-    /* rule2_next_date */
-    CASE
-      WHEN t.lbkum <> 0
-      THEN TRUNC(CAST(COALESCE(t.salk3_curr,0) AS NUMERIC(40,20)) / NULLIF(t.lbkum,0), 15)
-      ELSE 0
-    END AS average_weighted_stock_price_rule2_next_date_amount,
+    `unit_balance_code` String COMMENT 'Балансовая единица | Балансовая единица | dm_calc.account_debt.unit_balance_code' CODEC(ZSTD(9)),
 
-    h.price_rule_code
-FROM fact_with_dates t
-LEFT JOIN dds.material_ledger_header h
-  ON h.calculation_code = t.kalnr;
+    `fiscal_year` Decimal(4,
+ 0) COMMENT 'Финансовый год | Финансовый год | dm_calc.account_debt.fiscal_year' CODEC(ZSTD(9)),
+
+    `accounting_document_code` String COMMENT 'Номер бухгалтерского документа | Номер бухгалтерского документа | dm_calc.account_debt.accounting_document_code' CODEC(ZSTD(9)),
+
+    `dt_debt` Nullable(Date) COMMENT 'Дата возникновения задолженности | Дата возникновения задолженности | dm_calc.account_debt.dt_posting' CODEC(ZSTD(9)),
+
+    `dt_overdue` Nullable(Date) COMMENT 'Дата,
+ когда задолженность станет просроченной | Дата,
+ когда задолженность станет просроченной | ods.map_planned_repayment_dates_keys.dt_outstanding' CODEC(ZSTD(9)),
+
+    `dt_clearing` Nullable(Date) COMMENT 'Дата выравнивания | Дата выравнивания | dm_calc.account_debt.dt_clearing' CODEC(ZSTD(9)),
+
+    `contract_number` Nullable(String) COMMENT 'Номер договора | Номер договора | dm_calc.account_debt.contract_number' CODEC(ZSTD(9)),
+
+    `counterparty_code` Nullable(String) COMMENT 'Контрагент (код) | Код кредитора,
+ задолженность перед которым отражает позиция | dm_calc.accounting_debt.counterparty_code' CODEC(ZSTD(9)),
+
+    `debit_or_credit` Nullable(String) COMMENT 'Индикатор дебета/кредита | Индикатор дебета/кредита | dm_calc.account_debt.debit_or_credit' CODEC(ZSTD(9)),
+
+    `account_type` Nullable(String) COMMENT 'Вид счета | Вид счета | dm_calc.account_debt.account_type' CODEC(ZSTD(9)),
+
+    `general_ledger_account_code` Nullable(String) COMMENT 'Основной счет главной книги | Основной счет главной книги | dm_calc.account_debt.general_ledger_account_code' CODEC(ZSTD(9)),
+
+    `debt_balance_document_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток задолженности в валюте документа | Остаток задолженности в валюте документа | dm_calc.account_debt.document_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток задолженности в валюте организации | Остаток задолженности в валюте организации | dm_calc.account_debt.local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток задолженности во второй валюте | Остаток задолженности во второй валюте | dm_calc.account_debt.second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_with_revaluation_diff_second_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток задолженности,
+ во второй валюте,
+ с учётом последней переоценки | Остаток задолженности,
+ во второй валюте,
+ с учётом последней переоценки | dm_calc.account_debt.second_local_currency_amount + valuation_difference_second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_position_usd_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток ДЗ/КЗ по всей позиции в USD | Остаток ДЗ/КЗ по всей позиции в USD | dm_calc.account_debt.debt_balance_usd_amount' CODEC(ZSTD(9)),
+
+    `document_currency_code` Nullable(String) COMMENT 'Код валюты документа | Код валюты документа | dm_calc.account_debt.document_currency_code' CODEC(ZSTD(9)),
+
+    `local_currency_code` Nullable(String) COMMENT 'Код внутренней валюты | Код внутренней валюты | dm_calc.account_debt.local_currency_code' CODEC(ZSTD(9)),
+
+    `second_local_currency_code` Nullable(String) COMMENT 'Код второй внутренней валюты | Код второй внутренней валюты | dm_calc.account_debt.second_local_currency_code' CODEC(ZSTD(9)),
+
+    `accounting_document_type` Nullable(String) COMMENT 'Вид документа | Вид документа | dm_calc.account_debt.accounting_document_type' CODEC(ZSTD(9)),
+
+    `accounting_document_type_name` Nullable(String) COMMENT 'Вид документа,
+ наименование | Вид документа,
+ наименование | dm_calc.account_debt.accounting_document_type_name' CODEC(ZSTD(9)),
+
+    `position_line_item` Decimal(3,
+ 0) COMMENT 'Номер строки проводки в рамках бухгалтерского документа | Номер строки проводки в рамках бухгалтерского документа | dm_calc.account_debt.position_line_item' CODEC(ZSTD(9)),
+
+    `reverse_document_code` Nullable(String) COMMENT '№ документа сторно | № документа сторно | dm_calc.account_debt.reverse_document_code' CODEC(ZSTD(9)),
+
+    `reference_document_number` Nullable(String) COMMENT 'Ссылочный номер документа | Ссылочный номер документа | dm_calc.account_debt.reference_document_number' CODEC(ZSTD(9)),
+
+    `accounting_document_status_code` Nullable(String) COMMENT 'Статус документа | Статус документа | dm_calc.account_debt.accounting_document_status_code' CODEC(ZSTD(9)),
+
+    `clearing_document_code` Nullable(String) COMMENT 'Номер документа выравнивания | Номер документа выравнивания | dm_calc.account_debt.clearing_document_code' CODEC(ZSTD(9)),
+
+    `tax_code` Nullable(String) COMMENT 'Код налога с оборота | Код налога с оборота | dm_calc.account_debt.tax_code' CODEC(ZSTD(9)),
+
+    `position_line_item_text` Nullable(String) COMMENT 'Текст к позиции | Текст к позиции | dm_calc.account_debt.position_line_item_text' CODEC(ZSTD(9)),
+
+    `special_general_ledger_indicator` Nullable(String) COMMENT 'Код Особой главной книги | Код Особой главной книги | dm_calc.account_debt.special_general_ledger_indicator' CODEC(ZSTD(9)),
+
+    `dt_baseline_due_date_calculation` Nullable(Date) COMMENT 'Базовая дата для расчета срока оплаты | Базовая дата для расчета срока оплаты | dm_calc.account_debt.dt_baseline_due_date_calculation' CODEC(ZSTD(9)),
+
+    `assignment_number` Nullable(String) COMMENT 'Номер присвоения | Номер присвоения | dm_calc.account_debt.assignment_number' CODEC(ZSTD(9)),
+
+    `dt_accounting_document` Nullable(Date) COMMENT 'Дата документа | Дата документа | dm_calc.account_debt.dt_accounting_document' CODEC(ZSTD(9)),
+
+    `plant_code` Nullable(String) COMMENT 'Завод | Завод | Алгоритм по 3 полям' CODEC(ZSTD(9)),
+
+    `plant_name` Nullable(String) COMMENT 'Название филиала | Название филиала | dict_dds.plant_and_subsidiary.plant_full_name' CODEC(ZSTD(9)),
+
+    `general_ledger_account_full_name` Nullable(String) COMMENT 'Подробный текст к основному счету на русском | Подробный текст к основному счету на русском | dict_dds.general_ledger_account_chart.general_ledger_account_full_name_rus' CODEC(ZSTD(9)),
+
+    `unit_balance_name` Nullable(String) COMMENT 'Название БЕ  | Название БЕ  | unit_balance.unit_balance_name' CODEC(ZSTD(9)),
+
+    `counterparty_full_name` Nullable(String) COMMENT 'Наименование контрагента | Наименование контрагента | dict_dds.counterparty.counterparty_full_name' CODEC(ZSTD(9)),
+
+    `external_contract_number` Nullable(String) COMMENT 'Внешний номер договора | Внешний номер договора | dm_calc.accounting_external_contracts.external_contract_number' CODEC(ZSTD(9)),
+
+    `dt_external_contract` Nullable(Date) COMMENT 'Дата внешнего договора | Дата внешнего договора | dm_calc.accounting_external_contracts.dt_external_contract' CODEC(ZSTD(9)),
+
+    `contract_trader_code` Nullable(Decimal(8,
+ 0)) COMMENT 'Табельный номер трейдера договора | Табельный номер трейдера договора | dm_calc.accounting_external_contracts.contract_trader_code' CODEC(ZSTD(9)),
+
+    `contract_trader_name` Nullable(String) COMMENT 'ФИО трейдера договора | ФИО трейдера договора | dict_dds.personnel_main_data.employee_full_name' CODEC(ZSTD(9)),
+
+    `terms_of_payment_code` Nullable(String) COMMENT 'Код условий платежа | Код условий платежа | dm_calc.account_debt.terms_of_payment_code' CODEC(ZSTD(9)),
+
+    `terms_of_payment_name` Nullable(String) COMMENT 'Наименование условия платежа | Наименование условия платежа | condition_payment_comment."comment"' CODEC(ZSTD(9)),
+
+    `responsibility_center_code` Nullable(String) COMMENT 'Центр ответственности,
+ код | Центр ответственности,
+ код | ods.map_planned_repayment_dates_keys.responsibility_center_code' CODEC(ZSTD(9)),
+
+    `responsibility_center_name` Nullable(String) COMMENT 'Центр ответственности,
+ наименование | Центр ответственности,
+ наименование | dict_dds.funds_center_master_data.funds_center_short_name_rus' CODEC(ZSTD(9)),
+
+    `budget_subtype_code` Nullable(String) COMMENT 'Подвид бюджета | Подвид бюджета | ods.map_budget_subtype_by_counterparty.budget_subtype_code' CODEC(ZSTD(9)),
+
+    `contract_supervisor_employee_number` Nullable(String) COMMENT 'Куратор договора,
+ таб № | Куратор договора,
+ таб № | dm_calc.accounting_external_contracts.contract_supervisor_employee_number' CODEC(ZSTD(9)),
+
+    `contract_supervisor_name` Nullable(String) COMMENT 'Куратор договора,
+ ФИО | Куратор договора,
+ ФИО | dm_calc.accounting_external_contracts.contract_supervisor_name' CODEC(ZSTD(9)),
+
+    `purchase_or_sales_group_code` Nullable(String) COMMENT 'Группа закупок/сбыта,
+ Код | dm_calc.accounting_external_contracts.purchase_or_sales_group_code' CODEC(ZSTD(9)),
+
+    `purchase_or_sales_group_name` Nullable(String) COMMENT 'Группа закупок/сбыта,
+ Наименование | dm_calc.accounting_external_contracts.purchase_or_sales_group_name' CODEC(ZSTD(9)),
+
+    `funds_center_code` Nullable(String) COMMENT 'Подразделение финансового менеджмента,
+ код | Подразделение финансового менеджмента,
+ код | ods.map_planned_repayment_dates_keys.funds_center_code' CODEC(ZSTD(9)),
+
+    `funds_center_name` Nullable(String) COMMENT 'Подразделение финансового менеджмента,
+ название | Подразделение финансового менеджмента,
+ название | dict_dds.funds_center_master_data.funds_center_name' CODEC(ZSTD(9)),
+
+    `debt_subposition_number` Decimal(3,
+ 0) COMMENT 'Номер подпозиции задолженности | Номер подпозиции задолженности | ods.map_planned_repayment_dates_keys.debt_subposition_number' CODEC(ZSTD(9)),
+
+    `debt_subposition_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма задолженности подпозиции в местной валюте | Сумма задолженности подпозиции в местной валюте | ods.map_planned_repayment_dates_keys.debt_subposition_local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_subposition_document_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма задолженности подпозиции в валюте документа | Сумма задолженности подпозиции в валюте документа | ods.map_planned_repayment_dates_keys.debt_subposition_document_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_subposition_second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма задолженности подпозиции во второй местной валюте | Сумма задолженности подпозиции во второй местной валюте | ods.map_planned_repayment_dates_keys.debt_subposition_second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `is_debt_daily_calculated` Nullable(String) COMMENT 'Признак текущего остатка | Признак текущего остатка | Алгоритм' CODEC(ZSTD(9)),
+
+    `country_code` Nullable(String) COMMENT 'Страна регистрации контрагента | Страна регистрации контрагента | dict_dds.address.country_code' CODEC(ZSTD(9)),
+
+    `counterparty_hfm_code` Nullable(String) COMMENT 'Код HFM | Код HFM | dict_dds.counterparty.counterparty_hfm_code' CODEC(ZSTD(9)),
+
+    `counterparty_mdm_code` Nullable(String) COMMENT 'Код MDM | Код MDM | dict_dds.counterparty.counterparty_mdm_code' CODEC(ZSTD(9)),
+
+    `is_related_party_tco` Nullable(String) COMMENT 'Связанность по ТЦО | Связанность по ТЦО | dict_dds.counterparty.is_related_party_tco' CODEC(ZSTD(9)),
+
+    `is_group_company_affiliated` Nullable(String) COMMENT 'Входит в ОК | Входит в ОК | dict_dds.counterparty.is_group_company_affiliated' CODEC(ZSTD(9)),
+
+    `is_related_party_rsbo` Nullable(String) COMMENT 'Связанность по РСБО | Связанность по РСБО | dict_dds.counterparty.is_related_party_rsbo' CODEC(ZSTD(9)),
+
+    `is_bankrupt` Nullable(String) COMMENT 'Статус контрагента по банкротству | Статус контрагента по банкротству | dict_dds.counterparty.is_bankrupt' CODEC(ZSTD(9)),
+
+    `is_lawsuit_exist` Nullable(String) COMMENT 'Наличие у контрагента судебных исков | Наличие у контрагента судебных исков | dict_dds.counterparty.is_lawsuit_exist' CODEC(ZSTD(9)),
+
+    `is_fns_restriction_list_exist` Nullable(String) COMMENT 'Контрагент входит в негативные списки ФНС | Контрагент входит в негативные списки ФНС | dict_dds.counterparty.is_fns_restriction_list_exist' CODEC(ZSTD(9)),
+
+    `document_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма в валюте документа | Сумма в валюте документа | dm_calc.account_debt.document_currency_amount' CODEC(ZSTD(9)),
+
+    `local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма во внутренней валюте | Сумма во внутренней валюте | dm_calc.account_debt.local_currency_amount' CODEC(ZSTD(9)),
+
+    `second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма во второй ВнутрВалюте | Сумма во второй ВнутрВалюте | dm_calc.account_debt.second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `counterparty_tin_code` Nullable(String) COMMENT 'Идентификационный налоговый номер РФ (код) | Идентификационный налоговый номер РФ (код) | dict_dds.counterparty.counterparty_tin_code' CODEC(ZSTD(9)),
+
+    `reverse_document_fiscal_year` Nullable(Decimal(4,
+ 0)) COMMENT 'Финансовый год документа сторно | Финансовый год документа сторно | dm_calc.account_debt.reverse_document_fiscal_year' CODEC(ZSTD(9)),
+
+    `reason_for_reversal` Nullable(String) COMMENT 'Причина сторно или обратной проводки | Причина сторно или обратной проводки | dm_calc.account_debt.reason_for_reversal' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_document_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток КЗ по данной позиции,
+ в валюте документа | Остаток КЗ по данной позиции,
+ в валюте документа | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток КЗ по данной позиции,
+ в валюте БЕ | Остаток КЗ по данной позиции,
+ в валюте БЕ | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток КЗ по данной позиции,
+ во второй валюте | Остаток КЗ по данной позиции,
+ во второй валюте | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_usd_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток КЗ по данной позиции,
+ приведенный к USD | Остаток КЗ по данной позиции,
+ приведенный к USD | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_document_currency_to_usd_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток задолженности в долларах | Остаток задолженности в долларах | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subpos_no_revaluation_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток ДЗ/КЗ по данной подпозиции в валюте БЕ | Остаток ДЗ/КЗ по данной подпозиции в валюте БЕ | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subpos_no_revaluation_sec_local_curr_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток ДЗ/КЗ по данной подпозиции в валюте концерна | Остаток ДЗ/КЗ по данной подпозиции в валюте концерна | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_subposition_no_revaluation_usd_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Остаток ДЗ/КЗ по данной подпозиции в USD | Остаток ДЗ/КЗ по данной подпозиции в USD | Алгоритм' CODEC(ZSTD(9)),
+
+    `debt_balance_contract_usd_amount` Nullable(Decimal(19,
+ 2)) COMMENT 'Остаток задолженности по контракту,
+ в USD | Остаток задолженности по контракту,
+ в USD | Сумма debt_balance_subposition_usd_amount в рамках тех же значений dt,
+ counterparty_code,
+ contract_number' CODEC(ZSTD(9)),
+
+    `debt_balance_contract_document_currency_to_usd_amount` Nullable(Decimal(19,
+ 2)) COMMENT 'Остаток задолженности в долларах (пересчёт на дату отчёта) | Остаток задолженности в долларах (пересчёт на дату отчёта) | Сумма debt_balance_subposition_document_currency_to_usd_amount в рамках тех же значений dt,
+ counterparty_code,
+ contract_number' CODEC(ZSTD(9)),
+
+    `debt_balance_contract_no_revaluation_usd_amount` Nullable(Decimal(19,
+ 2)) COMMENT 'Остаток задолженности в долларах без переоценки | Остаток задолженности в долларах без переоценки | Сумма debt_balance_subposition_no_revaluation_usd_amount в рамках тех же значений dt,
+ counterparty_code,
+ contract_number' CODEC(ZSTD(9)),
+
+    `paydox_credit_limit_usd_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Суммарное значение КЛ | Суммарное значение КЛ | Алгоритм' CODEC(ZSTD(9)),
+
+    `invoice_document_code` Nullable(String) COMMENT 'Ссылочный инвойс (№) | Ссылочный инвойс (№) | dm_calc.account_debt.invoice_document_code' CODEC(ZSTD(9)),
+
+    `fiscal_year_of_relevant_invoice` Nullable(Decimal(4,
+ 0)) COMMENT 'Ссылочный инвойс (Год) | Ссылочный инвойс (Год)  | dm_calc.account_debt.fiscal_year_of_relevant_invoice' CODEC(ZSTD(9)),
+
+    `position_number_of_relevant_invoice` Nullable(Decimal(3,
+ 0)) COMMENT 'Ссылочный инвойс (Позиция) | Ссылочный инвойс (Позиция) | dm_calc.account_debt.position_number_of_relevant_invoice' CODEC(ZSTD(9)),
+
+    `final_position_line_item` Nullable(Decimal(3,
+ 0)) COMMENT 'Позиция документа задолженности | Позиция документа задолженности  | coalesce (position_number_of_relevant_invoice,
+position_line_item)' CODEC(ZSTD(9)),
+
+    `final_fiscal_year` Decimal(4,
+ 0) COMMENT 'Год документа задолженности | Год документа задолженности | coalesce (fiscal_year_of_relevant_invoice,
+ fiscal_year)' CODEC(ZSTD(9)),
+
+    `final_accounting_document_code` Nullable(String) COMMENT 'Номер документа задолженности | Номер документа задолженности  | coalesce (invoice_document_code,
+ accounting_document_code)' CODEC(ZSTD(9)),
+
+    `exchange_diff_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'ВВ Курсовая разница позиции| ВВ Курсовая разница позиции | dm_calc.account_debt.local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_exchange_diff_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'ВВ Курсовая разница остатка позиции | ВВ Курсовая разница остатка позиции  | dm_calc.account_debt.local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_subpos_exch_diff_local_currency_amount` Nullable(Decimal(17,
+ 4)) COMMENT 'ВВ Курсовая разница остатка подпозиции | ВВ Курсовая разница остатка подпозиции  | dm_calc.account_debt.local_currency_amount' CODEC(ZSTD(9)),
+
+    `exchange_diff_second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'ВВ2 Курсовая разница позиции | ВВ2 Курсовая разница позиции | dm_calc.account_debt.second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_exchange_diff_second_local_currency_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'ВВ2 Курсовая разница остатка позиции | ВВ2 Курсовая разница остатка позиции | dm_calc.account_debt.second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `debt_balance_subpos_exch_diff_second_local_curr_amount` Nullable(Decimal(17,
+ 4)) COMMENT 'ВВ2 Курсовая разница остатка подпозиции | ВВ2 Курсовая разница остатка подпозиции| dm_calc.account_debt.second_local_currency_amount' CODEC(ZSTD(9)),
+
+    `counterparty_truncated_code` Nullable(String) COMMENT 'Контрагент (код,
+ без лидирующих нулей) | Контрагент (код,
+ без лидирующих нулей) | dict_dds.counterparty.counterparty_truncated_code' CODEC(ZSTD(9)),
+
+    `counterparty_search_name` Nullable(String) COMMENT 'Название контрагента (для поиска) | Название контрагента (для поиска) |dict_dds.counterparty.counterparty_search_name' CODEC(ZSTD(9)),
+
+    `responsibility_center_level1_code` Nullable(String) COMMENT 'Центр ответственности верхнеуровневый (код) | Центр ответственности верхнеуровневый (код)  | dict_dds.map_responsibility_center_to_funds_center.responsibility_center_level1_code' CODEC(ZSTD(9)),
+
+    `responsibility_center_level1_name` Nullable(String) COMMENT 'Центр ответственности верхнеуровневый,
+ название | Центр ответственности верхнеуровневый,
+ название |dict_dds.responsibility_center_texts.responsibility_center_name' CODEC(ZSTD(9)),
+
+    `financial_position_code` Nullable(String) COMMENT 'Расчётная ФП код | Расчётная ФП код | ods.map_planned_repayment_dates_keys.financial_position_code' CODEC(ZSTD(9)),
+
+    `financial_position_name` Nullable(String) COMMENT 'Расчётная ФП название | Расчётная ФП название |dict_dds.financial_position_master_data_texts.financial_position_full_name' CODEC(ZSTD(9)),
+
+    `usd_amount` Nullable(Decimal(17,
+ 2)) COMMENT 'Сумма задолженности в долларах | Сумма задолженности в долларах |dm_calc.account_debt.document_currency_amount' CODEC(ZSTD(9)),
+
+    `realization_invoice_code` Nullable(String) COMMENT 'Фактура реализации | Фактура реализации | dm_calc.sales_invoice_and_invoice_realization_relation.invoice_realization_code' CODEC(ZSTD(9)),
+
+    `realization_document_code` Nullable(String) COMMENT 'Группа | Группа | dds.invoice_realization.invoice_realization_group_code' CODEC(ZSTD(9)),
+
+    `country_of_end_user_code` Nullable(String) COMMENT 'Страна конечного потребителя (код) | - | Расчетное | dm_calc.sales_invoice_and_invoice_realization_relation. country_of_destination_code' CODEC(ZSTD(9)),
+
+    `country_of_end_user_name` Nullable(String) COMMENT 'Краткое название страны на русском | - | country_texts.country_short_name' CODEC(ZSTD(9)),
+
+    `region_of_end_user_code` Nullable(String) COMMENT 'Рынок сбыта Региона сбыта (код) | Рынок сбыта Региона сбыта (код) | country.market_region1_code' CODEC(ZSTD(9)),
+
+    `region_of_end_user_name` Nullable(String) COMMENT 'Наименование региона дебитора | Наименование региона дебитора | dict_dds.market_region1_texts.market_region1_name' CODEC(ZSTD(9)),
+
+    `sales_invoice_code` Nullable(String) COMMENT 'Фактура сбыта (инвойс) | dm_calc.sales_invoice_and_invoice_realization_relation.sales_invoice_code' CODEC(ZSTD(9)),
+
+    `material_shape_code` Nullable(String) COMMENT 'Форма (код) | Форма (код) | dict_dds.material_specification.shape_code' CODEC(ZSTD(9)),
+
+    `material_shape_name` Nullable(String) COMMENT 'Название признака "Форма" | Форма  | material_shape_texts.material_shape_full_name' CODEC(ZSTD(9)),
+
+    `receivable_claim_number` Nullable(String) COMMENT 'Претензия | Претензия | dds.invoice_realization.claim_code' CODEC(ZSTD(9)),
+
+    `receivable_claim_paydox_url` Nullable(String) COMMENT 'Ссылка на документ PayDox | Ссылка на документ PayDox | dds.invoice_realization_claim.paydox_claim_url' CODEC(ZSTD(9)),
+
+    `dt_receivable_claim` Nullable(Date) COMMENT 'Дата выставления претензии | Дата выставления претензии | dds.invoice_realization_claim.dt_claim' CODEC(ZSTD(9)),
+
+    `reference_operation_type_code` Nullable(String) COMMENT 'Ссылочная операция | Ссылочная операция | dm_calc.account_debt.reference_operation_type_code' CODEC(ZSTD(9)),
+
+    `reference_object_key_code` Nullable(String) COMMENT 'Ссылочный ключ | Ссылочный ключ | dm_calc.account_debt.reference_object_key' CODEC(ZSTD(9)),
+
+    `material_code` Nullable(String) COMMENT 'Номер материала | Номер материала | dm_calc.accounting_documents_header_working_capital.material_code' CODEC(ZSTD(9)),
+
+    `bank_as_counterparty_code` Nullable(String) COMMENT 'Банк получатель (код контрагента) | Банк получатель (код контрагента) | dm_calc.sales_invoice_and_invoice_realization_relation.sales_bank_account_code' CODEC(ZSTD(9)),
+
+    `almer_bank_code` Nullable(String) COMMENT 'Банк получатель (код almer) | Банк получатель (код almer) | dict_dds.counterparty.almer_bank_code' CODEC(ZSTD(9)),
+
+    `bank_as_counterparty_name` Nullable(String) COMMENT 'Банк получатель (наименование) | Банк получатель (наименование) | dict_dds.counterparty.counterparty_full_name' CODEC(ZSTD(9)),
+
+    `paydox_document_url` Nullable(String) COMMENT 'Ссылка на оригинал документа в PAYDOX | Ссылка на оригинал документа в PAYDOX | Разные таблицы' CODEC(ZSTD(9)),
+
+    `contract_list` Nullable(String) COMMENT 'Cписок контрактов закупок | Cписок контрактов закупок | dm_calc.accounting_document_contracts.contract_list' CODEC(ZSTD(9)),
+
+    `contract_list_with_paydox_url` Nullable(String) COMMENT 'Cписок контрактов закупок с ссылками на PAYDOX | Cписок контрактов закупок с ссылками на PAYDOX | on column dm_calc.accounting_document_contracts.contract_list_with_paydox_url' CODEC(ZSTD(9)),
+
+    `external_contract_source_table_name` Nullable(String) COMMENT 'Таблица-источник контракта | Таблица-источник контракта|  dm_calc.accounting_document_contracts.external_contract_source_table_name' CODEC(ZSTD(9)),
+
+    `dttm_inserted` DateTime COMMENT 'Комментария нет' CODEC(ZSTD(9)),
+
+    `dttm_updated` DateTime COMMENT 'Комментария нет' CODEC(ZSTD(9)),
+
+    `job_name` String COMMENT 'Комментария нет' CODEC(ZSTD(9)),
+
+    `deleted_flag` UInt8 COMMENT 'Комментария нет' CODEC(ZSTD(9))
+)
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/dm/"account_debt_for_working_capital"',
+ '{replica}')
+ORDER BY (dt,
+ unit_balance_code,
+ fiscal_year,
+ accounting_document_code,
+ position_line_item,
+ debt_subposition_number)
+SETTINGS index_granularity = 8192
+COMMENT 'Оборотный капитал - ДЗ/КЗ';

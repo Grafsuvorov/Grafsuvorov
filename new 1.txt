@@ -1,33 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Наполняем tech_etl.tables_dependencies по всем объектам из tech_etl.tables_meta.
+Строим витрину зависимостей tech_etl.entity_table_deps_v2:
+- парсим источники/таргеты из tech_etl.tables_meta.query_insert_init
+- связываем с entities_meta (entity_id / entity_name)
+- подтягиваем мониторинг tech_monitoring.table_compare за нужный день
+- записываем всё в витрину + печатаем пересечения по таблицам
 
-Требуется: sqlalchemy, psycopg2-binary
+Требуется: sqlalchemy, psycopg2-binary, pandas, openpyxl (опц.)
 """
 
 import re
 import sys
-from typing import Optional, Tuple, Set, Dict, List
+from typing import Tuple, Optional, Set, Dict
+import pandas as pd
 from sqlalchemy import create_engine, text
 
 # ---------------------- НАСТРОЙКИ ----------------------
-DB_URL = "postgresql+psycopg2://gp:gp@00.00.00.000:5432/dwh"
+DB_URL = "postgresql+psycopg2://gpl:gpl@00.66.029.00:5432/dwh"
+DATE_FILTER = "2025-10-20"  # только этот день из мониторинга
 
-# Таблица, откуда берём SQL и привязку к сущностям
-TABLES_META = "tech_etl.tables_meta"
-# Имена колонок в tables_meta (поправьте под свою схему)
-COL_ENTITY_ID = "entity_id"               # >>> если нет — поставьте None
-COL_ENTITY_NAME = "entity_name"           # >>> если нет — поставьте None
-COL_QUERY = "query_insert_init"           # текст SQL, откуда парсим
-# Доп. информативные поля (необязательно)
-COL_META_ID = "table_id"                  # внутренний id (если есть)
-COL_META_SCHEMA = "table_schema"          # если есть
-COL_META_NAME = "table_name"              # если есть
+DEST_TABLE = "tech_etl.entity_table_deps_v2"
 
-# Поведение
-TRUNCATE_BEFORE_INSERT = True  # очищать таблицу перед загрузкой
-
-# ---------------------- ФИЛЬТРЫ И РЕГЕКСПЫ ----------------------
+# ---------------------- ПАРАМЕТРЫ ПАРСЕРА ----------------------
 SYSTEM_SCHEMAS = {
     "pg_catalog", "information_schema", "pg_toast",
     "gp_toolkit", "pg_temp", "pg_aoseg", "pg_bitmapindex", "pg_aocsseg"
@@ -35,67 +29,78 @@ SYSTEM_SCHEMAS = {
 IGNORE_SCHEMAS = [r"pg_temp", r"pg_temp_\d+", r"pg_toast_temp_\d+"]
 IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]
 SQL_KEYWORDS = {
-    "select","from","join","left","right","full","inner","outer","cross","natural",
-    "on","using","where","group","by","order","limit","offset","union","intersect",
-    "except","all","distinct","and","or","not","as","with","having","values","into",
-    "update","set","delete","insert"
+    "select", "from", "join", "left", "right", "full", "inner", "outer", "cross", "natural",
+    "on", "using", "where", "group", "by", "order", "limit", "offset", "union", "intersect",
+    "except", "all", "distinct", "and", "or", "not", "as", "with", "having", "values", "into",
+    "update", "set", "delete", "insert"
 }
 FUNCTION_PREFIXES = (
-    "unnest(","generate_series(","regexp_split_to_table(",
-    "json_each(","jsonb_each(","json_each_text(","jsonb_each_text(",
-    "json_to_record(","jsonb_to_record(","json_to_recordset(","jsonb_to_recordset("
+    "unnest(", "generate_series(", "regexp_split_to_table(",
+    "json_each(", "jsonb_each(", "json_each_text(", "jsonb_each_text(",
+    "json_to_record(", "jsonb_to_record(", "json_to_recordset(", "jsonb_to_recordset(",
 )
 
-RE_INSERT   = re.compile(r"insert\s+into\s+(?:only\s+)?([^\s(]+)", re.IGNORECASE | re.MULTILINE)
-RE_FROMJOIN = re.compile(r"(?:from|join)\s+([^\s,()]+)", re.IGNORECASE | re.MULTILINE)
+RE_INSERT = re.compile(r"insert\s+into\s+(?:only\s+)?([^\s(]+)", re.IGNORECASE | re.MULTILINE)
+RE_FROM_JOIN = re.compile(r"(?:from|join)\s+([^\s,()]+)", re.IGNORECASE | re.MULTILINE)
 
-# ---------------------- УТИЛИТЫ ПАРСЕРА ----------------------
+
+# ---------------------- ХЕЛПЕРЫ ПАРСЕРА ----------------------
 def unquote_ident(s: str) -> str:
     s = re.split(r"::", s, maxsplit=1)[0]
     s = s.strip("() \t\n\r")
     if s.startswith('"') and s.endswith('"') and s.count('"') == 2:
         return s[1:-1]
     parts = s.split(".")
-    clean = []
+    clean_parts = []
     for p in parts:
         p = p.strip()
         if len(p) >= 2 and p[0] == '"' and p[-1] == '"':
-            clean.append(p[1:-1])
+            clean_parts.append(p[1:-1])
         else:
-            clean.append(p)
-    return ".".join(clean)
+            clean_parts.append(p)
+    return ".".join(clean_parts)
+
 
 def split_schema_table(token: str) -> Tuple[Optional[str], str]:
-    token = unquote_ident(token.split()[0])
+    token = token.strip()
+    token = unquote_ident(token)
+    token = token.split()[0]  # отрезаем алиас
     if "." in token:
-        sch, tbl = token.split(".", 1)
-        return sch, tbl
+        schema, table = token.split(".", 1)
+        return schema, table
     return None, token
+
 
 def is_function_like(token: str) -> bool:
     t = token.strip().lower()
     return any(t.startswith(fp) for fp in FUNCTION_PREFIXES)
 
+
 def is_subquery_token(token: str) -> bool:
     return token.strip().startswith("(")
+
 
 def is_temp_schema(schema: Optional[str]) -> bool:
     if not schema:
         return False
     s = schema.lower()
-    return any(re.fullmatch(p, s) for p in IGNORE_SCHEMAS)
+    return any(re.fullmatch(pat, s) for pat in IGNORE_SCHEMAS)
+
 
 def is_temp_table_name(table: Optional[str]) -> bool:
     if not table:
         return False
     t = table.lower()
-    return any(re.fullmatch(p, t) for p in IGNORE_TABLE_PATTERNS)
+    return any(re.fullmatch(pat, t) for pat in IGNORE_TABLE_PATTERNS)
+
 
 def is_keyword(token: str) -> bool:
     return token.lower() in SQL_KEYWORDS
 
+
 def is_system_schema(schema: Optional[str]) -> bool:
     return (schema or "").lower() in SYSTEM_SCHEMAS
+
 
 def collect_cte_names(sql_text: str) -> Set[str]:
     ctes = set()
@@ -104,7 +109,7 @@ def collect_cte_names(sql_text: str) -> Set[str]:
             ctes.add(unquote_ident(cte).lower())
     return ctes
 
-# ---------------------- КАТАЛОГ ----------------------
+
 def load_real_tables(conn) -> Tuple[Set[str], Dict[str, Set[str]]]:
     sql = """
         SELECT table_schema, table_name
@@ -116,15 +121,13 @@ def load_real_tables(conn) -> Tuple[Set[str], Dict[str, Set[str]]]:
     full = set()
     by_name: Dict[str, Set[str]] = {}
     for sch, tbl in rows:
-        full_name = f"{sch}.{tbl}"
-        full.add(full_name)
+        key = f"{sch}.{tbl}"
+        full.add(key)
         by_name.setdefault(tbl, set()).add(sch)
     return full, by_name
 
-def resolve_if_exists(schema: Optional[str], table: str,
-                      full_catalog_set: Set[str],
-                      by_name: Dict[str, Set[str]],
-                      default_schema: Optional[str]) -> Optional[Tuple[str,str,str]]:
+
+def resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema=None):
     if not table or is_keyword(table) or "$" in (schema or "") or "$" in table:
         return None
     if schema:
@@ -132,7 +135,6 @@ def resolve_if_exists(schema: Optional[str], table: str,
             return None
         full = f"{schema}.{table}"
         return (schema, table, full) if full in full_catalog_set else None
-    # нет схемы — пытаемся определить
     schemas = by_name.get(table, set())
     if len(schemas) == 1:
         sch = next(iter(schemas))
@@ -141,16 +143,37 @@ def resolve_if_exists(schema: Optional[str], table: str,
         return (default_schema, table, f"{default_schema}.{table}")
     return None
 
-# ---------------------- ГЛАВНАЯ ----------------------
+
+# ---------------------- ОСНОВНАЯ ЛОГИКА ----------------------
 def main():
     engine = create_engine(DB_URL)
+
     with engine.begin() as conn:
+        # --- Создаём витрину (пересоздаём, чтобы схема была гарантирована)
+        conn.execute(text(f"""
+            DROP TABLE IF EXISTS {DEST_TABLE};
+            CREATE TABLE {DEST_TABLE} (
+                date_id                  date            NOT NULL,
+                entity_id                int             NOT NULL,
+                entity_name              text            NOT NULL,
+                table_schema             text            NOT NULL,
+                table_name               text            NOT NULL,
+                target                   boolean         NOT NULL DEFAULT false,
+                edge_type                text            NULL,
+                curr_start_dttm          timestamp       NULL,
+                curr_finish_dttm         timestamp       NULL,
+                prev_start_dttm          timestamp       NULL,
+                prev_finish_dttm         timestamp       NULL,
+                load_dttm                timestamp       NOT NULL DEFAULT now()
+            );
+            CREATE INDEX ON {DEST_TABLE} (date_id);
+            CREATE INDEX ON {DEST_TABLE} (entity_id);
+            CREATE INDEX ON {DEST_TABLE} (table_schema, table_name);
+            CREATE INDEX ON {DEST_TABLE} (target);
+        """))
 
-
-        if TRUNCATE_BEFORE_INSERT:
-            conn.execute(text("truncate table tech_etl.tables_dependencies"))
-
-        # default_schema
+    with engine.connect() as conn:
+        # --- search_path: берём первую «обычную» схему как дефолт
         sp = (conn.execute(text("SHOW search_path")).scalar() or "")
         default_schema = None
         if sp:
@@ -159,114 +182,190 @@ def main():
                     default_schema = raw
                     break
 
+        # --- каталог реальных таблиц
         full_catalog_set, by_name = load_real_tables(conn)
 
-        # вытаскиваем все строки meta
-        cols = [c for c in [COL_META_ID, COL_ENTITY_ID, COL_ENTITY_NAME, COL_META_SCHEMA, COL_META_NAME, COL_QUERY] if c]
-        sql = f"select {', '.join(cols)} from {TABLES_META}"
-        meta_rows = conn.execute(text(sql)).mappings().all()
+        # --- определим состав полей tables_meta (чтобы быть совместимыми с разными инсталляциями)
+        meta_cols = [r[0] for r in conn.execute(text("SELECT * FROM tech_etl.tables_meta LIMIT 0")).cursor.description]
+        has_entity_name = "entity_name" in meta_cols
+        has_entity_id   = "entity_id" in meta_cols
+        has_name        = "name" in meta_cols
+        has_table_schema= "table_schema" in meta_cols
 
-        inserts: List[dict] = []
-        seen_pairs = set()  # чтобы не плодить дубликаты одинаковых source для одного target/сущности
+        # выберем минимум нужного
+        # берём ВСЕ записи (чтобы покрыть вашу задачу «получить весь список…»)
+        select_sql = "SELECT query_insert_init"
+        if has_entity_name:
+            select_sql += ", entity_name"
+        if has_entity_id:
+            select_sql += ", entity_id"
+        if has_name:
+            select_sql += ", name"
+        if has_table_schema:
+            select_sql += ", table_schema"
+        select_sql += " FROM tech_etl.tables_meta"
 
-        for r in meta_rows:
-            sql_text = r.get(COL_QUERY)
+        df_meta = pd.read_sql(select_sql, conn)
+
+        # нормализуем колонки entity_name_raw / entity_id_raw для дальнейшей стыковки
+        df_meta["entity_name_raw"] = None
+        if has_entity_name:
+            df_meta["entity_name_raw"] = df_meta["entity_name"]
+        elif has_name:
+            df_meta["entity_name_raw"] = df_meta["name"]
+        else:
+            # fallback — пусть будет None, позже попытаемся смаппить иначе
+            df_meta["entity_name_raw"] = None
+
+        df_meta["entity_id_raw"] = df_meta["entity_id"] if has_entity_id else None
+
+        # --- парсинг
+        rows = []
+        for idx, row in df_meta.iterrows():
+            sql_text = row.get("query_insert_init")
             if not isinstance(sql_text, str) or not sql_text.strip():
                 continue
 
-            entity_id = r.get(COL_ENTITY_ID)
-            entity_name = r.get(COL_ENTITY_NAME)
-
+            entity_name_raw = (row.get("entity_name_raw") or "")  # может быть пустым
             cte_names = collect_cte_names(sql_text)
 
-            # --- целевой INSERT INTO (target)
-            target_schema = target_table = target_full = None
-            m_ins = RE_INSERT.search(sql_text)
-            if m_ins:
-                token = m_ins.group(1).strip()
+            # INSERT target
+            m = RE_INSERT.search(sql_text)
+            if m:
+                token = m.group(1).strip()
                 for kw in ("only", "lateral"):
                     if token.lower().startswith(kw + " "):
                         token = token[len(kw):].strip()
                         break
-                sch, tbl = split_schema_table(token)
-                if tbl and not is_function_like(tbl) and not is_temp_table_name(tbl):
-                    if not (sch and is_temp_schema(sch)):
-                        resolved = resolve_if_exists(sch, tbl, full_catalog_set, by_name, default_schema)
+                schema, table = split_schema_table(token)
+                if table and not is_function_like(table) and not is_temp_table_name(table):
+                    if not (schema and is_temp_schema(schema)):
+                        # проверка существования
+                        resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
                         if resolved:
-                            target_schema, target_table, target_full = resolved
+                            sch, tbl, full = resolved
+                            rows.append({
+                                "edge_type": "insert_target",
+                                "table_schema": sch,
+                                "table_name": tbl,
+                                "entity_name_raw": entity_name_raw
+                            })
 
-            # --- источники (FROM/JOIN)
-            local_sources = []
-            for m in RE_FROMJOIN.finditer(sql_text):
+            # FROM/JOIN sources
+            for m in RE_FROM_JOIN.finditer(sql_text):
                 token = m.group(1)
                 low = token.strip().lower()
-                for kw in ("only","lateral"):
+                for kw in ("only", "lateral"):
                     if low.startswith(kw + " "):
                         token = token[len(kw):].strip()
                         break
                 if is_subquery_token(token) or is_function_like(token):
                     continue
-                sch, tbl = split_schema_table(token)
-                if not tbl:
+                schema, table = split_schema_table(token)
+                if not table:
                     continue
-                # CTE?
-                if unquote_ident(tbl).lower() in cte_names:
+                if unquote_ident(table).lower() in cte_names:
                     continue
-                # фильтры
-                if is_keyword(tbl) or (sch and is_keyword(sch)):
+                if is_keyword(table) or (schema and is_keyword(schema)):
                     continue
-                if "$" in (sch or "") or "$" in tbl:
+                if "$" in (schema or "") or "$" in table:
                     continue
-                if is_temp_table_name(tbl) or (sch and is_temp_schema(sch)):
+                if is_temp_table_name(table) or (schema and is_temp_schema(schema)):
                     continue
 
-                resolved = resolve_if_exists(sch, tbl, full_catalog_set, by_name, default_schema)
+                resolved = resolve_if_exists(schema, table, full_catalog_set, by_name, default_schema)
                 if not resolved:
                     continue
-                s_sch, s_tbl, s_full = resolved
-                local_sources.append((s_sch, s_tbl, s_full))
-
-            # если target не найден — всё равно можно фиксировать dependency “UNKNOWN target”
-            # но обычно target есть. Запишем только если есть хотя бы один source.
-            if not local_sources:
-                continue
-
-            # если target не распознан — пусть будет None (но чаще он есть)
-            for s_sch, s_tbl, s_full in local_sources:
-                key = (entity_id, entity_name, target_schema, target_table, s_sch, s_tbl)
-                if key in seen_pairs:
-                    continue
-                seen_pairs.add(key)
-                inserts.append({
-                    "entity_id": entity_id,
-                    "entity_name": entity_name,
-                    "target_schema": target_schema,
-                    "target_table": target_table,
-                    "target_full_name": target_full,
-                    "source_schema": s_sch,
-                    "source_table": s_tbl,
-                    "source_full_name": s_full
+                sch, tbl, full = resolved
+                rows.append({
+                    "edge_type": "select_source",
+                    "table_schema": sch,
+                    "table_name": tbl,
+                    "entity_name_raw": entity_name_raw
                 })
 
-        if not inserts:
-            print("[WARN] Нечего вставлять — парсер не нашёл валидных зависимостей.")
+        if not rows:
+            print("[WARN] После парсинга — пусто.")
             return
 
-        # батч-вставка
-        conn.execute(
-            text("""
-            insert into tech_etl.tables_dependencies
-              (entity_id, entity_name,
-               target_schema, target_table, target_full_name,
-               source_schema, source_table, source_full_name)
-            values
-              (:entity_id, :entity_name,
-               :target_schema, :target_table, :target_full_name,
-               :source_schema, :source_table, :source_full_name)
-            """),
-            inserts
+        parsed = pd.DataFrame(rows).drop_duplicates()
+
+        # --- подмешиваем entities_meta
+        df_entities = pd.read_sql("""
+            SELECT entity_id, entity_name, entity_last_load, entity_load_mode
+            FROM tech_etl.entities_meta
+        """, conn)
+
+        # если entity_name_raw пуст — попробуем «догадаться» по единственному совпадению имени таблицы?
+        # Но это рискованно; оставим None -> -1.
+        parsed = parsed.merge(df_entities, how="left",
+                              left_on="entity_name_raw", right_on="entity_name",
+                              suffixes=("", "_em"))
+
+        parsed["entity_id"] = parsed["entity_id"].fillna(-1).astype(int)
+        parsed["entity_name"] = parsed["entity_name"].fillna(parsed["entity_name_raw"]).fillna("(unknown)")
+
+        # --- мониторинг за нужный день
+        mon = pd.read_sql(f"""
+            SELECT entity_id, entity_name, table_schema, table_name,
+                   curr_start_dttm, curr_finish_dttm, prev_start_dttm, prev_finish_dttm
+            FROM tech_monitoring.table_compare
+            WHERE date_id = DATE '{DATE_FILTER}'
+        """, conn)
+
+        # нормализуем регистр схем/имен для join
+        for col in ("table_schema", "table_name"):
+            parsed[col] = parsed[col].str.lower()
+            mon[col] = mon[col].str.lower()
+
+        # join по (entity_name, schema, table) — обычно именно так заполняется мониторинг
+        merged = parsed.merge(
+            mon,
+            how="left",
+            on=["entity_name", "table_schema", "table_name"],
+            suffixes=("", "_mon")
         )
-        print(f"[OK] Загружено строк зависимостей: {len(inserts)}")
+
+        # проставим target
+        merged["target"] = (merged["edge_type"] == "insert_target")
+
+        # сформируем итог под заливку
+        out = merged[[
+            "entity_id", "entity_name", "table_schema", "table_name",
+            "target", "edge_type",
+            "curr_start_dttm", "curr_finish_dttm", "prev_start_dttm", "prev_finish_dttm"
+        ]].copy()
+        out.insert(0, "date_id", pd.to_datetime(DATE_FILTER).date())
+
+    # --- запись в витрину
+    with create_engine(DB_URL).begin() as conn:
+        # очищаем за день, чтобы не плодить дублей
+        conn.execute(text(f"DELETE FROM {DEST_TABLE} WHERE date_id = DATE :d"), {"d": DATE_FILTER})
+
+        out.to_sql(DEST_TABLE.split(".")[1],
+                   con=conn.connection,  # raw DBAPI для to_sql на уже-начатой транзакции
+                   schema=DEST_TABLE.split(".")[0],
+                   if_exists="append",
+                   index=False,
+                   method="multi",
+                   chunksize=10_000)
+
+    # --- отчёт по пересечениям
+    overlaps = (out.loc[~out["target"], ["table_schema", "table_name", "entity_id", "entity_name"]]
+                .drop_duplicates()
+                .groupby(["table_schema", "table_name"])
+                .agg(entities_cnt=("entity_id", "nunique"),
+                     entities=("entity_name", lambda s: sorted(set(s))))
+                .reset_index())
+    overlaps = overlaps[overlaps["entities_cnt"] > 1].sort_values(["table_schema", "table_name"])
+
+    print(f"[OK] Загружено строк: {len(out)} в {DEST_TABLE} за {DATE_FILTER}")
+    if not overlaps.empty:
+        print("[INFO] Пересечения по источникам (одна таблица у нескольких сущностей):")
+        print(overlaps.head(30).to_string(index=False))
+    else:
+        print("[INFO] Пересечений по источникам не найдено (за день).")
+
 
 if __name__ == "__main__":
     try:

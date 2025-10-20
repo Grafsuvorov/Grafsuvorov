@@ -1,6 +1,10 @@
+ALTER TABLE tech_etl.tables_dependencies
+  ADD COLUMN IF NOT EXISTS source_entity_id   int,
+  ADD COLUMN IF NOT EXISTS source_entity_name text;
 # -*- coding: utf-8 -*-
 """
 Наполняем tech_etl.tables_dependencies по всем объектам из tech_etl.tables_meta.
+Дополнительно проставляем владельца для source-таблиц: source_entity_id / source_entity_name.
 
 Требуется: sqlalchemy, psycopg2-binary
 """
@@ -15,14 +19,14 @@ DB_URL = "postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh"
 
 # Таблица, откуда берём SQL и привязку к сущностям
 TABLES_META = "tech_etl.tables_meta"
-# Имена колонок в tables_meta (поправьте под свою схему)
-COL_ENTITY_ID = "entity_id"               # >>> если нет — поставьте None
-COL_ENTITY_NAME = "entity_name"           # >>> если нет — поставьте None
-COL_QUERY = "query_insert_init"           # текст SQL, откуда парсим
-# Доп. информативные поля (необязательно)
-COL_META_ID = "table_id"                  # внутренний id (если есть)
-COL_META_SCHEMA = "table_schema"          # если есть
-COL_META_NAME = "table_name"              # если есть
+# Имена колонок в tables_meta (подправьте при необходимости)
+COL_ENTITY_ID   = "entity_id"       # если нет — поставьте None
+COL_ENTITY_NAME = "entity_name"     # если нет — поставьте None
+COL_QUERY       = "query_insert_init"   # текст SQL, откуда парсим
+# Доп. информативные поля (нужны для построения карты владельцев по таргет-таблицам)
+COL_META_ID     = "table_id"        # можно None
+COL_META_SCHEMA = "table_schema"    # имя схемы таргет-таблицы в tables_meta
+COL_META_NAME   = "table_name"      # имя таргет-таблицы в tables_meta
 
 # Поведение
 TRUNCATE_BEFORE_INSERT = True  # очищать таблицу перед загрузкой
@@ -33,7 +37,7 @@ SYSTEM_SCHEMAS = {
     "gp_toolkit", "pg_temp", "pg_aoseg", "pg_bitmapindex", "pg_aocsseg"
 }
 IGNORE_SCHEMAS = [r"pg_temp", r"pg_temp_\d+", r"pg_toast_temp_\d+"]
-IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]
+IGNORE_TABLE_PATTERNS = [r"#.*", r"(tmp|temp|tt|t)_.+"]  # подстройте при необходимости
 SQL_KEYWORDS = {
     "select","from","join","left","right","full","inner","outer","cross","natural",
     "on","using","where","group","by","order","limit","offset","union","intersect",
@@ -146,11 +150,11 @@ def main():
     engine = create_engine(DB_URL)
     with engine.begin() as conn:
 
-
+        # --- опционально чистим витрину
         if TRUNCATE_BEFORE_INSERT:
-            conn.execute(text("truncate table tech_etl.tables_dependencies"))
+            conn.execute(text("TRUNCATE TABLE tech_etl.tables_dependencies"))
 
-        # default_schema
+        # --- default_schema
         sp = (conn.execute(text("SHOW search_path")).scalar() or "")
         default_schema = None
         if sp:
@@ -159,15 +163,28 @@ def main():
                     default_schema = raw
                     break
 
+        # --- каталог реальных таблиц
         full_catalog_set, by_name = load_real_tables(conn)
 
-        # вытаскиваем все строки meta
+        # --- вытаскиваем всё из tables_meta
         cols = [c for c in [COL_META_ID, COL_ENTITY_ID, COL_ENTITY_NAME, COL_META_SCHEMA, COL_META_NAME, COL_QUERY] if c]
-        sql = f"select {', '.join(cols)} from {TABLES_META}"
+        sql = f"SELECT {', '.join(cols)} FROM {TABLES_META}"
         meta_rows = conn.execute(text(sql)).mappings().all()
 
+        # --- карта владельцев по таргет-таблицам:
+        #     (schema, table) -> (entity_id, entity_name)
+        owner_map: Dict[Tuple[str,str], Tuple[Optional[int], Optional[str]]] = {}
+        if COL_META_SCHEMA and COL_META_NAME:
+            for r in meta_rows:
+                sch = r.get(COL_META_SCHEMA)
+                tbl = r.get(COL_META_NAME)
+                if not sch or not tbl:
+                    continue
+                key = (str(sch).lower(), str(tbl).lower())
+                owner_map[key] = (r.get(COL_ENTITY_ID), r.get(COL_ENTITY_NAME))
+
         inserts: List[dict] = []
-        seen_pairs = set()  # чтобы не плодить дубликаты одинаковых source для одного target/сущности
+        seen_pairs = set()  # чтобы не плодить дублей одинаковых source для одного target/сущности
 
         for r in meta_rows:
             sql_text = r.get(COL_QUERY)
@@ -226,17 +243,19 @@ def main():
                 s_sch, s_tbl, s_full = resolved
                 local_sources.append((s_sch, s_tbl, s_full))
 
-            # если target не найден — всё равно можно фиксировать dependency “UNKNOWN target”
-            # но обычно target есть. Запишем только если есть хотя бы один source.
             if not local_sources:
                 continue
 
-            # если target не распознан — пусть будет None (но чаще он есть)
+            # --- вставляем зависимости; для каждого source подтянем владельца
             for s_sch, s_tbl, s_full in local_sources:
                 key = (entity_id, entity_name, target_schema, target_table, s_sch, s_tbl)
                 if key in seen_pairs:
                     continue
                 seen_pairs.add(key)
+
+                src_owner = owner_map.get((s_sch.lower(), s_tbl.lower()), (None, None))
+                src_entity_id, src_entity_name = src_owner
+
                 inserts.append({
                     "entity_id": entity_id,
                     "entity_name": entity_name,
@@ -245,24 +264,28 @@ def main():
                     "target_full_name": target_full,
                     "source_schema": s_sch,
                     "source_table": s_tbl,
-                    "source_full_name": s_full
+                    "source_full_name": s_full,
+                    "source_entity_id": src_entity_id,
+                    "source_entity_name": src_entity_name
                 })
 
         if not inserts:
             print("[WARN] Нечего вставлять — парсер не нашёл валидных зависимостей.")
             return
 
-        # батч-вставка
+        # --- батч-вставка (с учётом новых колонок для сорсов)
         conn.execute(
             text("""
-            insert into tech_etl.tables_dependencies
+            INSERT INTO tech_etl.tables_dependencies
               (entity_id, entity_name,
                target_schema, target_table, target_full_name,
-               source_schema, source_table, source_full_name)
-            values
+               source_schema, source_table, source_full_name,
+               source_entity_id, source_entity_name)
+            VALUES
               (:entity_id, :entity_name,
                :target_schema, :target_table, :target_full_name,
-               :source_schema, :source_table, :source_full_name)
+               :source_schema, :source_table, :source_full_name,
+               :source_entity_id, :source_entity_name)
             """),
             inserts
         )

@@ -1,137 +1,82 @@
-WITH base AS (
-  SELECT 'v1' src, calculation_code, dt_valid_from,
-         average_weighted_stock_price_rule2_prev_date_amount AS r2_prev,
-         average_weighted_stock_price_rule2_next_date_amount AS r2_next
-  FROM userdata.material_price_calculation
-  UNION ALL
-  SELECT 'v2', calculation_code, dt_valid_from,
-         average_weighted_stock_price_rule2_prev_date_amount,
-         average_weighted_stock_price_rule2_next_date_amount
-  FROM userdata.material_price_calculation_v2
-),
-chk AS (
-  SELECT src, calculation_code, dt_valid_from, r2_prev, r2_next,
-         LAG(r2_next) OVER (PARTITION BY src, calculation_code ORDER BY dt_valid_from) AS prev_of_next,
-         LEAD(r2_prev) OVER (PARTITION BY src, calculation_code ORDER BY dt_valid_from) AS next_of_prev
-  FROM base
-)
-SELECT src,
-       COUNT(*) FILTER (WHERE r2_prev IS DISTINCT FROM prev_of_next) AS bad_prev,
-       COUNT(*) FILTER (WHERE r2_next IS DISTINCT FROM next_of_prev) AS bad_next
-FROM chk
-GROUP BY src;
+Посчитаем, сколько расхождений по rule2_prev объясняются отсутствием строки в CKMLCR на дату «1-е число следующего месяца» (т.е. дыркой в периодах):
 
-результат
-v1	9461199	9461199
-v2	9355260	9465888
-
-
-WITH ord AS (
-  SELECT 'v1' src, calculation_code, dt_valid_from,
-         ROW_NUMBER() OVER (PARTITION BY calculation_code ORDER BY dt_valid_from, calculation_code) AS rn
-  FROM userdata.material_price_calculation
-  UNION ALL
-  SELECT 'v2', calculation_code, dt_valid_from,
-         ROW_NUMBER() OVER (PARTITION BY calculation_code ORDER BY dt_valid_from, calculation_code) AS rn
-  FROM userdata.material_price_calculation_v2
-)
-SELECT COUNT(*) AS rows_mismatch_order
-FROM (
-  SELECT v1.calculation_code, v1.dt_valid_from, v1.rn AS rn1, v2.rn AS rn2
-  FROM ord v1
-  JOIN ord v2 USING (calculation_code, dt_valid_from)
-  WHERE v1.src='v1' AND v2.src='v2' AND v1.rn <> v2.rn
-) t;
-
-результат 
-0
-
-WITH p AS (SELECT 1e-12::numeric tol),
-j AS (
+WITH diff AS (
   SELECT v1.calculation_code, v1.dt_valid_from,
-         ABS(COALESCE(v1.standard_price_amount,0) - COALESCE(v2.standard_price_amount,0)) AS d
+         v1.average_weighted_stock_price_rule2_prev_date_amount AS r1,
+         v2.average_weighted_stock_price_rule2_prev_date_amount AS r2
   FROM userdata.material_price_calculation v1
-  JOIN userdata.material_price_calculation_v2 v2 USING (calculation_code, dt_valid_from)
+  JOIN userdata.material_price_calculation_v2 v2
+    USING (calculation_code, dt_valid_from)
+  WHERE ABS(COALESCE(v1.average_weighted_stock_price_rule2_prev_date_amount,0)
+          - COALESCE(v2.average_weighted_stock_price_rule2_prev_date_amount,0)) > 1e-9
+),
+ck AS (
+  SELECT d.*,
+         EXISTS (
+           SELECT 1
+           FROM userdata.ckmlcr_ral c
+           WHERE c.untper='000' AND c.curtp='10'
+             AND (c.kalnr)::text = d.calculation_code
+             -- dt_posting_next = 1-е число месяца 'после' (bdatj,poper)
+             AND to_date(c.bdatj||substr(c.poper,2,2)||'01','YYYYMMDD') = d.dt_valid_from
+         ) AS has_next_month_row
+  FROM diff d
 )
 SELECT
-  COUNT(*) FILTER (WHERE d > 1e-12) AS n_d12,
-  COUNT(*) FILTER (WHERE d > 1e-9 ) AS n_d9,
-  COUNT(*) FILTER (WHERE d > 1e-6 ) AS n_d6,
-  COUNT(*) FILTER (WHERE d > 1e-3 ) AS n_d3
-FROM j;
-
-результат 
-0	0	0	0
+  COUNT(*)                                   AS diffs_total,
+  COUNT(*) FILTER (WHERE NOT has_next_month_row) AS diffs_caused_by_gap
+FROM ck;
 
 
-WITH d AS (
-  SELECT v1.calculation_code, v1.dt_valid_from,
-         v1.standard_price_amount AS a1, v2.standard_price_amount AS a2,
-         v1.price_unit_code       AS peinh1, v2.price_unit_code       AS peinh2,
-         v1.price_valuation_type_code AS vprsv1, v2.price_valuation_type_code AS vprsv2,
-         v1.price_rule_code AS rule1, v2.price_rule_code AS rule2
-  FROM userdata.material_price_calculation v1
-  JOIN userdata.material_price_calculation_v2 v2 USING (calculation_code, dt_valid_from)
-),
-x AS (
-  SELECT *,
-         (a1 IS NULL) AS s_null1, (a2 IS NULL) AS s_null2,
-         (peinh1 IS DISTINCT FROM peinh2) AS diff_peinh,
-         (vprsv1 IS DISTINCT FROM vprsv2) AS diff_vprsv,
-         (rule1  IS DISTINCT FROM rule2 ) AS diff_rule,
-         ABS(COALESCE(a1,0) - COALESCE(a2,0)) AS delta
-  FROM d
-)
-SELECT scenario, COUNT(*) AS n_rows, SUM((delta>1e-9)::int) AS n_diff
-FROM (
-  SELECT CASE
-           WHEN diff_peinh THEN 'A) разные price_unit_code'
-           WHEN diff_vprsv THEN 'B) разные valuation_type'
-           WHEN diff_rule  THEN 'C) разные rule_code'
-           WHEN s_null1 OR s_null2 THEN 'D) NULL против значения'
-           ELSE 'E) одинаковые входы, разный результат'
-         END AS scenario,
-         delta
-  FROM x
-) t
-GROUP BY scenario
-ORDER BY n_diff DESC, n_rows DESC;
+Если доля diffs_caused_by_gap большая — причина подтверждена: пропуски месяцев.
 
-результат
-E) одинаковые входы, разный результат	87060569	0
-D) NULL против значения	12	0
+Что делать дальше (два варианта — выбери бизнес-логику)
 
+Строго календарно, как в v2 (быстрее).
+Оставляешь, как есть: r2_prev считается только от следующего календарного месяца. Если периода нет — 0. Это устойчиво и быстро.
 
-WITH s AS (
-  SELECT calculation_code, dt_valid_from,
-         average_weighted_stock_price_rule2_prev_date_amount AS r_prev,
-         average_weighted_stock_price_rule2_next_date_amount AS r_next,
-         LAG(average_weighted_stock_price_rule2_prev_date_amount)
-           OVER (PARTITION BY calculation_code ORDER BY dt_valid_from) AS lag_prev,
-         LEAD(average_weighted_stock_price_rule2_next_date_amount)
-           OVER (PARTITION BY calculation_code ORDER BY dt_valid_from) AS lead_next
-  FROM userdata.material_price_calculation
+Как в v1: “следующий доступный период” (совместимость).
+Тогда r2_prev(t) должен брать salk3 минимального будущего периода (не обязательно t+1). Без индексов это можно сделать LATERAL’ом по уже «урезанной» таблице cr_base:
+
+-- cr_base — один проход по CKMLCR (как мы делали)
+WITH cr_base AS (
+  SELECT (kalnr)::text AS kalnr_text,
+         bdatj::text   AS bdatj,
+         poper::text   AS poper,
+         stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3,
+         -- «постинг этого ряда» = 1-е число ЭТОГО месяца
+         to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')::date AS dt_posting
+  FROM userdata.ckmlcr_ral
+  WHERE untper='000' AND curtp='10'
 )
 SELECT
-  COUNT(*) FILTER (WHERE r_prev IS DISTINCT FROM lag_prev) AS prev_mismatch,
-  COUNT(*) FILTER (WHERE r_next IS DISTINCT FROM lead_next) AS next_mismatch
-FROM s;
+  ...
+  /* rule2_prev_date — как в v1: ближайший доступный будущий период */
+  CASE WHEN (p.abkumo + p.umkumo + p.zukumo) <> 0
+       THEN TRUNC(
+              CAST(
+                COALESCE(n_nearest.salk3,0)
+                + COALESCE(m.salk3 + m.estprd + m.mstprd, 0)
+              AS NUMERIC(40,20))
+              / NULLIF((p.abkumo + p.umkumo + p.zukumo),0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_prev_date_amount,
+  ...
+FROM pp p
+LEFT JOIN cr_base c       -- текущий
+  ON c.kalnr_text = p.kalnr_text
+ AND c.bdatj      = p.bdatj
+ AND c.poper      = p.poper
+-- ближайший БУДУЩИЙ период (не обязательно следующий месяц)
+LEFT JOIN LATERAL (
+  SELECT salk3
+  FROM cr_base cb
+  WHERE cb.kalnr_text = p.kalnr_text
+    AND cb.dt_posting > p.dt_valid_from
+  ORDER BY cb.dt_posting
+  LIMIT 1
+) AS n_nearest ON TRUE
+LEFT JOIN mlcd_agg m ...
 
-14282699	10754966
 
-
-WITH canon_v1 AS (
-  SELECT calculation_code, dt_valid_from,
-         ROUND(COALESCE(standard_price_amount,0)::numeric, 12) AS stprs_canon
-  FROM userdata.material_price_calculation
-),
-canon_v2 AS (
-  SELECT calculation_code, dt_valid_from,
-         ROUND(COALESCE(standard_price_amount,0)::numeric, 12) AS stprs_canon
-  FROM userdata.material_price_calculation_v2
-)
-SELECT COUNT(*) FILTER (WHERE ABS(v1.stprs_canon - v2.stprs_canon) > 1e-9) AS n_diff_canon
-FROM canon_v1 v1 JOIN canon_v2 v2 USING (calculation_code, dt_valid_from);
-
-результт 
-0
+Это на 100% повторит «LEAD по существующим датам» из v1, и цифры сойдутся. Минус — немного тяжелее, чем строгий календарный join.

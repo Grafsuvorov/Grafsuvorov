@@ -1,5 +1,119 @@
-SQL Error [42703]: ERROR: column pp_src.umkumo does not exist
-  Позиция: 3295
+INSERT INTO userdata.material_price_calculation
+WITH
+pp AS (                         -- базовый PP: 1 строка на (kalnr,bdatj,poper)
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')        AS dt_valid_from,
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_next_cal,
+    -- ВАЖНО: эти 4 поля нужны ниже в формулах
+    umkumo,
+    abkumo,
+    zukumo,
+    lbkum
+  FROM userdata.ckmlpp_ral
+  WHERE untper='000'
+),
+pp_next_cal AS (
+  SELECT p1.kalnr_text, p1.dt_valid_from,
+         p2.dt_valid_from AS dt_next_found
+  FROM pp p1
+  LEFT JOIN pp p2
+    ON p2.kalnr_text   = p1.kalnr_text
+   AND p2.dt_valid_from = p1.dt_next_cal
+),
+pp_next_fallback AS (
+  SELECT p1.kalnr_text, p1.dt_valid_from,
+         MIN(p2.dt_valid_from) AS dt_next_found
+  FROM pp p1
+  JOIN pp p2
+    ON p2.kalnr_text   = p1.kalnr_text
+   AND p2.dt_valid_from > p1.dt_valid_from
+  GROUP BY p1.kalnr_text, p1.dt_valid_from
+),
+pp_ranges AS (
+  SELECT
+    p.kalnr_text, p.bdatj, p.poper, p.dt_valid_from,
+    p.umkumo, p.abkumo, p.zukumo, p.lbkum,
+    COALESCE(nc.dt_next_found, nf.dt_next_found, DATE '2299-12-31') - INTERVAL '1 day' AS dt_valid_to
+  FROM pp p
+  LEFT JOIN pp_next_cal      nc ON nc.kalnr_text = p.kalnr_text AND nc.dt_valid_from = p.dt_valid_from
+  LEFT JOIN pp_next_fallback nf ON nf.kalnr_text = p.kalnr_text AND nf.dt_valid_from = p.dt_valid_from
+),
+cr AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')                         AS dt_start,
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_next,
+    stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3
+  FROM userdata.ckmlcr_ral
+  WHERE untper='000' AND curtp='10'
+),
+mlcd_agg AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+  FROM userdata.mlcd_ral
+  WHERE curtp='10' AND categ IN ('ZU','VP','PC')
+  GROUP BY 1,2,3
+)
+SELECT
+  r.kalnr_text                        AS calculation_code,
+  r.dt_valid_from,
+  r.dt_valid_to::date                 AS dt_valid_to,
+  c_curr.vprsv                        AS price_valuation_type_code,
+  c_curr.stprs                        AS standard_price_amount,
+  c_curr.peinh                        AS price_unit_code,
+  c_curr.pvprs                        AS moving_average_price_amount,
 
+  /* rule3 */
+  CASE WHEN (r.umkumo + r.abkumo + r.zukumo)=0 THEN 0
+       ELSE TRUNC(
+              CAST(ROUND(
+                    (c_curr.stprs / NULLIF(c_curr.peinh,0)) * (r.umkumo + r.abkumo)
+                  + c_curr.abprd_o + c_curr.abprd_mo
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
+              ,2) AS NUMERIC(40,20))
+              / NULLIF((r.umkumo + r.abkumo + r.zukumo),0), 15)
+  END AS average_weighted_stock_price_rule3_amount,
 
-Позиция ошибки: line: 1282 pos: 3294
+  /* rule2_prev_date — как в старом алгоритме */
+  CASE WHEN (r.abkumo + r.umkumo + r.zukumo)<>0
+       THEN TRUNC(
+              CAST(
+                COALESCE(c_prev.salk3,0)
+                + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
+              AS NUMERIC(40,20))
+              / NULLIF((r.abkumo + r.umkumo + r.zukumo),0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_prev_date_amount,
+
+  /* rule2_next_date */
+  CASE WHEN r.lbkum<>0
+       THEN TRUNC(CAST(c_curr.salk3 AS NUMERIC(40,20)) / NULLIF(r.lbkum,0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_next_date_amount,
+
+  h.price_rule_code
+FROM pp_ranges r
+LEFT JOIN cr c_curr
+  ON  c_curr.kalnr_text = r.kalnr_text
+  AND c_curr.bdatj      = r.bdatj
+  AND c_curr.poper      = r.poper
+LEFT JOIN cr c_prev
+  ON  c_prev.kalnr_text = r.kalnr_text
+  AND c_prev.dt_next    = r.dt_valid_from
+LEFT JOIN mlcd_agg m
+  ON  m.kalnr_text = r.kalnr_text
+  AND m.bdatj      = r.bdatj
+  AND m.poper      = r.poper
+LEFT JOIN dds.material_ledger_header h
+  ON  h.calculation_code = r.kalnr_text
+;

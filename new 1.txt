@@ -1,82 +1,158 @@
-Посчитаем, сколько расхождений по rule2_prev объясняются отсутствием строки в CKMLCR на дату «1-е число следующего месяца» (т.е. дыркой в периодах):
 
-WITH diff AS (
-  SELECT v1.calculation_code, v1.dt_valid_from,
-         v1.average_weighted_stock_price_rule2_prev_date_amount AS r1,
-         v2.average_weighted_stock_price_rule2_prev_date_amount AS r2
-  FROM userdata.material_price_calculation v1
-  JOIN userdata.material_price_calculation_v2 v2
-    USING (calculation_code, dt_valid_from)
-  WHERE ABS(COALESCE(v1.average_weighted_stock_price_rule2_prev_date_amount,0)
-          - COALESCE(v2.average_weighted_stock_price_rule2_prev_date_amount,0)) > 1e-9
+новый оптимизированный
+insert into  userdata.material_price_calculation
+WITH
+pp AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')        AS dt_valid_from,
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')
+      + INTERVAL '1 month' - INTERVAL '1 day')::date          AS dt_valid_to,
+    umkumo, abkumo, zukumo, lbkum
+  FROM userdata.ckmlpp_ral
+  WHERE untper='000'
 ),
-ck AS (
-  SELECT d.*,
-         EXISTS (
-           SELECT 1
-           FROM userdata.ckmlcr_ral c
-           WHERE c.untper='000' AND c.curtp='10'
-             AND (c.kalnr)::text = d.calculation_code
-             -- dt_posting_next = 1-е число месяца 'после' (bdatj,poper)
-             AND to_date(c.bdatj||substr(c.poper,2,2)||'01','YYYYMMDD') = d.dt_valid_from
-         ) AS has_next_month_row
-  FROM diff d
-)
-SELECT
-  COUNT(*)                                   AS diffs_total,
-  COUNT(*) FILTER (WHERE NOT has_next_month_row) AS diffs_caused_by_gap
-FROM ck;
 
-
-Если доля diffs_caused_by_gap большая — причина подтверждена: пропуски месяцев.
-
-Что делать дальше (два варианта — выбери бизнес-логику)
-
-Строго календарно, как в v2 (быстрее).
-Оставляешь, как есть: r2_prev считается только от следующего календарного месяца. Если периода нет — 0. Это устойчиво и быстро.
-
-Как в v1: “следующий доступный период” (совместимость).
-Тогда r2_prev(t) должен брать salk3 минимального будущего периода (не обязательно t+1). Без индексов это можно сделать LATERAL’ом по уже «урезанной» таблице cr_base:
-
--- cr_base — один проход по CKMLCR (как мы делали)
-WITH cr_base AS (
-  SELECT (kalnr)::text AS kalnr_text,
-         bdatj::text   AS bdatj,
-         poper::text   AS poper,
-         stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3,
-         -- «постинг этого ряда» = 1-е число ЭТОГО месяца
-         to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')::date AS dt_posting
+cr AS (  -- ЕДИНСТВЕННЫЙ проход по CKMLCR
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') AS dt_start,   -- 1-е число текущего месяца
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_next, -- 1-е след. месяца
+    stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3
   FROM userdata.ckmlcr_ral
   WHERE untper='000' AND curtp='10'
+),
+
+mlcd_agg AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+
+  FROM userdata.mlcd_ral
+  WHERE curtp='10' AND categ IN ('ZU','VP','PC')
+  GROUP BY 1,2,3
 )
+
 SELECT
-  ...
-  /* rule2_prev_date — как в v1: ближайший доступный будущий период */
-  CASE WHEN (p.abkumo + p.umkumo + p.zukumo) <> 0
+  p.kalnr_text                  AS calculation_code,
+  p.dt_valid_from,
+  p.dt_valid_to,
+
+  c_curr.vprsv                  AS price_valuation_type_code,
+  c_curr.stprs                  AS standard_price_amount,
+  c_curr.peinh                  AS price_unit_code,
+  c_curr.pvprs                  AS moving_average_price_amount,
+
+  /* rule3 */
+  CASE WHEN (p.umkumo + p.abkumo + p.zukumo)=0 THEN 0
+       ELSE TRUNC(
+              CAST(ROUND(
+                    (c_curr.stprs / NULLIF(c_curr.peinh,0)) * (p.umkumo + p.abkumo)
+                  + c_curr.abprd_o + c_curr.abprd_mo
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
+              ,2) AS NUMERIC(40,20))
+              / NULLIF((p.umkumo + p.abkumo + p.zukumo),0), 15)
+  END AS average_weighted_stock_price_rule3_amount,
+
+  /* rule2_prev_date: берём salk3 строки, у которой dt_next = dt_valid_from */
+  CASE WHEN (p.abkumo + p.umkumo + p.zukumo)<>0
        THEN TRUNC(
-              CAST(
-                COALESCE(n_nearest.salk3,0)
-                + COALESCE(m.salk3 + m.estprd + m.mstprd, 0)
+              CAST(COALESCE(c_prev.salk3,0)
+                   + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
               AS NUMERIC(40,20))
               / NULLIF((p.abkumo + p.umkumo + p.zukumo),0), 15)
        ELSE 0
   END AS average_weighted_stock_price_rule2_prev_date_amount,
-  ...
+
+  /* rule2_next_date: остаток текущего периода */
+  CASE WHEN p.lbkum<>0
+       THEN TRUNC(CAST(c_curr.salk3 AS NUMERIC(40,20)) / NULLIF(p.lbkum,0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_next_date_amount,
+
+  h.price_rule_code
 FROM pp p
-LEFT JOIN cr_base c       -- текущий
-  ON c.kalnr_text = p.kalnr_text
- AND c.bdatj      = p.bdatj
- AND c.poper      = p.poper
--- ближайший БУДУЩИЙ период (не обязательно следующий месяц)
-LEFT JOIN LATERAL (
-  SELECT salk3
-  FROM cr_base cb
-  WHERE cb.kalnr_text = p.kalnr_text
-    AND cb.dt_posting > p.dt_valid_from
-  ORDER BY cb.dt_posting
-  LIMIT 1
-) AS n_nearest ON TRUE
-LEFT JOIN mlcd_agg m ...
+LEFT JOIN cr c_curr
+  ON  c_curr.kalnr_text = p.kalnr_text
+  AND c_curr.bdatj      = p.bdatj
+  AND c_curr.poper      = p.poper
+LEFT JOIN cr c_prev
+  ON  c_prev.kalnr_text = p.kalnr_text
+  AND c_prev.dt_next    = p.dt_valid_from      -- “предыдущий период” через сдвиг +1 месяц
+LEFT JOIN mlcd_agg m
+  ON  m.kalnr_text = p.kalnr_text
+  AND m.bdatj      = p.bdatj
+  AND m.poper      = p.poper
+LEFT JOIN dds.material_ledger_header h
+  ON  h.calculation_code = p.kalnr_text) a 
+;
 
 
-Это на 100% повторит «LEAD по существующим датам» из v1, и цифры сойдутся. Минус — немного тяжелее, чем строгий календарный join.
+старая версия
+
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+select kalnr, (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, salk3
+from userdata.ckmlcr_ral as ckmlcr_2
+where ckmlcr_2.untper = '000' and ckmlcr_2.curtp = '10')
+distributed by (kalnr);
+
+
+create temporary table mlcd ON COMMIT DROP as (
+select kalnr, bdatj, poper, sum(salk3) as salk3, sum(estprd) as estprd, sum(mstprd) as mstprd 
+from userdata.mlcd_ral where categ in ('ZU', 'VP', 'PC') and curtp = '10' 
+group by kalnr, bdatj, poper)
+distributed by (kalnr);
+
+
+
+insert into userdata.material_price_calculation_v2
+select ckmlpp.kalnr as calculation_code,
+(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date as dt_valid_from,
+case when lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+is null then '22991231'::date
+else lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date) - interval '1 day' 
+end as dt_valid_to,
+ckmlcr.vprsv as price_valuation_type_code, 
+ckmlcr.stprs as standard_price_amount, 
+ckmlcr.peinh as price_unit_code, 
+ckmlcr.pvprs as moving_average_price_amount, 
+case when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0 then 0
+	else trunc(cast(round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+	then trunc(cast(ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case when (ckmlpp.lbkum) <> 0 then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd.price_rule_code as price_rule_code
+from userdata.ckmlpp_ral as ckmlpp
+left join userdata.ckmlcr_ral as ckmlcr 
+on ckmlcr.kalnr = ckmlpp.kalnr and ckmlcr.bdatj = ckmlpp.bdatj and ckmlcr.poper = ckmlpp.poper and ckmlcr.untper = '000' and ckmlcr.curtp = '10'
+left join ckmlcr_2 on ckmlcr_2.kalnr = ckmlpp.kalnr and ckmlcr_2.dt_posting = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date
+left join mlcd on mlcd.kalnr = ckmlpp.kalnr and mlcd.bdatj = ckmlpp.bdatj and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000';
+
+select 'v1',* from userdata.material_price_calculation v1
+where calculation_code='000134239866'
+and dt_valid_from='2025-01-01'
+and dt_valid_to='2025-01-31'
+union all 
+select 'v2',* from userdata.material_price_calculation_v2
+where calculation_code='000134239866'
+?column?, calculation_code, dt_valid_from, dt_valid_to, price_valuation_type_code, standard_price_amount, price_unit_code, moving_average_price_amount, average_weighted_stock_price_rule3_amount, average_weighted_stock_price_rule2_prev_date_amount, average_weighted_stock_price_rule2_next_date_amount, price_rule_code, dttm_inserted, dttm_updated, job_name, deleted_flag
+v1	000134239866	2025-01-01	2025-01-31	S	60000.000	1	0.000	0.00000000000000	0.00000000000000	0.00000000000000	3	2025-10-22 11:00:19.342	2025-10-22 11:00:19.342	airflow	false
+v2	000134239866	2025-01-01	2299-12-31	S	60000.000	1	0.000	0.00000000000000	0.00000000000000	0.00000000000000	3	2025-10-22 11:14:31.919	2025-10-22 11:14:31.919	airflow	false

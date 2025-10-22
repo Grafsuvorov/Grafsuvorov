@@ -1,2 +1,33 @@
-v1	000131258113	2004-08-01	2299-12-30	S
-v2	000131258113	2004-08-01	2299-12-31	S
+WITH
+pp AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') AS dt_valid_from,
+    umkumo, abkumo, zukumo, lbkum
+  FROM userdata.ckmlpp_ral
+  WHERE untper='000'
+),
+pp_ranges AS (
+  SELECT
+    kalnr_text, bdatj, poper, dt_valid_from,
+    umkumo, abkumo, zukumo, lbkum,
+    LEAD(dt_valid_from) OVER (PARTITION BY kalnr_text ORDER BY dt_valid_from) AS next_dt
+  FROM pp
+)
+SELECT
+  r.kalnr_text AS calculation_code,
+  r.dt_valid_from,
+  /* ВАЖНО: минус один день только когда next_dt не NULL */
+  (CASE
+     WHEN r.next_dt IS NULL THEN DATE '2299-12-31'
+     ELSE (r.next_dt - INTERVAL '1 day')::date
+   END) AS dt_valid_to,
+  ...
+FROM pp_ranges r
+LEFT JOIN cr c_curr ...
+LEFT JOIN cr c_prev ...
+LEFT JOIN mlcd_agg m ...
+LEFT JOIN dds.material_ledger_header h ...
+;

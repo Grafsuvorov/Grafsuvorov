@@ -1,3 +1,169 @@
-select * from   userdata.material_price_calculation
+-- точность для числовых полей (можно ужесточить до 1e-9)
+WITH params AS (SELECT 1e-6::numeric AS tol)
+SELECT * FROM params;
+1) Дубликаты ключей в каждой таблице (должно быть 0)
+sql
+Копировать код
+-- v1
+SELECT calculation_code, dt_valid_from, COUNT(*) AS cnt
+FROM userdata.material_price_calculation
+GROUP BY 1,2
+HAVING COUNT(*)>1;
 
-select * from   userdata.material_price_calculation_v2
+-- v2
+SELECT calculation_code, dt_valid_from, COUNT(*) AS cnt
+FROM userdata.material_price_calculation_v2
+GROUP BY 1,2
+HAVING COUNT(*)>1;
+2) Сверка набора ключей (у кого-то ключи лишние/пропали)
+sql
+Копировать код
+-- есть в v1, нет в v2
+SELECT calculation_code, dt_valid_from
+FROM userdata.material_price_calculation
+EXCEPT
+SELECT calculation_code, dt_valid_from
+FROM userdata.material_price_calculation_v2;
+
+-- есть в v2, нет в v1
+SELECT calculation_code, dt_valid_from
+FROM userdata.material_price_calculation_v2
+EXCEPT
+SELECT calculation_code, dt_valid_from
+FROM userdata.material_price_calculation;
+3) Быстрые метрики: строки и ключи
+sql
+Копировать код
+SELECT 'v1 rows' AS m, COUNT(*) FROM userdata.material_price_calculation
+UNION ALL
+SELECT 'v2 rows', COUNT(*) FROM userdata.material_price_calculation_v2
+UNION ALL
+SELECT 'v1 distinct keys', COUNT(*) FROM (
+  SELECT DISTINCT calculation_code, dt_valid_from
+  FROM userdata.material_price_calculation) t
+UNION ALL
+SELECT 'v2 distinct keys', COUNT(*) FROM (
+  SELECT DISTINCT calculation_code, dt_valid_from
+  FROM userdata.material_price_calculation_v2) t;
+4) Детальная сверка по значениям (с толерансом для numerics)
+Подставь фактические имена столбцов из обеих таблиц (я взял из твоего расчёта).
+Если каких-то полей нет — убери их из блока.
+
+sql
+Копировать код
+WITH params AS (SELECT 1e-6::numeric AS tol),
+j AS (
+  SELECT
+    v1.calculation_code,
+    v1.dt_valid_from,
+    -- сравнение числовых полей
+    (ABS(COALESCE(v1.standard_price_amount,0) - COALESCE(v2.standard_price_amount,0)) > p.tol) AS diff_standard_price_amount,
+    (ABS(COALESCE(v1.price_unit_code::numeric,0) - COALESCE(v2.price_unit_code::numeric,0)) > p.tol) AS diff_price_unit_code, -- если числовой код; если текст — см. ниже
+    (ABS(COALESCE(v1.moving_average_price_amount,0) - COALESCE(v2.moving_average_price_amount,0)) > p.tol) AS diff_moving_average_price_amount,
+    (ABS(COALESCE(v1.average_weighted_stock_price_rule3_amount,0) - COALESCE(v2.average_weighted_stock_price_rule3_amount,0)) > p.tol) AS diff_rule3,
+    (ABS(COALESCE(v1.average_weighted_stock_price_rule2_prev_date_amount,0) - COALESCE(v2.average_weighted_stock_price_rule2_prev_date_amount,0)) > p.tol) AS diff_rule2_prev,
+    (ABS(COALESCE(v1.average_weighted_stock_price_rule2_next_date_amount,0) - COALESCE(v2.average_weighted_stock_price_rule2_next_date_amount,0)) > p.tol) AS diff_rule2_next,
+    -- сравнение текстовых полей (нормализуем NULL -> '')
+    (COALESCE(v1.price_valuation_type_code,'') <> COALESCE(v2.price_valuation_type_code,'')) AS diff_price_valuation_type_code,
+    (COALESCE(v1.price_rule_code,'') <> COALESCE(v2.price_rule_code,'')) AS diff_price_rule_code
+  FROM userdata.material_price_calculation       v1
+  JOIN userdata.material_price_calculation_v2    v2
+    ON v1.calculation_code = v2.calculation_code
+   AND v1.dt_valid_from    = v2.dt_valid_from
+  CROSS JOIN params p
+)
+SELECT
+  SUM((diff_standard_price_amount)::int)                   AS n_diff_standard_price_amount,
+  SUM((diff_price_unit_code)::int)                         AS n_diff_price_unit_code,
+  SUM((diff_moving_average_price_amount)::int)             AS n_diff_moving_avg,
+  SUM((diff_rule3)::int)                                   AS n_diff_rule3,
+  SUM((diff_rule2_prev)::int)                              AS n_diff_rule2_prev,
+  SUM((diff_rule2_next)::int)                              AS n_diff_rule2_next,
+  SUM((diff_price_valuation_type_code)::int)               AS n_diff_price_valuation_type_code,
+  SUM((diff_price_rule_code)::int)                         AS n_diff_price_rule_code,
+  COUNT(*)                                                 AS matched_keys
+FROM j;
+5) Выгрузка примеров расхождений (топ-N строк)
+sql
+Копировать код
+WITH params AS (SELECT 1e-6::numeric AS tol)
+SELECT
+  v1.calculation_code, v1.dt_valid_from,
+  v1.standard_price_amount AS v1_stprs, v2.standard_price_amount AS v2_stprs,
+  v1.price_unit_code       AS v1_peinh, v2.price_unit_code       AS v2_peinh,
+  v1.moving_average_price_amount AS v1_pvprs, v2.moving_average_price_amount AS v2_pvprs,
+  v1.average_weighted_stock_price_rule3_amount AS v1_rule3,
+  v2.average_weighted_stock_price_rule3_amount AS v2_rule3,
+  v1.average_weighted_stock_price_rule2_prev_date_amount AS v1_rule2_prev,
+  v2.average_weighted_stock_price_rule2_prev_date_amount AS v2_rule2_prev,
+  v1.average_weighted_stock_price_rule2_next_date_amount AS v1_rule2_next,
+  v2.average_weighted_stock_price_rule2_next_date_amount AS v2_rule2_next,
+  v1.price_valuation_type_code AS v1_vprsv, v2.price_valuation_type_code AS v2_vprsv,
+  v1.price_rule_code AS v1_rule, v2.price_rule_code AS v2_rule
+FROM userdata.material_price_calculation    v1
+JOIN userdata.material_price_calculation_v2 v2
+  ON v1.calculation_code = v2.calculation_code
+ AND v1.dt_valid_from    = v2.dt_valid_from
+CROSS JOIN (SELECT 1e-6::numeric AS tol) p
+WHERE
+    ABS(COALESCE(v1.standard_price_amount,0) - COALESCE(v2.standard_price_amount,0)) > p.tol
+ OR ABS(COALESCE(v1.price_unit_code::numeric,0) - COALESCE(v2.price_unit_code::numeric,0)) > p.tol
+ OR ABS(COALESCE(v1.moving_average_price_amount,0) - COALESCE(v2.moving_average_price_amount,0)) > p.tol
+ OR ABS(COALESCE(v1.average_weighted_stock_price_rule3_amount,0) - COALESCE(v2.average_weighted_stock_price_rule3_amount,0)) > p.tol
+ OR ABS(COALESCE(v1.average_weighted_stock_price_rule2_prev_date_amount,0) - COALESCE(v2.average_weighted_stock_price_rule2_prev_date_amount,0)) > p.tol
+ OR ABS(COALESCE(v1.average_weighted_stock_price_rule2_next_date_amount,0) - COALESCE(v2.average_weighted_stock_price_rule2_next_date_amount,0)) > p.tol
+ OR COALESCE(v1.price_valuation_type_code,'') <> COALESCE(v2.price_valuation_type_code,'')
+ OR COALESCE(v1.price_rule_code,'') <> COALESCE(v2.price_rule_code,'')
+LIMIT 200;
+6) Полная «контрольная сумма» строк (нормализуем NULL и округляем численные колонки)
+Это быстрый способ убедиться, что таблицы идентичны «побайтно» по списку полей.
+
+sql
+Копировать код
+-- сформируй одинаковый набор и порядок полей!
+WITH norm_v1 AS (
+  SELECT calculation_code, dt_valid_from,
+         COALESCE(price_valuation_type_code,'') AS vprsv,
+         COALESCE(price_rule_code,'')          AS rule_code,
+         ROUND(COALESCE(standard_price_amount,0), 6)                AS stprs,
+         ROUND(COALESCE(price_unit_code::numeric,0), 6)             AS peinh_num,
+         ROUND(COALESCE(moving_average_price_amount,0), 6)          AS pvprs,
+         ROUND(COALESCE(average_weighted_stock_price_rule3_amount,0), 6) AS rule3,
+         ROUND(COALESCE(average_weighted_stock_price_rule2_prev_date_amount,0), 6) AS rule2_prev,
+         ROUND(COALESCE(average_weighted_stock_price_rule2_next_date_amount,0), 6) AS rule2_next
+  FROM userdata.material_price_calculation
+), norm_v2 AS (
+  SELECT calculation_code, dt_valid_from,
+         COALESCE(price_valuation_type_code,'') AS vprsv,
+         COALESCE(price_rule_code,'')          AS rule_code,
+         ROUND(COALESCE(standard_price_amount,0), 6)                AS stprs,
+         ROUND(COALESCE(price_unit_code::numeric,0), 6)             AS peinh_num,
+         ROUND(COALESCE(moving_average_price_amount,0), 6)          AS pvprs,
+         ROUND(COALESCE(average_weighted_stock_price_rule3_amount,0), 6) AS rule3,
+         ROUND(COALESCE(average_weighted_stock_price_rule2_prev_date_amount,0), 6) AS rule2_prev,
+         ROUND(COALESCE(average_weighted_stock_price_rule2_next_date_amount,0), 6) AS rule2_next
+  FROM userdata.material_price_calculation_v2
+),
+h1 AS (
+  SELECT calculation_code, dt_valid_from,
+         md5(concat_ws('|', vprsv, rule_code, stprs, peinh_num, pvprs, rule3, rule2_prev, rule2_next)) AS row_hash
+  FROM norm_v1
+),
+h2 AS (
+  SELECT calculation_code, dt_valid_from,
+         md5(concat_ws('|', vprsv, rule_code, stprs, peinh_num, pvprs, rule3, rule2_prev, rule2_next)) AS row_hash
+  FROM norm_v2
+)
+-- симметрическая разность по хешам (если пусто — всё совпало)
+SELECT 'in_v1_not_in_v2' AS where_, * FROM (
+  SELECT h1.calculation_code, h1.dt_valid_from
+  FROM h1 LEFT JOIN h2 USING (calculation_code, dt_valid_from)
+  WHERE h2.row_hash IS NULL OR h2.row_hash <> h1.row_hash
+) q1
+UNION ALL
+SELECT 'in_v2_not_in_v1', * FROM (
+  SELECT h2.calculation_code, h2.dt_valid_from
+  FROM h2 LEFT JOIN h1 USING (calculation_code, dt_valid_from)
+  WHERE h1.row_hash IS NULL OR h1.row_hash <> h2.row_hash
+) q2
+LIMIT 200;

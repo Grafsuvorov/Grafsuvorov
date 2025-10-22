@@ -1,150 +1,94 @@
-SET statement_mem = '6GB';
+SET statement_mem='6GB';
 
--- 1) Сворачиваем CKMLPP (как у тебя) -> pp0
-CREATE TEMP TABLE pp0
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
-AS
-SELECT
-  (kalnr)::text AS kalnr_text,
-  bdatj::text   AS bdatj,
-  poper::text   AS poper,
-  to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') AS dt_valid_from,
-  SUM(umkumo) AS umkumo,
-  SUM(abkumo) AS abkumo,
-  SUM(zukumo) AS zukumo,
-  MAX(lbkum)  AS lbkum
-FROM ods.ckmlpp_ral
-WHERE untper = '000'
-GROUP BY 1,2,3,4
-DISTRIBUTED BY (kalnr_text);
-ANALYZE pp0;
-
--- 2) Только нужные ключи из pp0
-CREATE TEMP TABLE keys AS
-SELECT DISTINCT kalnr_text, bdatj, poper, dt_valid_from
-FROM pp0
-DISTRIBUTED BY (kalnr_text);
-ANALYZE keys;
-
--- 3) Урезаем cr_curr/cr_next/mlcd_agg по keys (без индексов)
-CREATE TEMP TABLE cr_curr_cut
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=5)
-AS
-SELECT c.*
-FROM ods.ckmlcr_ral c
-JOIN keys k
-  ON (c.kalnr)::text = k.kalnr_text
- AND c.bdatj::text   = k.bdatj
- AND c.poper::text   = k.poper
-WHERE c.untper='000' AND c.curtp='10'
-DISTRIBUTED BY (kalnr_text);
-ANALYZE cr_curr_cut;
-
-CREATE TEMP TABLE cr_curr AS  -- агрегируем после урезания
-SELECT
-  (kalnr)::text AS kalnr_text,
-  bdatj::text   AS bdatj,
-  poper::text   AS poper,
-  MAX(stprs)    AS stprs,
-  MAX(peinh)    AS peinh,
-  MAX(pvprs)    AS pvprs,
-  MAX(abprd_o)  AS abprd_o,
-  MAX(abprd_mo) AS abprd_mo,
-  MAX(vprsv)    AS vprsv,
-  MAX(salk3)    AS salk3
-FROM cr_curr_cut
-GROUP BY 1,2,3
-DISTRIBUTED BY (kalnr_text);
-ANALYZE cr_curr;
-
-CREATE TEMP TABLE cr_next AS
-SELECT
-  (kalnr)::text AS kalnr_text,
-  (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_posting,
-  MAX(salk3) AS salk3
-FROM ods.ckmlcr_ral
-JOIN (SELECT DISTINCT kalnr_text, dt_valid_from FROM keys) k
-  ON (kalnr)::text = k.kalnr_text
-WHERE untper='000' AND curtp='10'
-GROUP BY 1,2
-DISTRIBUTED BY (kalnr_text);
-ANALYZE cr_next;
-
-CREATE TEMP TABLE mlcd_agg AS
-SELECT
-  (m.kalnr)::text AS kalnr_text,
-  m.bdatj::text   AS bdatj,
-  m.poper::text   AS poper,
-  SUM(m.salk3)  AS salk3,
-  SUM(m.estprd) AS estprd,
-  SUM(m.mstprd) AS mstprd
-FROM ods.mlcd_ral m
-JOIN keys k
-  ON (m.kalnr)::text = k.kalnr_text
- AND m.bdatj::text   = k.bdatj
- AND m.poper::text   = k.poper
-WHERE m.curtp='10' AND m.categ IN ('ZU','VP','PC')
-GROUP BY 1,2,3
-DISTRIBUTED BY (kalnr_text);
-ANALYZE mlcd_agg;
-
--- 4) ranges БЕЗ окон: «месяц вперёд минус 1 день»
-WITH ranges AS (
+WITH
+pp AS (
   SELECT
-    kalnr_text,
-    dt_valid_from,
-    (dt_valid_from + INTERVAL '1 month' - INTERVAL '1 day')::date AS dt_valid_to
-  FROM (SELECT DISTINCT kalnr_text, dt_valid_from FROM keys) d
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')        AS dt_valid_from,
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')
+      + INTERVAL '1 month' - INTERVAL '1 day')::date          AS dt_valid_to,
+    umkumo, abkumo, zukumo, lbkum
+  FROM userdata.ckmlpp_ral
+  WHERE untper='000'
+),
+
+cr AS (  -- ЕДИНСТВЕННЫЙ проход по CKMLCR
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') AS dt_start,   -- 1-е число текущего месяца
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_next, -- 1-е след. месяца
+    stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3
+  FROM userdata.ckmlcr_ral
+  WHERE untper='000' AND curtp='10'
+),
+
+mlcd_agg AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
+  FROM userdata.mlcd_ral
+  WHERE curtp='10' AND categ IN ('ZU','VP','PC')
+  GROUP BY 1,2,3
 )
 
 SELECT
-  r.kalnr_text AS calculation_code,
-  r.dt_valid_from,
-  r.dt_valid_to,
-  cr_curr.vprsv AS price_valuation_type_code,
-  cr_curr.stprs AS standard_price_amount,
-  cr_curr.peinh AS price_unit_code,
-  cr_curr.pvprs AS moving_average_price_amount,
+  p.kalnr_text                  AS calculation_code,
+  p.dt_valid_from,
+  p.dt_valid_to,
 
-  CASE WHEN (pp0.umkumo + pp0.abkumo + pp0.zukumo)=0 THEN 0
+  c_curr.vprsv                  AS price_valuation_type_code,
+  c_curr.stprs                  AS standard_price_amount,
+  c_curr.peinh                  AS price_unit_code,
+  c_curr.pvprs                  AS moving_average_price_amount,
+
+  /* rule3 */
+  CASE WHEN (p.umkumo + p.abkumo + p.zukumo)=0 THEN 0
        ELSE TRUNC(
               CAST(ROUND(
-                    (cr_curr.stprs / NULLIF(cr_curr.peinh,0)) * (pp0.umkumo + pp0.abkumo)
-                  + cr_curr.abprd_o + cr_curr.abprd_mo
-                  + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd,0)
+                    (c_curr.stprs / NULLIF(c_curr.peinh,0)) * (p.umkumo + p.abkumo)
+                  + c_curr.abprd_o + c_curr.abprd_mo
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
               ,2) AS NUMERIC(40,20))
-              / NULLIF((pp0.umkumo + pp0.abkumo + pp0.zukumo),0), 15)
+              / NULLIF((p.umkumo + p.abkumo + p.zukumo),0), 15)
   END AS average_weighted_stock_price_rule3_amount,
 
-  CASE WHEN (pp0.abkumo + pp0.umkumo + pp0.zukumo)<>0
+  /* rule2_prev_date: берём salk3 строки, у которой dt_next = dt_valid_from */
+  CASE WHEN (p.abkumo + p.umkumo + p.zukumo)<>0
        THEN TRUNC(
-              CAST(cr_next.salk3 + COALESCE(mlcd_agg.salk3 + mlcd_agg.estprd + mlcd_agg.mstprd,0)
+              CAST(COALESCE(c_prev.salk3,0)
+                   + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
               AS NUMERIC(40,20))
-              / NULLIF((pp0.abkumo + pp0.umkumo + pp0.zukumo),0), 15)
+              / NULLIF((p.abkumo + p.umkumo + p.zukumo),0), 15)
        ELSE 0
   END AS average_weighted_stock_price_rule2_prev_date_amount,
 
-  CASE WHEN pp0.lbkum<>0
-       THEN TRUNC(CAST(cr_curr.salk3 AS NUMERIC(40,20)) / NULLIF(pp0.lbkum,0), 15)
+  /* rule2_next_date: остаток текущего периода */
+  CASE WHEN p.lbkum<>0
+       THEN TRUNC(CAST(c_curr.salk3 AS NUMERIC(40,20)) / NULLIF(p.lbkum,0), 15)
        ELSE 0
   END AS average_weighted_stock_price_rule2_next_date_amount,
 
-  ckmlhd.price_rule_code
-FROM ranges r
-JOIN pp0
-  ON pp0.kalnr_text    = r.kalnr_text
- AND pp0.dt_valid_from = r.dt_valid_from
-LEFT JOIN cr_curr
-  ON cr_curr.kalnr_text = pp0.kalnr_text
- AND cr_curr.bdatj      = pp0.bdatj
- AND cr_curr.poper      = pp0.poper
-LEFT JOIN cr_next
-  ON cr_next.kalnr_text = pp0.kalnr_text
- AND cr_next.dt_posting = pp0.dt_valid_from
-LEFT JOIN mlcd_agg
-  ON mlcd_agg.kalnr_text = pp0.kalnr_text
- AND mlcd_agg.bdatj      = pp0.bdatj
- AND mlcd_agg.poper      = pp0.poper
-LEFT JOIN dds.material_ledger_header ckmlhd
-  ON ckmlhd.calculation_code = pp0.kalnr_text
+  h.price_rule_code
+FROM pp p
+LEFT JOIN cr c_curr
+  ON  c_curr.kalnr_text = p.kalnr_text
+  AND c_curr.bdatj      = p.bdatj
+  AND c_curr.poper      = p.poper
+LEFT JOIN cr c_prev
+  ON  c_prev.kalnr_text = p.kalnr_text
+  AND c_prev.dt_next    = p.dt_valid_from      -- “предыдущий период” через сдвиг +1 месяц
+LEFT JOIN mlcd_agg m
+  ON  m.kalnr_text = p.kalnr_text
+  AND m.bdatj      = p.bdatj
+  AND m.poper      = p.poper
+LEFT JOIN dds.material_ledger_header h
+  ON  h.calculation_code = p.kalnr_text
 ;

@@ -1,1144 +1,784 @@
--- =====================================================================
--- 0) Целевая таблица (как у тебя)
--- =====================================================================
-
-DROP TABLE IF EXISTS dm_calc.storage_sales_bundles_weight;
-
-CREATE TABLE IF NOT EXISTS dm_calc.storage_sales_bundles_weight (
-  sales_bundle_code varchar(10) null,
-  plant_producer_delivery_code varchar(30) null,
-  plant_producer_delivery_position_code varchar(18) null,
-  initial_delivery_code varchar(30) null,
-  material_code varchar(54) null,
-  dt_shipment date null,
-  railcar_code varchar(60) null,
-  transport_bill_code varchar(105) null,
-  uni varchar(180) null,
-  material_shape_code varchar(9) null,
-  dt_arrival_to_russian_port date null,
-  dt_storage_end_in_release date null,
-  transport_type_code varchar(12) null,
-  etsng_code varchar(10) null,
-  dt_report date null,
-  sales_bundle_net_weight numeric(15, 3) null,
-  sales_bundle_gross_weight numeric(15, 3) null,
-  batch_code varchar(30) null,
-  dt_arrival date null,
-  receiving_plant_code varchar(4) null,
-  sales_delivery_code varchar(30) null,
-  transportation_inbound_delivery_code varchar(10) null,
-  delivery_for_storage_calculation_code varchar(30) null,
-  transportation_inbound_delivery_position_code varchar(6) null,
-  delivery_position_for_storage_calculation_code varchar(6) null,
-  forwarder_code varchar(10) null,
-  storage_cost_calculation_type_name varchar(20) null,
-  transport_departure_hub_code varchar(10) null,
-  transport_destination_hub_code varchar(10) null,
-  transportation_outbound_delivery_code varchar(10) null,
-  transportation_outbound_delivery_position_code varchar(6) null,
-  is_final_transportation_stage_code varchar(1) null,
-  transportation_stage_code varchar(2) null,
-  storage_calculation_bundle_quantity int8 null,
-  warehouse_code varchar(10) null,
-  is_stored_in_russian_port_code varchar(1) null,
-  delivery_in_final_release_code varchar(30) null,
-  dt_final_release date null,
-  bill_of_lading_code varchar(30) null,
-  bill_of_lading_number varchar(90) null,
-  dt_bill_of_lading date null,
-  incoterms_code varchar(9) null,
-  storage_cost_special_calculation_type_code varchar(1) null,
-  warehouse_storage_area_code varchar(10) null,
-  plant_code varchar(4) null,
-  unit_balance_code varchar(4) null,
-  creditor_in_shipment_instruction_code varchar(10) null,
-  dt_storage_start date null,
-  dt_shipped_from_warehouse date null,
-  dt_storage_end date null,
-  storage_duration_total_calendar_days int4 null,
-  shipment_instruction_number varchar(30) null,
-  dt_for_price_search_in_purchase_contract date null,
-  port_of_discharge_code varchar(30) null,
-  service_number text null,
-  weight_for_1090_umno numeric null,
-  weight_for_1090_razdel numeric null,
-  remote_warehouse_code varchar(10) null,
-  dt_transportation_stage_start_p date null,
-  dt_transportation_stage_start_r date null,
-  rn varchar(36) null,
-  dttm_inserted timestamp not null default now(),
-  dttm_updated timestamp not null default now(),
-  job_name varchar(60) not null default 'airflow'::character varying,
-  deleted_flag bool not null default false
+create temporary table lake-- on commit drop 
+as ( -- данные из озера данных. Для джойна с t4 берутся данные 4798 (dds.sales_bundle_and_delivery_relationship)
+	select
+		ssms.delivery_number_sales, --продажная поставка
+		ssms.delivery_number_of_producer_plant as SD_000003,
+		ssms.delivery_item_of_plant as SD_000110,
+		ssms.delivery_number_initial as SD_000001,
+		ssms.material_code as SD_000143,
+		ssms.dt_shipment as SD_000010,
+		ssms.railcar as SD_000013,
+		ssms.transport_bill as SD_000014,
+		ssms.uni as SD_000151,
+		ssms.port_of_discharge_in_foreign_port_code as SD_000054,
+		ssms.port_of_loading_code as SD_000649,
+		ssms.port_of_discharge_code as SD_000044,
+		ssms.transport_railcar_type_code as SD_000028,
+		ssms.bill_of_lading_group_code as SD_000040,
+		ssms.bill_of_lading_number as SD_000041,
+		ssms.dt_bill_of_lading as SD_000042,
+		ssms.dt_final_release as SD_000482,
+		ssms.batch as SD_000004, -- SD.000737 Маша сказала брать партию из озера
+		ssms.delivery_basis as SD_000067,
+		ssms.bill_of_lading_group_code_in_foreign_port as SD_000047,
+		ssms.bill_of_lading_in_foreign_port as SD_000048,
+		ssms.dt_bill_of_lading_in_foreign_port as SD_000049,
+		ssms.dt_warehouse as SD_000024,
+		sd4798.sales_bundle_code, -- id_him
+		row_number() over(partition by sd4798.sales_bundle_code order by source_system_position_code desc) as rn
+	from dm_calc.sd_sales_main_scm as ssms
+	join dds.sales_bundle_and_delivery_relationship as sd4798
+		on ssms.delivery_number_sales = sd4798.delivery_code
 )
-WITH (
-  appendonly = true,
-  orientation = column,
-  compresstype = zstd,
-  compresslevel = 3
+distributed by (sales_bundle_code);
+
+
+create temporary table adrc --on commit drop 
+as ( -- убираются дубли для поля склада
+select
+	address_code,
+	min(country_code) as country_code
+from
+	dict_dds.address
+group by
+	address_code
+	)
+distributed replicated;
+
+create temporary table asia --on commit drop 
+as ( -- Убираются дубли для поля LE.001064 (логика в зависимости от региона) Для логики Азия
+select
+	counterparty_code
+	from
+	dict_dds.transportation_storage_calculation_method
+group by
+	counterparty_code)
+distributed replicated;
+
+
+create temporary table euro_1 --on commit drop
+as ( -- Убираются дубли для поля LE.001064 (логика в зависимости от региона) Для логики Европа
+select
+	counterparty_code
+from
+	dict_dds.transportation_storage_calculation_method
+where
+	service_code like 'EU%'
+group by
+	counterparty_code)
+distributed replicated;
+
+create temporary table euro_2 --on commit drop 
+as ( -- Убираются дубли для поля LE.001064 (логика в зависимости от региона) Для логики Европа
+select
+	counterparty_code
+from
+	dict_dds.transportation_storage_calculation_method
+group by
+	counterparty_code)
+distributed replicated;
+
+
+create temporary table euro_log --on commit drop
+as ( -- Таблица для поля LE.001064 (логика в зависимости от региона) Для логики Европа. Тут хранятся значения настроечного параметра
+select
+	range_low_value
+from
+	dict_dds.settings_and_parameters_sap
+where
+	abap_program_code ilike '/RUSAL/ZLE112m'
+	and case_code = 'PERET_FRN'
+	and parameter_code = 'S_LIFNRA'
+	and range_low_value is not null
+group by
+	range_low_value)
+distributed replicated;
+
+create temporary table svh-- on commit drop
+as ( -- Убираются дубли для поля LE.001064 (логика в зависимости от региона) Для логики СВХ. Сейчас нет дублей, но на всякий
+select
+	counterparty_code
+from
+	dict_dds.transportation_general_calculation_method
+where
+	general_calculation_method_code in ('16', '04')
+group by
+	counterparty_code)
+distributed replicated;
+
+create temporary table asia_log --on commit drop
+as ( -- Таблица для поля LE.001064 (логика в зависимости от региона) Для логики Азия. Тут хранятся значения настроечного параметра
+select
+	range_low_value
+from
+	dict_dds.settings_and_parameters_sap
+where
+	abap_program_code ilike '/RUSAL/ZLE112m'
+	and case_code = 'PERET_FRN'
+	and parameter_code = 'LIFNR_FR'
+	and range_low_value is not null
+group by
+	range_low_value)
+distributed replicated;
+
+create temporary table for_LE_001035 --on commit drop 
+as ( -- в таблице считается количество пакетов в поставке хранения для поля LE.001035
+select
+	delivery_code,
+	batch_code,
+	count(*) as cnt
+from
+	dds.sales_bundle_and_delivery_relationship
+where
+	is_deleted_code is null
+group by
+	delivery_code,
+	batch_code)
+distributed by (delivery_code);
+
+create temporary table date_for_vitr --on commit drop 
+as (
+	select
+		dt_balance::date as dt_balance
+	from generate_series(current_date - '1year'::interval, current_date, '1day'::interval) AS t(dt_balance)
+		--generate_series('20241230'::date, '20250131'::date, '1day'::interval) AS t(dt_balance)
 )
-DISTRIBUTED BY (sales_bundle_code);
-
-TRUNCATE TABLE dm_calc.storage_sales_bundles_weight;
-
--- =====================================================================
--- 1) Источники из «озера» и мелкие справочники (реплицируемые)
--- =====================================================================
-
--- 1.1 lake: продажная поставка + код плавки
-CREATE TEMP TABLE lake ON COMMIT DROP AS
-SELECT
-  ssms.delivery_number_sales,                        -- продажная поставка
-  ssms.delivery_number_of_producer_plant AS SD_000003,
-  ssms.delivery_item_of_plant           AS SD_000110,
-  ssms.delivery_number_initial          AS SD_000001,
-  ssms.material_code                    AS SD_000143,
-  ssms.dt_shipment                      AS SD_000010,
-  ssms.railcar                          AS SD_000013,
-  ssms.transport_bill                   AS SD_000014,
-  ssms.uni                              AS SD_000151,
-  ssms.port_of_discharge_in_foreign_port_code AS SD_000054,
-  ssms.port_of_loading_code             AS SD_000649,
-  ssms.port_of_discharge_code           AS SD_000044,
-  ssms.transport_railcar_type_code      AS SD_000028,
-  ssms.bill_of_lading_group_code        AS SD_000040,
-  ssms.bill_of_lading_number            AS SD_000041,
-  ssms.dt_bill_of_lading                AS SD_000042,
-  ssms.dt_final_release                 AS SD_000482,
-  ssms.batch                            AS SD_000004,
-  ssms.delivery_basis                   AS SD_000067,
-  ssms.bill_of_lading_group_code_in_foreign_port AS SD_000047,
-  ssms.bill_of_lading_in_foreign_port           AS SD_000048,
-  ssms.dt_bill_of_lading_in_foreign_port        AS SD_000049,
-  ssms.dt_warehouse                     AS SD_000024,
-  sd4798.sales_bundle_code,
-  ROW_NUMBER() OVER (PARTITION BY sd4798.sales_bundle_code ORDER BY source_system_position_code DESC) AS rn
-FROM dm_calc.sd_sales_main_scm ssms
-JOIN dds.sales_bundle_and_delivery_relationship sd4798
-  ON ssms.delivery_number_sales = sd4798.delivery_code
-DISTRIBUTED BY (sales_bundle_code);
-
--- 1.2 даты отчёта (реплиц)
-CREATE TEMP TABLE date_for_vitr ON COMMIT DROP AS
-SELECT dt_balance::date AS dt_balance
-FROM generate_series(current_date - INTERVAL '1 year', current_date, INTERVAL '1 day') AS t(dt_balance)
-DISTRIBUTED REPLICATED;
-
--- 1.3 мелкие справочники (реплиц)
-CREATE TEMP TABLE asia ON COMMIT DROP AS
-SELECT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-GROUP BY counterparty_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE euro_1 ON COMMIT DROP AS
-SELECT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-WHERE service_code LIKE 'EU%'
-GROUP BY counterparty_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE euro_2 ON COMMIT DROP AS
-SELECT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-GROUP BY counterparty_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE euro_log ON COMMIT DROP AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
-  AND case_code = 'PERET_FRN'
-  AND parameter_code = 'S_LIFNRA'
-  AND range_low_value IS NOT NULL
-GROUP BY range_low_value
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE svh ON COMMIT DROP AS
-SELECT counterparty_code
-FROM dict_dds.transportation_general_calculation_method
-WHERE general_calculation_method_code IN ('16','04')
-GROUP BY counterparty_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE asia_log ON COMMIT DROP AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
-  AND case_code = 'PERET_FRN'
-  AND parameter_code = 'LIFNR_FR'
-  AND range_low_value IS NOT NULL
-GROUP BY range_low_value
-DISTRIBUTED REPLICATED;
-
--- 1.4 утилитные агрегаты
-CREATE TEMP TABLE for_LE_001035 ON COMMIT DROP AS
-SELECT delivery_code, batch_code, COUNT(*) AS cnt
-FROM dds.sales_bundle_and_delivery_relationship
-WHERE is_deleted_code IS NULL
-GROUP BY delivery_code, batch_code
-DISTRIBUTED BY (delivery_code);
-
-CREATE TEMP TABLE dedopo_2 ON COMMIT DROP AS
-SELECT delivery_code, sales_document_code
-FROM dds.delivery_document_position
-WHERE sales_document_code IS NOT NULL
-GROUP BY delivery_code, sales_document_code
-DISTRIBUTED BY (delivery_code);
-
-CREATE TEMP TABLE for_1055 ON COMMIT DROP AS
-SELECT
-  vbss.delivery_code AS vbeln,
-  MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
-FROM dds.logistics_document_and_delivery_relationship vbss
-LEFT JOIN dds.release vbsk
-  ON vbsk.release_code = vbss.logistics_document_code
- AND vbsk.release_type_code = 'X'
-LEFT JOIN dict_dds.settings_and_parameters_sap frel_kod
-  ON vbsk.release_template_code = frel_kod.range_low_value
-WHERE frel_kod.abap_program_code = '/RUSAL/SD2921M'
-  AND frel_kod.parameter_code = 'FREL_KOD'
-  AND frel_kod.range_sign_code = 'I'
-  AND frel_kod.range_option_code = 'EQ'
-  AND vbsk.release_code IS NOT NULL
-  AND vbsk.dt_end_of_free_storage IS NOT NULL
-GROUP BY vbss.delivery_code
-DISTRIBUTED REPLICATED;
-
--- =====================================================================
--- 2) Списки стадий и признаки регионов (реплиц)
--- =====================================================================
-
-CREATE TEMP TABLE stage_eu ON COMMIT DROP AS
-SELECT range_low_value::varchar AS stage_code
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD2973M_2'
-  AND parameter_code = 'STAGE_EU'
-  AND range_low_value IS NOT NULL
-GROUP BY range_low_value
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE stage_as ON COMMIT DROP AS
-SELECT range_low_value::varchar AS stage_code
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD2973M_2'
-  AND parameter_code = 'STAGE_A'
-  AND range_low_value IS NOT NULL
-GROUP BY range_low_value
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE forwapd_1 ON COMMIT DROP AS
-SELECT transport_hub_code, MIN(market_region1_code) AS market_region1_code
-FROM dict_dds.foreign_warehouse_priority_definition
-WHERE market_region1_code IN ('04','03')
-  AND (is_terminal_code IS NOT NULL OR is_foreign_warehouse_code IS NOT NULL OR is_temporary_warehouse_code IS NOT NULL)
-GROUP BY transport_hub_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE forwapd_2 ON COMMIT DROP AS
-SELECT transport_hub_code
-FROM dict_dds.foreign_warehouse_priority_definition
-WHERE is_russian_port_code IS NOT NULL
-GROUP BY transport_hub_code
-DISTRIBUTED REPLICATED;
-
--- =====================================================================
--- 3) Дедуп по сабам (EU/AS) и «лучший поставщик XR>ZU» (реплиц)
--- =====================================================================
-
-CREATE TEMP TABLE sabadr_eu_best ON COMMIT DROP AS
-SELECT *
-FROM (
-  SELECT
-    s.*,
-    ROW_NUMBER() OVER(
-      PARTITION BY s.sales_bundle_code, s.transport_route_destination_hub_code
-      ORDER BY s.dt_transportation_stage_start DESC NULLS LAST, s.delivery_code DESC
-    ) AS rn
-  FROM dds.sales_bundle_and_delivery_relationship s
-  JOIN stage_eu se ON se.stage_code = s.transportation_stage_code
-  WHERE s.is_deleted_code IS NULL
-) q
-WHERE rn = 1
-DISTRIBUTED BY (sales_bundle_code);
-
-CREATE TEMP TABLE sabadr_as_best ON COMMIT DROP AS
-SELECT *
-FROM (
-  SELECT
-    s.*,
-    ROW_NUMBER() OVER(
-      PARTITION BY s.sales_bundle_code, s.transport_route_destination_hub_code
-      ORDER BY s.dt_transportation_stage_start DESC NULLS LAST, s.delivery_code DESC
-    ) AS rn
-  FROM dds.sales_bundle_and_delivery_relationship s
-  JOIN stage_as sa ON sa.stage_code = s.transportation_stage_code
-  WHERE s.is_deleted_code IS NULL
-) q
-WHERE rn = 1
-DISTRIBUTED BY (sales_bundle_code);
-
-CREATE TEMP TABLE supplier_final ON COMMIT DROP AS
-SELECT sales_document_code, supplier_code
-FROM (
-  SELECT
-    sdr.sales_document_code,
-    sdr.supplier_code,
-    ROW_NUMBER() OVER(
-      PARTITION BY sdr.sales_document_code
-      ORDER BY (sdr.counterparty_role_code = 'XR') DESC, sdr.counterparty_role_code
-    ) AS rn
-  FROM dds.sales_document_counterparty_role sdr
-  WHERE sdr.counterparty_role_code IN ('XR','ZU')
-) x
-WHERE rn = 1
-DISTRIBUTED REPLICATED;
-
--- =====================================================================
--- 4) Базовая сборка без фан-аута: base
--- =====================================================================
-
-DROP TABLE IF EXISTS base;
-CREATE TEMP TABLE base ON COMMIT DROP AS
-WITH bounds AS (
-  SELECT (SELECT MIN(dt_balance) FROM date_for_vitr) AS min_dt,
-         (SELECT MAX(dt_balance) FROM date_for_vitr) AS max_dt
-),
-prep AS (
-  SELECT
-    t4.sales_bundle_code,
-    lake.SD_000003 AS plant_producer_delivery_code,
-    lake.SD_000110 AS plant_producer_delivery_position_code,
-    lake.SD_000001 AS initial_delivery_code,
-    lake.SD_000143 AS material_code,
-    lake.SD_000010 AS dt_shipment,
-    lake.SD_000013 AS railcar_code,
-    lake.SD_000014 AS transport_bill_code,
-    lake.SD_000151 AS uni,
-    lake.SD_000028 AS transport_type_code,
-    lake.SD_000004 AS batch_code,
-    lake.SD_000024 AS dt_arrival_rus_port_raw,
-
-    t4.dt_transportation_stage_start_p,
-    t4.dt_transportation_stage_start_r,
-    t4.knote,
-    t4.transportation_inbound_delivery_position_code,
-    t4.transportation_outbound_delivery_position_code,
-    t4.delivery_code_le_p,
-    t4.delivery_code_le_r,
-    lake.delivery_number_sales,
-
-    fw1.market_region1_code,
-    (fw2.transport_hub_code IS NOT NULL)::int AS is_rus_port,
-
-    eu.delivery_code  AS vbeln_eu,
-    asia.delivery_code AS vbeln_as,
-
-    eu.dt_transportation_stage_start   AS sab_eu_dt_start,
-    asia.dt_transportation_stage_start AS sab_as_dt_start,
-
-    CASE
-      WHEN fw1.market_region1_code = '03' AND eu.delivery_code IS NOT NULL  THEN eu.delivery_code
-      WHEN fw1.market_region1_code = '04' AND asia.delivery_code IS NOT NULL THEN asia.delivery_code
-      WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
-    END AS delivery_for_join,
-
-    CASE
-      WHEN fw1.market_region1_code IN ('03','04') AND (eu.delivery_code IS NOT NULL OR asia.delivery_code IS NOT NULL) THEN NULL
-      WHEN fw2.transport_hub_code IS NOT NULL THEN '1'
-    END AS wwgsg_01,
-
-    CASE
-      WHEN fw1.market_region1_code IN ('03','04') AND (eu.delivery_code IS NOT NULL OR asia.delivery_code IS NOT NULL) THEN NULL::date
-      WHEN fw2.transport_hub_code IS NOT NULL THEN vbsk.dt_bill_of_lading
-    END AS wwgsg_01_date,
-
-    sf.supplier_code AS supplier_code_final,
-
-    COALESCE(eu.dt_transportation_stage_start, asia.dt_transportation_stage_start) AS lddat_4798,
-    COALESCE(eu.delivery_code, asia.delivery_code)                                 AS vbeln_4798
-
-  FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-  LEFT JOIN lake ON lake.sales_bundle_code = t4.sales_bundle_code AND lake.rn = 1
-  LEFT JOIN forwapd_1 fw1 ON fw1.transport_hub_code = t4.knote
-  LEFT JOIN forwapd_2 fw2 ON fw2.transport_hub_code = t4.knote
-
-  LEFT JOIN sabadr_eu_best eu
-         ON eu.sales_bundle_code = t4.sales_bundle_code
-        AND eu.transport_route_destination_hub_code = t4.knote
-        AND eu.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p
-                                               AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
-
-  LEFT JOIN sabadr_as_best asia
-         ON asia.sales_bundle_code = t4.sales_bundle_code
-        AND asia.transport_route_destination_hub_code = t4.knote
-        AND asia.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p
-                                                 AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
-
-  LEFT JOIN dds.bill_of_lading vbsk
-         ON vbsk.bill_of_lading_code = lake.SD_000040
-        AND vbsk.bill_of_lading_type_code = 'Y'
-
-  LEFT JOIN supplier_final sf ON sf.sales_document_code = t4.delivery_code_le_p
-  CROSS JOIN bounds b
-  WHERE t4.dt_transportation_stage_start_p <= b.max_dt
-    AND (t4.dt_transportation_stage_start_r IS NULL OR t4.dt_transportation_stage_start_r >= b.min_dt)
-    AND t4.dt_transportation_stage_start_p <> COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-    AND t4.transport_route_destination_hub_code LIKE 'G%'
-    AND (
-      CASE
-        WHEN fw1.market_region1_code = '03' AND eu.delivery_code IS NOT NULL THEN eu.delivery_code
-        WHEN fw1.market_region1_code = '04' AND asia.delivery_code IS NOT NULL THEN asia.delivery_code
-        WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
-      END
-    ) IS NOT NULL
-)
-SELECT
-  p.sales_bundle_code,
-  lake.SD_000003 AS plant_producer_delivery_code,
-  lake.SD_000110 AS plant_producer_delivery_position_code,
-  lake.SD_000001 AS initial_delivery_code,
-  lake.SD_000143 AS material_code,
-  lake.SD_000010 AS dt_shipment,
-  lake.SD_000013 AS railcar_code,
-  lake.SD_000014 AS transport_bill_code,
-  lake.SD_000151 AS uni,
-  maspe.shape_code AS material_shape_code,
-  lake.SD_000028 AS transport_type_code,
-  mater.etsng_code AS etsng_code,
-  sabu.sales_bundle_net_weight / 1000.0 AS sales_bundle_net_weight,
-  sabu.sales_bundle_gross_weight / 1000.0 AS sales_bundle_gross_weight,
-  lake.SD_000004 AS batch_code,
-  t4.dt_transportation_stage_start_r AS dt_arrival,
-
-  dedopo_1.plant_producer_code AS receiving_plant_code,
-  lake.delivery_number_sales    AS sales_delivery_code,
-
-  CASE WHEN fw1.transport_hub_code IS NOT NULL THEN t4.delivery_code_le_p END AS transportation_inbound_delivery_code,
-
-  CASE
-    WHEN fw1.market_region1_code = '03' AND p.vbeln_eu IS NOT NULL  THEN p.vbeln_eu
-    WHEN fw1.market_region1_code = '04' AND p.vbeln_as IS NOT NULL THEN p.vbeln_as
-    WHEN p.is_rus_port = 1 THEN lake.delivery_number_sales
-  END AS delivery_for_storage_calculation_code,
-
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_eu IS NOT NULL OR p.vbeln_as IS NOT NULL) THEN NULL
-    WHEN p.is_rus_port = 1 THEN '1'
-  END AS wwgsg_01,
-
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_eu IS NOT NULL OR p.vbeln_as IS NOT NULL) THEN NULL::date
-    WHEN p.is_rus_port = 1 THEN p.wwgsg_01_date
-  END AS wwgsg_01_date,
-
-  t4.transportation_inbound_delivery_position_code AS transportation_inbound_delivery_position_code,
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_eu IS NOT NULL OR p.vbeln_as IS NOT NULL)
-      THEN t4.transportation_inbound_delivery_position_code
-    ELSE '10'
-  END AS delivery_position_for_storage_calculation_code,
-
-  p.supplier_code_final AS forwarder_code,
-
-  CASE
-    WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 = 'TL04' THEN 'Логика РФ-контейнеры'
-    WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 <> 'TL04' THEN 'Логика РФ-балк'
-    WHEN likp.delivery_type_code  = 'ZLE' AND asia_log.range_low_value IS NOT NULL AND asia.counterparty_code IS NULL THEN 'Логика Азия'
-    WHEN likp.delivery_type_code  = 'ZLE' AND euro_1.counterparty_code IS NOT NULL THEN 'Логика Европа'
-    WHEN likp.delivery_type_code  = 'ZLE' AND euro_2.counterparty_code IS NOT NULL AND euro_log.range_low_value IS NOT NULL THEN 'Логика Европа'
-    WHEN likp.delivery_type_code  = 'ZLE' AND svh.counterparty_code  IS NOT NULL THEN 'Логика СВХ'
-    ELSE 'Логика не определена'
-  END AS storage_cost_calculation_type_name,
-
-  sbudr_base.transport_route_departure_hub_code AS transport_departure_hub_code,
-  sbudr_base.transport_route_destination_hub_code AS transport_destination_hub_code,
-  sbudr_base.is_final_transportation_stage_code  AS SD_000902,
-  sbudr_base.transportation_stage_code           AS SD_000903,
-  for_LE_001035.cnt                              AS SD_000905,
-
-  lake.SD_000482, lake.SD_000041, lake.SD_000042, lake.SD_000047, lake.SD_000048,
-  lake.SD_000054, lake.SD_000049, lake.SD_000067, lake.SD_000649, lake.SD_000044, lake.SD_000040,
-
-  t4.delivery_code_le_r                             AS SD_000516,
-  t4.transportation_outbound_delivery_position_code AS SD_000897,
-  likp.weight_net                                   AS ntgew,
-  likp.weight_net_with_wirerod                      AS btgew,
-  t4.knote                                          AS SD_000420,
-  likp.dt_loaded                                    AS likp_lddat,
-
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_eu IS NOT NULL OR p.vbeln_as IS NOT NULL) THEN NULL
-    ELSE lake.SD_000024
-  END AS dt_arrival_to_russian_port,
-
-  t4.dt_transportation_stage_start_p,
-  COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE) AS dt_transportation_stage_start_r,
-  CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique,
-
-  p.lddat_4798,
-  p.vbeln_4798,
-
-  for_1055.dt_end_of_free_storage AS dt_storage_end_in_release
-
-FROM prep p
-JOIN dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-  ON t4.sales_bundle_code = p.sales_bundle_code
-LEFT JOIN lake ON lake.sales_bundle_code = p.sales_bundle_code AND lake.rn = 1
-LEFT JOIN dds.sales_bundle sabu ON sabu.sales_bundle_code = p.sales_bundle_code
-LEFT JOIN dict_dds.material mater ON mater.material_code = lake.SD_000143
-LEFT JOIN dict_dds.material_specification maspe ON maspe.material_code = lake.SD_000143
-LEFT JOIN dds.delivery_document_position dedopo_1 ON dedopo_1.delivery_code = lake.delivery_number_sales
-
-LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
-  ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
- AND sbudr_base.delivery_code      = t4.delivery_code_le_p
- AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
- AND sbudr_base.is_deleted_code IS NULL
-
-LEFT JOIN dds.delivery_document_header likp ON likp.delivery_code = p.delivery_for_join
-
-LEFT JOIN asia      ON asia.counterparty_code   = p.supplier_code_final
-LEFT JOIN euro_1    ON euro_1.counterparty_code = p.supplier_code_final
-LEFT JOIN euro_2    ON euro_2.counterparty_code = p.supplier_code_final
-LEFT JOIN svh       ON svh.counterparty_code    = p.supplier_code_final
-LEFT JOIN asia_log  ON asia_log.range_low_value = p.supplier_code_final
-LEFT JOIN euro_log  ON euro_log.range_low_value = p.supplier_code_final
-
-LEFT JOIN for_LE_001035 ON for_LE_001035.delivery_code = t4.delivery_code_le_p
-                        AND for_LE_001035.batch_code   = lake.SD_000004
-LEFT JOIN for_1055 ON for_1055.vbeln = lake.delivery_number_sales
-LEFT JOIN forwapd_1 fw1 ON fw1.transport_hub_code = t4.knote
-DISTRIBUTED BY (sales_bundle_code, plant_producer_delivery_code);
-
--- =====================================================================
--- 5) Остальные подготовительные временные таблицы (как у тебя)
--- =====================================================================
-
-CREATE TEMP TABLE for_1082_1 ON COMMIT DROP AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'FORMSTEU'
-  AND range_low_value IS NOT NULL
-GROUP BY range_low_value
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE for_1082_2 ON COMMIT DROP AS
-SELECT string_agg(range_low_value, ', ') AS res, 1 AS rn
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'S_USLSTC'
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE for_1082_3 ON COMMIT DROP AS
-SELECT string_agg(range_low_value, ', ') AS res, 1 AS rn
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'S_USLST'
-  AND range_low_value LIKE 'EU%'
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE for_1047_1 ON COMMIT DROP AS
-SELECT
-  sales_bundle_code,
-  transportation_stage_code,
-  transport_route_departure_hub_code,
-  transport_route_destination_hub_code,
-  ROW_NUMBER() OVER (PARTITION BY sales_bundle_code ORDER BY transportation_stage_code DESC) AS rn
-FROM dds.sales_bundle_and_delivery_relationship
-WHERE is_deleted_code IS NULL
-  AND transportation_stage_code IN ('10','15','16','25')
-DISTRIBUTED BY (sales_bundle_code);
-
-CREATE TEMP TABLE trscm ON COMMIT DROP AS
-SELECT counterparty_code, calculation_method_code
-FROM dict_dds.transportation_storage_calculation_method
-GROUP BY counterparty_code, calculation_method_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE sbudr_1 ON COMMIT DROP AS
-SELECT
-  sales_bundle_code,
-  delivery_code,
-  batch_code,
-  transportation_stage_code,
-  transport_route_destination_hub_code,
-  ROW_NUMBER() OVER (PARTITION BY sales_bundle_code, delivery_code) AS rn
-FROM dds.sales_bundle_and_delivery_relationship
-WHERE is_deleted_code IS NULL
-DISTRIBUTED BY (sales_bundle_code);
-
-CREATE TEMP TABLE zlet43_1 ON COMMIT DROP AS
-SELECT
-  plant_code,
-  counterparty_code,
-  unit_balance_of_storage_agreement_code,
-  ROW_NUMBER() OVER(
-    PARTITION BY plant_code, counterparty_code
-    ORDER BY unit_balance_of_storage_agreement_code
-  ) AS rn
-FROM dict_dds.map_trader_to_unit_balance_of_storage_agreement
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE ekpa ON COMMIT DROP AS
-SELECT shipment_instruction_code AS objek, shipment_instruction_counterparty_code AS counterparty_code
-FROM dds.sales_order_header
-WHERE shipment_instruction_counterparty_code IS NOT NULL
-GROUP BY shipment_instruction_code, shipment_instruction_counterparty_code
-DISTRIBUTED REPLICATED;
-
-CREATE TEMP TABLE vbak ON COMMIT DROP AS
-SELECT sales_request_for_proposal_code AS vbeln, shipment_instruction_code AS zznoi
-FROM dds.sales_request_for_proposal_header
-WHERE shipment_instruction_code IS NOT NULL
-UNION ALL
-SELECT sales_contract_code, shipment_instruction_code
-FROM dds.sales_contract_header
-WHERE shipment_instruction_code IS NOT NULL
-UNION ALL
-SELECT sales_order_code, shipment_instruction_code
-FROM dds.sales_order_header
-WHERE shipment_instruction_code IS NOT NULL
-DISTRIBUTED REPLICATED;
-
--- =====================================================================
--- 6) base_1_5 — продолжение, без фан-аута
--- =====================================================================
-
-DROP TABLE IF EXISTS base_1_5;
-CREATE TEMP TABLE base_1_5 ON COMMIT DROP AS
-SELECT
-  b.sales_bundle_code,
-  b.plant_producer_delivery_code,
-  b.plant_producer_delivery_position_code,
-  b.initial_delivery_code,
-  b.material_code,
-  b.dt_shipment,
-  b.railcar_code,
-  b.transport_bill_code,
-  b.uni,
-  b.material_shape_code,
-  b.dt_arrival_to_russian_port,
-  b.dt_storage_end_in_release,
-  b.transport_type_code,
-  b.etsng_code,
-  b.sales_bundle_net_weight,
-  b.sales_bundle_gross_weight,
-  b.batch_code,
-  b.dt_arrival,
-  b.receiving_plant_code,
-  b.sales_delivery_code,
-  b.transportation_inbound_delivery_code,
-  b.delivery_for_storage_calculation_code,
-  b.transportation_inbound_delivery_position_code,
-  b.delivery_position_for_storage_calculation_code,
-  b.forwarder_code,
-  b.storage_cost_calculation_type_name,
-  b.transport_departure_hub_code,
-  b.transport_destination_hub_code,
-  b.SD_000049,
-  b.SD_000044,
-  b.wwgsg_01_date,
-  b.id_for_unique,
-  b.lddat_4798,
-  b.vbeln_4798,
-  b.SD_000054,
-  b.wwgsg_01,
-
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000516 END AS transportation_outbound_delivery_code,
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000897 END AS transportation_outbound_delivery_position_code,
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000902 END AS is_final_transportation_stage_code,
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000903 END AS transportation_stage_code,
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000905 END AS storage_calculation_bundle_quantity,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code = '25' THEN f1047_1.transport_route_departure_hub_code
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code <> '25' THEN f1047_1.transport_route_destination_hub_code
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN f1047_2.transport_route_destination_hub_code
-  END AS warehouse_code,
-
-  tr_hub.is_seaport AS is_stored_in_russian_port_code,
-
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.sales_delivery_code END AS delivery_in_final_release_code,
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000482 END AS dt_final_release,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.SD_000040
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b.SD_000047
-  END AS bill_of_lading_code,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.SD_000041
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b.SD_000048
-  END AS bill_of_lading_number,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.SD_000042
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b.SD_000049
-  END AS dt_bill_of_lading,
-
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000067 END AS incoterms_code,
-
-  CASE WHEN b.storage_cost_calculation_type_name = 'Логика Европа' THEN trscm.calculation_method_code END AS storage_cost_special_calculation_type_code,
-
-  CASE WHEN b.storage_cost_calculation_type_name = 'Логика Азия' THEN trwsa.warehouse_storage_area_code END AS warehouse_storage_area_code,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ') THEN '1121'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа') THEN '1521'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия') THEN COALESCE(zlet43_1.unit_balance_of_storage_agreement_code, zlet43_2.unit_balance_of_storage_agreement_code)
-  END AS plant_code,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ') THEN '1120'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа') THEN '1520'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия') THEN valuar.unit_balance_code
-  END AS unit_balance_code,
-
-  CASE WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN COALESCE(ekpa.counterparty_code, vbpa.supplier_code) END AS creditor_in_shipment_instruction_code,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.dt_arrival_to_russian_port
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.likp_lddat
-  END AS dt_storage_start,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.SD_000042
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN sbudr_2.dt_transportation_stage_start
-  END AS dt_shipped_from_warehouse,
-
-  CASE
-    WHEN b.delivery_for_storage_calculation_code = b.transportation_inbound_delivery_code THEN NULL
-    ELSE vbak.zznoi
-  END AS shipment_instruction_number,
-
-  sbudr_2.dt_transportation_stage_start AS sbudr_2_dt_transportation_stage_start,
-  b.SD_000042,
-  b.SD_000649,
-  b.SD_000420,
-
-  for_1076_1.counterparty_code AS for_1076_1_lifnr,
-  for_1076_2.counterparty_code AS for_1076_2_counterparty_code,
-  b.likp_lddat,
-  b.dt_transportation_stage_start_p,
-  b.dt_transportation_stage_start_r,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.sales_bundle_net_weight
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ') AND zle112t37t3.lifnr IS NOT NULL THEN b.sales_bundle_net_weight
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ') THEN b.sales_bundle_gross_weight
-  END AS weight_for_1090_umno,
-
-  CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b.ntgew
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ') AND zle112t37t3.lifnr IS NOT NULL THEN b.ntgew
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ') THEN b.btgew
-  END AS weight_for_1090_razdel
-
-FROM base b
-LEFT JOIN dict_dds.tech_zle112t37t3 zle112t37t3
-  ON zle112t37t3.lifnr = b.forwarder_code AND zle112t37t3.brutto IS NULL
-
-LEFT JOIN dedopo_2 d2
-  ON d2.delivery_code = b.plant_producer_delivery_code
-LEFT JOIN vbak
-  ON vbak.vbeln = d2.sales_document_code
-
-LEFT JOIN for_1047_1 f1047_1
-  ON f1047_1.sales_bundle_code = b.sales_bundle_code AND f1047_1.rn = 1
-
-LEFT JOIN dds.sales_bundle_and_delivery_relationship f1047_2
-  ON f1047_2.sales_bundle_code = b.sales_bundle_code
- AND f1047_2.delivery_code = b.delivery_for_storage_calculation_code
- AND f1047_2.is_deleted_code IS NULL
- AND b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-
-LEFT JOIN trscm
-  ON trscm.counterparty_code = b.forwarder_code
-
-LEFT JOIN dict_dds.transportation_warehouse_storage_area trwsa
-  ON trwsa.plant_code = b.receiving_plant_code
- AND trwsa.transport_hub_code = CASE
-   WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code = '25' THEN f1047_1.transport_route_departure_hub_code
-   WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code <> '25' THEN f1047_1.transport_route_destination_hub_code
-   WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN f1047_2.transport_route_destination_hub_code
- END
- AND trwsa.transportation_stage_code = CASE
-   WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b.SD_000903
- END
-
-LEFT JOIN sbudr_1
-  ON sbudr_1.sales_bundle_code = b.sales_bundle_code
- AND sbudr_1.delivery_code = b.delivery_for_storage_calculation_code
- AND b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
- AND sbudr_1.rn = 1
-
-LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_2
-  ON sbudr_2.sales_bundle_code = b.sales_bundle_code
- AND sbudr_2.batch_code = sbudr_1.batch_code
- AND sbudr_2.transportation_stage_code > sbudr_1.transportation_stage_code
- AND sbudr_2.transport_route_departure_hub_code = sbudr_1.transport_route_destination_hub_code
- AND sbudr_2.dt_transportation_stage_start >= b.likp_lddat
- AND sbudr_2.is_deleted_code IS NULL
-
-LEFT JOIN zlet43_1
-  ON zlet43_1.plant_code = b.receiving_plant_code
- AND zlet43_1.counterparty_code = b.forwarder_code
- AND zlet43_1.rn = 1
-
-LEFT JOIN dict_dds.map_trader_to_unit_balance_of_storage_agreement zlet43_2
-  ON zlet43_2.plant_code = b.receiving_plant_code
- AND zlet43_2.counterparty_code IS NULL
-
-LEFT JOIN dict_dds.plant_and_subsidiary pas
-  ON pas.plant_code = CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ') THEN '1121'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Европа') THEN '1521'
-    WHEN b.storage_cost_calculation_type_name IN ('Логика Азия') THEN COALESCE(zlet43_1.unit_balance_of_storage_agreement_code, zlet43_2.unit_balance_of_storage_agreement_code)
-  END
-
-LEFT JOIN dict_dds.valuation_area valuar
-  ON valuar.valuation_area_code = pas.valuation_area_code
-
-LEFT JOIN ekpa
-  ON ekpa.objek = CASE WHEN b.delivery_for_storage_calculation_code = b.transportation_inbound_delivery_code THEN NULL ELSE vbak.zznoi END
- AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-
-LEFT JOIN dds.sales_document_counterparty_role vbpa
-  ON vbpa.sales_document_code = CASE WHEN b.delivery_for_storage_calculation_code = b.transportation_inbound_delivery_code THEN NULL ELSE vbak.zznoi END
- AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
- AND vbpa.counterparty_role_code = CASE
-   WHEN b.SD_000649 IN (
-     SELECT range_low_value
-     FROM dict_dds.settings_and_parameters_sap
-     WHERE abap_program_code = '/RUSAL/SD4553M' AND parameter_code = 'S_PORTZJ' AND range_low_value IS NOT NULL
-   ) THEN 'ZJ' ELSE 'YP' END
-
-LEFT JOIN (
-  SELECT counterparty_code
-  FROM dict_dds.tech_additional_transportation_service_calculation_rule
-  WHERE service_code = 'STO' AND date_of_rate_determination_rule_code = '3'
-  GROUP BY counterparty_code
-) for_1076_1
-  ON for_1076_1.counterparty_code = COALESCE(ekpa.counterparty_code, vbpa.supplier_code)
-
-LEFT JOIN (
-  SELECT counterparty_code
-  FROM dict_dds.transportation_storage_date_search_method
-  WHERE storage_date_search_method_code = '1'
-  GROUP BY counterparty_code
-) for_1076_2
-  ON for_1076_2.counterparty_code = b.forwarder_code
-
-LEFT JOIN dict_dds.transport_hub tr_hub
-  ON tr_hub.transport_hub_code = CASE
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code = '25' THEN f1047_1.transport_route_departure_hub_code
-    WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND f1047_1.transportation_stage_code <> '25' THEN f1047_1.transport_route_destination_hub_code
-  END
- AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-DISTRIBUTED BY (sales_bundle_code);
-
--- =====================================================================
--- 7) base_1_7 — размножение на даты отчёта (детерминированно)
--- =====================================================================
-
-DROP TABLE IF EXISTS base_1_7;
-CREATE TEMP TABLE base_1_7 ON COMMIT DROP AS
-SELECT
-  b15.sales_bundle_code,
-  b15.plant_producer_delivery_code,
-  b15.plant_producer_delivery_position_code,
-  b15.initial_delivery_code,
-  b15.material_code,
-  b15.dt_shipment,
-  b15.railcar_code,
-  b15.transport_bill_code,
-  b15.uni,
-  b15.material_shape_code,
-  b15.dt_arrival_to_russian_port,
-  b15.dt_storage_end_in_release,
-  b15.transport_type_code,
-  b15.etsng_code,
-  d.dt_balance AS dt_report,
-  b15.sales_bundle_net_weight,
-  b15.sales_bundle_gross_weight,
-  b15.batch_code,
-  b15.dt_arrival,
-  b15.receiving_plant_code,
-  b15.sales_delivery_code,
-  b15.transportation_inbound_delivery_code,
-  b15.delivery_for_storage_calculation_code,
-  b15.transportation_inbound_delivery_position_code,
-  b15.delivery_position_for_storage_calculation_code,
-  b15.forwarder_code,
-  b15.storage_cost_calculation_type_name,
-  b15.transport_departure_hub_code,
-  b15.transport_destination_hub_code,
-  b15.transportation_outbound_delivery_code,
-  b15.transportation_outbound_delivery_position_code,
-  b15.is_final_transportation_stage_code,
-  b15.transportation_stage_code,
-  b15.storage_calculation_bundle_quantity,
-  b15.warehouse_code,
-  b15.is_stored_in_russian_port_code,
-  b15.delivery_in_final_release_code,
-  b15.dt_final_release,
-  b15.bill_of_lading_code,
-  b15.bill_of_lading_number,
-  b15.dt_bill_of_lading,
-  b15.incoterms_code,
-  b15.storage_cost_special_calculation_type_code,
-  b15.warehouse_storage_area_code,
-  b15.plant_code,
-  b15.unit_balance_code,
-  b15.creditor_in_shipment_instruction_code,
-  b15.dt_storage_start,
-  b15.dt_shipped_from_warehouse,
-  b15.dt_transportation_stage_start_p,
-
-  CASE
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-      AND b15.SD_000042 IS NOT NULL AND b15.SD_000042 <= d.dt_balance THEN b15.SD_000042
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN d.dt_balance
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-      AND b15.sbudr_2_dt_transportation_stage_start IS NOT NULL
-      AND b15.sbudr_2_dt_transportation_stage_start <= d.dt_balance THEN b15.sbudr_2_dt_transportation_stage_start
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN d.dt_balance
-  END AS dt_storage_end,
-
-  CASE
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-      AND b15.SD_000042 IS NOT NULL AND b15.SD_000042 <= d.dt_balance
-      THEN b15.SD_000042 - b15.dt_arrival_to_russian_port + 1
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-      THEN d.dt_balance - b15.dt_arrival_to_russian_port + 1
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-      AND b15.sbudr_2_dt_transportation_stage_start IS NOT NULL
-      AND b15.sbudr_2_dt_transportation_stage_start <= d.dt_balance
-      THEN b15.sbudr_2_dt_transportation_stage_start - b15.likp_lddat + 1
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-      THEN d.dt_balance - b15.likp_lddat + 1
-  END AS storage_duration_total_calendar_days,
-
-  b15.shipment_instruction_number,
-
-  CASE
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') AND b15.for_1076_1_lifnr IS NOT NULL
-      THEN b15.dt_arrival_to_russian_port
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-      AND b15.SD_000042 IS NOT NULL AND b15.SD_000042 <= d.dt_balance
-      THEN b15.SD_000042
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-      THEN d.dt_balance
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-      AND b15.sbudr_2_dt_transportation_stage_start IS NOT NULL
-      AND b15.sbudr_2_dt_transportation_stage_start <= d.dt_balance
-      THEN b15.sbudr_2_dt_transportation_stage_start
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-      THEN d.dt_balance
-    WHEN b15.storage_cost_calculation_type_name = 'Логика СВХ'
-      AND b15.for_1076_2_counterparty_code IS NOT NULL
-      THEN b15.likp_lddat
-    WHEN b15.storage_cost_calculation_type_name = 'Логика СВХ'
-      AND b15.sbudr_2_dt_transportation_stage_start IS NOT NULL
-      AND b15.sbudr_2_dt_transportation_stage_start <= d.dt_balance
-      THEN b15.sbudr_2_dt_transportation_stage_start
-    WHEN b15.storage_cost_calculation_type_name = 'Логика СВХ'
-      THEN d.dt_balance
-  END AS dt_for_price_search_in_purchase_contract,
-
-  CASE
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b15.SD_000649
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') AND b15.SD_000049 < d.dt_balance THEN b15.SD_000054
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b15.SD_000044
-  END AS port_of_discharge_code,
-
-  CASE
-    WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика Азия','Логика СВХ') THEN 'S49'
-    WHEN b15.storage_cost_calculation_type_name = 'Логика РФ-балк' AND stmatl.storage_method_code = '1' THEN 'S49/3'
-    WHEN b15.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'S49/2'
-    WHEN b15.storage_cost_calculation_type_name = 'Логика Европа' AND f1082_1.range_low_value IS NOT NULL THEN f1082_2.res
-    WHEN b15.storage_cost_calculation_type_name = 'Логика Европа' THEN f1082_3.res
-  END AS service_number,
-
-  b15.weight_for_1090_umno,
-  b15.weight_for_1090_razdel,
-  b15.SD_000420,
-  b15.id_for_unique,
-
-  ROW_NUMBER() OVER(
-    PARTITION BY b15.id_for_unique, d.dt_balance
-    ORDER BY b15.lddat_4798 DESC NULLS LAST, b15.vbeln_4798 DESC NULLS LAST
-  ) AS unique_row
-
-FROM base_1_5 b15
-JOIN date_for_vitr d
-  ON d.dt_balance BETWEEN b15.dt_transportation_stage_start_p AND b15.dt_transportation_stage_start_r
-
-LEFT JOIN dict_dds.location_sales losa
-  ON b15.storage_cost_calculation_type_name = 'Логика РФ-балк'
- AND losa.transport_hub_code = CASE
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b15.SD_000649
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') AND b15.SD_000049 < d.dt_balance THEN b15.SD_000054
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b15.SD_000044
- END
-
-LEFT JOIN dict_dds.storage_method_at_tsw_location stmatl
-  ON b15.storage_cost_calculation_type_name = 'Логика РФ-балк'
- AND stmatl.tsw_location_code = losa.location_code
- AND stmatl.material_shape_code = CASE
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN b15.SD_000649
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') AND b15.SD_000049 < d.dt_balance THEN b15.SD_000054
-   WHEN b15.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа') THEN b15.SD_000044
- END
-
-LEFT JOIN for_1082_1 f1082_1
-  ON b15.storage_cost_calculation_type_name = 'Логика Европа'
- AND f1082_1.range_low_value = b15.material_shape_code
-LEFT JOIN for_1082_2 f1082_2
-  ON b15.storage_cost_calculation_type_name = 'Логика Европа' AND f1082_2.rn = 1
-LEFT JOIN for_1082_3 f1082_3
-  ON b15.storage_cost_calculation_type_name = 'Логика Европа' AND f1082_3.rn = 1
-
-LEFT JOIN dict_dds.transportation_warehouse_storage_area trwsa
-  ON trwsa.plant_code = b15.receiving_plant_code
- AND trwsa.transport_hub_code = b15.warehouse_code
- AND trwsa.transportation_stage_code = b15.transportation_stage_code
-
-WHERE
-  (b15.wwgsg_01 IS NULL OR (b15.wwgsg_01 IS NOT NULL AND COALESCE(b15.wwgsg_01_date, DATE '9999-12-31') >= d.dt_balance))
-  AND (b15.lddat_4798 <= d.dt_balance OR b15.wwgsg_01 IS NOT NULL)
-DISTRIBUTED BY (sales_bundle_code);
-
--- =====================================================================
--- 8) Финишная загрузка в витрину
--- =====================================================================
-
-INSERT INTO dm_calc.storage_sales_bundles_weight (
-  sales_bundle_code,
-  plant_producer_delivery_code,
-  plant_producer_delivery_position_code,
-  initial_delivery_code,
-  material_code,
-  dt_shipment,
-  railcar_code,
-  transport_bill_code,
-  uni,
-  material_shape_code,
-  dt_arrival_to_russian_port,
-  dt_storage_end_in_release,
-  transport_type_code,
-  etsng_code,
-  dt_report,
-  sales_bundle_net_weight,
-  sales_bundle_gross_weight,
-  batch_code,
-  dt_arrival,
-  receiving_plant_code,
-  sales_delivery_code,
-  transportation_inbound_delivery_code,
-  delivery_for_storage_calculation_code,
-  transportation_inbound_delivery_position_code,
-  delivery_position_for_storage_calculation_code,
-  forwarder_code,
-  storage_cost_calculation_type_name,
-  transport_departure_hub_code,
-  transport_destination_hub_code,
-  transportation_outbound_delivery_code,
-  transportation_outbound_delivery_position_code,
-  is_final_transportation_stage_code,
-  transportation_stage_code,
-  storage_calculation_bundle_quantity,
-  warehouse_code,
-  is_stored_in_russian_port_code,
-  delivery_in_final_release_code,
-  dt_final_release,
-  bill_of_lading_code,
-  bill_of_lading_number,
-  dt_bill_of_lading,
-  incoterms_code,
-  storage_cost_special_calculation_type_code,
-  warehouse_storage_area_code,
-  plant_code,
-  unit_balance_code,
-  creditor_in_shipment_instruction_code,
-  dt_storage_start,
-  dt_shipped_from_warehouse,
-  dt_storage_end,
-  storage_duration_total_calendar_days,
-  shipment_instruction_number,
-  dt_for_price_search_in_purchase_contract,
-  port_of_discharge_code,
-  service_number,
-  weight_for_1090_umno,
-  weight_for_1090_razdel,
-  remote_warehouse_code,
-  dt_transportation_stage_start_p,
-  dt_transportation_stage_start_r,
-  rn
-)
-SELECT
-  b7.sales_bundle_code,
-  b7.plant_producer_delivery_code,
-  b7.plant_producer_delivery_position_code,
-  b7.initial_delivery_code,
-  b7.material_code,
-  b7.dt_shipment,
-  b7.railcar_code,
-  b7.transport_bill_code,
-  b7.uni,
-  b7.material_shape_code,
-  b7.dt_arrival_to_russian_port,
-  b7.dt_storage_end_in_release,
-  b7.transport_type_code,
-  b7.etsng_code,
-  b7.dt_report,
-  b7.sales_bundle_net_weight,
-  b7.sales_bundle_gross_weight,
-  b7.batch_code,
-  b7.dt_arrival,
-  b7.receiving_plant_code,
-  b7.sales_delivery_code,
-  b7.transportation_inbound_delivery_code,
-  b7.delivery_for_storage_calculation_code,
-  b7.transportation_inbound_delivery_position_code,
-  b7.delivery_position_for_storage_calculation_code,
-  b7.forwarder_code,
-  b7.storage_cost_calculation_type_name,
-  b7.transport_departure_hub_code,
-  b7.transport_destination_hub_code,
-  b7.transportation_outbound_delivery_code,
-  b7.transportation_outbound_delivery_position_code,
-  b7.is_final_transportation_stage_code,
-  b7.transportation_stage_code,
-  b7.storage_calculation_bundle_quantity,
-  b7.warehouse_code,
-  b7.is_stored_in_russian_port_code,
-  b7.delivery_in_final_release_code,
-  b7.dt_final_release,
-  b7.bill_of_lading_code,
-  b7.bill_of_lading_number,
-  b7.dt_bill_of_lading,
-  b7.incoterms_code,
-  b7.storage_cost_special_calculation_type_code,
-  b7.warehouse_storage_area_code,
-  b7.plant_code,
-  b7.unit_balance_code,
-  b7.creditor_in_shipment_instruction_code,
-  b7.dt_storage_start,
-  b7.dt_shipped_from_warehouse,
-  b7.dt_storage_end,
-  b7.storage_duration_total_calendar_days,
-  b7.shipment_instruction_number,
-  b7.dt_for_price_search_in_purchase_contract,
-  b7.port_of_discharge_code,
-  b7.service_number,
-  b7.weight_for_1090_umno,
-  NULLIF(b7.weight_for_1090_razdel, 0),
-  b7.SD_000420 AS remote_warehouse_code,
-  CASE WHEN b7.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b7.dt_transportation_stage_start_p END,
-  CASE WHEN b7.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ') THEN b7.dt_arrival END,
-  b7.id_for_unique || b7.dt_report::text AS rn
-FROM base_1_7 b7
-WHERE b7.unique_row = 1;
+distributed replicated;
+-- Выбор периода для отчета. Сейчас для тестирования данные за 1 месяц
+
+create temporary table dedopo_2 --on commit drop 
+as ( -- убираются дубли для выявления номера поставки завода для поля LE.001043
+select
+	delivery_code,
+	sales_document_code
+from
+	dds.delivery_document_position
+where
+	sales_document_code is not null
+group by
+	delivery_code,
+	sales_document_code)
+distributed by (delivery_code);
+
+create temporary table for_1055 --on commit drop
+as ( -- считается дата окончания хранения для поля LE.001055.
+select
+	vbss.delivery_code as vbeln,
+	min(vbsk.dt_end_of_free_storage) as dt_end_of_free_storage
+from
+	dds.logistics_document_and_delivery_relationship vbss
+left join dds.release as vbsk on
+	vbsk.release_code
+	= vbss.logistics_document_code
+	and vbsk.release_type_code = 'X'
+left join dict_dds.settings_and_parameters_sap frel_kod
+			on
+	vbsk.release_template_code = frel_kod.range_low_value 
+where
+	1 = 1
+	and frel_kod.abap_program_code = '/RUSAL/SD2921M'
+	and frel_kod.parameter_code = 'FREL_KOD'
+	and frel_kod.range_sign_code = 'I'
+	and frel_kod.range_option_code = 'EQ'
+	and vbsk.release_code is not null
+	and vbsk.dt_end_of_free_storage is not null
+group by
+	vbss.delivery_code
+	)
+distributed replicated;
+--	stock_det as (
+--	select *
+--	from dm_view.sales_material_turnover_detailed -- Не использовать эту таблицу. Нужно найти все нужные поля в озере. Если их там нет, то написать Насте и Вместе с Машей добавить их куда-то
+--	)
+
+
+
+create temporary table base --on commit drop
+as ( -- в таблице собираются начальные поля витрины. за основу берется таблица t4
+
+explain(verbose, format json)
+with forwapd_1 as ( -- убираются дубли для определения поставки хранения (поле LE.001016) и некоторых других полей	
+	select transport_hub_code, min(market_region1_code) as market_region1_code from dict_dds.foreign_warehouse_priority_definition
+	where market_region1_code in ('04', '03') and (is_terminal_code is not null or is_foreign_warehouse_code is not null or is_temporary_warehouse_code is not null) group by transport_hub_code
+	),
+	
+	forwapd_2 as (
+	select transport_hub_code from dict_dds.foreign_warehouse_priority_definition
+	where is_russian_port_code is not null
+	)
+	
+	select
+		t4.sales_bundle_code as sales_bundle_code, --id_him LE.001000
+		lake.SD_000003 as plant_producer_delivery_code,  -- LE.001001
+		lake.SD_000110 as plant_producer_delivery_position_code, -- LE.001002
+		lake.SD_000001 as initial_delivery_code, -- LE.001003
+		lake.SD_000143 as material_code, -- LE.001012
+		lake.SD_000010 as dt_shipment, -- LE.001020
+		lake.SD_000013 as railcar_code, -- LE.001032
+		lake.SD_000014 as transport_bill_code, -- LE.001033
+		lake.SD_000151 as uni, -- LE.001034
+		maspe.shape_code as material_shape_code, -- LE.001036
+		lake.SD_000028 as transport_type_code, -- LE.001050
+		mater.etsng_code as etsng_code, -- LE.001066
+		sabu.sales_bundle_net_weight / 1000 as sales_bundle_net_weight, -- LE.001018
+		sabu.sales_bundle_gross_weight / 1000 as sales_bundle_gross_weight, -- LE.001019
+		lake.SD_000004 as batch_code, -- LE.001015
+		t4.dt_transportation_stage_start_r as dt_arrival, -- LE.001039 -- Нет поля SD.000530. Сейчас используем SD.000518
+			
+
+				
+		dedopo_1.plant_producer_code as receiving_plant_code, -- LE.001029
+		lake.delivery_number_sales as sales_delivery_code, -- LE.001005
+				
+		case
+			when forwapd_1.transport_hub_code is not null then t4.delivery_code_le_p
+		end as transportation_inbound_delivery_code, -- LE.001007
+	
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then sabadr_03.delivery_code
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then sabadr_04.delivery_code
+			when forwapd_2.transport_hub_code is not null then lake.delivery_number_sales
+		end as delivery_for_storage_calculation_code, -- LE.001016
+	
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then null
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then null
+			when forwapd_2.transport_hub_code is not null then '1'
+		end as wwgsg_01,
+	
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then null
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then null
+			when forwapd_2.transport_hub_code is not null then vbsk.dt_bill_of_lading -- zzlddat
+		end as wwgsg_01_date,
+	
+		t4.transportation_inbound_delivery_position_code as transportation_inbound_delivery_position_code, -- LE.001008
+				
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then t4.transportation_inbound_delivery_position_code
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then t4.transportation_inbound_delivery_position_code		
+			else '10'
+		end as delivery_position_for_storage_calculation_code, -- LE.001017
+	
+		coalesce(ascr_1.supplier_code, ascr_2.supplier_code) as forwarder_code, -- LE.001040
+
+		case
+			when likp.delivery_type_code <> 'ZLE' and lake.SD_000028 = 'TL04' then 'Логика РФ-контейнеры'
+			when likp.delivery_type_code <> 'ZLE' and lake.SD_000028 <> 'TL04' then 'Логика РФ-балк'
+			when likp.delivery_type_code = 'ZLE' and asia_log.range_low_value is not null and asia.counterparty_code is null then 'Логика Азия'
+			when likp.delivery_type_code = 'ZLE' and euro_1.counterparty_code is not null then 'Логика Европа'
+			when likp.delivery_type_code = 'ZLE' and euro_2.counterparty_code is not null and euro_log.range_low_value is not null then 'Логика Европа'
+			when likp.delivery_type_code = 'ZLE' and svh.counterparty_code is not null then 'Логика СВХ'
+			else 'Логика не определена'
+		end as storage_cost_calculation_type_name, -- LE.001064
+			
+		sbudr_base.transport_route_departure_hub_code as transport_departure_hub_code, -- LE.001021
+		sbudr_base.transport_route_destination_hub_code as transport_destination_hub_code, -- LE.001023
+		sbudr_base.is_final_transportation_stage_code as SD_000902,
+		sbudr_base.transportation_stage_code as SD_000903,
+		for_LE_001035.cnt as SD_000905,
+		lake.SD_000482,
+		lake.SD_000041,
+		lake.SD_000042,
+		lake.SD_000047,
+		lake.SD_000048,
+		lake.SD_000054,
+		lake.SD_000049,
+		lake.SD_000067,
+		lake.SD_000649,
+		lake.SD_000044,
+		lake.SD_000040,
+		t4.delivery_code_le_r as SD_000516,
+		t4.transportation_outbound_delivery_position_code as SD_000897,
+		likp.weight_net as ntgew,
+		likp.weight_net_with_wirerod as btgew,
+		t4.knote as SD_000420,
+		likp.dt_loaded as likp_lddat,
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then null
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then null
+			else lake.SD_000024
+		end as dt_arrival_to_russian_port, -- LE.001059
+		t4.dt_transportation_stage_start_p,
+		coalesce(t4.dt_transportation_stage_start_r, current_date) as dt_transportation_stage_start_r,
+		concat(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) as id_for_unique,
+		
+		coalesce(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start) as lddat_4798,
+		coalesce(sabadr_03.delivery_code, sabadr_04.delivery_code) as vbeln_4798,
+		
+		for_1055.dt_end_of_free_storage as dt_storage_end_in_release -- LE.001055
+
+
+	from
+		dm_calc.sales_bundle_transport_hub_turnover_sdt0004 as t4
+	left join lake on
+		t4.sales_bundle_code = lake.sales_bundle_code
+		and lake.rn = 1
+	left join dds.bill_of_lading as vbsk on 
+		vbsk.bill_of_lading_code = lake.sd_000040
+		and vbsk.bill_of_lading_type_code = 'Y'
+	left join for_1055 on
+		for_1055.vbeln = lake.delivery_number_sales
+	left join dict_dds.material as mater on
+		mater.material_code = lake.SD_000143
+	left join dds.sales_bundle as sabu on
+		sabu.sales_bundle_code = t4.sales_bundle_code
+	left join forwapd_1 on
+		forwapd_1.transport_hub_code = t4.knote
+	left join forwapd_2 on forwapd_2.transport_hub_code = t4.knote
+
+	left join dds.sales_bundle_and_delivery_relationship as sabadr_03 on
+		sabadr_03.sales_bundle_code = t4.sales_bundle_code
+		and sabadr_03.transportation_stage_code in (select range_low_value
+	   	   											from dict_dds.settings_and_parameters_sap
+	   	   											where abap_program_code = '/RUSAL/SD2973M_2'
+													  and parameter_code in ('STAGE_EU')
+													  and range_low_value is not null
+													group by range_low_value) 
+		and sabadr_03.transport_route_destination_hub_code = t4.knote
+		and forwapd_1.market_region1_code = '03' 
+		and sabadr_03.is_deleted_code is null 
+		and sabadr_03.dt_transportation_stage_start <= coalesce(t4.dt_transportation_stage_start_r, current_date) 
+		and sabadr_03.dt_transportation_stage_start >= coalesce(t4.dt_transportation_stage_start_p, current_date)
+
+
+	left join dds.sales_bundle_and_delivery_relationship as sabadr_04 on 
+		sabadr_04.sales_bundle_code = t4.sales_bundle_code
+	    and sabadr_04.transportation_stage_code in (select range_low_value
+	   											from dict_dds.settings_and_parameters_sap
+	   											where abap_program_code = '/RUSAL/SD2973M_2'
+												  and parameter_code in ('STAGE_A')
+												  and range_low_value is not null
+												group by range_low_value)
+		and sabadr_04.transport_route_destination_hub_code = t4.knote
+		and forwapd_1.market_region1_code = '04'
+		and sabadr_04.is_deleted_code is null
+		and sabadr_04.dt_transportation_stage_start <= coalesce(t4.dt_transportation_stage_start_r, current_date) 
+		and sabadr_04.dt_transportation_stage_start >= coalesce(t4.dt_transportation_stage_start_p, current_date)
+		
+
+	left join dds.sales_bundle_and_delivery_relationship as sbudr_base on sbudr_base.sales_bundle_code = t4.sales_bundle_code and sbudr_base.delivery_code = t4.delivery_code_le_p
+		and sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
+		and sbudr_base.is_deleted_code is null 
+	left join dds.delivery_document_position as dedopo_1 on
+		dedopo_1.delivery_code = lake.delivery_number_sales
+	left join dds.sales_document_counterparty_role as ascr_1 on
+		ascr_1.sales_document_code = t4.delivery_code_le_p
+		and ascr_1.counterparty_role_code in ('XR')
+	left join dds.sales_document_counterparty_role as ascr_2 on
+		ascr_2.sales_document_code = t4.delivery_code_le_p
+		and ascr_2.counterparty_role_code in ('ZU')
+	left join dict_dds.counterparty as country on
+		country.counterparty_code = coalesce(ascr_1.supplier_code, ascr_1.supplier_code)
+	left join dds.delivery_document_header as likp on
+		likp.delivery_code =
+		case
+			when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then sabadr_03.delivery_code
+			when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then sabadr_04.delivery_code
+			when forwapd_2.transport_hub_code is not null then lake.delivery_number_sales
+		end
+	left join asia as asia on
+		asia.counterparty_code = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join euro_1 as euro_1 on
+		euro_1.counterparty_code = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join euro_2 as euro_2 on
+		euro_2.counterparty_code = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join svh as svh on
+		svh.counterparty_code = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join asia_log as asia_log on
+		asia_log.range_low_value = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join euro_log as euro_log on
+		euro_log.range_low_value = coalesce(ascr_1.supplier_code, ascr_2.supplier_code)
+	left join dict_dds.material_specification as maspe on
+		maspe.material_code = lake.SD_000143
+	left join for_LE_001035 as for_LE_001035 on
+		for_LE_001035.delivery_code = t4.delivery_code_le_p
+		and for_LE_001035.batch_code = lake.SD_000004
+	where t4.dt_transportation_stage_start_p <= (select max(dt_balance) from date_for_vitr)
+	and coalesce(t4.dt_transportation_stage_start_r, current_date) >= (select min(dt_balance) from date_for_vitr)
+	and t4.dt_transportation_stage_start_p <> coalesce(t4.dt_transportation_stage_start_r, '22991231'::date)
+	and t4.transport_route_destination_hub_code like 'G%'
+	and case
+		when forwapd_1.market_region1_code = '03' and sabadr_03.delivery_code is not null then sabadr_03.delivery_code
+		when forwapd_1.market_region1_code = '04' and sabadr_04.delivery_code is not null then sabadr_04.delivery_code
+		when forwapd_2.transport_hub_code is not null then lake.delivery_number_sales
+	end is not null 
+		-- первая часть ограничений для поля 1016. В логике поля LE.001016 есть пункт про исключение из выборки. Из-за того, что я пытаюсь до последнего не размножать данные на 
+		-- даты отчета (поле LE.001069) приходится разделять это исключение.
+) distributed by (sales_bundle_code, plant_producer_delivery_code);
+
+
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 17,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 2582222111.48,
+      "Plan Rows": 53109923001,
+      "Plan Width": 392,
+      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "material_specification.shape_code", "lake.sd_000028", "material.etsng_code", "((sales_bundle.sales_bundle_net_weight / '1000'::numeric))", "((sales_bundle.sales_bundle_gross_weight / '1000'::numeric))", "lake.sd_000004", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "delivery_document_position.plant_producer_code", "lake.delivery_number_sales", "(CASE WHEN (NOT (foreign_warehouse_priority_definition.transport_hub_code IS NULL)) THEN sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p ELSE NULL::character varying END)", "(CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship.delivery_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship_1.delivery_code WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN lake.delivery_number_sales ELSE NULL::character varying END)", "(CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::text WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::text WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN '1'::text ELSE NULL::text END)", "(CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::date WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::date WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN bill_of_lading.dt_bill_of_lading ELSE NULL::date END)", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "(CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code ELSE '10'::character varying END)", "(COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))", "(CASE WHEN (((delivery_document_header.delivery_type_code)::text <> 'ZLE'::text) AND ((lake.sd_000028)::text = 'TL04'::text)) THEN 'Логика РФ-контейнеры'::text WHEN (((delivery_document_header.delivery_type_code)::text <> 'ZLE'::text) AND ((lake.sd_000028)::text <> 'TL04'::text)) THEN 'Логика РФ-балк'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (asia_log.range_low_value IS NULL)) AND (asia.counterparty_code IS NULL)) THEN 'Логика Азия'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (euro_1.counterparty_code IS NULL))) THEN 'Логика Европа'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (euro_2.counterparty_code IS NULL)) AND (NOT (euro_log.range_low_value IS NULL))) THEN 'Логика Европа'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (svh.counterparty_code IS NULL))) THEN 'Логика СВХ'::text ELSE 'Логика не определена'::text END)", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "for_le_001035.cnt", "lake.sd_000482", "lake.sd_000041", "lake.sd_000042", "lake.sd_000047", "lake.sd_000048", "lake.sd_000054", "lake.sd_000049", "lake.sd_000067", "lake.sd_000649", "lake.sd_000044", "lake.sd_000040", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "sales_bundle_transport_hub_turnover_sdt0004.knote", "delivery_document_header.dt_loaded", "(CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::date WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::date ELSE lake.sd_000024 END)", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "(COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r, '2025-10-27'::date))", "(concat(sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code, sales_bundle_transport_hub_turnover_sdt0004.delivery_code, sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code))", "(COALESCE(sales_bundle_and_delivery_relationship.dt_transportation_stage_start, sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start))", "(COALESCE(sales_bundle_and_delivery_relationship.delivery_code, sales_bundle_and_delivery_relationship_1.delivery_code))", "for_1055.dt_end_of_free_storage"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 17,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 2524501184.97,
+          "Plan Rows": 53109923001,
+          "Plan Width": 392,
+          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "material_specification.shape_code", "lake.sd_000028", "material.etsng_code", "(sales_bundle.sales_bundle_net_weight / '1000'::numeric)", "(sales_bundle.sales_bundle_gross_weight / '1000'::numeric)", "lake.sd_000004", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "delivery_document_position.plant_producer_code", "lake.delivery_number_sales", "CASE WHEN (NOT (foreign_warehouse_priority_definition.transport_hub_code IS NULL)) THEN sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p ELSE NULL::character varying END", "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship.delivery_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship_1.delivery_code WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN lake.delivery_number_sales ELSE NULL::character varying END", "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::text WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::text WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN '1'::text ELSE NULL::text END", "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::date WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::date WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN bill_of_lading.dt_bill_of_lading ELSE NULL::date END", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code ELSE '10'::character varying END", "COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code)", "CASE WHEN (((delivery_document_header.delivery_type_code)::text <> 'ZLE'::text) AND ((lake.sd_000028)::text = 'TL04'::text)) THEN 'Логика РФ-контейнеры'::text WHEN (((delivery_document_header.delivery_type_code)::text <> 'ZLE'::text) AND ((lake.sd_000028)::text <> 'TL04'::text)) THEN 'Логика РФ-балк'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (asia_log.range_low_value IS NULL)) AND (asia.counterparty_code IS NULL)) THEN 'Логика Азия'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (euro_1.counterparty_code IS NULL))) THEN 'Логика Европа'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (euro_2.counterparty_code IS NULL)) AND (NOT (euro_log.range_low_value IS NULL))) THEN 'Логика Европа'::text WHEN (((delivery_document_header.delivery_type_code)::text = 'ZLE'::text) AND (NOT (svh.counterparty_code IS NULL))) THEN 'Логика СВХ'::text ELSE 'Логика не определена'::text END", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "for_le_001035.cnt", "lake.sd_000482", "lake.sd_000041", "lake.sd_000042", "lake.sd_000047", "lake.sd_000048", "lake.sd_000054", "lake.sd_000049", "lake.sd_000067", "lake.sd_000649", "lake.sd_000044", "lake.sd_000040", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "sales_bundle_transport_hub_turnover_sdt0004.knote", "delivery_document_header.dt_loaded", "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN NULL::date WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN NULL::date ELSE lake.sd_000024 END", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r, '2025-10-27'::date)", "concat(sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code, sales_bundle_transport_hub_turnover_sdt0004.delivery_code, sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code)", "COALESCE(sales_bundle_and_delivery_relationship.dt_transportation_stage_start, sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start)", "COALESCE(sales_bundle_and_delivery_relationship.delivery_code, sales_bundle_and_delivery_relationship_1.delivery_code)", "for_1055.dt_end_of_free_storage"],
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Slice": 17,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Join Type": "Left",
+              "Startup Cost": 0.00,
+              "Total Cost": 2521234924.70,
+              "Plan Rows": 53109923001,
+              "Plan Width": 533,
+              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code", "asia_log.range_low_value", "euro_log.range_low_value", "material_specification.shape_code", "for_le_001035.cnt"],
+              "Hash Cond": "(((sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p)::text = (for_le_001035.delivery_code)::text) AND ((lake.sd_000004)::text = (for_le_001035.batch_code)::text))",
+              "Plans": [
+                {
+                  "Node Type": "Redistribute Motion",
+                  "Senders": 8,
+                  "Receivers": 8,
+                  "Parent Relationship": "Outer",
+                  "Slice": 16,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 2504419561.03,
+                  "Plan Rows": 53105556808,
+                  "Plan Width": 525,
+                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code", "asia_log.range_low_value", "euro_log.range_low_value", "material_specification.shape_code"],
+                  "Hash Key": "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p",
+                  "Plans": [
+                    {
+                      "Node Type": "Hash Join",
+                      "Parent Relationship": "Outer",
+                      "Slice": 16,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Join Type": "Left",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 2493511347.75,
+                      "Plan Rows": 53105556808,
+                      "Plan Width": 525,
+                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code", "asia_log.range_low_value", "euro_log.range_low_value", "material_specification.shape_code"],
+                      "Hash Cond": "((lake.sd_000143)::text = (material_specification.material_code)::text)",
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 16,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Left",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 2479683254.64,
+                          "Plan Rows": 26552778404,
+                          "Plan Width": 521,
+                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code", "asia_log.range_low_value", "euro_log.range_low_value"],
+                          "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (euro_log.range_low_value)::text)",
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 16,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Left",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 2472276044.64,
+                              "Plan Rows": 18966270289,
+                              "Plan Width": 510,
+                              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code", "asia_log.range_low_value"],
+                              "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (asia_log.range_low_value)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 16,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Join Type": "Left",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 2467087676.56,
+                                  "Plan Rows": 13547335920,
+                                  "Plan Width": 499,
+                                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code", "svh.counterparty_code"],
+                                  "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (svh.counterparty_code)::text)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 16,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Join Type": "Left",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 2463454875.79,
+                                      "Plan Rows": 9676668515,
+                                      "Plan Width": 488,
+                                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code", "euro_2.counterparty_code"],
+                                      "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (euro_2.counterparty_code)::text)",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Hash Join",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 16,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Join Type": "Left",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 2460912251.77,
+                                          "Plan Rows": 6911906082,
+                                          "Plan Width": 477,
+                                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code", "euro_1.counterparty_code"],
+                                          "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (euro_1.counterparty_code)::text)",
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Hash Join",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 16,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Join Type": "Left",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 2459133366.34,
+                                              "Plan Rows": 4937075773,
+                                              "Plan Width": 466,
+                                              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod", "asia.counterparty_code"],
+                                              "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role_1.supplier_code))::text = (asia.counterparty_code)::text)",
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Hash Join",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 16,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Join Type": "Left",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 2457889323.41,
+                                                  "Plan Rows": 3526482695,
+                                                  "Plan Width": 455,
+                                                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code", "delivery_document_header.delivery_type_code", "delivery_document_header.dt_loaded", "delivery_document_header.weight_net", "delivery_document_header.weight_net_with_wirerod"],
+                                                  "Hash Cond": "((CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship.delivery_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship_1.delivery_code WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN lake.delivery_number_sales ELSE NULL::character varying END)::text = (delivery_document_header.delivery_code)::text)",
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Redistribute Motion",
+                                                      "Senders": 8,
+                                                      "Receivers": 8,
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 15,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 2456397253.42,
+                                                      "Plan Rows": 2518916211,
+                                                      "Plan Width": 437,
+                                                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code"],
+                                                      "Hash Key": "CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship.delivery_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship_1.delivery_code WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN lake.delivery_number_sales ELSE NULL::character varying END",
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Hash Join",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 15,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Join Type": "Left",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 2455966578.57,
+                                                          "Plan Rows": 2518916211,
+                                                          "Plan Width": 437,
+                                                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code"],
+                                                          "Hash Cond": "((COALESCE(sales_document_counterparty_role.supplier_code, sales_document_counterparty_role.supplier_code))::text = (counterparty.counterparty_code)::text)",
+                                                          "Plans": [
+                                                            {
+                                                              "Node Type": "Hash Join",
+                                                              "Parent Relationship": "Outer",
+                                                              "Slice": 15,
+                                                              "Segments": 8,
+                                                              "Gang Type": "primary reader",
+                                                              "Join Type": "Left",
+                                                              "Startup Cost": 0.00,
+                                                              "Total Cost": 2455385324.08,
+                                                              "Plan Rows": 1799225865,
+                                                              "Plan Width": 437,
+                                                              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code", "sales_document_counterparty_role_1.supplier_code"],
+                                                              "Hash Cond": "((sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p)::text = (sales_document_counterparty_role_1.sales_document_code)::text)",
+                                                              "Plans": [
+                                                                {
+                                                                  "Node Type": "Hash Join",
+                                                                  "Parent Relationship": "Outer",
+                                                                  "Slice": 15,
+                                                                  "Segments": 8,
+                                                                  "Gang Type": "primary reader",
+                                                                  "Join Type": "Left",
+                                                                  "Startup Cost": 0.00,
+                                                                  "Total Cost": 2454990092.27,
+                                                                  "Plan Rows": 899614483,
+                                                                  "Plan Width": 426,
+                                                                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code", "sales_document_counterparty_role.supplier_code"],
+                                                                  "Hash Cond": "((sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p)::text = (sales_document_counterparty_role.sales_document_code)::text)",
+                                                                  "Plans": [
+                                                                    {
+                                                                      "Node Type": "Redistribute Motion",
+                                                                      "Senders": 8,
+                                                                      "Receivers": 8,
+                                                                      "Parent Relationship": "Outer",
+                                                                      "Slice": 12,
+                                                                      "Segments": 8,
+                                                                      "Gang Type": "primary reader",
+                                                                      "Startup Cost": 0.00,
+                                                                      "Total Cost": 2454796387.67,
+                                                                      "Plan Rows": 449867515,
+                                                                      "Plan Width": 415,
+                                                                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code"],
+                                                                      "Hash Key": "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p",
+                                                                      "Plans": [
+                                                                        {
+                                                                          "Node Type": "Hash Join",
+                                                                          "Parent Relationship": "Outer",
+                                                                          "Slice": 12,
+                                                                          "Segments": 8,
+                                                                          "Gang Type": "primary reader",
+                                                                          "Join Type": "Left",
+                                                                          "Startup Cost": 0.00,
+                                                                          "Total Cost": 2454723343.24,
+                                                                          "Plan Rows": 449867515,
+                                                                          "Plan Width": 415,
+                                                                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code", "delivery_document_position.plant_producer_code"],
+                                                                          "Hash Cond": "((lake.delivery_number_sales)::text = (delivery_document_position.delivery_code)::text)",
+                                                                          "Plans": [
+                                                                            {
+                                                                              "Node Type": "Redistribute Motion",
+                                                                              "Senders": 8,
+                                                                              "Receivers": 8,
+                                                                              "Parent Relationship": "Outer",
+                                                                              "Slice": 11,
+                                                                              "Segments": 8,
+                                                                              "Gang Type": "primary reader",
+                                                                              "Startup Cost": 0.00,
+                                                                              "Total Cost": 2454622127.42,
+                                                                              "Plan Rows": 78230083,
+                                                                              "Plan Width": 410,
+                                                                              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code"],
+                                                                              "Hash Key": "lake.delivery_number_sales",
+                                                                              "Plans": [
+                                                                                {
+                                                                                  "Node Type": "Hash Join",
+                                                                                  "Parent Relationship": "Outer",
+                                                                                  "Slice": 11,
+                                                                                  "Segments": 8,
+                                                                                  "Gang Type": "primary reader",
+                                                                                  "Join Type": "Left",
+                                                                                  "Startup Cost": 0.00,
+                                                                                  "Total Cost": 2454609578.34,
+                                                                                  "Plan Rows": 78230083,
+                                                                                  "Plan Width": 410,
+                                                                                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_2.transport_route_departure_hub_code", "sales_bundle_and_delivery_relationship_2.transport_route_destination_hub_code", "sales_bundle_and_delivery_relationship_2.transportation_stage_code", "sales_bundle_and_delivery_relationship_2.is_final_transportation_stage_code"],
+                                                                                  "Hash Cond": "(((sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code)::text = (sales_bundle_and_delivery_relationship_2.sales_bundle_code)::text) AND ((sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p)::text = (sales_bundle_and_delivery_relationship_2.delivery_code)::text) AND ((sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code)::text = (sales_bundle_and_delivery_relationship_2.delivery_position_code)::text))",
+                                                                                  "Plans": [
+                                                                                    {
+                                                                                      "Node Type": "Redistribute Motion",
+                                                                                      "Senders": 8,
+                                                                                      "Receivers": 8,
+                                                                                      "Parent Relationship": "Outer",
+                                                                                      "Slice": 10,
+                                                                                      "Segments": 8,
+                                                                                      "Gang Type": "primary reader",
+                                                                                      "Startup Cost": 0.00,
+                                                                                      "Total Cost": 2454542872.66,
+                                                                                      "Plan Rows": 59930773,
+                                                                                      "Plan Width": 383,
+                                                                                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start"],
+                                                                                      "Hash Key": "sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code, sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p, sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code",
+                                                                                      "Plans": [
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Outer",
+                                                                                          "Slice": 10,
+                                                                                          "Segments": 8,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 2454533892.11,
+                                                                                          "Plan Rows": 59930773,
+                                                                                          "Plan Width": 383,
+                                                                                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start"],
+                                                                                          "Filter": "(NOT (CASE WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (NOT (sales_bundle_and_delivery_relationship.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship.delivery_code WHEN (((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (NOT (sales_bundle_and_delivery_relationship_1.delivery_code IS NULL))) THEN sales_bundle_and_delivery_relationship_1.delivery_code WHEN (NOT (foreign_warehouse_priority_definition_1.transport_hub_code IS NULL)) THEN lake.delivery_number_sales ELSE NULL::character varying END IS NULL))",
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Hash Join",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 10,
+                                                                                              "Segments": 8,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Join Type": "Left",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 2454530811.30,
+                                                                                              "Plan Rows": 149826932,
+                                                                                              "Plan Width": 383,
+                                                                                              "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start", "sales_bundle_and_delivery_relationship_1.delivery_code", "sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start"],
+                                                                                              "Hash Cond": "(((sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code)::text = (sales_bundle_and_delivery_relationship_1.sales_bundle_code)::text) AND ((sales_bundle_transport_hub_turnover_sdt0004.knote)::text = (sales_bundle_and_delivery_relationship_1.transport_route_destination_hub_code)::text))",
+                                                                                              "Join Filter": "(((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '04'::text) AND (sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start <= COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r, '2025-10-27'::date)) AND (sales_bundle_and_delivery_relationship_1.dt_transportation_stage_start >= COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p, '2025-10-27'::date)))",
+                                                                                              "Plans": [
+                                                                                                {
+                                                                                                  "Node Type": "Hash Join",
+                                                                                                  "Parent Relationship": "Outer",
+                                                                                                  "Slice": 10,
+                                                                                                  "Segments": 8,
+                                                                                                  "Gang Type": "primary reader",
+                                                                                                  "Join Type": "Left",
+                                                                                                  "Startup Cost": 0.00,
+                                                                                                  "Total Cost": 2454479630.81,
+                                                                                                  "Plan Rows": 147726488,
+                                                                                                  "Plan Width": 368,
+                                                                                                  "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code", "sales_bundle_and_delivery_relationship.delivery_code", "sales_bundle_and_delivery_relationship.dt_transportation_stage_start"],
+                                                                                                  "Hash Cond": "(((sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code)::text = (sales_bundle_and_delivery_relationship.sales_bundle_code)::text) AND ((sales_bundle_transport_hub_turnover_sdt0004.knote)::text = (sales_bundle_and_delivery_relationship.transport_route_destination_hub_code)::text))",
+                                                                                                  "Join Filter": "(((min((foreign_warehouse_priority_definition.market_region1_code)::text)) = '03'::text) AND (sales_bundle_and_delivery_relationship.dt_transportation_stage_start <= COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r, '2025-10-27'::date)) AND (sales_bundle_and_delivery_relationship.dt_transportation_stage_start >= COALESCE(sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p, '2025-10-27'::date)))",
+                                                                                                  "Plans": [
+                                                                                                    {
+                                                                                                      "Node Type": "Hash Join",
+                                                                                                      "Parent Relationship": "Outer",
+                                                                                                      "Slice": 10,
+                                                                                                      "Segments": 8,
+                                                                                                      "Gang Type": "primary reader",
+                                                                                                      "Join Type": "Left",
+                                                                                                      "Startup Cost": 0.00,
+                                                                                                      "Total Cost": 2454430089.12,
+                                                                                                      "Plan Rows": 146419383,
+                                                                                                      "Plan Width": 353,
+                                                                                                      "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))", "foreign_warehouse_priority_definition_1.transport_hub_code"],
+                                                                                                      "Hash Cond": "((sales_bundle_transport_hub_turnover_sdt0004.knote)::text = (foreign_warehouse_priority_definition_1.transport_hub_code)::text)",
+                                                                                                      "Plans": [
+                                                                                                        {
+                                                                                                          "Node Type": "Hash Join",
+                                                                                                          "Parent Relationship": "Outer",
+                                                                                                          "Slice": 10,
+                                                                                                          "Segments": 8,
+                                                                                                          "Gang Type": "primary reader",
+                                                                                                          "Join Type": "Left",
+                                                                                                          "Startup Cost": 0.00,
+                                                                                                          "Total Cost": 2454402534.66,
+                                                                                                          "Plan Rows": 94446113,
+                                                                                                          "Plan Width": 342,
+                                                                                                          "Output": ["sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code", "sales_bundle_transport_hub_turnover_sdt0004.knote", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r", "sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r", "sales_bundle_transport_hub_turnover_sdt0004.delivery_code", "sales_bundle_transport_hub_turnover_sdt0004.delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code", "sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code", "lake.delivery_number_sales", "lake.sd_000003", "lake.sd_000110", "lake.sd_000001", "lake.sd_000143", "lake.sd_000010", "lake.sd_000013", "lake.sd_000014", "lake.sd_000151", "lake.sd_000054", "lake.sd_000649", "lake.sd_000044", "lake.sd_000028", "lake.sd_000040", "lake.sd_000041", "lake.sd_000042", "lake.sd_000482", "lake.sd_000004", "lake.sd_000067", "lake.sd_000047", "lake.sd_000048", "lake.sd_000049", "lake.sd_000024", "bill_of_lading.dt_bill_of_lading", "for_1055.dt_end_of_free_storage", "material.etsng_code", "sales_bundle.sales_bundle_net_weight", "sales_bundle.sales_bundle_gross_weight", "foreign_warehouse_priority_definition.transport_hub_code", "(min((foreign_warehouse_priority_definition.market_region1_code)::text))"],
+                                                                                                          "Hash Cond": "((sales_bundle_transport_hub_turnover_sdt0004.knote)::text = (foreign_warehouse_priority_definition.transport_hub_code)::text)",
+                                                                                                          "Plans": [
+                                                                                                            {
+                                                                                                              "Node Type": "Redistribute Motion",
+                                                                                                              "Senders": 8,
+                                                                                                              "Receivers": 8,
+                                                                                                              "Parent Relationsh

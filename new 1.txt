@@ -1,300 +1,1104 @@
-WITH bounds AS (
-  SELECT 
-    (SELECT min(dt_balance) FROM date_for_vitr) AS min_dt,
-    (SELECT max(dt_balance) FROM date_for_vitr) AS max_dt
-),
+привет, первый запрос как был второй то то оптимизировали, мы писали вот в презентации не могу этого найти в плане
+❌ WindowAgg (LEAD) + Sort по десяткам млн строк
+❌ Двойное чтение CKMLCR
+❌ Redistribute Motion из-за разных дистрибуций
+❌ Без предагрегации MLCD → множители строк
+⚙️ Cost ≈ 187 млн, Rows ≈ 40 млрд
 
--- 1) XR > ZU: одна строка на документ
-supplier_final AS (
-  SELECT sales_document_code, supplier_code
-  FROM (
-    SELECT
-      sdr.sales_document_code,
-      sdr.supplier_code,
-      ROW_NUMBER() OVER (
-        PARTITION BY sdr.sales_document_code
-        ORDER BY (sdr.counterparty_role_code = 'XR') DESC, sdr.counterparty_role_code
-      ) AS rn
-    FROM dds.sales_document_counterparty_role sdr
-    WHERE sdr.counterparty_role_code IN ('XR','ZU')
-  ) x
-  WHERE rn = 1
-),
 
--- 2) списки стадий
-stage_eu AS (
-  SELECT range_low_value::varchar AS stage_code
-  FROM dict_dds.settings_and_parameters_sap
-  WHERE abap_program_code = '/RUSAL/SD2973M_2'
-    AND parameter_code = 'STAGE_EU'
-    AND range_low_value IS NOT NULL
-  GROUP BY range_low_value
-),
-stage_as AS (
-  SELECT range_low_value::varchar AS stage_code
-  FROM dict_dds.settings_and_parameters_sap
-  WHERE abap_program_code = '/RUSAL/SD2973M_2'   -- <-- фикс опечатки
-    AND parameter_code = 'STAGE_A'
-    AND range_low_value IS NOT NULL
-  GROUP BY range_low_value
-),
+create temporary table ckmlcr_2 ON COMMIT DROP as (
+select kalnr, (ckmlcr_2.bdatj || substring(ckmlcr_2.poper, 2, 2) || '01')::date + interval '1 month' as dt_posting, salk3
+from ods.ckmlcr_ral as ckmlcr_2
+where ckmlcr_2.untper = '000' and ckmlcr_2.curtp = '10')
+distributed by (kalnr);
 
--- 3) признаки регионов
-forwapd_1 AS (
-  SELECT transport_hub_code, MIN(market_region1_code) AS market_region1_code
-  FROM dict_dds.foreign_warehouse_priority_definition
-  WHERE market_region1_code IN ('04','03')
-    AND (is_terminal_code IS NOT NULL OR is_foreign_warehouse_code IS NOT NULL OR is_temporary_warehouse_code IS NOT NULL)
-  GROUP BY transport_hub_code
-),
-forwapd_2 AS (
-  SELECT transport_hub_code
-  FROM dict_dds.foreign_warehouse_priority_definition
-  WHERE is_russian_port_code IS NOT NULL
-  GROUP BY transport_hub_code
-),
 
--- 4) дедуп по sabadr_* (одна лучшая запись на (bundle, hub))
-sabadr_03_best AS (
-  SELECT *
-  FROM (
-    SELECT
-      s.*,
-      ROW_NUMBER() OVER (
-        PARTITION BY s.sales_bundle_code, s.transport_route_destination_hub_code
-        ORDER BY s.dt_transportation_stage_start DESC NULLS LAST, s.delivery_code DESC
-      ) AS rn
-    FROM dds.sales_bundle_and_delivery_relationship s
-    JOIN stage_eu se ON se.stage_code = s.transportation_stage_code
-    WHERE s.is_deleted_code IS NULL
-  ) q
-  WHERE rn = 1
-),
-sabadr_04_best AS (
-  SELECT *
-  FROM (
-    SELECT
-      s.*,
-      ROW_NUMBER() OVER (
-        PARTITION BY s.sales_bundle_code, s.transport_route_destination_hub_code
-        ORDER BY s.dt_transportation_stage_start DESC NULLS LAST, s.delivery_code DESC
-      ) AS rn
-    FROM dds.sales_bundle_and_delivery_relationship s
-    JOIN stage_as sa ON sa.stage_code = s.transportation_stage_code
-    WHERE s.is_deleted_code IS NULL
-  ) q
-  WHERE rn = 1
-),
+create temporary table mlcd ON COMMIT DROP as (
+select kalnr, bdatj, poper, sum(salk3) as salk3, sum(estprd) as estprd, sum(mstprd) as mstprd 
+from ods.mlcd_ral where categ in ('ZU', 'VP', 'PC') and curtp = '10' 
+group by kalnr, bdatj, poper)
+distributed by (kalnr);
 
--- 5) подготовка: считаем все «сложные» поля, режем по датам без COALESCE в WHERE
-prep AS (
+
+
+explain(analyze, format json)
+select ckmlpp.kalnr as calculation_code,
+(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date as dt_valid_from,
+case when lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+is null then '22991231'::date
+else lead(tech_etl.util_text_to_date_validation(ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01'))
+over (partition by ckmlpp.kalnr, ckmlpp.untper = '000' order by (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01')::date) - interval '1 day' 
+end as dt_valid_to,
+ckmlcr.vprsv as price_valuation_type_code, 
+ckmlcr.stprs as standard_price_amount, 
+ckmlcr.peinh as price_unit_code, 
+ckmlcr.pvprs as moving_average_price_amount, 
+case when ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo = 0 then 0
+	else trunc(cast(round(ckmlcr.stprs / ckmlcr.peinh * (ckmlpp.umkumo + ckmlpp.abkumo) + ckmlcr.abprd_o + ckmlcr.abprd_mo -- стоймость остатков на начало
+	+ coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) , 2) as numeric(40, 20)) -- стоймость куммулютивного запаса
+	/ (ckmlpp.umkumo + ckmlpp.abkumo + ckmlpp.zukumo), 15) end as average_weighted_stock_price_rule3_amount, -- Цена кумулятивного запаса в ветке = 3 price_588_3
+------------- цена куммулютивного запаса для равной даты
+case when (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo) <> 0 
+	then trunc(cast(ckmlcr_2.salk3 + coalesce(mlcd.salk3 + mlcd.estprd + mlcd.mstprd, 0) as numeric(40, 20)) / (ckmlpp.abkumo + ckmlpp.umkumo + ckmlpp.zukumo), 15)
+	else 0 end as average_weighted_stock_price_rule2_prev_date_amount, -- price_588_2_ravno
+------------- цена куммулютивного запаса для не равной даты
+case when (ckmlpp.lbkum) <> 0 then trunc(cast(ckmlcr.salk3 as numeric(40, 20)) / (ckmlpp.lbkum), 15)
+	else 0 end as average_weighted_stock_price_rule2_next_date_amount, -- price_588_2_ne_ravno
+ckmlhd.price_rule_code as price_rule_code
+from ods.ckmlpp_ral as ckmlpp
+left join ods.ckmlcr_ral as ckmlcr 
+on ckmlcr.kalnr = ckmlpp.kalnr and ckmlcr.bdatj = ckmlpp.bdatj and ckmlcr.poper = ckmlpp.poper and ckmlcr.untper = '000' and ckmlcr.curtp = '10'
+left join ckmlcr_2 on ckmlcr_2.kalnr = ckmlpp.kalnr and ckmlcr_2.dt_posting = (ckmlpp.bdatj || substring(ckmlpp.poper, 2, 2) || '01') ::date
+left join mlcd on mlcd.kalnr = ckmlpp.kalnr and mlcd.bdatj = ckmlpp.bdatj and mlcd.poper = ckmlpp.poper
+left join dds.material_ledger_header as ckmlhd on ckmlhd.calculation_code = ckmlpp.kalnr
+where ckmlpp.untper = '000';
+
+
+
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 3,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 1086157.57,
+      "Plan Rows": 243810381,
+      "Plan Width": 84,
+      "Actual Startup Time": 376505.617,
+      "Actual Total Time": 476296.092,
+      "Actual Rows": 87075138,
+      "Actual Loops": 1,
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 3,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 1029376.57,
+          "Plan Rows": 243810381,
+          "Plan Width": 84,
+          "Actual Startup Time": 383730.118,
+          "Actual Total Time": 465387.702,
+          "Actual Rows": 10935896,
+          "Actual Loops": 1,
+          "Plans": [
+            {
+              "Node Type": "WindowAgg",
+              "Parent Relationship": "Outer",
+              "Slice": 3,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 1026816.57,
+              "Plan Rows": 243810381,
+              "Plan Width": 100,
+              "Actual Startup Time": 383730.077,
+              "Actual Total Time": 446796.474,
+              "Actual Rows": 10935896,
+              "Actual Loops": 1,
+              "Partition By": ["ckmlpp_ral.kalnr", "(((ckmlpp_ral.untper)::text = '000'::text))"],
+              "Order By": ["(((((ckmlpp_ral.bdatj)::text || \"substring\"((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text))::date)"],
+              "Plans": [
+                {
+                  "Node Type": "Sort",
+                  "Parent Relationship": "Outer",
+                  "Slice": 3,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 1023586.08,
+                  "Plan Rows": 243810381,
+                  "Plan Width": 106,
+                  "Actual Startup Time": 383729.975,
+                  "Actual Total Time": 385704.181,
+                  "Actual Rows": 10935896,
+                  "Actual Loops": 1,
+                  "Sort Key": ["ckmlpp_ral.kalnr", "(((ckmlpp_ral.untper)::text = '000'::text))", "(((((ckmlpp_ral.bdatj)::text || \"substring\"((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text))::date)"],
+                  "Sort Method": "external sort",
+                  "Sort Space Used": 11109440,
+                  "Sort Space Type": "Disk",
+                  "Plans": [
+                    {
+                      "Node Type": "WindowAgg",
+                      "Parent Relationship": "Outer",
+                      "Slice": 3,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 568207.14,
+                      "Plan Rows": 243810381,
+                      "Plan Width": 106,
+                      "Actual Startup Time": 237769.235,
+                      "Actual Total Time": 313819.084,
+                      "Actual Rows": 10935896,
+                      "Actual Loops": 1,
+                      "Partition By": ["ckmlpp_ral.kalnr", "(((ckmlpp_ral.untper)::text = '000'::text))"],
+                      "Order By": ["(tech_etl.util_text_to_date_validation((((ckmlpp_ral.bdatj)::text || \"substring\"((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text)))"],
+                      "Plans": [
+                        {
+                          "Node Type": "Sort",
+                          "Parent Relationship": "Outer",
+                          "Slice": 3,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 564976.65,
+                          "Plan Rows": 243810381,
+                          "Plan Width": 106,
+                          "Actual Startup Time": 237769.113,
+                          "Actual Total Time": 253652.943,
+                          "Actual Rows": 10935896,
+                          "Actual Loops": 1,
+                          "Sort Key": ["ckmlpp_ral.kalnr", "(((ckmlpp_ral.untper)::text = '000'::text))", "(tech_etl.util_text_to_date_validation((((ckmlpp_ral.bdatj)::text || \"substring\"((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text)))"],
+                          "Sort Method": "external merge",
+                          "Sort Space Used": 10802656,
+                          "Sort Space Type": "Disk",
+                          "Plans": [
+                            {
+                              "Node Type": "Result",
+                              "Parent Relationship": "Outer",
+                              "Slice": 3,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 109597.71,
+                              "Plan Rows": 243810381,
+                              "Plan Width": 106,
+                              "Actual Startup Time": 15264.950,
+                              "Actual Total Time": 135042.072,
+                              "Actual Rows": 10935896,
+                              "Actual Loops": 1,
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 3,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Join Type": "Left",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 103319.59,
+                                  "Plan Rows": 243810381,
+                                  "Plan Width": 92,
+                                  "Actual Startup Time": 15263.008,
+                                  "Actual Total Time": 75523.189,
+                                  "Actual Rows": 10935896,
+                                  "Actual Loops": 1,
+                                  "Hash Cond": "((ckmlpp_ral.kalnr)::text = (material_ledger_header.calculation_code)::text)",
+                                  "Extra Text": [
+                                    {
+                                      "Extra Text": "(seg2)   Hash chain length 3.3 avg, 14 max, using 125664 of 131072 buckets.Initial batch 0:\n"
+                                    }
+                                  ],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 3,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Join Type": "Left",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 89367.25,
+                                      "Plan Rows": 121905190,
+                                      "Plan Width": 90,
+                                      "Actual Startup Time": 15161.600,
+                                      "Actual Total Time": 65034.339,
+                                      "Actual Rows": 10935896,
+                                      "Actual Loops": 1,
+                                      "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (mlcd.kalnr)::text) AND ((ckmlpp_ral.bdatj)::text = (mlcd.bdatj)::text) AND ((ckmlpp_ral.poper)::text = (mlcd.poper)::text))",
+                                      "Extra Text": [
+                                        {
+                                          "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 40705K bytes to inner workfile.\n(seg2)     Wrote 970340K bytes to outer workfile.\n(seg2)   Initial batches 1..3:\n(seg2)     Read 40705K bytes from inner workfile: 13569K avg x 3 nonempty batches, 13588K max.\n(seg2)     Read 970340K bytes from outer workfile: 323447K avg x 3 nonempty batches, 323540K max.\n(seg2)   Work file set: 6 files (0 compressed), avg file size 172528981, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.1 avg, 10 max, using 428107 of 524288 buckets.Initial batch 0:\n"
+                                        }
+                                      ],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Hash Join",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 3,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Join Type": "Left",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 74385.45,
+                                          "Plan Rows": 121905190,
+                                          "Plan Width": 74,
+                                          "Actual Startup Time": 14845.115,
+                                          "Actual Total Time": 53557.136,
+                                          "Actual Rows": 10935896,
+                                          "Actual Loops": 1,
+                                          "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (ckmlcr_2.kalnr)::text) AND ((((((ckmlpp_ral.bdatj)::text || \"substring\"((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text))::date)::timestamp without time zone = ckmlcr_2.dt_posting))",
+                                          "Extra Text": [
+                                            {
+                                              "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 466716K bytes to inner workfile.\n(seg2)     Wrote 1202730K bytes to outer workfile.\n(seg2)   Initial batches 1..31:\n(seg2)     Read 466716K bytes from inner workfile: 15056K avg x 31 nonempty batches, 15124K max.\n(seg2)     Read 1202730K bytes from outer workfile: 38798K avg x 31 nonempty batches, 38982K max.\n(seg2)   Work file set: 62 files (0 compressed), avg file size 27555245, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.8 avg, 14 max, using 3893213 of 4194304 buckets.Initial batch 0:\n"
+                                            }
+                                          ],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Hash Join",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 3,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Join Type": "Left",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 45757.16,
+                                              "Plan Rows": 87075136,
+                                              "Plan Width": 70,
+                                              "Actual Startup Time": 11967.712,
+                                              "Actual Total Time": 28266.348,
+                                              "Actual Rows": 10935896,
+                                              "Actual Loops": 1,
+                                              "Hash Cond": "(((ckmlpp_ral.kalnr)::text = (ckmlcr_ral.kalnr)::text) AND ((ckmlpp_ral.bdatj)::text = (ckmlcr_ral.bdatj)::text) AND ((ckmlpp_ral.poper)::text = (ckmlcr_ral.poper)::text))",
+                                              "Extra Text": [
+                                                {
+                                                  "Extra Text": "(seg2)   Initial batch 0:\n(seg2)     Wrote 957536K bytes to inner workfile.\n(seg2)     Wrote 717180K bytes to outer workfile.\n(seg2)   Initial batches 1..63:\n(seg2)     Read 957536K bytes from inner workfile: 15199K avg x 63 nonempty batches, 15308K max.\n(seg2)     Read 717180K bytes from outer workfile: 11384K avg x 63 nonempty batches, 11468K max.\n(seg2)   Work file set: 126 files (0 compressed), avg file size 13593778, compression buffer size 0 bytes\n(seg2)   Hash chain length 2.8 avg, 14 max, using 3892787 of 4194304 buckets."
+                                                }
+                                              ],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Redistribute Motion",
+                                                  "Senders": 8,
+                                                  "Receivers": 8,
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 3613.27,
+                                                  "Plan Rows": 87075136,
+                                                  "Plan Width": 38,
+                                                  "Actual Startup Time": 0.076,
+                                                  "Actual Total Time": 4121.316,
+                                                  "Actual Rows": 10935896,
+                                                  "Actual Loops": 1,
+                                                  "Hash Key": "ckmlpp_ral.kalnr",
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Seq Scan",
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 1,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Relation Name": "ckmlpp_ral",
+                                                      "Alias": "ckmlpp_ral",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 2318.68,
+                                                      "Plan Rows": 87075136,
+                                                      "Plan Width": 38,
+                                                      "Actual Startup Time": 7.231,
+                                                      "Actual Total Time": 2651.154,
+                                                      "Actual Rows": 10891272,
+                                                      "Actual Loops": 1,
+                                                      "Filter": "((untper)::text = '000'::text)",
+                                                      "Rows Removed by Filter": 0
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "Node Type": "Hash",
+                                                  "Parent Relationship": "Inner",
+                                                  "Slice": 3,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Startup Cost": 6185.92,
+                                                  "Total Cost": 6185.92,
+                                                  "Plan Rows": 87723572,
+                                                  "Plan Width": 54,
+                                                  "Actual Startup Time": 11962.890,
+                                                  "Actual Total Time": 11962.890,
+                                                  "Actual Rows": 11050800,
+                                                  "Actual Loops": 1,
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Redistribute Motion",
+                                                      "Senders": 8,
+                                                      "Receivers": 8,
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 2,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 6185.92,
+                                                      "Plan Rows": 87723572,
+                                                      "Plan Width": 54,
+                                                      "Actual Startup Time": 0.041,
+                                                      "Actual Total Time": 9955.788,
+                                                      "Actual Rows": 11050800,
+                                                      "Actual Loops": 1,
+                                                      "Hash Key": "ckmlcr_ral.kalnr",
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Seq Scan",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 2,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Relation Name": "ckmlcr_ral",
+                                                          "Alias": "ckmlcr_ral",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 4332.54,
+                                                          "Plan Rows": 87723572,
+                                                          "Plan Width": 54,
+                                                          "Actual Startup Time": 9.003,
+                                                          "Actual Total Time": 6801.302,
+                                                          "Actual Rows": 11003553,
+                                                          "Actual Loops": 1,
+                                                          "Filter": "(((untper)::text = '000'::text) AND ((curtp)::text = '10'::text))",
+                                                          "Rows Removed by Filter": 0
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "Node Type": "Hash",
+                                              "Parent Relationship": "Inner",
+                                              "Slice": 3,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 763.73,
+                                              "Total Cost": 763.73,
+                                              "Plan Rows": 87996024,
+                                              "Plan Width": 25,
+                                              "Actual Startup Time": 2829.099,
+                                              "Actual Total Time": 2829.099,
+                                              "Actual Rows": 11050800,
+                                              "Actual Loops": 1,
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 3,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "ckmlcr_2",
+                                                  "Alias": "ckmlcr_2",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 763.73,
+                                                  "Plan Rows": 87996024,
+                                                  "Plan Width": 25,
+                                                  "Actual Startup Time": 0.044,
+                                                  "Actual Total Time": 730.486,
+                                                  "Actual Rows": 11050800,
+                                                  "Actual Loops": 1
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "Node Type": "Hash",
+                                          "Parent Relationship": "Inner",
+                                          "Slice": 3,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 463.93,
+                                          "Total Cost": 463.93,
+                                          "Plan Rows": 7044352,
+                                          "Plan Width": 38,
+                                          "Actual Startup Time": 316.284,
+                                          "Actual Total Time": 316.284,
+                                          "Actual Rows": 889370,
+                                          "Actual Loops": 1,
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Seq Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 3,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Relation Name": "mlcd",
+                                              "Alias": "mlcd",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 463.93,
+                                              "Plan Rows": 7044352,
+                                              "Plan Width": 38,
+                                              "Actual Startup Time": 0.041,
+                                              "Actual Total Time": 51.433,
+                                              "Actual Rows": 889370,
+                                              "Actual Loops": 1
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "Node Type": "Hash",
+                                      "Parent Relationship": "Inner",
+                                      "Slice": 3,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 461.11,
+                                      "Total Cost": 461.11,
+                                      "Plan Rows": 3317974,
+                                      "Plan Width": 15,
+                                      "Actual Startup Time": 101.150,
+                                      "Actual Total Time": 101.150,
+                                      "Actual Rows": 416144,
+                                      "Actual Loops": 1,
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 3,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "material_ledger_header",
+                                          "Alias": "material_ledger_header",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 461.11,
+                                          "Plan Rows": 3317974,
+                                          "Plan Width": 15,
+                                          "Actual Startup Time": 0.175,
+                                          "Actual Total Time": 39.540,
+                                          "Actual Rows": 416144,
+                                          "Actual Loops": 1
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Planning Time": 122.696,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 3346280
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 1261288,
+          "Workers": 8,
+          "Maximum Memory Used": 1261288
+        }
+      },
+      {
+        "Slice": 2,
+        "Executor Memory": {
+          "Average": 1769472,
+          "Workers": 8,
+          "Maximum Memory Used": 1769472
+        }
+      },
+      {
+        "Slice": 3,
+        "Executor Memory": {
+          "Average": 153167328,
+          "Workers": 8,
+          "Maximum Memory Used": 153179616
+        },
+        "Work Maximum Memory": 73894736
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 126976,
+      "Memory wanted": 28126866
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    },
+    "Execution Time": 478949.554
+  }
+]
+
+
+
+
+explain(verbose, format json)
+WITH
+pp AS (
   SELECT
-    t4.sales_bundle_code,
-    lake.sd_000003  AS plant_producer_delivery_code,
-    lake.sd_000110  AS plant_producer_delivery_position_code,
-    lake.sd_000001  AS initial_delivery_code,
-    lake.sd_000143  AS material_code,
-    lake.sd_000010  AS dt_shipment,
-    lake.sd_000013  AS railcar_code,
-    lake.sd_000014  AS transport_bill_code,
-    lake.sd_000151  AS uni,
-    lake.sd_000028  AS transport_type_code,
-    lake.sd_000004  AS batch_code,
-    lake.sd_000024  AS dt_arrival_rus_port_raw,
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')        AS dt_valid_from,
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD')
+      + INTERVAL '1 month' - INTERVAL '1 day')::date          AS dt_valid_to,
+    umkumo, abkumo, zukumo, lbkum
+  FROM userdata.ckmlpp_ral
+  WHERE untper='000'
+),
 
-    t4.dt_transportation_stage_start_p,
-    t4.dt_transportation_stage_start_r,
-    t4.knote,
-    t4.transportation_inbound_delivery_position_code,
-    t4.transportation_outbound_delivery_position_code,
-    t4.delivery_code_le_p,
-    t4.delivery_code_le_r,
-    lake.delivery_number_sales,
+cr AS (  
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') AS dt_start,   -- 1-е число текущего месяца
+    (to_date(bdatj||substr(poper,2,2)||'01','YYYYMMDD') + INTERVAL '1 month')::date AS dt_next, -- 1-е след. месяца
+    stprs, peinh, pvprs, abprd_o, abprd_mo, vprsv, salk3
+  FROM userdata.ckmlcr_ral
+  WHERE untper='000' AND curtp='10'
+),
 
-    fw1.market_region1_code,
-    (fw2.transport_hub_code IS NOT NULL)::int AS is_rus_port,
+mlcd_agg AS (
+  SELECT
+    (kalnr)::text AS kalnr_text,
+    bdatj::text   AS bdatj,
+    poper::text   AS poper,
+    SUM(salk3)  AS salk3,
+    SUM(estprd) AS estprd,
+    SUM(mstprd) AS mstprd
 
-    -- кандидаты
-    sab03.delivery_code AS vbeln_03,
-    sab04.delivery_code AS vbeln_04,
-
-    -- протащим нужные даты сабов ВНУТРЬ prep:
-    sab03.dt_transportation_stage_start AS sab03_dt_transportation_stage_start,
-    sab04.dt_transportation_stage_start AS sab04_dt_transportation_stage_start,
-
-    -- финальный ключ для join с likp
-    CASE
-      WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
-      WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
-      WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
-    END AS delivery_for_join,
-
-    -- wwgsg_01 и дата
-    CASE
-      WHEN fw1.market_region1_code IN ('03','04') 
-           AND (sab03.delivery_code IS NOT NULL OR sab04.delivery_code IS NOT NULL) THEN NULL
-      WHEN fw2.transport_hub_code IS NOT NULL THEN '1'
-    END AS wwgsg_01,
-    CASE
-      WHEN fw1.market_region1_code IN ('03','04') 
-           AND (sab03.delivery_code IS NOT NULL OR sab04.delivery_code IS NOT NULL) THEN NULL::date
-      WHEN fw2.transport_hub_code IS NOT NULL THEN vbsk.dt_bill_of_lading
-    END AS wwgsg_01_date,
-
-    -- единый поставщик
-    sf.supplier_code AS supplier_code_final
-
-  FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-  LEFT JOIN lake ON lake.sales_bundle_code = t4.sales_bundle_code AND lake.rn = 1
-  LEFT JOIN forwapd_1 fw1 ON fw1.transport_hub_code = t4.knote
-  LEFT JOIN forwapd_2 fw2 ON fw2.transport_hub_code = t4.knote
-
-  LEFT JOIN sabadr_03_best sab03
-         ON sab03.sales_bundle_code = t4.sales_bundle_code
-        AND sab03.transport_route_destination_hub_code = t4.knote
-        AND sab03.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p 
-                                                   AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
-
-  LEFT JOIN sabadr_04_best sab04
-         ON sab04.sales_bundle_code = t4.sales_bundle_code
-        AND sab04.transport_route_destination_hub_code = t4.knote
-        AND sab04.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p 
-                                                   AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
-
-  LEFT JOIN dds.bill_of_lading vbsk 
-         ON vbsk.bill_of_lading_code = lake.sd_000040
-        AND vbsk.bill_of_lading_type_code = 'Y'
-
-  LEFT JOIN supplier_final sf ON sf.sales_document_code = t4.delivery_code_le_p
-  CROSS JOIN bounds b
-  WHERE 
-        t4.dt_transportation_stage_start_p <= b.max_dt
-    AND (t4.dt_transportation_stage_start_r IS NULL OR t4.dt_transportation_stage_start_r >= b.min_dt)
-    AND t4.dt_transportation_stage_start_p <> COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-    AND t4.transport_route_destination_hub_code LIKE 'G%'
-    AND (
-      CASE
-        WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
-        WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
-        WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
-      END
-    ) IS NOT NULL
+  FROM userdata.mlcd_ral
+  WHERE curtp='10' AND categ IN ('ZU','VP','PC')
+  GROUP BY 1,2,3
 )
 
--- 6) Итог
 SELECT
-  p.sales_bundle_code                                        AS sales_bundle_code,
-  p.plant_producer_delivery_code                             AS plant_producer_delivery_code,
-  p.plant_producer_delivery_position_code                    AS plant_producer_delivery_position_code,
-  p.initial_delivery_code                                    AS initial_delivery_code,
-  p.material_code                                            AS material_code,
-  p.dt_shipment                                              AS dt_shipment,
-  p.railcar_code                                             AS railcar_code,
-  p.transport_bill_code                                      AS transport_bill_code,
-  p.uni                                                      AS uni,
-  maspe.shape_code                                           AS material_shape_code,
-  p.transport_type_code                                      AS transport_type_code,
-  mater.etsng_code                                           AS etsng_code,
-  sabu.sales_bundle_net_weight / 1000.0                      AS sales_bundle_net_weight,
-  sabu.sales_bundle_gross_weight / 1000.0                    AS sales_bundle_gross_weight,
-  p.batch_code                                               AS batch_code,
-  t4.dt_transportation_stage_start_r                         AS dt_arrival,
-  dedopo_1.plant_producer_code                               AS receiving_plant_code,
-  p.delivery_number_sales                                    AS sales_delivery_code,
+  p.kalnr_text                  AS calculation_code,
+  p.dt_valid_from,
+  p.dt_valid_to,
 
-  CASE WHEN p.market_region1_code IS NOT NULL THEN p.delivery_code_le_p END AS transportation_inbound_delivery_code,
+  c_curr.vprsv                  AS price_valuation_type_code,
+  c_curr.stprs                  AS standard_price_amount,
+  c_curr.peinh                  AS price_unit_code,
+  c_curr.pvprs                  AS moving_average_price_amount,
 
-  CASE
-    WHEN p.market_region1_code = '03' AND p.vbeln_03 IS NOT NULL THEN p.vbeln_03
-    WHEN p.market_region1_code = '04' AND p.vbeln_04 IS NOT NULL THEN p.vbeln_04
-    WHEN p.is_rus_port = 1                                    THEN p.delivery_number_sales
-  END AS delivery_for_storage_calculation_code,
 
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL) THEN NULL
-    WHEN p.is_rus_port = 1 THEN '1'
-  END AS wwgsg_01,
+  CASE WHEN (p.umkumo + p.abkumo + p.zukumo)=0 THEN 0
+       ELSE TRUNC(
+              CAST(ROUND(
+                    (c_curr.stprs / NULLIF(c_curr.peinh,0)) * (p.umkumo + p.abkumo)
+                  + c_curr.abprd_o + c_curr.abprd_mo
+                  + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
+              ,2) AS NUMERIC(40,20))
+              / NULLIF((p.umkumo + p.abkumo + p.zukumo),0), 15)
+  END AS average_weighted_stock_price_rule3_amount,
 
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL) THEN NULL::date
-    WHEN p.is_rus_port = 1 THEN p.wwgsg_01_date
-  END AS wwgsg_01_date,
+  /* берём salk3 строки, у которой dt_next = dt_valid_from */
+  CASE WHEN (p.abkumo + p.umkumo + p.zukumo)<>0
+       THEN TRUNC(
+              CAST(COALESCE(c_prev.salk3,0)
+                   + COALESCE(m.salk3 + m.estprd + m.mstprd,0)
+              AS NUMERIC(40,20))
+              / NULLIF((p.abkumo + p.umkumo + p.zukumo),0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_prev_date_amount,
 
-  t4.transportation_inbound_delivery_position_code           AS transportation_inbound_delivery_position_code,
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL)
-      THEN t4.transportation_inbound_delivery_position_code
-    ELSE '10'
-  END AS delivery_position_for_storage_calculation_code,
+  /* rule2_next_date: остаток текущего периода */
+  CASE WHEN p.lbkum<>0
+       THEN TRUNC(CAST(c_curr.salk3 AS NUMERIC(40,20)) / NULLIF(p.lbkum,0), 15)
+       ELSE 0
+  END AS average_weighted_stock_price_rule2_next_date_amount,
 
-  sf_final.supplier_code                                     AS forwarder_code,
+  h.price_rule_code
+FROM pp p
+LEFT JOIN cr c_curr
+  ON  c_curr.kalnr_text = p.kalnr_text
+  AND c_curr.bdatj      = p.bdatj
+  AND c_curr.poper      = p.poper
+LEFT JOIN cr c_prev
+  ON  c_prev.kalnr_text = p.kalnr_text
+  AND c_prev.dt_next    = p.dt_valid_from     
+LEFT JOIN mlcd_agg m
+  ON  m.kalnr_text = p.kalnr_text
+  AND m.bdatj      = p.bdatj
+  AND m.poper      = p.poper
+LEFT JOIN dds.material_ledger_header h
+  ON  h.calculation_code = p.kalnr_text
 
-  CASE
-    WHEN likp.delivery_type_code <> 'ZLE' AND p.transport_type_code = 'TL04' THEN 'Логика РФ-контейнеры'
-    WHEN likp.delivery_type_code <> 'ZLE' AND p.transport_type_code <> 'TL04' THEN 'Логика РФ-балк'
-    WHEN likp.delivery_type_code  = 'ZLE' AND asia_log.range_low_value IS NOT NULL AND asia.counterparty_code IS NULL THEN 'Логика Азия'
-    WHEN likp.delivery_type_code  = 'ZLE' AND euro_1.counterparty_code IS NOT NULL THEN 'Логика Европа'
-    WHEN likp.delivery_type_code  = 'ZLE' AND euro_2.counterparty_code IS NOT NULL AND euro_log.range_low_value IS NOT NULL THEN 'Логика Европа'
-    WHEN likp.delivery_type_code  = 'ZLE' AND svh.counterparty_code  IS NOT NULL THEN 'Логика СВХ'
-    ELSE 'Логика не определена'
-  END AS storage_cost_calculation_type_name,
 
-  sbudr_base.transport_route_departure_hub_code              AS transport_departure_hub_code,
-  sbudr_base.transport_route_destination_hub_code            AS transport_destination_hub_code,
-  sbudr_base.is_final_transportation_stage_code              AS sd_000902,
-  sbudr_base.transportation_stage_code                       AS sd_000903,
-  for_LE_001035.cnt                                          AS sd_000905,
-
-  lake.SD_000482, lake.SD_000041, lake.SD_000042, lake.SD_000047, lake.SD_000048,
-  lake.SD_000054, lake.SD_000049, lake.SD_000067, lake.SD_000649, lake.SD_000044, lake.SD_000040,
-
-  t4.delivery_code_le_r                                       AS sd_000516,
-  t4.transportation_outbound_delivery_position_code           AS sd_000897,
-  likp.weight_net                                             AS ntgew,
-  likp.weight_net_with_wirerod                                AS btgew,
-  t4.knote                                                    AS sd_000420,
-  likp.dt_loaded                                              AS likp_lddat,
-
-  CASE
-    WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL) THEN NULL
-    ELSE p.dt_arrival_rus_port_raw
-  END AS dt_arrival_to_russian_port,
-
-  t4.dt_transportation_stage_start_p,
-  COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)  AS dt_transportation_stage_start_r,
-  CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique,
-
-  -- ВАЖНО: теперь берём даты сабов из p., а НЕ из sab03/sab04
-  COALESCE(p.sab03_dt_transportation_stage_start, p.sab04_dt_transportation_stage_start) AS lddat_4798,
-  COALESCE(p.vbeln_03, p.vbeln_04)                                                       AS vbeln_4798,
-
-  for_1055.dt_end_of_free_storage                            AS dt_storage_end_in_release
-
-FROM prep p
-JOIN dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4 
-  ON t4.sales_bundle_code = p.sales_bundle_code
-LEFT JOIN lake ON lake.sales_bundle_code = p.sales_bundle_code AND lake.rn = 1
-LEFT JOIN dds.sales_bundle sabu ON sabu.sales_bundle_code = p.sales_bundle_code
-LEFT JOIN dict_dds.material mater ON mater.material_code = p.material_code
-LEFT JOIN dict_dds.material_specification maspe ON maspe.material_code = p.material_code
-LEFT JOIN dds.delivery_document_position dedopo_1 ON dedopo_1.delivery_code = p.delivery_number_sales
-
-LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base 
-       ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
-      AND sbudr_base.delivery_code      = t4.delivery_code_le_p
-      AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
-      AND sbudr_base.is_deleted_code IS NULL
-
-LEFT JOIN dds.delivery_document_header likp ON likp.delivery_code = p.delivery_for_join
-LEFT JOIN supplier_final sf_final ON sf_final.sales_document_code = t4.delivery_code_le_p
-
-LEFT JOIN asia      ON asia.counterparty_code   = sf_final.supplier_code
-LEFT JOIN euro_1    ON euro_1.counterparty_code = sf_final.supplier_code
-LEFT JOIN euro_2    ON euro_2.counterparty_code = sf_final.supplier_code
-LEFT JOIN svh       ON svh.counterparty_code    = sf_final.supplier_code
-LEFT JOIN asia_log  ON asia_log.range_low_value = sf_final.supplier_code
-LEFT JOIN euro_log  ON euro_log.range_low_value = sf_final.supplier_code
-
-LEFT JOIN for_LE_001035 ON for_LE_001035.delivery_code = t4.delivery_code_le_p
-                        AND for_LE_001035.batch_code   = p.batch_code
-LEFT JOIN for_1055   ON for_1055.vbeln = p.delivery_number_sales;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 6,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 133522.97,
+      "Plan Rows": 87940071,
+      "Plan Width": 80,
+      "Output": ["((ckmlpp_ral.kalnr)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "share1_ref3.vprsv", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "(CASE WHEN (((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((share1_ref3.stprs / (NULLIF(share1_ref3.peinh, 0))::numeric) * (ckmlpp_ral.umkumo + ckmlpp_ral.abkumo)) + share1_ref3.abprd_o) + share1_ref3.abprd_mo) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2), 2621464) / NULLIF(((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) END)", "(CASE WHEN (((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((COALESCE(share1_ref2.salk3, '0'::numeric) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2621464) / NULLIF(((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) ELSE '0'::numeric END)", "(CASE WHEN (ckmlpp_ral.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(share1_ref3.salk3, 2621464) / NULLIF(ckmlpp_ral.lbkum, '0'::numeric)), 15) ELSE '0'::numeric END)", "material_ledger_header.price_rule_code"],
+      "Plans": [
+        {
+          "Node Type": "Sequence",
+          "Parent Relationship": "Outer",
+          "Slice": 6,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 114017.86,
+          "Plan Rows": 87940071,
+          "Plan Width": 80,
+          "Output": ["((ckmlpp_ral.kalnr)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "share1_ref3.vprsv", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "(CASE WHEN (((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((share1_ref3.stprs / (NULLIF(share1_ref3.peinh, 0))::numeric) * (ckmlpp_ral.umkumo + ckmlpp_ral.abkumo)) + share1_ref3.abprd_o) + share1_ref3.abprd_mo) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2), 2621464) / NULLIF(((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) END)", "(CASE WHEN (((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((COALESCE(share1_ref2.salk3, '0'::numeric) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2621464) / NULLIF(((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) ELSE '0'::numeric END)", "(CASE WHEN (ckmlpp_ral.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(share1_ref3.salk3, 2621464) / NULLIF(ckmlpp_ral.lbkum, '0'::numeric)), 15) ELSE '0'::numeric END)", "material_ledger_header.price_rule_code"],
+          "Plans": [
+            {
+              "Node Type": "Shared Scan",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Share ID": 1,
+              "Slice ID": 6,
+              "Startup Cost": 0.00,
+              "Total Cost": 6406.45,
+              "Plan Rows": 87812422,
+              "Plan Width": 1,
+              "Output": ["share1_ref1.kalnr_text", "share1_ref1.bdatj", "share1_ref1.poper", "share1_ref1.dt_start", "share1_ref1.dt_next", "share1_ref1.stprs", "share1_ref1.peinh", "share1_ref1.pvprs", "share1_ref1.abprd_o", "share1_ref1.abprd_mo", "share1_ref1.vprsv", "share1_ref1.salk3"],
+              "Plans": [
+                {
+                  "Node Type": "Materialize",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 6406.45,
+                  "Plan Rows": 87812422,
+                  "Plan Width": 1,
+                  "Output": ["((ckmlcr_ral.kalnr)::text)", "((ckmlcr_ral.bdatj)::text)", "((ckmlcr_ral.poper)::text)", "(to_date((((ckmlcr_ral.bdatj)::text || substr((ckmlcr_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date((to_date((((ckmlcr_ral.bdatj)::text || substr((ckmlcr_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval)))", "ckmlcr_ral.stprs", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo", "ckmlcr_ral.vprsv", "ckmlcr_ral.salk3"],
+                  "Plans": [
+                    {
+                      "Node Type": "Result",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 6395.47,
+                      "Plan Rows": 87812422,
+                      "Plan Width": 88,
+                      "Output": ["ckmlcr_ral.kalnr", "ckmlcr_ral.bdatj", "ckmlcr_ral.poper", "to_date((((ckmlcr_ral.bdatj)::text || substr((ckmlcr_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text)", "date((to_date((((ckmlcr_ral.bdatj)::text || substr((ckmlcr_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval))", "ckmlcr_ral.stprs", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo", "ckmlcr_ral.vprsv", "ckmlcr_ral.salk3"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "ckmlcr_ral",
+                          "Schema": "userdata",
+                          "Alias": "ckmlcr_ral",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 4331.88,
+                          "Plan Rows": 87812422,
+                          "Plan Width": 54,
+                          "Output": ["ckmlcr_ral.bdatj", "ckmlcr_ral.kalnr", "ckmlcr_ral.poper", "ckmlcr_ral.peinh", "ckmlcr_ral.pvprs", "ckmlcr_ral.salk3", "ckmlcr_ral.stprs", "ckmlcr_ral.vprsv", "ckmlcr_ral.abprd_o", "ckmlcr_ral.abprd_mo"],
+                          "Filter": "(((ckmlcr_ral.untper)::text = '000'::text) AND ((ckmlcr_ral.curtp)::text = '10'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 106732.02,
+              "Plan Rows": 87940071,
+              "Plan Width": 80,
+              "Output": ["((ckmlpp_ral.kalnr)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "share1_ref3.vprsv", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "CASE WHEN (((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo) = '0'::numeric) THEN '0'::numeric ELSE trunc((\"numeric\"(round((((((share1_ref3.stprs / (NULLIF(share1_ref3.peinh, 0))::numeric) * (ckmlpp_ral.umkumo + ckmlpp_ral.abkumo)) + share1_ref3.abprd_o) + share1_ref3.abprd_mo) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2), 2621464) / NULLIF(((ckmlpp_ral.umkumo + ckmlpp_ral.abkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) END", "CASE WHEN (((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo) <> '0'::numeric) THEN trunc((\"numeric\"((COALESCE(share1_ref2.salk3, '0'::numeric) + COALESCE((((sum(mlcd_ral.salk3)) + (sum(mlcd_ral.estprd))) + (sum(mlcd_ral.mstprd))), '0'::numeric)), 2621464) / NULLIF(((ckmlpp_ral.abkumo + ckmlpp_ral.umkumo) + ckmlpp_ral.zukumo), '0'::numeric)), 15) ELSE '0'::numeric END", "CASE WHEN (ckmlpp_ral.lbkum <> '0'::numeric) THEN trunc((\"numeric\"(share1_ref3.salk3, 2621464) / NULLIF(ckmlpp_ral.lbkum, '0'::numeric)), 15) ELSE '0'::numeric END", "material_ledger_header.price_rule_code"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Left",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 105852.62,
+                  "Plan Rows": 87940071,
+                  "Plan Width": 98,
+                  "Output": ["((ckmlpp_ral.kalnr)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3", "share1_ref2.salk3", "(sum(mlcd_ral.salk3))", "(sum(mlcd_ral.estprd))", "(sum(mlcd_ral.mstprd))", "material_ledger_header.price_rule_code"],
+                  "Hash Cond": "(((ckmlpp_ral.kalnr)::text) = (material_ledger_header.calculation_code)::text)",
+                  "Plans": [
+                    {
+                      "Node Type": "Hash Join",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Join Type": "Left",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 98898.92,
+                      "Plan Rows": 87069377,
+                      "Plan Width": 96,
+                      "Output": ["((ckmlpp_ral.kalnr)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3", "share1_ref2.salk3", "(sum(mlcd_ral.salk3))", "(sum(mlcd_ral.estprd))", "(sum(mlcd_ral.mstprd))"],
+                      "Hash Cond": "((((ckmlpp_ral.kalnr)::text) = ((mlcd_ral.kalnr)::text)) AND (((ckmlpp_ral.bdatj)::text) = ((mlcd_ral.bdatj)::text)) AND (((ckmlpp_ral.poper)::text) = ((mlcd_ral.poper)::text)))",
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Left",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 72599.76,
+                          "Plan Rows": 87069377,
+                          "Plan Width": 88,
+                          "Output": ["((ckmlpp_ral.kalnr)::text)", "((ckmlpp_ral.bdatj)::text)", "((ckmlpp_ral.poper)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3", "share1_ref2.salk3"],
+                          "Hash Cond": "((((ckmlpp_ral.kalnr)::text) = share1_ref2.kalnr_text) AND ((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text)) = share1_ref2.dt_next))",
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Left",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 49264.18,
+                              "Plan Rows": 87060671,
+                              "Plan Width": 84,
+                              "Output": ["((ckmlpp_ral.kalnr)::text)", "((ckmlpp_ral.bdatj)::text)", "((ckmlpp_ral.poper)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3"],
+                              "Hash Cond": "((((ckmlpp_ral.kalnr)::text) = share1_ref3.kalnr_text) AND (((ckmlpp_ral.bdatj)::text) = share1_ref3.bdatj) AND (((ckmlpp_ral.poper)::text) = share1_ref3.poper))",
+                              "Plans": [
+                                {
+                                  "Node Type": "Redistribute Motion",
+                                  "Senders": 8,
+                                  "Receivers": 8,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 1,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 5384.20,
+                                  "Plan Rows": 87060584,
+                                  "Plan Width": 44,
+                                  "Output": ["((ckmlpp_ral.kalnr)::text)", "((ckmlpp_ral.bdatj)::text)", "((ckmlpp_ral.poper)::text)", "(to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text))", "(date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval)))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum"],
+                                  "Hash Key": "((ckmlpp_ral.kalnr)::text)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Result",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 3885.46,
+                                      "Plan Rows": 87060584,
+                                      "Plan Width": 44,
+                                      "Output": ["ckmlpp_ral.kalnr", "ckmlpp_ral.bdatj", "ckmlpp_ral.poper", "to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text)", "date(((to_date((((ckmlpp_ral.bdatj)::text || substr((ckmlpp_ral.poper)::text, 2, 2)) || '01'::text), 'YYYYMMDD'::text) + '1 mon'::interval) - '1 day'::interval))", "ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "ckmlpp_ral",
+                                          "Schema": "userdata",
+                                          "Alias": "ckmlpp_ral",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 2318.36,
+                                          "Plan Rows": 87060584,
+                                          "Plan Width": 34,
+                                          "Output": ["ckmlpp_ral.umkumo", "ckmlpp_ral.abkumo", "ckmlpp_ral.zukumo", "ckmlpp_ral.lbkum", "ckmlpp_ral.bdatj", "ckmlpp_ral.kalnr", "ckmlpp_ral.poper"],
+                                          "Filter": "((ckmlpp_ral.untper)::text = '000'::text)"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 6,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 4322.85,
+                                  "Total Cost": 4322.85,
+                                  "Plan Rows": 87812422,
+                                  "Plan Width": 64,
+                                  "Output": ["share1_ref3.kalnr_text", "share1_ref3.bdatj", "share1_ref3.poper", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Redistribute Motion",
+                                      "Senders": 8,
+                                      "Receivers": 8,
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 2,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 4322.85,
+                                      "Plan Rows": 87812422,
+                                      "Plan Width": 64,
+                                      "Output": ["share1_ref3.kalnr_text", "share1_ref3.bdatj", "share1_ref3.poper", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3"],
+                                      "Hash Key": "share1_ref3.kalnr_text",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Result",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 2,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 2124.02,
+                                          "Plan Rows": 87812422,
+                                          "Plan Width": 64,
+                                          "Output": ["share1_ref3.kalnr_text", "share1_ref3.bdatj", "share1_ref3.poper", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Shared Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 2,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Share ID": 1,
+                                              "Slice ID": 2,
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 2124.02,
+                                              "Plan Rows": 87812422,
+                                              "Plan Width": 64,
+                                              "Output": ["share1_ref3.kalnr_text", "share1_ref3.bdatj", "share1_ref3.poper", "share1_ref3.dt_start", "share1_ref3.dt_next", "share1_ref3.stprs", "share1_ref3.peinh", "share1_ref3.pvprs", "share1_ref3.abprd_o", "share1_ref3.abprd_mo", "share1_ref3.vprsv", "share1_ref3.salk3"]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 1403.96,
+                              "Total Cost": 1403.96,
+                              "Plan Rows": 87812422,
+                              "Plan Width": 16,
+                              "Output": ["share1_ref2.kalnr_text", "share1_ref2.dt_next", "share1_ref2.salk3"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Redistribute Motion",
+                                  "Senders": 8,
+                                  "Receivers": 8,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 3,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 1403.96,
+                                  "Plan Rows": 87812422,
+                                  "Plan Width": 16,
+                                  "Output": ["share1_ref2.kalnr_text", "share1_ref2.dt_next", "share1_ref2.salk3"],
+                                  "Hash Key": "share1_ref2.kalnr_text",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Result",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 3,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 854.26,
+                                      "Plan Rows": 87812422,
+                                      "Plan Width": 16,
+                                      "Output": ["share1_ref2.kalnr_text", "share1_ref2.dt_next", "share1_ref2.salk3"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Shared Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 3,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Share ID": 1,
+                                          "Slice ID": 3,
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 854.26,
+                                          "Plan Rows": 87812422,
+                                          "Plan Width": 16,
+                                          "Output": ["share1_ref2.kalnr_text", "share1_ref2.bdatj", "share1_ref2.poper", "share1_ref2.dt_start", "share1_ref2.dt_next", "share1_ref2.stprs", "share1_ref2.peinh", "share1_ref2.pvprs", "share1_ref2.abprd_o", "share1_ref2.abprd_mo", "share1_ref2.vprsv", "share1_ref2.salk3"]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "Node Type": "Hash",
+                          "Parent Relationship": "Inner",
+                          "Slice": 6,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 3951.75,
+                          "Total Cost": 3951.75,
+                          "Plan Rows": 12675516,
+                          "Plan Width": 48,
+                          "Output": ["((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)", "(sum(mlcd_ral.salk3))", "(sum(mlcd_ral.estprd))", "(sum(mlcd_ral.mstprd))"],
+                          "Plans": [
+                            {
+                              "Node Type": "Redistribute Motion",
+                              "Senders": 8,
+                              "Receivers": 8,
+                              "Parent Relationship": "Outer",
+                              "Slice": 5,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 3951.75,
+                              "Plan Rows": 12675516,
+                              "Plan Width": 48,
+                              "Output": ["((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)", "(sum(mlcd_ral.salk3))", "(sum(mlcd_ral.estprd))", "(sum(mlcd_ral.mstprd))"],
+                              "Hash Key": "((mlcd_ral.kalnr)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Result",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 5,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 3713.71,
+                                  "Plan Rows": 12675516,
+                                  "Plan Width": 48,
+                                  "Output": ["((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)", "(sum(mlcd_ral.salk3))", "(sum(mlcd_ral.estprd))", "(sum(mlcd_ral.mstprd))"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Aggregate",
+                                      "Strategy": "Hashed",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 5,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 3713.71,
+                                      "Plan Rows": 12675516,
+                                      "Plan Width": 48,
+                                      "Output": ["sum(mlcd_ral.salk3)", "sum(mlcd_ral.estprd)", "sum(mlcd_ral.mstprd)", "((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)"],
+                                      "Group Key": ["((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Redistribute Motion",
+                                          "Senders": 8,
+                                          "Receivers": 8,
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 4,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 3075.09,
+                                          "Plan Rows": 12675516,
+                                          "Plan Width": 36,
+                                          "Output": ["((mlcd_ral.kalnr)::text)", "((mlcd_ral.bdatj)::text)", "((mlcd_ral.poper)::text)", "mlcd_ral.estprd", "mlcd_ral.mstprd", "mlcd_ral.salk3"],
+                                          "Hash Key": "((mlcd_ral.kalnr)::text), ((mlcd_ral.bdatj)::text), ((mlcd_ral.poper)::text)",
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Result",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 4,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 2896.55,
+                                              "Plan Rows": 12675516,
+                                              "Plan Width": 36,
+                                              "Output": ["mlcd_ral.kalnr", "mlcd_ral.bdatj", "mlcd_ral.poper", "mlcd_ral.estprd", "mlcd_ral.mstprd", "mlcd_ral.salk3"],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 4,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "mlcd_ral",
+                                                  "Schema": "userdata",
+                                                  "Alias": "mlcd_ral",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 2839.51,
+                                                  "Plan Rows": 12675516,
+                                                  "Plan Width": 34,
+                                                  "Output": ["mlcd_ral.bdatj", "mlcd_ral.kalnr", "mlcd_ral.poper", "mlcd_ral.estprd", "mlcd_ral.mstprd", "mlcd_ral.salk3"],
+                                                  "Filter": "(((mlcd_ral.curtp)::text = '10'::text) AND ((mlcd_ral.categ)::text = ANY ('{ZU,VP,PC}'::text[])))"
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 6,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 461.11,
+                      "Total Cost": 461.11,
+                      "Plan Rows": 3317974,
+                      "Plan Width": 15,
+                      "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "material_ledger_header",
+                          "Schema": "dds",
+                          "Alias": "material_ledger_header",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 461.11,
+                          "Plan Rows": 3317974,
+                          "Plan Width": 15,
+                          "Output": ["material_ledger_header.calculation_code", "material_ledger_header.price_rule_code"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

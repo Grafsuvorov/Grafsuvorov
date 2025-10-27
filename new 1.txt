@@ -1,246 +1,360 @@
--- 0) Параметры периода (чтобы не дергать generate_series и min/max по ней много раз)
-WITH params AS (
-  SELECT
-    (current_date - INTERVAL '1 year')::date AS dt_from,
-    current_date::date                 AS dt_to
-),
+-- === Очистка на всякий случай
+DROP TABLE IF EXISTS params, lake, supplier, hub, region_flags, end_free, stage_sets, dpos_min, for_le_001035, base;
 
--- 1) lake: данные из озера с выбором единственной строки по sales_bundle_code
-lake AS (
+-- === 0) Параметры периода (1 год назад по сегодня)
+CREATE TEMP TABLE params
+DISTRIBUTED REPLICATED AS
+SELECT (current_date - INTERVAL '1 year')::date AS dt_from,
+       current_date::date                       AS dt_to;
+
+ANALYZE params;
+
+-- === 1) lake: одна строка на sales_bundle_code по максимальному source_system_position_code
+CREATE TEMP TABLE lake
+DISTRIBUTED BY (sales_bundle_code, delivery_number_sales) AS
+SELECT *
+FROM (
   SELECT
       sd4798.sales_bundle_code,
       ssms.delivery_number_sales,
-      ssms.delivery_number_of_producer_plant   AS SD_000003,
-      ssms.delivery_item_of_plant              AS SD_000110,
-      ssms.delivery_number_initial             AS SD_000001,
-      ssms.material_code                       AS SD_000143,
-      ssms.dt_shipment                         AS SD_000010,
-      ssms.railcar                              AS SD_000013,
-      ssms.transport_bill                       AS SD_000014,
-      ssms.uni                                  AS SD_000151,
-      ssms.port_of_discharge_in_foreign_port_code AS SD_000054,
-      ssms.port_of_loading_code                AS SD_000649,
-      ssms.port_of_discharge_code              AS SD_000044,
-      ssms.transport_railcar_type_code         AS SD_000028,
-      ssms.bill_of_lading_group_code           AS SD_000040,
-      ssms.bill_of_lading_number               AS SD_000041,
-      ssms.dt_bill_of_lading                   AS SD_000042,
-      ssms.dt_final_release                    AS SD_000482,
-      ssms.batch                               AS SD_000004,
-      ssms.delivery_basis                      AS SD_000067,
+      ssms.delivery_number_of_producer_plant        AS SD_000003,
+      ssms.delivery_item_of_plant                   AS SD_000110,
+      ssms.delivery_number_initial                  AS SD_000001,
+      ssms.material_code                            AS SD_000143,
+      ssms.dt_shipment                              AS SD_000010,
+      ssms.railcar                                  AS SD_000013,
+      ssms.transport_bill                           AS SD_000014,
+      ssms.uni                                      AS SD_000151,
+      ssms.port_of_discharge_in_foreign_port_code   AS SD_000054,
+      ssms.port_of_loading_code                     AS SD_000649,
+      ssms.port_of_discharge_code                   AS SD_000044,
+      ssms.transport_railcar_type_code              AS SD_000028,
+      ssms.bill_of_lading_group_code                AS SD_000040,
+      ssms.bill_of_lading_number                    AS SD_000041,
+      ssms.dt_bill_of_lading                        AS SD_000042,
+      ssms.dt_final_release                         AS SD_000482,
+      ssms.batch                                    AS SD_000004,
+      ssms.delivery_basis                           AS SD_000067,
       ssms.bill_of_lading_group_code_in_foreign_port AS SD_000047,
-      ssms.bill_of_lading_in_foreign_port      AS SD_000048,
-      ssms.dt_bill_of_lading_in_foreign_port   AS SD_000049,
-      ssms.dt_warehouse                        AS SD_000024
+      ssms.bill_of_lading_in_foreign_port           AS SD_000048,
+      ssms.dt_bill_of_lading_in_foreign_port        AS SD_000049,
+      ssms.dt_warehouse                             AS SD_000024,
+      ROW_NUMBER() OVER (
+        PARTITION BY sd4798.sales_bundle_code
+        ORDER BY ssms.source_system_position_code DESC
+      ) AS rn
   FROM dm_calc.sd_sales_main_scm ssms
   JOIN dds.sales_bundle_and_delivery_relationship sd4798
     ON ssms.delivery_number_sales = sd4798.delivery_code
-  QUALIFY ROW_NUMBER() OVER (PARTITION BY sd4798.sales_bundle_code
-                             ORDER BY ssms.source_system_position_code DESC) = 1
-),
+) s
+WHERE rn = 1;
 
--- 2) supplier для одного кода документа (убираем повторяющиеся coalesce)
-supplier AS (
+ANALYZE lake;
+
+-- === 2) supplier: один supplier_code на документ (XR приоритетнее, затем ZU)
+CREATE TEMP TABLE supplier
+DISTRIBUTED BY (delivery_code_le_p) AS
+SELECT
+  sales_document_code AS delivery_code_le_p,
+  COALESCE(
+    MAX(CASE WHEN counterparty_role_code = 'XR' THEN supplier_code END),
+    MAX(CASE WHEN counterparty_role_code = 'ZU' THEN supplier_code END)
+  ) AS supplier_code
+FROM dds.sales_document_counterparty_role
+GROUP BY sales_document_code;
+
+ANALYZE supplier;
+
+-- === 3) hub: одна запись на transport_hub_code (рынок + флаг "российский порт")
+CREATE TEMP TABLE hub
+DISTRIBUTED REPLICATED AS
+SELECT transport_hub_code,
+       market_region1_code,
+       (MAX(CASE WHEN is_russian_port_code IS NOT NULL THEN 1 ELSE 0 END) = 1) AS is_russian_port
+FROM (
   SELECT
-    sdoc.sales_document_code        AS delivery_code_le_p,
-    COALESCE(MAX(sxr.supplier_code), MAX(szu.supplier_code)) AS supplier_code
-  FROM dds.sales_document_counterparty_role sxr
-  FULL JOIN dds.sales_document_counterparty_role szu
-    ON szu.sales_document_code = sxr.sales_document_code AND szu.counterparty_role_code = 'ZU'
-  JOIN dds.sales_document_counterparty_role sdoc
-    ON sdoc.sales_document_code = COALESCE(sxr.sales_document_code, szu.sales_document_code)
-  WHERE sxr.counterparty_role_code = 'XR' OR szu.counterparty_role_code = 'ZU'
-  GROUP BY sdoc.sales_document_code
-),
-
--- 3) свод по внешним складам/хабам (одна запись на хаб)
-hub AS (
-  SELECT DISTINCT ON (transport_hub_code)
-         transport_hub_code,
-         market_region1_code,
-         (is_russian_port_code IS NOT NULL) AS is_russian_port
+    transport_hub_code,
+    market_region1_code,
+    is_russian_port_code
   FROM dict_dds.foreign_warehouse_priority_definition
   WHERE market_region1_code IN ('03','04')
-    AND (is_terminal_code IS NOT NULL OR is_foreign_warehouse_code IS NOT NULL OR is_temporary_warehouse_code IS NOT NULL)
-  ORDER BY transport_hub_code, /* при необходимости приоритезация */ market_region1_code DESC
-),
+    AND (is_terminal_code IS NOT NULL
+         OR is_foreign_warehouse_code IS NOT NULL
+         OR is_temporary_warehouse_code IS NOT NULL)
+) x
+GROUP BY transport_hub_code, market_region1_code;
 
--- 4) списки для логики LE.001064 в один справочник-флаги
-region_flags AS (
-  SELECT c.counterparty_code,
-         (EXISTS (SELECT 1 FROM dict_dds.settings_and_parameters_sap sp
-                  WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
-                    AND sp.case_code = 'PERET_FRN'
-                    AND sp.parameter_code = 'S_LIFNRA'
-                    AND sp.range_low_value = c.counterparty_code)) AS is_euro_log,
-         (EXISTS (SELECT 1 FROM dict_dds.settings_and_parameters_sap sp
-                  WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
-                    AND sp.case_code = 'PERET_FRN'
-                    AND sp.parameter_code = 'LIFNR_FR'
-                    AND sp.range_low_value = c.counterparty_code)) AS is_asia_log,
-         (EXISTS (SELECT 1 FROM dict_dds.transportation_general_calculation_method g
-                  WHERE g.general_calculation_method_code IN ('16','04')
-                    AND g.counterparty_code = c.counterparty_code))       AS is_svh,
-         (EXISTS (SELECT 1 FROM dict_dds.transportation_storage_calculation_method m
-                  WHERE m.service_code LIKE 'EU%'
-                    AND m.counterparty_code = c.counterparty_code))       AS is_euro,
-         (EXISTS (SELECT 1 FROM dict_dds.transportation_storage_calculation_method m
-                  WHERE m.counterparty_code = c.counterparty_code))       AS is_asia
-  FROM dict_dds.counterparty c
-),
+ANALYZE hub;
 
--- 5) окончание бесплатного хранения (ужатая витрина)
-end_free AS (
-  SELECT
-    vbss.delivery_code AS delivery_code_sales,
-    MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
-  FROM dds.logistics_document_and_delivery_relationship vbss
-  JOIN dds.release vbsk
-    ON vbsk.release_code = vbss.logistics_document_code
-   AND vbsk.release_type_code = 'X'
-  JOIN dict_dds.settings_and_parameters_sap frel
-    ON frel.abap_program_code = '/RUSAL/SD2921M'
-   AND frel.parameter_code = 'FREL_KOD'
-   AND frel.range_sign_code = 'I'
-   AND frel.range_option_code = 'EQ'
-   AND frel.range_low_value = vbsk.release_template_code
-  WHERE vbsk.dt_end_of_free_storage IS NOT NULL
-  GROUP BY vbss.delivery_code
-),
+-- === 4) region_flags: флаги логики LE.001064 по контрагенту (единый справочник)
+CREATE TEMP TABLE region_flags
+DISTRIBUTED REPLICATED AS
+SELECT c.counterparty_code,
+       EXISTS (
+         SELECT 1
+         FROM dict_dds.settings_and_parameters_sap sp
+         WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
+           AND sp.case_code = 'PERET_FRN'
+           AND sp.parameter_code = 'S_LIFNRA'
+           AND sp.range_low_value = c.counterparty_code
+       ) AS is_euro_log,
+       EXISTS (
+         SELECT 1
+         FROM dict_dds.settings_and_parameters_sap sp
+         WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
+           AND sp.case_code = 'PERET_FRN'
+           AND sp.parameter_code = 'LIFNR_FR'
+           AND sp.range_low_value = c.counterparty_code
+       ) AS is_asia_log,
+       EXISTS (
+         SELECT 1
+         FROM dict_dds.transportation_general_calculation_method g
+         WHERE g.general_calculation_method_code IN ('16','04')
+           AND g.counterparty_code = c.counterparty_code
+       ) AS is_svh,
+       EXISTS (
+         SELECT 1
+         FROM dict_dds.transportation_storage_calculation_method m
+         WHERE m.service_code LIKE 'EU%'
+           AND m.counterparty_code = c.counterparty_code
+       ) AS is_euro,
+       EXISTS (
+         SELECT 1
+         FROM dict_dds.transportation_storage_calculation_method m
+         WHERE m.counterparty_code = c.counterparty_code
+       ) AS is_asia
+FROM dict_dds.counterparty c;
 
--- 6) выбор “релевантной” поставки для EU/ASIA через LATERAL (ровно одна строка)
-stage_sets AS (
-  SELECT DISTINCT range_low_value, parameter_code
-  FROM dict_dds.settings_and_parameters_sap
-  WHERE abap_program_code = '/RUSAL/SD2973M_2'
-    AND parameter_code IN ('STAGE_EU','STAGE_A')
-    AND range_low_value IS NOT NULL
-),
-base AS (
-  SELECT
-    t4.sales_bundle_code,
-    l.SD_000003 AS plant_producer_delivery_code,
-    l.SD_000110 AS plant_producer_delivery_position_code,
-    l.SD_000001 AS initial_delivery_code,
-    l.SD_000143 AS material_code,
-    l.SD_000010 AS dt_shipment,
-    l.SD_000013 AS railcar_code,
-    l.SD_000014 AS transport_bill_code,
-    l.SD_000151 AS uni,
-    ms.shape_code AS material_shape_code,
-    l.SD_000028 AS transport_type_code,
-    m.etsng_code,
-    (sb.sales_bundle_net_weight  / 1000.0) AS sales_bundle_net_weight,
-    (sb.sales_bundle_gross_weight/ 1000.0) AS sales_bundle_gross_weight,
-    l.SD_000004 AS batch_code,
+ANALYZE region_flags;
 
-    /* хаб/регион */
-    h.market_region1_code,
-    h.is_russian_port,
+-- === 5) конец бесплатного хранения
+CREATE TEMP TABLE end_free
+DISTRIBUTED BY (delivery_code_sales) AS
+SELECT vbss.delivery_code AS delivery_code_sales,
+       MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
+FROM dds.logistics_document_and_delivery_relationship vbss
+JOIN dds.release vbsk
+  ON vbsk.release_code = vbss.logistics_document_code
+ AND vbsk.release_type_code = 'X'
+JOIN dict_dds.settings_and_parameters_sap frel
+  ON frel.abap_program_code = '/RUSAL/SD2921M'
+ AND frel.parameter_code   = 'FREL_KOD'
+ AND frel.range_sign_code  = 'I'
+ AND frel.range_option_code= 'EQ'
+ AND frel.range_low_value  = vbsk.release_template_code
+WHERE vbsk.dt_end_of_free_storage IS NOT NULL
+GROUP BY vbss.delivery_code;
 
-    /* выбор поставки под расчёт хранения: EU/ASIA или Russia port */
-    COALESCE(eu_sel.delivery_code, a_sel.delivery_code,
-             CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) AS delivery_for_storage_calculation_code,
+ANALYZE end_free;
 
-    /* позиция для расчёта */
-    CASE WHEN eu_sel.delivery_code IS NOT NULL OR a_sel.delivery_code IS NOT NULL
-         THEN t4.transportation_inbound_delivery_position_code
-         ELSE '10' END AS delivery_position_for_storage_calculation_code,
+-- === 6) stage_sets: коды стадий для EU/ASIA
+CREATE TEMP TABLE stage_sets
+DISTRIBUTED REPLICATED AS
+SELECT DISTINCT parameter_code, range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/SD2973M_2'
+  AND parameter_code IN ('STAGE_EU','STAGE_A')
+  AND range_low_value IS NOT NULL;
 
-    /* inbound для LE.001007 (только если есть форен-хаб) */
-    CASE WHEN h.transport_hub_code IS NOT NULL THEN t4.delivery_code_le_p END AS transportation_inbound_delivery_code,
+ANALYZE stage_sets;
 
-    /* служебные */
-    t4.transportation_inbound_delivery_position_code,
-    t4.transportation_outbound_delivery_position_code,
-    t4.dt_transportation_stage_start_p,
-    COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
+-- === 7) dpos_min: склад/завод-получатель на доставку (ужатие)
+CREATE TEMP TABLE dpos_min
+DISTRIBUTED BY (delivery_code) AS
+SELECT delivery_code,
+       MIN(plant_producer_code) AS plant_producer_code
+FROM dds.delivery_document_position
+WHERE plant_producer_code IS NOT NULL
+GROUP BY delivery_code;
 
-    /* документы */
-    l.SD_000482, l.SD_000041, l.SD_000042, l.SD_000047, l.SD_000048,
-    l.SD_000054, l.SD_000049, l.SD_000067, l.SD_000649, l.SD_000044, l.SD_000040,
-    t4.delivery_code_le_r     AS SD_000516,
-    t4.knote                  AS SD_000420,
+ANALYZE dpos_min;
 
-    /* доп. веса/даты */
-    ddh.weight_net            AS ntgew,
-    ddh.weight_net_with_wirerod AS btgew,
-    ddh.dt_loaded             AS likp_lddat,
+-- === 8) for_le_001035: количество пакетов в поставке хранения
+CREATE TEMP TABLE for_le_001035
+DISTRIBUTED BY (delivery_code) AS
+SELECT delivery_code,
+       batch_code,
+       COUNT(*) AS cnt
+FROM dds.sales_bundle_and_delivery_relationship
+WHERE is_deleted_code IS NULL
+GROUP BY delivery_code, batch_code;
 
-    /* порт РФ (если не EU/ASIA) */
-    CASE WHEN eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL
-         THEN l.SD_000024 END AS dt_arrival_to_russian_port,
+ANALYZE for_le_001035;
 
-    /* forwarder/supplier */
-    s.supplier_code,
-    rf.is_euro, rf.is_euro_log, rf.is_asia, rf.is_asia_log, rf.is_svh,
+-- === 9) BASE: основная сборка с ранними фильтрами и выбором ровно одной записи EU/ASIA через LATERAL
+CREATE TEMP TABLE base
+DISTRIBUTED BY (sales_bundle_code, plant_producer_delivery_code) AS
+SELECT
+  t4.sales_bundle_code,
 
-    /* окончание бесплатного хранения */
-    ef.dt_end_of_free_storage
-  FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-  JOIN params p ON true
-  JOIN hub h
-    ON h.transport_hub_code = t4.knote
-  JOIN lake l
-    ON l.sales_bundle_code = t4.sales_bundle_code
-  LEFT JOIN dds.sales_bundle sb
-    ON sb.sales_bundle_code = t4.sales_bundle_code
-  LEFT JOIN dict_dds.material m
-    ON m.material_code = l.SD_000143
-  LEFT JOIN dict_dds.material_specification ms
-    ON ms.material_code = l.SD_000143
-  LEFT JOIN supplier s
-    ON s.delivery_code_le_p = t4.delivery_code_le_p
-  LEFT JOIN region_flags rf
-    ON rf.counterparty_code = s.supplier_code
-  /* выбрать ОДНУ запись sabadr для EU по окну дат */
-  LEFT JOIN LATERAL (
-    SELECT r.delivery_code, r.dt_transportation_stage_start
-    FROM dds.sales_bundle_and_delivery_relationship r
-    WHERE r.sales_bundle_code = t4.sales_bundle_code
-      AND r.transport_route_destination_hub_code = t4.knote
-      AND r.transportation_stage_code IN (
+  -- базовые SD/LE поля
+  l.SD_000003 AS plant_producer_delivery_code,          -- LE.001001
+  l.SD_000110 AS plant_producer_delivery_position_code, -- LE.001002
+  l.SD_000001 AS initial_delivery_code,                 -- LE.001003
+  l.SD_000143 AS material_code,                         -- LE.001012
+  l.SD_000010 AS dt_shipment,                           -- LE.001020
+  l.SD_000013 AS railcar_code,                          -- LE.001032
+  l.SD_000014 AS transport_bill_code,                   -- LE.001033
+  l.SD_000151 AS uni,                                   -- LE.001034
+  ms.shape_code AS material_shape_code,                 -- LE.001036
+  l.SD_000028 AS transport_type_code,                   -- LE.001036 (тип транспорта)
+  m.etsng_code  AS etsng_code,                          -- LE.001050
+  (sb.sales_bundle_net_weight  / 1000.0) AS sales_bundle_net_weight,  -- LE.001018
+  (sb.sales_bundle_gross_weight/ 1000.0) AS sales_bundle_gross_weight,-- LE.001019
+  l.SD_000004  AS batch_code,                           -- LE.001015
+
+  -- даты/хабы
+  t4.dt_transportation_stage_start_p,
+  COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
+  t4.transportation_inbound_delivery_position_code,
+  t4.transportation_outbound_delivery_position_code,
+  t4.delivery_code_le_r                 AS SD_000516,
+  t4.knote                              AS SD_000420,
+
+  -- выбор поставки для расчёта хранения
+  COALESCE(eu_sel.delivery_code,
+           a_sel.delivery_code,
+           CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) AS delivery_for_storage_calculation_code, -- LE.001016
+
+  CASE WHEN eu_sel.delivery_code IS NOT NULL OR a_sel.delivery_code IS NOT NULL
+       THEN t4.transportation_inbound_delivery_position_code
+       ELSE '10'
+  END AS delivery_position_for_storage_calculation_code, -- LE.001017
+
+  CASE WHEN h.transport_hub_code IS NOT NULL THEN t4.delivery_code_le_p END AS transportation_inbound_delivery_code, -- LE.001007
+
+  -- wwgsg_01 логика (как у тебя: флаг и дата при РФ-порте)
+  CASE WHEN h.is_russian_port AND eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL THEN '1' END AS wwgsg_01,
+  CASE WHEN h.is_russian_port AND eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL THEN ddh.dt_bill_of_lading END AS wwgsg_01_date,
+
+  -- дополнительные SD поля
+  l.SD_000482, l.SD_000041, l.SD_000042, l.SD_000047, l.SD_000048,
+  l.SD_000054, l.SD_000049, l.SD_000067, l.SD_000649, l.SD_000044, l.SD_000040,
+
+  -- маршрут из базовой связи по inbound-кодам
+  sbudr_base.transport_route_departure_hub_code,
+  sbudr_base.transport_route_destination_hub_code,
+  sbudr_base.is_final_transportation_stage_code AS SD_000902,
+  sbudr_base.transportation_stage_code          AS SD_000903,
+
+  -- кол-во пакетов
+  fl35.cnt AS SD_000905,
+
+  -- веса/даты из заголовка доставки (по выбранной поставке)
+  ddh.weight_net               AS ntgew,
+  ddh.weight_net_with_wirerod  AS btgew,
+  ddh.dt_loaded                AS likp_lddat,
+
+  -- поступление в РФ-порт (если нет EU/ASIA)
+  CASE WHEN eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL
+       THEN l.SD_000024
+  END AS dt_arrival_to_russian_port, -- LE.001059
+
+  -- получатель/завод из позиций доставки
+  dmin.plant_producer_code     AS receiving_plant_code, -- LE.001029
+
+  -- экспресс-логика типа расчёта хранения (LE.001064) по флагам
+  CASE
+    WHEN (ddh.delivery_type_code <> 'ZLE') AND (l.SD_000028 = 'TL04') THEN 'Логика РФ-контейнеры'
+    WHEN (ddh.delivery_type_code <> 'ZLE') AND (l.SD_000028 <> 'TL04') THEN 'Логика РФ-балк'
+    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_asia_log AND NOT rf.is_asia  THEN 'Логика Азия'
+    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_euro                        THEN 'Логика Европа'
+    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_euro_log AND rf.is_asia     THEN 'Логика Европа'
+    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_svh                         THEN 'Логика СВХ'
+    ELSE 'Логика не определена'
+  END AS storage_cost_calculation_type_name, -- LE.001064
+
+  -- forwarder/supplier + окончание бесплатного хранения
+  s.supplier_code,
+  ef.dt_end_of_free_storage     AS dt_storage_end_in_release -- LE.001055
+
+FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
+JOIN params p ON TRUE
+JOIN hub h
+  ON h.transport_hub_code = t4.knote
+JOIN lake l
+  ON l.sales_bundle_code = t4.sales_bundle_code
+LEFT JOIN dds.sales_bundle sb
+  ON sb.sales_bundle_code = t4.sales_bundle_code
+LEFT JOIN dict_dds.material m
+  ON m.material_code = l.SD_000143
+LEFT JOIN dict_dds.material_specification ms
+  ON ms.material_code = l.SD_000143
+LEFT JOIN supplier s
+  ON s.delivery_code_le_p = t4.delivery_code_le_p
+LEFT JOIN region_flags rf
+  ON rf.counterparty_code = s.supplier_code
+
+-- выбрать ровно одну запись EU по окну дат
+LEFT JOIN LATERAL (
+  SELECT r.delivery_code, r.dt_transportation_stage_start
+  FROM dds.sales_bundle_and_delivery_relationship r
+  WHERE r.sales_bundle_code = t4.sales_bundle_code
+    AND r.transport_route_destination_hub_code = t4.knote
+    AND r.transportation_stage_code IN (
           SELECT range_low_value FROM stage_sets WHERE parameter_code = 'STAGE_EU'
-      )
-      AND r.is_deleted_code IS NULL
-      AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
-                                              AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
-    ORDER BY r.dt_transportation_stage_start DESC
-    LIMIT 1
-  ) eu_sel ON (h.market_region1_code = '03')
-  /* выбрать ОДНУ запись sabadr для ASIA по окну дат */
-  LEFT JOIN LATERAL (
-    SELECT r.delivery_code, r.dt_transportation_stage_start
-    FROM dds.sales_bundle_and_delivery_relationship r
-    WHERE r.sales_bundle_code = t4.sales_bundle_code
-      AND r.transport_route_destination_hub_code = t4.knote
-      AND r.transportation_stage_code IN (
+        )
+    AND r.is_deleted_code IS NULL
+    AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
+                                            AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
+  ORDER BY r.dt_transportation_stage_start DESC
+  LIMIT 1
+) eu_sel ON (h.market_region1_code = '03')
+
+-- выбрать ровно одну запись ASIA по окну дат
+LEFT JOIN LATERAL (
+  SELECT r.delivery_code, r.dt_transportation_stage_start
+  FROM dds.sales_bundle_and_delivery_relationship r
+  WHERE r.sales_bundle_code = t4.sales_bundle_code
+    AND r.transport_route_destination_hub_code = t4.knote
+    AND r.transportation_stage_code IN (
           SELECT range_low_value FROM stage_sets WHERE parameter_code = 'STAGE_A'
-      )
-      AND r.is_deleted_code IS NULL
-      AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
-                                              AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
-    ORDER BY r.dt_transportation_stage_start DESC
-    LIMIT 1
-  ) a_sel ON (h.market_region1_code = '04')
+        )
+    AND r.is_deleted_code IS NULL
+    AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
+                                            AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
+  ORDER BY r.dt_transportation_stage_start DESC
+  LIMIT 1
+) a_sel ON (h.market_region1_code = '04')
 
-  /* заголовок доставки — только по уже выбранному delivery_for_storage_calculation_code */
-  LEFT JOIN dds.delivery_document_header ddh
-    ON ddh.delivery_code = COALESCE(eu_sel.delivery_code, a_sel.delivery_code,
-                         CASE WHEN h.is_russian_port THEN l.delivery_number_sales END)
+-- заголовок доставки по итоговому delivery_for_storage_calculation_code
+LEFT JOIN dds.delivery_document_header ddh
+  ON ddh.delivery_code = COALESCE(eu_sel.delivery_code,
+                                  a_sel.delivery_code,
+                                  CASE WHEN h.is_russian_port THEN l.delivery_number_sales END)
 
-  LEFT JOIN end_free ef
-    ON ef.delivery_code_sales = l.delivery_number_sales
+-- связь по inbound для маршрута/стадии
+LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
+  ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
+ AND sbudr_base.delivery_code     = t4.delivery_code_le_p
+ AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
+ AND sbudr_base.is_deleted_code   IS NULL
 
-  WHERE
-      -- РАННИЕ фильтры по периоду и хабу
-      t4.transport_route_destination_hub_code LIKE 'G%'
-      AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= p.dt_from
-      AND t4.dt_transportation_stage_start_p <  COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-      -- ключевая поставка для расчёта хранения должна быть определена
-      AND COALESCE(eu_sel.delivery_code, a_sel.delivery_code,
-                   CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) IS NOT NULL
-)
+-- склад-получатель (ужатый)
+LEFT JOIN dpos_min dmin
+  ON dmin.delivery_code = l.delivery_number_sales
 
-SELECT *
-FROM base;
+-- количество пакетов по inbound delivery + batch
+LEFT JOIN for_le_001035 fl35
+  ON fl35.delivery_code = t4.delivery_code_le_p
+ AND fl35.batch_code    = l.SD_000004
+
+-- конец бесплатного хранения
+LEFT JOIN end_free ef
+  ON ef.delivery_code_sales = l.delivery_number_sales
+
+WHERE
+  -- ранние фильтры периода и “узкий” хаб
+  t4.transport_route_destination_hub_code LIKE 'G%'
+  AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= p.dt_from
+  AND t4.dt_transportation_stage_start_p <  COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
+  -- ключевая поставка для расчёта хранения должна быть определена
+  AND COALESCE(eu_sel.delivery_code,
+               a_sel.delivery_code,
+               CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) IS NOT NULL
+;
+
+ANALYZE base;
+
+-- при необходимости смотрим результат
+-- SELECT * FROM base LIMIT 100;

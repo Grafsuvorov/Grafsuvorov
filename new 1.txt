@@ -1,14 +1,10 @@
-SQL Error [42P01]: ERROR: missing FROM-clause entry for table "sab03"
-  Позиция: 12919
-
-
 WITH bounds AS (
   SELECT 
     (SELECT min(dt_balance) FROM date_for_vitr) AS min_dt,
     (SELECT max(dt_balance) FROM date_for_vitr) AS max_dt
 ),
 
--- 1) Единый поставщик по документу: XR > ZU, одна строка на sales_document_code
+-- 1) XR > ZU: одна строка на документ
 supplier_final AS (
   SELECT sales_document_code, supplier_code
   FROM (
@@ -17,18 +13,15 @@ supplier_final AS (
       sdr.supplier_code,
       ROW_NUMBER() OVER (
         PARTITION BY sdr.sales_document_code
-        ORDER BY 
-          (sdr.counterparty_role_code = 'XR') DESC, -- XR приоритет
-          sdr.counterparty_role_code,
-          sdr.dttm_inserted DESC NULLS LAST
+        ORDER BY (sdr.counterparty_role_code = 'XR') DESC, sdr.counterparty_role_code
       ) AS rn
-     FROM dds.sales_document_counterparty_role sdr
+    FROM dds.sales_document_counterparty_role sdr
     WHERE sdr.counterparty_role_code IN ('XR','ZU')
   ) x
   WHERE rn = 1
 ),
 
--- 2) Списки стадий в отдельные маленькие наборы (можно сделать временными replicated-таблицами)
+-- 2) списки стадий
 stage_eu AS (
   SELECT range_low_value::varchar AS stage_code
   FROM dict_dds.settings_and_parameters_sap
@@ -40,13 +33,13 @@ stage_eu AS (
 stage_as AS (
   SELECT range_low_value::varchar AS stage_code
   FROM dict_dds.settings_and_parameters_sap
-  WHERE abap_program_code = '/RUSAL/SD2973M__2'
+  WHERE abap_program_code = '/RUSAL/SD2973M_2'   -- <-- фикс опечатки
     AND parameter_code = 'STAGE_A'
     AND range_low_value IS NOT NULL
   GROUP BY range_low_value
 ),
 
--- 3) Региональные признаки из foreign_warehouse_priority_definition (как у тебя, но заранее)
+-- 3) признаки регионов
 forwapd_1 AS (
   SELECT transport_hub_code, MIN(market_region1_code) AS market_region1_code
   FROM dict_dds.foreign_warehouse_priority_definition
@@ -61,7 +54,7 @@ forwapd_2 AS (
   GROUP BY transport_hub_code
 ),
 
--- 4) Срез sabadr_* по датам/хабу и дедуп (оставляем самую "свежую" запись на ключ)
+-- 4) дедуп по sabadr_* (одна лучшая запись на (bundle, hub))
 sabadr_03_best AS (
   SELECT *
   FROM (
@@ -76,7 +69,7 @@ sabadr_03_best AS (
     WHERE s.is_deleted_code IS NULL
   ) q
   WHERE rn = 1
-) ,
+),
 sabadr_04_best AS (
   SELECT *
   FROM (
@@ -93,7 +86,7 @@ sabadr_04_best AS (
   WHERE rn = 1
 ),
 
--- 5) Подготовка: считаем сложные ключи один раз, режем по датам без COALESCE в WHERE
+-- 5) подготовка: считаем все «сложные» поля, режем по датам без COALESCE в WHERE
 prep AS (
   SELECT
     t4.sales_bundle_code,
@@ -112,22 +105,24 @@ prep AS (
     t4.dt_transportation_stage_start_p,
     t4.dt_transportation_stage_start_r,
     t4.knote,
-
     t4.transportation_inbound_delivery_position_code,
     t4.transportation_outbound_delivery_position_code,
     t4.delivery_code_le_p,
     t4.delivery_code_le_r,
     lake.delivery_number_sales,
 
-    -- региональные флаги
     fw1.market_region1_code,
     (fw2.transport_hub_code IS NOT NULL)::int AS is_rus_port,
 
-    -- кандидаты на «доставку для джойна» из заранее схлопнутых sabadr
+    -- кандидаты
     sab03.delivery_code AS vbeln_03,
     sab04.delivery_code AS vbeln_04,
 
-    -- финальный delivery_for_join
+    -- протащим нужные даты сабов ВНУТРЬ prep:
+    sab03.dt_transportation_stage_start AS sab03_dt_transportation_stage_start,
+    sab04.dt_transportation_stage_start AS sab04_dt_transportation_stage_start,
+
+    -- финальный ключ для join с likp
     CASE
       WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
       WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
@@ -153,19 +148,23 @@ prep AS (
   LEFT JOIN lake ON lake.sales_bundle_code = t4.sales_bundle_code AND lake.rn = 1
   LEFT JOIN forwapd_1 fw1 ON fw1.transport_hub_code = t4.knote
   LEFT JOIN forwapd_2 fw2 ON fw2.transport_hub_code = t4.knote
-  LEFT JOIN sabadr_03_best sab03 
+
+  LEFT JOIN sabadr_03_best sab03
          ON sab03.sales_bundle_code = t4.sales_bundle_code
         AND sab03.transport_route_destination_hub_code = t4.knote
         AND sab03.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p 
                                                    AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
+
   LEFT JOIN sabadr_04_best sab04
          ON sab04.sales_bundle_code = t4.sales_bundle_code
         AND sab04.transport_route_destination_hub_code = t4.knote
         AND sab04.dt_transportation_stage_start BETWEEN t4.dt_transportation_stage_start_p 
                                                    AND COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)
+
   LEFT JOIN dds.bill_of_lading vbsk 
          ON vbsk.bill_of_lading_code = lake.sd_000040
         AND vbsk.bill_of_lading_type_code = 'Y'
+
   LEFT JOIN supplier_final sf ON sf.sales_document_code = t4.delivery_code_le_p
   CROSS JOIN bounds b
   WHERE 
@@ -180,36 +179,36 @@ prep AS (
         WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
       END
     ) IS NOT NULL
-) 
+)
 
--- 6) Итоговая сборка (твоя base), тут уже нет фан-аута по XR/ZU и «множественным стадиям»
+-- 6) Итог
 SELECT
-  p.sales_bundle_code                                        AS sales_bundle_code,           -- LE.001000
-  p.plant_producer_delivery_code                             AS plant_producer_delivery_code,-- LE.001001
-  p.plant_producer_delivery_position_code                    AS plant_producer_delivery_position_code, -- LE.001002
-  p.initial_delivery_code                                    AS initial_delivery_code,       -- LE.001003
-  p.material_code                                            AS material_code,               -- LE.001012
-  p.dt_shipment                                              AS dt_shipment,                 -- LE.001020
-  p.railcar_code                                             AS railcar_code,                -- LE.001032
-  p.transport_bill_code                                      AS transport_bill_code,         -- LE.001033
-  p.uni                                                      AS uni,                         -- LE.001034
-  maspe.shape_code                                           AS material_shape_code,         -- LE.001036
-  p.transport_type_code                                      AS transport_type_code,         -- LE.001050
-  mater.etsng_code                                           AS etsng_code,                  -- LE.001066
-  sabu.sales_bundle_net_weight / 1000.0                      AS sales_bundle_net_weight,     -- LE.001018
-  sabu.sales_bundle_gross_weight / 1000.0                    AS sales_bundle_gross_weight,   -- LE.001019
-  p.batch_code                                               AS batch_code,                  -- LE.001015
-  t4.dt_transportation_stage_start_r                         AS dt_arrival,                  -- LE.001039
-  dedopo_1.plant_producer_code                               AS receiving_plant_code,        -- LE.001029
-  p.delivery_number_sales                                    AS sales_delivery_code,         -- LE.001005
+  p.sales_bundle_code                                        AS sales_bundle_code,
+  p.plant_producer_delivery_code                             AS plant_producer_delivery_code,
+  p.plant_producer_delivery_position_code                    AS plant_producer_delivery_position_code,
+  p.initial_delivery_code                                    AS initial_delivery_code,
+  p.material_code                                            AS material_code,
+  p.dt_shipment                                              AS dt_shipment,
+  p.railcar_code                                             AS railcar_code,
+  p.transport_bill_code                                      AS transport_bill_code,
+  p.uni                                                      AS uni,
+  maspe.shape_code                                           AS material_shape_code,
+  p.transport_type_code                                      AS transport_type_code,
+  mater.etsng_code                                           AS etsng_code,
+  sabu.sales_bundle_net_weight / 1000.0                      AS sales_bundle_net_weight,
+  sabu.sales_bundle_gross_weight / 1000.0                    AS sales_bundle_gross_weight,
+  p.batch_code                                               AS batch_code,
+  t4.dt_transportation_stage_start_r                         AS dt_arrival,
+  dedopo_1.plant_producer_code                               AS receiving_plant_code,
+  p.delivery_number_sales                                    AS sales_delivery_code,
 
-  CASE WHEN p.market_region1_code IS NOT NULL THEN p.delivery_code_le_p END AS transportation_inbound_delivery_code, -- LE.001007
+  CASE WHEN p.market_region1_code IS NOT NULL THEN p.delivery_code_le_p END AS transportation_inbound_delivery_code,
 
   CASE
     WHEN p.market_region1_code = '03' AND p.vbeln_03 IS NOT NULL THEN p.vbeln_03
     WHEN p.market_region1_code = '04' AND p.vbeln_04 IS NOT NULL THEN p.vbeln_04
     WHEN p.is_rus_port = 1                                    THEN p.delivery_number_sales
-  END AS delivery_for_storage_calculation_code, -- LE.001016
+  END AS delivery_for_storage_calculation_code,
 
   CASE
     WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL) THEN NULL
@@ -221,14 +220,14 @@ SELECT
     WHEN p.is_rus_port = 1 THEN p.wwgsg_01_date
   END AS wwgsg_01_date,
 
-  t4.transportation_inbound_delivery_position_code           AS transportation_inbound_delivery_position_code, -- LE.001008
+  t4.transportation_inbound_delivery_position_code           AS transportation_inbound_delivery_position_code,
   CASE
     WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL)
       THEN t4.transportation_inbound_delivery_position_code
     ELSE '10'
-  END AS delivery_position_for_storage_calculation_code,     -- LE.001017
+  END AS delivery_position_for_storage_calculation_code,
 
-  sf_final.supplier_code                                     AS forwarder_code,              -- LE.001040
+  sf_final.supplier_code                                     AS forwarder_code,
 
   CASE
     WHEN likp.delivery_type_code <> 'ZLE' AND p.transport_type_code = 'TL04' THEN 'Логика РФ-контейнеры'
@@ -238,10 +237,10 @@ SELECT
     WHEN likp.delivery_type_code  = 'ZLE' AND euro_2.counterparty_code IS NOT NULL AND euro_log.range_low_value IS NOT NULL THEN 'Логика Европа'
     WHEN likp.delivery_type_code  = 'ZLE' AND svh.counterparty_code  IS NOT NULL THEN 'Логика СВХ'
     ELSE 'Логика не определена'
-  END AS storage_cost_calculation_type_name,                  -- LE.001064
+  END AS storage_cost_calculation_type_name,
 
-  sbudr_base.transport_route_departure_hub_code              AS transport_departure_hub_code, -- LE.001021
-  sbudr_base.transport_route_destination_hub_code            AS transport_destination_hub_code, -- LE.001023
+  sbudr_base.transport_route_departure_hub_code              AS transport_departure_hub_code,
+  sbudr_base.transport_route_destination_hub_code            AS transport_destination_hub_code,
   sbudr_base.is_final_transportation_stage_code              AS sd_000902,
   sbudr_base.transportation_stage_code                       AS sd_000903,
   for_LE_001035.cnt                                          AS sd_000905,
@@ -259,16 +258,17 @@ SELECT
   CASE
     WHEN p.market_region1_code IN ('03','04') AND (p.vbeln_03 IS NOT NULL OR p.vbeln_04 IS NOT NULL) THEN NULL
     ELSE p.dt_arrival_rus_port_raw
-  END AS dt_arrival_to_russian_port,                          -- LE.001059
+  END AS dt_arrival_to_russian_port,
 
   t4.dt_transportation_stage_start_p,
   COALESCE(t4.dt_transportation_stage_start_r, CURRENT_DATE)  AS dt_transportation_stage_start_r,
   CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique,
 
-  COALESCE(sab03.dt_transportation_stage_start, sab04.dt_transportation_stage_start) AS lddat_4798,
-  COALESCE(p.vbeln_03, p.vbeln_04)                           AS vbeln_4798,
+  -- ВАЖНО: теперь берём даты сабов из p., а НЕ из sab03/sab04
+  COALESCE(p.sab03_dt_transportation_stage_start, p.sab04_dt_transportation_stage_start) AS lddat_4798,
+  COALESCE(p.vbeln_03, p.vbeln_04)                                                       AS vbeln_4798,
 
-  for_1055.dt_end_of_free_storage                            AS dt_storage_end_in_release   -- LE.001055
+  for_1055.dt_end_of_free_storage                            AS dt_storage_end_in_release
 
 FROM prep p
 JOIN dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4 
@@ -278,21 +278,22 @@ LEFT JOIN dds.sales_bundle sabu ON sabu.sales_bundle_code = p.sales_bundle_code
 LEFT JOIN dict_dds.material mater ON mater.material_code = p.material_code
 LEFT JOIN dict_dds.material_specification maspe ON maspe.material_code = p.material_code
 LEFT JOIN dds.delivery_document_position dedopo_1 ON dedopo_1.delivery_code = p.delivery_number_sales
+
 LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base 
        ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
       AND sbudr_base.delivery_code      = t4.delivery_code_le_p
       AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
       AND sbudr_base.is_deleted_code IS NULL
+
 LEFT JOIN dds.delivery_document_header likp ON likp.delivery_code = p.delivery_for_join
 LEFT JOIN supplier_final sf_final ON sf_final.sales_document_code = t4.delivery_code_le_p
 
--- твои маленькие replicated-таблицы для логик/регионов подключай здесь ПО УЖЕ ЕДИНОМУ supplier_code:
-LEFT JOIN asia      ON asia.counterparty_code      = sf_final.supplier_code
-LEFT JOIN euro_1    ON euro_1.counterparty_code    = sf_final.supplier_code
-LEFT JOIN euro_2    ON euro_2.counterparty_code    = sf_final.supplier_code
-LEFT JOIN svh       ON svh.counterparty_code       = sf_final.supplier_code
-LEFT JOIN asia_log  ON asia_log.range_low_value    = sf_final.supplier_code
-LEFT JOIN euro_log  ON euro_log.range_low_value    = sf_final.supplier_code
+LEFT JOIN asia      ON asia.counterparty_code   = sf_final.supplier_code
+LEFT JOIN euro_1    ON euro_1.counterparty_code = sf_final.supplier_code
+LEFT JOIN euro_2    ON euro_2.counterparty_code = sf_final.supplier_code
+LEFT JOIN svh       ON svh.counterparty_code    = sf_final.supplier_code
+LEFT JOIN asia_log  ON asia_log.range_low_value = sf_final.supplier_code
+LEFT JOIN euro_log  ON euro_log.range_low_value = sf_final.supplier_code
 
 LEFT JOIN for_LE_001035 ON for_LE_001035.delivery_code = t4.delivery_code_le_p
                         AND for_LE_001035.batch_code   = p.batch_code

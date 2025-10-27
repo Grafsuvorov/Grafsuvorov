@@ -1,4 +1,7 @@
--- 0) Границы дат, чтобы не писать подзапросы много раз
+SQL Error [42P01]: ERROR: missing FROM-clause entry for table "sab03"
+  Позиция: 12919
+
+
 WITH bounds AS (
   SELECT 
     (SELECT min(dt_balance) FROM date_for_vitr) AS min_dt,
@@ -17,9 +20,9 @@ supplier_final AS (
         ORDER BY 
           (sdr.counterparty_role_code = 'XR') DESC, -- XR приоритет
           sdr.counterparty_role_code,
-          sdr.inserted_dttm DESC NULLS LAST
+          sdr.dttm_inserted DESC NULLS LAST
       ) AS rn
-    FROM dds.sales_document_counterparty_role sdr
+     FROM dds.sales_document_counterparty_role sdr
     WHERE sdr.counterparty_role_code IN ('XR','ZU')
   ) x
   WHERE rn = 1
@@ -73,7 +76,7 @@ sabadr_03_best AS (
     WHERE s.is_deleted_code IS NULL
   ) q
   WHERE rn = 1
-),
+) ,
 sabadr_04_best AS (
   SELECT *
   FROM (
@@ -177,7 +180,7 @@ prep AS (
         WHEN fw2.transport_hub_code IS NOT NULL THEN lake.delivery_number_sales
       END
     ) IS NOT NULL
-)
+) 
 
 -- 6) Итоговая сборка (твоя base), тут уже нет фан-аута по XR/ZU и «множественным стадиям»
 SELECT

@@ -1,366 +1,157 @@
- explain(verbose, format json)
- with cte as (
-	select
-		pc.purchase_contract_code as purchase_order_for_reporting_code,
-		'purchase_contract'::varchar(21) as external_contract_source_table_name,
-		pc.paydox_registration_number, 
-		pc.appendix_number,
-		coalesce(pc.paydox_registration_number, pc.appendix_number) as purchase_compound_number
-	from
-		dds.purchase_contract_header as pc
-union all
-	select
-		po.purchase_order_code as purchase_order_for_reporting_code,
-		'purchase_order'::varchar(21) as external_contract_source_table_name,
-		po.paydox_registration_number, 
-		po.appendix_number,
-		coalesce(po.paydox_registration_number, po.appendix_number) as purchase_compound_number
-	from
-		dds.purchase_order_header as po
-union all
-	select
-		pa.purchase_agreement_code as purchase_order_for_reporting_code,
-		'purchase_agreement'::varchar(21) as external_contract_source_table_name,
-		pa.paydox_registration_number, 
-		pa.appendix_number,
-		coalesce(pa.paydox_registration_number, pa.appendix_number) as purchase_compound_number
-	from
-		dds.purchase_agreement_header as pa),
-t as(
-	select
-		ad.unit_balance_code,
-		ad.fiscal_year,
-		ad.accounting_document_code,
-		ad.material_code as material_for_reporting_code,
-		ad.position_line_item,
-		ad.dt_posting,
-		ad.accounting_document_type as accounting_document_type_code,
-		ad.reference_object_key as reference_object_key_code,
-		ad.dt_accounting_document,
-		ad.dttm_accounting_document_created,
-		ad.accounting_document_status_code,
-		ad.reference_document_number,
-		ad.reference_key_internal_for_document_header_1 as document_header_reference_internal_key1_number,
-		ad.reference_key_internal_for_document_header_2 as document_header_reference_internal_key2_number,
-		ad.reverse_document_code,
-		ad.reverse_document_fiscal_year,
-        array_to_string(array_agg(distinct cte.purchase_compound_number) over 
-		(partition by ad.unit_balance_code,
-							ad.fiscal_year,
-							ad.accounting_document_code),', ') as purchase_specification_compound_number,
-		dense_rank() over( partition by ad.unit_balance_code,
-							ad.fiscal_year,
-							ad.accounting_document_code
-	order by
-		--- по постановке необходимо отбирать материал из позиции с минимальным номером, для остальных полей - это неважно, тк они являются атрибутами заголовка
-		case
-			when ad.material_code is null then position_line_item + 999
-			else position_line_item	end asc) as row_num,
-					         
-	case
-		when min(ad.purchase_document_code) over w	= max(ad.purchase_document_code) over w
-			then min(ad.purchase_document_code) over w
-			else null
-		end as purchase_order_for_reporting_code
-	from
-		dds.accounting_documents ad
-	left join cte on
-		ad.purchase_document_code = cte.purchase_order_for_reporting_code
-	where
-		1 = 1
-		and ad.deleted_flag = false
-		and ad.is_active = true
-window w as (partition by ad.unit_balance_code,
-							ad.fiscal_year,
-							ad.accounting_document_code))
-select 
-	unit_balance_code,
-	fiscal_year,
-	accounting_document_code,
-	material_for_reporting_code,
-	dt_posting,
-	accounting_document_type_code,
-	reference_object_key_code,
-	dt_accounting_document,
-	dttm_accounting_document_created,
-	accounting_document_status_code,
-	reference_document_number,
-	document_header_reference_internal_key1_number,
-	document_header_reference_internal_key2_number,
-	reverse_document_code,
-	reverse_document_fiscal_year,
-	purchase_order_for_reporting_code,
-	purchase_specification_compound_number
-from
-	t
-where
-	row_num = 1;
+-- 0) (опционально, но очень желательно для качества плана)
+-- ANALYZE dds.accounting_documents;
+-- ANALYZE dds.purchase_contract_header;
+-- ANALYZE dds.purchase_order_header;
+-- ANALYZE dds.purchase_agreement_header;
 
+----------------------------------------------------------------------
+-- 1) Справочник кодов закупочных документов -> составной номер
+----------------------------------------------------------------------
+CREATE TEMP TABLE purchase_mapping AS
+WITH cte AS (
+    SELECT
+        pc.purchase_contract_code          AS purchase_order_for_reporting_code,
+        COALESCE(pc.paydox_registration_number, pc.appendix_number) AS purchase_compound_number
+    FROM dds.purchase_contract_header AS pc
 
+    UNION ALL
+    SELECT
+        po.purchase_order_code,
+        COALESCE(po.paydox_registration_number, po.appendix_number)
+    FROM dds.purchase_order_header AS po
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 3,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 255399336990.45,
-      "Total Cost": 269786435063.86,
-      "Plan Rows": 198442732047,
-      "Plan Width": 167,
-      "Output": ["t.unit_balance_code", "t.fiscal_year", "t.accounting_document_code", "t.material_for_reporting_code", "t.dt_posting", "t.accounting_document_type_code", "t.reference_object_key_code", "t.dt_accounting_document", "t.dttm_accounting_document_created", "t.accounting_document_status_code", "t.reference_document_number", "t.document_header_reference_internal_key1_number", "t.document_header_reference_internal_key2_number", "t.reverse_document_code", "t.reverse_document_fiscal_year", "t.purchase_order_for_reporting_code", "t.purchase_specification_compound_number"],
-      "Plans": [
-        {
-          "Node Type": "Subquery Scan",
-          "Parent Relationship": "Outer",
-          "Slice": 3,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Alias": "t",
-          "Startup Cost": 255399336990.45,
-          "Total Cost": 269786435063.86,
-          "Plan Rows": 198442732047,
-          "Plan Width": 167,
-          "Output": ["t.unit_balance_code", "t.fiscal_year", "t.accounting_document_code", "t.material_for_reporting_code", "t.dt_posting", "t.accounting_document_type_code", "t.reference_object_key_code", "t.dt_accounting_document", "t.dttm_accounting_document_created", "t.accounting_document_status_code", "t.reference_document_number", "t.document_header_reference_internal_key1_number", "t.document_header_reference_internal_key2_number", "t.reverse_document_code", "t.reverse_document_fiscal_year", "t.purchase_order_for_reporting_code", "t.purchase_specification_compound_number"],
-          "Filter": "(t.row_num = 1)",
-          "Plans": [
-            {
-              "Node Type": "WindowAgg",
-              "Parent Relationship": "Subquery",
-              "Slice": 3,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Startup Cost": 255399336990.45,
-              "Total Cost": 267802007743.39,
-              "Plan Rows": 198442732047,
-              "Plan Width": 167,
-              "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "array_to_string(array_agg(DISTINCT cte.purchase_compound_number) OVER (?), ', '::text)", "(dense_rank() OVER (?))", "CASE WHEN (min((ad.purchase_document_code)::text) OVER (?) = max((ad.purchase_document_code)::text) OVER (?)) THEN min((ad.purchase_document_code)::text) OVER (?) ELSE NULL::text END", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
-              "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
-              "Plans": [
-                {
-                  "Node Type": "WindowAgg",
-                  "Parent Relationship": "Outer",
-                  "Slice": 3,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 255399336990.45,
-                  "Total Cost": 260856512121.74,
-                  "Plan Rows": 198442732047,
-                  "Plan Width": 167,
-                  "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code", "dense_rank() OVER (?)"],
-                  "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
-                  "Order By": ["(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
-                  "Plans": [
-                    {
-                      "Node Type": "Sort",
-                      "Parent Relationship": "Outer",
-                      "Slice": 3,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 255399336990.45,
-                      "Total Cost": 255895443820.56,
-                      "Plan Rows": 198442732047,
-                      "Plan Width": 167,
-                      "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
-                      "Sort Key": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
-                      "Plans": [
-                        {
-                          "Node Type": "Redistribute Motion",
-                          "Senders": 8,
-                          "Receivers": 8,
-                          "Parent Relationship": "Outer",
-                          "Slice": 2,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 10731839340.73,
-                          "Total Cost": 38516691694.07,
-                          "Plan Rows": 198442732047,
-                          "Plan Width": 167,
-                          "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
-                          "Hash Key": "ad.unit_balance_code, ad.fiscal_year, ad.accounting_document_code",
-                          "Plans": [
-                            {
-                              "Node Type": "Merge Join",
-                              "Parent Relationship": "Outer",
-                              "Slice": 2,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Join Type": "Right",
-                              "Startup Cost": 10731839340.73,
-                              "Total Cost": 34547837053.13,
-                              "Plan Rows": 198442732047,
-                              "Plan Width": 167,
-                              "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
-                              "Merge Cond": "((cte.purchase_order_for_reporting_code)::text = (ad.purchase_document_code)::text)",
-                              "Plans": [
-                                {
-                                  "Node Type": "Sort",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 2,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 8963159.91,
-                                  "Total Cost": 9040679.69,
-                                  "Plan Rows": 31007912,
-                                  "Plan Width": 70,
-                                  "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
-                                  "Sort Key": ["cte.purchase_order_for_reporting_code"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Broadcast Motion",
-                                      "Senders": 8,
-                                      "Receivers": 8,
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 1,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 426358.79,
-                                      "Plan Rows": 31007912,
-                                      "Plan Width": 70,
-                                      "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Subquery Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Alias": "cte",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 82314.78,
-                                          "Plan Rows": 3875989,
-                                          "Plan Width": 131,
-                                          "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Append",
-                                              "Parent Relationship": "Subquery",
-                                              "Slice": 1,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 43554.89,
-                                              "Plan Rows": 3875989,
-                                              "Plan Width": 131,
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Member",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "purchase_contract_header",
-                                                  "Schema": "dds",
-                                                  "Alias": "pc",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 3301.44,
-                                                  "Plan Rows": 283844,
-                                                  "Plan Width": 133,
-                                                  "Output": ["pc.purchase_contract_code", "'purchase_contract'::character varying(21)", "pc.paydox_registration_number", "pc.appendix_number", "COALESCE(pc.paydox_registration_number, pc.appendix_number)"]
-                                                },
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Member",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "purchase_order_header",
-                                                  "Schema": "dds",
-                                                  "Alias": "po",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 33858.34,
-                                                  "Plan Rows": 3027134,
-                                                  "Plan Width": 131,
-                                                  "Output": ["po.purchase_order_code", "'purchase_order'::character varying(21)", "po.paydox_registration_number", "po.appendix_number", "COALESCE(po.paydox_registration_number, po.appendix_number)"]
-                                                },
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Member",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "purchase_agreement_header",
-                                                  "Schema": "dds",
-                                                  "Alias": "pa",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 6395.11,
-                                                  "Plan Rows": 565011,
-                                                  "Plan Width": 127,
-                                                  "Output": ["pa.purchase_agreement_code", "'purchase_agreement'::character varying(21)", "pa.paydox_registration_number", "pa.appendix_number", "COALESCE(pa.paydox_registration_number, pa.appendix_number)"]
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "Node Type": "Materialize",
-                                  "Parent Relationship": "Inner",
-                                  "Slice": 2,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 722876180.82,
-                                  "Total Cost": 728305835.19,
-                                  "Plan Rows": 1085930872,
-                                  "Plan Width": 135,
-                                  "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Sort",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 2,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 722876180.82,
-                                      "Total Cost": 725591008.00,
-                                      "Plan Rows": 1085930872,
-                                      "Plan Width": 135,
-                                      "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
-                                      "Sort Key": ["ad.purchase_document_code"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 2,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Relation Name": "accounting_documents",
-                                          "Schema": "dds",
-                                          "Alias": "ad",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 13751236.40,
-                                          "Plan Rows": 1085930872,
-                                          "Plan Width": 135,
-                                          "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
-                                          "Filter": "((NOT ad.deleted_flag) AND ad.is_active)"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Postgres query optimizer"
-    }
-  }
-]
+    UNION ALL
+    SELECT
+        pa.purchase_agreement_code,
+        COALESCE(pa.paydox_registration_number, pa.appendix_number)
+    FROM dds.purchase_agreement_header AS pa
+)
+SELECT
+    purchase_order_for_reporting_code,
+    purchase_compound_number
+FROM cte
+DISTRIBUTED REPLICATED;
+
+----------------------------------------------------------------------
+-- 2) База по бухгалтерским документам (один раз фильтруем активные)
+--    и готовим поле для сортировки позиции
+----------------------------------------------------------------------
+CREATE TEMP TABLE ad_base AS
+SELECT
+    ad.unit_balance_code,
+    ad.fiscal_year,
+    ad.accounting_document_code,
+
+    -- поля заголовка/позиции, которые нужны в финальном выводе
+    ad.material_code                                 AS material_for_reporting_code,
+    ad.dt_posting,
+    ad.accounting_document_type                      AS accounting_document_type_code,
+    ad.reference_object_key                          AS reference_object_key_code,
+    ad.dt_accounting_document,
+    ad.dttm_accounting_document_created,
+    ad.accounting_document_status_code,
+    ad.reference_document_number,
+    ad.reference_key_internal_for_document_header_1  AS document_header_reference_internal_key1_number,
+    ad.reference_key_internal_for_document_header_2  AS document_header_reference_internal_key2_number,
+    ad.reverse_document_code,
+    ad.reverse_document_fiscal_year,
+
+    -- для агрегатов
+    ad.purchase_document_code,
+
+    -- «вес» позиции для выбора первой по правилу из постановки
+    CASE
+        WHEN ad.material_code IS NULL THEN ad.position_line_item + 999
+        ELSE ad.position_line_item
+    END AS pos_order
+FROM dds.accounting_documents ad
+WHERE ad.deleted_flag = FALSE
+  AND ad.is_active = TRUE
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
+
+----------------------------------------------------------------------
+-- 3) Агрегат по документу: список составных спецификаций (DISTINCT)
+----------------------------------------------------------------------
+CREATE TEMP TABLE doc_compound_agg AS
+SELECT
+    b.unit_balance_code,
+    b.fiscal_year,
+    b.accounting_document_code,
+    STRING_AGG(DISTINCT pm.purchase_compound_number, ', ') AS purchase_specification_compound_number
+FROM ad_base b
+LEFT JOIN purchase_mapping pm
+  ON b.purchase_document_code = pm.purchase_order_for_reporting_code
+GROUP BY
+    b.unit_balance_code, b.fiscal_year, b.accounting_document_code
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
+
+----------------------------------------------------------------------
+-- 4) Агрегат по документу: purchase_order_for_reporting_code
+--    (если в документе ровно один DISTINCT код закупочного документа)
+----------------------------------------------------------------------
+CREATE TEMP TABLE doc_po_agg AS
+SELECT
+    unit_balance_code,
+    fiscal_year,
+    accounting_document_code,
+    CASE
+        WHEN COUNT(DISTINCT purchase_document_code) = 1
+             THEN MIN(purchase_document_code)
+        ELSE NULL
+    END AS purchase_order_for_reporting_code
+FROM ad_base
+GROUP BY unit_balance_code, fiscal_year, accounting_document_code
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
+
+----------------------------------------------------------------------
+-- 5) Выбор «лучшей» позиции на документ (минимальный pos_order)
+--    Берём все «заголовочные» поля из этой строки (по постановке это допустимо)
+----------------------------------------------------------------------
+CREATE TEMP TABLE doc_best_position AS
+SELECT DISTINCT ON (unit_balance_code, fiscal_year, accounting_document_code)
+    unit_balance_code,
+    fiscal_year,
+    accounting_document_code,
+
+    material_for_reporting_code,
+    dt_posting,
+    accounting_document_type_code,
+    reference_object_key_code,
+    dt_accounting_document,
+    dttm_accounting_document_created,
+    accounting_document_status_code,
+    reference_document_number,
+    document_header_reference_internal_key1_number,
+    document_header_reference_internal_key2_number,
+    reverse_document_code,
+    reverse_document_fiscal_year
+FROM ad_base
+ORDER BY
+    unit_balance_code, fiscal_year, accounting_document_code, pos_order ASC
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
+
+----------------------------------------------------------------------
+-- 6) Финальный результат (эквивалент твоему SELECT ... WHERE row_num = 1)
+----------------------------------------------------------------------
+-- Можешь завернуть ниже в CREATE TEMP TABLE final_result AS (...) при необходимости.
+SELECT
+    bp.unit_balance_code,
+    bp.fiscal_year,
+    bp.accounting_document_code,
+    bp.material_for_reporting_code,
+    bp.dt_posting,
+    bp.accounting_document_type_code,
+    bp.reference_object_key_code,
+    bp.dt_accounting_document,
+    bp.dttm_accounting_document_created,
+    bp.accounting_document_status_code,
+    bp.reference_document_number,
+    bp.document_header_reference_internal_key1_number,
+    bp.document_header_reference_internal_key2_number,
+    bp.reverse_document_code,
+    bp.reverse_document_fiscal_year,
+    po.purchase_order_for_reporting_code,
+    ca.purchase_specification_compound_number
+FROM doc_best_position bp
+LEFT JOIN doc_po_agg       po USING (unit_balance_code, fiscal_year, accounting_document_code)
+LEFT JOIN doc_compound_agg ca USING (unit_balance_code, fiscal_year, accounting_document_code);

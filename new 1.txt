@@ -1,343 +1,366 @@
--- === Чистим, если были
-DROP TABLE IF EXISTS params, lake, supplier, hub, region_flags, end_free, stage_sets, dpos_min, for_le_001035, base;
+ explain(verbose, format json)
+ with cte as (
+	select
+		pc.purchase_contract_code as purchase_order_for_reporting_code,
+		'purchase_contract'::varchar(21) as external_contract_source_table_name,
+		pc.paydox_registration_number, 
+		pc.appendix_number,
+		coalesce(pc.paydox_registration_number, pc.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_contract_header as pc
+union all
+	select
+		po.purchase_order_code as purchase_order_for_reporting_code,
+		'purchase_order'::varchar(21) as external_contract_source_table_name,
+		po.paydox_registration_number, 
+		po.appendix_number,
+		coalesce(po.paydox_registration_number, po.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_order_header as po
+union all
+	select
+		pa.purchase_agreement_code as purchase_order_for_reporting_code,
+		'purchase_agreement'::varchar(21) as external_contract_source_table_name,
+		pa.paydox_registration_number, 
+		pa.appendix_number,
+		coalesce(pa.paydox_registration_number, pa.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_agreement_header as pa),
+t as(
+	select
+		ad.unit_balance_code,
+		ad.fiscal_year,
+		ad.accounting_document_code,
+		ad.material_code as material_for_reporting_code,
+		ad.position_line_item,
+		ad.dt_posting,
+		ad.accounting_document_type as accounting_document_type_code,
+		ad.reference_object_key as reference_object_key_code,
+		ad.dt_accounting_document,
+		ad.dttm_accounting_document_created,
+		ad.accounting_document_status_code,
+		ad.reference_document_number,
+		ad.reference_key_internal_for_document_header_1 as document_header_reference_internal_key1_number,
+		ad.reference_key_internal_for_document_header_2 as document_header_reference_internal_key2_number,
+		ad.reverse_document_code,
+		ad.reverse_document_fiscal_year,
+        array_to_string(array_agg(distinct cte.purchase_compound_number) over 
+		(partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code),', ') as purchase_specification_compound_number,
+		dense_rank() over( partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code
+	order by
+		--- по постановке необходимо отбирать материал из позиции с минимальным номером, для остальных полей - это неважно, тк они являются атрибутами заголовка
+		case
+			when ad.material_code is null then position_line_item + 999
+			else position_line_item	end asc) as row_num,
+					         
+	case
+		when min(ad.purchase_document_code) over w	= max(ad.purchase_document_code) over w
+			then min(ad.purchase_document_code) over w
+			else null
+		end as purchase_order_for_reporting_code
+	from
+		dds.accounting_documents ad
+	left join cte on
+		ad.purchase_document_code = cte.purchase_order_for_reporting_code
+	where
+		1 = 1
+		and ad.deleted_flag = false
+		and ad.is_active = true
+window w as (partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code))
+select 
+	unit_balance_code,
+	fiscal_year,
+	accounting_document_code,
+	material_for_reporting_code,
+	dt_posting,
+	accounting_document_type_code,
+	reference_object_key_code,
+	dt_accounting_document,
+	dttm_accounting_document_created,
+	accounting_document_status_code,
+	reference_document_number,
+	document_header_reference_internal_key1_number,
+	document_header_reference_internal_key2_number,
+	reverse_document_code,
+	reverse_document_fiscal_year,
+	purchase_order_for_reporting_code,
+	purchase_specification_compound_number
+from
+	t
+where
+	row_num = 1;
 
--- === 0) Параметры периода (1 год до сегодня)
-CREATE TEMP TABLE params AS
-SELECT (current_date - INTERVAL '1 year')::date AS dt_from,
-       current_date::date                       AS dt_to
-DISTRIBUTED REPLICATED;
-ANALYZE params;
 
--- === 1) lake: одна строка на sales_bundle_code (max source_system_position_code)
-CREATE TEMP TABLE lake AS
-SELECT *
-FROM (
-  SELECT
-      sd4798.sales_bundle_code,
-      ssms.delivery_number_sales,
-      ssms.delivery_number_of_producer_plant        AS SD_000003,
-      ssms.delivery_item_of_plant                   AS SD_000110,
-      ssms.delivery_number_initial                  AS SD_000001,
-      ssms.material_code                            AS SD_000143,
-      ssms.dt_shipment                              AS SD_000010,
-      ssms.railcar                                  AS SD_000013,
-      ssms.transport_bill                           AS SD_000014,
-      ssms.uni                                      AS SD_000151,
-      ssms.port_of_discharge_in_foreign_port_code   AS SD_000054,
-      ssms.port_of_loading_code                     AS SD_000649,
-      ssms.port_of_discharge_code                   AS SD_000044,
-      ssms.transport_railcar_type_code              AS SD_000028,
-      ssms.bill_of_lading_group_code                AS SD_000040,
-      ssms.bill_of_lading_number                    AS SD_000041,
-      ssms.dt_bill_of_lading                        AS SD_000042,
-      ssms.dt_final_release                         AS SD_000482,
-      ssms.batch                                    AS SD_000004,
-      ssms.delivery_basis                           AS SD_000067,
-      ssms.bill_of_lading_group_code_in_foreign_port AS SD_000047,
-      ssms.bill_of_lading_in_foreign_port           AS SD_000048,
-      ssms.dt_bill_of_lading_in_foreign_port        AS SD_000049,
-      ssms.dt_warehouse                             AS SD_000024,
-      ROW_NUMBER() OVER (
-        PARTITION BY sd4798.sales_bundle_code
-        ORDER BY ssms.source_system_position_code DESC
-      ) AS rn
-  FROM dm_calc.sd_sales_main_scm ssms
-  JOIN dds.sales_bundle_and_delivery_relationship sd4798
-    ON ssms.delivery_number_sales = sd4798.delivery_code
-) s
-WHERE rn = 1
-DISTRIBUTED BY (sales_bundle_code, delivery_number_sales);
-ANALYZE lake;
 
--- === 2) supplier: один supplier_code на документ (XR приоритет, затем ZU)
-CREATE TEMP TABLE supplier AS
-SELECT
-  sales_document_code AS delivery_code_le_p,
-  COALESCE(
-    MAX(CASE WHEN counterparty_role_code = 'XR' THEN supplier_code END),
-    MAX(CASE WHEN counterparty_role_code = 'ZU' THEN supplier_code END)
-  ) AS supplier_code
-FROM dds.sales_document_counterparty_role
-GROUP BY sales_document_code
-DISTRIBUTED BY (delivery_code_le_p);
-ANALYZE supplier;
-
--- === 3) hub: одна запись на хаб (рынок + флаг «российский порт»)
-CREATE TEMP TABLE hub AS
-SELECT transport_hub_code,
-       market_region1_code,
-       (MAX(CASE WHEN is_russian_port_code IS NOT NULL THEN 1 ELSE 0 END) = 1) AS is_russian_port
-FROM (
-  SELECT
-    transport_hub_code,
-    market_region1_code,
-    is_russian_port_code
-  FROM dict_dds.foreign_warehouse_priority_definition
-  WHERE market_region1_code IN ('03','04')
-    AND (is_terminal_code IS NOT NULL
-         OR is_foreign_warehouse_code IS NOT NULL
-         OR is_temporary_warehouse_code IS NOT NULL)
-) x
-GROUP BY transport_hub_code, market_region1_code
-DISTRIBUTED REPLICATED;
-ANALYZE hub;
-
--- === 4) region_flags: флаги логики LE.001064 по контрагенту
-CREATE TEMP TABLE region_flags AS
-SELECT c.counterparty_code,
-       EXISTS (
-         SELECT 1
-         FROM dict_dds.settings_and_parameters_sap sp
-         WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
-           AND sp.case_code = 'PERET_FRN'
-           AND sp.parameter_code = 'S_LIFNRA'
-           AND sp.range_low_value = c.counterparty_code
-       ) AS is_euro_log,
-       EXISTS (
-         SELECT 1
-         FROM dict_dds.settings_and_parameters_sap sp
-         WHERE sp.abap_program_code ILIKE '/RUSAL/ZLE112m'
-           AND sp.case_code = 'PERET_FRN'
-           AND sp.parameter_code = 'LIFNR_FR'
-           AND sp.range_low_value = c.counterparty_code
-       ) AS is_asia_log,
-       EXISTS (
-         SELECT 1
-         FROM dict_dds.transportation_general_calculation_method g
-         WHERE g.general_calculation_method_code IN ('16','04')
-           AND g.counterparty_code = c.counterparty_code
-       ) AS is_svh,
-       EXISTS (
-         SELECT 1
-         FROM dict_dds.transportation_storage_calculation_method m
-         WHERE m.service_code LIKE 'EU%'
-           AND m.counterparty_code = c.counterparty_code
-       ) AS is_euro,
-       EXISTS (
-         SELECT 1
-         FROM dict_dds.transportation_storage_calculation_method m
-         WHERE m.counterparty_code = c.counterparty_code
-       ) AS is_asia
-FROM dict_dds.counterparty c
-DISTRIBUTED REPLICATED;
-ANALYZE region_flags;
-
--- === 5) конец бесплатного хранения
-CREATE TEMP TABLE end_free AS
-SELECT vbss.delivery_code AS delivery_code_sales,
-       MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
-FROM dds.logistics_document_and_delivery_relationship vbss
-JOIN dds.release vbsk
-  ON vbsk.release_code = vbss.logistics_document_code
- AND vbsk.release_type_code = 'X'
-JOIN dict_dds.settings_and_parameters_sap frel
-  ON frel.abap_program_code = '/RUSAL/SD2921M'
- AND frel.parameter_code   = 'FREL_KOD'
- AND frel.range_sign_code  = 'I'
- AND frel.range_option_code= 'EQ'
- AND frel.range_low_value  = vbsk.release_template_code
-WHERE vbsk.dt_end_of_free_storage IS NOT NULL
-GROUP BY vbss.delivery_code
-DISTRIBUTED BY (delivery_code_sales);
-ANALYZE end_free;
-
--- === 6) stage_sets: коды стадий EU/ASIA
-CREATE TEMP TABLE stage_sets AS
-SELECT DISTINCT parameter_code, range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD2973M_2'
-  AND parameter_code IN ('STAGE_EU','STAGE_A')
-  AND range_low_value IS NOT NULL
-DISTRIBUTED REPLICATED;
-ANALYZE stage_sets;
-
--- === 7) dpos_min: получатель по доставке (ужатие)
-CREATE TEMP TABLE dpos_min AS
-SELECT delivery_code,
-       MIN(plant_producer_code) AS plant_producer_code
-FROM dds.delivery_document_position
-WHERE plant_producer_code IS NOT NULL
-GROUP BY delivery_code
-DISTRIBUTED BY (delivery_code);
-ANALYZE dpos_min;
-
--- === 8) for_le_001035: число пакетов в поставке хранения
-CREATE TEMP TABLE for_le_001035 AS
-SELECT delivery_code,
-       batch_code,
-       COUNT(*) AS cnt
-FROM dds.sales_bundle_and_delivery_relationship
-WHERE is_deleted_code IS NULL
-GROUP BY delivery_code, batch_code
-DISTRIBUTED BY (delivery_code);
-ANALYZE for_le_001035;
-
--- === 9) BASE: основная сборка
-CREATE TEMP TABLE base AS
-SELECT
-  t4.sales_bundle_code,
-
-  -- Базовые SD/LE
-  l.SD_000003 AS plant_producer_delivery_code,          -- LE.001001
-  l.SD_000110 AS plant_producer_delivery_position_code, -- LE.001002
-  l.SD_000001 AS initial_delivery_code,                 -- LE.001003
-  l.SD_000143 AS material_code,                         -- LE.001012
-  l.SD_000010 AS dt_shipment,                           -- LE.001020
-  l.SD_000013 AS railcar_code,                          -- LE.001032
-  l.SD_000014 AS transport_bill_code,                   -- LE.001033
-  l.SD_000151 AS uni,                                   -- LE.001034
-  ms.shape_code AS material_shape_code,                 -- LE.001036
-  l.SD_000028 AS transport_type_code,                   -- LE.001036
-  m.etsng_code  AS etsng_code,                          -- LE.001050
-  (sb.sales_bundle_net_weight  / 1000.0) AS sales_bundle_net_weight,   -- LE.001018
-  (sb.sales_bundle_gross_weight/ 1000.0) AS sales_bundle_gross_weight, -- LE.001019
-  l.SD_000004  AS batch_code,                           -- LE.001015
-
-  -- Даты/хабы
-  t4.dt_transportation_stage_start_p,
-  COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
-  t4.transportation_inbound_delivery_position_code,
-  t4.transportation_outbound_delivery_position_code,
-  t4.delivery_code_le_r                 AS SD_000516,
-  t4.knote                              AS SD_000420,
-
-  -- Поставка для расчёта хранения
-  COALESCE(eu_sel.delivery_code,
-           a_sel.delivery_code,
-           CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) AS delivery_for_storage_calculation_code, -- LE.001016
-
-  CASE WHEN eu_sel.delivery_code IS NOT NULL OR a_sel.delivery_code IS NOT NULL
-       THEN t4.transportation_inbound_delivery_position_code
-       ELSE '10'
-  END AS delivery_position_for_storage_calculation_code, -- LE.001017
-
-  CASE WHEN h.transport_hub_code IS NOT NULL THEN t4.delivery_code_le_p END AS transportation_inbound_delivery_code, -- LE.001007
-
-  -- РФ-порт флаги (как у тебя)
-  CASE WHEN h.is_russian_port AND eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL THEN '1' END AS wwgsg_01,
-  CASE WHEN h.is_russian_port AND eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL THEN ddh.dt_bill_of_lading END AS wwgsg_01_date,
-
-  -- SD поля
-  l.SD_000482, l.SD_000041, l.SD_000042, l.SD_000047, l.SD_000048,
-  l.SD_000054, l.SD_000049, l.SD_000067, l.SD_000649, l.SD_000044, l.SD_000040,
-
-  -- Маршрут (по inbound)
-  sbudr_base.transport_route_departure_hub_code,
-  sbudr_base.transport_route_destination_hub_code,
-  sbudr_base.is_final_transportation_stage_code AS SD_000902,
-  sbudr_base.transportation_stage_code          AS SD_000903,
-
-  -- Кол-во пакетов
-  fl35.cnt AS SD_000905,
-
-  -- Веса/даты из заголовка доставки
-  ddh.weight_net               AS ntgew,
-  ddh.weight_net_with_wirerod  AS btgew,
-  ddh.dt_loaded                AS likp_lddat,
-
-  -- Дата прибытия в РФ-порт (если не EU/ASIA)
-  CASE WHEN eu_sel.delivery_code IS NULL AND a_sel.delivery_code IS NULL
-       THEN l.SD_000024
-  END AS dt_arrival_to_russian_port, -- LE.001059
-
-  -- Получатель/завод из позиций
-  dmin.plant_producer_code     AS receiving_plant_code, -- LE.001029
-
-  -- Тип расчёта хранения (LE.001064)
-  CASE
-    WHEN (ddh.delivery_type_code <> 'ZLE') AND (l.SD_000028 = 'TL04') THEN 'Логика РФ-контейнеры'
-    WHEN (ddh.delivery_type_code <> 'ZLE') AND (l.SD_000028 <> 'TL04') THEN 'Логика РФ-балк'
-    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_asia_log AND NOT rf.is_asia  THEN 'Логика Азия'
-    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_euro                        THEN 'Логика Европа'
-    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_euro_log AND rf.is_asia     THEN 'Логика Европа'
-    WHEN (ddh.delivery_type_code  = 'ZLE') AND rf.is_svh                         THEN 'Логика СВХ'
-    ELSE 'Логика не определена'
-  END AS storage_cost_calculation_type_name, -- LE.001064
-
-  -- Supplier + окончание бесплатного хранения
-  s.supplier_code,
-  ef.dt_end_of_free_storage     AS dt_storage_end_in_release -- LE.001055
-
-FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-JOIN params p ON TRUE
-JOIN hub h
-  ON h.transport_hub_code = t4.knote
-JOIN lake l
-  ON l.sales_bundle_code = t4.sales_bundle_code
-LEFT JOIN dds.sales_bundle sb
-  ON sb.sales_bundle_code = t4.sales_bundle_code
-LEFT JOIN dict_dds.material m
-  ON m.material_code = l.SD_000143
-LEFT JOIN dict_dds.material_specification ms
-  ON ms.material_code = l.SD_000143
-LEFT JOIN supplier s
-  ON s.delivery_code_le_p = t4.delivery_code_le_p
-LEFT JOIN region_flags rf
-  ON rf.counterparty_code = s.supplier_code
-
--- одна EU-запись по окну дат
-LEFT JOIN LATERAL (
-  SELECT r.delivery_code, r.dt_transportation_stage_start
-  FROM dds.sales_bundle_and_delivery_relationship r
-  WHERE r.sales_bundle_code = t4.sales_bundle_code
-    AND r.transport_route_destination_hub_code = t4.knote
-    AND r.transportation_stage_code IN (SELECT range_low_value FROM stage_sets WHERE parameter_code = 'STAGE_EU')
-    AND r.is_deleted_code IS NULL
-    AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
-                                            AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
-  ORDER BY r.dt_transportation_stage_start DESC
-  LIMIT 1
-) eu_sel ON (h.market_region1_code = '03')
-
--- одна ASIA-запись по окну дат
-LEFT JOIN LATERAL (
-  SELECT r.delivery_code, r.dt_transportation_stage_start
-  FROM dds.sales_bundle_and_delivery_relationship r
-  WHERE r.sales_bundle_code = t4.sales_bundle_code
-    AND r.transport_route_destination_hub_code = t4.knote
-    AND r.transportation_stage_code IN (SELECT range_low_value FROM stage_sets WHERE parameter_code = 'STAGE_A')
-    AND r.is_deleted_code IS NULL
-    AND r.dt_transportation_stage_start BETWEEN COALESCE(t4.dt_transportation_stage_start_p, p.dt_from)
-                                            AND COALESCE(t4.dt_transportation_stage_start_r, p.dt_to)
-  ORDER BY r.dt_transportation_stage_start DESC
-  LIMIT 1
-) a_sel ON (h.market_region1_code = '04')
-
--- заголовок доставки по выбранной поставке
-LEFT JOIN dds.delivery_document_header ddh
-  ON ddh.delivery_code = COALESCE(eu_sel.delivery_code,
-                                  a_sel.delivery_code,
-                                  CASE WHEN h.is_russian_port THEN l.delivery_number_sales END)
-
--- связь по inbound для маршрута/стадии
-LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
-  ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
- AND sbudr_base.delivery_code     = t4.delivery_code_le_p
- AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
- AND sbudr_base.is_deleted_code   IS NULL
-
--- получатель
-LEFT JOIN dpos_min dmin
-  ON dmin.delivery_code = l.delivery_number_sales
-
--- количество пакетов
-LEFT JOIN for_le_001035 fl35
-  ON fl35.delivery_code = t4.delivery_code_le_p
- AND fl35.batch_code    = l.SD_000004
-
--- окончание бесплатного хранения
-LEFT JOIN end_free ef
-  ON ef.delivery_code_sales = l.delivery_number_sales
-
-WHERE
-  t4.transport_route_destination_hub_code LIKE 'G%'
-  AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= p.dt_from
-  AND t4.dt_transportation_stage_start_p <  COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-  AND COALESCE(eu_sel.delivery_code,
-               a_sel.delivery_code,
-               CASE WHEN h.is_russian_port THEN l.delivery_number_sales END) IS NOT NULL
-DISTRIBUTED BY (sales_bundle_code, plant_producer_delivery_code);
-ANALYZE base;
-
--- Проверка
--- SELECT * FROM base LIMIT 100;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 3,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 255399336990.45,
+      "Total Cost": 269786435063.86,
+      "Plan Rows": 198442732047,
+      "Plan Width": 167,
+      "Output": ["t.unit_balance_code", "t.fiscal_year", "t.accounting_document_code", "t.material_for_reporting_code", "t.dt_posting", "t.accounting_document_type_code", "t.reference_object_key_code", "t.dt_accounting_document", "t.dttm_accounting_document_created", "t.accounting_document_status_code", "t.reference_document_number", "t.document_header_reference_internal_key1_number", "t.document_header_reference_internal_key2_number", "t.reverse_document_code", "t.reverse_document_fiscal_year", "t.purchase_order_for_reporting_code", "t.purchase_specification_compound_number"],
+      "Plans": [
+        {
+          "Node Type": "Subquery Scan",
+          "Parent Relationship": "Outer",
+          "Slice": 3,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Alias": "t",
+          "Startup Cost": 255399336990.45,
+          "Total Cost": 269786435063.86,
+          "Plan Rows": 198442732047,
+          "Plan Width": 167,
+          "Output": ["t.unit_balance_code", "t.fiscal_year", "t.accounting_document_code", "t.material_for_reporting_code", "t.dt_posting", "t.accounting_document_type_code", "t.reference_object_key_code", "t.dt_accounting_document", "t.dttm_accounting_document_created", "t.accounting_document_status_code", "t.reference_document_number", "t.document_header_reference_internal_key1_number", "t.document_header_reference_internal_key2_number", "t.reverse_document_code", "t.reverse_document_fiscal_year", "t.purchase_order_for_reporting_code", "t.purchase_specification_compound_number"],
+          "Filter": "(t.row_num = 1)",
+          "Plans": [
+            {
+              "Node Type": "WindowAgg",
+              "Parent Relationship": "Subquery",
+              "Slice": 3,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 255399336990.45,
+              "Total Cost": 267802007743.39,
+              "Plan Rows": 198442732047,
+              "Plan Width": 167,
+              "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "array_to_string(array_agg(DISTINCT cte.purchase_compound_number) OVER (?), ', '::text)", "(dense_rank() OVER (?))", "CASE WHEN (min((ad.purchase_document_code)::text) OVER (?) = max((ad.purchase_document_code)::text) OVER (?)) THEN min((ad.purchase_document_code)::text) OVER (?) ELSE NULL::text END", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
+              "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 3,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 255399336990.45,
+                  "Total Cost": 260856512121.74,
+                  "Plan Rows": 198442732047,
+                  "Plan Width": 167,
+                  "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code", "dense_rank() OVER (?)"],
+                  "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
+                  "Order By": ["(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 3,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 255399336990.45,
+                      "Total Cost": 255895443820.56,
+                      "Plan Rows": 198442732047,
+                      "Plan Width": 167,
+                      "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
+                      "Sort Key": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
+                      "Plans": [
+                        {
+                          "Node Type": "Redistribute Motion",
+                          "Senders": 8,
+                          "Receivers": 8,
+                          "Parent Relationship": "Outer",
+                          "Slice": 2,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 10731839340.73,
+                          "Total Cost": 38516691694.07,
+                          "Plan Rows": 198442732047,
+                          "Plan Width": 167,
+                          "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
+                          "Hash Key": "ad.unit_balance_code, ad.fiscal_year, ad.accounting_document_code",
+                          "Plans": [
+                            {
+                              "Node Type": "Merge Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 2,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Right",
+                              "Startup Cost": 10731839340.73,
+                              "Total Cost": 34547837053.13,
+                              "Plan Rows": 198442732047,
+                              "Plan Width": 167,
+                              "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "cte.purchase_compound_number", "ad.purchase_document_code"],
+                              "Merge Cond": "((cte.purchase_order_for_reporting_code)::text = (ad.purchase_document_code)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Sort",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 2,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 8963159.91,
+                                  "Total Cost": 9040679.69,
+                                  "Plan Rows": 31007912,
+                                  "Plan Width": 70,
+                                  "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
+                                  "Sort Key": ["cte.purchase_order_for_reporting_code"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Broadcast Motion",
+                                      "Senders": 8,
+                                      "Receivers": 8,
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 426358.79,
+                                      "Plan Rows": 31007912,
+                                      "Plan Width": 70,
+                                      "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Subquery Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Alias": "cte",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 82314.78,
+                                          "Plan Rows": 3875989,
+                                          "Plan Width": 131,
+                                          "Output": ["cte.purchase_compound_number", "cte.purchase_order_for_reporting_code"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Append",
+                                              "Parent Relationship": "Subquery",
+                                              "Slice": 1,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 43554.89,
+                                              "Plan Rows": 3875989,
+                                              "Plan Width": 131,
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Member",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "purchase_contract_header",
+                                                  "Schema": "dds",
+                                                  "Alias": "pc",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 3301.44,
+                                                  "Plan Rows": 283844,
+                                                  "Plan Width": 133,
+                                                  "Output": ["pc.purchase_contract_code", "'purchase_contract'::character varying(21)", "pc.paydox_registration_number", "pc.appendix_number", "COALESCE(pc.paydox_registration_number, pc.appendix_number)"]
+                                                },
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Member",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "purchase_order_header",
+                                                  "Schema": "dds",
+                                                  "Alias": "po",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 33858.34,
+                                                  "Plan Rows": 3027134,
+                                                  "Plan Width": 131,
+                                                  "Output": ["po.purchase_order_code", "'purchase_order'::character varying(21)", "po.paydox_registration_number", "po.appendix_number", "COALESCE(po.paydox_registration_number, po.appendix_number)"]
+                                                },
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Member",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "purchase_agreement_header",
+                                                  "Schema": "dds",
+                                                  "Alias": "pa",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 6395.11,
+                                                  "Plan Rows": 565011,
+                                                  "Plan Width": 127,
+                                                  "Output": ["pa.purchase_agreement_code", "'purchase_agreement'::character varying(21)", "pa.paydox_registration_number", "pa.appendix_number", "COALESCE(pa.paydox_registration_number, pa.appendix_number)"]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Materialize",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 2,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 722876180.82,
+                                  "Total Cost": 728305835.19,
+                                  "Plan Rows": 1085930872,
+                                  "Plan Width": 135,
+                                  "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Sort",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 2,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 722876180.82,
+                                      "Total Cost": 725591008.00,
+                                      "Plan Rows": 1085930872,
+                                      "Plan Width": 135,
+                                      "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
+                                      "Sort Key": ["ad.purchase_document_code"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 2,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "accounting_documents",
+                                          "Schema": "dds",
+                                          "Alias": "ad",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 13751236.40,
+                                          "Plan Rows": 1085930872,
+                                          "Plan Width": 135,
+                                          "Output": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "ad.material_code", "ad.position_line_item", "ad.dt_posting", "ad.accounting_document_type", "ad.reference_object_key", "ad.dt_accounting_document", "ad.dttm_accounting_document_created", "ad.accounting_document_status_code", "ad.reference_document_number", "ad.reference_key_internal_for_document_header_1", "ad.reference_key_internal_for_document_header_2", "ad.reverse_document_code", "ad.reverse_document_fiscal_year", "ad.purchase_document_code", "ad.position_line_item_type_code"],
+                                          "Filter": "((NOT ad.deleted_flag) AND ad.is_active)"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Postgres query optimizer"
+    }
+  }
+]

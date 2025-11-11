@@ -51,7 +51,103 @@ comment on column dm_calc.accounting_document_header.purchase_order_for_reportin
 comment on column dm_calc.accounting_document_header.purchase_specification_compound_number is 'Региcтрационный номер, присвоенный документу в PayDox | Региcтрационный номер, присвоенный документу в PayDox | dds.purchase_contract_header.coalesce(paydox_registration_number, appendix_number)';
 comment on column dm_calc.accounting_document_header.dttm_accounting_document_created is 'Дата-время ввода бухгалтерского документа | Дата-время ввода бухгалтерского документа | dds.accounting_documents.dttm_accounting_document_created';
 
-
+explain(analyze, format json)
+with cte as (
+	select
+		pc.purchase_contract_code as purchase_order_for_reporting_code,
+		'purchase_contract'::varchar(21) as external_contract_source_table_name,
+		pc.paydox_registration_number, 
+		pc.appendix_number,
+		coalesce(pc.paydox_registration_number, pc.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_contract_header as pc
+union all
+	select
+		po.purchase_order_code as purchase_order_for_reporting_code,
+		'purchase_order'::varchar(21) as external_contract_source_table_name,
+		po.paydox_registration_number, 
+		po.appendix_number,
+		coalesce(po.paydox_registration_number, po.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_order_header as po
+union all
+	select
+		pa.purchase_agreement_code as purchase_order_for_reporting_code,
+		'purchase_agreement'::varchar(21) as external_contract_source_table_name,
+		pa.paydox_registration_number, 
+		pa.appendix_number,
+		coalesce(pa.paydox_registration_number, pa.appendix_number) as purchase_compound_number
+	from
+		dds.purchase_agreement_header as pa),
+t as(
+	select
+		ad.unit_balance_code,
+		ad.fiscal_year,
+		ad.accounting_document_code,
+		ad.material_code as material_for_reporting_code,
+		ad.position_line_item,
+		ad.dt_posting,
+		ad.accounting_document_type as accounting_document_type_code,
+		ad.reference_object_key as reference_object_key_code,
+		ad.dt_accounting_document,
+		ad.dttm_accounting_document_created,
+		ad.accounting_document_status_code,
+		ad.reference_document_number,
+		ad.reference_key_internal_for_document_header_1 as document_header_reference_internal_key1_number,
+		ad.reference_key_internal_for_document_header_2 as document_header_reference_internal_key2_number,
+		ad.reverse_document_code,
+		ad.reverse_document_fiscal_year,
+        array_to_string(array_agg(distinct cte.purchase_compound_number) over 
+		(partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code),', ') as purchase_specification_compound_number,
+		dense_rank() over( partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code
+	order by
+		--- по постановке необходимо отбирать материал из позиции с минимальным номером, для остальных полей - это неважно, тк они являются атрибутами заголовка
+		case
+			when ad.material_code is null then position_line_item + 999
+			else position_line_item	end asc) as row_num,
+					         
+	case
+		when min(ad.purchase_document_code) over w	= max(ad.purchase_document_code) over w
+			then min(ad.purchase_document_code) over w
+			else null
+		end as purchase_order_for_reporting_code
+	from
+		ods.accounting_documents ad
+	left join cte on
+		ad.purchase_document_code = cte.purchase_order_for_reporting_code
+	where
+		1 = 1
+		and ad.deleted_flag = false
+		and ad.is_active = true
+window w as (partition by ad.unit_balance_code,
+							ad.fiscal_year,
+							ad.accounting_document_code))
+select 
+	unit_balance_code,
+	fiscal_year,
+	accounting_document_code,
+	material_for_reporting_code,
+	dt_posting,
+	accounting_document_type_code,
+	reference_object_key_code,
+	dt_accounting_document,
+	dttm_accounting_document_created,
+	accounting_document_status_code,
+	reference_document_number,
+	document_header_reference_internal_key1_number,
+	document_header_reference_internal_key2_number,
+	reverse_document_code,
+	reverse_document_fiscal_year,
+	purchase_order_for_reporting_code,
+	purchase_specification_compound_number
+from
+	t
+where
+	row_num = 1;
 
 [
   {
@@ -381,3 +477,4 @@ comment on column dm_calc.accounting_document_header.dttm_accounting_document_cr
     "Execution Time": 568.241
   }
 ]
+

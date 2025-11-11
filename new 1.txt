@@ -1,14 +1,55 @@
-explain(verbose, format json)
-SELECT
-    b.unit_balance_code,
-    b.fiscal_year,
-    b.accounting_document_code,
-    STRING_AGG(DISTINCT pm.purchase_compound_number, ', ') AS purchase_specification_compound_number
-FROM ad_base b
-LEFT JOIN purchase_mapping pm
-  ON b.purchase_document_code = pm.purchase_order_for_reporting_code
-GROUP BY
-    b.unit_balance_code, b.fiscal_year, b.accounting_document_code
+drop table if exists dm_calc.accounting_document_header;
+
+CREATE table if not exists dm_calc.accounting_document_header (
+	unit_balance_code varchar(4) NOT NULL,
+	fiscal_year numeric(4) NOT NULL,
+	accounting_document_code varchar(10) NOT NULL,
+	material_for_reporting_code varchar(18) NULL,
+	dt_posting date NULL,
+    accounting_document_type_code varchar(2) NULL,
+    reference_object_key_code varchar(20) NULL,
+    dt_accounting_document date NULL,
+    dttm_accounting_document_created  timestamp null, 
+    accounting_document_status_code varchar(1) NULL,
+    reference_document_number varchar(16) NULL,
+    document_header_reference_internal_key1_number varchar(20) NULL,
+    document_header_reference_internal_key2_number varchar(20) NULL,
+    reverse_document_code varchar(10) NULL,
+	reverse_document_fiscal_year numeric(4) NULL,
+	purchase_order_for_reporting_code varchar(10) NULL,
+	purchase_specification_compound_number text,
+	dttm_inserted timestamp NOT NULL DEFAULT now(),
+	dttm_updated timestamp NOT NULL DEFAULT now(),
+	job_name varchar(60) NOT NULL DEFAULT 'airflow'::character varying,
+	deleted_flag bool NOT NULL DEFAULT false
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (unit_balance_code, fiscal_year, accounting_document_code);
+
+
+comment on table dm_calc.accounting_document_header is 'Заголовки бухгалтерских документов';
+comment on column dm_calc.accounting_document_header.unit_balance_code is 'Балансовая единица | Балансовая единица | accounting_documents.sap.unit_balance_code';
+comment on column dm_calc.accounting_document_header.fiscal_year is 'Финансовый год | Финансовый год | accounting_documents.sap.fiscal_year';
+comment on column dm_calc.accounting_document_header.accounting_document_code is 'Номер бухгалтерского документа  | Номер бухгалтерского документа  | accounting_documents.accounting_document_code';
+comment on column dm_calc.accounting_document_header.material_for_reporting_code is 'Номер материала, код | Номер материала, код | accounting_documents.material_code';
+comment on column dm_calc.accounting_document_header.dt_posting is 'Дата проводки в документе | Дата проводки в документе | accounting_documents.dt_posting';
+comment on column dm_calc.accounting_document_header.accounting_document_type_code is 'Вид документа (код) | Вид документа (код) | accounting_documents.accounting_document_type';
+comment on column dm_calc.accounting_document_header.reference_object_key_code is 'Ссылочный ключ (код) | Ссылочный ключ (код) | accounting_documents.reference_object_key';
+comment on column dm_calc.accounting_document_header.dt_accounting_document is 'Дата документа | Дата документа | accounting_documents.dt_accounting_document';
+comment on column dm_calc.accounting_document_header.accounting_document_status_code is 'Статус документа (код) | Статус документа (код) | accounting_documents.accounting_document_status_code';
+comment on column dm_calc.accounting_document_header.reference_document_number is 'Ссылочный номер документа (код) | Ссылочный номер документа (код) | accounting_documents.reference_document_number';
+comment on column dm_calc.accounting_document_header.document_header_reference_internal_key1_number is 'Внутренний ссылочный ключ 1 к заголовку документа | Внутренний ссылочный ключ 1 к заголовку документа | accounting_documents.reference_key_internal_for_document_header_1';
+comment on column dm_calc.accounting_document_header.document_header_reference_internal_key2_number is 'Внутренний ссылочный ключ 2 к заголовку документа | Внутренний ссылочный ключ 2 к заголовку документа | accounting_documents.reference_key_internal_for_document_header_2';
+comment on column dm_calc.accounting_document_header.reverse_document_code is '№ документа сторно | № документа сторно | dds.accounting_documents';
+comment on column dm_calc.accounting_document_header.reverse_document_fiscal_year is 'Финансовый год документа сторно | Финансовый год документа сторно | dds.accounting_documents';
+comment on column dm_calc.accounting_document_header.purchase_order_for_reporting_code is 'Номер документа закупки | Номер документа закупки | dds.accounting_documents.purchase_document_code';
+comment on column dm_calc.accounting_document_header.purchase_specification_compound_number is 'Региcтрационный номер, присвоенный документу в PayDox | Региcтрационный номер, присвоенный документу в PayDox | dds.purchase_contract_header.coalesce(paydox_registration_number, appendix_number)';
+comment on column dm_calc.accounting_document_header.dttm_accounting_document_created is 'Дата-время ввода бухгалтерского документа | Дата-время ввода бухгалтерского документа | dds.accounting_documents.dttm_accounting_document_created';
 
 
 
@@ -16,99 +57,275 @@ GROUP BY
   {
     "Plan": {
       "Node Type": "Gather Motion",
-      "Senders": 8,
+      "Senders": 6,
       "Receivers": 1,
-      "Slice": 1,
-      "Segments": 8,
+      "Slice": 3,
+      "Segments": 6,
       "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 1603609.15,
-      "Plan Rows": 625327885,
-      "Plan Width": 29,
-      "Output": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code", "(string_agg(DISTINCT (purchase_mapping.purchase_compound_number)::text, ', '::text))"],
+      "Startup Cost": 83816773.90,
+      "Total Cost": 91695798.27,
+      "Plan Rows": 108676198,
+      "Plan Width": 163,
+      "Actual Startup Time": 447.649,
+      "Actual Total Time": 543.136,
+      "Actual Rows": 35242,
+      "Actual Loops": 1,
       "Plans": [
         {
-          "Node Type": "Aggregate",
-          "Strategy": "Sorted",
+          "Node Type": "Subquery Scan",
           "Parent Relationship": "Outer",
-          "Slice": 1,
-          "Segments": 8,
+          "Slice": 3,
+          "Segments": 6,
           "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 1553331.22,
-          "Plan Rows": 625327885,
-          "Plan Width": 29,
-          "Output": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code", "string_agg(DISTINCT (purchase_mapping.purchase_compound_number)::text, ', '::text)"],
-          "Group Key": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code"],
+          "Alias": "t",
+          "Startup Cost": 83816773.90,
+          "Total Cost": 91695798.27,
+          "Plan Rows": 108676198,
+          "Plan Width": 163,
+          "Actual Startup Time": 449.230,
+          "Actual Total Time": 498.199,
+          "Actual Rows": 6019,
+          "Actual Loops": 1,
+          "Filter": "(t.row_num = 1)",
+          "Rows Removed by Filter": 0,
           "Plans": [
             {
-              "Node Type": "Sort",
-              "Parent Relationship": "Outer",
-              "Slice": 1,
-              "Segments": 8,
+              "Node Type": "WindowAgg",
+              "Parent Relationship": "Subquery",
+              "Slice": 3,
+              "Segments": 6,
               "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 1543115.29,
-              "Plan Rows": 2168303556,
-              "Plan Width": 33,
-              "Output": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code", "purchase_mapping.purchase_compound_number"],
-              "Sort Key": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code"],
+              "Startup Cost": 83816773.90,
+              "Total Cost": 90609036.29,
+              "Plan Rows": 108676198,
+              "Plan Width": 163,
+              "Actual Startup Time": 449.223,
+              "Actual Total Time": 496.604,
+              "Actual Rows": 15894,
+              "Actual Loops": 1,
+              "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
               "Plans": [
                 {
-                  "Node Type": "Hash Join",
+                  "Node Type": "WindowAgg",
                   "Parent Relationship": "Outer",
-                  "Slice": 1,
-                  "Segments": 8,
+                  "Slice": 3,
+                  "Segments": 6,
                   "Gang Type": "primary reader",
-                  "Join Type": "Left",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 122419.90,
-                  "Plan Rows": 2168303556,
-                  "Plan Width": 33,
-                  "Output": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code", "purchase_mapping.purchase_compound_number"],
-                  "Hash Cond": "((ad_base.purchase_document_code)::text = (purchase_mapping.purchase_order_for_reporting_code)::text)",
+                  "Startup Cost": 83816773.90,
+                  "Total Cost": 86805369.35,
+                  "Plan Rows": 108676198,
+                  "Plan Width": 163,
+                  "Actual Startup Time": 449.166,
+                  "Actual Total Time": 461.971,
+                  "Actual Rows": 15894,
+                  "Actual Loops": 1,
+                  "Partition By": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code"],
+                  "Order By": ["(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
                   "Plans": [
                     {
-                      "Node Type": "Seq Scan",
+                      "Node Type": "Sort",
                       "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 8,
+                      "Slice": 3,
+                      "Segments": 6,
                       "Gang Type": "primary reader",
-                      "Relation Name": "ad_base",
-                      "Schema": "pg_temp_6958956",
-                      "Alias": "ad_base",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 12729.35,
-                      "Plan Rows": 1084152320,
-                      "Plan Width": 32,
-                      "Output": ["ad_base.unit_balance_code", "ad_base.fiscal_year", "ad_base.accounting_document_code", "ad_base.purchase_document_code"]
-                    },
-                    {
-                      "Node Type": "Hash",
-                      "Parent Relationship": "Inner",
-                      "Slice": 1,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 543.99,
-                      "Total Cost": 543.99,
-                      "Plan Rows": 31007912,
-                      "Plan Width": 23,
-                      "Output": ["purchase_mapping.purchase_order_for_reporting_code", "purchase_mapping.purchase_compound_number"],
+                      "Startup Cost": 83816773.90,
+                      "Total Cost": 84088464.40,
+                      "Plan Rows": 108676198,
+                      "Plan Width": 163,
+                      "Actual Startup Time": 449.150,
+                      "Actual Total Time": 449.839,
+                      "Actual Rows": 15894,
+                      "Actual Loops": 1,
+                      "Sort Key": ["ad.unit_balance_code", "ad.fiscal_year", "ad.accounting_document_code", "(CASE WHEN (ad.material_code IS NULL) THEN (ad.position_line_item + '999'::numeric) ELSE ad.position_line_item END)"],
+                      "Sort Method": "quicksort",
+                      "Sort Space Used": 26838,
+                      "Sort Space Type": "Memory",
                       "Plans": [
                         {
-                          "Node Type": "Seq Scan",
+                          "Node Type": "Redistribute Motion",
+                          "Senders": 6,
+                          "Receivers": 6,
                           "Parent Relationship": "Outer",
-                          "Slice": 1,
-                          "Segments": 8,
+                          "Slice": 2,
+                          "Segments": 6,
                           "Gang Type": "primary reader",
-                          "Relation Name": "purchase_mapping",
-                          "Schema": "pg_temp_6958956",
-                          "Alias": "purchase_mapping",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 543.99,
-                          "Plan Rows": 31007912,
-                          "Plan Width": 23,
-                          "Output": ["purchase_mapping.purchase_order_for_reporting_code", "purchase_mapping.purchase_compound_number"]
+                          "Startup Cost": 4046.19,
+                          "Total Cost": 36517055.49,
+                          "Plan Rows": 108676198,
+                          "Plan Width": 163,
+                          "Actual Startup Time": 81.091,
+                          "Actual Total Time": 402.785,
+                          "Actual Rows": 15894,
+                          "Actual Loops": 1,
+                          "Hash Key": "ad.unit_balance_code, ad.fiscal_year, ad.accounting_document_code",
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 2,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Right",
+                              "Startup Cost": 4046.19,
+                              "Total Cost": 34343531.53,
+                              "Plan Rows": 108676198,
+                              "Plan Width": 163,
+                              "Actual Startup Time": 61.137,
+                              "Actual Total Time": 321.126,
+                              "Actual Rows": 62534,
+                              "Actual Loops": 1,
+                              "Hash Cond": "((cte.purchase_order_for_reporting_code)::text = (ad.purchase_document_code)::text)",
+                              "Extra Text": [
+                                {
+                                  "Extra Text": "(seg0)   Hash chain length 449.9 avg, 59710 max, using 139 of 32768 buckets."
+                                }
+                              ],
+                              "Plans": [
+                                {
+                                  "Node Type": "Subquery Scan",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 2,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Alias": "cte",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 80390.40,
+                                  "Plan Rows": 3765720,
+                                  "Plan Width": 131,
+                                  "Actual Startup Time": 1.209,
+                                  "Actual Total Time": 154.275,
+                                  "Actual Rows": 629025,
+                                  "Actual Loops": 1,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Append",
+                                      "Parent Relationship": "Subquery",
+                                      "Slice": 2,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 42733.20,
+                                      "Plan Rows": 3765720,
+                                      "Plan Width": 131,
+                                      "Actual Startup Time": 1.197,
+                                      "Actual Total Time": 110.715,
+                                      "Actual Rows": 629025,
+                                      "Actual Loops": 1,
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Member",
+                                          "Slice": 2,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "purchase_contract_header",
+                                          "Alias": "pc",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 3297.18,
+                                          "Plan Rows": 283118,
+                                          "Plan Width": 134,
+                                          "Actual Startup Time": 0.994,
+                                          "Actual Total Time": 6.793,
+                                          "Actual Rows": 47517,
+                                          "Actual Loops": 1
+                                        },
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Member",
+                                          "Slice": 2,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "purchase_order_header",
+                                          "Alias": "po",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 32992.47,
+                                          "Plan Rows": 2918847,
+                                          "Plan Width": 131,
+                                          "Actual Startup Time": 1.170,
+                                          "Actual Total Time": 57.067,
+                                          "Actual Rows": 487538,
+                                          "Actual Loops": 1
+                                        },
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Member",
+                                          "Slice": 2,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "purchase_agreement_header",
+                                          "Alias": "pa",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 6443.55,
+                                          "Plan Rows": 563755,
+                                          "Plan Width": 127,
+                                          "Actual Startup Time": 1.284,
+                                          "Actual Total Time": 13.103,
+                                          "Actual Rows": 94568,
+                                          "Actual Loops": 1
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 2,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 2941.43,
+                                  "Total Cost": 2941.43,
+                                  "Plan Rows": 88381,
+                                  "Plan Width": 131,
+                                  "Actual Startup Time": 55.955,
+                                  "Actual Total Time": 55.955,
+                                  "Actual Rows": 62534,
+                                  "Actual Loops": 1,
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Redistribute Motion",
+                                      "Senders": 6,
+                                      "Receivers": 6,
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 2941.43,
+                                      "Plan Rows": 88381,
+                                      "Plan Width": 131,
+                                      "Actual Startup Time": 0.022,
+                                      "Actual Total Time": 45.582,
+                                      "Actual Rows": 62534,
+                                      "Actual Loops": 1,
+                                      "Hash Key": "ad.purchase_document_code",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "accounting_documents",
+                                          "Alias": "ad",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 1173.81,
+                                          "Plan Rows": 88381,
+                                          "Plan Width": 131,
+                                          "Actual Startup Time": 1.186,
+                                          "Actual Total Time": 17.506,
+                                          "Actual Rows": 14930,
+                                          "Actual Loops": 1,
+                                          "Filter": "((NOT deleted_flag) AND is_active)",
+                                          "Rows Removed by Filter": 0
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
                         }
                       ]
                     }
@@ -120,8 +337,47 @@ GROUP BY
         }
       ]
     },
+    "Planning Time": 36.419,
+    "Triggers": [
+    ],
+    "Slice statistics": [
+      {
+        "Slice": 0,
+        "Executor Memory": 1568288
+      },
+      {
+        "Slice": 1,
+        "Executor Memory": {
+          "Average": 249216,
+          "Workers": 6,
+          "Maximum Memory Used": 249216
+        }
+      },
+      {
+        "Slice": 2,
+        "Executor Memory": {
+          "Average": 6333584,
+          "Workers": 6,
+          "Maximum Memory Used": 18926528
+        },
+        "Work Maximum Memory": 7473984
+      },
+      {
+        "Slice": 3,
+        "Executor Memory": {
+          "Average": 245890869,
+          "Workers": 6,
+          "Maximum Memory Used": 252065056
+        },
+        "Work Maximum Memory": 4579376
+      }
+    ],
+    "Statement statistics": {
+      "Memory used": 90112
+    },
     "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
+      "Optimizer": "Postgres query optimizer"
+    },
+    "Execution Time": 568.241
   }
 ]

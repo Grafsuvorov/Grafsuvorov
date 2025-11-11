@@ -1,397 +1,110 @@
--- Рекомендуется запускать в отдельной сессии.
--- Предполагается, что целевая таблица dm_calc.accounting_document_header уже создана так, как у тебя.
-
-BEGIN;
-
--- =====================================================================================
--- 0) Технические настройки сессии (опционально — под объёмы и инфраструктуру кластера)
--- =====================================================================================
--- SET statement_mem='4GB';               -- подбирай под кластер
--- SET work_mem='256MB';
--- SET gp_enable_hashagg=on;              -- для больших группировок полезно
--- SET gp_hashagg_default_nbatches=32;    -- если есть пролив, можно увеличить
--- SET gp_vmem_protect_limit='8192MB';    -- по политике кластера
-
--- =====================================================================================
--- 1) Маппинг документов закупки → PayDox (узкий, быстрый, распределяем по коду закупки)
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.stg_purchase_mapping;
-
-CREATE TEMP TABLE pg_temp.stg_purchase_mapping
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
+explain(verbose, format json)
 SELECT
-    purchase_order_for_reporting_code,
-    purchase_compound_number
-FROM (
-    SELECT
-        pc.purchase_contract_code  AS purchase_order_for_reporting_code,
-        COALESCE(pc.paydox_registration_number, pc.appendix_number) AS purchase_compound_number
-    FROM dds.purchase_contract_header pc
-    UNION ALL
-    SELECT
-        po.purchase_order_code,
-        COALESCE(po.paydox_registration_number, po.appendix_number)
-    FROM dds.purchase_order_header po
-    UNION ALL
-    SELECT
-        pa.purchase_agreement_code,
-        COALESCE(pa.paydox_registration_number, pa.appendix_number)
-    FROM dds.purchase_agreement_header pa
-) u
-WHERE purchase_order_for_reporting_code IS NOT NULL
-  AND purchase_compound_number IS NOT NULL
-DISTRIBUTED BY (purchase_order_for_reporting_code);
-
-ANALYZE pg_temp.stg_purchase_mapping;
+	ad.unit_balance_code,
+	ad.fiscal_year_of_relevant_invoice as fiscal_year,
+    ad.invoice_document_code,
+    ad.position_number_of_relevant_invoice as invoice_document_position_code,
+    case 
+	    when min(ad.accounting_document_code)= max(ad.accounting_document_code) 
+	    then min(ad.accounting_document_code) 
+	    else null 
+	end as unpaid_payment_request_code
+from 
+   dds.accounting_documents	ad
+where 
+    ad.is_active = true 
+    and ad.deleted_flag = false
+    and ad.clearing_document_code is null 
+    and ad.accounting_document_status_code = 'S'
+group by 
+	ad.unit_balance_code,
+	ad.fiscal_year_of_relevant_invoice,
+    ad.invoice_document_code,
+    ad.position_number_of_relevant_invoice;
 
 
--- =====================================================================================
--- 2) Отфильтрованный базовый слой accounting_documents (только нужные поля)
---    Распределяем ТАК ЖЕ, как целевая таблица, чтобы снизить Motion в последующих стадиях
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.ad_filtered;
-
-CREATE TEMP TABLE pg_temp.ad_filtered
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    ad.unit_balance_code,
-    ad.fiscal_year,
-    ad.accounting_document_code,
-    ad.material_code,
-    ad.position_line_item,
-    ad.dt_posting,
-    ad.accounting_document_type,
-    ad.reference_object_key,
-    ad.dt_accounting_document,
-    ad.dttm_accounting_document_created,
-    ad.accounting_document_status_code,
-    ad.reference_document_number,
-    ad.reference_key_internal_for_document_header_1,
-    ad.reference_key_internal_for_document_header_2,
-    ad.reverse_document_code,
-    ad.reverse_document_fiscal_year,
-    ad.purchase_document_code
-FROM ods.accounting_documents ad
-WHERE ad.deleted_flag = false
-  AND ad.is_active = true
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
--- Очень важно для оптимизатора на больших объёмах:
-ANALYZE pg_temp.ad_filtered;
-
-
--- =====================================================================================
--- 3) Ключи заголовков (distinct) — сразу уменьшаем объём
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.header_keys;
-
-CREATE TEMP TABLE pg_temp.header_keys
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT DISTINCT
-    unit_balance_code,
-    fiscal_year,
-    accounting_document_code
-FROM pg_temp.ad_filtered
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_keys;
-
-
--- =====================================================================================
--- 4) Покупочный документ по заголовку (distinct) —
---    нужен для PayDox-строки и для проверки "все строки с одним purchase_document_code?"
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.header_to_purchase;
-
-CREATE TEMP TABLE pg_temp.header_to_purchase
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT DISTINCT
-    a.unit_balance_code,
-    a.fiscal_year,
-    a.accounting_document_code,
-    a.purchase_document_code
-FROM pg_temp.ad_filtered a
-WHERE a.purchase_document_code IS NOT NULL
--- распределим по purchase_document_code, чтобы стык с mapping был без лишнего Motion
-DISTRIBUTED BY (purchase_document_code);
-
-ANALYZE pg_temp.header_to_purchase;
-
-
--- =====================================================================================
--- 5) Аггрегаты по заголовку, не требующие привязки к позиции:
---    - cnt_distinct_purchase_doc
---    - min_purchase_doc (вернём, если cnt=1)
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.header_purchase_info;
-
-CREATE TEMP TABLE pg_temp.header_purchase_info
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    h.unit_balance_code,
-    h.fiscal_year,
-    h.accounting_document_code,
-    COUNT(DISTINCT hp.purchase_document_code) AS cnt_purchase_docs,
-    MIN(hp.purchase_document_code)            AS min_purchase_doc
-FROM pg_temp.header_keys h
-LEFT JOIN pg_temp.header_to_purchase hp
-  ON     h.unit_balance_code      = hp.unit_balance_code
-     AND h.fiscal_year            = hp.fiscal_year
-     AND h.accounting_document_code = hp.accounting_document_code
-GROUP BY
-    h.unit_balance_code, h.fiscal_year, h.accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_purchase_info;
-
-
--- =====================================================================================
--- 6) Материал «из минимальной позиции».
---    Без оконок: считаем min(order_key), затем подтягиваем material_code с этой позиции.
---    Правило: if material_code is null → position+999 (чтобы null шёл «после»).
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.header_min_pos;
-
-CREATE TEMP TABLE pg_temp.header_min_pos
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    unit_balance_code,
-    fiscal_year,
-    accounting_document_code,
-    MIN( CASE
-           WHEN material_code IS NULL THEN position_line_item + 999
-           ELSE position_line_item
-         END ) AS min_order_key
-FROM pg_temp.ad_filtered
-GROUP BY
-    unit_balance_code, fiscal_year, accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_min_pos;
-
-
--- Теперь подтянем material_code для min_order_key.
--- Если по ключу совпало несколько строк (редко, но возможно), возьмём MAX(material_code) — детерминированно и дёшево.
-DROP TABLE IF EXISTS pg_temp.header_material;
-
-CREATE TEMP TABLE pg_temp.header_material
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    p.unit_balance_code,
-    p.fiscal_year,
-    p.accounting_document_code,
-    MAX(a.material_code) AS material_for_reporting_code
-FROM pg_temp.header_min_pos p
-JOIN pg_temp.ad_filtered a
-  ON  a.unit_balance_code        = p.unit_balance_code
-  AND a.fiscal_year              = p.fiscal_year
-  AND a.accounting_document_code = p.accounting_document_code
-  AND (
-        CASE WHEN a.material_code IS NULL
-             THEN a.position_line_item + 999
-             ELSE a.position_line_item
-        END
-      ) = p.min_order_key
-GROUP BY
-    p.unit_balance_code, p.fiscal_year, p.accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_material;
-
-
--- =====================================================================================
--- 7) Атрибуты заголовка (стабильные по заголовку)
---    Берём MIN(...) как any_value — если поля действительно заголовочные, они равны на всех позициях.
--- =====================================================================================
-DROP TABLE IF EXISTS pg_temp.header_attrs;
-
-CREATE TEMP TABLE pg_temp.header_attrs
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    unit_balance_code,
-    fiscal_year,
-    accounting_document_code,
-    MIN(dt_posting)                            AS dt_posting,
-    MIN(accounting_document_type)              AS accounting_document_type_code,
-    MIN(reference_object_key)                  AS reference_object_key_code,
-    MIN(dt_accounting_document)                AS dt_accounting_document,
-    MIN(dttm_accounting_document_created)      AS dttm_accounting_document_created,
-    MIN(accounting_document_status_code)       AS accounting_document_status_code,
-    MIN(reference_document_number)             AS reference_document_number,
-    MIN(reference_key_internal_for_document_header_1) AS document_header_reference_internal_key1_number,
-    MIN(reference_key_internal_for_document_header_2) AS document_header_reference_internal_key2_number,
-    MIN(reverse_document_code)                 AS reverse_document_code,
-    MIN(reverse_document_fiscal_year)          AS reverse_document_fiscal_year
-FROM pg_temp.ad_filtered
-GROUP BY
-    unit_balance_code, fiscal_year, accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_attrs;
-
-
--- =====================================================================================
--- 8) PayDox-строка (distinct на уровне purchase_compound_number) по заголовку:
---    header → distinct purchase_doc → mapping → distinct compound → string_agg
--- =====================================================================================
--- Сначала устраним дубликаты purchase_compound_number на уровне заголовка
-DROP TABLE IF EXISTS pg_temp.header_compounds_distinct;
-
-CREATE TEMP TABLE pg_temp.header_compounds_distinct
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT DISTINCT
-    hp.unit_balance_code,
-    hp.fiscal_year,
-    hp.accounting_document_code,
-    m.purchase_compound_number
-FROM pg_temp.header_to_purchase hp
-JOIN pg_temp.stg_purchase_mapping m
-  ON hp.purchase_document_code = m.purchase_order_for_reporting_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_compounds_distinct;
-
-
-DROP TABLE IF EXISTS pg_temp.header_compounds_agg;
-
-CREATE TEMP TABLE pg_temp.header_compounds_agg
-WITH (
-  appendonly=true,
-  orientation=column,
-  compresstype=zstd,
-  compresslevel=3
-) AS
-SELECT
-    unit_balance_code,
-    fiscal_year,
-    accounting_document_code,
-    STRING_AGG(purchase_compound_number, ', ') AS purchase_specification_compound_number
-FROM pg_temp.header_compounds_distinct
-GROUP BY
-    unit_balance_code, fiscal_year, accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
-ANALYZE pg_temp.header_compounds_agg;
-
-
--- =====================================================================================
--- 9) Итоговая сборка результата + загрузка в витрину
--- =====================================================================================
--- Если делаешь полную инициализацию — лучше очистить партицию/год заранее,
--- но ниже просто пример full insert (при необходимости добавь WHERE по годам).
-
--- На full-init — безопаснее TRUNCATE целевой (или нужные партиции), тут покажу TRUNCATE:
-TRUNCATE TABLE dm_calc.accounting_document_header;
-
-INSERT /*+ direct */ INTO dm_calc.accounting_document_header (
-    unit_balance_code,
-    fiscal_year,
-    accounting_document_code,
-    material_for_reporting_code,
-    dt_posting,
-    accounting_document_type_code,
-    reference_object_key_code,
-    dt_accounting_document,
-    dttm_accounting_document_created,
-    accounting_document_status_code,
-    reference_document_number,
-    document_header_reference_internal_key1_number,
-    document_header_reference_internal_key2_number,
-    reverse_document_code,
-    reverse_document_fiscal_year,
-    purchase_order_for_reporting_code,
-    purchase_specification_compound_number,
-    dttm_inserted,
-    dttm_updated,
-    job_name,
-    deleted_flag
-)
-SELECT
-    k.unit_balance_code,
-    k.fiscal_year,
-    k.accounting_document_code,
-    COALESCE(hm.material_for_reporting_code, NULL) AS material_for_reporting_code,
-    ha.dt_posting,
-    ha.accounting_document_type_code,
-    ha.reference_object_key_code,
-    ha.dt_accounting_document,
-    ha.dttm_accounting_document_created,
-    ha.accounting_document_status_code,
-    ha.reference_document_number,
-    ha.document_header_reference_internal_key1_number,
-    ha.document_header_reference_internal_key2_number,
-    ha.reverse_document_code,
-    ha.reverse_document_fiscal_year,
-    CASE
-      WHEN hpi.cnt_purchase_docs = 1 THEN hpi.min_purchase_doc
-      ELSE NULL
-    END AS purchase_order_for_reporting_code,
-    hca.purchase_specification_compound_number,
-    now() AS dttm_inserted,
-    now() AS dttm_updated,
-    'airflow'::varchar(60) AS job_name,
-    false AS deleted_flag
-FROM pg_temp.header_keys k
-LEFT JOIN pg_temp.header_material        hm  ON hm.unit_balance_code = k.unit_balance_code
-                                           AND hm.fiscal_year = k.fiscal_year
-                                           AND hm.accounting_document_code = k.accounting_document_code
-LEFT JOIN pg_temp.header_attrs           ha  ON ha.unit_balance_code = k.unit_balance_code
-                                           AND ha.fiscal_year = k.fiscal_year
-                                           AND ha.accounting_document_code = k.accounting_document_code
-LEFT JOIN pg_temp.header_purchase_info   hpi ON hpi.unit_balance_code = k.unit_balance_code
-                                           AND hpi.fiscal_year = k.fiscal_year
-                                           AND hpi.accounting_document_code = k.accounting_document_code
-LEFT JOIN pg_temp.header_compounds_agg   hca ON hca.unit_balance_code = k.unit_balance_code
-                                           AND hca.fiscal_year = k.fiscal_year
-                                           AND hca.accounting_document_code = k.accounting_document_code
-DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code);
-
--- Итоговая статистика
-ANALYZE dm_calc.accounting_document_header;
-
-COMMIT;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 67749.85,
+      "Plan Rows": 625915,
+      "Plan Width": 40,
+      "Output": ["unit_balance_code", "fiscal_year_of_relevant_invoice", "invoice_document_code", "position_number_of_relevant_invoice", "(CASE WHEN ((min((accounting_document_code)::text)) = (max((accounting_document_code)::text))) THEN (min((accounting_document_code)::text)) ELSE NULL::text END)"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 67680.44,
+          "Plan Rows": 625915,
+          "Plan Width": 40,
+          "Output": ["unit_balance_code", "fiscal_year_of_relevant_invoice", "invoice_document_code", "position_number_of_relevant_invoice", "CASE WHEN ((min((accounting_document_code)::text)) = (max((accounting_document_code)::text))) THEN (min((accounting_document_code)::text)) ELSE NULL::text END"],
+          "Plans": [
+            {
+              "Node Type": "Aggregate",
+              "Strategy": "Hashed",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 67677.31,
+              "Plan Rows": 625915,
+              "Plan Width": 50,
+              "Output": ["min((accounting_document_code)::text)", "max((accounting_document_code)::text)", "min((accounting_document_code)::text)", "unit_balance_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
+              "Group Key": ["accounting_documents.unit_balance_code", "accounting_documents.fiscal_year_of_relevant_invoice", "accounting_documents.invoice_document_code", "accounting_documents.position_number_of_relevant_invoice"],
+              "Plans": [
+                {
+                  "Node Type": "Redistribute Motion",
+                  "Senders": 8,
+                  "Receivers": 8,
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 67510.63,
+                  "Plan Rows": 2619222,
+                  "Plan Width": 37,
+                  "Output": ["unit_balance_code", "accounting_document_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
+                  "Hash Key": "unit_balance_code, fiscal_year_of_relevant_invoice, invoice_document_code, position_number_of_relevant_invoice",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "accounting_documents",
+                      "Schema": "dds",
+                      "Alias": "accounting_documents",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 67472.71,
+                      "Plan Rows": 2619222,
+                      "Plan Width": 37,
+                      "Output": ["unit_balance_code", "accounting_document_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
+                      "Filter": "(accounting_documents.is_active AND (NOT accounting_documents.deleted_flag) AND (accounting_documents.clearing_document_code IS NULL) AND (accounting_documents.accounting_document_status_code = 'S'::bpchar))"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

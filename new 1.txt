@@ -1,110 +1,1273 @@
-explain(verbose, format json)
-SELECT
-	ad.unit_balance_code,
-	ad.fiscal_year_of_relevant_invoice as fiscal_year,
-    ad.invoice_document_code,
-    ad.position_number_of_relevant_invoice as invoice_document_position_code,
-    case 
-	    when min(ad.accounting_document_code)= max(ad.accounting_document_code) 
-	    then min(ad.accounting_document_code) 
-	    else null 
-	end as unpaid_payment_request_code
-from 
-   dds.accounting_documents	ad
-where 
-    ad.is_active = true 
-    and ad.deleted_flag = false
-    and ad.clearing_document_code is null 
-    and ad.accounting_document_status_code = 'S'
-group by 
-	ad.unit_balance_code,
-	ad.fiscal_year_of_relevant_invoice,
-    ad.invoice_document_code,
-    ad.position_number_of_relevant_invoice;
+drop table if exists dm.transportation_service_invoice_approvement_history_pivot cascade;
 
+create table if not exists dm.transportation_service_invoice_approvement_history_pivot (
+	unit_balance_code varchar(4) null,
+	unit_balance_name varchar(50) null,
+	unit_balance_search_name varchar(60) null,
+	plant_code varchar(4) null,
+	plant_name varchar(50) null,
+	plant_search_name varchar(60) null,
+	transportation_service_invoice_code varchar(10) null,
+	transportation_service_invoice_position_code varchar(5) null,
+	transportation_service_invoice_subposition_code varchar(5) null,
+	transportation_service_invoice_number varchar(40) null,
+	transportation_service_invoice_position_object_code varchar(35) null,
+	transportation_service_invoice_truncated_code varchar(10) null,
+	transportation_service_invoice_position_truncated_code varchar(5) null,
+	transportation_service_invoice_subposition_truncated_code varchar(5) null,
+	transportation_service_invoice_in_sap_system_url text null,
+	creditor_code varchar(10) null,
+	creditor_name varchar(300) null,
+	creditor_search_name varchar(300) null,
+	creditor_agent_code varchar(10) null,
+	creditor_agent_name varchar(300) null,
+	creditor_agent_search_name varchar(300) null,
+	second_creditor_agent_code varchar(10) null,
+	second_creditor_agent_name varchar(300) null,
+	second_creditor_agent_search_name varchar(300) null,
+	creditor_for_reporting_code varchar(10) null,
+	creditor_for_reporting_name varchar(300) null,
+	creditor_for_reporting_search_name varchar(300) null,
+	transportation_service_provider_code varchar(10) null,
+	transportation_service_provider_name varchar(300) null,
+	transportation_service_provider_search_name varchar(300) null,
+	dt_transportation_service_invoice date null,
+	dt_due_payment_date date null,
+	dt_payment date null,
+	overdue_days int8 null,
+	payment_document_code varchar(10) null,
+	payment_order_code varchar(10) null,
+	comment_text varchar(200) null,
+	supplier_account_code varchar(15) null,
+	purchase_contract_assigned_to_supplier_account_code varchar(10) null,
+	service_code varchar(18) null,
+	service_name varchar(50) null,
+	service_search_name varchar(70) null,
+	payment_obstacle_code varchar(2) null,
+	payment_obstacle_name varchar(70) null,
+	payment_obstacle_search_name varchar(73) null,
+	created_by varchar(12) null,
+	transportation_service_invoice_created_by_full_name varchar(80) null,
+	dt_created date null,
+	updated_by varchar(12) null,
+	updated_by_full_name varchar(80) null,
+	dt_updated date null,
+	contract_supervisor_user_code varchar(12) null,
+	contract_supervisor_user_full_name varchar(80) null,
+	dt_odo_informed_contract_supervisor date null,
+	transportation_service_invoice_type_code varchar(2) null,
+	transportation_service_invoice_type_name varchar(60) null,
+	transportation_service_invoice_type_search_name varchar(63) null,
+	funds_center_code varchar(16) null,
+	subdivision_name varchar(50) null,
+	department_name varchar(50) null,
+	subdivision_responsible_for_document_registration_name varchar(50) null,
+	user_group_responsible_for_document_registration_name varchar(50) null,
+	user_responsible_for_document_registration_code varchar(12) null,
+	user_responsible_for_document_registration_name varchar(80) null,
+	user_responsible_for_document_code varchar(12) null,
+	user_responsible_for_document_name varchar(80) null,
+	odo_informed_contract_supervisor_or_rcu_by varchar(12) null,
+	odo_informed_contract_supervisor_or_rcu_by_full_name varchar(80) null,
+	dt_odo_informed_contract_supervisor_or_rcu date null,
+	acceptance_code varchar(1) null,
+	accepted_by varchar(12) null,
+	accepted_by_full_name varchar(80) null,
+	dt_accepted date null,
+	dt_posting date null,
+	is_payment_date_manually_adjusted_code varchar(1) null,
+	is_adjustment_document_code varchar(1) null,
+	registration_status_external_code varchar null,
+	validation_status_external_code varchar null,
+	approvement_status_external_code varchar null,
+	is_contract_supervisor_informed_code varchar(1) null,
+	is_contract_supervisor_informed_name varchar(100) null,
+	is_contract_supervisor_informed_search_name varchar(100) null,
+	is_back_office_informed_code varchar(1) null,
+	is_back_office_informed_name varchar(100) null,
+	is_back_office_informed_search_name varchar(100) null,
+	dt_validated date null,
+	sap_to_aldor_export_status_code varchar(1) null,
+	sap_to_aldor_export_status_name varchar(100) null,
+	sap_to_aldor_export_status_search_name varchar(100) null,
+	unblocked_by varchar(12) null,
+	unblocked_by_full_name varchar(80) null,
+	dt_unblocked date null,
+	is_reregistered_to_other_plant_code varchar(1) null,
+	contract_supervisor2_user_code varchar(12) null,
+	contract_supervisor2_user_full_name varchar(80) null,
+	is_posted_without_validated_electronic_documents_code varchar(1) null,
+	dt_document_received date null,
+	invoice_type_code varchar(1) null,
+	is_payment_purpose_manually_updated_code varchar(1) null,
+	approved_by	varchar(12) null,
+	approved_by_full_name varchar(80) null,
+	dt_approved date null,
+	rcu_responsible_for_unblock_user_code varchar(12) null,
+	rcu_responsible_for_unblock_user_full_name varchar(80) null,
+	dt_rcu_unblock_requested date null,
+	vessel_code varchar(10) null,
+	dt_rcu_unblock_rejected date null,
+	rcu_unblock_reject_reason_name varchar(100) null,
+	bill_of_lading_compound_code text null,
+	bill_of_lading_compound_number text null,
+	vessel_compound_name text null,
+	etsng_code varchar(6) null,
+	etsng_name varchar(80) null,
+	etsng_search_name varchar(90) null,
+	document_type_code varchar(1) null,
+	document_type_name varchar(100) null,
+	document_type_search_name varchar(100) null,
+	controlling_order_code varchar(12) null,
+	accounting_document_code varchar(10) null,
+	batch_code varchar(10) null,
+	is_check_turned_off_code varchar(1) null,
+	is_check_on_dublicates_turned_off_code varchar(1) null,
+	general_ledger_account_code varchar(10) null,
+	dt_storage_start date null,
+	dt_storage_end date null,
+	is_accrual_posting_exists_code varchar(1) null,
+	is_invoice_posting_exists_code varchar(1) null,
+	cost_center_code varchar(10) null,
+	transportation_service_customer_code varchar(10) null,
+	transportation_service_customer_name varchar(300) null,
+	transportation_service_customer_search_name varchar(300) null,
+	material_code varchar(18) null,
+	mmaterial_name varchar(100) null,
+	material_search_name varchar(100) null,
+	service_desk_request_code varchar(10) null,
+	vat_classification_code varchar(1) null,
+	vat_classification_name varchar(100) null,
+	vat_classification_search_name varchar(100) null,
+	assignment_type_code varchar(2) null,
+	assignment_type_name varchar(100) null,
+	assignment_type_search_name varchar(100) null,
+	is_manual_input_controlling_order_assignment_code varchar(1) null,
+	is_manual_input_general_ledger_account_code varchar(1) null,
+	is_manual_input_assignment_type_code varchar(1) null,
+	is_manual_input_cost_center_code varchar(1) null,
+	is_manual_input_transportation_service_customer_code varchar(1) null,
+	is_manual_input_vat_code varchar(1) null,
+	is_manual_input_wbs_element_code varchar(1) null,
+	is_manual_input_vat_classification_code varchar(1) null,
+	wbs_element_code varchar(8) null,
+	is_manual_input_financial_position_code varchar(1) null,
+	is_manual_input_funds_center_code varchar(1) null,
+	valuation_type_code varchar(10) null,
+	route_code varchar(6) null,
+	route_name varchar(50) null,
+	route_search_name varchar(50) null,
+	vat_code varchar(2) null,
+	vat_name varchar(50) null,
+	vat_search_name varchar(50) null,
+	vat_adjustment_code varchar(1) null,
+	vat_adjustment_name varchar(100) null,
+	vat_adjustment_search_name varchar(100) null,
+	is_non_refundable_vat_code varchar(1) null,
+	trading_method_code varchar(1) null,
+	trading_method_name varchar(50) null,
+	trading_method_search_name varchar(50) null,
+	is_check_on_limit_exceed_turned_off_code varchar(1) null,
+	agent_and_supplier_contract_code varchar(10) null,	
+	supplier_and_carrier_contract_code varchar(10) null,
+	document_terms_vs_contract_terms_check_external_code varchar null,
+	is_expense_write_off_completed_code varchar(1) null,
+	customs_declaration_number varchar(30) null,
+	transport_bill_code varchar(35) null,
+	vehicle_code varchar(20) null,
+	is_own_vehicle_code varchar(1) null,
+	railway_platform_code varchar(20) null,
+	currency_exchange_rate numeric(16, 6) null,
+	transport_bill_weight numeric(13, 3) null,
+	dt_shipment date null,
+	bill_of_lading_number varchar(30) null,
+	dt_bill_of_lading date null,
+	nomination_code varchar(20) null,
+	transportation_expenses_write_off_delivery_code varchar(10) null,
+	transportation_service_type_code varchar(1) null,
+	transportation_service_type_name varchar(100) null,
+	transportation_service_type_search_name varchar(100) null,
+	transportation_service_approval_status_code varchar(1) null,
+	transportation_service_approval_status_name varchar(100) null,
+	transportation_service_approval_status_search_name varchar(100) null,
+	railcar_information_source_code varchar(1) null,
+	railcar_information_source_name varchar(100) null,
+	railcar_information_source_search_name varchar(100) null,
+	is_railcar_external_rzd_use_prohibted_code varchar(1) null,
+	payment_request_local_currency_amount numeric(13, 2) null,
+	dt_exchange_rate date null,
+	subposition_document_currency_vat_excluded_amount numeric(13, 2) null,
+	subposition_document_currency_vat_amount numeric(13, 2) null,
+	transportation_service_invoice_document_curr_total_amount numeric(13, 2) null,
+	document_currency_code varchar(5) null,
+	transportation_service_invoice_local_curr_vat_excl_amount numeric(13, 2) null,
+	transportation_service_invoice_local_curr_vat_incl_amount numeric(13, 2) null,
+	local_currency_code varchar(5) null,
+	transportation_service_invoice_sec_lcl_curr_vat_ex_amount numeric(13, 2) null,
+	transportation_service_invoice_sec_lcl_curr_vat_in_amount numeric(13, 2) null,
+	second_local_currency_code varchar(5) null,
+	is_marked_for_report_code varchar(1) null,
+	is_account_receivable_report_code varchar(1) null,
+	is_account_receivable_overdue_report_code varchar(1) null,
+	is_payed_document_report_code varchar(1) null,
+	is_used_in_transportation_documents_report_code	varchar(1) null,
+	dttm_inserted timestamp not null default now(),
+	dttm_updated timestamp not null default now(),
+	job_name varchar(60) not null default 'airflow'::character varying,
+	deleted_flag bool not null default false
+)
+with (
+ 	appendonly=true,
+ 	orientation=column,
+ 	compresstype=zstd,
+ 	compresslevel=3
+)
+distributed by (
+	plant_code,
+	transportation_service_invoice_code
+);
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 2,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 67749.85,
-      "Plan Rows": 625915,
-      "Plan Width": 40,
-      "Output": ["unit_balance_code", "fiscal_year_of_relevant_invoice", "invoice_document_code", "position_number_of_relevant_invoice", "(CASE WHEN ((min((accounting_document_code)::text)) = (max((accounting_document_code)::text))) THEN (min((accounting_document_code)::text)) ELSE NULL::text END)"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 2,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 67680.44,
-          "Plan Rows": 625915,
-          "Plan Width": 40,
-          "Output": ["unit_balance_code", "fiscal_year_of_relevant_invoice", "invoice_document_code", "position_number_of_relevant_invoice", "CASE WHEN ((min((accounting_document_code)::text)) = (max((accounting_document_code)::text))) THEN (min((accounting_document_code)::text)) ELSE NULL::text END"],
-          "Plans": [
-            {
-              "Node Type": "Aggregate",
-              "Strategy": "Hashed",
-              "Parent Relationship": "Outer",
-              "Slice": 2,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 67677.31,
-              "Plan Rows": 625915,
-              "Plan Width": 50,
-              "Output": ["min((accounting_document_code)::text)", "max((accounting_document_code)::text)", "min((accounting_document_code)::text)", "unit_balance_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
-              "Group Key": ["accounting_documents.unit_balance_code", "accounting_documents.fiscal_year_of_relevant_invoice", "accounting_documents.invoice_document_code", "accounting_documents.position_number_of_relevant_invoice"],
-              "Plans": [
-                {
-                  "Node Type": "Redistribute Motion",
-                  "Senders": 8,
-                  "Receivers": 8,
-                  "Parent Relationship": "Outer",
-                  "Slice": 1,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 67510.63,
-                  "Plan Rows": 2619222,
-                  "Plan Width": 37,
-                  "Output": ["unit_balance_code", "accounting_document_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
-                  "Hash Key": "unit_balance_code, fiscal_year_of_relevant_invoice, invoice_document_code, position_number_of_relevant_invoice",
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "accounting_documents",
-                      "Schema": "dds",
-                      "Alias": "accounting_documents",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 67472.71,
-                      "Plan Rows": 2619222,
-                      "Plan Width": 37,
-                      "Output": ["unit_balance_code", "accounting_document_code", "invoice_document_code", "fiscal_year_of_relevant_invoice", "position_number_of_relevant_invoice"],
-                      "Filter": "(accounting_documents.is_active AND (NOT accounting_documents.deleted_flag) AND (accounting_documents.clearing_document_code IS NULL) AND (accounting_documents.accounting_document_status_code = 'S'::bpchar))"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
+comment on table dm.transportation_service_invoice_approvement_history_pivot is 'Оплата актов (детальные данные)';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.unit_balance_code is 'Балансовая единица (код) | Балансовая единица (код) | dds.transportation_service_invoice_header.unit_balance_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.unit_balance_name is 'Балансовая единица (наименование) | Балансовая единица (наименование) | dict_dds.address.address_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.unit_balance_search_name is 'Балансовая единица (код и наименование) | Балансовая единица (код и наименование) | Объединить unit_balance_code и unit_balance_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.plant_code is 'Завод (код) | Завод (код) | dds.transportation_service_invoice_header.plant_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.plant_name is 'Завод (наименование) | Завод (наименование) | dict_dds.address.address_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.plant_search_name is 'Завод (код и наименование) | Завод (код и наименование) | Объединить plant_code и plant_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_code is 'Акт на транспортировку (код) | Акт на транспортировку (код) | dds.transportation_service_invoice_header.transportation_service_invoice_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_position_code is 'Позиция акта на транспортировку (код) | Позиция акта на транспортировку (код) | dds.transportation_service_invoice_position.transportation_service_invoice_position_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_subposition_code is 'Подпозиция акта на транспортировку (код) | Подпозиция акта на транспортировку (код) | dds.transportation_service_invoice_subposition.transportation_service_invoice_subposition_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_number is 'Номер документа (акта) на бумаге | Номер документа (акта) на бумаге | dds.transportation_service_invoice_header.transportation_service_invoice_number';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_position_object_code is 'Номер документа, на который внесена позиция документа оплаты (например, номер накладной, коносамента, контейнера) | Номер документа, на который внесена позиция документа оплаты (например, номер накладной, коносамента, контейнера) | dds.transportation_service_invoice_position.transportation_service_invoice_position_object_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_truncated_code is 'Акт на транспортировку без лидирующих нулей (код) | Акт на транспортировку без лидирующих нулей (код) | dds.transportation_service_invoice_header.transportation_service_invoice_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_position_truncated_code is 'Позиция акта на транспортировку без лидирующих нулей (код) | Позиция акта на транспортировку без лидирующих нулей (код) | dds.transportation_service_invoice_position.transportation_service_invoice_position_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_subposition_truncated_code is 'Подпозиция акта на транспортировку без лидирующих нулей (код) | Подпозиция акта на транспортировку без лидирующих нулей (код) | dds.transportation_service_invoice_subposition.transportation_service_invoice_subposition_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_in_sap_system_url is 'Техническая гиперссылка для перехода в SAP | Техническая гиперссылка для перехода в SAP | dds.transportation_service_invoice_header.transportation_service_invoice_in_sap_system_url';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_code is 'Кредитор (код) | Кредитор (код) | dds.transportation_service_invoice_header.creditor_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_name is 'Кредитор (наименование) | Кредитор (наименование) | dict_dds.counterparty.counterparty_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_search_name is 'Кредитор (код и наименование) | Кредитор (код и наименование) | Объединить creditor_code и creditor_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_agent_code is 'Кредитор агента  (код) | Кредитор агента  (код) | dds.transportation_service_invoice_header.creditor_agent_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_agent_name is 'Кредитор агента (наименование) | Кредитор агента (наименование) | dict_dds.counterparty.counterparty_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_agent_search_name is 'Кредитор агента (код и наименование) | Кредитор агента (код и наименование) | Объединить creditor_agent_code и creditor_agent_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.second_creditor_agent_code is 'Перевозчик (код) | Перевозчик (код) | dds.transportation_service_invoice_header.second_creditor_agent_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.second_creditor_agent_name is 'Перевозчик (наименование) | Перевозчик (наименование) | dict_dds.counterparty.counterparty_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.second_creditor_agent_search_name is 'Перевозчик (код и наименование) | Перевозчик (код и наименование) | Объединить second_creditor_agent_code и second_creditor_agent_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_for_reporting_code is 'Кредитор, непосредственно оказавший транспортные услуги (код) | Кредитор, непосредственно оказавший транспортные услуги (код) | dds.transportation_service_invoice_header.creditor_final_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_for_reporting_name is 'Кредитор, непосредственно оказавший транспортные услуги (наименование) | Кредитор, непосредственно оказавший транспортные услуги (наименование) | dict_dds.counterparty.counterparty_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.creditor_for_reporting_search_name is 'Кредитор, непосредственно оказавший транспортные услуги (код и наименование) | Кредитор, непосредственно оказавший транспортные услуги (код и наименование) | Объединить creditor_for_reporting_code и creditor_for_reporting_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_provider_code is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_provider_name is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_provider_search_name is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_transportation_service_invoice is 'Дата документа (акта) | Дата документа (акта) | dds.transportation_service_invoice_header.dt_transportation_service_invoice';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_due_payment_date is 'Дата, когда должна быть произведена оплата | Дата, когда должна быть произведена оплата | dds.transportation_service_invoice_header.dt_due_payment_date';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_payment is 'Дата оплаты | Дата оплаты | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.overdue_days is 'Количество дней, на которые просрочена оплата акта. Может быть положительной (просрочено) или отрицательной (оплачено раньше срока) или нулевой (оплачено в срок) | Количество дней, на которые просрочена оплата акта. Может быть положительной (просрочено) или отрицательной (оплачено раньше срока) или нулевой (оплачено в срок) | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.payment_document_code is 'Номер документа оплаты (ТАП) | Номер документа оплаты (ТАП) | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.payment_order_code is 'Номер платежного поручения | Номер платежного поручения | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.comment_text is 'Комментарий | Комментарий | dds.transportation_service_invoice_header.comment_text';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.supplier_account_code is 'Лицевой счет для связи между документом на оплату и рамочным договором (код) | Лицевой счет для связи между документом на оплату и рамочным договором (код) | dds.transportation_service_invoice_header.supplier_account_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.purchase_contract_assigned_to_supplier_account_code is 'Номер договора, внесенного в лицевой счет | Номер договора, внесенного в лицевой счет | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.service_code is '№ Услуги (код) | № Услуги (код) | dds.transportation_service_invoice_position.service_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.service_name is '№ Услуги (наименование) | № Услуги (наименование) | dict_dds.service_assessment_class_dsc.service_dsc';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.service_search_name is '№ Услуги (код и наименование) | № Услуги (код и наименование) | Объединить service_code и service_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.payment_obstacle_code is 'Препятствие оплаты (код) | Препятствие оплаты (код) | dds.transportation_service_invoice_header.payment_obstacle_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.payment_obstacle_name is 'Препятствие оплаты (наименование) | Препятствие оплаты (наименование) | dict_dds.payment_obstacle_texts.payment_obstacle_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.payment_obstacle_search_name is 'Препятствие оплаты (код и наименование) | Препятствие оплаты (код и наименование) | Объединить payment_obstacle_code и payment_obstacle_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.created_by is 'Логин пользователя, создавшего документ | Логин пользователя, создавшего документ | dds.transportation_service_invoice_header.created_by';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_created_by_full_name is 'ФИО пользователя, создавшего документ | ФИО пользователя, создавшего документ | dict_dds.person_main_data.person_last_name и dict_dds.person_main_data.person_first_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_created is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.updated_by is 'Автор изменения | Автор изменения | dds.transportation_service_invoice_header.updated_by';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.updated_by_full_name is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_updated is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.contract_supervisor_user_code is 'Куратор договора (код) | Куратор договора (код) | dds.transportation_service_invoice_header.contract_supervisor_user_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.contract_supervisor_user_full_name is 'Куратор договора (наименование) | Куратор договора (наименование) | dict_dds.person_main_data.person_last_name и dict_dds.person_main_data.person_first_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_odo_informed_contract_supervisor is '';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_type_code is 'Вид документа (код) | Вид документа (код) | dds.transportation_service_invoice_header.transportation_service_invoice_type_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_type_name is 'Вид документа (наименование) | Вид документа (наименование) | dict_dds.transportation_document_type_texts.document_type_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_type_search_name is 'Вид документа (код и наименование) | Вид документа (код и наименование) | Объединить transportation_service_invoice_type_code и transportation_service_invoice_type_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.funds_center_code is 'Подразделение финансового менеджмента (код) | Подразделение финансового менеджмента (код) | dds.transportation_service_invoice_position.funds_center_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.subdivision_name is 'Отдел (наименование) | Отдел (наименование) | dict_dds.funds_center_and_department_link.subdivision_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.department_name is 'Департамент (наименование) | Департамент (наименование) | dict_dds.funds_center_and_department_link.department_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.subdivision_responsible_for_document_registration_name is 'Отдел или депаратмент, который отвечает за регистрацию документа (наименование) | Отдел или депаратмент, который отвечает за регистрацию документа (наименование) | dict_dds.employee_odo_dfk_dtil + dict_dds.address.address_short_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.user_group_responsible_for_document_registration_name is 'Направление отдела или депаратамента, которое отвечает за регистрацию документа (наименование) | Направление отдела или депаратамента, которое отвечает за регистрацию документа (наименование) | dict_dds.employee_odo_dfk_dtil';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.user_responsible_for_document_registration_code is 'Сотрудник ОДО, ответственный за акт (код) | Сотрудник ОДО, ответственный за акт (код) | dds.transportation_service_invoice_header.user_responsible_for_document_registration_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.user_responsible_for_document_registration_name is 'Сотрудник ОДО, ответственный за акт (наименование) | Сотрудник ОДО, ответственный за акт (наименование) | dict_dds.person_main_data.person_last_name и dict_dds.person_main_data.person_first_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.user_responsible_for_document_code is 'Ответственный за акт (код) | Ответственный за акт (код) | dds.transportation_service_invoice_header.user_responsible_for_document_registration_code или dds.transportation_service_invoice_header.created_by';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.user_responsible_for_document_name is 'Ответственный за акт (наименование) | Ответственный за акт (наименование) | user_responsible_for_document_registration_name или transportation_service_invoice_created_by_full_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.bill_of_lading_compound_code is 'Номер коносамента системный | Номер коносамента системный | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.bill_of_lading_compound_number is 'Номер судового коносамента | Номер судового коносамента | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.vessel_compound_name is 'Судно (наименование) | Судно (наименование) | См. логику заполнения';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.etsng_code is 'ЕТ СНГ (код) | ЕТ СНГ (код) | dds.transportation_service_invoice_position.etsng_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.etsng_name is 'ЕТ СНГ (наименование) | ЕТ СНГ (наименование) | dict_dds.etsng_texts.etsng_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.etsng_search_name is 'ЕТ СНГ (код и наименование) | ЕТ СНГ (код и наименование) | Объединить etsng_code и etsng_name';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.document_type_code is 'Тип документа (код) | Тип документа (код) | dds.transportation_service_invoice_position.document_type_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.controlling_order_code is 'Заказ контроллинга затрат (код) | Заказ контроллинга затрат (код) | dds.transportation_service_invoice_position.controlling_order_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.accounting_document_code is 'Номер бухгалтерской проводки начисления затрат (код) | Номер бухгалтерской проводки начисления затрат (код) | dds.transportation_service_invoice_position.accounting_document_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.batch_code is 'Партия (код) | Партия (код) | dds.transportation_service_invoice_position.batch_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_check_turned_off_code is 'Сверка отлючена (код) | Сверка отлючена (код) | dds.transportation_service_invoice_position.is_check_turned_off_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_check_on_dublicates_turned_off_code is 'Проверка на дубли отлючена (код) | Проверка на дубли отлючена (код) | dds.transportation_service_invoice_position.is_check_on_dublicates_turned_off_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.general_ledger_account_code is 'Счет главной книги (код) | Счет главной книги (код) | dds.transportation_service_invoice_position.general_ledger_account_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_storage_start is 'Начальная дата периода хранения | Начальная дата периода хранения | dds.transportation_service_invoice_position.dt_storage_start';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_storage_end is 'Конечная дата периода хранения | Конечная дата периода хранения | dds.transportation_service_invoice_position.dt_storage_end';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_accrual_posting_exists_code is 'Наличие проводки начисления (код) | Наличие проводки начисления (код) | dds.transportation_service_invoice_position.is_accrual_posting_exists_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_invoice_posting_exists_code is 'Наличие проводки фактуры (код) | Наличие проводки фактуры (код) | dds.transportation_service_invoice_position.is_invoice_posting_exists_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.cost_center_code is 'Место возникновения затрат (код) | Место возникновения затрат (код) | dds.transportation_service_invoice_position.cost_center_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_customer_code is 'Заказчик услуги перевозки (код) | Заказчик услуги перевозки (код) | dds.transportation_service_invoice_position.transportation_service_customer_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.material_code is 'Материал (код) | Материал (код) | dds.transportation_service_invoice_position.material_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.service_desk_request_code is 'Номер заявки в сервис-деск (код) | Номер заявки в сервис-деск (код) | dds.transportation_service_invoice_position.service_desk_request_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.vat_classification_code is 'Налоговая классификация (код) | Налоговая классификация (код) | dds.transportation_service_invoice_position.vat_classification_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.assignment_type_code is 'Тип контировки (код) | Тип контировки (код) | dds.transportation_service_invoice_position.assignment_type_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_controlling_order_assignment_code is 'Контировка заказ введена вручную (код) | Контировка заказ введена вручную (код) | dds.transportation_service_invoice_position.is_manual_input_controlling_order_assignment_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_general_ledger_account_code is 'Счет ГК введен вручную (код) | Счет ГК введен вручную (код) | dds.transportation_service_invoice_position.is_manual_input_general_ledger_account_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_assignment_type_code is 'Тип контировки введен вручную (код) | Тип контировки введен вручную (код) | dds.transportation_service_invoice_position.is_manual_input_assignment_type_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_cost_center_code is 'Контировка МВЗ введена вручную (код) | Контировка МВЗ введена вручную (код) | dds.transportation_service_invoice_position.is_manual_input_cost_center_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_transportation_service_customer_code is 'Заказчик услуги перевозки введен вручную (код) | Заказчик услуги перевозки введен вручную (код) | dds.transportation_service_invoice_position.is_manual_input_transportation_service_customer_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_vat_code is 'Код налога введен вручную (код) | Код налога введен вручную (код) | dds.transportation_service_invoice_position.is_manual_input_vat_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_wbs_element_code is 'Контировка СПП введена вручную (код) | Контировка СПП введена вручную (код) | dds.transportation_service_invoice_position.is_manual_input_wbs_element_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_vat_classification_code is 'Налоговая классификация введена вручную (код) | Налоговая классификация введена вручную (код) | dds.transportation_service_invoice_position.is_manual_input_vat_classification_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.wbs_element_code is 'СПП-элемент (код) | СПП-элемент (код) | dds.transportation_service_invoice_position.wbs_element_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_financial_position_code is 'Финансовая позиция введена вручную (код) | Финансовая позиция введена вручную (код) | dds.transportation_service_invoice_position.is_manual_input_financial_position_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_manual_input_funds_center_code is 'ПФМ введено вручную (код) | ПФМ введено вручную (код) | dds.transportation_service_invoice_position.is_manual_input_funds_center_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.valuation_type_code is 'Вид оценки (код) | Вид оценки (код) | dds.transportation_service_invoice_position.valuation_type_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.route_code is 'Маршрут (код) | Маршрут (код) | dds.transportation_service_invoice_position.route_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.vat_code is 'Код НДС (код) | Код НДС (код) | dds.transportation_service_invoice_position.vat_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.vat_adjustment_code is 'Вид корректировки (код) | Вид корректировки (код) | dds.transportation_service_invoice_position.vat_adjustment_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_non_refundable_vat_code is 'Невозмещаемый НДС (код) | Невозмещаемый НДС (код) | dds.transportation_service_invoice_position.is_non_refundable_vat_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.trading_method_code is 'Схема реализации (код) | Схема реализации (код) | dds.transportation_service_invoice_position.trading_method_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_check_on_limit_exceed_turned_off_code is 'Проверка на лимиты отключена (код) | Проверка на лимиты отключена (код) | dds.transportation_service_invoice_position.is_check_on_limit_exceed_turned_off_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.agent_and_supplier_contract_code is 'Номер договора между агентом и поставщиком услуг и работ (код) | Номер договора между агентом и поставщиком услуг и работ (код) | dds.transportation_service_invoice_position.agent_and_supplier_contract_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.supplier_and_carrier_contract_code is 'Номер договора между поставщиком и фактическим исполнителем услуг и работ (код) | Номер договора между поставщиком и фактическим исполнителем услуг и работ (код) | dds.transportation_service_invoice_position.supplier_and_carrier_contract_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.dt_exchange_rate is 'Дата курса | Дата курса | dds.transportation_service_invoice_subposition.dt_currency_translation';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.subposition_document_currency_vat_excluded_amount is 'Сумма акта без НДС в валюте документа | Сумма акта без НДС в валюте документа | dds.transportation_service_invoice_subposition.subposition_document_currency_vat_excluded_amount, dds.transportation_service_invoice_position.position_document_currency_vat_excluded_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.subposition_document_currency_vat_amount is 'Сумма НДС акта в валюте документа | Сумма НДС акта в валюте документа | dds.transportation_service_invoice_subposition.subposition_document_currency_vat_amount, dds.transportation_service_invoice_position.position_document_currency_vat_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_document_curr_total_amount is 'Сумма акта с НДС в валюте документа | Сумма акта с НДС в валюте документа | dds.transportation_service_invoice_subposition.subposition_document_currency_vat_excluded_amount + dds.transportation_service_invoice_subposition.subposition_document_currency_vat_amount, dds.transportation_service_invoice_position.position_document_currency_vat_excluded_amount + dds.transportation_service_invoice_position.position_document_currency_vat_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.document_currency_code is 'Валюта документа (акта) (код) | Валюта документа (акта) (код) | dds.transportation_service_invoice_position.document_currency_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_local_curr_vat_excl_amount is 'Сумма акта без НДС во внутренней валюте | Сумма акта без НДС во внутренней валюте | dds.transportation_service_invoice_subposition.subposition_local_currency_vat_excluded_amount, через пересчет валют subposition_document_currency_vat_excluded_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_local_curr_vat_incl_amount is 'Сумма акта с НДС во внутренней валюте | Сумма акта с НДС во внутренней валюте | Через пересчет валют transportation_service_invoice_document_curr_total_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.local_currency_code is 'Внутренняя валюта (код) | Внутренняя валюта (код) | dds.transportation_service_invoice_header.local_currency_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_sec_lcl_curr_vat_ex_amount is 'Сумма акта без НДС во второй внутренней валюте | Сумма акта без НДС во второй внутренней валюте | dds.transportation_service_invoice_subposition.subposition_second_local_currency_vat_excluded_amount, через пересчет валют subposition_document_currency_vat_excluded_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.transportation_service_invoice_sec_lcl_curr_vat_in_amount is 'Сумма акта с НДС во второй внутренней валюте | Сумма акта с НДС во второй внутренней валюте | Через пересчет валют transportation_service_invoice_document_curr_total_amount';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.second_local_currency_code is 'Вторая внутренняя валюта (код) | Вторая внутренняя валюта (код) | dds.transportation_service_invoice_header.second_local_currency_code';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_marked_for_report_code is 'Принадлежность дашборду - Исходная выгрузка | Принадлежность дашборду - Исходная выгрузка | X - акт относится к исходной выгрузке';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_account_receivable_report_code is 'Принадлежность дашборду - Задолженность | Принадлежность дашборду - Задолженность | X - по акту задолженность по оплате';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_account_receivable_overdue_report_code is 'Принадлежность дашборду - Просроченная задолженность | Принадлежность дашборду - Просроченная задолженность | X - по акту просроченная задолженность по оплате';
+comment on column dm.transportation_service_invoice_approvement_history_pivot.is_payed_document_report_code is 'Принадлежность дашборду - Оплачено | Принадлежность дашборду - Оплачено | X - акт оплачен';
+
+truncate table dm.transportation_service_invoice_approvement_history_pivot;
+
+----------------------------------------------------------------------------------------------------------
+-- Расчет вспомогательных таблиц для поиска списка всех коносаментов и судов
+----------------------------------------------------------------------------------------------------------
+
+drop table if exists bill_search;
+create temporary table bill_search as( --on commit drop as (
+with bill_step1 as (
+	select
+		a1.delivery_code,
+		a2.bill_of_lading_code
+	from
+		(	select
+				perw.delivery_code,
+				sbdr1.sales_bundle_code
+			from dds.transportation_service_invoice_subposition as perw
+				left join dds.transportation_service_invoice_header as perh
+					on perw.plant_code = perh.plant_code and
+		   	   		   perw.transportation_service_invoice_code = perh.transportation_service_invoice_code
+				left join dds.bill_of_lading as vbsk_src
+					on vbsk_src.bill_of_lading_code = perw.bill_of_lading_code
+				join dds.sales_bundle_and_delivery_relationship as sbdr1
+					on sbdr1.delivery_code = perw.delivery_code
+			where (vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null)
+  	  		  and perh.dt_transportation_service_invoice >= '2023-01-01'
+  	  		  and sbdr1.is_deleted_code is null
+			group by
+				perw.delivery_code,
+				sbdr1.sales_bundle_code) as a1
+	join
+		(	select
+				sbdr2.sales_bundle_code,
+				sbdr2.delivery_code,
+				vbsk_trg.bill_of_lading_code
+			from dds.sales_bundle_and_delivery_relationship as sbdr2		--по химиям ищем полный список поставок
+				join dds.delivery_document_header as likp
+					on likp.delivery_code = sbdr2.delivery_code and
+	   	   	   	   	   likp.delivery_type_code = 'EL'
+	   			join dds.logistics_document_and_delivery_relationship as vbss
+					on vbss.delivery_code = likp.delivery_code
+				join dds.bill_of_lading as vbsk_trg
+					on vbsk_trg.bill_of_lading_code = vbss.logistics_document_code and
+	   	   	   		   vbsk_trg.bill_of_lading_type_code = 'Y'
+	   	   	where sbdr2.is_deleted_code is null
+	   		group by
+	   			sbdr2.sales_bundle_code,
+				sbdr2.delivery_code,
+				vbsk_trg.bill_of_lading_code) as a2
+		on a1.sales_bundle_code = a2.sales_bundle_code
+	group by
+		a1.delivery_code,
+		a2.bill_of_lading_code
+),
+bill_step2 as (
+	select
+		bill_step1.delivery_code,
+		string_agg(bill_step1.bill_of_lading_code, ',') as bill_of_lading_compound_code,
+		string_agg(vbsk_trg.bill_of_lading_number, ',') as bill_of_lading_compound_number,
+		nom.vessel_number,
+		tv.vessel_name
+	from bill_step1
+		left join dds.bill_of_lading as vbsk_trg
+			on vbsk_trg.bill_of_lading_code = bill_step1.bill_of_lading_code
+		left join dds.nomination as nom
+			on nom.nomination_code = vbsk_trg.nomination_code
+		left join dict_dds.transport_vehicle_texts as tv
+			on tv.vessel_code = nom.vessel_number and
+		   	   tv.language_code = 'R'
+	group by
+		bill_step1.delivery_code,
+		nom.vessel_number,
+		tv.vessel_name
+)
+	select
+		bill_step2.delivery_code,
+		string_agg(bill_step2.bill_of_lading_compound_code, ',') as bill_of_lading_compound_code,
+		string_agg(bill_step2.bill_of_lading_compound_number, ',') as bill_of_lading_compound_number,
+		string_agg(bill_step2.vessel_number, ',') as vessel_compound_number,
+		string_agg(bill_step2.vessel_name, ',')	as vessel_compound_name
+	from bill_step2
+	group by
+		bill_step2.delivery_code
+)
+distributed replicated;
+
+drop table if exists perw_aggr_likp;
+create temporary table perw_aggr_likp as (--on commit drop as (
+	select 
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.delivery_code
+	from dds.transportation_service_invoice_subposition as perw	
+		left join dds.transportation_service_invoice_header as perh on
+			perw.plant_code = perh.plant_code and 
+			perw.transportation_service_invoice_code = perh.transportation_service_invoice_code		
+	where perh.dt_transportation_service_invoice >= '2023-01-01'
+	  and perw.delivery_code is not null
+	group by
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.delivery_code
+)
+distributed by (delivery_code);
+
+drop table if exists perw_likp;
+create temporary table perw_likp as (--on commit drop as (
+	select
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.delivery_code,
+		likp.delivery_type_code,
+		dbv.bill_of_lading_compound_code,
+		dbv.bill_of_lading_compound_number,
+		dbv.vessel_compound_name,
+		tvdlv.vessel_name
+	from perw_aggr_likp as perw
+		join dds.delivery_document_header as likp on
+			likp.delivery_code = perw.delivery_code
+		left join bill_search as dbv on
+			dbv.delivery_code = perw.delivery_code
+		left join dict_dds.transport_vehicle_texts as tvdlv on
+			tvdlv.vessel_code = case when length(likp.vehicle_code) < 10 then lpad(likp.vehicle_code, 10, '0') else likp.vehicle_code end and
+			tvdlv.language_code = 'R'
+)
+distributed by (plant_code, transportation_service_invoice_code);
+
+drop table if exists bill_search;
+drop table if exists perw_aggr_likp;
+
+----------------------------------------------------------------------------------------------------------
+-- Расчет вспомогательных таблиц для поиска атрибутов коносамента и судов
+----------------------------------------------------------------------------------------------------------
+
+drop table if exists perw_aggr_bill;
+create temporary table perw_aggr_bill as (--on commit drop as (
+	select
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.bill_of_lading_code
+	from dds.transportation_service_invoice_subposition as perw
+		left join dds.transportation_service_invoice_header as perh on
+			perw.plant_code = perh.plant_code and 
+			perw.transportation_service_invoice_code = perh.transportation_service_invoice_code
+	where perh.dt_transportation_service_invoice >= '2023-01-01'
+	  and perw.bill_of_lading_code is not null
+	group by
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.bill_of_lading_code
+)
+distributed by (bill_of_lading_code);
+
+drop table if exists bill_nom;
+create temporary table bill_nom as (--on commit drop as (
+	select
+		vbsk_src.bill_of_lading_code,
+		vbsk_src.bill_of_lading_type_code,
+		vbsk_src.bill_of_lading_number,
+		tv.vessel_name
+	from dds.bill_of_lading as vbsk_src 
+		left join dds.nomination as nom on
+			nom.nomination_code = vbsk_src.nomination_code
+		left join dict_dds.transport_vehicle_texts as tv on
+			tv.vessel_code = nom.vessel_number and
+			tv.language_code = 'R'
+)
+distributed by (bill_of_lading_code);
+
+drop table if exists perw_bill;
+create temporary table perw_bill as (--on commit drop as (
+	select
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.bill_of_lading_code,
+		vbsk.bill_of_lading_type_code,
+		vbsk.bill_of_lading_number,
+		vbsk.vessel_name
+	from perw_aggr_bill as perw	
+		join bill_nom as vbsk on
+			vbsk.bill_of_lading_code = perw.bill_of_lading_code
+)
+distributed by (plant_code, transportation_service_invoice_code);
+
+drop table if exists perw_aggr_bill;
+drop table if exists bill_nom;
+
+----------------------------------------------------------------------------------------------------------
+-- Расчет вспомогательных таблиц для поиска ПФМ
+----------------------------------------------------------------------------------------------------------
+
+drop table if exists perw_aggr_ekko;
+create temporary table perw_aggr_ekko as (--on commit drop as (
+	select
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.purchase_contract_code
+	from dds.transportation_service_invoice_subposition as perw
+		left join dds.transportation_service_invoice_header as perh on
+			perw.plant_code = perh.plant_code and 
+			perw.transportation_service_invoice_code = perh.transportation_service_invoice_code
+	where perh.dt_transportation_service_invoice >= '2023-01-01'
+	  and perw.purchase_contract_code is not null
+	group by
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.purchase_contract_code
+)
+distributed by (purchase_contract_code);
+
+drop table if exists perw_ekko;
+create temporary table perw_ekko as (--on commit drop as (
+	select
+		perw.plant_code,
+		perw.transportation_service_invoice_code,
+		perw.purchase_contract_code,
+		ekko.responsibility_center_code
+	from dds.purchase_contract_header as ekko
+		join perw_aggr_ekko as perw on
+			ekko.purchase_contract_code = perw.purchase_contract_code
+	where ekko.responsibility_center_code is not null
+)
+distributed by (plant_code, transportation_service_invoice_code);
+
+drop table if exists perw_aggr_ekko;
+
+----------------------------------------------------------------------------------------------------------
+-- на все подготовительные таблицы уходит около минуты
+-- Основная таблица
+----------------------------------------------------------------------------------------------------------
+
+--на случай наличия дублей в параметрах
+/*drop table if exists param_werks_sap;
+create temporary table param_werks_sap as (
+	select distinct range_low_value
+	from dict_dds.settings_and_parameters_sap as param_werks_sap
+	where param_werks_sap.abap_program_code = '/RUSAL/ZLE112M'
+  	  and param_werks_sap.case_code = 'TRAID'
+  	  and param_werks_sap.parameter_code in ( 'S_WERKSE', 'S_WERKST' )
+  	  and range_low_value is not null
+) distributed replicated;*/
+
+insert into dm.transportation_service_invoice_approvement_history_pivot (
+	unit_balance_code,
+	unit_balance_name,
+	unit_balance_search_name,
+	plant_code,
+	plant_name,
+	plant_search_name,
+	transportation_service_invoice_code,
+	transportation_service_invoice_position_code,
+	transportation_service_invoice_subposition_code,
+	transportation_service_invoice_number,
+	transportation_service_invoice_position_object_code,
+	transportation_service_invoice_truncated_code,
+	transportation_service_invoice_position_truncated_code,
+	transportation_service_invoice_subposition_truncated_code,
+	transportation_service_invoice_in_sap_system_url,
+	creditor_code,
+	creditor_name,
+	creditor_search_name,
+	creditor_agent_code,
+	creditor_agent_name,
+	creditor_agent_search_name,
+	second_creditor_agent_code,
+	second_creditor_agent_name,
+	second_creditor_agent_search_name,
+	creditor_for_reporting_code,
+	creditor_for_reporting_name,
+	creditor_for_reporting_search_name,
+	transportation_service_provider_code,
+	transportation_service_provider_name,
+	transportation_service_provider_search_name,
+	dt_transportation_service_invoice,
+	dt_due_payment_date,
+	dt_payment,
+	overdue_days,
+	payment_document_code,
+	payment_order_code,
+	comment_text,
+	supplier_account_code,
+	purchase_contract_assigned_to_supplier_account_code,
+	service_code,
+	service_name,
+	service_search_name,
+	payment_obstacle_code,
+	payment_obstacle_name,
+	payment_obstacle_search_name,
+	created_by,
+	transportation_service_invoice_created_by_full_name,
+	dt_created,
+	updated_by,
+	updated_by_full_name,
+	dt_updated,
+	contract_supervisor_user_code,
+	contract_supervisor_user_full_name,
+	dt_odo_informed_contract_supervisor,
+	transportation_service_invoice_type_code,
+	transportation_service_invoice_type_name,
+	transportation_service_invoice_type_search_name,
+	funds_center_code,
+	subdivision_name,
+	department_name,
+	subdivision_responsible_for_document_registration_name,
+	user_group_responsible_for_document_registration_name,
+	user_responsible_for_document_registration_code,
+	user_responsible_for_document_registration_name,
+	user_responsible_for_document_code,
+	user_responsible_for_document_name,
+	odo_informed_contract_supervisor_or_rcu_by,
+	odo_informed_contract_supervisor_or_rcu_by_full_name,
+	dt_odo_informed_contract_supervisor_or_rcu,
+	acceptance_code,
+	accepted_by,
+	accepted_by_full_name,
+	dt_accepted,
+	dt_posting,
+	is_payment_date_manually_adjusted_code,
+	is_adjustment_document_code,
+	registration_status_external_code,
+	validation_status_external_code,
+	approvement_status_external_code,
+	is_contract_supervisor_informed_code,
+	is_contract_supervisor_informed_name,
+	is_contract_supervisor_informed_search_name,
+	is_back_office_informed_code,
+	is_back_office_informed_name,
+	is_back_office_informed_search_name,
+	dt_validated,
+	sap_to_aldor_export_status_code,
+	sap_to_aldor_export_status_name,
+	sap_to_aldor_export_status_search_name,
+	unblocked_by,
+	unblocked_by_full_name,
+	dt_unblocked,
+	is_reregistered_to_other_plant_code,
+	contract_supervisor2_user_code,
+	contract_supervisor2_user_full_name,
+	is_posted_without_validated_electronic_documents_code,
+	dt_document_received,
+	invoice_type_code,
+	is_payment_purpose_manually_updated_code,
+	approved_by,
+	approved_by_full_name,
+	dt_approved,
+	rcu_responsible_for_unblock_user_code,
+	rcu_responsible_for_unblock_user_full_name,
+	dt_rcu_unblock_requested,
+	vessel_code,
+	dt_rcu_unblock_rejected,
+	rcu_unblock_reject_reason_name,
+	bill_of_lading_compound_code,
+	bill_of_lading_compound_number,
+	vessel_compound_name,
+	etsng_code,
+	etsng_name,
+	etsng_search_name,
+	document_type_code,
+	document_type_name,
+	document_type_search_name,
+	controlling_order_code,
+	accounting_document_code,
+	batch_code,
+	is_check_turned_off_code,
+	is_check_on_dublicates_turned_off_code,
+	general_ledger_account_code,
+	dt_storage_start,
+	dt_storage_end,
+	is_accrual_posting_exists_code,
+	is_invoice_posting_exists_code,
+	cost_center_code,
+	transportation_service_customer_code,
+	transportation_service_customer_name,
+	transportation_service_customer_search_name,
+	material_code,
+	mmaterial_name,
+	material_search_name,
+	service_desk_request_code,
+	vat_classification_code,
+	vat_classification_name,
+	vat_classification_search_name,
+	assignment_type_code,
+	assignment_type_name,
+	assignment_type_search_name,
+	is_manual_input_controlling_order_assignment_code,
+	is_manual_input_general_ledger_account_code,
+	is_manual_input_assignment_type_code,
+	is_manual_input_cost_center_code,
+	is_manual_input_transportation_service_customer_code,
+	is_manual_input_vat_code,
+	is_manual_input_wbs_element_code,
+	is_manual_input_vat_classification_code,
+	wbs_element_code,
+	is_manual_input_financial_position_code,
+	is_manual_input_funds_center_code,
+	valuation_type_code,
+	route_code,
+	route_name,
+	route_search_name,
+	vat_code,
+	vat_name,
+	vat_search_name,
+	vat_adjustment_code,
+	vat_adjustment_name,
+	vat_adjustment_search_name,
+	is_non_refundable_vat_code,
+	trading_method_code,
+	trading_method_name,
+	trading_method_search_name,
+	is_check_on_limit_exceed_turned_off_code,
+	agent_and_supplier_contract_code,
+	supplier_and_carrier_contract_code,
+	document_terms_vs_contract_terms_check_external_code,
+	is_expense_write_off_completed_code,
+	customs_declaration_number,
+	transport_bill_code,
+	vehicle_code,
+	is_own_vehicle_code,
+	railway_platform_code,
+	currency_exchange_rate,
+	transport_bill_weight,
+	dt_shipment,
+	bill_of_lading_number,
+	dt_bill_of_lading,
+	nomination_code,
+	transportation_expenses_write_off_delivery_code,
+	transportation_service_type_code,
+	transportation_service_type_name,
+	transportation_service_type_search_name,
+	transportation_service_approval_status_code,
+	transportation_service_approval_status_name,
+	transportation_service_approval_status_search_name,
+	railcar_information_source_code,
+	railcar_information_source_name,
+	railcar_information_source_search_name,
+	is_railcar_external_rzd_use_prohibted_code,
+	payment_request_local_currency_amount,
+	dt_exchange_rate,
+	subposition_document_currency_vat_excluded_amount,
+	subposition_document_currency_vat_amount,
+	transportation_service_invoice_document_curr_total_amount,
+	document_currency_code,
+	transportation_service_invoice_local_curr_vat_excl_amount,
+	transportation_service_invoice_local_curr_vat_incl_amount,
+	local_currency_code,
+	transportation_service_invoice_sec_lcl_curr_vat_ex_amount,
+	transportation_service_invoice_sec_lcl_curr_vat_in_amount,
+	second_local_currency_code,
+	is_marked_for_report_code,
+	is_account_receivable_report_code,
+	is_account_receivable_overdue_report_code,
+	is_payed_document_report_code,
+	is_used_in_transportation_documents_report_code
+)
+select
+	perh.unit_balance_code,
+	addr1.address_full_name as unit_balance_name,
+	perh.unit_balance_code||'-'||coalesce(addr1.address_full_name, '') as unit_balance_search_name,
+	perh.plant_code,
+	addr2.address_full_name as plant_name,
+	perh.plant_code||'-'||coalesce(addr2.address_full_name, '') as plant_search_name,
+	perh.transportation_service_invoice_code,
+	perp.transportation_service_invoice_position_code,
+	perw.transportation_service_invoice_subposition_code,
+	perh.transportation_service_invoice_number,
+	perp.transportation_service_invoice_position_object_code,
+	trim(leading '0' from perh.transportation_service_invoice_code) as transportation_service_invoice_truncated_code,
+	trim(leading '0' from perp.transportation_service_invoice_position_code) as transportation_service_invoice_position_truncated_code,
+	trim(leading '0' from perw.transportation_service_invoice_subposition_code) as transportation_service_invoice_subposition_truncated_code,
+	perh.transportation_service_invoice_in_sap_system_url,
+	perh.creditor_code,
+	cntr1.counterparty_full_name as creditor_name,
+	perh.creditor_code||'-'||coalesce(cntr1.counterparty_full_name, '') as creditor_search_name,
+	perh.creditor_agent_code,
+	cntr2.counterparty_full_name as creditor_agent_name,
+	perh.creditor_agent_code||'-'||coalesce(cntr2.counterparty_full_name, '') as creditor_agent_search_name,
+	perh.second_creditor_agent_code,
+	cntr3.counterparty_full_name as second_creditor_agent_name,
+	perh.second_creditor_agent_code||'-'||coalesce(cntr3.counterparty_full_name, '') as second_creditor_agent_search_name,
+	perh.creditor_final_code as creditor_for_reporting_code,
+	cntr4.counterparty_full_name as creditor_for_reporting_name,
+	perh.creditor_final_code||'-'||coalesce(cntr4.counterparty_full_name, '') as creditor_for_reporting_search_name,
+	perh.transportation_service_provider_code,
+	cntr5.counterparty_full_name as transportation_service_provider_name,
+	perh.transportation_service_provider_code||'-'||coalesce(cntr5.counterparty_full_name, '') as transportation_service_provider_search_name,
+	perh.dt_transportation_service_invoice,
+	perh.dt_due_payment_date,
+	step0.dt_payment,
+	step0.overdue_days,
+	step0.payment_document_code,
+	step0.payment_order_code,
+	perh.comment as comment_text,
+	perh.supplier_account_code,
+	step0.purchase_contract_assigned_to_supplier_account_code,
+	perp.service_code,
+	sacd.transportation_service_name as service_name,
+	perp.service_code||'-'||coalesce(sacd.transportation_service_name, '') as service_search_name,
+	perh.payment_obstacle_code,
+	pot.payment_obstacle_name,
+	perh.payment_obstacle_code||'-'||coalesce(pot.payment_obstacle_name, '') as payment_obstacle_search_name,
+	perh.created_by,
+	coalesce(pmd1.person_last_name||' '||pmd1.person_first_name, pmd1.person_last_name) as transportation_service_invoice_created_by_full_name,
+	perh.dt_created,
+	perh.updated_by,
+	coalesce(pmd4.person_last_name||' '||pmd4.person_first_name, pmd4.person_last_name) as updated_by_full_name,
+	perh.dt_updated,
+	perh.contract_supervisor_user_code,
+	coalesce(pmd2.person_last_name||' '||pmd2.person_first_name, pmd2.person_last_name) as contract_supervisor_user_full_name,
+	perh.dt_odo_informed_contract_supervisor,
+	perh.transportation_service_invoice_type_code,
+	tdtt.document_type_name as transportation_service_invoice_type_name,
+	perh.transportation_service_invoice_type_code||'-'||coalesce(tdtt.document_type_name, '') as transportation_service_invoice_type_search_name,
+	coalesce(perp.funds_center_code, ekko.responsibility_center_code, step0.funds_center_code) as funds_center_code,
+	case
+		when perp.funds_center_code is not null then fcdl1.subdivision_name
+		when ekko.responsibility_center_code is not null then fcdl2.subdivision_name
+		else fcdl3.subdivision_name
+    end as subdivision_name,
+	case
+		when perp.funds_center_code is not null then fcdl1.department_name
+		when ekko.responsibility_center_code is not null then fcdl2.department_name
+		else fcdl3.department_name
+	end as department_name,
+	perh.subdivision_responsible_for_document_registration_name,
+	perh.user_group_responsible_for_document_registration_name,
+	perh.user_responsible_for_document_registration_code,
+	coalesce(pmd3.person_last_name||' '||pmd3.person_first_name, pmd3.person_last_name) as user_responsible_for_document_registration_name,
+	perh.user_responsible_for_document_code,
+	coalesce(pmd10.person_last_name||' '||pmd10.person_first_name, pmd10.person_last_name) as user_responsible_for_document_name,
+	perh.odo_informed_contract_supervisor_or_rcu_by,
+	coalesce(pmd5.person_last_name||' '||pmd5.person_first_name, pmd5.person_last_name) as odo_informed_contract_supervisor_or_rcu_by_full_name,
+	perh.dt_odo_informed_contract_supervisor_or_rcu,
+	perh.acceptance_code,
+	perh.accepted_by,
+	coalesce(pmd6.person_last_name||' '||pmd6.person_first_name, pmd6.person_last_name) as accepted_by_full_name,
+	perh.dt_accepted,
+	perh.dt_posting,
+	perh.is_payment_date_manually_adjusted_code,
+	perh.is_adjustment_document_code,
+	icon1.sap_icon_external_code as registration_status_external_code,
+	icon2.sap_icon_external_code as validation_status_external_code,
+	icon3.sap_icon_external_code as approvement_status_external_code,
+	perh.is_contract_supervisor_informed_code,
+	bt1.boolean2_name as is_contract_supervisor_informed_name,
+	perh.is_contract_supervisor_informed_code||'-'||coalesce(bt1.boolean2_name, '') as is_contract_supervisor_informed_search_name,
+	perh.is_back_office_informed_code,
+	bt2.boolean2_name as is_back_office_informed_name,
+	perh.is_back_office_informed_code||'-'||coalesce(bt2.boolean2_name, '') as is_back_office_informed_search_name,
+	perh.dt_validated,
+	perh.sap_to_aldor_export_status_code,
+	staest.sap_to_aldor_export_status_name,
+	perh.sap_to_aldor_export_status_code||'-'||staest.sap_to_aldor_export_status_name as sap_to_aldor_export_status_search_name,
+	step0.unblocked_by as unblocked_by,
+	coalesce(pmd11.person_last_name||' '||pmd11.person_first_name, pmd11.person_last_name) as unblocked_by_full_name,
+	step0.dt_unblocked as dt_unblocked,
+	perh.is_reregistered_to_other_plant_code,
+	perh.contract_supervisor2_user_code,
+	coalesce(pmd7.person_last_name||' '||pmd7.person_first_name, pmd7.person_last_name) as contract_supervisor2_user_full_name,
+	perh.is_posted_without_validated_electronic_documents_code,
+	perh.dt_document_received,
+	perh.invoice_type_code,
+	perh.is_payment_purpose_manually_updated_code,
+	perh.approved_by,
+	coalesce(pmd8.person_last_name||' '||pmd8.person_first_name, pmd8.person_last_name) as approved_by_full_name,
+	perh.dt_approved,
+	perh.rcu_responsible_for_unblock_user_code,
+	coalesce(pmd9.person_last_name||' '||pmd9.person_first_name, pmd9.person_last_name) as rcu_responsible_for_unblock_user_full_name,
+	perh.dt_rcu_unblock_requested,
+	perh.vessel_code,
+	null as dt_rcu_unblock_rejected,			--в процессе реализации
+	null as rcu_unblock_reject_reason_name,		--в процессе реализации
+	/*case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then perw.bill_of_lading_code
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then dbv.bill_of_lading_compound_code
+		else null
+	end as bill_of_lading_compound_code,
+	case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then vbsk_src.bill_of_lading_number
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then dbv.bill_of_lading_compound_number
+		else null
+	end as bill_of_lading_compound_number,
+	case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then vbsk_src.vessel_name
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then dbv.vessel_compound_name
+		when perw.bill_of_lading_code is null and perp.etsng_code in ('151060', '151037') and likp.delivery_type_code = 'EL' then tvdlv.vessel_name
+		else null
+	end as vessel_compound_name,*/
+	case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then perw.bill_of_lading_code
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then likp.bill_of_lading_compound_code
+		else null
+	end as bill_of_lading_compound_code,
+	case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then vbsk_src.bill_of_lading_number
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then likp.bill_of_lading_compound_number
+		else null
+	end as bill_of_lading_compound_number,
+	case
+		when vbsk_src.bill_of_lading_type_code in ('Y', '5') then vbsk_src.vessel_name
+		when vbsk_src.bill_of_lading_type_code = 'Й' or perw.bill_of_lading_code is null and perp.etsng_code in ('331016', '332019') then likp.vessel_compound_name
+		when perw.bill_of_lading_code is null and perp.etsng_code in ('151060', '151037') and likp.delivery_type_code = 'EL' then likp.vessel_name
+		else null
+	end as vessel_compound_name,
+	perp.etsng_code,
+	ett.etsng_name,
+	perp.etsng_code||'-'||coalesce(ett.etsng_name, '') as etsng_search_name,
+	perp.document_type_code,
+	tdrtt.document_type_name,
+	perp.document_type_code||'-'||coalesce(tdrtt.document_type_name, '') as document_type_search_name,
+	perp.controlling_order_code,
+	perp.accounting_document_code,
+	perp.batch_code,
+	perp.is_validation_turned_off_by_management_code as is_check_turned_off_code,
+	perp.is_check_on_dublicates_turned_off_code,
+	perp.general_ledger_account_code,
+	perp.dt_storage_start,
+	perp.dt_storage_end,
+	perp.is_accrual_posting_exists_code,
+	perp.is_invoice_posting_exists_code,
+	perp.cost_center_code,
+	perp.transportation_service_customer_code,
+	cntr6.counterparty_full_name as transportation_service_customer_name,
+	perp.transportation_service_customer_code||'-'||coalesce(cntr6.counterparty_full_name, '') as transportation_service_customer_search_name,
+	perp.material_code,
+	mt.material_name,
+	perp.material_code||'-'||coalesce(mt.material_name, '') as material_search_name,
+	perp.service_desk_request_code,
+	perp.vat_classification_code,
+	vct.vat_classification_name,
+	perp.vat_classification_code||'-'||coalesce(vct.vat_classification_name, '') as vat_classification_search_name,
+	perp.assignment_type_code,
+	tatt.assignment_type_name,
+	perp.assignment_type_code||'-'||coalesce(tatt.assignment_type_name, '') as assignment_type_search_name,
+	perp.is_manual_input_controlling_order_assignment_code,
+	perp.is_manual_input_general_ledger_account_code,
+	perp.is_manual_input_assignment_type_code,
+	perp.is_manual_input_cost_center_code,
+	perp.is_manual_input_transportation_service_customer_code,
+	perp.is_manual_input_vat_code,
+	perp.is_manual_input_wbs_element_code,
+	perp.is_manual_input_vat_classification_code,
+	perp.wbs_element_code,
+	perp.is_manual_input_financial_position_code,
+	perp.is_manual_input_funds_center_code,
+	perp.valuation_type_code,
+	perp.route_code,
+	trt.transport_route_name as route_name,
+	perp.route_code||'-'||coalesce(trt.transport_route_name, '') as route_search_name,
+	perp.vat_code,
+	tvt.tax_vat_name as vat_name,
+	perp.vat_code||'-'||coalesce(tvt.tax_vat_name, '') as vat_search_name,
+	perp.vat_adjustment_code,
+	vat.vat_adjustment_name,
+	perp.vat_adjustment_code||'-'||coalesce(vat.vat_adjustment_name, '') as vat_adjustment_search_name,
+	perp.is_non_refundable_vat_code,
+	perp.trading_method_code,
+	imt.import_method_name as trading_method_name,
+	perp.trading_method_code||'-'||coalesce(imt.import_method_name, '') as trading_method_search_name,
+	perp.is_check_on_limit_exceed_turned_off_code,
+	perp.agent_and_supplier_contract_code,
+	perp.supplier_and_carrier_contract_code,
+	coalesce(icon4.sap_icon_external_code, icon5.sap_icon_external_code) as document_terms_vs_contract_terms_check_external_code,
+	perw.is_expense_write_off_completed_code,
+	perw.customs_declaration_number,
+	perw.transport_bill_code,
+	perw.vehicle_code,
+	perw.is_own_vehicle_code,
+	perw.railway_platform_code,
+	coalesce(perw.currency_exchange_rate, 0) as currency_exchange_rate,
+	coalesce(perw.transport_bill_weight, 0) as transport_bill_weight,
+	perw.dt_shipment,
+	perw.bill_of_lading_number,
+	perw.dt_bill_of_lading,
+	perw.nomination_code,
+	perw.delivery_code as transportation_expenses_write_off_delivery_code,
+	perw.transportation_service_type_code,
+	stt.service_type_name as transportation_service_type_name,
+	perw.transportation_service_type_code||'-'||coalesce(stt.service_type_name, '') as transportation_service_type_search_name,
+	perw.transportation_service_approval_status_code,
+	tsast.approval_status_name as transportation_service_approval_status_name,
+	perw.transportation_service_approval_status_code||'-'||coalesce(tsast.approval_status_name, '') as transportation_service_approval_status_search_name,
+	perw.railcar_information_source_code,
+	rist.railcar_information_source_name,
+	perw.railcar_information_source_code||'-'||coalesce(rist.railcar_information_source_name, '') as railcar_information_source_search_name,
+	perw.is_railcar_external_rzd_use_prohibted_code,
+	perh.prepayed_document_currency_amount as payment_request_local_currency_amount,	
+	perw.dt_currency_translation as dt_exchange_rate,
+	coalesce(perw.subposition_document_currency_vat_excluded_amount, perp.position_document_currency_vat_excluded_amount, 0) as subposition_document_currency_vat_excluded_amount,
+	coalesce(perw.subposition_document_currency_vat_amount, perp.position_document_currency_vat_amount, 0) as subposition_document_currency_vat_amount,
+	coalesce(perw.subposition_document_currency_vat_excluded_amount + perw.subposition_document_currency_vat_amount,
+			 perp.position_document_currency_vat_excluded_amount + perp.position_document_currency_vat_amount, 0) as transportation_service_invoice_document_curr_total_amount,
+	perp.document_currency_code,
+	case
+		when coalesce(perw.subposition_local_currency_vat_excluded_amount, 0) = 0
+			then perw.subposition_local_currency_vat_excluded_amount
+		when (perp.document_currency_code = perh.local_currency_code) or (perp.document_currency_code in ('USD', 'UED') and perh.local_currency_code in ('USDI'))
+			then coalesce(perw.subposition_document_currency_vat_excluded_amount, perp.position_document_currency_vat_excluded_amount, 0)
+		when cr1.currency_rate is null 
+			then 0                               -- если пересчета не нашли, то вернуть 0
+		else
+			coalesce(perw.subposition_document_currency_vat_excluded_amount, perp.position_document_currency_vat_excluded_amount, 0) *
+			( coalesce(cr1.currency_to_multiplier, 1) / coalesce(cr1.currency_from_multiplier, 1) ) *
+			( case when coalesce(cr1.currency_rate, 1) > 0 then coalesce(cr1.currency_rate, 1) else 1 end / case when coalesce(cr1.currency_rate, 1) < 0 then abs(coalesce(cr1.currency_rate, 1)) else 1 end )
+	end as transportation_service_invoice_local_curr_vat_excl_amount,
+	case
+		when (perp.document_currency_code = perh.local_currency_code) or (perp.document_currency_code in ('USD', 'UED') and perh.local_currency_code in ('USDI'))
+			then coalesce(perw.subposition_document_currency_vat_excluded_amount + perw.subposition_document_currency_vat_amount,
+						  perp.position_document_currency_vat_excluded_amount + perp.position_document_currency_vat_amount, 0)
+		when cr1.currency_rate is null
+			then 0                               -- если пересчета не нашли, то вернуть 0
+		else
+			coalesce(perw.subposition_document_currency_vat_excluded_amount + perw.subposition_document_currency_vat_amount,
+			 		 perp.position_document_currency_vat_excluded_amount + perp.position_document_currency_vat_amount, 0) *
+			( coalesce(cr1.currency_to_multiplier, 1) / coalesce(cr1.currency_from_multiplier, 1) ) *
+			( case when coalesce(cr1.currency_rate, 1) > 0 then coalesce(cr1.currency_rate, 1) else 1 end / case when coalesce(cr1.currency_rate, 1) < 0 then abs(coalesce(cr1.currency_rate, 1)) else 1 end )
+	end as transportation_service_invoice_local_curr_vat_incl_amount,
+	perh.local_currency_code,
+	case
+		when perw.subposition_second_local_currency_vat_excluded_amount <> 0.00
+			then perw.subposition_second_local_currency_vat_excluded_amount
+		when (perp.document_currency_code = perh.second_local_currency_code) or (perp.document_currency_code in ('USD', 'UED') and perh.second_local_currency_code in ('USDI'))
+			then coalesce(perw.subposition_document_currency_vat_excluded_amount, perp.position_document_currency_vat_excluded_amount, 0)
+		when cr2.currency_rate is null
+			then 0                               -- если пересчета не нашли, то вернуть 0		 
+		else
+		 	coalesce(perw.subposition_document_currency_vat_excluded_amount, perp.position_document_currency_vat_excluded_amount, 0) * 
+			( coalesce(cr2.currency_to_multiplier, 1) / coalesce(cr2.currency_from_multiplier, 1) ) *
+			( case when coalesce(cr2.currency_rate, 1) > 0 then coalesce(cr2.currency_rate, 1) else 1 end / case when coalesce(cr2.currency_rate, 1) < 0 then abs(coalesce(cr2.currency_rate, 1)) else 1 end )
+	end as transportation_service_invoice_sec_lcl_curr_vat_ex_amount,
+	case
+		when (perp.document_currency_code = perh.second_local_currency_code) or (perp.document_currency_code in ('USD', 'UED') and perh.second_local_currency_code in ('USDI'))
+			then coalesce(perw.subposition_document_currency_vat_excluded_amount + perw.subposition_document_currency_vat_amount,
+			 		      perp.position_document_currency_vat_excluded_amount + perp.position_document_currency_vat_amount, 0)
+		when cr2.currency_rate is null
+			then 0                               -- если пересчета не нашли, то вернуть 0		 
+		else
+			coalesce(perw.subposition_document_currency_vat_excluded_amount + perw.subposition_document_currency_vat_amount,
+			 		 perp.position_document_currency_vat_excluded_amount + perp.position_document_currency_vat_amount, 0) * 
+			( coalesce(cr2.currency_to_multiplier, 1) / coalesce(cr2.currency_from_multiplier, 1) ) *
+			( case when coalesce(cr2.currency_rate, 1) > 0 then coalesce(cr2.currency_rate, 1) else 1 end / case when coalesce(cr2.currency_rate, 1) < 0 then abs(coalesce(cr2.currency_rate, 1)) else 1 end )
+	end as transportation_service_invoice_sec_lcl_curr_vat_in_amount,
+	perh.second_local_currency_code,
+	step0.is_marked_for_report_code,
+	step0.is_account_receivable_report_code,
+	step0.is_account_receivable_overdue_report_code,
+	step0.is_payed_document_report_code,
+	null as is_used_in_transportation_documents_report_code
+from dds.transportation_service_invoice_subposition as perw
+	right join dds.transportation_service_invoice_position as perp
+		on perw.plant_code = perp.plant_code and 
+		   perw.transportation_service_invoice_code = perp.transportation_service_invoice_code and 
+		   perw.transportation_service_invoice_position_code = perp.transportation_service_invoice_position_code	
+	right join dds.transportation_service_invoice_header as perh
+		on perp.plant_code = perh.plant_code and 
+		   perp.transportation_service_invoice_code = perh.transportation_service_invoice_code
+	right join dm_calc.transportation_service_invoice_header as step0
+		on step0.plant_code = perh.plant_code and 
+		   step0.transportation_service_invoice_code = perh.transportation_service_invoice_code
+	left join perw_bill as vbsk_src on
+		vbsk_src.plant_code = perh.plant_code and 
+		vbsk_src.transportation_service_invoice_code = perh.transportation_service_invoice_code and
+		vbsk_src.bill_of_lading_code = perw.bill_of_lading_code
+	left join perw_ekko as ekko on
+		ekko.plant_code = perh.plant_code and 
+		ekko.transportation_service_invoice_code = perh.transportation_service_invoice_code and
+		ekko.purchase_contract_code = perw.purchase_contract_code
+	/*left join bill_search as dbv
+		on dbv.delivery_code = perw.delivery_code*/
+	/*left join dds.delivery_document_header as likp
+		on likp.delivery_code = perw.delivery_code
+	left join dict_dds.transport_vehicle_texts as tvdlv
+		on tvdlv.vessel_code = case when length(likp.vehicle_code) < 10 then lpad(likp.vehicle_code, 10, '0') else likp.vehicle_code end and
+		   tvdlv.language_code = 'R'*/
+	left join perw_likp as likp on
+		likp.plant_code = perh.plant_code and 
+		likp.transportation_service_invoice_code = perh.transportation_service_invoice_code and
+		likp.delivery_code = perw.delivery_code
+	left join dict_dds.currency_rates as cr1
+		on cr1.currency_rate_type_code = 'M' and 
+		   cr1.currency_from_code = perp.document_currency_code and
+		   cr1.currency_to_code = perh.local_currency_code and
+		   cr1.dt_currency_rate = coalesce(perw.dt_currency_translation, current_date)
+	left join dict_dds.currency_rates as cr2
+		on cr2.currency_rate_type_code = 'M' and
+		   cr2.currency_from_code = perp.document_currency_code and
+		   cr2.currency_to_code = perh.second_local_currency_code and
+		   cr2.dt_currency_rate = coalesce(perw.dt_currency_translation, current_date)
+----------------справочники-----------------------------------------------------------------------		   
+	left join dict_dds.funds_center_and_department_link as fcdl1
+		on fcdl1.funds_center_code = perp.funds_center_code
+	left join dict_dds.funds_center_and_department_link as fcdl2
+		on fcdl2.funds_center_code = ekko.responsibility_center_code
+	left join dict_dds.funds_center_and_department_link as fcdl3
+		on fcdl3.funds_center_code = step0.funds_center_code
+	left join dict_dds.payment_obstacle_texts as pot
+		on pot.payment_obstacle_code = perh.payment_obstacle_code
+	left join dict_dds.transportation_service_texts as sacd
+		on sacd.transportation_service_code = perp.service_code and 
+		   sacd.language_code = 'R'
+	left join dict_dds.counterparty as cntr1
+		on cntr1.counterparty_code = perh.creditor_code
+	left join dict_dds.counterparty as cntr2
+		on cntr2.counterparty_code = perh.creditor_agent_code
+	left join dict_dds.counterparty as cntr3
+		on cntr3.counterparty_code = perh.second_creditor_agent_code
+	left join dict_dds.counterparty as cntr4
+		on cntr4.counterparty_code = perh.creditor_final_code
+	left join dict_dds.unit_balance as ub
+		on ub.unit_balance_code = perh.unit_balance_code
+	left join dict_dds.address as addr1
+		on addr1.address_code = ub.address_code and 
+		   addr1.international_display_format_code is null
+	left join dict_dds.plant_and_subsidiary as plnt
+		on plnt.plant_code = perh.plant_code
+	left join dict_dds.address as addr2
+		on addr2.address_code = plnt.address_code and 
+		   addr2.international_display_format_code is null	
+	left join dict_dds.transportation_document_type_texts as tdtt
+		on tdtt.document_type_code = perh.transportation_service_invoice_type_code and
+		   tdtt.language_code = 'R'	   
+	left join dict_dds.etsng_texts as ett
+		on ett.etsng_code = perp.etsng_code	and
+		   ett.language_code = 'R'
+	left join dict_dds.person_main_data as pmd1
+		on pmd1.login_username = perh.created_by
+	left join dict_dds.person_main_data as pmd2
+		on pmd2.login_username = perh.contract_supervisor_user_code
+	left join dict_dds.person_main_data as pmd3
+		on pmd3.login_username = perh.user_responsible_for_document_registration_code
+	left join dict_dds.counterparty as cntr5 on
+		cntr5.counterparty_code = perh.transportation_service_provider_code
+	left join dict_dds.person_main_data as pmd4 on
+		pmd4.login_username = perh.updated_by
+	left join dict_dds.person_main_data as pmd5 on
+		pmd5.login_username = perh.odo_informed_contract_supervisor_or_rcu_by
+	left join dict_dds.person_main_data as pmd6 on
+		pmd6.login_username = perh.accepted_by
+	left join dict_dds.person_main_data as pmd7 on
+		pmd7.login_username = perh.contract_supervisor2_user_code
+	left join dict_dds.person_main_data as pmd8 on
+		pmd8.login_username = perh.approved_by
+	left join dict_dds.person_main_data as pmd9 on
+		pmd9.login_username = perh.rcu_responsible_for_unblock_user_code
+	left join dict_dds.person_main_data as pmd10 on
+		pmd10.login_username = perh.user_responsible_for_document_code
+	left join dict_dds.person_main_data as pmd11 on
+		pmd11.login_username = step0.unblocked_by
+	left join dict_dds.boolean_texts as bt1 on
+		bt1.boolean_code = perh.is_contract_supervisor_informed_code and
+		bt1.language_code = 'R'
+	left join dict_dds.boolean_texts as bt2 on
+		bt2.boolean_code = perh.is_back_office_informed_code and
+		bt2.language_code = 'R'
+	left join dict_dds.sap_to_aldor_export_status_texts as staest on
+		staest.sap_to_aldor_export_status_code = perh.sap_to_aldor_export_status_code
+	left join dict_dds.counterparty as cntr6 on
+		cntr6.counterparty_code = perp.transportation_service_customer_code
+	left join dict_dds.transportation_document_reporting_type_texts as tdrtt on
+		tdrtt.document_type_code = perp.document_type_code and
+		tdrtt.language_code = 'R'
+	left join dict_dds.vat_classification_texts as vct on
+		vct.vat_classification_code = perp.vat_classification_code and
+		vct.language_code = 'R'		
+	left join dict_dds.material_texts as mt on
+		mt.material_code = perp.material_code and
+		mt.language_code = 'R'
+	left join dict_dds.transport_route_texts as trt on
+		trt.transport_route_code = perp.route_code and
+		trt.language_code = 'R'		
+	left join dict_dds.country as t005 on
+		t005.country_code = ub.country_code
+	left join dict_dds.tax_vat_texts as tvt on
+		tvt.tax_vat_code = perp.vat_code and
+		tvt.calculation_scheme_code = t005.calculation_scheme_code and
+		tvt.language_code = 'R'
+	left join dict_dds.import_method_texts as imt on
+		imt.import_method_code = perp.trading_method_code and
+		imt.language_code = 'R'
+	left join dict_dds.service_type_texts as stt on
+		stt.service_type_code = perw.transportation_service_type_code and
+		stt.language_code = 'R'
+	left join dict_dds.vat_adjustment_texts as vat on
+		vat.vat_adjustment_code = perp.vat_adjustment_code and
+		vat.language_code = 'R'
+	left join dict_dds.transportation_services_approval_status_texts as tsast on
+		tsast.approval_status_code = perw.transportation_service_approval_status_code and
+		tsast.language_code = 'R'
+	left join dict_dds.railcar_information_source_texts as rist on
+		rist.railcar_information_source_code = perw.railcar_information_source_code and
+		rist.language_code = 'R'
+	left join dict_dds.transportation_assignment_type_texts as tatt on
+		tatt.assignment_type_code = perp.assignment_type_code and
+		tatt.language_code = 'R'
+	left join dict_dds.sap_icon as icon1 on
+		icon1.sap_icon_code = perh.registration_status_code
+	left join dict_dds.sap_icon as icon2 on
+		icon2.sap_icon_code = perh.validation_status_code
+	left join dict_dds.sap_icon as icon3 on
+		icon3.sap_icon_code = perh.approvement_status_code
+	left join dict_dds.sap_icon as icon4 on
+		icon4.sap_icon_code = perp.document_terms_vs_contract_terms_check_status_code
+	left join dict_dds.sap_icon as icon5 on
+		icon5.sap_icon_code = perw.document_terms_vs_contract_terms_check_status_code
+	join dict_dds.settings_and_parameters_sap as param_werks_sap on
+		step0.plant_code = param_werks_sap.range_low_value and
+		param_werks_sap.abap_program_code = '/RUSAL/ZLE112M' and
+		param_werks_sap.case_code = 'TRAID' and
+		param_werks_sap.parameter_code in ( 'S_WERKSE', 'S_WERKST' )
+	--join param_werks_sap on step0.plant_code = param_werks_sap.range_low_value
+where perh.dt_transportation_service_invoice >= '2023-01-01'
+  --and perh.plant_code = '1121'
+  and perh.creditor_code <> '0000021026'
+;
+
+drop table if exists perw_likp;
+drop table if exists perw_bill;
+drop table if exists perw_ekko;
+drop table if exists param_werks_sap;

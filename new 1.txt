@@ -1,230 +1,265 @@
-Проблемы и риски
+dq.registry — справочник проверок
 
-Детали в «по-одной таблице на проверку». Через месяц будут десятки/сотни таблиц, сложнее сопровождать, мигрировать, настраивать права, писать запросы и алерты.
+check_id — уникальный ID проверки (dq_sd_0001). Используется в логах, алёртах и дашборде.
 
-Нет формальной модели запуска/идемпотентности. Не описаны run_id, версия данных/партиции, как пересчитывать/перезапускать, как связывать с пайплайнами.
+name — человекочитаемое имя проверки.
 
-Нет порогов и политики алертинга. Не определены SLI/SLO/Severity/эскалации → дашборд есть, реакции нет.
+description — подробности логики/цели.
 
-Слабая аналитика качества. Нет “coverage”, доли проверенных строк/полей, динамики пер-категория DQ, срезов по системам/сущностям.
+category — тип проверки: technical / business / freshness / др.
 
-Раздувание схемы DM. Хранить логи в dm — спорно; DM — для бизнес-витрин. Логи DQ лучше держать в отдельной схеме (или в ClickHouse для «деталей»).
+severity — критичность нарушения: P1 (критично)…P4 (минор).
 
-Нет формата спецификаций проверок. Скрипты есть, но не стандартизован вход: где входные наборы, где параметры, где owner, как привязывать к контракту данных.
+owner_team — владелец проверки (домен/команда).
 
-Нет связки с релизным процессом. Проверки не «блокируют» промоут, не запускаются в smoke-режиме перед релизом.
+owner_person — ответственный человек.
 
-Как сделать лучше (целевое решение)
-1) Архитектура потока
+dataset — логическое имя набора данных (финансы/сбыт и т.п.).
 
-Spec-driven (YAML) проверки → генерация SQL/джобов.
+schema_name — схема источника, где живут данные, которые проверяем.
 
-Единый “Registry” (справочник) + авто-инвентарь из YAML (валидация при CI/CD).
+table_name — таблица источника, которую проверяем.
 
-Единая краткая витрина dq_overview (ежезапуск), единая детальная витрина dq_detail (с JSON payload).
+partition_key — имя/смысловой ключ партиции, если проверка по срезам (например, dt, period_yyyymm). Это не значение, а «какой партиционный атрибут используется».
 
-Run lifecycle: run_id, started_at, ended_at, status, rows_tested, rows_failed, data_version/partition_key.
+threshold_type — тип порога:
 
-Алертинг по порогам (thresholds из YAML) с умным подавлением (запуск в окне загрузки, авто-снижение шума).
+abs — абсолютное число ошибок (например, 0)
 
-Дашборд: обзор (SLA качества, топ-ошибки), с drill-down до деталей.
+pct — доля ошибок (например, 0.01 = 1%)
 
-2) Схемы и размещение
+dynamic — динамический порог (например, «медиана ±10%»)
 
-Схема dq (или ops_dq) для логов (не dm).
+threshold_value — само пороговое значение (в абс. или в долях), если актуально.
 
-Детали (много строк) — лучше в ClickHouse (быстро, дешево, партиции по дате/error_code). В GP хранить краткую.
+schedule — расписание запуска (cron/rrule/описание).
 
-Хранение: dq_overview — 180 дней, dq_detail — 30 дней (с ежедневной очисткой по партициям).
+enabled — включена ли проверка.
 
-3) Модель данных (минимально, но достаточно)
-dq.registry (справочник)
+source_yaml_path — путь к YAML-спецификации проверки (если используете spec-driven генерацию).
 
-check_id (pk, например dq_sd_0001)
+created_at / updated_at — служебные метки времени.
 
-name, description, category (technical|business|freshness|…)
+dq.detail — «ошибочные строки» (детали)
 
-owner_team, owner_person, severity (P1–P4)
+run_date — дата запуска проверки (для партиционирования).
 
-dataset, schema_name, table_name, partition_key
+run_id — идентификатор конкретного прогона (для идемпотентности и трассировки).
 
-threshold_type (abs|pct), threshold_value
+check_id — какая именно проверка сработала (ссылка на registry).
 
-schedule (cron/rrule), enabled
+schema_name / table_name — где нашли нарушение.
 
-source_yaml_path, created_at, updated_at
+row_key — ключ нарушителя: бизнес-ключ строки (или стабильный хэш ключевых полей), чтобы можно было отследить «ту же» проблему во времени.
 
-dq.overview (краткая)
+error_code — тип/класс нарушения (например, UNIQUENESS_VIOLATION, NULL_REQUIRED, REF_MISS, RANGE_OUT и т.п.).
 
-run_id, check_id, run_started_at, run_ended_at, status (pass|warn|fail|error)
+error_msg — короткое человеческое описание проблемы (что именно не так).
 
-dataset, schema_name, table_name, data_version / partition_key
+payload_json — гибкие детали для починки: проблемное поле, фактическое/ожидаемое значение, контекст (любая полезная информация).
 
-метрики: rows_tested, rows_failed, fail_pct, coverage_pct, freshness_sec
+severity — копия критичности на момент запуска (удобно для фильтров без джойна c registry).
 
-severity, message, link_to_detail, executor (DAG/task_id)
+partition_key — значение среза данных, к которому относится нарушение (например, '2025-11-18' или '2025-10'). В отличие от одноимённого поля в registry, здесь уже значение, а не имя атрибута.
 
-партиция по run_date (день)
+data_version — см. ниже (ключевая идея — идентификатор версии/снапшота данных, по которому однозначно понимаем, на каком состоянии источника выполнялась проверка).
 
-dq.detail (единая детальная)
+found_at — когда нарушение зафиксировано (вставлено в лог).
 
-run_id, check_id, row_key (строковый ключ или hash), error_code, error_msg
+dq.overview — краткая сводка (агрегаты)
 
-dataset, schema_name, table_name, partition_key
+run_date — дата запуска (партиция).
 
-payload_json (гибкая структура: конфликтующие поля, значения, diffs)
+run_id — идентификатор прогона.
 
-партиции: по дате / check_id (в CH — PARTITION BY toDate(run_started_at) ORDER BY (check_id,row_key))
+check_id — проверка.
 
-Почему одна детальная таблица лучше: проще права, квоты, индексация, алерты, SQL; нет каскада DDL на каждую новую проверку; гибкий payload_json покрывает разнородные структуры.
+run_started_at / run_ended_at — тайминги выполнения проверки.
 
-4) Формат спецификации проверки (YAML)
-check_id: dq_sd_0001
-name: Uniqueness of sales order lines
-category: technical
-severity: P2
-dataset: sales
-schema: dds
-table: sales_order_line
-key_columns: [order_id, line_id]
-logic:
-  type: uniqueness
-  sql: |
-    SELECT order_id, line_id, COUNT(*) AS cnt
-    FROM dds.sales_order_line
-    WHERE load_dt = {{ ds }}
-    GROUP BY 1,2
-    HAVING COUNT(*) > 1
-threshold:
-  type: abs
-  fail_if_rows_failed_gt: 0
-retention:
-  overview_days: 180
-  detail_days: 30
-alerting:
-  notify: ["data-quality@company.com"]
-  create_ticket: true
-  jira_project: "DQ"
+status — итог статуса проверки: pass / warn / fail / error
+(обычно рассчитывается из rows_failed и порога из registry).
+
+dataset / schema_name / table_name — контекст источника.
+
+partition_key — значение проверяемого среза (как и в detail).
+
+data_version — идентификатор версии данных, на которых считалась проверка.
+
+rows_tested — сколько строк/единиц проверено.
+
+rows_failed — сколько нарушений найдено (или сколько уникальных ключей-нарушителей).
+
+fail_pct — доля нарушений (rows_failed / rows_tested, если применимо).
+
+coverage_pct — доля охваченных проверкой данных (если измеряется).
+
+freshness_sec — отставание/свежесть (для проверок свежести).
+
+severity — критичность, полезно для дашборда/срезов.
+
+message — пояснение, почему warn/fail (например, «превышен порог в 1%»).
+
+executor — кто выполнял (DAG/Task/инстанс).
+
+Что такое data_version и зачем оно
+
+data_version — это идентификатор состояния исходных данных, на которых выполнялась проверка.
+Нужно, чтобы:
+
+отличать результаты, посчитанные на разных «срезах»/батчах/снапшотах;
+
+уметь точно воспроизвести/сопоставить запуски;
+
+связывать лог DQ и загрузочные пайплайны (какой batch/commit/SCN породил такое состояние).
+
+Что использовать в качестве data_version (примеры)
+
+Выбирай то, что реально отражает смену содержимого источника у тебя в пайплайне:
+
+Дата/время загрузки: max(dt_load) или to_char(max(inserted_dttm), 'YYYY-MM-DD HH24:MI:SS').
+
+Batch ID / Job ID: если лоадер проставляет batch_id — это лучший кандидат.
+
+Снапшот/Tag: имя снапшота в S3 (s3://…/manifest_2025-11-18T02:00Z.json), версию parquet-манифеста.
+
+Oracle SCN / Log Sequence: «номер» консистентного чтения из источника.
+
+Git commit (редко, но подходит для полностью воспроизводимых генераций).
+
+Хэш данных: агрегатный контрольный хэш по набору (дороже, но честно).
+
+Важно: partition_key отвечает на вопрос «какой период/срез мы проверяли»,
+а data_version — «какая именно версия исходных данных за этот период лежала в системе во время проверки».
+
+Примеры значений
+
+'batch_2025-11-18T03:15:20Z'
+
+'oracle_scn_1234567890'
+
+'s3_manifest_2025-11-18T02:00Z'
+
+'gp_load_2025-11-18_02:10:05'
 
 
-Для «бизнесовых» проверок logic.type: custom и даём SQL, который возвращает ровно строки-нарушители с ключом и описанием.
+Почему не всё «колоночное»
 
-5) Исполнение (Airflow)
+В Greenplum есть два основных формата AO (Append-Optimized):
 
-DAG per domain (финансы/сбыт/…); task per check (идемпотентные).
+AO Column: хорошо для «долго лежит, много читаем агрегациями». Идеально для dq.detail и dq.overview.
 
-Оператор:
+AO Row (или обычные HEAP): лучше, когда часто обновляешь строки (частые UPDATE, «тикет повесили → статус поменяли»). Это про будущую dq.issue.
 
-прогоняет SQL «нарушителей»,
+Поэтому:
 
-пишет dq.detail с run_id,
+registry — маленькая справочная → REPLICATED HEAP (или AO row) — быстро джоинится везде.
 
-пишет агрегат в dq.overview (rows_tested/failed/… и статус с учётом threshold),
+detail/overview — AO Column + zstd (дёшево хранить, быстро агрегировать). Там в основном INSERT и SELECT, почти нет UPDATE.
 
-если status in (fail,error) — шлёт алерт/создаёт тикет.
+Как «раскидать» данные по сегментам (DISTRIBUTED)
 
-Idempotency: run_id = ${dag_id}_${ds}_${check_id}; перед записью делаем DELETE WHERE run_id=….
+registry — REPLICATED (малая, нужна везде без шеффлов).
 
-Порядок: зависимости тестов от таблиц: авто-построение по YAML (как вы уже делаете для витрин).
+detail — DISTRIBUTED BY (check_id, row_key):
+хорошо ложится под «карточку проверки» и «историю строки».
 
-6) Алёртинг (чёткая политика)
+overview — DISTRIBUTED BY (run_date):
+обычно читаешь по дате/диапазону дат для дашборда.
 
-Severity: P1 (блокирующие отчёты/клиентов), P2 (критичное отклонение), P3 (заметно), P4 (минор).
+Партиционирование и чистка
 
-Порог: abs/pct; можно поддержать динамический порог (медиана ±10% за 7 дней) для шумных проверок.
+Делай PARTITION BY RANGE (run_date) (день/месяц).
 
-Почта/Slack/Teams + автосоздание тикетов по P1–P2.
+Ретеншн: detail — 30 дней, overview — 180 дней.
 
-Suppression windows: не алертить в «окно ночных догрузок».
+Ежедневно дропай старые партиции — это моментально и не фрагментирует.
 
-Escalation: если P1 не закрыт X часов — эскалация владельцу домена.
+Готовые DDL (GP)
+1) Справочник проверок
+CREATE SCHEMA IF NOT EXISTS dq;
 
-7) Категоризация и метрики качества
-
-Категории (Completeness, Uniqueness, Validity, Consistency, Freshness, Integrity).
-
-SLI/SLO: % проверок «зелёные», средний freshness_sec, среднее fail_pct, MTTR по DQ инцидентам.
-
-Дашборд:
-
-Главная: «здоровье доменов», тепловая карта проверок (по severity и статусу).
-
-Drill-down: чек → динамика за 30/180 дней, топ-ключи нарушений, ссылка в CH на dq.detail.
-
-Мини-DDL (пример на GP/CH)
-Greenplum (краткая и справочник)
--- registry
+-- маленькая и общая: реплицируем
 CREATE TABLE dq.registry (
-  check_id text PRIMARY KEY,
-  name text, description text, category text, severity text,
-  owner_team text, owner_person text,
-  dataset text, schema_name text, table_name text, partition_key text,
-  threshold_type text, threshold_value numeric,
-  schedule text, enabled boolean,
+  check_id         text PRIMARY KEY,          -- 'dq_sd_0001'
+  name             text NOT NULL,
+  description      text,
+  category         text NOT NULL,             -- technical|business|freshness|...
+  severity         text NOT NULL,             -- P1|P2|P3|P4
+  owner_team       text,
+  owner_person     text,
+  dataset          text,
+  schema_name      text NOT NULL,
+  table_name       text NOT NULL,
+  partition_key    text,                      -- если проверка по партициям
+  threshold_type   text,                      -- abs|pct|dynamic
+  threshold_value  numeric,                   -- например 0 (=нет ошибок)
+  schedule         text,
+  enabled          boolean DEFAULT true,
   source_yaml_path text,
-  created_at timestamp default now(), updated_at timestamp default now()
-) DISTRIBUTED REPLICATED;
-
--- overview (партиция по дню)
-CREATE TABLE dq.overview (
-  run_date date,
-  run_id text,
-  check_id text,
-  run_started_at timestamp,
-  run_ended_at timestamp,
-  status text,
-  dataset text, schema_name text, table_name text,
-  partition_key text, data_version text,
-  rows_tested bigint, rows_failed bigint,
-  fail_pct numeric, coverage_pct numeric,
-  freshness_sec bigint,
-  severity text,
-  message text,
-  link_to_detail text,
-  executor text
-) DISTRIBUTED BY (run_date);
-
-ClickHouse (детали)
-CREATE TABLE dq.detail
-(
-  run_started_at DateTime,
-  run_id String,
-  check_id String,
-  dataset String, schema_name String, table_name String,
-  partition_key String,
-  error_code String,
-  error_msg String,
-  row_key String,
-  payload_json JSON
+  created_at       timestamp DEFAULT now(),
+  updated_at       timestamp DEFAULT now()
 )
-ENGINE = MergeTree
-PARTITION BY toDate(run_started_at)
-ORDER BY (check_id, row_key);
+DISTRIBUTED REPLICATED;
 
-Почему так лучше
+2) Детальная (универсальная) — колоночная, помесячные партиции
+-- базовая таблица с колоночным хранением
+CREATE TABLE dq.detail_base (
+  run_date      date NOT NULL,                -- ключ партиции (дата запуска)
+  run_id        text NOT NULL,                -- id прогона
+  check_id      text NOT NULL,
+  schema_name   text NOT NULL,
+  table_name    text NOT NULL,
+  row_key       text NOT NULL,                -- бизнес-ключ/хэш
+  error_code    text NOT NULL,
+  error_msg     text,
+  payload_json  jsonb,
+  severity      text,
+  partition_key text,                         -- логический срез данных (если есть)
+  data_version  text,
+  found_at      timestamp DEFAULT now()
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (check_id, row_key);
 
-Одна детальная таблица вместо N → проще эксплуатация, права, запросы, индексация, ретеншн.
+-- партиционированная «обёртка»
+CREATE TABLE dq.detail
+  (LIKE dq.detail_base INCLUDING DEFAULTS INCLUDING INDEXES)
+PARTITION BY RANGE (run_date);
 
-Spec-driven → меньше ручных несоответствий, автогенерация задач, прозрачность.
+-- пример: создать партиции на 3 месяца вперёд/назад
+CREATE TABLE dq.detail_y2025m11 PARTITION OF dq.detail
+  FOR VALUES FROM ('2025-11-01') TO ('2025-12-01')
+  (LIKE dq.detail_base INCLUDING DEFAULTS INCLUDING INDEXES);
 
-Идемпотентность и run-модель → корректные перерасчёты, воспроизводимость, связь с релизом.
+-- дальше по месяцу: dq.detail_y2025m12, dq.detail_y2026m01, ...
 
-Пороговая логика и алёртинг → не просто «дашборд», а управляемый процесс с реакцией.
+-- индексы на логические фильтры
+CREATE INDEX ON dq.detail (run_id);
+CREATE INDEX ON dq.detail (check_id, found_at);
+CREATE INDEX ON dq.detail (schema_name, table_name);
+CREATE INDEX ON dq.detail (check_id, row_key);
 
-Метрики и категории → можно ставить цели по качеству (SLO) и показывать прогресс руководству.
-
-Производительность → детали в ClickHouse, агрегаты в GP, партиции/TTL удаляют старь автоматически.
-
-Что сделать прямо сейчас (пошагово)
-
-Утвердить модель: dq.registry, dq.overview, dq.detail и YAML-формат.
-
-Перевести 5–10 текущих проверок в YAML и прогнать генератор задач.
-
-Подключить алёртинг (P1–P2 → тикеты; P3–P4 → почта/чат).
-
-Сверстать обзорный дашборд: здоровье доменов, динамика, топ-ошибки.
-
-Закрепить в регламенте релизов: smoke-DQ до и после промоута.
-
-Хочешь — скидывай ваш DQ.xlsx и один «бизнесовый» SQL, я переведу в YAML и дам шаблон Airflow-таски под ваш стек (GP → CH, с ретеншном и алертингом).
+3) Краткая сводка — колоночная, помесячные партиции
+CREATE TABLE dq.overview_base (
+  run_date       date NOT NULL,
+  run_id         text NOT NULL,
+  check_id       text NOT NULL,
+  run_started_at timestamp,
+  run_ended_at   timestamp,
+  status         text,                       -- pass|warn|fail|error
+  dataset        text,
+  schema_name    text,
+  table_name     text,
+  partition_key  text,
+  data_version   text,
+  rows_tested    bigint,
+  rows_failed    bigint,
+  fail_pct       numeric,
+  coverage_pct   numeric,
+  freshness_sec  bigint,
+  severity       text,
+  message        text,
+  executor       text
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (run_date);

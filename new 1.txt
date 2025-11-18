@@ -1,189 +1,58 @@
--- ===========================
--- СЕССИОННЫЕ ТУМБЛЕРЫ (по желанию)
--- ===========================
-SET statement_mem TO '4096MB';    -- подберите под свою RG/узлы
--- SET optimizer TO off;          -- иногда полезно сравнить план без ORCA
--- SET enable_hashagg TO on;      -- если доступно в вашей версии, для явного hash aggregate
+Принимаем, что на текущий момент под проверками DQ понимается формирование спец витрин, содержащих информацию о результатах выполнения скриптов, проверяющих данные по каким-то алгоритмам. Конечная цель - построить аналитический дашборд, содержащий результаты таких проверок для дальнейшего исправления данных.
 
--- ===========================
--- ЧИСТКА TEMP (многократные прогоны)
--- ===========================
-DROP TABLE IF EXISTS order_union        ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS params_z_matkl    ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS params_bwrt       ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS params_auart      ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS params_autyp      ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS mg_core           ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS mg_agg            ON COMMIT PRESERVE ROWS;
-DROP TABLE IF EXISTS pt1_material_sum  ON COMMIT PRESERVE ROWS;
+Макет предполагаемого дашборда:
 
--- ===========================
--- 1) Большой union заказов (распределение по key джойна)
--- ===========================
-CREATE TEMP TABLE order_union (
-    order_type_code      varchar(4),
-    order_code           varchar(12),
-    order_category_code  varchar
-)
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (order_code);
+--Здесь будет макет--
 
-INSERT INTO order_union
-SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_toro
-UNION ALL
-SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_production
-UNION ALL
-SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_controlling;
+Все проверки делятся на две большие группы:
 
-ANALYZE order_union;
+технические
+бизнесовые
+Технические проверки - это базовая простая логика, что можно делать по шаблону для множества объектов (например, проверка на обязательность заполнения полей, проверка на отсутствие дубликатов по ключу), ведутся обособленно от бизнесовых, объединены и выделены в отдельный блок реализации.
 
--- ===========================
--- 2) Маленькие справочники-параметры (джойним, а не EXISTS)
--- ===========================
-CREATE TEMP TABLE params_z_matkl AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='ZMM2968M_BW' AND parameter_code='Z_MATKL'
-DISTRIBUTED RANDOMLY;
+Так называемые "бизнесовые" проверки, с неординарной логикой, ведутся обособленно. Логика каждой такой проверки указывается в отдельном скрипте, чтобы соблюдалось правило - один скрипт - одна проверка. Если витрина содержит несколько бизнесовых проверок, то каждая такая проверка будет реализована отдельным скриптом в отдельном файле.
 
-CREATE TEMP TABLE params_bwrt AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/CO312K' AND parameter_code='BWRT_ZKP'
-DISTRIBUTED RANDOMLY;
+Скрипты с проверками добавляются в текущие сущности загрузки, подобно формированию обычных витрин.
 
-CREATE TEMP TABLE params_auart AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/CO706M' AND parameter_code='AUART_BU'
-DISTRIBUTED RANDOMLY;
+Требуется создать централизованный "Справочник проверок", единый для всех направлений, содержащий основную информацию о проверке. Состав атрибутов справочника указан в файле: DQ.xlsx на листе "Справочник". Набор атрибутов обусловлен необходимостью построения аналитической отчетности по результатам прохождения проверок. Справочник будет использоваться при наполнении спец витрин с результатами проверки.
 
-CREATE TEMP TABLE params_autyp AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/CO706M' AND parameter_code='AUTYP_BU'
-DISTRIBUTED RANDOMLY;
+Два вида витрин: Краткая и детальные.
 
-ANALYZE params_z_matkl;
-ANALYZE params_bwrt;
-ANALYZE params_auart;
-ANALYZE params_autyp;
+Краткая. Для всех направлений и всех проверок. Содержит агрегированную информацию о результатах выполнения каждой проверки каждого направления. Новые данные дописываются. Срок хранения записей 180 дней, чтобы иметь возможность строить аналитику в динамике, а более старые удаляются ежедневно.
 
--- ===========================
--- 3) Ядро движений (ТОЛЬКО нужные поля) + предрасчёт qty11/qty22_base
---    Важное: распределяем по (plant_code, material_code) — это ключ джойна на material_by_plant
--- ===========================
-CREATE TEMP TABLE mg_core
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (plant_code, material_code)
-AS
-SELECT
-    date_trunc('month', mg.dt_posting) AS mon,
-    mg.plant_code,
-    mg.material_code,
-    mg.uom_code,
-    mg.order_code,
+Структура краткой витрины описана в файле DQ.xlsx на листе "Краткая витрина".
 
-    -- предварительно считаем «подпись» количества для menge11
-    CASE WHEN mg.debit_or_credit_code = 'H'
-         THEN mg.quantity * -1
-         ELSE mg.quantity
-    END AS qty11_signed,
+Над данными краткой витрины строится главная (обзорная) страница аналитического дашборда DQ.
 
-    -- базовый кандидат для menge22 (WE, receipt NULL, не в BWRT)
-    CASE WHEN mg.operation_type_code = 'WE'
-              AND mg.receipt_type_code IS NULL
-              AND pbw.range_low_value IS NULL
-         THEN CASE WHEN mg.debit_or_credit_code = 'H'
-                   THEN mg.quantity * -1
-                   ELSE mg.quantity
-              END
-         ELSE 0
-    END AS qty22_base
-FROM dds.material_movement_document mg
-LEFT JOIN params_bwrt pbw
-  ON pbw.range_low_value = mg.movement_type_code
--- фильтры вниз по потоку
-WHERE mg.posting_rule_code IS NOT NULL
-  AND mg.sales_document_number_of_valuated_stock_code IS NULL
-  AND mg.wbs_element_of_valuated_stock_code = '00000000';
+Наименование краткой витрины: dq_overview
 
-ANALYZE mg_core;
+Детальные витрины. Содержат подробную информацию об ошибке, включая данные, которых будет достаточно для того, чтобы понять конкретную строку витрины, которая не прошла проверку (ключ строки). Для каждого вида проверки (error_code) своя таблица с деталями. Таблиц несколько, потому что их структура разная, в зависимости от вида проверки. Срок хранения записей в детальных витринах 30 дней, а более старые удаляются ежедневно.
 
--- ===========================
--- 4) Достраиваем признаки по заказам одноразовыми лёгкими JOIN и агрегируем
---    (сначала сумма по mg_core + order_union/auart/autyp, потом — джойн к большим справочникам)
--- ===========================
-CREATE TEMP TABLE mg_agg
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (plant_code, material_code)
-AS
-SELECT
-    c.mon,
-    c.plant_code,
-    c.material_code,
-    c.uom_code,
+Структура детальных витрин описана в файле DQ.xlsx на листе "Подробная витрина".
 
-    SUM(c.qty11_signed) AS menge11,
+Наименование таблиц дается по id проверки. ID проверки содержит префикс dq_, функциональное направление и порядковый номер проверки, например, dq_sd0001
 
-    -- обнуляем qty22_base если выполнено спец-условие по заказу:
-    -- order_code NOT NULL AND auart MATCH AND autyp NOT MATCH
-    SUM(
-        CASE
-            WHEN c.order_code IS NOT NULL
-                 AND pauart.range_low_value IS NOT NULL
-                 AND pautyp.range_low_value IS NULL
-            THEN 0
-            ELSE c.qty22_base
-        END
-    ) AS menge22
-FROM mg_core c
-LEFT JOIN order_union ou
-  ON ou.order_code = c.order_code
-LEFT JOIN params_auart pauart
-  ON pauart.range_low_value = ou.order_type_code
-LEFT JOIN params_autyp pautyp
-  ON pautyp.range_low_value = ou.order_category_code
-GROUP BY c.mon, c.plant_code, c.material_code, c.uom_code;
+Результаты проверок, выполняемых над массивами данных, логируются только в краткой витрине с соответствующим текстом ошибки. Причина - невозможность собрать детальную информацию по ключам, так как сравниваются агрегированные множества.
 
-ANALYZE mg_agg;
+Краткий и подробные логи находятся в схеме dm, подобно другим витринам, справочник проверок в dict_dds.
 
--- ===========================
--- 5) Финальный шаг: подцепляем m-by-plant и material (после агрегации!) + фильтр Z_MATKL
--- ===========================
-CREATE TEMP TABLE pt1_material_sum (
-    spmon   varchar,
-    werks   varchar,
-    matnr   varchar,
-    menge11 numeric(28,10),
-    menge22 numeric(28,10),
-    meins   varchar,
-    ekgrp   varchar,
-    dispo   varchar
-)
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED RANDOMLY;
+Какие-либо методики расчета метрик достоверности, расчет показателей достоверности и степени доверия пока не прорабатываются.
 
-INSERT INTO pt1_material_sum
-SELECT
-    to_char(a.mon, 'YYYY-MM')                     AS spmon,
-    a.plant_code                                  AS werks,
-    a.material_code                               AS matnr,
-    a.menge11,
-    a.menge22,
-    a.uom_code                                    AS meins,
-    mbp.purchase_group_code                       AS ekgrp,
-    mbp.material_planning_controller_code         AS dispo
-FROM mg_agg a
-JOIN dict_dds.material_by_plant mbp
-  ON mbp.material_code = a.material_code
- AND mbp.plant_code    = a.plant_code
-JOIN dict_dds.material m
-  ON m.material_code = a.material_code
-LEFT JOIN params_z_matkl pz
-  ON pz.range_low_value = m.material_group_code
-WHERE pz.range_low_value IS NULL;  -- эквивалент исходному фильтру
+В базе знаний есть раздел с описанием "бизнесовых" проверок, сгруппированных по функциональным областям, например, Описание проверок. Сбыт. | База знаний
 
-ANALYZE pt1_material_sum;
+Все проверки должны быть классифицированы по критериям качества данных:
 
--- SELECT * FROM pt1_material_sum LIMIT 100;
+image.png
+
+Перечень технических проверок:
+
+Проверка на дубликаты (уникальность ключа)
+Проверка на обязательные поля
+Проверка диапазона значений
+Проверка на соответствие формату
+Проверка на соответствие справочникам (что запись есть в справочнике)
+Выявление выбросов
+Проверка даты последнего обновления (возможно, задержки обновления данных, что что-то не стартовало или длительности обновления, что что-то зависло, слишком долго выполняется (это если можно отследить)
+Проверка на соответствие типов данных
+Проверка длины значений
+Проверка на специальные символы

@@ -1,731 +1,189 @@
-SQL Error [53000]: ERROR: number of workfiles per query limit exceeded  (seg5 slice2 10.66.229.175:10001 pid=88356)
+-- ===========================
+-- СЕССИОННЫЕ НАСТРОЙКИ (по желанию)
+-- ===========================
+-- На время выполнения можно дать больше памяти запросу:
+-- (Подберите под вашу RG/узлы; если есть Resource Groups — правьте их.)
+SET statement_mem TO '4096MB';
 
-Позиция ошибки:
-CREATE temporary TABLE order_union (
-	order_type_code varchar(4) NULL,
-	order_code varchar(12) NULL,
-	order_category_code varchar NULL
-) 
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) 
-DISTRIBUTED by (order_code) ;
-insert into order_union 
-	select order_type_code, order_code, order_category_code from dict_dds.order_toro
-		union all
-	select order_type_code, order_code, order_category_code from dict_dds.order_production
-		union all
-	select order_type_code, order_code, order_category_code from dict_dds.order_controlling;
-create temporary table pt1_material_sum (
-spmon varchar,
-werks varchar,
-matnr varchar,
-MENGE11 numeric(28, 10),
-MENGE22 numeric(28, 10),
-meins varchar,
-ekgrp varchar,
-dispo varchar
+-- Для сравнения плана иногда полезно отключить ORCA:
+-- SET optimizer TO off;
+
+-- ===========================
+-- ЧИСТИМ СТАРЫЕ TEMP (на случай повторных прогонов)
+-- ===========================
+DROP TABLE IF EXISTS order_union          ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS params_z_matkl      ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS params_bwrt         ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS params_auart        ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS params_autyp        ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS mg_base             ON COMMIT PRESERVE ROWS;
+DROP TABLE IF EXISTS pt1_material_sum    ON COMMIT PRESERVE ROWS;
+
+-- ===========================
+-- 1) order_union — большой temp, распределяем по ключу джойна
+-- ===========================
+CREATE TEMPORARY TABLE order_union (
+    order_type_code      varchar(4),
+    order_code           varchar(12),
+    order_category_code  varchar
 )
 WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-) --on commit drop
-DISTRIBUTED randomly;
-insert into pt1_material_sum
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+DISTRIBUTED BY (order_code);
 
---explain(verbose, format json)
-select 
-		to_char(mg.dt_posting, 'YYYY-MM') as spmon, -- mg."BUDAT_MKPF"
-		mg.plant_code as werks, -- mg."WERKS"
-		mg.material_code as matnr, -- mg."MATNR" 
-		sum(case 
-			when mg.debit_or_credit_code = 'H' -- mg."SHKZG"
-			then mg.quantity * -1  -- mg."MENGE"
-		else mg.quantity end) as "MENGE11", 
-		sum(case 
-			when mg.order_code is not null 
-				and param_m3.range_low_value is null 
-				and param_m4.range_low_value is not null then 0
-			when mg.debit_or_credit_code = 'H' 
-				and mg.operation_type_code = 'WE' -- mg."VGART_MKPF"
-				and mg.receipt_type_code is null -- mg."KZZUG" <> 'X'
-				and param_m2.range_low_value is null then mg.quantity * -1
-			when mg.debit_or_credit_code <> 'H' -- = 'S'
-				and mg.operation_type_code = 'WE'
-				and mg.receipt_type_code is null -- <> 'X'
-				and param_m2.range_low_value is null then mg.quantity
-		else 0 end) as "MENGE22",
-		mg.uom_code as meins, -- mg."MEINS"
-		mc.purchase_group_code as ekgrp, -- mc."EKGRP"
-		mc.material_planning_controller_code as dispo -- mc."DISPO"
-	from dict_dds.material_by_plant mc -- dict_stg."MARC"
-		join dict_dds.plant_and_subsidiary tw -- dict_stg."T001W"
-		on mc.plant_code = tw.plant_code -- mc."WERKS" = tw."WERKS"
-		join dict_dds.material ma -- dict_stg."MARA"
-		on mc.material_code = ma.material_code -- mc."MATNR" = ma."MATNR"
-		join dds.material_movement_document mg -- stg."MSEG"
-		on mg.material_code = mc.material_code -- mg."MATNR" = mc."MATNR"
-		and mg.plant_code = mc.plant_code -- mg."WERKS" = mc."WERKS"
-		left join dict_dds.settings_and_parameters_sap as param_m
-		on param_m.abap_program_code = 'ZMM2968M_BW' 
-		and param_m.parameter_code = 'Z_MATKL'
-		and param_m.range_low_value = ma.material_group_code -- ma."MATKL"
-		left join dict_dds.settings_and_parameters_sap as param_m2
-		on param_m2.abap_program_code = '/RUSAL/CO312K' 
-		and param_m2.parameter_code = 'BWRT_ZKP'
-		and param_m2.range_low_value = mg.movement_type_code -- mg."BWART"
-		left join order_union ak -- dict_stg."AUFK"
-		on mg.order_code = ak.order_code -- mg."AUFNR" = ak."AUFNR"
-		left join dict_dds.settings_and_parameters_sap as param_m3
-		on param_m3.abap_program_code = '/RUSAL/CO706M' 
-		and param_m3.parameter_code = 'AUART_BU'
-		and param_m3.range_low_value = ak.order_type_code -- ak."AUART"
-		left join dict_dds.settings_and_parameters_sap as param_m4
-		on param_m4.abap_program_code = '/RUSAL/CO706M'
-		and param_m4.parameter_code = 'AUTYP_BU'
-		and param_m4.range_low_value = ak.order_category_code -- ak."AUTYP"
-	where param_m.abap_program_code is null
-		and mg.posting_rule_code is not null -- mg."BUSTW" <> ' '
-		and mg.sales_document_number_of_valuated_stock_code is null -- mg."MAT_KDAUF" = ' '
-		and mg.wbs_element_of_valuated_stock_code = '00000000' -- mg."MAT_PSPNR"
-	group by 1, 2, 3, 6, 7, 8;
+INSERT INTO order_union
+SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_toro
+UNION ALL
+SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_production
+UNION ALL
+SELECT order_type_code, order_code, order_category_code FROM dict_dds.order_controlling;
 
+ANALYZE order_union;
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 6,
-      "Receivers": 1,
-      "Slice": 6,
-      "Segments": 6,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 5786.27,
-      "Plan Rows": 1,
-      "Plan Width": 64,
-      "Output": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "(pg_catalog.sum((sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END))))", "(pg_catalog.sum((sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END))))", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-      "Plans": [
-        {
-          "Node Type": "Aggregate",
-          "Strategy": "Sorted",
-          "Parent Relationship": "Outer",
-          "Slice": 6,
-          "Segments": 6,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 5786.27,
-          "Plan Rows": 1,
-          "Plan Width": 64,
-          "Output": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "pg_catalog.sum((sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END)))", "pg_catalog.sum((sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END)))", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-          "Group Key": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-          "Plans": [
-            {
-              "Node Type": "Sort",
-              "Parent Relationship": "Outer",
-              "Slice": 6,
-              "Segments": 6,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 5786.27,
-              "Plan Rows": 1,
-              "Plan Width": 64,
-              "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "(sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END))", "(sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END))"],
-              "Sort Key": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-              "Plans": [
-                {
-                  "Node Type": "Redistribute Motion",
-                  "Senders": 6,
-                  "Receivers": 6,
-                  "Parent Relationship": "Outer",
-                  "Slice": 5,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 5786.27,
-                  "Plan Rows": 1,
-                  "Plan Width": 64,
-                  "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "(sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END))", "(sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END))"],
-                  "Hash Key": "(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text)), material_movement_document.plant_code, material_movement_document.material_code, material_movement_document.uom_code, material_by_plant.purchase_group_code, material_by_plant.material_planning_controller_code",
-                  "Plans": [
-                    {
-                      "Node Type": "Result",
-                      "Parent Relationship": "Outer",
-                      "Slice": 5,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 5786.27,
-                      "Plan Rows": 1,
-                      "Plan Width": 64,
-                      "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "(sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END))", "(sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END))"],
-                      "Plans": [
-                        {
-                          "Node Type": "Aggregate",
-                          "Strategy": "Sorted",
-                          "Parent Relationship": "Outer",
-                          "Slice": 5,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 5786.27,
-                          "Plan Rows": 1,
-                          "Plan Width": 64,
-                          "Output": ["sum(CASE WHEN ((material_movement_document.debit_or_credit_code)::text = 'H'::text) THEN (material_movement_document.quantity * '-1'::numeric) ELSE material_movement_document.quantity END)", "sum(CASE WHEN ((NOT (material_movement_document.order_code IS NULL)) AND (settings_and_parameters_sap_2.range_low_value IS NULL) AND (NOT (settings_and_parameters_sap_3.range_low_value IS NULL))) THEN '0'::numeric WHEN (((material_movement_document.debit_or_credit_code)::text = 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN (material_movement_document.quantity * '-1'::numeric) WHEN (((material_movement_document.debit_or_credit_code)::text <> 'H'::text) AND ((material_movement_document.operation_type_code)::text = 'WE'::text) AND (material_movement_document.receipt_type_code IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN material_movement_document.quantity ELSE '0'::numeric END)", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))"],
-                          "Group Key": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-                          "Plans": [
-                            {
-                              "Node Type": "Sort",
-                              "Parent Relationship": "Outer",
-                              "Slice": 5,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 5786.27,
-                              "Plan Rows": 5,
-                              "Plan Width": 93,
-                              "Output": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "settings_and_parameters_sap_2.range_low_value", "settings_and_parameters_sap_3.range_low_value"],
-                              "Sort Key": ["(to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text))", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.uom_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Result",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 5,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 5786.27,
-                                  "Plan Rows": 5,
-                                  "Plan Width": 93,
-                                  "Output": ["to_char((material_movement_document.dt_posting)::timestamp with time zone, 'YYYY-MM'::text)", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "settings_and_parameters_sap_2.range_low_value", "settings_and_parameters_sap_3.range_low_value"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Redistribute Motion",
-                                      "Senders": 6,
-                                      "Receivers": 6,
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 4,
-                                      "Segments": 6,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 5786.27,
-                                      "Plan Rows": 5,
-                                      "Plan Width": 89,
-                                      "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "settings_and_parameters_sap_2.range_low_value", "settings_and_parameters_sap_3.range_low_value"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Hash Join",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 4,
-                                          "Segments": 6,
-                                          "Gang Type": "primary reader",
-                                          "Join Type": "Left",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 5786.27,
-                                          "Plan Rows": 5,
-                                          "Plan Width": 89,
-                                          "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "settings_and_parameters_sap_2.range_low_value", "settings_and_parameters_sap_3.range_low_value"],
-                                          "Hash Cond": "((order_union.order_category_code)::text = (settings_and_parameters_sap_3.range_low_value)::text)",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Hash Join",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 4,
-                                              "Segments": 6,
-                                              "Gang Type": "primary reader",
-                                              "Join Type": "Left",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 5277.92,
-                                              "Plan Rows": 4,
-                                              "Plan Width": 84,
-                                              "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "order_union.order_category_code", "settings_and_parameters_sap_2.range_low_value"],
-                                              "Hash Cond": "((order_union.order_type_code)::text = (settings_and_parameters_sap_2.range_low_value)::text)",
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Hash Join",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 4,
-                                                  "Segments": 6,
-                                                  "Gang Type": "primary reader",
-                                                  "Join Type": "Right",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 4769.57,
-                                                  "Plan Rows": 3,
-                                                  "Plan Width": 81,
-                                                  "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value", "order_union.order_type_code", "order_union.order_category_code"],
-                                                  "Hash Cond": "((order_union.order_code)::text = (material_movement_document.order_code)::text)",
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Seq Scan",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 4,
-                                                      "Segments": 6,
-                                                      "Gang Type": "primary reader",
-                                                      "Relation Name": "order_union",
-                                                      "Schema": "pg_temp_3463606",
-                                                      "Alias": "order_union",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 462.62,
-                                                      "Plan Rows": 9854954,
-                                                      "Plan Width": 21,
-                                                      "Output": ["order_union.order_type_code", "order_union.order_code", "order_union.order_category_code"]
-                                                    },
-                                                    {
-                                                      "Node Type": "Hash",
-                                                      "Parent Relationship": "Inner",
-                                                      "Slice": 4,
-                                                      "Segments": 6,
-                                                      "Gang Type": "primary reader",
-                                                      "Startup Cost": 3936.32,
-                                                      "Total Cost": 3936.32,
-                                                      "Plan Rows": 2,
-                                                      "Plan Width": 73,
-                                                      "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value"],
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Redistribute Motion",
-                                                          "Senders": 6,
-                                                          "Receivers": 6,
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 3,
-                                                          "Segments": 6,
-                                                          "Gang Type": "primary reader",
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 3936.32,
-                                                          "Plan Rows": 2,
-                                                          "Plan Width": 73,
-                                                          "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value"],
-                                                          "Hash Key": "material_movement_document.order_code",
-                                                          "Plans": [
-                                                            {
-                                                              "Node Type": "Hash Join",
-                                                              "Parent Relationship": "Outer",
-                                                              "Slice": 3,
-                                                              "Segments": 6,
-                                                              "Gang Type": "primary reader",
-                                                              "Join Type": "Left",
-                                                              "Startup Cost": 0.00,
-                                                              "Total Cost": 3936.32,
-                                                              "Plan Rows": 2,
-                                                              "Plan Width": 73,
-                                                              "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap_1.range_low_value"],
-                                                              "Hash Cond": "((material_movement_document.movement_type_code)::text = (settings_and_parameters_sap_1.range_low_value)::text)",
-                                                              "Plans": [
-                                                                {
-                                                                  "Node Type": "Result",
-                                                                  "Parent Relationship": "Outer",
-                                                                  "Slice": 3,
-                                                                  "Segments": 6,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Startup Cost": 0.00,
-                                                                  "Total Cost": 3427.97,
-                                                                  "Plan Rows": 1,
-                                                                  "Plan Width": 69,
-                                                                  "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                  "Filter": "(settings_and_parameters_sap.abap_program_code IS NULL)",
-                                                                  "Plans": [
-                                                                    {
-                                                                      "Node Type": "Hash Join",
-                                                                      "Parent Relationship": "Outer",
-                                                                      "Slice": 3,
-                                                                      "Segments": 6,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Join Type": "Left",
-                                                                      "Startup Cost": 0.00,
-                                                                      "Total Cost": 3427.97,
-                                                                      "Plan Rows": 2,
-                                                                      "Plan Width": 84,
-                                                                      "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code", "settings_and_parameters_sap.abap_program_code"],
-                                                                      "Hash Cond": "((material.material_group_code)::text = (settings_and_parameters_sap.range_low_value)::text)",
-                                                                      "Plans": [
-                                                                        {
-                                                                          "Node Type": "Hash Join",
-                                                                          "Parent Relationship": "Outer",
-                                                                          "Slice": 3,
-                                                                          "Segments": 6,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Join Type": "Inner",
-                                                                          "Startup Cost": 0.00,
-                                                                          "Total Cost": 2919.62,
-                                                                          "Plan Rows": 1,
-                                                                          "Plan Width": 74,
-                                                                          "Output": ["material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material.material_group_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                          "Hash Cond": "((material.material_code)::text = (material_by_plant.material_code)::text)",
-                                                                          "Plans": [
-                                                                            {
-                                                                              "Node Type": "Result",
-                                                                              "Parent Relationship": "Outer",
-                                                                              "Slice": 3,
-                                                                              "Segments": 6,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Startup Cost": 0.00,
-                                                                              "Total Cost": 808.90,
-                                                                              "Plan Rows": 1087535,
-                                                                              "Plan Width": 23,
-                                                                              "Output": ["material.material_code", "material.material_group_code"],
-                                                                              "Plans": [
-                                                                                {
-                                                                                  "Node Type": "Seq Scan",
-                                                                                  "Parent Relationship": "Outer",
-                                                                                  "Slice": 3,
-                                                                                  "Segments": 6,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Relation Name": "material",
-                                                                                  "Schema": "dict_dds",
-                                                                                  "Alias": "material",
-                                                                                  "Startup Cost": 0.00,
-                                                                                  "Total Cost": 700.76,
-                                                                                  "Plan Rows": 6525210,
-                                                                                  "Plan Width": 23,
-                                                                                  "Output": ["material.material_code", "material.material_group_code"]
-                                                                                }
-                                                                              ]
-                                                                            },
-                                                                            {
-                                                                              "Node Type": "Hash",
-                                                                              "Parent Relationship": "Inner",
-                                                                              "Slice": 3,
-                                                                              "Segments": 6,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Startup Cost": 2076.67,
-                                                                              "Total Cost": 2076.67,
-                                                                              "Plan Rows": 1,
-                                                                              "Plan Width": 86,
-                                                                              "Output": ["material_by_plant.material_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                              "Plans": [
-                                                                                {
-                                                                                  "Node Type": "Redistribute Motion",
-                                                                                  "Senders": 6,
-                                                                                  "Receivers": 6,
-                                                                                  "Parent Relationship": "Outer",
-                                                                                  "Slice": 2,
-                                                                                  "Segments": 6,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Startup Cost": 0.00,
-                                                                                  "Total Cost": 2076.67,
-                                                                                  "Plan Rows": 1,
-                                                                                  "Plan Width": 86,
-                                                                                  "Output": ["material_by_plant.material_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                  "Hash Key": "material_by_plant.material_code",
-                                                                                  "Plans": [
-                                                                                    {
-                                                                                      "Node Type": "Hash Join",
-                                                                                      "Parent Relationship": "Outer",
-                                                                                      "Slice": 2,
-                                                                                      "Segments": 6,
-                                                                                      "Gang Type": "primary reader",
-                                                                                      "Join Type": "Inner",
-                                                                                      "Startup Cost": 0.00,
-                                                                                      "Total Cost": 2076.67,
-                                                                                      "Plan Rows": 1,
-                                                                                      "Plan Width": 86,
-                                                                                      "Output": ["material_by_plant.material_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                      "Hash Cond": "((plant_and_subsidiary.plant_code)::text = (material_by_plant.plant_code)::text)",
-                                                                                      "Plans": [
-                                                                                        {
-                                                                                          "Node Type": "Result",
-                                                                                          "Parent Relationship": "Outer",
-                                                                                          "Slice": 2,
-                                                                                          "Segments": 6,
-                                                                                          "Gang Type": "primary reader",
-                                                                                          "Startup Cost": 0.00,
-                                                                                          "Total Cost": 431.07,
-                                                                                          "Plan Rows": 613,
-                                                                                          "Plan Width": 5,
-                                                                                          "Output": ["plant_and_subsidiary.plant_code"],
-                                                                                          "Plans": [
-                                                                                            {
-                                                                                              "Node Type": "Seq Scan",
-                                                                                              "Parent Relationship": "Outer",
-                                                                                              "Slice": 2,
-                                                                                              "Segments": 6,
-                                                                                              "Gang Type": "primary reader",
-                                                                                              "Relation Name": "plant_and_subsidiary",
-                                                                                              "Schema": "dict_dds",
-                                                                                              "Alias": "plant_and_subsidiary",
-                                                                                              "Startup Cost": 0.00,
-                                                                                              "Total Cost": 431.05,
-                                                                                              "Plan Rows": 3678,
-                                                                                              "Plan Width": 5,
-                                                                                              "Output": ["plant_and_subsidiary.plant_code"]
-                                                                                            }
-                                                                                          ]
-                                                                                        },
-                                                                                        {
-                                                                                          "Node Type": "Hash",
-                                                                                          "Parent Relationship": "Inner",
-                                                                                          "Slice": 2,
-                                                                                          "Segments": 6,
-                                                                                          "Gang Type": "primary reader",
-                                                                                          "Startup Cost": 1645.58,
-                                                                                          "Total Cost": 1645.58,
-                                                                                          "Plan Rows": 1,
-                                                                                          "Plan Width": 91,
-                                                                                          "Output": ["material_by_plant.material_code", "material_by_plant.plant_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                          "Plans": [
-                                                                                            {
-                                                                                              "Node Type": "Hash Join",
-                                                                                              "Parent Relationship": "Outer",
-                                                                                              "Slice": 2,
-                                                                                              "Segments": 6,
-                                                                                              "Gang Type": "primary reader",
-                                                                                              "Join Type": "Inner",
-                                                                                              "Startup Cost": 0.00,
-                                                                                              "Total Cost": 1645.58,
-                                                                                              "Plan Rows": 1,
-                                                                                              "Plan Width": 91,
-                                                                                              "Output": ["material_by_plant.material_code", "material_by_plant.plant_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code", "material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                              "Hash Cond": "(((material_by_plant.material_code)::text = (material_movement_document.material_code)::text) AND ((material_by_plant.plant_code)::text = (material_movement_document.plant_code)::text))",
-                                                                                              "Plans": [
-                                                                                                {
-                                                                                                  "Node Type": "Result",
-                                                                                                  "Parent Relationship": "Outer",
-                                                                                                  "Slice": 2,
-                                                                                                  "Segments": 6,
-                                                                                                  "Gang Type": "primary reader",
-                                                                                                  "Startup Cost": 0.00,
-                                                                                                  "Total Cost": 1082.07,
-                                                                                                  "Plan Rows": 2165918,
-                                                                                                  "Plan Width": 32,
-                                                                                                  "Output": ["material_by_plant.material_code", "material_by_plant.plant_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"],
-                                                                                                  "Plans": [
-                                                                                                    {
-                                                                                                      "Node Type": "Seq Scan",
-                                                                                                      "Parent Relationship": "Outer",
-                                                                                                      "Slice": 2,
-                                                                                                      "Segments": 6,
-                                                                                                      "Gang Type": "primary reader",
-                                                                                                      "Relation Name": "material_by_plant",
-                                                                                                      "Schema": "dict_dds",
-                                                                                                      "Alias": "material_by_plant",
-                                                                                                      "Startup Cost": 0.00,
-                                                                                                      "Total Cost": 782.42,
-                                                                                                      "Plan Rows": 12995508,
-                                                                                                      "Plan Width": 32,
-                                                                                                      "Output": ["material_by_plant.material_code", "material_by_plant.plant_code", "material_by_plant.purchase_group_code", "material_by_plant.material_planning_controller_code"]
-                                                                                                    }
-                                                                                                  ]
-                                                                                                },
-                                                                                                {
-                                                                                                  "Node Type": "Hash",
-                                                                                                  "Parent Relationship": "Inner",
-                                                                                                  "Slice": 2,
-                                                                                                  "Segments": 6,
-                                                                                                  "Gang Type": "primary reader",
-                                                                                                  "Startup Cost": 431.00,
-                                                                                                  "Total Cost": 431.00,
-                                                                                                  "Plan Rows": 1,
-                                                                                                  "Plan Width": 59,
-                                                                                                  "Output": ["material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                                  "Plans": [
-                                                                                                    {
-                                                                                                      "Node Type": "Redistribute Motion",
-                                                                                                      "Senders": 6,
-                                                                                                      "Receivers": 6,
-                                                                                                      "Parent Relationship": "Outer",
-                                                                                                      "Slice": 1,
-                                                                                                      "Segments": 6,
-                                                                                                      "Gang Type": "primary reader",
-                                                                                                      "Startup Cost": 0.00,
-                                                                                                      "Total Cost": 431.00,
-                                                                                                      "Plan Rows": 1,
-                                                                                                      "Plan Width": 59,
-                                                                                                      "Output": ["material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                                      "Hash Key": "material_movement_document.plant_code",
-                                                                                                      "Plans": [
-                                                                                                        {
-                                                                                                          "Node Type": "Seq Scan",
-                                                                                                          "Parent Relationship": "Outer",
-                                                                                                          "Slice": 1,
-                                                                                                          "Segments": 6,
-                                                                                                          "Gang Type": "primary reader",
-                                                                                                          "Relation Name": "material_movement_document",
-                                                                                                          "Schema": "dds",
-                                                                                                          "Alias": "material_movement_document",
-                                                                                                          "Startup Cost": 0.00,
-                                                                                                          "Total Cost": 431.00,
-                                                                                                          "Plan Rows": 1,
-                                                                                                          "Plan Width": 59,
-                                                                                                          "Output": ["material_movement_document.dt_posting", "material_movement_document.plant_code", "material_movement_document.material_code", "material_movement_document.debit_or_credit_code", "material_movement_document.quantity", "material_movement_document.uom_code", "material_movement_document.movement_type_code", "material_movement_document.order_code", "material_movement_document.operation_type_code", "material_movement_document.receipt_type_code"],
-                                                                                                          "Filter": "((NOT (material_movement_document.posting_rule_code IS NULL)) AND (material_movement_document.sales_document_number_of_valuated_stock_code IS NULL) AND ((material_movement_document.wbs_element_of_valuated_stock_code)::text = '00000000'::text))"
-                                                                                                        }
-                                                                                                      ]
-                                                                                                    }
-                                                                                                  ]
-                                                                                                }
-                                                                                              ]
-                                                                                            }
-                                                                                          ]
-                                                                                        }
-                                                                                      ]
-                                                                                    }
-                                                                                  ]
-                                                                                }
-                                                                              ]
-                                                                            }
-                                                                          ]
-                                                                        },
-                                                                        {
-                                                                          "Node Type": "Hash",
-                                                                          "Parent Relationship": "Inner",
-                                                                          "Slice": 3,
-                                                                          "Segments": 6,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Startup Cost": 508.35,
-                                                                          "Total Cost": 508.35,
-                                                                          "Plan Rows": 6,
-                                                                          "Plan Width": 23,
-                                                                          "Output": ["settings_and_parameters_sap.abap_program_code", "settings_and_parameters_sap.range_low_value"],
-                                                                          "Plans": [
-                                                                            {
-                                                                              "Node Type": "Seq Scan",
-                                                                              "Parent Relationship": "Outer",
-                                                                              "Slice": 3,
-                                                                              "Segments": 6,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Relation Name": "settings_and_parameters_sap",
-                                                                              "Schema": "dict_dds",
-                                                                              "Alias": "settings_and_parameters_sap",
-                                                                              "Startup Cost": 0.00,
-                                                                              "Total Cost": 508.35,
-                                                                              "Plan Rows": 6,
-                                                                              "Plan Width": 23,
-                                                                              "Output": ["settings_and_parameters_sap.abap_program_code", "settings_and_parameters_sap.range_low_value"],
-                                                                              "Filter": "(((settings_and_parameters_sap.abap_program_code)::text = 'ZMM2968M_BW'::text) AND ((settings_and_parameters_sap.parameter_code)::text = 'Z_MATKL'::text))"
-                                                                            }
-                                                                          ]
-                                                                        }
-                                                                      ]
-                                                                    }
-                                                                  ]
-                                                                },
-                                                                {
-                                                                  "Node Type": "Hash",
-                                                                  "Parent Relationship": "Inner",
-                                                                  "Slice": 3,
-                                                                  "Segments": 6,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Startup Cost": 508.35,
-                                                                  "Total Cost": 508.35,
-                                                                  "Plan Rows": 6,
-                                                                  "Plan Width": 8,
-                                                                  "Output": ["settings_and_parameters_sap_1.range_low_value"],
-                                                                  "Plans": [
-                                                                    {
-                                                                      "Node Type": "Seq Scan",
-                                                                      "Parent Relationship": "Outer",
-                                                                      "Slice": 3,
-                                                                      "Segments": 6,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Relation Name": "settings_and_parameters_sap",
-                                                                      "Schema": "dict_dds",
-                                                                      "Alias": "settings_and_parameters_sap_1",
-                                                                      "Startup Cost": 0.00,
-                                                                      "Total Cost": 508.35,
-                                                                      "Plan Rows": 6,
-                                                                      "Plan Width": 8,
-                                                                      "Output": ["settings_and_parameters_sap_1.range_low_value"],
-                                                                      "Filter": "(((settings_and_parameters_sap_1.abap_program_code)::text = '/RUSAL/CO312K'::text) AND ((settings_and_parameters_sap_1.parameter_code)::text = 'BWRT_ZKP'::text))"
-                                                                    }
-                                                                  ]
-                                                                }
-                                                              ]
-                                                            }
-                                                          ]
-                                                        }
-                                                      ]
-                                                    }
-                                                  ]
-                                                },
-                                                {
-                                                  "Node Type": "Hash",
-                                                  "Parent Relationship": "Inner",
-                                                  "Slice": 4,
-                                                  "Segments": 6,
-                                                  "Gang Type": "primary reader",
-                                                  "Startup Cost": 508.35,
-                                                  "Total Cost": 508.35,
-                                                  "Plan Rows": 6,
-                                                  "Plan Width": 8,
-                                                  "Output": ["settings_and_parameters_sap_2.range_low_value"],
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Seq Scan",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 4,
-                                                      "Segments": 6,
-                                                      "Gang Type": "primary reader",
-                                                      "Relation Name": "settings_and_parameters_sap",
-                                                      "Schema": "dict_dds",
-                                                      "Alias": "settings_and_parameters_sap_2",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 508.35,
-                                                      "Plan Rows": 6,
-                                                      "Plan Width": 8,
-                                                      "Output": ["settings_and_parameters_sap_2.range_low_value"],
-                                                      "Filter": "(((settings_and_parameters_sap_2.abap_program_code)::text = '/RUSAL/CO706M'::text) AND ((settings_and_parameters_sap_2.parameter_code)::text = 'AUART_BU'::text))"
-                                                    }
-                                                  ]
-                                                }
-                                              ]
-                                            },
-                                            {
-                                              "Node Type": "Hash",
-                                              "Parent Relationship": "Inner",
-                                              "Slice": 4,
-                                              "Segments": 6,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 508.35,
-                                              "Total Cost": 508.35,
-                                              "Plan Rows": 6,
-                                              "Plan Width": 8,
-                                              "Output": ["settings_and_parameters_sap_3.range_low_value"],
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 4,
-                                                  "Segments": 6,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "settings_and_parameters_sap",
-                                                  "Schema": "dict_dds",
-                                                  "Alias": "settings_and_parameters_sap_3",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 508.35,
-                                                  "Plan Rows": 6,
-                                                  "Plan Width": 8,
-                                                  "Output": ["settings_and_parameters_sap_3.range_low_value"],
-                                                  "Filter": "(((settings_and_parameters_sap_3.abap_program_code)::text = '/RUSAL/CO706M'::text) AND ((settings_and_parameters_sap_3.parameter_code)::text = 'AUTYP_BU'::text))"
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
+-- ===========================
+-- 2) Параметры — микротаблицы (чтобы не строить большие hash join)
+-- ===========================
+CREATE TEMP TABLE params_z_matkl AS
+SELECT range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = 'ZMM2968M_BW'
+  AND parameter_code    = 'Z_MATKL'
+DISTRIBUTED RANDOMLY;
+
+CREATE TEMP TABLE params_bwrt AS
+SELECT range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/CO312K'
+  AND parameter_code    = 'BWRT_ZKP'
+DISTRIBUTED RANDOMLY;
+
+CREATE TEMP TABLE params_auart AS
+SELECT range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/CO706M'
+  AND parameter_code    = 'AUART_BU'
+DISTRIBUTED RANDOMLY;
+
+CREATE TEMP TABLE params_autyp AS
+SELECT range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/CO706M'
+  AND parameter_code    = 'AUTYP_BU'
+DISTRIBUTED RANDOMLY;
+
+ANALYZE params_z_matkl;
+ANALYZE params_bwrt;
+ANALYZE params_auart;
+ANALYZE params_autyp;
+
+-- ===========================
+-- 3) База движений (mg_base) — только нужные колонки + правильное DISTRIBUTED BY
+--    Ключи под дальнейшие join: (plant_code, material_code)
+-- ===========================
+CREATE TEMP TABLE mg_base
+WITH (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+DISTRIBUTED BY (plant_code, material_code)
+AS
+SELECT
+    date_trunc('month', mg.dt_posting)  AS mon,
+    mg.plant_code,
+    mg.material_code,
+    mg.uom_code,
+    mg.debit_or_credit_code,
+    mg.quantity,
+    mg.operation_type_code,
+    mg.receipt_type_code,
+    mg.movement_type_code,
+    mg.order_code
+FROM dds.material_movement_document mg
+WHERE mg.posting_rule_code IS NOT NULL
+  AND mg.sales_document_number_of_valuated_stock_code IS NULL
+  AND mg.wbs_element_of_valuated_stock_code = '00000000';
+
+ANALYZE mg_base;
+
+-- ===========================
+-- 4) Итоговая таблица суммы (TEMP) — как в исходнике, но без двойной агрегации
+-- ===========================
+CREATE TEMPORARY TABLE pt1_material_sum (
+    spmon    varchar,
+    werks    varchar,
+    matnr    varchar,
+    MENGE11  numeric(28,10),
+    MENGE22  numeric(28,10),
+    meins    varchar,
+    ekgrp    varchar,
+    dispo    varchar
+)
+WITH (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+DISTRIBUTED RANDOMLY;
+
+INSERT INTO pt1_material_sum
+SELECT
+    to_char(b.mon, 'YYYY-MM')                 AS spmon,
+    b.plant_code                              AS werks,
+    b.material_code                           AS matnr,
+    SUM(CASE
+            WHEN b.debit_or_credit_code = 'H' THEN b.quantity * -1
+            ELSE b.quantity
+        END)                                  AS MENGE11,
+    SUM(CASE
+            WHEN b.order_code IS NOT NULL
+                 AND NOT EXISTS (SELECT 1 FROM params_autyp t WHERE t.range_low_value = ou.order_category_code)
+                 AND EXISTS     (SELECT 1 FROM params_auart a WHERE a.range_low_value = ou.order_type_code)
+              THEN 0
+            WHEN b.debit_or_credit_code = 'H'
+                 AND b.operation_type_code = 'WE'
+                 AND b.receipt_type_code IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM params_bwrt x WHERE x.range_low_value = b.movement_type_code)
+              THEN b.quantity * -1
+            WHEN b.debit_or_credit_code <> 'H'
+                 AND b.operation_type_code = 'WE'
+                 AND b.receipt_type_code IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM params_bwrt x WHERE x.range_low_value = b.movement_type_code)
+              THEN b.quantity
+            ELSE 0
+        END)                                  AS MENGE22,
+    b.uom_code                                AS meins,
+    mbypl.purchase_group_code                 AS ekgrp,
+    mbypl.material_planning_controller_code   AS dispo
+FROM mg_base b
+JOIN dict_dds.material_by_plant mbypl
+  ON mbypl.material_code = b.material_code
+ AND mbypl.plant_code    = b.plant_code
+JOIN dict_dds.material ma
+  ON ma.material_code = mbypl.material_code
+LEFT JOIN order_union ou
+  ON ou.order_code = b.order_code
+LEFT JOIN params_z_matkl pm
+  ON pm.range_low_value = ma.material_group_code
+WHERE pm.range_low_value IS NULL      -- эквивалентно вашему фильтру param_m.abap_program_code IS NULL
+GROUP BY
+    b.mon,
+    b.plant_code,
+    b.material_code,
+    b.uom_code,
+    mbypl.purchase_group_code,
+    mbypl.material_planning_controller_code
+;
+
+ANALYZE pt1_material_sum;
+
+-- ===========================
+-- ПОСМОТРЕТЬ РЕЗУЛЬТАТ
+-- ===========================
+-- SELECT * FROM pt1_material_sum LIMIT 100;

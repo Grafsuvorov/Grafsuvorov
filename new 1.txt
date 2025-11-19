@@ -1,265 +1,160 @@
-dq.registry — справочник проверок
+отлично, сведу всё в три таблицы — как ты попросил:
 
-check_id — уникальный ID проверки (dq_sd_0001). Используется в логах, алёртах и дашборде.
+Справочник проверок (где хранится сама проверка, её владелец и пороги).
 
-name — человекочитаемое имя проверки.
+Короткая сводка (по каждому запуску и проверке — агрегаты, статус).
 
-description — подробности логики/цели.
+Детальная (строки-нарушения с гибким payload_json).
 
-category — тип проверки: technical / business / freshness / др.
+Ниже — компактные DDL под Greenplum + пояснения каждого поля и примеры.
 
-severity — критичность нарушения: P1 (критично)…P4 (минор).
-
-owner_team — владелец проверки (домен/команда).
-
-owner_person — ответственный человек.
-
-dataset — логическое имя набора данных (финансы/сбыт и т.п.).
-
-schema_name — схема источника, где живут данные, которые проверяем.
-
-table_name — таблица источника, которую проверяем.
-
-partition_key — имя/смысловой ключ партиции, если проверка по срезам (например, dt, period_yyyymm). Это не значение, а «какой партиционный атрибут используется».
-
-threshold_type — тип порога:
-
-abs — абсолютное число ошибок (например, 0)
-
-pct — доля ошибок (например, 0.01 = 1%)
-
-dynamic — динамический порог (например, «медиана ±10%»)
-
-threshold_value — само пороговое значение (в абс. или в долях), если актуально.
-
-schedule — расписание запуска (cron/rrule/описание).
-
-enabled — включена ли проверка.
-
-source_yaml_path — путь к YAML-спецификации проверки (если используете spec-driven генерацию).
-
-created_at / updated_at — служебные метки времени.
-
-dq.detail — «ошибочные строки» (детали)
-
-run_date — дата запуска проверки (для партиционирования).
-
-run_id — идентификатор конкретного прогона (для идемпотентности и трассировки).
-
-check_id — какая именно проверка сработала (ссылка на registry).
-
-schema_name / table_name — где нашли нарушение.
-
-row_key — ключ нарушителя: бизнес-ключ строки (или стабильный хэш ключевых полей), чтобы можно было отследить «ту же» проблему во времени.
-
-error_code — тип/класс нарушения (например, UNIQUENESS_VIOLATION, NULL_REQUIRED, REF_MISS, RANGE_OUT и т.п.).
-
-error_msg — короткое человеческое описание проблемы (что именно не так).
-
-payload_json — гибкие детали для починки: проблемное поле, фактическое/ожидаемое значение, контекст (любая полезная информация).
-
-severity — копия критичности на момент запуска (удобно для фильтров без джойна c registry).
-
-partition_key — значение среза данных, к которому относится нарушение (например, '2025-11-18' или '2025-10'). В отличие от одноимённого поля в registry, здесь уже значение, а не имя атрибута.
-
-data_version — см. ниже (ключевая идея — идентификатор версии/снапшота данных, по которому однозначно понимаем, на каком состоянии источника выполнялась проверка).
-
-found_at — когда нарушение зафиксировано (вставлено в лог).
-
-dq.overview — краткая сводка (агрегаты)
-
-run_date — дата запуска (партиция).
-
-run_id — идентификатор прогона.
-
-check_id — проверка.
-
-run_started_at / run_ended_at — тайминги выполнения проверки.
-
-status — итог статуса проверки: pass / warn / fail / error
-(обычно рассчитывается из rows_failed и порога из registry).
-
-dataset / schema_name / table_name — контекст источника.
-
-partition_key — значение проверяемого среза (как и в detail).
-
-data_version — идентификатор версии данных, на которых считалась проверка.
-
-rows_tested — сколько строк/единиц проверено.
-
-rows_failed — сколько нарушений найдено (или сколько уникальных ключей-нарушителей).
-
-fail_pct — доля нарушений (rows_failed / rows_tested, если применимо).
-
-coverage_pct — доля охваченных проверкой данных (если измеряется).
-
-freshness_sec — отставание/свежесть (для проверок свежести).
-
-severity — критичность, полезно для дашборда/срезов.
-
-message — пояснение, почему warn/fail (например, «превышен порог в 1%»).
-
-executor — кто выполнял (DAG/Task/инстанс).
-
-Что такое data_version и зачем оно
-
-data_version — это идентификатор состояния исходных данных, на которых выполнялась проверка.
-Нужно, чтобы:
-
-отличать результаты, посчитанные на разных «срезах»/батчах/снапшотах;
-
-уметь точно воспроизвести/сопоставить запуски;
-
-связывать лог DQ и загрузочные пайплайны (какой batch/commit/SCN породил такое состояние).
-
-Что использовать в качестве data_version (примеры)
-
-Выбирай то, что реально отражает смену содержимого источника у тебя в пайплайне:
-
-Дата/время загрузки: max(dt_load) или to_char(max(inserted_dttm), 'YYYY-MM-DD HH24:MI:SS').
-
-Batch ID / Job ID: если лоадер проставляет batch_id — это лучший кандидат.
-
-Снапшот/Tag: имя снапшота в S3 (s3://…/manifest_2025-11-18T02:00Z.json), версию parquet-манифеста.
-
-Oracle SCN / Log Sequence: «номер» консистентного чтения из источника.
-
-Git commit (редко, но подходит для полностью воспроизводимых генераций).
-
-Хэш данных: агрегатный контрольный хэш по набору (дороже, но честно).
-
-Важно: partition_key отвечает на вопрос «какой период/срез мы проверяли»,
-а data_version — «какая именно версия исходных данных за этот период лежала в системе во время проверки».
-
-Примеры значений
-
-'batch_2025-11-18T03:15:20Z'
-
-'oracle_scn_1234567890'
-
-'s3_manifest_2025-11-18T02:00Z'
-
-'gp_load_2025-11-18_02:10:05'
-
-
-Почему не всё «колоночное»
-
-В Greenplum есть два основных формата AO (Append-Optimized):
-
-AO Column: хорошо для «долго лежит, много читаем агрегациями». Идеально для dq.detail и dq.overview.
-
-AO Row (или обычные HEAP): лучше, когда часто обновляешь строки (частые UPDATE, «тикет повесили → статус поменяли»). Это про будущую dq.issue.
-
-Поэтому:
-
-registry — маленькая справочная → REPLICATED HEAP (или AO row) — быстро джоинится везде.
-
-detail/overview — AO Column + zstd (дёшево хранить, быстро агрегировать). Там в основном INSERT и SELECT, почти нет UPDATE.
-
-Как «раскидать» данные по сегментам (DISTRIBUTED)
-
-registry — REPLICATED (малая, нужна везде без шеффлов).
-
-detail — DISTRIBUTED BY (check_id, row_key):
-хорошо ложится под «карточку проверки» и «историю строки».
-
-overview — DISTRIBUTED BY (run_date):
-обычно читаешь по дате/диапазону дат для дашборда.
-
-Партиционирование и чистка
-
-Делай PARTITION BY RANGE (run_date) (день/месяц).
-
-Ретеншн: detail — 30 дней, overview — 180 дней.
-
-Ежедневно дропай старые партиции — это моментально и не фрагментирует.
-
-Готовые DDL (GP)
-1) Справочник проверок
+1) dq.registry — справочник проверок
 CREATE SCHEMA IF NOT EXISTS dq;
 
--- маленькая и общая: реплицируем
+-- маленькая и часто джоинится → REPLICATED
 CREATE TABLE dq.registry (
-  check_id         text PRIMARY KEY,          -- 'dq_sd_0001'
-  name             text NOT NULL,
-  description      text,
-  category         text NOT NULL,             -- technical|business|freshness|...
-  severity         text NOT NULL,             -- P1|P2|P3|P4
-  owner_team       text,
-  owner_person     text,
-  dataset          text,
-  schema_name      text NOT NULL,
-  table_name       text NOT NULL,
-  partition_key    text,                      -- если проверка по партициям
-  threshold_type   text,                      -- abs|pct|dynamic
-  threshold_value  numeric,                   -- например 0 (=нет ошибок)
-  schedule         text,
-  enabled          boolean DEFAULT true,
-  source_yaml_path text,
+  check_id         text PRIMARY KEY,      -- 'dq_sd_0001'
+  name             text NOT NULL,         -- краткое имя проверки
+  description      text,                  -- подробности логики
+  category         text NOT NULL,         -- 'technical' | 'business' | 'freshness' | ...
+  severity         text NOT NULL,         -- 'P1'..'P4'
+  owner_team       text,                  -- команда-владелец
+  owner_person     text,                  -- ответственный
+  dataset          text,                  -- логическое направление (финансы/сбыт/…)
+  schema_name      text NOT NULL,         -- где проверяем (схема)
+  table_name       text NOT NULL,         -- где проверяем (таблица)
+
+  -- Порог/критерий срабатывания сводного статуса
+  threshold_type   text,                  -- 'abs' | 'pct' | 'dynamic'
+  threshold_value  numeric,               -- напр. 0 (=нет ошибок) или 0.01 (=1%)
+  warn_threshold   numeric,               -- опционально: порог для WARN (например 0.001)
+
+  -- Как мы режем данные и когда проверяем
+  partition_attr   text,                  -- название партиционного признака в источнике (например 'dt' или 'yyyymm')
+  schedule         text,                  -- cron/rrule/описание расписания
+  enabled          boolean DEFAULT true,  -- включена ли проверка
+
+  -- Источник спецификации/генерации
+  source_yaml_path text,                  -- путь к YAML (если spec-driven)
+
   created_at       timestamp DEFAULT now(),
   updated_at       timestamp DEFAULT now()
 )
 DISTRIBUTED REPLICATED;
 
-2) Детальная (универсальная) — колоночная, помесячные партиции
--- базовая таблица с колоночным хранением
-CREATE TABLE dq.detail_base (
-  run_date      date NOT NULL,                -- ключ партиции (дата запуска)
-  run_id        text NOT NULL,                -- id прогона
-  check_id      text NOT NULL,
-  schema_name   text NOT NULL,
-  table_name    text NOT NULL,
-  row_key       text NOT NULL,                -- бизнес-ключ/хэш
-  error_code    text NOT NULL,
-  error_msg     text,
-  payload_json  jsonb,
-  severity      text,
-  partition_key text,                         -- логический срез данных (если есть)
-  data_version  text,
-  found_at      timestamp DEFAULT now()
-)
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (check_id, row_key);
+Что означает каждое поле (коротко)
 
--- партиционированная «обёртка»
-CREATE TABLE dq.detail
-  (LIKE dq.detail_base INCLUDING DEFAULTS INCLUDING INDEXES)
-PARTITION BY RANGE (run_date);
+check_id — уникальный ID проверки, основной ключ в отчётности/алёртах.
 
--- пример: создать партиции на 3 месяца вперёд/назад
-CREATE TABLE dq.detail_y2025m11 PARTITION OF dq.detail
-  FOR VALUES FROM ('2025-11-01') TO ('2025-12-01')
-  (LIKE dq.detail_base INCLUDING DEFAULTS INCLUDING INDEXES);
+name/description — человекочитаемое название/описание.
 
--- дальше по месяцу: dq.detail_y2025m12, dq.detail_y2026m01, ...
+category — тип проверки (техническая, бизнесовая, свежесть и т.д.).
 
--- индексы на логические фильтры
-CREATE INDEX ON dq.detail (run_id);
-CREATE INDEX ON dq.detail (check_id, found_at);
-CREATE INDEX ON dq.detail (schema_name, table_name);
-CREATE INDEX ON dq.detail (check_id, row_key);
+severity — критичность нарушения (влияет на приоритизацию).
 
-3) Краткая сводка — колоночная, помесячные партиции
-CREATE TABLE dq.overview_base (
-  run_date       date NOT NULL,
-  run_id         text NOT NULL,
+owner_team/owner_person — кому писать, кто чинит.
+
+dataset/schema_name/table_name — объект проверки.
+
+threshold_type/value — как оценивать результат (абсолют/доля/динамика).
+
+warn_threshold — «жёлтый» уровень (необязательно).
+
+partition_attr — имя партиционного признака (например, «проверяем помесячно по yyyymm»).
+
+schedule — когда гоняем.
+
+enabled — можно массово отключить проверку.
+
+source_yaml_path — если генерируешь SQL из YAML.
+
+2) dq.summary — короткая сводка (агрегаты + статус)
+-- много читаем агрегатами → AO Column
+CREATE TABLE dq.summary_base (
+  run_date       date NOT NULL,           -- дата запуска (партиция)
+  run_id         text NOT NULL,           -- id прогона (для трассировки/идемпотентности)
   check_id       text NOT NULL,
+
   run_started_at timestamp,
   run_ended_at   timestamp,
-  status         text,                       -- pass|warn|fail|error
+
+  status         text,                    -- 'pass' | 'warn' | 'fail' | 'error'
+  message        text,                    -- пояснение, почему warn/fail
+
   dataset        text,
   schema_name    text,
   table_name     text,
-  partition_key  text,
-  data_version   text,
+
+  partition_key  text,                    -- значение среза (напр. '2025-10' или '2025-11-19')
+  data_version   text,                    -- версия/снапшот данных (batch_id/SCN/manifest)
+
   rows_tested    bigint,
   rows_failed    bigint,
   fail_pct       numeric,
-  coverage_pct   numeric,
-  freshness_sec  bigint,
-  severity       text,
-  message        text,
-  executor       text
+
+  coverage_pct   numeric,                 -- если считаем охват
+  freshness_sec  bigint,                  -- если проверка на свежесть
+
+  severity       text,                    -- дубль из registry на момент запуска
+  executor       text                     -- DAG/таска/инстанс
 )
 WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
 DISTRIBUTED BY (run_date);
+
+CREATE TABLE dq.summary
+  (LIKE dq.summary_base INCLUDING DEFAULTS INCLUDING INDEXES)
+PARTITION BY RANGE (run_date);
+
+-- Пример партиции на месяц:
+CREATE TABLE dq.summary_y2025m11 PARTITION OF dq.summary
+  FOR VALUES FROM ('2025-11-01') TO ('2025-12-01')
+  (LIKE dq.summary_base INCLUDING DEFAULTS INCLUDING INDEXES);
+
+CREATE INDEX ON dq.summary (check_id, run_date);
+CREATE INDEX ON dq.summary (status);
+
+Поля (по смыслу)
+
+run_date/run_id — когда и какой прогон.
+
+check_id — какая проверка.
+
+status/message — итог и краткое пояснение по порогам.
+
+dataset/schema_name/table_name — контекст.
+
+partition_key — значение контролируемого среза (в отличие от partition_attr в справочнике, которое — имя атрибута).
+
+data_version — идентификатор версии данных (batch_id/SCN/manifest…), чтобы воспроизводить запуск.
+
+rows_tested/rows_failed/fail_pct — метрики.
+
+coverage_pct/freshness_sec — по желанию.
+
+severity — для фильтрации без лишних JOIN.
+
+executor — кто выполнял.
+
+3) dq.detail — детальная (строки-нарушения с JSON)
+CREATE TABLE dq.detail_base (
+  run_date      date NOT NULL,            -- дата запуска (партиция)
+  run_id        text NOT NULL,            -- id прогона
+  check_id      text NOT NULL,
+
+  schema_name   text NOT NULL,
+  table_name    text NOT NULL,
+
+  row_key       text NOT NULL,            -- бизнес-ключ нарушителя или стабильный хэш набора полей
+  error_code    text NOT NULL,            -- тип нарушения (NULL_REQUIRED/UNIQUENESS/... )
+  error_msg     text,                     -- коротко «что не так»
+
+  payload_json  jsonb,                    -- гибкие детали (см. примеры ниже)
+
+  severity      text,                     -- копия критичности на момент запуска
+  partition_key text,                     -- значение среза (период/дата и т.п.)
+  data_version  text,                     -- версия/снапшот данных
+
+  found_at      timestamp DEFAULT now()   -- когда зафиксировали нарушение
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (check_id, row_key);

@@ -1,160 +1,172 @@
-отлично, сведу всё в три таблицы — как ты попросил:
+Окей, давай сделаем это удобно и небюрократично. Ниже — минимальный, но рабочий процесс: как трекать время инженеров, понимать «где утекает», и как правильно списывать.
 
-Справочник проверок (где хранится сама проверка, её владелец и пороги).
+1) Структура задач (как заводить и вести)
 
-Короткая сводка (по каждому запуску и проверке — агрегаты, статус).
+Типы задач
 
-Детальная (строки-нарушения с гибким payload_json).
+Feature/Встраивание прототипа (от аналитика)
 
-Ниже — компактные DDL под Greenplum + пояснения каждого поля и примеры.
+Optimization/Техдолг (инициатива инженеров: ускорение витрин/пайплайна)
 
-1) dq.registry — справочник проверок
-CREATE SCHEMA IF NOT EXISTS dq;
+Framework/Инфра (развитие фреймворка, мониторинг, DQ)
 
--- маленькая и часто джоинится → REPLICATED
-CREATE TABLE dq.registry (
-  check_id         text PRIMARY KEY,      -- 'dq_sd_0001'
-  name             text NOT NULL,         -- краткое имя проверки
-  description      text,                  -- подробности логики
-  category         text NOT NULL,         -- 'technical' | 'business' | 'freshness' | ...
-  severity         text NOT NULL,         -- 'P1'..'P4'
-  owner_team       text,                  -- команда-владелец
-  owner_person     text,                  -- ответственный
-  dataset          text,                  -- логическое направление (финансы/сбыт/…)
-  schema_name      text NOT NULL,         -- где проверяем (схема)
-  table_name       text NOT NULL,         -- где проверяем (таблица)
+Incident/Баг (падения, срочные фиксы)
 
-  -- Порог/критерий срабатывания сводного статуса
-  threshold_type   text,                  -- 'abs' | 'pct' | 'dynamic'
-  threshold_value  numeric,               -- напр. 0 (=нет ошибок) или 0.01 (=1%)
-  warn_threshold   numeric,               -- опционально: порог для WARN (например 0.001)
+Единый шаблон задачи
 
-  -- Как мы режем данные и когда проверяем
-  partition_attr   text,                  -- название партиционного признака в источнике (например 'dt' или 'yyyymm')
-  schedule         text,                  -- cron/rrule/описание расписания
-  enabled          boolean DEFAULT true,  -- включена ли проверка
+Summary: что меняем и зачем (1–2 строки).
 
-  -- Источник спецификации/генерации
-  source_yaml_path text,                  -- путь к YAML (если spec-driven)
+Acceptance/DOD (чек-лист):
 
-  created_at       timestamp DEFAULT now(),
-  updated_at       timestamp DEFAULT now()
-)
-DISTRIBUTED REPLICATED;
+SQL/ETL обновлён, тесты пройдены
 
-Что означает каждое поле (коротко)
+DAG/раскатка ок
 
-check_id — уникальный ID проверки, основной ключ в отчётности/алёртах.
+Прописаны DQ/мониторинг (если нужно)
 
-name/description — человекочитаемое название/описание.
+PR в main
 
-category — тип проверки (техническая, бизнесовая, свежесть и т.д.).
+Замер до/после (для оптимизаций)
 
-severity — критичность нарушения (влияет на приоритизацию).
+Ссылки: PR, коммиты, DAG/задачи Airflow, YAML таблицы.
 
-owner_team/owner_person — кому писать, кто чинит.
+Поля: Domain (финансы/сбыт/MR), Task Type, Effort Band (S/M/L/XL), Due/SLA, Risk (низкий/средний/высокий).
 
-dataset/schema_name/table_name — объект проверки.
+2) Оценка и «сколько времени должно уходить»
 
-threshold_type/value — как оценивать результат (абсолют/доля/динамика).
+Effort Bands (оценка при создании)
 
-warn_threshold — «жёлтый» уровень (необязательно).
+S: 1–4 ч (мелкий фикс, sql-правка без схемы)
 
-partition_attr — имя партиционного признака (например, «проверяем помесячно по yyyymm»).
+M: 4–16 ч (новый шаг ETL/правка схемы, тесты)
 
-schedule — когда гоняем.
+L: 1–3 дня (сложная оптимизация/перенос через S3)
 
-enabled — можно массово отключить проверку.
+XL: >3 дней (новая витрина/крупный рефакторинг)
 
-source_yaml_path — если генерируешь SQL из YAML.
+Цели по времени
+У каждой категории держим цель (для сравнения факта):
 
-2) dq.summary — короткая сводка (агрегаты + статус)
--- много читаем агрегатами → AO Column
-CREATE TABLE dq.summary_base (
-  run_date       date NOT NULL,           -- дата запуска (партиция)
-  run_id         text NOT NULL,           -- id прогона (для трассировки/идемпотентности)
-  check_id       text NOT NULL,
+Feature (M): 8–16 ч
 
-  run_started_at timestamp,
-  run_ended_at   timestamp,
+Optimization (L): 12–24 ч + обязательно «до/после» (секунд/минут)
 
-  status         text,                    -- 'pass' | 'warn' | 'fail' | 'error'
-  message        text,                    -- пояснение, почему warn/fail
+Framework (M/L): 8–24 ч
 
-  dataset        text,
-  schema_name    text,
-  table_name     text,
+Incident (S/M): 1–8 ч
 
-  partition_key  text,                    -- значение среза (напр. '2025-10' или '2025-11-19')
-  data_version   text,                    -- версия/снапшот данных (batch_id/SCN/manifest)
+Метрика перезатраты
 
-  rows_tested    bigint,
-  rows_failed    bigint,
-  fail_pct       numeric,
+Overrun Ratio = Spent / Estimate
 
-  coverage_pct   numeric,                 -- если считаем охват
-  freshness_sec  bigint,                  -- если проверка на свежесть
+норма: 0.7–1.3; >1.5 — повод разбирать причины
 
-  severity       text,                    -- дубль из registry на момент запуска
-  executor       text                     -- DAG/таска/инстанс
-)
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (run_date);
+3) Правила списания времени (минимум боли)
 
-CREATE TABLE dq.summary
-  (LIKE dq.summary_base INCLUDING DEFAULTS INCLUDING INDEXES)
-PARTITION BY RANGE (run_date);
+Ежедневно до конца дня — краткие записи (Work items).
 
--- Пример партиции на месяц:
-CREATE TABLE dq.summary_y2025m11 PARTITION OF dq.summary
-  FOR VALUES FROM ('2025-11-01') TO ('2025-12-01')
-  (LIKE dq.summary_base INCLUDING DEFAULTS INCLUDING INDEXES);
+Гранулярность: 15–30 минут, без дробления до минут.
 
-CREATE INDEX ON dq.summary (check_id, run_date);
-CREATE INDEX ON dq.summary (status);
+Категория времени:
 
-Поля (по смыслу)
+Analysis/Investigation
 
-run_date/run_id — когда и какой прогон.
+Build/Coding
 
-check_id — какая проверка.
+Review/Testing
 
-status/message — итог и краткое пояснение по порогам.
+Release/Rollout
 
-dataset/schema_name/table_name — контекст.
+Ops/Incident
 
-partition_key — значение контролируемого среза (в отличие от partition_attr в справочнике, которое — имя атрибута).
+Комментарий к записи (1–2 строки): что делали и результат («переписал join, план -30% cost»).
 
-data_version — идентификатор версии данных (batch_id/SCN/manifest…), чтобы воспроизводить запуск.
+Контекст-свитч: если прыгали между задачами — 2–3 короткие записи, не одну «общую».
 
-rows_tested/rows_failed/fail_pct — метрики.
+Не списывать «в никуда»: всё время — только на конкретные задачи. Для мелочи — заведите «Tech Chores (weekly)» с чек-листом.
 
-coverage_pct/freshness_sec — по желанию.
+4) Как понять «много времени списывает»
 
-severity — для фильтрации без лишних JOIN.
+Дашборды (фильтры/отчёты)
 
-executor — кто выполнял.
+По инженеру / по неделе: фактические часы по Task Type и Domain.
 
-3) dq.detail — детальная (строки-нарушения с JSON)
-CREATE TABLE dq.detail_base (
-  run_date      date NOT NULL,            -- дата запуска (партиция)
-  run_id        text NOT NULL,            -- id прогона
-  check_id      text NOT NULL,
+Overrun Top-10: задачи с Overrun Ratio >1.5.
 
-  schema_name   text NOT NULL,
-  table_name    text NOT NULL,
+Cycle Time: от «В работе» до «Готово» (медиана/перцентиль по типам).
 
-  row_key       text NOT NULL,            -- бизнес-ключ нарушителя или стабильный хэш набора полей
-  error_code    text NOT NULL,            -- тип нарушения (NULL_REQUIRED/UNIQUENESS/... )
-  error_msg     text,                     -- коротко «что не так»
+Optimization ROI: до/после по времени выполнения витрины (секунд) и экономия CPU/IO.
 
-  payload_json  jsonb,                    -- гибкие детали (см. примеры ниже)
+Незавершённые > X дней: висяки по каждому инженеру.
 
-  severity      text,                     -- копия критичности на момент запуска
-  partition_key text,                     -- значение среза (период/дата и т.п.)
-  data_version  text,                     -- версия/снапшот данных
+Причины перерасхода (обязательно отмечать в задаче)
 
-  found_at      timestamp DEFAULT now()   -- когда зафиксировали нарушение
-)
-WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
-DISTRIBUTED BY (check_id, row_key);
+Blocked by data (нет источников/доступов)
+
+Ambiguous requirements (неясная постановка)
+
+Infra/Env issues (кластер/pxf/сеть)
+
+Hidden complexity (неочевидные зависимости)
+
+Scope creep (расширение объёма)
+
+Один чекбокс в задаче — и в отчёте видно, что «едят» время.
+
+5) Поток работ (твоя модель распределения)
+
+Аналитик создаёт Feature → назначает на тебя.
+
+Ты: проставляешь Effort Band, проверяешь DOD, назначаешь инженеру.
+
+Инженер: ведёт чек-лист, коммиты → PR → раскатка.
+
+Оптимизации (инициатива инженеров): отдельные задачи типа Optimization с измерением «до/после».
+
+Review & Close: ты/ревьювер закрывает, фиксируется Overrun, причина (если есть), метрика результата.
+
+6) Интеграции, чтобы не руками
+
+Git ↔ Задача: в коммит-месседже PROJ-123: short msg → авто-линк.
+
+PR статус в задаче (автомат): Open / Approved / Merged.
+
+Airflow: линк до DAG run; метаданные раскатки в комментарий.
+
+Автозаполнение summary метрик (скриптом): rows/time before/after для оптимизаций.
+
+7) Минимальный набор отчётов (YouTrack/Jira — без фанатизма)
+
+Team Heatmap (неделя): инженер × тип задачи → часы.
+
+Overrun & Causes: список перетрат >1.5 с причинами.
+
+Value Board (оптимизации): карта «что ускорили» (таблица/витрина, время до/после, %).
+
+WIP & Aging: сколько задач «в работе» и сколько «висят».
+
+Capacity Plan: запланировано часов vs доступная ёмкость на неделю.
+
+8) Правила, которые всё держат в тонусе
+
+Оценка в задаче обязательна (Effort Band).
+
+Время — ежедневно (иначе быстро теряется контекст).
+
+Каждая оптимизация = замер до/после.
+
+Причина перерасхода обязательна при Overrun >1.5.
+
+Не держим «вечные» задачи: всё, что >3 дней без движения, — эскалация и перепланирование.
+
+Что ты получишь
+
+Прозрачность: кто над чем, сколько и с каким результатом.
+
+Сравнимость: задачи разных размеров через Effort Bands.
+
+Факты для директора: не только часы, но и ценность (ускорили витрину N с 14 до 4 мин, −71%).
+
+Основание на «ещё ставки»: перегруз по Capacity, рост очереди, высокий % вынужденных переработок, стабильные перерасходы из-за «Blocked by data/Infra» — это объективные метрики.
+
+Если хочешь — пришлю краткие шаблоны: чек-лист DOD, шаблон комментария к списанию, и SQL/формулы для отчётов (Overrun, Cycle Time, ROI по оптимизациям) под вашу систему.

@@ -1,28 +1,288 @@
-table_name: account_debt
-table_schema: dm
-table_id: 3119
-source_id: 15
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 36
-entity_name: BI_FI
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_truncate.sql
-depends_on:
-  dm_calc:
-    - operating_periods_for_account_debt
-  dm:
-    - account_debt_for_working_capital
+# etl_dep_monitor_min.py
+# pip install pyyaml psycopg2-binary
+import os, sys, argparse, datetime as dt, csv
+from typing import Dict, Tuple, Set, List, Optional
+import yaml, psycopg2
+
+Node = Tuple[str, str]  # (schema, table)
+
+def scan_yaml_files(base_dir: str) -> List[str]:
+    files = []
+    for root, _, fs in os.walk(base_dir):
+        for f in fs:
+            if f.lower().endswith((".yaml", ".yml")):
+                files.append(os.path.join(root, f))
+    return files
+
+def _s(x) -> Optional[str]:
+    if x is None: return None
+    x = str(x).strip()
+    return x or None
+
+def parse_yaml(path: str) -> Tuple[Optional[Node], Set[Node]]:
+    """
+    Ждём в YAML:
+      table_schema: dm
+      table_name: account_debt
+      depends_on:
+        dm_calc:
+          - operating_periods_for_account_debt
+        dm:
+          - account_debt_for_working_capital
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+    except Exception as e:
+        print(f"[WARN] YAML parse failed {path}: {e}", file=sys.stderr)
+        return None, set()
+
+    if not isinstance(doc, dict):
+        return None, set()
+
+    schema = _s(doc.get("table_schema"))
+    table  = _s(doc.get("table_name"))
+    tgt = (schema, table) if (schema and table) else None
+
+    deps = set()
+    dep_map = doc.get("depends_on")
+    if isinstance(dep_map, dict):
+        for dep_schema, names in dep_map.items():
+            dep_schema_s = _s(dep_schema)
+            if not dep_schema_s: 
+                continue
+            if isinstance(names, list):
+                for n in names:
+                    n_s = _s(n)
+                    if n_s: deps.add((dep_schema_s, n_s))
+            elif isinstance(names, str):
+                n_s = _s(names)
+                if n_s: deps.add((dep_schema_s, n_s))
+            elif isinstance(names, dict):
+                for maybe_schema, lst in names.items():
+                    ms = _s(maybe_schema)
+                    if isinstance(lst, list):
+                        for n in lst:
+                            n_s = _s(n)
+                            if ms and n_s: deps.add((ms, n_s))
+    return tgt, deps
+
+def build_graph(yaml_dir: str):
+    """Возвращает: graph (dict[target] = set(deps)), edges (со списком source_path)."""
+    graph: Dict[Node, Set[Node]] = {}
+    edges: List[dict] = []
+    for p in scan_yaml_files(yaml_dir):
+        tgt, deps = parse_yaml(p)
+        if not tgt: 
+            continue
+        graph.setdefault(tgt, set()).update(deps)
+        for d in deps:
+            edges.append({
+                "tgt_schema": tgt[0], "tgt_table": tgt[1],
+                "dep_schema": d[0],   "dep_table": d[1],
+                "source_path": p
+            })
+    return graph, edges
+
+def load_last_load(conn) -> Dict[Node, Optional[dt.datetime]]:
+    sql = "select table_schema, table_name, last_load from tech_etl.tables_meta"
+    out = {}
+    with conn.cursor() as cur:
+        cur.execute(sql)
+        for s, t, ll in cur.fetchall():
+            out[(str(s).strip(), str(t).strip())] = ll
+    return out
+
+def find_cycles(graph: Dict[Node, Set[Node]]) -> List[List[Node]]:
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color, parent = {}, {}
+    cycles = []
+    for n in graph.keys():
+        color[n] = WHITE
+        parent[n] = None
+    def dfs(u):
+        color[u] = GRAY
+        for v in graph.get(u, set()):
+            if v not in color:
+                color[v] = WHITE; parent[v] = None; graph.setdefault(v, set())
+            if color[v] == WHITE:
+                parent[v] = u; dfs(v)
+            elif color[v] == GRAY:
+                cyc = [v]; cur = u
+                while cur != v and cur is not None:
+                    cyc.append(cur); cur = parent.get(cur)
+                cyc.reverse()
+                if cyc and cyc not in cycles: cycles.append(cyc)
+        color[u] = BLACK
+    for n in list(graph.keys()):
+        if color.get(n, WHITE) == WHITE: dfs(n)
+    return cycles
+
+def compute_freshness(graph, last_load):
+    rows = []
+    for tgt, srcs in graph.items():
+        tgt_ll = last_load.get(tgt)
+        max_src = None
+        for s in srcs:
+            ll = last_load.get(s)
+            if ll is not None and (max_src is None or ll > max_src):
+                max_src = ll
+        if max_src is None:
+            status = "NO_SOURCES"
+        else:
+            status = "STALE_TARGET" if (tgt_ll is None or max_src > tgt_ll) else "OK"
+        rows.append({
+            "tgt_schema": tgt[0], "tgt_table": tgt[1],
+            "tgt_last_load": tgt_ll, "max_src_last_load": max_src,
+            "freshness_status": status
+        })
+    return rows
+
+def compute_orphans(graph, last_load):
+    out = []
+    for tgt, srcs in graph.items():
+        for s in srcs:
+            if s not in last_load:
+                out.append({
+                    "tgt_schema": tgt[0], "tgt_table": tgt[1],
+                    "missing_dep_schema": s[0], "missing_dep_table": s[1]
+                })
+    return out
+
+def db_write_all(dsn, yaml_dir, edges, fresh_rows, orphan_rows, cycles):
+    run_ts = dt.datetime.utcnow()
+    run_id = run_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        # run
+        cur.execute("INSERT INTO tech_etl.dep_runs(run_id, run_ts, yaml_dir) VALUES (%s,%s,%s)",
+                    (run_id, run_ts, yaml_dir))
+        # edges_current
+        cur.execute("TRUNCATE tech_etl.dep_edges_current")
+        cur.executemany("""
+          INSERT INTO tech_etl.dep_edges_current(tgt_schema, tgt_table, dep_schema, dep_table, source_path)
+          VALUES (%s,%s,%s,%s,%s)
+        """, [(e["tgt_schema"], e["tgt_table"], e["dep_schema"], e["dep_table"], e["source_path"]) for e in edges])
+        # edges_log
+        cur.executemany("""
+          INSERT INTO tech_etl.dep_edges_log(run_id, run_ts, tgt_schema, tgt_table, dep_schema, dep_table, source_path)
+          VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, [(run_id, run_ts, e["tgt_schema"], e["tgt_table"], e["dep_schema"], e["dep_table"], e["source_path"]) for e in edges])
+        # freshness
+        cur.executemany("""
+          INSERT INTO tech_etl.dep_freshness(run_id, run_ts, tgt_schema, tgt_table, tgt_last_load, max_src_last_load, freshness_status)
+          VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, [(run_id, run_ts, r["tgt_schema"], r["tgt_table"], r["tgt_last_load"], r["max_src_last_load"], r["freshness_status"]) for r in fresh_rows])
+        # orphans
+        cur.executemany("""
+          INSERT INTO tech_etl.dep_orphans(run_id, run_ts, tgt_schema, tgt_table, missing_dep_schema, missing_dep_table)
+          VALUES (%s,%s,%s,%s,%s,%s)
+        """, [(run_id, run_ts, r["tgt_schema"], r["tgt_table"], r["missing_dep_schema"], r["missing_dep_table"]) for r in orphan_rows])
+        # cycles
+        cyc_rows = []
+        for i, cyc in enumerate(cycles, 1):
+            path = " -> ".join([f"{s}.{t}" for s,t in cyc])
+            cyc_rows.append((run_id, run_ts, i, len(cyc), path))
+        if cyc_rows:
+            cur.executemany("""
+              INSERT INTO tech_etl.dep_cycles(run_id, run_ts, cycle_id, cycle_len, path)
+              VALUES (%s,%s,%s,%s,%s)
+            """, cyc_rows)
+        conn.commit()
+    print(f"[OK] DB updated, run_id={run_id}")
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--yaml-dir", required=True)
+    ap.add_argument("--gp-dsn", required=True)
+    args = ap.parse_args()
+
+    print("[INFO] build graph from YAML…")
+    graph, edges = build_graph(args.yaml_dir)
+    print(f"[INFO] targets: {len(graph)}, edges: {len(edges)}")
+
+    with psycopg2.connect(args.gp_dsn) as conn:
+        last_load = load_last_load(conn)
+
+    print("[INFO] detect cycles…")
+    cycles = find_cycles(graph)
+
+    print("[INFO] compute freshness & orphans…")
+    fresh_rows = compute_freshness(graph, last_load)
+    orphan_rows = compute_orphans(graph, last_load)
+
+    print("[INFO] write to DB…")
+    db_write_all(args.gp_dsn, args.yaml_dir, edges, fresh_rows, orphan_rows, cycles)
+
+if __name__ == "__main__":
+    main()
+
+
+CREATE SCHEMA IF NOT EXISTS tech_etl;
+
+-- Текущее состояние рёбер (зависимостей)
+CREATE TABLE IF NOT EXISTS tech_etl.dep_edges_current (
+  tgt_schema  text NOT NULL,
+  tgt_table   text NOT NULL,
+  dep_schema  text NOT NULL,
+  dep_table   text NOT NULL,
+  source_path text,            -- путь к YAML, где нашли зависимость
+  PRIMARY KEY (tgt_schema, tgt_table, dep_schema, dep_table)
+)
+DISTRIBUTED BY (tgt_schema, tgt_table);
+
+-- История рёбер по запускам
+CREATE TABLE IF NOT EXISTS tech_etl.dep_edges_log (
+  run_id     text NOT NULL,
+  run_ts     timestamp NOT NULL,
+  tgt_schema text NOT NULL,
+  tgt_table  text NOT NULL,
+  dep_schema text NOT NULL,
+  dep_table  text NOT NULL,
+  source_path text
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (run_id);
+
+-- Свежесть целей относительно источников
+CREATE TABLE IF NOT EXISTS tech_etl.dep_freshness (
+  run_id            text NOT NULL,
+  run_ts            timestamp NOT NULL,
+  tgt_schema        text NOT NULL,
+  tgt_table         text NOT NULL,
+  tgt_last_load     timestamp,
+  max_src_last_load timestamp,
+  freshness_status  text NOT NULL  -- OK | STALE_TARGET | NO_SOURCES
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (run_id);
+
+-- Осиротевшие зависимости (есть в YAML, нет в tables_meta)
+CREATE TABLE IF NOT EXISTS tech_etl.dep_orphans (
+  run_id     text NOT NULL,
+  run_ts     timestamp NOT NULL,
+  tgt_schema text NOT NULL,
+  tgt_table  text NOT NULL,
+  missing_dep_schema text NOT NULL,
+  missing_dep_table  text NOT NULL
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (run_id);
+
+-- Циклы
+CREATE TABLE IF NOT EXISTS tech_etl.dep_cycles (
+  run_id    text NOT NULL,
+  run_ts    timestamp NOT NULL,
+  cycle_id  integer NOT NULL,
+  cycle_len integer NOT NULL,
+  path      text NOT NULL
+)
+WITH (appendonly=true, orientation=column, compresstype=zstd, compresslevel=3)
+DISTRIBUTED BY (run_id);
+
+-- Аудит прогона
+CREATE TABLE IF NOT EXISTS tech_etl.dep_runs (
+  run_id  text PRIMARY KEY,
+  run_ts  timestamp NOT NULL,
+  yaml_dir text
+)
+DISTRIBUTED REPLICATED;

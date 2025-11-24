@@ -1,7 +1,477 @@
-[INFO] YAML_ROOT: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-[INFO] Сканирую YAML и строю граф…
-[INFO] targets: 0, edges: 0
-[INFO] Поиск циклов…
-[INFO] Свежесть и осироты…
-[INFO] Запись в БД…
-[OK] DB updated, run_id=2025-11-24T07:00:24Z
+# etl_dep_monitor.py
+# -*- coding: utf-8 -*-
+"""
+Единый мониторинг зависимостей из YAML → БД (Greenplum/Postgres).
+Запуск: python etl_dep_monitor.py  (без параметров)
+
+Что делает:
+  - сканирует YAML-файлы в YAML_ROOT (рекурсивно)
+  - парсит table_schema/table_name/depends_on
+  - вытаскивает entity/layer из пути вида: <ENTITY>/<LAYER>/<TABLE>/file.yaml
+  - строит граф зависимостей target -> sources
+  - читает last_load из tech_etl.tables_meta
+  - находит циклы, «осироты», оценивает свежесть
+  - пишет всё в:
+      tech_etl.dep_runs
+      tech_etl.dep_edges_current  (TRUNCATE + INSERT)
+      tech_etl.dep_edges_log
+      tech_etl.dep_freshness
+      tech_etl.dep_orphans
+      tech_etl.dep_cycles
+"""
+
+import os
+import sys
+import glob
+import datetime as dt
+from typing import Dict, Tuple, Set, List, Optional
+
+import yaml                   # pip install pyyaml
+import psycopg2               # pip install psycopg2-binary
+from psycopg2.extras import execute_batch
+
+# =========================
+# ХАРДКОД НАСТРОЕК
+# =========================
+# 1) Корень, относительно которого лежат все YAML
+#    ЕСЛИ запускаешь САМ ИЗ папки etl_loads_entity — просто поставь "."
+YAML_ROOT = r"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity"
+
+# 2) Подключение к GP/Postgres
+GP_DSN = "postgresql://user:password@host:5432/dbname"
+
+# 3) Создавать служебные таблицы, если их нет
+CREATE_TABLES_IF_MISSING = True
+
+# 4) Отладочные логи
+DEBUG_PRINT = True
+DEBUG_LIST_FIRST = 5
+# =========================
+
+Node = Tuple[str, str]  # (schema, table)
+
+
+# ---------- утилиты пути ----------
+def normalize_paths(base_dir: str, path: str) -> Tuple[str, str]:
+    abs_path = os.path.abspath(path)
+    rel_path = os.path.relpath(abs_path, os.path.abspath(base_dir))
+    return rel_path.replace("\\", "/"), abs_path.replace("\\", "/")
+
+
+def split_entity_layer_table(rel_path: str) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Ожидаем rel_path вида: ENTITY/LAYER/TABLE/anything.yaml
+    Возвращаем (ENTITY, LAYER, TABLE) или (None, None, None), если формат иной.
+    """
+    parts = rel_path.split("/")
+    entity = parts[0] if len(parts) > 0 else None
+    layer  = parts[1] if len(parts) > 1 else None
+    table  = parts[2] if len(parts) > 2 else None
+    return entity, layer, table
+
+
+# ---------- сканирование YAML ----------
+def scan_yaml_files(base_dir: str) -> List[str]:
+    base_dir = os.path.abspath(base_dir)
+    files = []
+    for ext in ("*.yaml", "*.yml"):
+        files.extend(glob.glob(os.path.join(base_dir, "**", ext), recursive=True))
+    return files
+
+
+def _s(x) -> Optional[str]:
+    if x is None:
+        return None
+    x = str(x).strip()
+    return x or None
+
+
+def parse_yaml(path: str) -> Tuple[Optional[Node], Set[Node]]:
+    """
+    Ожидаем ключи в YAML:
+      table_schema: dm
+      table_name:   account_debt
+      depends_on:
+        dm_calc:
+          - operating_periods_for_account_debt
+        dm:
+          - account_debt_for_working_capital
+
+    Если формат у тебя иной — скажи, подстрою парсер.
+    """
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            doc = yaml.safe_load(f)
+    except Exception as e:
+        print(f"[WARN] YAML parse failed {path}: {e}", file=sys.stderr)
+        return None, set()
+
+    if not isinstance(doc, dict):
+        return None, set()
+
+    schema = _s(doc.get("table_schema"))
+    table = _s(doc.get("table_name"))
+    tgt = (schema, table) if (schema and table) else None
+
+    deps: Set[Node] = set()
+    dep_map = doc.get("depends_on")
+    if isinstance(dep_map, dict):
+        for dep_schema, names in dep_map.items():
+            dep_schema_s = _s(dep_schema)
+            if not dep_schema_s:
+                continue
+            if isinstance(names, list):
+                for n in names:
+                    n_s = _s(n)
+                    if n_s:
+                        deps.add((dep_schema_s, n_s))
+            elif isinstance(names, str):
+                n_s = _s(names)
+                if n_s:
+                    deps.add((dep_schema_s, n_s))
+            elif isinstance(names, dict):
+                # редкий случай вложенности
+                for maybe_schema, lst in names.items():
+                    ms = _s(maybe_schema)
+                    if isinstance(lst, list):
+                        for n in lst:
+                            n_s = _s(n)
+                            if ms and n_s:
+                                deps.add((ms, n_s))
+    return tgt, deps
+
+
+# ---------- построение графа ----------
+def build_graph(yaml_dir: str):
+    graph: Dict[Node, Set[Node]] = {}
+    edges: List[dict] = []
+
+    base = os.path.abspath(yaml_dir)
+    files = scan_yaml_files(yaml_dir)
+
+    if DEBUG_PRINT:
+        print(f"[DEBUG] YAML files found: {len(files)}")
+        for p in files[:DEBUG_LIST_FIRST]:
+            print("[DEBUG] sample:", p)
+
+    for p in files:
+        tgt, deps = parse_yaml(p)
+        if not tgt:
+            continue
+        rel_path, abs_path = normalize_paths(base, p)
+        entity, layer, _tbl_by_path = split_entity_layer_table(rel_path)
+
+        graph.setdefault(tgt, set()).update(deps)
+        for d in deps:
+            edges.append({
+                "tgt_schema": tgt[0],
+                "tgt_table":  tgt[1],
+                "dep_schema": d[0],
+                "dep_table":  d[1],
+                "source_path": rel_path,
+                "source_path_abs": abs_path,
+                "entity": entity,
+                "layer": layer
+            })
+    return graph, edges
+
+
+# ---------- метаданные last_load ----------
+def load_last_load(conn) -> Dict[Node, Optional[dt.datetime]]:
+    sql_text = "select table_schema, table_name, last_load from tech_etl.tables_meta"
+    out: Dict[Node, Optional[dt.datetime]] = {}
+    with conn.cursor() as cur:
+        cur.execute(sql_text)
+        for s, t, ll in cur.fetchall():
+            out[(str(s).strip(), str(t).strip())] = ll
+    return out
+
+
+# ---------- поиск циклов ----------
+def find_cycles(graph: Dict[Node, Set[Node]]) -> List[List[Node]]:
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color: Dict[Node, int] = {}
+    parent: Dict[Node, Optional[Node]] = {}
+    cycles: List[List[Node]] = []
+
+    for n in list(graph.keys()):
+        color[n] = WHITE
+        parent[n] = None
+
+    def dfs(u: Node):
+        color[u] = GRAY
+        for v in graph.get(u, set()):
+            if v not in color:
+                color[v] = WHITE
+                parent[v] = None
+                graph.setdefault(v, set())
+            if color[v] == WHITE:
+                parent[v] = u
+                dfs(v)
+            elif color[v] == GRAY:
+                # соберём цикл
+                cyc = [v]
+                cur = u
+                while cur != v and cur is not None:
+                    cyc.append(cur)
+                    cur = parent.get(cur)
+                cyc.reverse()
+                if cyc and cyc not in cycles:
+                    cycles.append(cyc)
+        color[u] = BLACK
+
+    for n in list(graph.keys()):
+        if color.get(n, WHITE) == WHITE:
+            dfs(n)
+    return cycles
+
+
+# ---------- свежесть и «осироты» ----------
+def compute_freshness(graph, last_load):
+    rows = []
+    for tgt, srcs in graph.items():
+        tgt_ll = last_load.get(tgt)
+        max_src = None
+        for s in srcs:
+            ll = last_load.get(s)
+            if ll is not None and (max_src is None or ll > max_src):
+                max_src = ll
+        if max_src is None:
+            status = "NO_SOURCES"
+        else:
+            status = "STALE_TARGET" if (tgt_ll is None or max_src > tgt_ll) else "OK"
+        rows.append({
+            "tgt_schema": tgt[0],
+            "tgt_table":  tgt[1],
+            "tgt_last_load": tgt_ll,
+            "max_src_last_load": max_src,
+            "freshness_status": status
+        })
+    return rows
+
+
+def compute_orphans(graph, last_load):
+    out = []
+    for tgt, srcs in graph.items():
+        for s in srcs:
+            if s not in last_load:
+                out.append({
+                    "tgt_schema": tgt[0],
+                    "tgt_table":  tgt[1],
+                    "missing_dep_schema": s[0],
+                    "missing_dep_table":  s[1]
+                })
+    return out
+
+
+# ---------- колонки существуют? ----------
+def table_has_column(conn, schema: str, table: str, column: str) -> bool:
+    q = """
+    select 1
+    from information_schema.columns
+    where table_schema=%s and table_name=%s and column_name=%s
+    """
+    with conn.cursor() as cur:
+        cur.execute(q, (schema, table, column))
+        return cur.fetchone() is not None
+
+
+# ---------- автосоздание схемы/таблиц ----------
+DDL_SCHEMA = """
+CREATE SCHEMA IF NOT EXISTS tech_etl;
+"""
+
+DDL_TABLES = [
+    # пробег
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_runs(
+        run_id   text PRIMARY KEY,
+        run_ts   timestamptz NOT NULL,
+        yaml_dir text NOT NULL
+    );
+    """,
+    # текущие рёбра
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_edges_current(
+        tgt_schema text NOT NULL,
+        tgt_table  text NOT NULL,
+        dep_schema text NOT NULL,
+        dep_table  text NOT NULL,
+        source_path text,
+        source_path_abs text,
+        entity text,
+        layer  text
+    );
+    """,
+    # лог рёбер
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_edges_log(
+        run_id     text NOT NULL,
+        run_ts     timestamptz NOT NULL,
+        tgt_schema text NOT NULL,
+        tgt_table  text NOT NULL,
+        dep_schema text NOT NULL,
+        dep_table  text NOT NULL,
+        source_path text
+    );
+    """,
+    # свежесть
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_freshness(
+        run_id           text NOT NULL,
+        run_ts           timestamptz NOT NULL,
+        tgt_schema       text NOT NULL,
+        tgt_table        text NOT NULL,
+        tgt_last_load    timestamptz,
+        max_src_last_load timestamptz,
+        freshness_status text NOT NULL
+    );
+    """,
+    # «осироты»
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_orphans(
+        run_id              text NOT NULL,
+        run_ts              timestamptz NOT NULL,
+        tgt_schema          text NOT NULL,
+        tgt_table           text NOT NULL,
+        missing_dep_schema  text NOT NULL,
+        missing_dep_table   text NOT NULL
+    );
+    """,
+    # циклы
+    """
+    CREATE TABLE IF NOT EXISTS tech_etl.dep_cycles(
+        run_id   text NOT NULL,
+        run_ts   timestamptz NOT NULL,
+        cycle_id int  NOT NULL,
+        cycle_len int NOT NULL,
+        path     text NOT NULL
+    );
+    """
+]
+
+def ensure_meta_tables(dsn: str):
+    if not CREATE_TABLES_IF_MISSING:
+        return
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(DDL_SCHEMA)
+        for ddl in DDL_TABLES:
+            cur.execute(ddl)
+        conn.commit()
+
+
+# ---------- запись в БД ----------
+def db_write_all(dsn: str, yaml_dir: str, edges: List[dict],
+                 fresh_rows: List[dict], orphan_rows: List[dict], cycles: List[List[Node]]):
+    run_ts = dt.datetime.utcnow()
+    run_id = run_ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        # audit run
+        cur.execute(
+            "INSERT INTO tech_etl.dep_runs(run_id, run_ts, yaml_dir) VALUES (%s,%s,%s)",
+            (run_id, run_ts, yaml_dir)
+        )
+
+        # dep_edges_current (truncate + insert)
+        cur.execute("TRUNCATE tech_etl.dep_edges_current")
+        execute_batch(cur, """
+            INSERT INTO tech_etl.dep_edges_current
+              (tgt_schema, tgt_table, dep_schema, dep_table, source_path, source_path_abs, entity, layer)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, [
+            (e["tgt_schema"], e["tgt_table"], e["dep_schema"], e["dep_table"],
+             e.get("source_path"), e.get("source_path_abs"), e.get("entity"), e.get("layer"))
+            for e in edges
+        ], page_size=1000)
+
+        # dep_edges_log
+        execute_batch(cur, """
+            INSERT INTO tech_etl.dep_edges_log
+              (run_id, run_ts, tgt_schema, tgt_table, dep_schema, dep_table, source_path)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, [
+            (run_id, run_ts, e["tgt_schema"], e["tgt_table"], e["dep_schema"], e["dep_table"], e.get("source_path"))
+            for e in edges
+        ], page_size=1000)
+
+        # dep_freshness
+        execute_batch(cur, """
+            INSERT INTO tech_etl.dep_freshness
+              (run_id, run_ts, tgt_schema, tgt_table, tgt_last_load, max_src_last_load, freshness_status)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, [
+            (run_id, run_ts, r["tgt_schema"], r["tgt_table"], r["tgt_last_load"], r["max_src_last_load"], r["freshness_status"])
+            for r in fresh_rows
+        ], page_size=1000)
+
+        # dep_orphans
+        execute_batch(cur, """
+            INSERT INTO tech_etl.dep_orphans
+              (run_id, run_ts, tgt_schema, tgt_table, missing_dep_schema, missing_dep_table)
+            VALUES (%s,%s,%s,%s,%s,%s)
+        """, [
+            (run_id, run_ts, r["tgt_schema"], r["tgt_table"], r["missing_dep_schema"], r["missing_dep_table"])
+            for r in orphan_rows
+        ], page_size=1000)
+
+        # dep_cycles
+        if cycles:
+            execute_batch(cur, """
+                INSERT INTO tech_etl.dep_cycles
+                  (run_id, run_ts, cycle_id, cycle_len, path)
+                VALUES (%s,%s,%s,%s,%s)
+            """, [
+                (run_id, run_ts, i, len(cyc), " -> ".join([f"{s}.{t}" for s, t in cyc]))
+                for i, cyc in enumerate(cycles, 1)
+            ], page_size=1000)
+
+        conn.commit()
+
+    print(f"[OK] DB updated, run_id={run_id}")
+
+
+# ---------- main ----------
+def main():
+    # Нормализуем корень
+    yaml_root_abs = os.path.abspath(YAML_ROOT)
+
+    # sanity check: есть ли вообще файлы?
+    files = scan_yaml_files(yaml_root_abs)
+    if not files:
+        print(f"[ERR] В каталоге нет YAML: {yaml_root_abs}", file=sys.stderr)
+        print("Подсказка: если запускаешь САМ ИЗ папки etl_loads_entity — поставь YAML_ROOT='.'", file=sys.stderr)
+        sys.exit(2)
+
+    if DEBUG_PRINT:
+        print(f"[INFO] YAML_ROOT: {yaml_root_abs}")
+
+    # авто-DDL
+    ensure_meta_tables(GP_DSN)
+
+    # граф
+    print("[INFO] Сканирую YAML и строю граф…")
+    graph, edges = build_graph(yaml_root_abs)
+    print(f"[INFO] targets: {len(graph)}, edges: {len(edges)}")
+
+    # last_load
+    with psycopg2.connect(GP_DSN) as conn:
+        last_load = load_last_load(conn)
+
+    # вычисления
+    print("[INFO] Поиск циклов…")
+    cycles = find_cycles(graph)
+    print(f"[INFO] cycles: {len(cycles)}")
+
+    print("[INFO] Свежесть и осироты…")
+    fresh_rows = compute_freshness(graph, last_load)
+    orphan_rows = compute_orphans(graph, last_load)
+    print(f"[INFO] freshness rows: {len(fresh_rows)}, orphans: {len(orphan_rows)}")
+
+    # запись
+    print("[INFO] Запись в БД…")
+    db_write_all(GP_DSN, yaml_root_abs, edges, fresh_rows, orphan_rows, cycles)
+
+
+if __name__ == "__main__":
+    main()

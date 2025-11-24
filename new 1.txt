@@ -1,5 +1,6 @@
+
 CREATE WRITABLE EXTERNAL TABLE dwh.raw_ext.sales_alverse_mlc_write (
-    batch text,
+	 batch text,
     sales_order_in_shipment text,
     plant_producer_code text,
     plant_producer_name text,
@@ -101,4 +102,8 @@ CREATE WRITABLE EXTERNAL TABLE dwh.raw_ext.sales_alverse_mlc_write (
     job_name text,
     deleted_flag text
 )
-...
+LOCATION (
+	'pxf://dm.sales_alverse_mlc?PROFILE=JDBC&SERVER=clickhouse_prod&QUOTE_COLUMNS=true&BATCH_SIZE=10000&POOL_SIZE=6&custom_http_params=async_insert=1','wait_for_async_insert=1',' async_insert_busy_timeout_ms =1000'
+) ON ALL
+FORMAT 'CUSTOM' ( FORMATTER='pxfwritable_export' )
+ENCODING 'UTF8';

@@ -1,107 +1,108 @@
-DROP TABLE IF EXISTS "dm"."sales_alverse_mlc2" on cluster dwhcluster sync;
-CREATE TABLE IF NOT EXISTS "dm"."sales_alverse_mlc2" on cluster dwhcluster (
-"batch" String COMMENT 'Партия | Номер партии метала, формируется на заводе производителе, либо при закупке на операторе от внешних поставщиков. | dm_calc.sd_sales_main_scm.batch' CODEC(ZSTD(9)),
-"sales_order_in_shipment" String NULL COMMENT 'Заказ ЦК в отгрузке | ЦК - центральная компания.
-№ заказа центральной компании (заявки) под план производства. 
-Источник поступления данных транзакция ZSD2925M - Загрузка данных об отгрузке на трейдерах. 
-Изначально заказы ЦК вносятся в тразакции ZSD2882M - Регистрация заявок клиентов. 
-Если отгрузка не выполняется по внешнему номеру (вносится вручную) - то Заказ ЦК в отгрузке = Заказ ЦК | dm_calc.sd_sales_main_scm.sales_order_in_shipment' CODEC(ZSTD(9)),
-"plant_producer_code" String NULL COMMENT 'Завод производитель (код) | Код завода производителя | dm_calc.sd_sales_main_scm.plant_producer_code' CODEC(ZSTD(9)),
-"plant_producer_name" String NULL COMMENT 'Завод | Название завода производителя | dm_calc.sd_sales_main_scm.plant_producer_name' CODEC(ZSTD(9)),
-"port_of_loading_name" String NULL COMMENT 'Направление | МР - место размещения. Название порта погрузки. Например, ZARUBINO | dm_calc.sd_sales_main_scm.port_of_loading_name' CODEC(ZSTD(9)),
-"dt_shipment" Date NULL COMMENT 'Дата отгрузки | Дата отгрузки с завода производителя | dm_calc.sd_sales_main_scm.dt_shipment' CODEC(ZSTD(9)),
-"dt_arrival_by_railway" Date NULL COMMENT 'Дата прибытия по ЖД | ЖД - железная дорога, RW - railway. Дата прибытия вагона по железной дороге на конечную станцию | dm_calc.sd_sales_main_scm.dt_arrival_by_railway' CODEC(ZSTD(9)),
-"dt_forwarder" Date NULL COMMENT 'Дата экспедитора | Дата, когда экспедитор принял груз на склад, и подготовил документы для экспорта - готовность к вывозу | dm_calc.sd_sales_main_scm.dt_forwarder' CODEC(ZSTD(9)),
-"material_aggr_name" String NULL COMMENT 'Материал | Код признака «Материал». Применяется для готовой алюминиевой продукции. 
-Например, для кода материала APT0006ING0045, код признака Материл = COMMODITY | dm_calc.sd_sales_main_scm.material_aggr_name' CODEC(ZSTD(9)),
-"material_group_code" String NULL COMMENT 'Группа материалов | Группа материалов. Например, для кода материала APT0006ING0045, код Группа материалов = A02-Алюминий первичный АТЧ, раскисленный. | dm_calc.sd_sales_main_scm.material_group_code' CODEC(ZSTD(9)),
-"forwarder_name" String NULL COMMENT 'Экспедитор | Название экспедитора, который примет груз, после его прибытия с завода в конечную точку по жд или авто, 
-и который подготовит документы для экспорта. | dm_calc.sd_sales_main_scm.forwarder_name' CODEC(ZSTD(9)),
-"dt_warehouse" Date NULL COMMENT 'Дата склада | WH - warehouse. Дата прибытия на склад порта, когда экспедитор принял груз на склад | dm_calc.sd_sales_main_scm.dt_warehouse' CODEC(ZSTD(9)),
-"transport_railcar_type_name" String NULL COMMENT 'Тип вагона | Название типа вагона на текущий момент. 
-Заполняется по следующему алгоритму: = «Тип ПС после перетарки», если значение не пустое. Иначе = Тип вагона на заводе | dm_calc.sd_sales_main_scm.transport_railcar_type_name' CODEC(ZSTD(9)),
-"weight_gross" Decimal(13,3) NULL COMMENT 'Вес брутто | Вес брутто | dm_calc.sd_sales_main_scm.weight_gross' CODEC(ZSTD(9)),
-"weight_net" Decimal(13,3) NULL COMMENT 'Вес нетто | Вес нетто | dm_calc.sd_sales_main_scm.weight_net' CODEC(ZSTD(9)),
-"weight_net_with_wirerod" Decimal(13,3) NULL COMMENT 'Вес Н&K | Н&К (N&K) - нетто и катанка. Вес нетто + катанки | dm_calc.sd_sales_main_scm.weight_net_with_wirerod' CODEC(ZSTD(9)),
-"customer_name" String NULL COMMENT 'Покупатель | Название покупателя из клиентского лота, если его нет, то Плановый покупатель из заявки под план производства. | dm_calc.sd_sales_main_scm.customer_name' CODEC(ZSTD(9)),
-"contract_name" String NULL COMMENT 'Контракт | Номер контракта из клиентского лота, если его нет, то Плановый контракт из заявки под план производства. | dm_calc.sd_sales_main_scm.contract_name' CODEC(ZSTD(9)),
-"dt_bill_of_lading" Date NULL COMMENT 'Дата коносамента | Дата коносамента из РФ. Документ, который используют в водных перевозках из российских портов. 
-Он содержит полную информацию о грузе и доказывает, что перевозчик принял на себя ответственность доставить его в порт назначения. | dm_calc.sd_sales_main_scm.dt_bill_of_lading' CODEC(ZSTD(9))
+-- 1. Таблица в ClickHouse
+DROP TABLE IF EXISTS dm.sales_alverse_mlc2 ON CLUSTER dwhcluster SYNC;
 
-
+CREATE TABLE IF NOT EXISTS dm.sales_alverse_mlc2 ON CLUSTER dwhcluster (
+    batch String COMMENT '...',
+    sales_order_in_shipment String NULL,
+    plant_producer_code String NULL,
+    plant_producer_name String NULL,
+    port_of_loading_name String NULL,
+    dt_shipment Date NULL,
+    dt_arrival_by_railway Date NULL,
+    dt_forwarder Date NULL,
+    material_aggr_name String NULL,
+    material_group_code String NULL,
+    forwarder_name String NULL,
+    dt_warehouse Date NULL,
+    transport_railcar_type_name String NULL,
+    weight_gross Decimal(13,3) NULL,
+    weight_net Decimal(13,3) NULL,
+    weight_net_with_wirerod Decimal(13,3) NULL,
+    customer_name String NULL,
+    contract_name String NULL,
+    dt_bill_of_lading Date NULL
 )
-ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/dm/"sales_alverse_mlc2"', '{replica}') 
-ORDER BY ("batch")
+ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/dm/"sales_alverse_mlc2"', '{replica}')
+ORDER BY (batch)
 COMMENT 'MLC (Alverse)';
 
-INSERT INTO raw_ext."sales_alverse_mlc_write2"(
-"batch",
-"sales_order_in_shipment",
-"plant_producer_code",
-"plant_producer_name",
-"port_of_loading_name",
-"dt_shipment",
-"dt_arrival_by_railway",
-"dt_forwarder",
-"material_aggr_name",
-"material_group_code",
-"forwarder_name",
-"dt_warehouse",
-"transport_railcar_type_name",
-"weight_gross",
-"weight_net",
-"weight_net_with_wirerod",
-"customer_name",
-"contract_name",
-"dt_bill_of_lading")
-SELECT
-"batch",
-"sales_order_in_shipment",
-"plant_producer_code",
-"plant_producer_name",
-"port_of_loading_name",
-tech_etl.validate_date("dt_shipment"),
-tech_etl.validate_date("dt_arrival_by_railway"),
-tech_etl.validate_date("dt_forwarder"),
-"material_aggr_name",
-"material_group_code",
-"forwarder_name",
-tech_etl.validate_date("dt_warehouse"),
-"transport_railcar_type_name",
-"weight_gross",
-"weight_net",
-"weight_net_with_wirerod",
-"customer_name",
-"contract_name",
-tech_etl.validate_date("dt_bill_of_lading");
+-- 2. WRITABLE external table в Greenplum
+DROP EXTERNAL TABLE IF EXISTS raw_ext.sales_alverse_mlc_write2;
 
-CREATE WRITABLE EXTERNAL TABLE "raw_ext"."sales_alverse_mlc_write2"(
-"batch" text,
-"sales_order_in_shipment" text,
-"plant_producer_code" text,
-"plant_producer_name" text,
-"port_of_loading_name" text,
-"dt_shipment" date,
-"dt_arrival_by_railway" date,
-"dt_forwarder" date,
-"material_aggr_name" text,
-"material_group_code" text,
-"forwarder_name" text,
-"dt_warehouse" date,
-"transport_railcar_type_name" text,
-"weight_gross" numeric,
-"weight_net" numeric,
-"weight_net_with_wirerod" numeric,
-"customer_name" text,
-"contract_name" text,
-"dt_bill_of_lading" date
-
+CREATE WRITABLE EXTERNAL TABLE raw_ext.sales_alverse_mlc_write2 (
+    batch text,
+    sales_order_in_shipment text,
+    plant_producer_code text,
+    plant_producer_name text,
+    port_of_loading_name text,
+    dt_shipment date,
+    dt_arrival_by_railway date,
+    dt_forwarder date,
+    material_aggr_name text,
+    material_group_code text,
+    forwarder_name text,
+    dt_warehouse date,
+    transport_railcar_type_name text,
+    weight_gross numeric,
+    weight_net numeric,
+    weight_net_with_wirerod numeric,
+    customer_name text,
+    contract_name text,
+    dt_bill_of_lading date
 )
 LOCATION (
-'pxf://dm.sales_alverse_mlc2?PROFILE=JDBC&SERVER=clickhouse_prod&QUOTE_COLUMNS=true&BATCH_SIZE=10000&POOL_SIZE=6&custom_http_params=async_insert=1,wait_for_async_insert=1, async_insert_busy_timeout_ms =1000'
-) ON ALL
+  'pxf://dm.sales_alverse_mlc2
+    ?PROFILE=JDBC
+    &SERVER=clickhouse_prod
+    &QUOTE_COLUMNS=true
+    &BATCH_SIZE=10000
+    &POOL_SIZE=6'
+)
+ON ALL
 FORMAT 'CUSTOM' (FORMATTER='pxfwritable_export')
-ENCODING 'UTF8'
-	DISTRIBUTED BY ("batch");
+ENCODING 'UTF8';
 
-FROM "dm"."sales_alverse_mlc" where 1=1 ;
+-- 3. Загрузка данных из dm.sales_alverse_mlc в ClickHouse через external table
+INSERT INTO raw_ext.sales_alverse_mlc_write2 (
+    batch,
+    sales_order_in_shipment,
+    plant_producer_code,
+    plant_producer_name,
+    port_of_loading_name,
+    dt_shipment,
+    dt_arrival_by_railway,
+    dt_forwarder,
+    material_aggr_name,
+    material_group_code,
+    forwarder_name,
+    dt_warehouse,
+    transport_railcar_type_name,
+    weight_gross,
+    weight_net,
+    weight_net_with_wirerod,
+    customer_name,
+    contract_name,
+    dt_bill_of_lading
+)
+SELECT
+    batch::text,
+    sales_order_in_shipment::text,
+    plant_producer_code::text,
+    plant_producer_name::text,
+    port_of_loading_name::text,
+    tech_etl.validate_date(dt_shipment),
+    tech_etl.validate_date(dt_arrival_by_railway),
+    tech_etl.validate_date(dt_forwarder),
+    material_aggr_name::text,
+    material_group_code::text,
+    forwarder_name::text,
+    tech_etl.validate_date(dt_warehouse),
+    transport_railcar_type_name::text,
+    weight_gross,
+    weight_net,
+    weight_net_with_wirerod,
+    customer_name::text,
+    contract_name::text,
+    tech_etl.validate_date(dt_bill_of_lading)
+FROM dm.sales_alverse_mlc
+WHERE 1 = 1;

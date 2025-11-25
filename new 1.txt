@@ -1,30 +1,144 @@
-1120	1121				331478	ПВ	0000042821	2014-02-03	2014-12-31	2015-01-01	2299-12-31
-1510	1511				331016	ПВ	0000062580	2014-02-01	2014-03-31	2015-01-01	2299-12-31
-1120	1121				331016	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331016	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331016	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331478	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331478	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331478	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331478	ПВ	0000062580	2014-01-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				332019	ПВ	0000082725	2014-05-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331016	КРК	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331016	КРК	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331478	КРК	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331016	ПВ	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331478	КРК	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1530	1531				331478	ПВ	0000081221	2013-10-01	2014-12-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331478	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331478	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331478	КР	0000051566	2014-04-01	2015-03-31	2014-04-01	2014-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2014-04-01	2014-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				331016	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				332019	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
-1120	1121				332019	КР	0000051566	2014-04-01	2015-03-31	2015-01-01	2299-12-31
+-- 1. Делим 1079 на "специфичные" и "дефолтные" строки
+--   специфичные = есть ХОТЯ БЫ одно условие-ограничение
+--   дефолтные   = все поля, которые играют роль фильтров, NULL
+
+DROP TABLE IF EXISTS t_1079_specific;
+CREATE TEMP TABLE t_1079_specific
+ON COMMIT DROP AS
+SELECT *
+FROM t_1079_base t
+WHERE     t.zzport     IS NOT NULL
+       OR t.zzforma    IS NOT NULL
+       OR t.zzet_tarif IS NOT NULL
+       OR t.sdabw      IS NOT NULL
+       OR t.zzterminal IS NOT NULL
+       OR t.vzzzone    IS NOT NULL
+;
+
+DROP TABLE IF EXISTS t_1079_default;
+CREATE TEMP TABLE t_1079_default
+ON COMMIT DROP AS
+SELECT *
+FROM t_1079_base t
+WHERE     t.zzport     IS NULL
+  AND     t.zzforma    IS NULL
+  AND     t.zzet_tarif IS NULL
+  AND     t.sdabw      IS NULL
+  AND     t.zzterminal IS NULL
+  AND     t.vzzzone    IS NULL
+;
+
+-- (по желанию можно добавить индексы на маленькие таблицы)
+-- CREATE INDEX ON t_1079_specific (lifnr);
+-- CREATE INDEX ON t_1079_default  (lifnr);
+
+---------------------------------------------------------------------
+-- 2. Специфичные совпадения:
+--    для каждого rn берём ЛУЧШИЙ контракт из t_1079_specific
+---------------------------------------------------------------------
+
+DROP TABLE IF EXISTS t_contract_specific;
+CREATE TEMP TABLE t_contract_specific
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    t.purchase_contract_code,
+    t.position_line_item_code,
+    t.konws,
+    t.price_uom_code,
+    t.service_code,
+    t.currency_dogovor,
+    t.datab,
+    t.datbi
+FROM dm_calc.storage_sales_bundles_weight b
+JOIN t_1079_specific t
+  ON t.lifnr = b.forwarder_code   -- здесь поставь нужное поле-кредитора, если у тебя другое
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
+ -- условия-ограничения, но БЕЗ "всегда true" части:
+ AND (t.zzport  = b.port_of_discharge_code   OR t.zzport  IS NULL)
+ AND (t.zzforma = b.material_shape_code      OR t.zzforma IS NULL)
+ AND (t.zzet_tarif = b.etsng_code            OR t.zzet_tarif IS NULL)
+ AND (t.sdabw   = b.transport_type_code      OR t.sdabw   IS NULL)
+ -- если используешь терминал/зону — можешь добавить:
+ -- AND (t.zzterminal = b.warehouse_code          OR t.zzterminal IS NULL)
+ -- AND (t.vzzzone    = b.warehouse_storage_area_code OR t.vzzzone IS NULL)
+ORDER BY
+    b.rn,
+    CASE b.storage_cost_calculation_type_name
+        WHEN 'Логика РФ-контейнеры' THEN t.order_rf
+        WHEN 'Логика РФ-балк'       THEN t.order_rf
+        WHEN 'Логика Азия'          THEN t.order_asia
+        WHEN 'Логика Европа'        THEN t.order_euro_svh
+        WHEN 'Логика СВХ'           THEN t.order_euro_svh
+        ELSE 999999
+    END,
+    t.kopos,
+    t.kbetr,
+    t.purchase_contract_code,
+    t.position_line_item_code
+;
+
+-- Можешь посмотреть, сколько строк закрылось специфичными контрактами:
+-- SELECT count(*) FROM t_contract_specific;
+
+
+---------------------------------------------------------------------
+-- 3. Дефолтные совпадения:
+--    только для тех rn, у которых нет специфичного контракта
+--    (fallback на "общие" строки, где все поля-ограничения NULL)
+---------------------------------------------------------------------
+
+DROP TABLE IF EXISTS t_contract_default;
+CREATE TEMP TABLE t_contract_default
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    t.purchase_contract_code,
+    t.position_line_item_code,
+    t.konws,
+    t.price_uom_code,
+    t.service_code,
+    t.currency_dogovor,
+    t.datab,
+    t.datbi
+FROM dm_calc.storage_sales_bundles_weight b
+LEFT JOIN t_contract_specific s
+       ON s.rn = b.rn          -- если уже есть специфичный — в default не лезем
+JOIN t_1079_default t
+  ON t.lifnr = b.forwarder_code
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
+WHERE s.rn IS NULL             -- только те, кто не закрылся в t_contract_specific
+ORDER BY
+    b.rn,
+    -- для дефолтных логика приоритета может быть проще,
+    -- но оставим ту же, чтобы не ломать бизнес-логику:
+    CASE b.storage_cost_calculation_type_name
+        WHEN 'Логика РФ-контейнеры' THEN t.order_rf
+        WHEN 'Логика РФ-балк'       THEN t.order_rf
+        WHEN 'Логика Азия'          THEN t.order_asia
+        WHEN 'Логика Европа'        THEN t.order_euro_svh
+        WHEN 'Логика СВХ'           THEN t.order_euro_svh
+        ELSE 999999
+    END,
+    t.kopos,
+    t.kbetr,
+    t.purchase_contract_code,
+    t.position_line_item_code
+;
+
+
+---------------------------------------------------------------------
+-- 4. Финальная таблица сопоставленных контрактов
+---------------------------------------------------------------------
+
+DROP TABLE IF EXISTS t_contract_match;
+CREATE TEMP TABLE t_contract_match
+ON COMMIT DROP AS
+SELECT *
+FROM t_contract_specific
+UNION ALL
+SELECT *
+FROM t_contract_default
+DISTRIBUTED BY (rn);

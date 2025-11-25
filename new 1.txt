@@ -1,366 +1,170 @@
-DROP TABLE IF EXISTS dm_calc.storage_sales_bundles_amount;
-
-CREATE TABLE dm_calc.storage_sales_bundles_amount
-(
-    sales_bundle_code varchar(10),
-    plant_producer_delivery_code varchar(30),
-    plant_producer_delivery_position_code varchar(18),
-    initial_delivery_code varchar(30),
-    material_code varchar(54),
-    dt_shipment date,
-    railcar_code varchar(60),
-    transport_bill_code varchar(105),
-    uni varchar(180),
-    material_shape_code varchar(9),
-    port_of_discharge_code varchar(30),
-    dt_arrival_to_russian_port date,
-    dt_storage_end_in_release date,
-    transport_type_code varchar(12),
-    etsng_code varchar(10),
-    dt_report date,
-    sales_bundle_net_weight numeric(15,3),
-    sales_bundle_gross_weight numeric(15,3),
-    batch_code varchar(30),
-    dt_arrival date,
-    receiving_plant_code varchar(4),
-    sales_delivery_code varchar(30),
-    transportation_inbound_delivery_code varchar(10),
-    delivery_for_storage_calculation_code varchar(30),
-    transportation_inbound_delivery_position_code varchar(6),
-    delivery_position_for_storage_calculation_code varchar(6),
-    forwarder_code varchar(10),
-    storage_cost_calculation_type_name varchar(20),
-    transport_departure_hub_code varchar(10),
-    transport_destination_hub_code varchar(10),
-    transportation_outbound_delivery_code varchar(10),
-    transportation_outbound_delivery_position_code varchar(6),
-    is_final_transportation_stage_code varchar(1),
-    transportation_stage_code varchar(2),
-    storage_calculation_bundle_quantity int8,
-    warehouse_code varchar(10),
-    delivery_in_final_release_code varchar(30),
-    dt_final_release date,
-    bill_of_lading_code varchar(30),
-    bill_of_lading_number varchar(90),
-    dt_bill_of_lading date,
-    incoterms_code varchar(9),
-    storage_cost_special_calculation_type_code varchar(1),
-    warehouse_storage_area_code varchar(10),
-    plant_code varchar(4),
-    unit_balance_code varchar(4),
-    creditor_in_shipment_instruction_code varchar(10),
-    dt_storage_start date,
-    dt_shipped_from_warehouse date,
-    dt_storage_end date,
-    service_number text,
-    storage_duration_total_calendar_days int4,
-    shipment_instruction_number varchar(30),
-    dt_for_price_search_in_purchase_contract date,
-    purchase_contract_code varchar(10),
-    purchase_contract_position_code varchar(5),
-    purchase_contract_position_currency_code varchar(5),
-    service_code varchar(18),
-    purchase_contract_position_uom_code varchar(3),
-    storage_duration_free_by_contract_calendar_days numeric(15,3),
-    storage_duration_free_by_delivery_calendar_days numeric(15,3),
-    storage_duration_payable_calendar_days numeric(15,3),
-    remote_warehouse_code varchar(10),
-    dt_transportation_stage_start_p date,
-    dt_transportation_stage_start_r date,
-    dt_shipment_from_foreign_warehouse date,
-    storage_cost_calculated_amount numeric(15,2),
-    storage_cost_calculated_amount_local numeric(15,2),
-    storage_payable_001_030_days_gross_weight numeric(15,3),
-    storage_payable_031_060_days_gross_weight numeric(15,3),
-    storage_payable_061_090_days_gross_weight numeric(15,3),
-    storage_payable_091_180_days_gross_weight numeric(15,3),
-    storage_payable_181_365_days_gross_weight numeric(15,3),
-    storage_payable_over_365_days_gross_weight numeric(15,3),
-    is_stored_in_russian_port_code varchar(1),
-    storage_calculated_cost_001_030_amount numeric(15,2),
-    storage_calculated_cost_031_060_amount numeric(15,2),
-    storage_calculated_cost_061_090_amount numeric(15,2),
-    storage_calculated_cost_091_180_amount numeric(15,2),
-    storage_calculated_cost_181_365_amount numeric(15,2),
-    storage_calculated_cost_over_365_amount numeric(15,2),
-    metal_in_china_stock_balance_closing_weight numeric(15,3),
-    dttm_inserted timestamp default now(),
-    dttm_updated timestamp default now(),
-    job_name varchar(60) default 'airflow',
-    deleted_flag bool default false
-)
-WITH (
-    appendonly=true,
-    orientation=column,
-    compresstype=zstd,
-    compresslevel=3
-)
-DISTRIBUTED BY (sales_bundle_code);
-
-TRUNCATE TABLE dm_calc.storage_sales_bundles_amount;
-1. Подготовка t_1079_base (единая логика 1079)
-sql
-Копировать код
-CREATE TEMP TABLE t_1079_base ON COMMIT DROP AS
-SELECT *
-FROM
-(
-    SELECT
-        purchase_contract_code,
-        position_line_item_code,
-        bukrs,
-        lifnr,
-        zzport,
-        werks,
-        zzsrvpos,
-        zzforma,
-        zzet_tarif,
-        sdabw,
-        zzterminal,
-        vzzzone,
-        price_uom_code,
-        service_code,
-        konws,
-        currency_dogovor,
-        datab,
-        datbi,
-        dt_valid_from,
-        dt_valid_to,
-        purchase_document_subtype_code,
-        kopos,
-        kbetr,
-        order_rf,
-        order_asia,
-        order_euro_svh
-    FROM for_1079_base
-) q
-DISTRIBUTED BY (purchase_contract_code);
-2. Match RN → контракт/позиция (ОСНОВНОЙ ускоряющий блок)
-Полностью заменяет for_1079_rf_cont, rf_balk_1, rf_balk_2, asia, euro, svh.
-
-sql
-Копировать код
-CREATE TEMP TABLE t_contract_match ON COMMIT DROP AS
-SELECT
-    b.rn,
-    x.purchase_contract_code,
-    x.position_line_item_code,
-    x.konws,
-    x.price_uom_code,
-    x.service_code,
-    x.currency_dogovor,
-    x.datab,
-    x.datbi
-FROM dm_calc.storage_sales_bundles_weight b
-JOIN LATERAL
-(
-    SELECT *
-    FROM t_1079_base t
-    WHERE t.lifnr = b.forwarder_code
-      AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-      AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-      AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-      AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-      AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab AND t.datbi
-      AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-    ORDER BY
-        CASE b.storage_cost_calculation_type_name
-            WHEN 'Логика РФ-контейнеры' THEN order_rf
-            WHEN 'Логика РФ-балк'       THEN order_rf
-            WHEN 'Логика Азия'          THEN order_asia
-            WHEN 'Логика Европа'        THEN order_euro_svh
-            WHEN 'Логика СВХ'           THEN order_euro_svh
-        END,
-        kopos,
-        kbetr
-    LIMIT 1
-) x ON TRUE
-DISTRIBUTED BY (rn);
-3. Таблица 1087
-sql
-Копировать код
-CREATE TEMP TABLE t_1087 ON COMMIT DROP AS
-SELECT
-    purchase_contract_code,
-    purchase_contract_position_code,
-    dt_price_condition_valid_to,
-    dt_price_condition_valid_from,
-    MIN(price_scale_limit_from_quantity) AS min_free_days
-FROM dds.purchase_contract_price_conditions
-WHERE price_scale_limit_from_quantity IS NOT NULL
-GROUP BY 1,2,3,4
-DISTRIBUTED BY (purchase_contract_code);
-4. Таблица 1090 (оба варианта — scale C и non-C)
-sql
-Копировать код
-CREATE TEMP TABLE t_1090 ON COMMIT DROP AS
-SELECT
-    evrtn,
-    evrtp,
-    dt_price_condition_valid_to,
-    dt_price_condition_valid_from,
-    price_scale_basis_code,
-    kstbm,
-    kstbm_next,
-    konp_kbetr,
-    konm_kbetr,
-    presum
-FROM for_1090
-DISTRIBUTED BY (evrtn);
-5. ФИНАЛЬНАЯ СБОРКА (INSERT)
-❗Вся логика расчёта стоимости сохранена; формулы оставлены такие же, только структурированы проще.
-
-sql
-Копировать код
-INSERT INTO dm_calc.storage_sales_bundles_amount
-SELECT
-    b.sales_bundle_code,
-    b.plant_producer_delivery_code,
-    b.plant_producer_delivery_position_code,
-    b.initial_delivery_code,
-    b.material_code,
-    b.dt_shipment,
-    b.railcar_code,
-    b.transport_bill_code,
-    b.uni,
-    b.material_shape_code,
-    b.port_of_discharge_code,
-    b.dt_arrival_to_russian_port,
-    b.dt_storage_end_in_release,
-    b.transport_type_code,
-    b.etsng_code,
-    b.dt_report,
-    b.sales_bundle_net_weight,
-    b.sales_bundle_gross_weight,
-    b.batch_code,
-    b.dt_arrival,
-    b.receiving_plant_code,
-    b.sales_delivery_code,
-    b.transportation_inbound_delivery_code,
-    b.delivery_for_storage_calculation_code,
-    b.transportation_inbound_delivery_position_code,
-    b.delivery_position_for_storage_calculation_code,
-    b.forwarder_code,
-    b.storage_cost_calculation_type_name,
-    b.transport_departure_hub_code,
-    b.transport_destination_hub_code,
-    b.transportation_outbound_delivery_code,
-    b.transportation_outbound_delivery_position_code,
-    b.is_final_transportation_stage_code,
-    b.transportation_stage_code,
-    b.storage_calculation_bundle_quantity,
-    b.warehouse_code,
-    b.delivery_in_final_release_code,
-    b.dt_final_release,
-    b.bill_of_lading_code,
-    b.bill_of_lading_number,
-    b.dt_bill_of_lading,
-    b.incoterms_code,
-    b.storage_cost_special_calculation_type_code,
-    b.warehouse_storage_area_code,
-    b.plant_code,
-    b.unit_balance_code,
-    b.creditor_in_shipment_instruction_code,
-    b.dt_storage_start,
-    b.dt_shipped_from_warehouse,
-    b.dt_storage_end,
-    b.service_number,
-    b.storage_duration_total_calendar_days,
-    b.shipment_instruction_number,
-    b.dt_for_price_search_in_purchase_contract,
-
-    cm.purchase_contract_code,
-    cm.position_line_item_code,
-    cm.konws,
-    cm.service_code,
-    cm.price_uom_code,
-
-    GREATEST(t87.min_free_days - 1, 0) AS storage_duration_free_by_contract_calendar_days,
-    LEAST(b.storage_duration_total_calendar_days, GREATEST(t87.min_free_days - 1, 0))
-        AS storage_duration_free_by_delivery_calendar_days,
-
-    b.storage_duration_total_calendar_days
-        - LEAST(b.storage_duration_total_calendar_days, GREATEST(t87.min_free_days - 1, 0))
-        AS storage_duration_payable_calendar_days,
-
-    b.remote_warehouse_code,
-    b.dt_transportation_stage_start_p,
-    b.dt_transportation_stage_start_r,
-
-    /* dt_shipment_from_foreign_warehouse — логика полностью перенесена */
-    CASE
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-             AND b.dt_transportation_stage_start_r IS NOT NULL
-             AND b.dt_storage_end_in_release IS NOT NULL
-             AND (b.dt_transportation_stage_start_r < b.dt_storage_end_in_release
-                  OR b.dt_storage_end_in_release < b.dt_transportation_stage_start_p)
-            THEN b.dt_transportation_stage_start_r
-
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-             AND b.dt_storage_end_in_release IS NOT NULL
-             AND b.dt_storage_end_in_release >= b.dt_transportation_stage_start_p
-            THEN b.dt_storage_end_in_release
-
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-             AND b.dt_storage_end_in_release IS NULL
-             AND b.dt_transportation_stage_start_r IS NOT NULL
-            THEN b.dt_transportation_stage_start_r
-
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
-             AND b.dt_transportation_stage_start_r IS NULL
-             AND b.dt_storage_end_in_release IS NOT NULL
-             AND b.dt_storage_end_in_release >= b.dt_transportation_stage_start_p
-            THEN b.dt_storage_end_in_release
-    END
-    AS dt_shipment_from_foreign_warehouse,
-
-    /* Стоимость хранения в USD — твой оригинальный алгоритм */
-    CASE
-        WHEN cm.konws = 'USD' OR k1.konp_kbetr IS NULL THEN k1.konp_kbetr
-        ELSE
-            k1.konp_kbetr * cr.currency_rate
-    END AS storage_cost_calculated_amount,
-
-    /* Локальная валюта */
-    k1.konp_kbetr AS storage_cost_calculated_amount_local,
-
-    /* Группировки дней */
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 1 AND 30 THEN b.sales_bundle_gross_weight ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 31 AND 60 THEN b.sales_bundle_gross_weight ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 61 AND 90 THEN b.sales_bundle_gross_weight ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 91 AND 180 THEN b.sales_bundle_gross_weight ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 181 AND 365 THEN b.sales_bundle_gross_weight ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days > 365 THEN b.sales_bundle_gross_weight ELSE 0 END,
-
-    b.is_stored_in_russian_port_code,
-
-    /* Стоимость по диапазонам */
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 1 AND 30 THEN k1.konp_kbetr ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 31 AND 60 THEN k1.konp_kbetr ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 61 AND 90 THEN k1.konp_kbetr ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 91 AND 180 THEN k1.konp_kbetr ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days BETWEEN 181 AND 365 THEN k1.konp_kbetr ELSE 0 END,
-    CASE WHEN storage_duration_payable_calendar_days > 365 THEN k1.konp_kbetr ELSE 0 END,
-
-    NULL AS metal_in_china_stock_balance_closing_weight
-
-FROM dm_calc.storage_sales_bundles_weight b
-LEFT JOIN t_contract_match cm
-    ON cm.rn = b.rn
-LEFT JOIN t_1087 t87
-    ON t87.purchase_contract_code = cm.purchase_contract_code
-   AND t87.purchase_contract_position_code = cm.position_line_item_code
-   AND t87.dt_price_condition_valid_to = cm.datbi
-   AND t87.dt_price_condition_valid_from = cm.datab
-LEFT JOIN t_1090 k1
-    ON k1.evrtn = cm.purchase_contract_code
-   AND k1.evrtp = cm.position_line_item_code
-   AND k1.dt_price_condition_valid_to = cm.datbi
-   AND k1.dt_price_condition_valid_from = cm.datab
-   AND k1.price_scale_basis_code IS NULL
-LEFT JOIN dict_dds.currency_rates cr
-    ON cr.currency_rate_type_code = 'M'
-   AND cr.currency_from_code = cm.konws
-   AND cr.currency_to_code = 'USD'
-   AND cr.dt_currency_rate = b.dt_report
-   AND cr.deleted_flag = false;
+[
+  {
+    "Plan": {
+      "Node Type": "Nested Loop",
+      "Slice": 0,
+      "Segments": 0,
+      "Gang Type": "unallocated",
+      "Join Type": "Inner",
+      "Startup Cost": 10000017238.54,
+      "Total Cost": 10006493057.04,
+      "Plan Rows": 149024176,
+      "Plan Width": 78,
+      "Output": ["b.rn", "x.purchase_contract_code", "x.position_line_item_code", "x.konws", "x.price_uom_code", "x.service_code", "x.currency_dogovor", "x.datab", "x.datbi"],
+      "Plans": [
+        {
+          "Node Type": "Gather Motion",
+          "Senders": 6,
+          "Receivers": 1,
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 4613016.28,
+          "Plan Rows": 149024176,
+          "Plan Width": 107,
+          "Output": ["b.rn", "b.storage_cost_calculation_type_name", "b.forwarder_code", "b.port_of_discharge_code", "b.material_shape_code", "b.etsng_code", "b.transport_type_code", "b.dt_for_price_search_in_purchase_contract"],
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Relation Name": "storage_sales_bundles_weight",
+              "Schema": "dm_calc",
+              "Alias": "b",
+              "Startup Cost": 0.00,
+              "Total Cost": 1632532.76,
+              "Plan Rows": 149024176,
+              "Plan Width": 107,
+              "Output": ["b.rn", "b.storage_cost_calculation_type_name", "b.forwarder_code", "b.port_of_discharge_code", "b.material_shape_code", "b.etsng_code", "b.transport_type_code", "b.dt_for_price_search_in_purchase_contract"]
+            }
+          ]
+        },
+        {
+          "Node Type": "Materialize",
+          "Parent Relationship": "Inner",
+          "Slice": 0,
+          "Segments": 0,
+          "Gang Type": "unallocated",
+          "Startup Cost": 17238.54,
+          "Total Cost": 17238.56,
+          "Plan Rows": 1,
+          "Plan Width": 41,
+          "Output": ["x.purchase_contract_code", "x.position_line_item_code", "x.konws", "x.price_uom_code", "x.service_code", "x.currency_dogovor", "x.datab", "x.datbi"],
+          "Plans": [
+            {
+              "Node Type": "Subquery Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 0,
+              "Segments": 0,
+              "Gang Type": "unallocated",
+              "Alias": "x",
+              "Startup Cost": 17238.54,
+              "Total Cost": 17238.56,
+              "Plan Rows": 1,
+              "Plan Width": 41,
+              "Output": ["x.purchase_contract_code", "x.position_line_item_code", "x.konws", "x.price_uom_code", "x.service_code", "x.currency_dogovor", "x.datab", "x.datbi"],
+              "Plans": [
+                {
+                  "Node Type": "Limit",
+                  "Parent Relationship": "Subquery",
+                  "Slice": 0,
+                  "Segments": 0,
+                  "Gang Type": "unallocated",
+                  "Startup Cost": 17238.54,
+                  "Total Cost": 17238.55,
+                  "Plan Rows": 1,
+                  "Plan Width": 165,
+                  "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE NULL::integer END)"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 0,
+                      "Segments": 0,
+                      "Gang Type": "unallocated",
+                      "Startup Cost": 17238.54,
+                      "Total Cost": 17985.24,
+                      "Plan Rows": 298677,
+                      "Plan Width": 165,
+                      "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE NULL::integer END)"],
+                      "Sort Key": ["(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE NULL::integer END)", "t.kopos", "t.kbetr"],
+                      "Plans": [
+                        {
+                          "Node Type": "Result",
+                          "Parent Relationship": "Outer",
+                          "Slice": 0,
+                          "Segments": 0,
+                          "Gang Type": "unallocated",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 15745.16,
+                          "Plan Rows": 298677,
+                          "Plan Width": 165,
+                          "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor", "CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE NULL::integer END"],
+                          "Filter": "((((t.zzport)::text = (b.port_of_discharge_code)::text) OR (t.zzport IS NULL)) AND (((t.zzforma)::text = (b.material_shape_code)::text) OR (t.zzforma IS NULL)) AND (((t.zzet_tarif)::text = (b.etsng_code)::text) OR (t.zzet_tarif IS NULL)) AND (((t.sdabw)::text = (b.transport_type_code)::text) OR (t.sdabw IS NULL)) AND (b.dt_for_price_search_in_purchase_contract >= t.datab) AND (b.dt_for_price_search_in_purchase_contract <= t.datbi) AND (b.dt_for_price_search_in_purchase_contract >= t.dt_valid_from) AND (b.dt_for_price_search_in_purchase_contract <= t.dt_valid_to) AND ((t.lifnr)::text = (b.forwarder_code)::text))",
+                          "Plans": [
+                            {
+                              "Node Type": "Materialize",
+                              "Parent Relationship": "Outer",
+                              "Slice": 0,
+                              "Segments": 0,
+                              "Gang Type": "unallocated",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 12011.70,
+                              "Plan Rows": 298677,
+                              "Plan Width": 165,
+                              "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Gather Motion",
+                                  "Senders": 6,
+                                  "Receivers": 1,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 2,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 10518.31,
+                                  "Plan Rows": 298677,
+                                  "Plan Width": 165,
+                                  "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 2,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 4544.77,
+                                      "Plan Rows": 298677,
+                                      "Plan Width": 165,
+                                      "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.bukrs", "t.lifnr", "t.zzport", "t.kdatb", "t.kdate", "t.werks", "t.zzsrvpos", "t.zzforma", "t.zzet_tarif", "t.sdabw", "t.datbi", "t.datab", "t.dt_valid_to", "t.dt_valid_from", "t.purchase_document_subtype_code", "t.kopos", "t.konwa", "t.zzterminal", "t.vzzzone", "t.konws", "t.service_code", "t.price_uom_code", "t.netpr", "t.kbetr", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.currency_dogovor"]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Postgres query optimizer"
+    }
+  }
+]

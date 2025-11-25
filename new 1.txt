@@ -1,293 +1,660 @@
-DROP TABLE IF EXISTS t_contract_match;
-
-CREATE TEMP TABLE t_contract_match ON COMMIT DROP AS
-WITH
-
--- ===========================
--- 1. РФ-контейнеры
--- ===========================
-rf_cont AS (
-    SELECT
-        b.rn,
-        t.purchase_contract_code,
-        t.position_line_item_code,
-        t.konws,
-        t.price_uom_code,
-        t.service_code,
-        t.currency_dogovor,
-        t.datab,
-        t.datbi,
-        row_number() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                t.order_rf,
-                t.kopos,
-                t.kbetr,
-                t.purchase_contract_code,
-                t.position_line_item_code
-        ) AS rn_choice
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN t_1079_base t
-      ON t.bukrs = '1120'
-     AND t.lifnr = b.creditor_in_shipment_instruction_code
-     AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-     AND t.werks = '1121'
-     AND t.zzsrvpos = 'S49'
-     AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-     AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-     AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
-     AND b.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
-),
-rf_cont_final AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        price_uom_code,
-        service_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM rf_cont
-    WHERE rn_choice = 1
-),
-
--- ===========================
--- 2. РФ-балк (вариант 1: zzsrvpos = service_number)
--- ===========================
-rf_balk_1 AS (
-    SELECT
-        b.rn,
-        t.purchase_contract_code,
-        t.position_line_item_code,
-        t.konws,
-        t.price_uom_code,
-        t.service_code,
-        t.currency_dogovor,
-        t.datab,
-        t.datbi,
-        row_number() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                t.order_rf,
-                t.kopos,
-                t.kbetr,
-                t.purchase_contract_code,
-                t.position_line_item_code
-        ) AS rn_choice
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN t_1079_base t
-      ON t.bukrs = '1120'
-     AND t.lifnr = b.creditor_in_shipment_instruction_code
-     AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-     AND t.werks = '1121'
-     AND t.zzsrvpos = b.service_number
-     AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-     AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-     AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
-     AND b.storage_cost_calculation_type_name = 'Логика РФ-балк'
-),
-rf_balk_1_final AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        price_uom_code,
-        service_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM rf_balk_1
-    WHERE rn_choice = 1
-),
-
--- ===========================
--- 3. РФ-балк (вариант 2: zzsrvpos = 'S49')
--- ===========================
-rf_balk_2 AS (
-    SELECT
-        b.rn,
-        t.purchase_contract_code,
-        t.position_line_item_code,
-        t.konws,
-        t.price_uom_code,
-        t.service_code,
-        t.currency_dogovor,
-        t.datab,
-        t.datbi,
-        row_number() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                t.order_rf,
-                t.kopos,
-                t.kbetr,
-                t.purchase_contract_code,
-                t.position_line_item_code
-        ) AS rn_choice
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN t_1079_base t
-      ON t.bukrs = '1120'
-     AND t.lifnr = b.creditor_in_shipment_instruction_code
-     AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-     AND t.werks = '1121'
-     AND t.zzsrvpos = 'S49'
-     AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-     AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-     AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
-     AND b.storage_cost_calculation_type_name = 'Логика РФ-балк'
-),
-rf_balk_2_final AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        price_uom_code,
-        service_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM rf_balk_2
-    WHERE rn_choice = 1
-),
-
--- ===========================
--- 4. Логика Азия
--- ===========================
-asia AS (
-    SELECT
-        b.rn,
-        t.purchase_contract_code,
-        t.position_line_item_code,
-        t.konws,
-        t.price_uom_code,
-        t.service_code,
-        t.currency_dogovor,
-        t.datab,
-        t.datbi,
-        row_number() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                t.order_asia,
-                t.kopos,
-                t.kbetr,
-                t.purchase_contract_code,
-                t.position_line_item_code
-        ) AS rn_choice
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN t_1079_base t
-      ON t.bukrs = b.unit_balance_code
-     AND t.lifnr = b.forwarder_code
-     AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-     AND t.werks = b.plant_code
-     AND t.zzsrvpos = 'S49'
-     AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-     AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-     AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-     AND (t.zzterminal = b.warehouse_code OR t.zzterminal IS NULL)
-     AND (t.vzzzone   = b.warehouse_storage_area_code OR t.vzzzone IS NULL)
-     AND t.purchase_document_subtype_code = 'ZDTL'
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
-     AND b.storage_cost_calculation_type_name = 'Логика Азия'
-),
-asia_final AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        price_uom_code,
-        service_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM asia
-    WHERE rn_choice = 1
-),
-
--- ===========================
--- 5. Логика СВХ
--- ===========================
-svh AS (
-    SELECT
-        b.rn,
-        t.purchase_contract_code,
-        t.position_line_item_code,
-        t.konws,
-        t.price_uom_code,
-        t.service_code,
-        t.currency_dogovor,
-        t.datab,
-        t.datbi,
-        row_number() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                t.order_euro_svh,
-                t.kopos,
-                t.kbetr,
-                t.purchase_contract_code,
-                t.position_line_item_code
-        ) AS rn_choice
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN t_1079_base t
-      ON t.bukrs = '1120'
-     AND t.lifnr = b.forwarder_code
-     AND (t.zzport = b.port_of_discharge_code OR t.zzport IS NULL)
-     AND t.werks = '1121'
-     AND t.zzsrvpos = 'S49'
-     AND (t.zzforma = b.material_shape_code OR t.zzforma IS NULL)
-     AND (t.zzet_tarif = b.etsng_code OR t.zzet_tarif IS NULL)
-     AND (t.sdabw = b.transport_type_code OR t.sdabw IS NULL)
-     AND (t.zzterminal = b.warehouse_code OR t.zzterminal IS NULL)
-     AND t.purchase_document_subtype_code = 'ZDTL'
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
-     AND b.storage_cost_calculation_type_name = 'Логика СВХ'
-),
-svh_final AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        price_uom_code,
-        service_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM svh
-    WHERE rn_choice = 1
-)
-
-SELECT
-    rn,
-    purchase_contract_code,
-    position_line_item_code,
-    konws,
-    price_uom_code,
-    service_code,
-    currency_dogovor,
-    datab,
-    datbi
-FROM rf_cont_final
-
-UNION ALL
-SELECT * FROM rf_balk_1_final
-UNION ALL
-SELECT * FROM rf_balk_2_final
-UNION ALL
-SELECT * FROM asia_final
-UNION ALL
-SELECT * FROM svh_final
-;
--- Можно добавить:
--- DISTRIBUTED BY (rn);
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 6,
+      "Receivers": 1,
+      "Slice": 6,
+      "Segments": 6,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 662419.52,
+      "Plan Rows": 98019665,
+      "Plan Width": 78,
+      "Output": ["storage_sales_bundles_weight.rn", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi"],
+      "Plans": [
+        {
+          "Node Type": "Append",
+          "Parent Relationship": "Outer",
+          "Slice": 6,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 639763.25,
+          "Plan Rows": 98019665,
+          "Plan Width": 78,
+          "Plans": [
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 31458.46,
+              "Plan Rows": 3788286,
+              "Plan Width": 78,
+              "Output": ["storage_sales_bundles_weight.rn", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi"],
+              "Filter": "((row_number() OVER (?)) = 1)",
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 31406.53,
+                  "Plan Rows": 9470714,
+                  "Plan Width": 86,
+                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight.rn", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.order_rf"],
+                  "Partition By": ["storage_sales_bundles_weight.rn"],
+                  "Order By": ["t_1079_base.order_rf", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 30696.22,
+                      "Plan Rows": 9470714,
+                      "Plan Width": 90,
+                      "Output": ["storage_sales_bundles_weight.rn", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.order_rf"],
+                      "Sort Key": ["storage_sales_bundles_weight.rn", "t_1079_base.order_rf", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Inner",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 14111.24,
+                          "Plan Rows": 9470714,
+                          "Plan Width": 90,
+                          "Output": ["storage_sales_bundles_weight.rn", "t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.order_rf"],
+                          "Hash Cond": "((storage_sales_bundles_weight.creditor_in_shipment_instruction_code)::text = (t_1079_base.lifnr)::text)",
+                          "Join Filter": "((((t_1079_base.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (t_1079_base.zzport IS NULL)) AND (((t_1079_base.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (t_1079_base.zzforma IS NULL)) AND (((t_1079_base.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (t_1079_base.zzet_tarif IS NULL)) AND (((t_1079_base.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (t_1079_base.sdabw IS NULL)) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= t_1079_base.dt_valid_from) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= t_1079_base.dt_valid_to) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= t_1079_base.datab) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= t_1079_base.datbi))",
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "storage_sales_bundles_weight",
+                              "Schema": "dm_calc",
+                              "Alias": "storage_sales_bundles_weight",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 9267.38,
+                              "Plan Rows": 17311691,
+                              "Plan Width": 79,
+                              "Output": ["storage_sales_bundles_weight.rn", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code"],
+                              "Filter": "((storage_sales_bundles_weight.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text)"
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 442.64,
+                              "Total Cost": 442.64,
+                              "Plan Rows": 8455,
+                              "Plan Width": 99,
+                              "Output": ["t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.lifnr", "t_1079_base.zzport", "t_1079_base.zzforma", "t_1079_base.zzet_tarif", "t_1079_base.sdabw", "t_1079_base.dt_valid_to", "t_1079_base.dt_valid_from", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.order_rf"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 6,
+                                  "Receivers": 6,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 1,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 442.64,
+                                  "Plan Rows": 8455,
+                                  "Plan Width": 99,
+                                  "Output": ["t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.lifnr", "t_1079_base.zzport", "t_1079_base.zzforma", "t_1079_base.zzet_tarif", "t_1079_base.sdabw", "t_1079_base.dt_valid_to", "t_1079_base.dt_valid_from", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.order_rf"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t_1079_base",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 441.30,
+                                      "Plan Rows": 1409,
+                                      "Plan Width": 99,
+                                      "Output": ["t_1079_base.purchase_contract_code", "t_1079_base.position_line_item_code", "t_1079_base.konws", "t_1079_base.price_uom_code", "t_1079_base.service_code", "t_1079_base.currency_dogovor", "t_1079_base.datab", "t_1079_base.datbi", "t_1079_base.lifnr", "t_1079_base.zzport", "t_1079_base.zzforma", "t_1079_base.zzet_tarif", "t_1079_base.sdabw", "t_1079_base.dt_valid_to", "t_1079_base.dt_valid_from", "t_1079_base.kopos", "t_1079_base.kbetr", "t_1079_base.order_rf"],
+                                      "Filter": "(((t_1079_base.bukrs)::text = '1120'::text) AND ((t_1079_base.werks)::text = '1121'::text) AND ((t_1079_base.zzsrvpos)::text = 'S49'::text))"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 474459.45,
+              "Plan Rows": 79293867,
+              "Plan Width": 78,
+              "Output": ["storage_sales_bundles_weight_1.rn", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi"],
+              "Filter": "((row_number() OVER (?)) = 1)",
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 473372.46,
+                  "Plan Rows": 198234667,
+                  "Plan Width": 86,
+                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight_1.rn", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.order_rf"],
+                  "Partition By": ["storage_sales_bundles_weight_1.rn"],
+                  "Order By": ["t_1079_base_1.order_rf", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 458504.86,
+                      "Plan Rows": 198234667,
+                      "Plan Width": 90,
+                      "Output": ["storage_sales_bundles_weight_1.rn", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.order_rf"],
+                      "Sort Key": ["storage_sales_bundles_weight_1.rn", "t_1079_base_1.order_rf", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Inner",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 37384.86,
+                          "Plan Rows": 198234667,
+                          "Plan Width": 90,
+                          "Output": ["storage_sales_bundles_weight_1.rn", "t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.order_rf"],
+                          "Hash Cond": "(((storage_sales_bundles_weight_1.creditor_in_shipment_instruction_code)::text = (t_1079_base_1.lifnr)::text) AND (storage_sales_bundles_weight_1.service_number = (t_1079_base_1.zzsrvpos)::text))",
+                          "Join Filter": "((((t_1079_base_1.zzport)::text = (storage_sales_bundles_weight_1.port_of_discharge_code)::text) OR (t_1079_base_1.zzport IS NULL)) AND (((t_1079_base_1.zzforma)::text = (storage_sales_bundles_weight_1.material_shape_code)::text) OR (t_1079_base_1.zzforma IS NULL)) AND (((t_1079_base_1.zzet_tarif)::text = (storage_sales_bundles_weight_1.etsng_code)::text) OR (t_1079_base_1.zzet_tarif IS NULL)) AND (((t_1079_base_1.sdabw)::text = (storage_sales_bundles_weight_1.transport_type_code)::text) OR (t_1079_base_1.sdabw IS NULL)) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract >= t_1079_base_1.dt_valid_from) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract <= t_1079_base_1.dt_valid_to) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract >= t_1079_base_1.datab) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract <= t_1079_base_1.datbi))",
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "storage_sales_bundles_weight",
+                              "Schema": "dm_calc",
+                              "Alias": "storage_sales_bundles_weight_1",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 10856.77,
+                              "Plan Rows": 59147695,
+                              "Plan Width": 90,
+                              "Output": ["storage_sales_bundles_weight_1.rn", "storage_sales_bundles_weight_1.material_shape_code", "storage_sales_bundles_weight_1.transport_type_code", "storage_sales_bundles_weight_1.etsng_code", "storage_sales_bundles_weight_1.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_1.port_of_discharge_code", "storage_sales_bundles_weight_1.service_number"],
+                              "Filter": "((storage_sales_bundles_weight_1.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text)"
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 580.58,
+                              "Total Cost": 580.58,
+                              "Plan Rows": 816113,
+                              "Plan Width": 104,
+                              "Output": ["t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.lifnr", "t_1079_base_1.zzport", "t_1079_base_1.zzsrvpos", "t_1079_base_1.zzforma", "t_1079_base_1.zzet_tarif", "t_1079_base_1.sdabw", "t_1079_base_1.dt_valid_to", "t_1079_base_1.dt_valid_from", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.order_rf"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 6,
+                                  "Receivers": 6,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 2,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 580.58,
+                                  "Plan Rows": 816113,
+                                  "Plan Width": 104,
+                                  "Output": ["t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.lifnr", "t_1079_base_1.zzport", "t_1079_base_1.zzsrvpos", "t_1079_base_1.zzforma", "t_1079_base_1.zzet_tarif", "t_1079_base_1.sdabw", "t_1079_base_1.dt_valid_to", "t_1079_base_1.dt_valid_from", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.order_rf"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 2,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t_1079_base_1",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 444.42,
+                                      "Plan Rows": 136019,
+                                      "Plan Width": 104,
+                                      "Output": ["t_1079_base_1.purchase_contract_code", "t_1079_base_1.position_line_item_code", "t_1079_base_1.konws", "t_1079_base_1.price_uom_code", "t_1079_base_1.service_code", "t_1079_base_1.currency_dogovor", "t_1079_base_1.datab", "t_1079_base_1.datbi", "t_1079_base_1.lifnr", "t_1079_base_1.zzport", "t_1079_base_1.zzsrvpos", "t_1079_base_1.zzforma", "t_1079_base_1.zzet_tarif", "t_1079_base_1.sdabw", "t_1079_base_1.dt_valid_to", "t_1079_base_1.dt_valid_from", "t_1079_base_1.kopos", "t_1079_base_1.kbetr", "t_1079_base_1.order_rf"],
+                                      "Filter": "(((t_1079_base_1.bukrs)::text = '1120'::text) AND ((t_1079_base_1.werks)::text = '1121'::text))"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 90272.13,
+              "Plan Rows": 12943181,
+              "Plan Width": 78,
+              "Output": ["storage_sales_bundles_weight_2.rn", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi"],
+              "Filter": "((row_number() OVER (?)) = 1)",
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 90094.70,
+                  "Plan Rows": 32357953,
+                  "Plan Width": 86,
+                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight_2.rn", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.order_rf"],
+                  "Partition By": ["storage_sales_bundles_weight_2.rn"],
+                  "Order By": ["t_1079_base_2.order_rf", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 87667.86,
+                      "Plan Rows": 32357953,
+                      "Plan Width": 90,
+                      "Output": ["storage_sales_bundles_weight_2.rn", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.order_rf"],
+                      "Sort Key": ["storage_sales_bundles_weight_2.rn", "t_1079_base_2.order_rf", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Inner",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 26124.85,
+                          "Plan Rows": 32357953,
+                          "Plan Width": 90,
+                          "Output": ["storage_sales_bundles_weight_2.rn", "t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.order_rf"],
+                          "Hash Cond": "((storage_sales_bundles_weight_2.creditor_in_shipment_instruction_code)::text = (t_1079_base_2.lifnr)::text)",
+                          "Join Filter": "((((t_1079_base_2.zzport)::text = (storage_sales_bundles_weight_2.port_of_discharge_code)::text) OR (t_1079_base_2.zzport IS NULL)) AND (((t_1079_base_2.zzforma)::text = (storage_sales_bundles_weight_2.material_shape_code)::text) OR (t_1079_base_2.zzforma IS NULL)) AND (((t_1079_base_2.zzet_tarif)::text = (storage_sales_bundles_weight_2.etsng_code)::text) OR (t_1079_base_2.zzet_tarif IS NULL)) AND (((t_1079_base_2.sdabw)::text = (storage_sales_bundles_weight_2.transport_type_code)::text) OR (t_1079_base_2.sdabw IS NULL)) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract >= t_1079_base_2.dt_valid_from) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract <= t_1079_base_2.dt_valid_to) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract >= t_1079_base_2.datab) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract <= t_1079_base_2.datbi))",
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "storage_sales_bundles_weight",
+                              "Schema": "dm_calc",
+                              "Alias": "storage_sales_bundles_weight_2",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 10655.08,
+                              "Plan Rows": 59147695,
+                              "Plan Width": 79,
+                              "Output": ["storage_sales_bundles_weight_2.rn", "storage_sales_bundles_weight_2.material_shape_code", "storage_sales_bundles_weight_2.transport_type_code", "storage_sales_bundles_weight_2.etsng_code", "storage_sales_bundles_weight_2.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_2.port_of_discharge_code"],
+                              "Filter": "((storage_sales_bundles_weight_2.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text)"
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 442.64,
+                              "Total Cost": 442.64,
+                              "Plan Rows": 8455,
+                              "Plan Width": 99,
+                              "Output": ["t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.lifnr", "t_1079_base_2.zzport", "t_1079_base_2.zzforma", "t_1079_base_2.zzet_tarif", "t_1079_base_2.sdabw", "t_1079_base_2.dt_valid_to", "t_1079_base_2.dt_valid_from", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.order_rf"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 6,
+                                  "Receivers": 6,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 3,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 442.64,
+                                  "Plan Rows": 8455,
+                                  "Plan Width": 99,
+                                  "Output": ["t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.lifnr", "t_1079_base_2.zzport", "t_1079_base_2.zzforma", "t_1079_base_2.zzet_tarif", "t_1079_base_2.sdabw", "t_1079_base_2.dt_valid_to", "t_1079_base_2.dt_valid_from", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.order_rf"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 3,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t_1079_base_2",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 441.30,
+                                      "Plan Rows": 1409,
+                                      "Plan Width": 99,
+                                      "Output": ["t_1079_base_2.purchase_contract_code", "t_1079_base_2.position_line_item_code", "t_1079_base_2.konws", "t_1079_base_2.price_uom_code", "t_1079_base_2.service_code", "t_1079_base_2.currency_dogovor", "t_1079_base_2.datab", "t_1079_base_2.datbi", "t_1079_base_2.lifnr", "t_1079_base_2.zzport", "t_1079_base_2.zzforma", "t_1079_base_2.zzet_tarif", "t_1079_base_2.sdabw", "t_1079_base_2.dt_valid_to", "t_1079_base_2.dt_valid_from", "t_1079_base_2.kopos", "t_1079_base_2.kbetr", "t_1079_base_2.order_rf"],
+                                      "Filter": "(((t_1079_base_2.bukrs)::text = '1120'::text) AND ((t_1079_base_2.werks)::text = '1121'::text) AND ((t_1079_base_2.zzsrvpos)::text = 'S49'::text))"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 31811.88,
+              "Plan Rows": 1736707,
+              "Plan Width": 78,
+              "Output": ["storage_sales_bundles_weight_3.rn", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi"],
+              "Filter": "((row_number() OVER (?)) = 1)",
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 31788.07,
+                  "Plan Rows": 4341767,
+                  "Plan Width": 86,
+                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight_3.rn", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.order_asia"],
+                  "Partition By": ["storage_sales_bundles_weight_3.rn"],
+                  "Order By": ["t_1079_base_3.order_asia", "t_1079_base_3.kopos", "t_1079_base_3.kbetr", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 31462.44,
+                      "Plan Rows": 4341767,
+                      "Plan Width": 90,
+                      "Output": ["storage_sales_bundles_weight_3.rn", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.kopos", "t_1079_base_3.kbetr", "t_1079_base_3.order_asia"],
+                      "Sort Key": ["storage_sales_bundles_weight_3.rn", "t_1079_base_3.order_asia", "t_1079_base_3.kopos", "t_1079_base_3.kbetr", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Inner",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 24274.69,
+                          "Plan Rows": 4341767,
+                          "Plan Width": 90,
+                          "Output": ["storage_sales_bundles_weight_3.rn", "t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.kopos", "t_1079_base_3.kbetr", "t_1079_base_3.order_asia"],
+                          "Hash Cond": "(((storage_sales_bundles_weight_3.unit_balance_code)::text = (t_1079_base_3.bukrs)::text) AND ((storage_sales_bundles_weight_3.forwarder_code)::text = (t_1079_base_3.lifnr)::text) AND ((storage_sales_bundles_weight_3.plant_code)::text = (t_1079_base_3.werks)::text))",
+                          "Join Filter": "((((t_1079_base_3.zzport)::text = (storage_sales_bundles_weight_3.port_of_discharge_code)::text) OR (t_1079_base_3.zzport IS NULL)) AND (((t_1079_base_3.zzforma)::text = (storage_sales_bundles_weight_3.material_shape_code)::text) OR (t_1079_base_3.zzforma IS NULL)) AND (((t_1079_base_3.zzet_tarif)::text = (storage_sales_bundles_weight_3.etsng_code)::text) OR (t_1079_base_3.zzet_tarif IS NULL)) AND (((t_1079_base_3.sdabw)::text = (storage_sales_bundles_weight_3.transport_type_code)::text) OR (t_1079_base_3.sdabw IS NULL)) AND (((t_1079_base_3.zzterminal)::text = (storage_sales_bundles_weight_3.warehouse_code)::text) OR (t_1079_base_3.zzterminal IS NULL)) AND (((t_1079_base_3.vzzzone)::text = (storage_sales_bundles_weight_3.warehouse_storage_area_code)::text) OR (t_1079_base_3.vzzzone IS NULL)) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract >= t_1079_base_3.dt_valid_from) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract <= t_1079_base_3.dt_valid_to) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract >= t_1079_base_3.datab) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract <= t_1079_base_3.datbi))",
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "storage_sales_bundles_weight",
+                              "Schema": "dm_calc",
+                              "Alias": "storage_sales_bundles_weight_3",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 10350.74,
+                              "Plan Rows": 38468058,
+                              "Plan Width": 111,
+                              "Output": ["storage_sales_bundles_weight_3.rn", "storage_sales_bundles_weight_3.material_shape_code", "storage_sales_bundles_weight_3.transport_type_code", "storage_sales_bundles_weight_3.etsng_code", "storage_sales_bundles_weight_3.forwarder_code", "storage_sales_bundles_weight_3.warehouse_code", "storage_sales_bundles_weight_3.warehouse_storage_area_code", "storage_sales_bundles_weight_3.plant_code", "storage_sales_bundles_weight_3.unit_balance_code", "storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_3.port_of_discharge_code"],
+                              "Filter": "((storage_sales_bundles_weight_3.storage_cost_calculation_type_name)::text = 'Логика Азия'::text)"
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 441.69,
+                              "Total Cost": 441.69,
+                              "Plan Rows": 9557,
+                              "Plan Width": 131,
+                              "Output": ["t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.bukrs", "t_1079_base_3.lifnr", "t_1079_base_3.zzport", "t_1079_base_3.werks", "t_1079_base_3.zzforma", "t_1079_base_3.zzet_tarif", "t_1079_base_3.sdabw", "t_1079_base_3.dt_valid_to", "t_1079_base_3.dt_valid_from", "t_1079_base_3.kopos", "t_1079_base_3.zzterminal", "t_1079_base_3.vzzzone", "t_1079_base_3.kbetr", "t_1079_base_3.order_asia"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 6,
+                                  "Receivers": 6,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 4,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 441.69,
+                                  "Plan Rows": 9557,
+                                  "Plan Width": 131,
+                                  "Output": ["t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.bukrs", "t_1079_base_3.lifnr", "t_1079_base_3.zzport", "t_1079_base_3.werks", "t_1079_base_3.zzforma", "t_1079_base_3.zzet_tarif", "t_1079_base_3.sdabw", "t_1079_base_3.dt_valid_to", "t_1079_base_3.dt_valid_from", "t_1079_base_3.kopos", "t_1079_base_3.zzterminal", "t_1079_base_3.vzzzone", "t_1079_base_3.kbetr", "t_1079_base_3.order_asia"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 4,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t_1079_base_3",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 439.68,
+                                      "Plan Rows": 1593,
+                                      "Plan Width": 131,
+                                      "Output": ["t_1079_base_3.purchase_contract_code", "t_1079_base_3.position_line_item_code", "t_1079_base_3.konws", "t_1079_base_3.price_uom_code", "t_1079_base_3.service_code", "t_1079_base_3.currency_dogovor", "t_1079_base_3.datab", "t_1079_base_3.datbi", "t_1079_base_3.bukrs", "t_1079_base_3.lifnr", "t_1079_base_3.zzport", "t_1079_base_3.werks", "t_1079_base_3.zzforma", "t_1079_base_3.zzet_tarif", "t_1079_base_3.sdabw", "t_1079_base_3.dt_valid_to", "t_1079_base_3.dt_valid_from", "t_1079_base_3.kopos", "t_1079_base_3.zzterminal", "t_1079_base_3.vzzzone", "t_1079_base_3.kbetr", "t_1079_base_3.order_asia"],
+                                      "Filter": "(((t_1079_base_3.zzsrvpos)::text = 'S49'::text) AND ((t_1079_base_3.purchase_document_subtype_code)::text = 'ZDTL'::text))"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 6,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 10487.08,
+              "Plan Rows": 257625,
+              "Plan Width": 78,
+              "Output": ["storage_sales_bundles_weight_4.rn", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi"],
+              "Filter": "((row_number() OVER (?)) = 1)",
+              "Plans": [
+                {
+                  "Node Type": "WindowAgg",
+                  "Parent Relationship": "Outer",
+                  "Slice": 6,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 10483.54,
+                  "Plan Rows": 644062,
+                  "Plan Width": 86,
+                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight_4.rn", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.order_euro_svh"],
+                  "Partition By": ["storage_sales_bundles_weight_4.rn"],
+                  "Order By": ["t_1079_base_4.order_euro_svh", "t_1079_base_4.kopos", "t_1079_base_4.kbetr", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code"],
+                  "Plans": [
+                    {
+                      "Node Type": "Sort",
+                      "Parent Relationship": "Outer",
+                      "Slice": 6,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 10435.24,
+                      "Plan Rows": 644062,
+                      "Plan Width": 90,
+                      "Output": ["storage_sales_bundles_weight_4.rn", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.kopos", "t_1079_base_4.kbetr", "t_1079_base_4.order_euro_svh"],
+                      "Sort Key": ["storage_sales_bundles_weight_4.rn", "t_1079_base_4.order_euro_svh", "t_1079_base_4.kopos", "t_1079_base_4.kbetr", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 6,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Inner",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 9519.81,
+                          "Plan Rows": 644062,
+                          "Plan Width": 90,
+                          "Output": ["storage_sales_bundles_weight_4.rn", "t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.kopos", "t_1079_base_4.kbetr", "t_1079_base_4.order_euro_svh"],
+                          "Hash Cond": "((storage_sales_bundles_weight_4.forwarder_code)::text = (t_1079_base_4.lifnr)::text)",
+                          "Join Filter": "((((t_1079_base_4.zzport)::text = (storage_sales_bundles_weight_4.port_of_discharge_code)::text) OR (t_1079_base_4.zzport IS NULL)) AND (((t_1079_base_4.zzforma)::text = (storage_sales_bundles_weight_4.material_shape_code)::text) OR (t_1079_base_4.zzforma IS NULL)) AND (((t_1079_base_4.zzet_tarif)::text = (storage_sales_bundles_weight_4.etsng_code)::text) OR (t_1079_base_4.zzet_tarif IS NULL)) AND (((t_1079_base_4.sdabw)::text = (storage_sales_bundles_weight_4.transport_type_code)::text) OR (t_1079_base_4.sdabw IS NULL)) AND (((t_1079_base_4.zzterminal)::text = (storage_sales_bundles_weight_4.warehouse_code)::text) OR (t_1079_base_4.zzterminal IS NULL)) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract >= t_1079_base_4.dt_valid_from) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract <= t_1079_base_4.dt_valid_to) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract >= t_1079_base_4.datab) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract <= t_1079_base_4.datbi))",
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "storage_sales_bundles_weight",
+                              "Schema": "dm_calc",
+                              "Alias": "storage_sales_bundles_weight_4",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 8736.21,
+                              "Plan Rows": 1177291,
+                              "Plan Width": 90,
+                              "Output": ["storage_sales_bundles_weight_4.rn", "storage_sales_bundles_weight_4.material_shape_code", "storage_sales_bundles_weight_4.transport_type_code", "storage_sales_bundles_weight_4.etsng_code", "storage_sales_bundles_weight_4.forwarder_code", "storage_sales_bundles_weight_4.warehouse_code", "storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_4.port_of_discharge_code"],
+                              "Filter": "((storage_sales_bundles_weight_4.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text)"
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 6,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 444.44,
+                              "Total Cost": 444.44,
+                              "Plan Rows": 8455,
+                              "Plan Width": 110,
+                              "Output": ["t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.lifnr", "t_1079_base_4.zzport", "t_1079_base_4.zzforma", "t_1079_base_4.zzet_tarif", "t_1079_base_4.sdabw", "t_1079_base_4.dt_valid_to", "t_1079_base_4.dt_valid_from", "t_1079_base_4.kopos", "t_1079_base_4.zzterminal", "t_1079_base_4.kbetr", "t_1079_base_4.order_euro_svh"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 6,
+                                  "Receivers": 6,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 5,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 444.44,
+                                  "Plan Rows": 8455,
+                                  "Plan Width": 110,
+                                  "Output": ["t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.lifnr", "t_1079_base_4.zzport", "t_1079_base_4.zzforma", "t_1079_base_4.zzet_tarif", "t_1079_base_4.sdabw", "t_1079_base_4.dt_valid_to", "t_1079_base_4.dt_valid_from", "t_1079_base_4.kopos", "t_1079_base_4.zzterminal", "t_1079_base_4.kbetr", "t_1079_base_4.order_euro_svh"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 5,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "t_1079_base",
+                                      "Schema": "pg_temp_3961490",
+                                      "Alias": "t_1079_base_4",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 442.95,
+                                      "Plan Rows": 1409,
+                                      "Plan Width": 110,
+                                      "Output": ["t_1079_base_4.purchase_contract_code", "t_1079_base_4.position_line_item_code", "t_1079_base_4.konws", "t_1079_base_4.price_uom_code", "t_1079_base_4.service_code", "t_1079_base_4.currency_dogovor", "t_1079_base_4.datab", "t_1079_base_4.datbi", "t_1079_base_4.lifnr", "t_1079_base_4.zzport", "t_1079_base_4.zzforma", "t_1079_base_4.zzet_tarif", "t_1079_base_4.sdabw", "t_1079_base_4.dt_valid_to", "t_1079_base_4.dt_valid_from", "t_1079_base_4.kopos", "t_1079_base_4.zzterminal", "t_1079_base_4.kbetr", "t_1079_base_4.order_euro_svh"],
+                                      "Filter": "(((t_1079_base_4.bukrs)::text = '1120'::text) AND ((t_1079_base_4.werks)::text = '1121'::text) AND ((t_1079_base_4.zzsrvpos)::text = 'S49'::text) AND ((t_1079_base_4.purchase_document_subtype_code)::text = 'ZDTL'::text))"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

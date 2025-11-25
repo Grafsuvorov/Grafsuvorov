@@ -1,175 +1,117 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Unique",
-      "Slice": 0,
-      "Segments": 0,
-      "Gang Type": "unallocated",
-      "Startup Cost": 24738825854.91,
-      "Total Cost": 24739867048.29,
-      "Plan Rows": 138825784,
-      "Plan Width": 126,
-      "Output": ["b.rn", "t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr"],
-      "Group Key": ["b.rn"],
-      "Plans": [
-        {
-          "Node Type": "Gather Motion",
-          "Senders": 6,
-          "Receivers": 1,
-          "Parent Relationship": "Outer",
-          "Slice": 2,
-          "Segments": 6,
-          "Gang Type": "primary reader",
-          "Startup Cost": 24738825854.91,
-          "Total Cost": 24739519983.83,
-          "Plan Rows": 138825784,
-          "Plan Width": 126,
-          "Output": ["b.rn", "t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr"],
-          "Merge Key": ["b.rn", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr", "t.purchase_contract_code", "t.position_line_item_code"],
-          "Plans": [
-            {
-              "Node Type": "Unique",
-              "Parent Relationship": "Outer",
-              "Slice": 2,
-              "Segments": 6,
-              "Gang Type": "primary reader",
-              "Startup Cost": 24738825854.91,
-              "Total Cost": 24739519983.83,
-              "Plan Rows": 138825784,
-              "Plan Width": 126,
-              "Output": ["b.rn", "t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr"],
-              "Group Key": ["b.rn"],
-              "Plans": [
-                {
-                  "Node Type": "Sort",
-                  "Parent Relationship": "Outer",
-                  "Slice": 2,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 24738825854.91,
-                  "Total Cost": 24739172919.37,
-                  "Plan Rows": 138825784,
-                  "Plan Width": 126,
-                  "Output": ["b.rn", "t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr"],
-                  "Sort Key (Distinct)": ["b.rn", "(CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END)", "t.kopos", "t.kbetr", "t.purchase_contract_code", "t.position_line_item_code"],
-                  "Plans": [
-                    {
-                      "Node Type": "Merge Join",
-                      "Parent Relationship": "Outer",
-                      "Slice": 2,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Inner",
-                      "Startup Cost": 10057085448.22,
-                      "Total Cost": 24686886217.75,
-                      "Plan Rows": 138825784,
-                      "Plan Width": 126,
-                      "Output": ["b.rn", "t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "CASE b.storage_cost_calculation_type_name WHEN 'Логика РФ-контейнеры'::text THEN t.order_rf WHEN 'Логика РФ-балк'::text THEN t.order_rf WHEN 'Логика Азия'::text THEN t.order_asia WHEN 'Логика Европа'::text THEN t.order_euro_svh WHEN 'Логика СВХ'::text THEN t.order_euro_svh ELSE 999999 END", "t.kopos", "t.kbetr"],
-                      "Merge Cond": "((t.lifnr)::text = (b.forwarder_code)::text)",
-                      "Join Filter": "((b.dt_for_price_search_in_purchase_contract >= t.datab) AND (b.dt_for_price_search_in_purchase_contract <= t.datbi) AND (b.dt_for_price_search_in_purchase_contract >= t.dt_valid_from) AND (b.dt_for_price_search_in_purchase_contract <= t.dt_valid_to) AND (((t.zzport)::text = (b.port_of_discharge_code)::text) OR (t.zzport IS NULL)) AND (((t.zzforma)::text = (b.material_shape_code)::text) OR (t.zzforma IS NULL)) AND (((t.zzet_tarif)::text = (b.etsng_code)::text) OR (t.zzet_tarif IS NULL)) AND (((t.sdabw)::text = (b.transport_type_code)::text) OR (t.sdabw IS NULL)))",
-                      "Plans": [
-                        {
-                          "Node Type": "Sort",
-                          "Parent Relationship": "Outer",
-                          "Slice": 2,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 560022.58,
-                          "Total Cost": 564247.21,
-                          "Plan Rows": 1689852,
-                          "Plan Width": 107,
-                          "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.kopos", "t.kbetr", "t.lifnr", "t.dt_valid_from", "t.dt_valid_to", "t.zzport", "t.zzforma", "t.zzet_tarif", "t.sdabw"],
-                          "Sort Key": ["t.lifnr"],
-                          "Plans": [
-                            {
-                              "Node Type": "Broadcast Motion",
-                              "Senders": 6,
-                              "Receivers": 6,
-                              "Parent Relationship": "Outer",
-                              "Slice": 1,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 23999.36,
-                              "Plan Rows": 1689852,
-                              "Plan Width": 107,
-                              "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.kopos", "t.kbetr", "t.lifnr", "t.dt_valid_from", "t.dt_valid_to", "t.zzport", "t.zzforma", "t.zzet_tarif", "t.sdabw"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 1,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "t_1079_specific",
-                                  "Schema": "pg_temp_3961490",
-                                  "Alias": "t",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 4284.42,
-                                  "Plan Rows": 281642,
-                                  "Plan Width": 107,
-                                  "Output": ["t.purchase_contract_code", "t.position_line_item_code", "t.konws", "t.price_uom_code", "t.service_code", "t.currency_dogovor", "t.datab", "t.datbi", "t.order_rf", "t.order_asia", "t.order_euro_svh", "t.kopos", "t.kbetr", "t.lifnr", "t.dt_valid_from", "t.dt_valid_to", "t.zzport", "t.zzforma", "t.zzet_tarif", "t.sdabw"]
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "Node Type": "Materialize",
-                          "Parent Relationship": "Inner",
-                          "Slice": 2,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 53716501.78,
-                          "Total Cost": 54461622.66,
-                          "Plan Rows": 149024176,
-                          "Plan Width": 107,
-                          "Output": ["b.rn", "b.storage_cost_calculation_type_name", "b.forwarder_code", "b.dt_for_price_search_in_purchase_contract", "b.port_of_discharge_code", "b.material_shape_code", "b.etsng_code", "b.transport_type_code"],
-                          "Plans": [
-                            {
-                              "Node Type": "Sort",
-                              "Parent Relationship": "Outer",
-                              "Slice": 2,
-                              "Segments": 6,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 53716501.78,
-                              "Total Cost": 54089062.22,
-                              "Plan Rows": 149024176,
-                              "Plan Width": 107,
-                              "Output": ["b.rn", "b.storage_cost_calculation_type_name", "b.forwarder_code", "b.dt_for_price_search_in_purchase_contract", "b.port_of_discharge_code", "b.material_shape_code", "b.etsng_code", "b.transport_type_code"],
-                              "Sort Key": ["b.forwarder_code"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 2,
-                                  "Segments": 6,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "storage_sales_bundles_weight",
-                                  "Schema": "dm_calc",
-                                  "Alias": "b",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 1632532.76,
-                                  "Plan Rows": 149024176,
-                                  "Plan Width": 107,
-                                  "Output": ["b.rn", "b.storage_cost_calculation_type_name", "b.forwarder_code", "b.dt_for_price_search_in_purchase_contract", "b.port_of_discharge_code", "b.material_shape_code", "b.etsng_code", "b.transport_type_code"]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Postgres query optimizer"
-    }
-  }
-]
+-- 1. Полностью специфичные строки: все ограничения заданы
+DROP TABLE IF EXISTS t_1079_spec_full;
+CREATE TEMP TABLE t_1079_spec_full
+ON COMMIT DROP AS
+SELECT *
+FROM t_1079_specific
+WHERE zzport  IS NOT NULL
+  AND zzforma IS NOT NULL
+  AND zzet_tarif IS NOT NULL
+  AND sdabw   IS NOT NULL;
+
+-- 2. Частично специфичные / с подстановками (null)
+DROP TABLE IF EXISTS t_1079_spec_part;
+CREATE TEMP TABLE t_1079_spec_part
+ON COMMIT DROP AS
+SELECT *
+FROM t_1079_specific
+WHERE zzport  IS NULL
+   OR zzforma IS NULL
+   OR zzet_tarif IS NULL
+   OR sdabw   IS NULL;
+Теперь:
+
+1) Сначала ищем идеальные совпадения (без OR вообще)
+sql
+Копировать код
+DROP TABLE IF EXISTS t_contract_spec_full;
+CREATE TEMP TABLE t_contract_spec_full
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    t.purchase_contract_code,
+    t.position_line_item_code,
+    t.konws,
+    t.price_uom_code,
+    t.service_code,
+    t.currency_dogovor,
+    t.datab,
+    t.datbi
+FROM dm_calc.storage_sales_bundles_weight b
+JOIN t_1079_spec_full t
+  ON t.lifnr  = b.forwarder_code
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
+ AND t.zzport     = b.port_of_discharge_code
+ AND t.zzforma    = b.material_shape_code
+ AND t.zzet_tarif = b.etsng_code
+ AND t.sdabw      = b.transport_type_code
+ORDER BY
+    b.rn,
+    CASE b.storage_cost_calculation_type_name
+        WHEN 'Логика РФ-контейнеры' THEN t.order_rf
+        WHEN 'Логика РФ-балк'       THEN t.order_rf
+        WHEN 'Логика Азия'          THEN t.order_asia
+        WHEN 'Логика Европа'        THEN t.order_euro_svh
+        WHEN 'Логика СВХ'           THEN t.order_euro_svh
+        ELSE 999999
+    END,
+    t.kopos,
+    t.kbetr,
+    t.purchase_contract_code,
+    t.position_line_item_code;
+Здесь join чистый, без OR ... IS NULL, сильно более селективный — план должен стать нормальным Hash Join + существенно меньшим количеством строк, которые идут в DISTINCT ON.
+
+2) Потом добираем те rn, где идеального матча нет → используем «подстановки» как у тебя
+sql
+Копировать код
+DROP TABLE IF EXISTS t_contract_spec_part;
+CREATE TEMP TABLE t_contract_spec_part
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    t.purchase_contract_code,
+    t.position_line_item_code,
+    t.konws,
+    t.price_uom_code,
+    t.service_code,
+    t.currency_dogovor,
+    t.datab,
+    t.datbi
+FROM dm_calc.storage_sales_bundles_weight b
+JOIN t_1079_spec_part t
+  ON t.lifnr = b.forwarder_code
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.datab       AND t.datbi
+ AND b.dt_for_price_search_in_purchase_contract BETWEEN t.dt_valid_from AND t.dt_valid_to
+ AND (t.zzport     = b.port_of_discharge_code   OR t.zzport  IS NULL)
+ AND (t.zzforma    = b.material_shape_code      OR t.zzforma IS NULL)
+ AND (t.zzet_tarif = b.etsng_code               OR t.zzet_tarif IS NULL)
+ AND (t.sdabw      = b.transport_type_code      OR t.sdabw   IS NULL)
+WHERE NOT EXISTS (
+      SELECT 1
+      FROM t_contract_spec_full x
+      WHERE x.rn = b.rn
+)
+ORDER BY
+    b.rn,
+    CASE b.storage_cost_calculation_type_name
+        WHEN 'Логика РФ-контейнеры' THEN t.order_rf
+        WHEN 'Логика РФ-балк'       THEN t.order_rf
+        WHEN 'Логика Азия'          THEN t.order_asia
+        WHEN 'Логика Европа'        THEN t.order_euro_svh
+        WHEN 'Логика СВХ'           THEN t.order_euro_svh
+        ELSE 999999
+    END,
+    t.kopos,
+    t.kbetr,
+    t.purchase_contract_code,
+    t.position_line_item_code;
+3) Финальная таблица
+sql
+Копировать код
+DROP TABLE IF EXISTS t_contract_specific;
+CREATE TEMP TABLE t_contract_specific
+ON COMMIT DROP AS
+SELECT * FROM t_contract_spec_full
+UNION ALL
+SELECT * FROM t_contract_spec_part;

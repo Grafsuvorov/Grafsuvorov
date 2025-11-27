@@ -1,700 +1,269 @@
-CREATE TEMP TABLE for_1079_asia
- as
- explain(verbose, format json)
-WITH cte AS (
-    SELECT
-        b.rn,
-        f.purchase_contract_code,
-        f.position_line_item_code,
-        f.konws,
-        f.service_code,
-        f.price_uom_code,
-        f.currency_dogovor,
-        f.datab,
-        f.datbi,
-        ROW_NUMBER() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                f.order_asia,
-                f.kopos,
-                f.kbetr,
-                f.purchase_contract_code,
-                f.position_line_item_code
-        ) AS row_num
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN for_1079_base f
-      ON f.bukrs  = b.unit_balance_code
-     AND f.lifnr  = b.forwarder_code
-     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
-     AND f.werks  = b.plant_code
-     AND f.zzsrvpos = 'S49'
-     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
-     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
-     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.dt_valid_from AND f.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.datab AND f.datbi
-     AND b.storage_cost_calculation_type_name IN ('Логика Азия')
-     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
-     AND (f.vzzzone    = b.warehouse_storage_area_code OR f.vzzzone IS NULL)
-     AND f.purchase_document_subtype_code = 'ZDTL'
-)
+-- 1. Бандлы только с логикой Азия, минимальный набор колонок
+DROP TABLE IF EXISTS tmp_1079_asia_bundles;
+CREATE TEMP TABLE tmp_1079_asia_bundles
+ON COMMIT DROP AS
 SELECT
     rn,
-    purchase_contract_code,
-    position_line_item_code,
-    konws,
-    service_code,
-    price_uom_code,
-    currency_dogovor,
-    datab,
-    datbi
-FROM cte
-WHERE row_num = 1
+    unit_balance_code,
+    forwarder_code,
+    plant_code,
+    port_of_discharge_code,
+    material_shape_code,
+    etsng_code,
+    transport_type_code,
+    dt_for_price_search_in_purchase_contract,
+    warehouse_code,
+    warehouse_storage_area_code
+FROM dm_calc.storage_sales_bundles_weight
+WHERE storage_cost_calculation_type_name = 'Логика Азия'
 DISTRIBUTED BY (rn);
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 2,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 30775.82,
-      "Plan Rows": 1074700,
-      "Plan Width": 60,
-      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 2,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 30597.05,
-          "Plan Rows": 1074700,
-          "Plan Width": 60,
-          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
-          "Filter": "((row_number() OVER (?)) = 1)",
-          "Plans": [
-            {
-              "Node Type": "WindowAgg",
-              "Parent Relationship": "Outer",
-              "Slice": 2,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 30586.00,
-              "Plan Rows": 2686749,
-              "Plan Width": 68,
-              "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.order_asia"],
-              "Partition By": ["storage_sales_bundles_weight.rn"],
-              "Order By": ["for_1079_base.order_asia", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code"],
-              "Plans": [
-                {
-                  "Node Type": "Sort",
-                  "Parent Relationship": "Outer",
-                  "Slice": 2,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 30208.17,
-                  "Plan Rows": 6716872,
-                  "Plan Width": 90,
-                  "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_asia"],
-                  "Sort Key": ["storage_sales_bundles_weight.rn", "for_1079_base.order_asia", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code"],
-                  "Plans": [
-                    {
-                      "Node Type": "Redistribute Motion",
-                      "Senders": 8,
-                      "Receivers": 8,
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 21776.50,
-                      "Plan Rows": 6716872,
-                      "Plan Width": 90,
-                      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_asia"],
-                      "Hash Key": "storage_sales_bundles_weight.rn",
-                      "Plans": [
-                        {
-                          "Node Type": "Hash Join",
-                          "Parent Relationship": "Outer",
-                          "Slice": 1,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Join Type": "Inner",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 21539.98,
-                          "Plan Rows": 6716872,
-                          "Plan Width": 90,
-                          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_asia"],
-                          "Hash Cond": "(((storage_sales_bundles_weight.unit_balance_code)::text = (for_1079_base.bukrs)::text) AND ((storage_sales_bundles_weight.forwarder_code)::text = (for_1079_base.lifnr)::text) AND ((storage_sales_bundles_weight.plant_code)::text = (for_1079_base.werks)::text))",
-                          "Join Filter": "((((for_1079_base.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (for_1079_base.zzport IS NULL)) AND (((for_1079_base.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (for_1079_base.zzforma IS NULL)) AND (((for_1079_base.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (for_1079_base.zzet_tarif IS NULL)) AND (((for_1079_base.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (for_1079_base.sdabw IS NULL)) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base.dt_valid_from) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base.dt_valid_to) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base.datab) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base.datbi) AND (((for_1079_base.zzterminal)::text = (storage_sales_bundles_weight.warehouse_code)::text) OR (for_1079_base.zzterminal IS NULL)) AND (((for_1079_base.vzzzone)::text = (storage_sales_bundles_weight.warehouse_storage_area_code)::text) OR (for_1079_base.vzzzone IS NULL)))",
-                          "Plans": [
-                            {
-                              "Node Type": "Seq Scan",
-                              "Parent Relationship": "Outer",
-                              "Slice": 1,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Relation Name": "storage_sales_bundles_weight",
-                              "Schema": "dm_calc",
-                              "Alias": "storage_sales_bundles_weight",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 8276.52,
-                              "Plan Rows": 48424641,
-                              "Plan Width": 111,
-                              "Output": ["storage_sales_bundles_weight.rn", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code"],
-                              "Filter": "((storage_sales_bundles_weight.storage_cost_calculation_type_name)::text = 'Логика Азия'::text)"
-                            },
-                            {
-                              "Node Type": "Hash",
-                              "Parent Relationship": "Inner",
-                              "Slice": 1,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 484.40,
-                              "Total Cost": 484.40,
-                              "Plan Rows": 14700,
-                              "Plan Width": 120,
-                              "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.bukrs", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.werks", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_to", "for_1079_base.dt_valid_from", "for_1079_base.kopos", "for_1079_base.zzterminal", "for_1079_base.vzzzone", "for_1079_base.kbetr", "for_1079_base.order_asia"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 1,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "for_1079_base",
-                                  "Schema": "pg_temp_8077163",
-                                  "Alias": "for_1079_base",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 484.40,
-                                  "Plan Rows": 14700,
-                                  "Plan Width": 120,
-                                  "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.bukrs", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.werks", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_to", "for_1079_base.dt_valid_from", "for_1079_base.kopos", "for_1079_base.zzterminal", "for_1079_base.vzzzone", "for_1079_base.kbetr", "for_1079_base.order_asia"],
-                                  "Filter": "(((for_1079_base.zzsrvpos)::text = 'S49'::text) AND ((for_1079_base.purchase_document_subtype_code)::text = 'ZDTL'::text))"
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
 
 
-explain(verbose, format json)
-WITH euro_base AS (
-    SELECT
-        b.rn,
-        f.purchase_contract_code,
-        f.position_line_item_code,
-        f.konws,
-        f.service_code,
-        f.price_uom_code,
-        f.netpr,
-        f.currency_dogovor,
-        f.datab,
-        f.datbi,
-
-        /* Суммарный вес по складу и месяцу окончания хранения */
-        SUM(b.sales_bundle_gross_weight) OVER (
-            PARTITION BY b.warehouse_code,
-                         date_trunc('month', b.dt_storage_end)
-        ) AS warehouse_weight_month_end,
-
-        /* Разница в месяцах между началом и концом хранения (month_difference_2) */
-        CASE
-            WHEN EXTRACT(day FROM b.dt_storage_end) < EXTRACT(day FROM b.dt_storage_start) THEN
-                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
-                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start))
-            ELSE
-                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
-                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start)) + 1
-        END AS month_difference_2,
-
-        /* special — количество недель или месяцев, в зависимости от типа логики */
-        CASE
-            WHEN b.storage_cost_special_calculation_type_code = '4'
-                THEN CEIL(b.storage_duration_total_calendar_days / 7::numeric)
-            WHEN b.storage_cost_special_calculation_type_code = '5'
-                THEN CEIL(b.storage_duration_total_calendar_days / 30::numeric)
-        END AS special,
-
-        /* приоритет: order_euro_svh + наличие соответствий в параметрах SAP */
-        ROW_NUMBER() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                f.order_euro_svh,
-                f.kopos,
-                f.kbetr,
-                CASE
-                    WHEN param_sap.range_low_value IS NOT NULL
-                     AND param_srv_1.range_low_value IS NOT NULL THEN 1
-                    WHEN param_sap.range_low_value IS NULL
-                     AND param_srv_1.range_low_value IS NULL THEN 1
-                    ELSE 0
-                END DESC,
-                f.purchase_contract_code,
-                f.position_line_item_code
-        ) AS row_num
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN for_1079_base f
-      ON f.bukrs  = '1520'
-     AND f.lifnr  = b.forwarder_code
-     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
-     AND f.werks  = '1521'
-     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
-     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
-     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.dt_valid_from AND f.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.datab AND f.datbi
-     AND b.storage_cost_calculation_type_name IN ('Логика Европа')
-     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
-     AND f.purchase_document_subtype_code = 'ZDTL'
-
-    JOIN dict_dds.settings_and_parameters_sap s_eu
-      ON s_eu.range_low_value    = f.zzsrvpos
-     AND s_eu.range_low_value LIKE 'EU%'
-     AND s_eu.abap_program_code  = '/RUSAL/SD4553M'
-     AND s_eu.parameter_code     = 'S_USLST'
-
-    LEFT JOIN dict_dds.settings_and_parameters_sap param_sap
-      ON param_sap.range_low_value = b.material_shape_code
-     AND param_sap.abap_program_code = '/RUSAL/SD4553M'
-     AND param_sap.parameter_code    = 'FORMSTEU'
-
-    LEFT JOIN dict_dds.settings_and_parameters_sap param_srv_1
-      ON param_srv_1.range_low_value = s_eu.range_low_value
-     AND param_srv_1.abap_program_code = '/RUSAL/SD4553M'
-     AND param_srv_1.parameter_code    = 'S_USLSTC'
-)
+-- 2. Базовые условия по договорам для Азии
+DROP TABLE IF EXISTS tmp_1079_base_asia;
+CREATE TEMP TABLE tmp_1079_base_asia
+ON COMMIT DROP AS
 SELECT
-    rn,
     purchase_contract_code,
     position_line_item_code,
     konws,
     service_code,
     price_uom_code,
-    warehouse_weight_month_end,
-    month_difference_2,
-    netpr,
-    special,
     currency_dogovor,
     datab,
-    datbi
-FROM euro_base
-WHERE row_num = 1
+    datbi,
+    bukrs,
+    lifnr,
+    zzport,
+    werks,
+    zzforma,
+    zzet_tarif,
+    sdabw,
+    dt_valid_from,
+    dt_valid_to,
+    zzterminal,
+    vzzzone,
+    kbetr,
+    kopos,
+    order_asia
+FROM for_1079_base
+WHERE zzsrvpos = 'S49'
+  AND purchase_document_subtype_code = 'ZDTL'
+DISTRIBUTED REPLICATED;
 
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 3,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 13695.73,
-      "Plan Rows": 2866,
-      "Plan Width": 92,
-      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "(CASE WHEN (date_part('day'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END)", "for_1079_base.netpr", "(CASE WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '7'::numeric)) WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '30'::numeric)) ELSE NULL::numeric END)", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 3,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 13694.99,
-          "Plan Rows": 2866,
-          "Plan Width": 92,
-          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "(CASE WHEN (date_part('day'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END)", "for_1079_base.netpr", "(CASE WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '7'::numeric)) WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '30'::numeric)) ELSE NULL::numeric END)", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
-          "Filter": "((row_number() OVER (?)) = 1)",
-          "Plans": [
-            {
-              "Node Type": "Result",
-              "Parent Relationship": "Outer",
-              "Slice": 3,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 13694.97,
-              "Plan Rows": 7165,
-              "Plan Width": 100,
-              "Output": ["CASE WHEN (date_part('day'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_sales_bundles_weight.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END", "CASE WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '7'::numeric)) WHEN ((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric / '30'::numeric)) ELSE NULL::numeric END", "storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "(row_number() OVER (?))"],
-              "Plans": [
-                {
-                  "Node Type": "WindowAgg",
-                  "Parent Relationship": "Outer",
-                  "Slice": 3,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 13694.88,
-                  "Plan Rows": 66417,
-                  "Plan Width": 98,
-                  "Output": ["row_number() OVER (?)", "storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.order_euro_svh"],
-                  "Partition By": ["storage_sales_bundles_weight.rn"],
-                  "Order By": ["for_1079_base.order_euro_svh", "for_1079_base.kopos", "for_1079_base.kbetr", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code"],
-                  "Plans": [
-                    {
-                      "Node Type": "Sort",
-                      "Parent Relationship": "Outer",
-                      "Slice": 3,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 13689.20,
-                      "Plan Rows": 66417,
-                      "Plan Width": 114,
-                      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                      "Sort Key": ["storage_sales_bundles_weight.rn", "for_1079_base.order_euro_svh", "for_1079_base.kopos", "for_1079_base.kbetr", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code"],
-                      "Plans": [
-                        {
-                          "Node Type": "Redistribute Motion",
-                          "Senders": 8,
-                          "Receivers": 8,
-                          "Parent Relationship": "Outer",
-                          "Slice": 2,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 13619.33,
-                          "Plan Rows": 66417,
-                          "Plan Width": 114,
-                          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                          "Hash Key": "storage_sales_bundles_weight.rn",
-                          "Plans": [
-                            {
-                              "Node Type": "Result",
-                              "Parent Relationship": "Outer",
-                              "Slice": 2,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 13616.37,
-                              "Plan Rows": 66417,
-                              "Plan Width": 114,
-                              "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "(sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?))", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                              "Plans": [
-                                {
-                                  "Node Type": "WindowAgg",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 2,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 13616.37,
-                                  "Plan Rows": 66417,
-                                  "Plan Width": 114,
-                                  "Output": ["sum(storage_sales_bundles_weight.sales_bundle_gross_weight) OVER (?)", "storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                                  "Partition By": ["storage_sales_bundles_weight.warehouse_code", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Sort",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 2,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 13616.37,
-                                      "Plan Rows": 66417,
-                                      "Plan Width": 127,
-                                      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                                      "Sort Key": ["storage_sales_bundles_weight.warehouse_code", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 8,
-                                          "Receivers": 8,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 13538.54,
-                                          "Plan Rows": 66417,
-                                          "Plan Width": 127,
-                                          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                                          "Hash Key": "storage_sales_bundles_weight.warehouse_code, (date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Result",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 1,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 13535.23,
-                                              "Plan Rows": 66417,
-                                              "Plan Width": 127,
-                                              "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "(date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone))", "(CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END)"],
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Result",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 13535.23,
-                                                  "Plan Rows": 66417,
-                                                  "Plan Width": 127,
-                                                  "Output": ["date_trunc('month'::text, (storage_sales_bundles_weight.dt_storage_end)::timestamp with time zone)", "CASE WHEN ((NOT (settings_and_parameters_sap_2.range_low_value IS NULL)) AND (NOT (settings_and_parameters_sap_1.range_low_value IS NULL))) THEN 1 WHEN ((settings_and_parameters_sap_2.range_low_value IS NULL) AND (settings_and_parameters_sap_1.range_low_value IS NULL)) THEN 1 ELSE 0 END", "storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh"],
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Hash Join",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 1,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Join Type": "Left",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 13533.35,
-                                                      "Plan Rows": 66417,
-                                                      "Plan Width": 141,
-                                                      "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "settings_and_parameters_sap_2.range_low_value", "settings_and_parameters_sap_1.range_low_value"],
-                                                      "Hash Cond": "((storage_sales_bundles_weight.material_shape_code)::text = (settings_and_parameters_sap_2.range_low_value)::text)",
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Hash Join",
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 1,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Join Type": "Inner",
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 13017.63,
-                                                          "Plan Rows": 130862,
-                                                          "Plan Width": 137,
-                                                          "Output": ["storage_sales_bundles_weight.rn", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "settings_and_parameters_sap_1.range_low_value"],
-                                                          "Hash Cond": "((storage_sales_bundles_weight.forwarder_code)::text = (for_1079_base.lifnr)::text)",
-                                                          "Join Filter": "((((for_1079_base.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (for_1079_base.zzport IS NULL)) AND (((for_1079_base.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (for_1079_base.zzforma IS NULL)) AND (((for_1079_base.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (for_1079_base.zzet_tarif IS NULL)) AND (((for_1079_base.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (for_1079_base.sdabw IS NULL)) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base.dt_valid_from) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base.dt_valid_to) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base.datab) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base.datbi) AND (((for_1079_base.zzterminal)::text = (storage_sales_bundles_weight.warehouse_code)::text) OR (for_1079_base.zzterminal IS NULL)))",
-                                                          "Plans": [
-                                                            {
-                                                              "Node Type": "Seq Scan",
-                                                              "Parent Relationship": "Outer",
-                                                              "Slice": 1,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Relation Name": "storage_sales_bundles_weight",
-                                                              "Schema": "dm_calc",
-                                                              "Alias": "storage_sales_bundles_weight",
-                                                              "Startup Cost": 0.00,
-                                                              "Total Cost": 7398.57,
-                                                              "Plan Rows": 21170572,
-                                                              "Plan Width": 109,
-                                                              "Output": ["storage_sales_bundles_weight.rn", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code"],
-                                                              "Filter": "((storage_sales_bundles_weight.storage_cost_calculation_type_name)::text = 'Логика Европа'::text)"
-                                                            },
-                                                            {
-                                                              "Node Type": "Hash",
-                                                              "Parent Relationship": "Inner",
-                                                              "Slice": 1,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Startup Cost": 1526.08,
-                                                              "Total Cost": 1526.08,
-                                                              "Plan Rows": 125,
-                                                              "Plan Width": 123,
-                                                              "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_to", "for_1079_base.dt_valid_from", "for_1079_base.kopos", "for_1079_base.zzterminal", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "settings_and_parameters_sap_1.range_low_value"],
-                                                              "Plans": [
-                                                                {
-                                                                  "Node Type": "Hash Join",
-                                                                  "Parent Relationship": "Outer",
-                                                                  "Slice": 1,
-                                                                  "Segments": 8,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Join Type": "Inner",
-                                                                  "Startup Cost": 0.00,
-                                                                  "Total Cost": 1526.08,
-                                                                  "Plan Rows": 125,
-                                                                  "Plan Width": 123,
-                                                                  "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_to", "for_1079_base.dt_valid_from", "for_1079_base.kopos", "for_1079_base.zzterminal", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "settings_and_parameters_sap_1.range_low_value"],
-                                                                  "Hash Cond": "((for_1079_base.zzsrvpos)::text = (settings_and_parameters_sap.range_low_value)::text)",
-                                                                  "Plans": [
-                                                                    {
-                                                                      "Node Type": "Seq Scan",
-                                                                      "Parent Relationship": "Outer",
-                                                                      "Slice": 1,
-                                                                      "Segments": 8,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Relation Name": "for_1079_base",
-                                                                      "Schema": "pg_temp_8077163",
-                                                                      "Alias": "for_1079_base",
-                                                                      "Startup Cost": 0.00,
-                                                                      "Total Cost": 494.95,
-                                                                      "Plan Rows": 34933,
-                                                                      "Plan Width": 120,
-                                                                      "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.zzsrvpos", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_to", "for_1079_base.dt_valid_from", "for_1079_base.kopos", "for_1079_base.zzterminal", "for_1079_base.kbetr", "for_1079_base.order_euro_svh"],
-                                                                      "Filter": "(((for_1079_base.bukrs)::text = '1520'::text) AND ((for_1079_base.werks)::text = '1521'::text) AND ((for_1079_base.purchase_document_subtype_code)::text = 'ZDTL'::text))"
-                                                                    },
-                                                                    {
-                                                                      "Node Type": "Hash",
-                                                                      "Parent Relationship": "Inner",
-                                                                      "Slice": 1,
-                                                                      "Segments": 8,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Startup Cost": 1030.04,
-                                                                      "Total Cost": 1030.04,
-                                                                      "Plan Rows": 16,
-                                                                      "Plan Width": 16,
-                                                                      "Output": ["settings_and_parameters_sap.range_low_value", "settings_and_parameters_sap_1.range_low_value"],
-                                                                      "Plans": [
-                                                                        {
-                                                                          "Node Type": "Hash Join",
-                                                                          "Parent Relationship": "Outer",
-                                                                          "Slice": 1,
-                                                                          "Segments": 8,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Join Type": "Left",
-                                                                          "Startup Cost": 0.00,
-                                                                          "Total Cost": 1030.04,
-                                                                          "Plan Rows": 16,
-                                                                          "Plan Width": 16,
-                                                                          "Output": ["settings_and_parameters_sap.range_low_value", "settings_and_parameters_sap_1.range_low_value"],
-                                                                          "Hash Cond": "((settings_and_parameters_sap.range_low_value)::text = (settings_and_parameters_sap_1.range_low_value)::text)",
-                                                                          "Plans": [
-                                                                            {
-                                                                              "Node Type": "Seq Scan",
-                                                                              "Parent Relationship": "Outer",
-                                                                              "Slice": 1,
-                                                                              "Segments": 8,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Relation Name": "settings_and_parameters_sap",
-                                                                              "Schema": "dict_dds",
-                                                                              "Alias": "settings_and_parameters_sap",
-                                                                              "Startup Cost": 0.00,
-                                                                              "Total Cost": 522.62,
-                                                                              "Plan Rows": 8,
-                                                                              "Plan Width": 8,
-                                                                              "Output": ["settings_and_parameters_sap.range_low_value"],
-                                                                              "Filter": "(((settings_and_parameters_sap.range_low_value)::text ~~ 'EU%'::text) AND ((settings_and_parameters_sap.abap_program_code)::text = '/RUSAL/SD4553M'::text) AND ((settings_and_parameters_sap.parameter_code)::text = 'S_USLST'::text))"
-                                                                            },
-                                                                            {
-                                                                              "Node Type": "Hash",
-                                                                              "Parent Relationship": "Inner",
-                                                                              "Slice": 1,
-                                                                              "Segments": 8,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Startup Cost": 507.42,
-                                                                              "Total Cost": 507.42,
-                                                                              "Plan Rows": 8,
-                                                                              "Plan Width": 8,
-                                                                              "Output": ["settings_and_parameters_sap_1.range_low_value"],
-                                                                              "Plans": [
-                                                                                {
-                                                                                  "Node Type": "Seq Scan",
-                                                                                  "Parent Relationship": "Outer",
-                                                                                  "Slice": 1,
-                                                                                  "Segments": 8,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Relation Name": "settings_and_parameters_sap",
-                                                                                  "Schema": "dict_dds",
-                                                                                  "Alias": "settings_and_parameters_sap_1",
-                                                                                  "Startup Cost": 0.00,
-                                                                                  "Total Cost": 507.42,
-                                                                                  "Plan Rows": 8,
-                                                                                  "Plan Width": 8,
-                                                                                  "Output": ["settings_and_parameters_sap_1.range_low_value"],
-                                                                                  "Filter": "(((settings_and_parameters_sap_1.abap_program_code)::text = '/RUSAL/SD4553M'::text) AND ((settings_and_parameters_sap_1.parameter_code)::text = 'S_USLSTC'::text))"
-                                                                                }
-                                                                              ]
-                                                                            }
-                                                                          ]
-                                                                        }
-                                                                      ]
-                                                                    }
-                                                                  ]
-                                                                }
-                                                              ]
-                                                            }
-                                                          ]
-                                                        },
-                                                        {
-                                                          "Node Type": "Hash",
-                                                          "Parent Relationship": "Inner",
-                                                          "Slice": 1,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Startup Cost": 507.42,
-                                                          "Total Cost": 507.42,
-                                                          "Plan Rows": 8,
-                                                          "Plan Width": 8,
-                                                          "Output": ["settings_and_parameters_sap_2.range_low_value"],
-                                                          "Plans": [
-                                                            {
-                                                              "Node Type": "Seq Scan",
-                                                              "Parent Relationship": "Outer",
-                                                              "Slice": 1,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Relation Name": "settings_and_parameters_sap",
-                                                              "Schema": "dict_dds",
-                                                              "Alias": "settings_and_parameters_sap_2",
-                                                              "Startup Cost": 0.00,
-                                                              "Total Cost": 507.42,
-                                                              "Plan Rows": 8,
-                                                              "Plan Width": 8,
-                                                              "Output": ["settings_and_parameters_sap_2.range_low_value"],
-                                                              "Filter": "(((settings_and_parameters_sap_2.abap_program_code)::text = '/RUSAL/SD4553M'::text) AND ((settings_and_parameters_sap_2.parameter_code)::text = 'FORMSTEU'::text))"
-                                                            }
-                                                          ]
-                                                        }
-                                                      ]
-                                                    }
-                                                  ]
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
+-- 3. Выбор одного лучшего договора на rn через DISTINCT ON
+DROP TABLE IF EXISTS for_1079_asia;
+CREATE TEMP TABLE for_1079_asia
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    f.purchase_contract_code,
+    f.position_line_item_code,
+    f.konws,
+    f.service_code,
+    f.price_uom_code,
+    f.currency_dogovor,
+    f.datab,
+    f.datbi
+FROM tmp_1079_asia_bundles b
+JOIN tmp_1079_base_asia f
+  ON f.bukrs = b.unit_balance_code
+ AND f.lifnr = b.forwarder_code
+ AND (f.zzport   = b.port_of_discharge_code    OR f.zzport   IS NULL)
+ AND f.werks = b.plant_code
+ AND (f.zzforma  = b.material_shape_code       OR f.zzforma  IS NULL)
+ AND (f.zzet_tarif = b.etsng_code              OR f.zzet_tarif IS NULL)
+ AND (f.sdabw    = b.transport_type_code       OR f.sdabw    IS NULL)
+ AND (f.zzterminal = b.warehouse_code          OR f.zzterminal IS NULL)
+ AND (f.vzzzone    = b.warehouse_storage_area_code OR f.vzzzone IS NULL)
+ AND b.dt_for_price_search_in_purchase_contract
+      BETWEEN f.dt_valid_from AND f.dt_valid_to
+ AND b.dt_for_price_search_in_purchase_contract
+      BETWEEN f.datab AND f.datbi
+ORDER BY
+    b.rn,
+    f.order_asia,
+    f.kopos,
+    f.kbetr,
+    f.purchase_contract_code,
+    f.position_line_item_code
+DISTRIBUTED BY (rn);
+Что улучшили:
+
+нет WindowAgg (row_number()) и фильтра row_num = 1;
+
+for_1079_base для Азии маленькая и REPLICATED, join проще;
+
+основная тяжесть — один Redistribute + Sort под DISTINCT ON, но это проще, чем Sort + WindowAgg.
+
+2️⃣ Улучшаем euro_base
+Идея
+В плане по Европе видно:
+
+два тяжёлых Redistribute Motion:
+
+один под окно sum(weight) over (warehouse, month),
+
+второй под row_number over (rn).
+
+много оконных функций подряд.
+
+Что делаем:
+
+Отделяем расчёт суммы веса по складу/месяцу в отдельную агрегацию GROUP BY, без WINDOW.
+
+Аналогично Азии — делаем узкий tmp_euro_bundles и tmp_1079_base_euro + REPLICATED.
+
+Выбор лучшего договора — опять DISTINCT ON (rn).
+
+Вариант кода
+sql
+Копировать код
+-- 1. Бандлы под «Логика Европа» (узкий набор полей)
+DROP TABLE IF EXISTS tmp_1079_euro_bundles;
+CREATE TEMP TABLE tmp_1079_euro_bundles
+ON COMMIT DROP AS
+SELECT
+    rn,
+    forwarder_code,
+    port_of_discharge_code,
+    material_shape_code,
+    etsng_code,
+    transport_type_code,
+    dt_for_price_search_in_purchase_contract,
+    storage_cost_special_calculation_type_code,
+    dt_storage_start,
+    dt_storage_end,
+    storage_duration_total_calendar_days,
+    warehouse_code,
+    sales_bundle_gross_weight
+FROM dm_calc.storage_sales_bundles_weight
+WHERE storage_cost_calculation_type_name = 'Логика Европа'
+DISTRIBUTED BY (rn);
+
+
+-- 2. Вес по складу и месяцу окончания хранения (без оконной функции)
+DROP TABLE IF EXISTS tmp_1079_euro_wh_month;
+CREATE TEMP TABLE tmp_1079_euro_wh_month
+ON COMMIT DROP AS
+SELECT
+    warehouse_code,
+    date_trunc('month', dt_storage_end)::date AS month_end,
+    SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
+FROM tmp_1079_euro_bundles
+GROUP BY warehouse_code, date_trunc('month', dt_storage_end)
+DISTRIBUTED BY (warehouse_code, month_end);
+
+
+-- 3. Базовые настройки по договорам для Европы
+DROP TABLE IF EXISTS tmp_1079_base_euro;
+CREATE TEMP TABLE tmp_1079_base_euro
+ON COMMIT DROP AS
+SELECT
+    f.purchase_contract_code,
+    f.position_line_item_code,
+    f.konws,
+    f.service_code,
+    f.price_uom_code,
+    f.netpr,
+    f.currency_dogovor,
+    f.datab,
+    f.datbi,
+    f.lifnr,
+    f.zzport,
+    f.zzforma,
+    f.zzet_tarif,
+    f.sdabw,
+    f.dt_valid_from,
+    f.dt_valid_to,
+    f.kopos,
+    f.zzterminal,
+    f.kbetr,
+    f.order_euro_svh,
+    s_eu.range_low_value AS srv_range,
+    param_form.range_low_value AS form_match,
+    param_srv.range_low_value  AS srv_match
+FROM for_1079_base f
+JOIN dict_dds.settings_and_parameters_sap s_eu
+  ON s_eu.range_low_value    = f.zzsrvpos
+ AND s_eu.range_low_value LIKE 'EU%'
+ AND s_eu.abap_program_code  = '/RUSAL/SD4553M'
+ AND s_eu.parameter_code     = 'S_USLST'
+LEFT JOIN dict_dds.settings_and_parameters_sap param_form
+  ON param_form.range_low_value = f.zzforma
+ AND param_form.abap_program_code = '/RUSAL/SD4553M'
+ AND param_form.parameter_code    = 'FORMSTEU'
+LEFT JOIN dict_dds.settings_and_parameters_sap param_srv
+  ON param_srv.range_low_value = s_eu.range_low_value
+ AND param_srv.abap_program_code = '/RUSAL/SD4553M'
+ AND param_srv.parameter_code    = 'S_USLSTC'
+WHERE f.bukrs  = '1520'
+  AND f.werks  = '1521'
+  AND f.purchase_document_subtype_code = 'ZDTL'
+DISTRIBUTED REPLICATED;
+
+
+-- 4. Основной выбор одного договора на rn
+DROP TABLE IF EXISTS euro_base;
+CREATE TEMP TABLE euro_base
+ON COMMIT DROP AS
+SELECT DISTINCT ON (b.rn)
+    b.rn,
+    f.purchase_contract_code,
+    f.position_line_item_code,
+    f.konws,
+    f.service_code,
+    f.price_uom_code,
+    w.warehouse_weight_month_end,
+    /* month_difference_2 */
+    CASE
+        WHEN EXTRACT(day FROM b.dt_storage_end)
+           < EXTRACT(day FROM b.dt_storage_start)
+        THEN
+            (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+            (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start))
+        ELSE
+            (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+            (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start)) + 1
+    END AS month_difference_2,
+    f.netpr,
+    /* special */
+    CASE
+        WHEN b.storage_cost_special_calculation_type_code = '4'
+            THEN CEIL(b.storage_duration_total_calendar_days / 7::numeric)
+        WHEN b.storage_cost_special_calculation_type_code = '5'
+            THEN CEIL(b.storage_duration_total_calendar_days / 30::numeric)
+    END AS special,
+    f.currency_dogovor,
+    f.datab,
+    f.datbi
+FROM tmp_1079_euro_bundles b
+JOIN tmp_1079_euro_wh_month w
+  ON w.warehouse_code = b.warehouse_code
+ AND w.month_end      = date_trunc('month', b.dt_storage_end)::date
+JOIN tmp_1079_base_euro f
+  ON f.lifnr = b.forwarder_code
+ AND (f.zzport   = b.port_of_discharge_code OR f.zzport IS NULL)
+ AND (f.zzforma  = b.material_shape_code    OR f.zzforma IS NULL)
+ AND (f.zzet_tarif = b.etsng_code          OR f.zzet_tarif IS NULL)
+ AND (f.sdabw    = b.transport_type_code    OR f.sdabw   IS NULL)
+ AND (f.zzterminal = b.warehouse_code       OR f.zzterminal IS NULL)
+ AND b.dt_for_price_search_in_purchase_contract
+      BETWEEN f.dt_valid_from AND f.dt_valid_to
+ AND b.dt_for_price_search_in_purchase_contract
+      BETWEEN f.datab AND f.datbi
+ORDER BY
+    b.rn,
+    f.order_euro_svh,
+    f.kopos,
+    f.kbetr,
+    /* приоритет по «наличию настроек» как и было в исходном ORDER BY */
+    CASE
+        WHEN f.form_match IS NOT NULL AND f.srv_match IS NOT NULL THEN 1
+        WHEN f.form_match IS NULL     AND f.srv_match IS NULL     THEN 1
+        ELSE 0
+    END DESC,
+    f.purchase_contract_code,
+    f.position_line_item_code
+DISTRIBUTED BY (rn);

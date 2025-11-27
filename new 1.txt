@@ -1,6 +1,5 @@
-DROP TABLE IF EXISTS for_1079_rf_cont;
-
-CREATE TEMP TABLE for_1079_rf_cont AS
+CREATE TEMP TABLE for_1079_rf_cont
+ON COMMIT DROP AS
 WITH cte AS (
     SELECT
         b.rn,
@@ -12,32 +11,30 @@ WITH cte AS (
         f.currency_dogovor,
         f.datab,
         f.datbi,
-
         ROW_NUMBER() OVER (
             PARTITION BY b.rn
             ORDER BY
-                f.order_rf,                -- приоритет логики РФ-контейнеры
+                f.order_rf,
                 f.kopos,
                 f.kbetr,
                 f.purchase_contract_code,
                 f.position_line_item_code
         ) AS row_num
     FROM dm_calc.storage_sales_bundles_weight b
-
     JOIN for_1079_base f
-      ON f.lifnr = b.creditor_in_shipment_instruction_code
-     AND (f.zzport  = b.port_of_discharge_code    OR f.zzport  IS NULL)
-     AND (f.zzforma = b.material_shape_code        OR f.zzforma IS NULL)
-     AND (f.zzet_tarif = b.etsng_code              OR f.zzet_tarif IS NULL)
-     AND (f.sdabw   = b.transport_type_code        OR f.sdabw   IS NULL)
-
+      ON f.bukrs  = '1120'
+     AND f.lifnr  = b.creditor_in_shipment_instruction_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = '1121'
+     AND f.zzsrvpos = 'S49'
+     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
+     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
+     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.dt_valid_from AND f.dt_valid_to
-
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.datab AND f.datbi
-
-     AND b.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
+     AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры')
 )
 SELECT
     rn,

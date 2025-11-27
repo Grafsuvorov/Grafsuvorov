@@ -1,218 +1,497 @@
-drop table if exists match_candidates;
-
-create temporary table match_candidates
-distributed by (rn)
-as
--- 1) Логика РФ-контейнеры
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = '1120'
- and fb.lifnr   = sw.creditor_in_shipment_instruction_code
- and fb.werks   = '1121'
- and fb.service_code = 'S49'
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
-
-UNION ALL
-
--- 2) Логика РФ-балк — часть 1 (service_number)
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = '1120'
- and fb.lifnr   = sw.creditor_in_shipment_instruction_code
- and fb.werks   = '1121'
- and fb.service_code = sw.service_number         -- как в for_1079_rf_balk_1
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика РФ-балк'
-
-UNION ALL
-
--- 3) Логика РФ-балк — часть 2 (S49)
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = '1120'
- and fb.lifnr   = sw.creditor_in_shipment_instruction_code
- and fb.werks   = '1121'
- and fb.service_code = 'S49'                     -- как в for_1079_rf_balk_2
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика РФ-балк'
-
-UNION ALL
-
--- 4) Логика Азия
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = sw.unit_balance_code
- and fb.lifnr   = sw.forwarder_code
- and fb.werks   = sw.plant_code
- and fb.service_code = 'S49'
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and (fb.zzterminal = sw.warehouse_code          or fb.zzterminal is null)
- and (fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null)
- and fb.purchase_document_subtype_code = 'ZDTL'
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика Азия'
-
-UNION ALL
-
--- 5) Логика Европа
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = '1520'
- and fb.lifnr   = sw.forwarder_code
- and fb.werks   = '1521'
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and (fb.zzterminal = sw.warehouse_code          or fb.zzterminal is null)
- and fb.purchase_document_subtype_code = 'ZDTL'
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика Европа'
-
-UNION ALL
-
--- 6) Логика СВХ
-select
-    sw.rn,
-    sw.storage_cost_calculation_type_name,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.datab,
-    fb.datbi,
-    fb.price_uom_code,
-    fb.service_code,
-    fb.konws,
-    fb.currency_dogovor,
-
-    case when fb.zzport   = sw.port_of_discharge_code or fb.zzport   is null then 1 else 0 end as m_port,
-    case when fb.zzforma  = sw.material_shape_code    or fb.zzforma  is null then 1 else 0 end as m_shape,
-    case when fb.zzet_tarif = sw.etsng_code           or fb.zzet_tarif is null then 1 else 0 end as m_etsng,
-    case when fb.sdabw    = sw.transport_type_code    or fb.sdabw    is null then 1 else 0 end as m_transport,
-    case when fb.zzterminal = sw.warehouse_code       or fb.zzterminal is null then 1 else 0 end as m_terminal,
-    case when fb.vzzzone  = sw.warehouse_storage_area_code or fb.vzzzone is null then 1 else 0 end as m_area
-from dm_calc.storage_sales_bundles_weight sw
-join for_1079_base_clean fb
-  on fb.bukrs   = '1120'
- and fb.lifnr   = sw.forwarder_code
- and fb.werks   = '1121'
- and fb.service_code = 'S49'
- and (fb.zzport   = sw.port_of_discharge_code    or fb.zzport   is null)
- and (fb.zzforma  = sw.material_shape_code       or fb.zzforma  is null)
- and (fb.zzet_tarif = sw.etsng_code              or fb.zzet_tarif is null)
- and (fb.sdabw    = sw.transport_type_code       or fb.sdabw    is null)
- and (fb.zzterminal = sw.warehouse_code          or fb.zzterminal is null)
- and fb.purchase_document_subtype_code = 'ZDTL'
- and sw.dt_for_price_search_in_purchase_contract between fb.dt_valid_from and fb.dt_valid_to
- and sw.dt_for_price_search_in_purchase_contract between fb.datab       and fb.datbi
-where sw.storage_cost_calculation_type_name = 'Логика СВХ';
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 244275.41,
+      "Plan Rows": 317202804,
+      "Plan Width": 128,
+      "Output": ["storage_sales_bundles_weight.rn", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "for_1079_base_clean.purchase_contract_code", "for_1079_base_clean.position_line_item_code", "for_1079_base_clean.datab", "for_1079_base_clean.datbi", "for_1079_base_clean.price_uom_code", "for_1079_base_clean.service_code", "for_1079_base_clean.konws", "for_1079_base_clean.currency_dogovor", "(CASE WHEN (((for_1079_base_clean.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (for_1079_base_clean.zzport IS NULL)) THEN 1 ELSE 0 END)", "(CASE WHEN (((for_1079_base_clean.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (for_1079_base_clean.zzforma IS NULL)) THEN 1 ELSE 0 END)", "(CASE WHEN (((for_1079_base_clean.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (for_1079_base_clean.zzet_tarif IS NULL)) THEN 1 ELSE 0 END)", "(CASE WHEN (((for_1079_base_clean.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (for_1079_base_clean.sdabw IS NULL)) THEN 1 ELSE 0 END)", "(CASE WHEN (((for_1079_base_clean.zzterminal)::text = (storage_sales_bundles_weight.warehouse_code)::text) OR (for_1079_base_clean.zzterminal IS NULL)) THEN 1 ELSE 0 END)", "(CASE WHEN (((for_1079_base_clean.vzzzone)::text = (storage_sales_bundles_weight.warehouse_storage_area_code)::text) OR (for_1079_base_clean.vzzzone IS NULL)) THEN 1 ELSE 0 END)"],
+      "Plans": [
+        {
+          "Node Type": "Append",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 131706.48,
+          "Plan Rows": 317202804,
+          "Plan Width": 128,
+          "Plans": [
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 11673.85,
+              "Plan Rows": 9470513,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight.rn", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "for_1079_base_clean.purchase_contract_code", "for_1079_base_clean.position_line_item_code", "for_1079_base_clean.datab", "for_1079_base_clean.datbi", "for_1079_base_clean.price_uom_code", "for_1079_base_clean.service_code", "for_1079_base_clean.konws", "for_1079_base_clean.currency_dogovor", "CASE WHEN (((for_1079_base_clean.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (for_1079_base_clean.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (for_1079_base_clean.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (for_1079_base_clean.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (for_1079_base_clean.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean.zzterminal)::text = (storage_sales_bundles_weight.warehouse_code)::text) OR (for_1079_base_clean.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean.vzzzone)::text = (storage_sales_bundles_weight.warehouse_storage_area_code)::text) OR (for_1079_base_clean.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 11522.32,
+                  "Plan Rows": 9470513,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.rn", "for_1079_base_clean.purchase_contract_code", "for_1079_base_clean.position_line_item_code", "for_1079_base_clean.zzport", "for_1079_base_clean.zzforma", "for_1079_base_clean.zzet_tarif", "for_1079_base_clean.sdabw", "for_1079_base_clean.zzterminal", "for_1079_base_clean.vzzzone", "for_1079_base_clean.service_code", "for_1079_base_clean.price_uom_code", "for_1079_base_clean.konws", "for_1079_base_clean.currency_dogovor", "for_1079_base_clean.datab", "for_1079_base_clean.datbi"],
+                  "Hash Cond": "((storage_sales_bundles_weight.creditor_in_shipment_instruction_code)::text = (for_1079_base_clean.lifnr)::text)",
+                  "Join Filter": "((((for_1079_base_clean.zzport)::text = (storage_sales_bundles_weight.port_of_discharge_code)::text) OR (for_1079_base_clean.zzport IS NULL)) AND (((for_1079_base_clean.zzforma)::text = (storage_sales_bundles_weight.material_shape_code)::text) OR (for_1079_base_clean.zzforma IS NULL)) AND (((for_1079_base_clean.zzet_tarif)::text = (storage_sales_bundles_weight.etsng_code)::text) OR (for_1079_base_clean.zzet_tarif IS NULL)) AND (((for_1079_base_clean.sdabw)::text = (storage_sales_bundles_weight.transport_type_code)::text) OR (for_1079_base_clean.sdabw IS NULL)) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base_clean.dt_valid_from) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base_clean.dt_valid_to) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract >= for_1079_base_clean.datab) AND (storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract <= for_1079_base_clean.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 7235.12,
+                      "Plan Rows": 17113445,
+                      "Plan Width": 127,
+                      "Output": ["storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.rn"],
+                      "Filter": "((storage_sales_bundles_weight.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 492.02,
+                      "Total Cost": 492.02,
+                      "Plan Rows": 10791,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_clean.purchase_contract_code", "for_1079_base_clean.position_line_item_code", "for_1079_base_clean.lifnr", "for_1079_base_clean.zzport", "for_1079_base_clean.zzforma", "for_1079_base_clean.zzet_tarif", "for_1079_base_clean.sdabw", "for_1079_base_clean.zzterminal", "for_1079_base_clean.vzzzone", "for_1079_base_clean.service_code", "for_1079_base_clean.price_uom_code", "for_1079_base_clean.konws", "for_1079_base_clean.currency_dogovor", "for_1079_base_clean.datab", "for_1079_base_clean.datbi", "for_1079_base_clean.dt_valid_from", "for_1079_base_clean.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 492.02,
+                          "Plan Rows": 10791,
+                          "Plan Width": 109,
+                          "Output": ["for_1079_base_clean.purchase_contract_code", "for_1079_base_clean.position_line_item_code", "for_1079_base_clean.lifnr", "for_1079_base_clean.zzport", "for_1079_base_clean.zzforma", "for_1079_base_clean.zzet_tarif", "for_1079_base_clean.sdabw", "for_1079_base_clean.zzterminal", "for_1079_base_clean.vzzzone", "for_1079_base_clean.service_code", "for_1079_base_clean.price_uom_code", "for_1079_base_clean.konws", "for_1079_base_clean.currency_dogovor", "for_1079_base_clean.datab", "for_1079_base_clean.datbi", "for_1079_base_clean.dt_valid_from", "for_1079_base_clean.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean.bukrs)::text = '1120'::text) AND ((for_1079_base_clean.werks)::text = '1121'::text) AND ((for_1079_base_clean.service_code)::text = 'S49'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 46012.77,
+              "Plan Rows": 231525045,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight_1.rn", "storage_sales_bundles_weight_1.storage_cost_calculation_type_name", "for_1079_base_clean_1.purchase_contract_code", "for_1079_base_clean_1.position_line_item_code", "for_1079_base_clean_1.datab", "for_1079_base_clean_1.datbi", "for_1079_base_clean_1.price_uom_code", "for_1079_base_clean_1.service_code", "for_1079_base_clean_1.konws", "for_1079_base_clean_1.currency_dogovor", "CASE WHEN (((for_1079_base_clean_1.zzport)::text = (storage_sales_bundles_weight_1.port_of_discharge_code)::text) OR (for_1079_base_clean_1.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_1.zzforma)::text = (storage_sales_bundles_weight_1.material_shape_code)::text) OR (for_1079_base_clean_1.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_1.zzet_tarif)::text = (storage_sales_bundles_weight_1.etsng_code)::text) OR (for_1079_base_clean_1.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_1.sdabw)::text = (storage_sales_bundles_weight_1.transport_type_code)::text) OR (for_1079_base_clean_1.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_1.zzterminal)::text = (storage_sales_bundles_weight_1.warehouse_code)::text) OR (for_1079_base_clean_1.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_1.vzzzone)::text = (storage_sales_bundles_weight_1.warehouse_storage_area_code)::text) OR (for_1079_base_clean_1.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 42308.37,
+                  "Plan Rows": 231525045,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight_1.material_shape_code", "storage_sales_bundles_weight_1.transport_type_code", "storage_sales_bundles_weight_1.etsng_code", "storage_sales_bundles_weight_1.storage_cost_calculation_type_name", "storage_sales_bundles_weight_1.warehouse_code", "storage_sales_bundles_weight_1.warehouse_storage_area_code", "storage_sales_bundles_weight_1.port_of_discharge_code", "storage_sales_bundles_weight_1.rn", "for_1079_base_clean_1.purchase_contract_code", "for_1079_base_clean_1.position_line_item_code", "for_1079_base_clean_1.zzport", "for_1079_base_clean_1.zzforma", "for_1079_base_clean_1.zzet_tarif", "for_1079_base_clean_1.sdabw", "for_1079_base_clean_1.zzterminal", "for_1079_base_clean_1.vzzzone", "for_1079_base_clean_1.service_code", "for_1079_base_clean_1.price_uom_code", "for_1079_base_clean_1.konws", "for_1079_base_clean_1.currency_dogovor", "for_1079_base_clean_1.datab", "for_1079_base_clean_1.datbi"],
+                  "Hash Cond": "(((storage_sales_bundles_weight_1.creditor_in_shipment_instruction_code)::text = (for_1079_base_clean_1.lifnr)::text) AND (storage_sales_bundles_weight_1.service_number = (for_1079_base_clean_1.service_code)::text))",
+                  "Join Filter": "((((for_1079_base_clean_1.zzport)::text = (storage_sales_bundles_weight_1.port_of_discharge_code)::text) OR (for_1079_base_clean_1.zzport IS NULL)) AND (((for_1079_base_clean_1.zzforma)::text = (storage_sales_bundles_weight_1.material_shape_code)::text) OR (for_1079_base_clean_1.zzforma IS NULL)) AND (((for_1079_base_clean_1.zzet_tarif)::text = (storage_sales_bundles_weight_1.etsng_code)::text) OR (for_1079_base_clean_1.zzet_tarif IS NULL)) AND (((for_1079_base_clean_1.sdabw)::text = (storage_sales_bundles_weight_1.transport_type_code)::text) OR (for_1079_base_clean_1.sdabw IS NULL)) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_1.dt_valid_from) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_1.dt_valid_to) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_1.datab) AND (storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_1.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight_1",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 8725.88,
+                      "Plan Rows": 62212237,
+                      "Plan Width": 138,
+                      "Output": ["storage_sales_bundles_weight_1.material_shape_code", "storage_sales_bundles_weight_1.transport_type_code", "storage_sales_bundles_weight_1.etsng_code", "storage_sales_bundles_weight_1.storage_cost_calculation_type_name", "storage_sales_bundles_weight_1.warehouse_code", "storage_sales_bundles_weight_1.warehouse_storage_area_code", "storage_sales_bundles_weight_1.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight_1.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_1.port_of_discharge_code", "storage_sales_bundles_weight_1.service_number", "storage_sales_bundles_weight_1.rn"],
+                      "Filter": "((storage_sales_bundles_weight_1.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 512.89,
+                      "Total Cost": 512.89,
+                      "Plan Rows": 1123234,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_clean_1.purchase_contract_code", "for_1079_base_clean_1.position_line_item_code", "for_1079_base_clean_1.lifnr", "for_1079_base_clean_1.zzport", "for_1079_base_clean_1.zzforma", "for_1079_base_clean_1.zzet_tarif", "for_1079_base_clean_1.sdabw", "for_1079_base_clean_1.zzterminal", "for_1079_base_clean_1.vzzzone", "for_1079_base_clean_1.service_code", "for_1079_base_clean_1.price_uom_code", "for_1079_base_clean_1.konws", "for_1079_base_clean_1.currency_dogovor", "for_1079_base_clean_1.datab", "for_1079_base_clean_1.datbi", "for_1079_base_clean_1.dt_valid_from", "for_1079_base_clean_1.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean_1",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 512.89,
+                          "Plan Rows": 1123234,
+                          "Plan Width": 109,
+                          "Output": ["for_1079_base_clean_1.purchase_contract_code", "for_1079_base_clean_1.position_line_item_code", "for_1079_base_clean_1.lifnr", "for_1079_base_clean_1.zzport", "for_1079_base_clean_1.zzforma", "for_1079_base_clean_1.zzet_tarif", "for_1079_base_clean_1.sdabw", "for_1079_base_clean_1.zzterminal", "for_1079_base_clean_1.vzzzone", "for_1079_base_clean_1.service_code", "for_1079_base_clean_1.price_uom_code", "for_1079_base_clean_1.konws", "for_1079_base_clean_1.currency_dogovor", "for_1079_base_clean_1.datab", "for_1079_base_clean_1.datbi", "for_1079_base_clean_1.dt_valid_from", "for_1079_base_clean_1.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean_1.bukrs)::text = '1120'::text) AND ((for_1079_base_clean_1.werks)::text = '1121'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 23394.74,
+              "Plan Rows": 34428005,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight_2.rn", "storage_sales_bundles_weight_2.storage_cost_calculation_type_name", "for_1079_base_clean_2.purchase_contract_code", "for_1079_base_clean_2.position_line_item_code", "for_1079_base_clean_2.datab", "for_1079_base_clean_2.datbi", "for_1079_base_clean_2.price_uom_code", "for_1079_base_clean_2.service_code", "for_1079_base_clean_2.konws", "for_1079_base_clean_2.currency_dogovor", "CASE WHEN (((for_1079_base_clean_2.zzport)::text = (storage_sales_bundles_weight_2.port_of_discharge_code)::text) OR (for_1079_base_clean_2.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_2.zzforma)::text = (storage_sales_bundles_weight_2.material_shape_code)::text) OR (for_1079_base_clean_2.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_2.zzet_tarif)::text = (storage_sales_bundles_weight_2.etsng_code)::text) OR (for_1079_base_clean_2.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_2.sdabw)::text = (storage_sales_bundles_weight_2.transport_type_code)::text) OR (for_1079_base_clean_2.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_2.zzterminal)::text = (storage_sales_bundles_weight_2.warehouse_code)::text) OR (for_1079_base_clean_2.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_2.vzzzone)::text = (storage_sales_bundles_weight_2.warehouse_storage_area_code)::text) OR (for_1079_base_clean_2.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 22843.89,
+                  "Plan Rows": 34428005,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight_2.material_shape_code", "storage_sales_bundles_weight_2.transport_type_code", "storage_sales_bundles_weight_2.etsng_code", "storage_sales_bundles_weight_2.storage_cost_calculation_type_name", "storage_sales_bundles_weight_2.warehouse_code", "storage_sales_bundles_weight_2.warehouse_storage_area_code", "storage_sales_bundles_weight_2.port_of_discharge_code", "storage_sales_bundles_weight_2.rn", "for_1079_base_clean_2.purchase_contract_code", "for_1079_base_clean_2.position_line_item_code", "for_1079_base_clean_2.zzport", "for_1079_base_clean_2.zzforma", "for_1079_base_clean_2.zzet_tarif", "for_1079_base_clean_2.sdabw", "for_1079_base_clean_2.zzterminal", "for_1079_base_clean_2.vzzzone", "for_1079_base_clean_2.service_code", "for_1079_base_clean_2.price_uom_code", "for_1079_base_clean_2.konws", "for_1079_base_clean_2.currency_dogovor", "for_1079_base_clean_2.datab", "for_1079_base_clean_2.datbi"],
+                  "Hash Cond": "((storage_sales_bundles_weight_2.creditor_in_shipment_instruction_code)::text = (for_1079_base_clean_2.lifnr)::text)",
+                  "Join Filter": "((((for_1079_base_clean_2.zzport)::text = (storage_sales_bundles_weight_2.port_of_discharge_code)::text) OR (for_1079_base_clean_2.zzport IS NULL)) AND (((for_1079_base_clean_2.zzforma)::text = (storage_sales_bundles_weight_2.material_shape_code)::text) OR (for_1079_base_clean_2.zzforma IS NULL)) AND (((for_1079_base_clean_2.zzet_tarif)::text = (storage_sales_bundles_weight_2.etsng_code)::text) OR (for_1079_base_clean_2.zzet_tarif IS NULL)) AND (((for_1079_base_clean_2.sdabw)::text = (storage_sales_bundles_weight_2.transport_type_code)::text) OR (for_1079_base_clean_2.sdabw IS NULL)) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_2.dt_valid_from) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_2.dt_valid_to) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_2.datab) AND (storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_2.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight_2",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 8566.78,
+                      "Plan Rows": 62212237,
+                      "Plan Width": 127,
+                      "Output": ["storage_sales_bundles_weight_2.material_shape_code", "storage_sales_bundles_weight_2.transport_type_code", "storage_sales_bundles_weight_2.etsng_code", "storage_sales_bundles_weight_2.storage_cost_calculation_type_name", "storage_sales_bundles_weight_2.warehouse_code", "storage_sales_bundles_weight_2.warehouse_storage_area_code", "storage_sales_bundles_weight_2.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight_2.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_2.port_of_discharge_code", "storage_sales_bundles_weight_2.rn"],
+                      "Filter": "((storage_sales_bundles_weight_2.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 492.02,
+                      "Total Cost": 492.02,
+                      "Plan Rows": 10791,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_clean_2.purchase_contract_code", "for_1079_base_clean_2.position_line_item_code", "for_1079_base_clean_2.lifnr", "for_1079_base_clean_2.zzport", "for_1079_base_clean_2.zzforma", "for_1079_base_clean_2.zzet_tarif", "for_1079_base_clean_2.sdabw", "for_1079_base_clean_2.zzterminal", "for_1079_base_clean_2.vzzzone", "for_1079_base_clean_2.service_code", "for_1079_base_clean_2.price_uom_code", "for_1079_base_clean_2.konws", "for_1079_base_clean_2.currency_dogovor", "for_1079_base_clean_2.datab", "for_1079_base_clean_2.datbi", "for_1079_base_clean_2.dt_valid_from", "for_1079_base_clean_2.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean_2",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 492.02,
+                          "Plan Rows": 10791,
+                          "Plan Width": 109,
+                          "Output": ["for_1079_base_clean_2.purchase_contract_code", "for_1079_base_clean_2.position_line_item_code", "for_1079_base_clean_2.lifnr", "for_1079_base_clean_2.zzport", "for_1079_base_clean_2.zzforma", "for_1079_base_clean_2.zzet_tarif", "for_1079_base_clean_2.sdabw", "for_1079_base_clean_2.zzterminal", "for_1079_base_clean_2.vzzzone", "for_1079_base_clean_2.service_code", "for_1079_base_clean_2.price_uom_code", "for_1079_base_clean_2.konws", "for_1079_base_clean_2.currency_dogovor", "for_1079_base_clean_2.datab", "for_1079_base_clean_2.datbi", "for_1079_base_clean_2.dt_valid_from", "for_1079_base_clean_2.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean_2.bukrs)::text = '1120'::text) AND ((for_1079_base_clean_2.werks)::text = '1121'::text) AND ((for_1079_base_clean_2.service_code)::text = 'S49'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 22265.49,
+              "Plan Rows": 5585665,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight_3.rn", "storage_sales_bundles_weight_3.storage_cost_calculation_type_name", "for_1079_base_clean_3.purchase_contract_code", "for_1079_base_clean_3.position_line_item_code", "for_1079_base_clean_3.datab", "for_1079_base_clean_3.datbi", "for_1079_base_clean_3.price_uom_code", "for_1079_base_clean_3.service_code", "for_1079_base_clean_3.konws", "for_1079_base_clean_3.currency_dogovor", "CASE WHEN (((for_1079_base_clean_3.zzport)::text = (storage_sales_bundles_weight_3.port_of_discharge_code)::text) OR (for_1079_base_clean_3.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_3.zzforma)::text = (storage_sales_bundles_weight_3.material_shape_code)::text) OR (for_1079_base_clean_3.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_3.zzet_tarif)::text = (storage_sales_bundles_weight_3.etsng_code)::text) OR (for_1079_base_clean_3.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_3.sdabw)::text = (storage_sales_bundles_weight_3.transport_type_code)::text) OR (for_1079_base_clean_3.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_3.zzterminal)::text = (storage_sales_bundles_weight_3.warehouse_code)::text) OR (for_1079_base_clean_3.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_3.vzzzone)::text = (storage_sales_bundles_weight_3.warehouse_storage_area_code)::text) OR (for_1079_base_clean_3.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 22176.12,
+                  "Plan Rows": 5585665,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight_3.material_shape_code", "storage_sales_bundles_weight_3.transport_type_code", "storage_sales_bundles_weight_3.etsng_code", "storage_sales_bundles_weight_3.storage_cost_calculation_type_name", "storage_sales_bundles_weight_3.warehouse_code", "storage_sales_bundles_weight_3.warehouse_storage_area_code", "storage_sales_bundles_weight_3.port_of_discharge_code", "storage_sales_bundles_weight_3.rn", "for_1079_base_clean_3.purchase_contract_code", "for_1079_base_clean_3.position_line_item_code", "for_1079_base_clean_3.zzport", "for_1079_base_clean_3.zzforma", "for_1079_base_clean_3.zzet_tarif", "for_1079_base_clean_3.sdabw", "for_1079_base_clean_3.zzterminal", "for_1079_base_clean_3.vzzzone", "for_1079_base_clean_3.service_code", "for_1079_base_clean_3.price_uom_code", "for_1079_base_clean_3.konws", "for_1079_base_clean_3.currency_dogovor", "for_1079_base_clean_3.datab", "for_1079_base_clean_3.datbi"],
+                  "Hash Cond": "(((storage_sales_bundles_weight_3.unit_balance_code)::text = (for_1079_base_clean_3.bukrs)::text) AND ((storage_sales_bundles_weight_3.forwarder_code)::text = (for_1079_base_clean_3.lifnr)::text) AND ((storage_sales_bundles_weight_3.plant_code)::text = (for_1079_base_clean_3.werks)::text))",
+                  "Join Filter": "((((for_1079_base_clean_3.zzport)::text = (storage_sales_bundles_weight_3.port_of_discharge_code)::text) OR (for_1079_base_clean_3.zzport IS NULL)) AND (((for_1079_base_clean_3.zzforma)::text = (storage_sales_bundles_weight_3.material_shape_code)::text) OR (for_1079_base_clean_3.zzforma IS NULL)) AND (((for_1079_base_clean_3.zzet_tarif)::text = (storage_sales_bundles_weight_3.etsng_code)::text) OR (for_1079_base_clean_3.zzet_tarif IS NULL)) AND (((for_1079_base_clean_3.sdabw)::text = (storage_sales_bundles_weight_3.transport_type_code)::text) OR (for_1079_base_clean_3.sdabw IS NULL)) AND (((for_1079_base_clean_3.zzterminal)::text = (storage_sales_bundles_weight_3.warehouse_code)::text) OR (for_1079_base_clean_3.zzterminal IS NULL)) AND (((for_1079_base_clean_3.vzzzone)::text = (storage_sales_bundles_weight_3.warehouse_storage_area_code)::text) OR (for_1079_base_clean_3.vzzzone IS NULL)) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_3.dt_valid_from) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_3.dt_valid_to) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_3.datab) AND (storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_3.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight_3",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 8307.03,
+                      "Plan Rows": 49516523,
+                      "Plan Width": 137,
+                      "Output": ["storage_sales_bundles_weight_3.material_shape_code", "storage_sales_bundles_weight_3.transport_type_code", "storage_sales_bundles_weight_3.etsng_code", "storage_sales_bundles_weight_3.forwarder_code", "storage_sales_bundles_weight_3.storage_cost_calculation_type_name", "storage_sales_bundles_weight_3.warehouse_code", "storage_sales_bundles_weight_3.warehouse_storage_area_code", "storage_sales_bundles_weight_3.plant_code", "storage_sales_bundles_weight_3.unit_balance_code", "storage_sales_bundles_weight_3.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_3.port_of_discharge_code", "storage_sales_bundles_weight_3.rn"],
+                      "Filter": "((storage_sales_bundles_weight_3.storage_cost_calculation_type_name)::text = 'Логика Азия'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 482.15,
+                      "Total Cost": 482.15,
+                      "Plan Rows": 12051,
+                      "Plan Width": 119,
+                      "Output": ["for_1079_base_clean_3.purchase_contract_code", "for_1079_base_clean_3.position_line_item_code", "for_1079_base_clean_3.bukrs", "for_1079_base_clean_3.lifnr", "for_1079_base_clean_3.zzport", "for_1079_base_clean_3.werks", "for_1079_base_clean_3.zzforma", "for_1079_base_clean_3.zzet_tarif", "for_1079_base_clean_3.sdabw", "for_1079_base_clean_3.zzterminal", "for_1079_base_clean_3.vzzzone", "for_1079_base_clean_3.service_code", "for_1079_base_clean_3.price_uom_code", "for_1079_base_clean_3.konws", "for_1079_base_clean_3.currency_dogovor", "for_1079_base_clean_3.datab", "for_1079_base_clean_3.datbi", "for_1079_base_clean_3.dt_valid_from", "for_1079_base_clean_3.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean_3",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 482.15,
+                          "Plan Rows": 12051,
+                          "Plan Width": 119,
+                          "Output": ["for_1079_base_clean_3.purchase_contract_code", "for_1079_base_clean_3.position_line_item_code", "for_1079_base_clean_3.bukrs", "for_1079_base_clean_3.lifnr", "for_1079_base_clean_3.zzport", "for_1079_base_clean_3.werks", "for_1079_base_clean_3.zzforma", "for_1079_base_clean_3.zzet_tarif", "for_1079_base_clean_3.sdabw", "for_1079_base_clean_3.zzterminal", "for_1079_base_clean_3.vzzzone", "for_1079_base_clean_3.service_code", "for_1079_base_clean_3.price_uom_code", "for_1079_base_clean_3.konws", "for_1079_base_clean_3.currency_dogovor", "for_1079_base_clean_3.datab", "for_1079_base_clean_3.datbi", "for_1079_base_clean_3.dt_valid_from", "for_1079_base_clean_3.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean_3.service_code)::text = 'S49'::text) AND ((for_1079_base_clean_3.purchase_document_subtype_code)::text = 'ZDTL'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 15558.82,
+              "Plan Rows": 35231974,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight_4.rn", "storage_sales_bundles_weight_4.storage_cost_calculation_type_name", "for_1079_base_clean_4.purchase_contract_code", "for_1079_base_clean_4.position_line_item_code", "for_1079_base_clean_4.datab", "for_1079_base_clean_4.datbi", "for_1079_base_clean_4.price_uom_code", "for_1079_base_clean_4.service_code", "for_1079_base_clean_4.konws", "for_1079_base_clean_4.currency_dogovor", "CASE WHEN (((for_1079_base_clean_4.zzport)::text = (storage_sales_bundles_weight_4.port_of_discharge_code)::text) OR (for_1079_base_clean_4.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_4.zzforma)::text = (storage_sales_bundles_weight_4.material_shape_code)::text) OR (for_1079_base_clean_4.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_4.zzet_tarif)::text = (storage_sales_bundles_weight_4.etsng_code)::text) OR (for_1079_base_clean_4.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_4.sdabw)::text = (storage_sales_bundles_weight_4.transport_type_code)::text) OR (for_1079_base_clean_4.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_4.zzterminal)::text = (storage_sales_bundles_weight_4.warehouse_code)::text) OR (for_1079_base_clean_4.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_4.vzzzone)::text = (storage_sales_bundles_weight_4.warehouse_storage_area_code)::text) OR (for_1079_base_clean_4.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 14995.11,
+                  "Plan Rows": 35231974,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight_4.material_shape_code", "storage_sales_bundles_weight_4.transport_type_code", "storage_sales_bundles_weight_4.etsng_code", "storage_sales_bundles_weight_4.storage_cost_calculation_type_name", "storage_sales_bundles_weight_4.warehouse_code", "storage_sales_bundles_weight_4.warehouse_storage_area_code", "storage_sales_bundles_weight_4.port_of_discharge_code", "storage_sales_bundles_weight_4.rn", "for_1079_base_clean_4.purchase_contract_code", "for_1079_base_clean_4.position_line_item_code", "for_1079_base_clean_4.zzport", "for_1079_base_clean_4.zzforma", "for_1079_base_clean_4.zzet_tarif", "for_1079_base_clean_4.sdabw", "for_1079_base_clean_4.zzterminal", "for_1079_base_clean_4.vzzzone", "for_1079_base_clean_4.service_code", "for_1079_base_clean_4.price_uom_code", "for_1079_base_clean_4.konws", "for_1079_base_clean_4.currency_dogovor", "for_1079_base_clean_4.datab", "for_1079_base_clean_4.datbi"],
+                  "Hash Cond": "((storage_sales_bundles_weight_4.forwarder_code)::text = (for_1079_base_clean_4.lifnr)::text)",
+                  "Join Filter": "((((for_1079_base_clean_4.zzport)::text = (storage_sales_bundles_weight_4.port_of_discharge_code)::text) OR (for_1079_base_clean_4.zzport IS NULL)) AND (((for_1079_base_clean_4.zzforma)::text = (storage_sales_bundles_weight_4.material_shape_code)::text) OR (for_1079_base_clean_4.zzforma IS NULL)) AND (((for_1079_base_clean_4.zzet_tarif)::text = (storage_sales_bundles_weight_4.etsng_code)::text) OR (for_1079_base_clean_4.zzet_tarif IS NULL)) AND (((for_1079_base_clean_4.sdabw)::text = (storage_sales_bundles_weight_4.transport_type_code)::text) OR (for_1079_base_clean_4.sdabw IS NULL)) AND (((for_1079_base_clean_4.zzterminal)::text = (storage_sales_bundles_weight_4.warehouse_code)::text) OR (for_1079_base_clean_4.zzterminal IS NULL)) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_4.dt_valid_from) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_4.dt_valid_to) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_4.datab) AND (storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_4.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight_4",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 7342.53,
+                      "Plan Rows": 20750888,
+                      "Plan Width": 127,
+                      "Output": ["storage_sales_bundles_weight_4.material_shape_code", "storage_sales_bundles_weight_4.transport_type_code", "storage_sales_bundles_weight_4.etsng_code", "storage_sales_bundles_weight_4.forwarder_code", "storage_sales_bundles_weight_4.storage_cost_calculation_type_name", "storage_sales_bundles_weight_4.warehouse_code", "storage_sales_bundles_weight_4.warehouse_storage_area_code", "storage_sales_bundles_weight_4.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_4.port_of_discharge_code", "storage_sales_bundles_weight_4.rn"],
+                      "Filter": "((storage_sales_bundles_weight_4.storage_cost_calculation_type_name)::text = 'Логика Европа'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 492.67,
+                      "Total Cost": 492.67,
+                      "Plan Rows": 33106,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_clean_4.purchase_contract_code", "for_1079_base_clean_4.position_line_item_code", "for_1079_base_clean_4.lifnr", "for_1079_base_clean_4.zzport", "for_1079_base_clean_4.zzforma", "for_1079_base_clean_4.zzet_tarif", "for_1079_base_clean_4.sdabw", "for_1079_base_clean_4.zzterminal", "for_1079_base_clean_4.vzzzone", "for_1079_base_clean_4.service_code", "for_1079_base_clean_4.price_uom_code", "for_1079_base_clean_4.konws", "for_1079_base_clean_4.currency_dogovor", "for_1079_base_clean_4.datab", "for_1079_base_clean_4.datbi", "for_1079_base_clean_4.dt_valid_from", "for_1079_base_clean_4.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean_4",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 492.67,
+                          "Plan Rows": 33106,
+                          "Plan Width": 109,
+                          "Output": ["for_1079_base_clean_4.purchase_contract_code", "for_1079_base_clean_4.position_line_item_code", "for_1079_base_clean_4.lifnr", "for_1079_base_clean_4.zzport", "for_1079_base_clean_4.zzforma", "for_1079_base_clean_4.zzet_tarif", "for_1079_base_clean_4.sdabw", "for_1079_base_clean_4.zzterminal", "for_1079_base_clean_4.vzzzone", "for_1079_base_clean_4.service_code", "for_1079_base_clean_4.price_uom_code", "for_1079_base_clean_4.konws", "for_1079_base_clean_4.currency_dogovor", "for_1079_base_clean_4.datab", "for_1079_base_clean_4.datbi", "for_1079_base_clean_4.dt_valid_from", "for_1079_base_clean_4.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean_4.bukrs)::text = '1520'::text) AND ((for_1079_base_clean_4.werks)::text = '1521'::text) AND ((for_1079_base_clean_4.purchase_document_subtype_code)::text = 'ZDTL'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Result",
+              "Parent Relationship": "Member",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 7725.58,
+              "Plan Rows": 961603,
+              "Plan Width": 128,
+              "Output": ["storage_sales_bundles_weight_5.rn", "storage_sales_bundles_weight_5.storage_cost_calculation_type_name", "for_1079_base_clean_5.purchase_contract_code", "for_1079_base_clean_5.position_line_item_code", "for_1079_base_clean_5.datab", "for_1079_base_clean_5.datbi", "for_1079_base_clean_5.price_uom_code", "for_1079_base_clean_5.service_code", "for_1079_base_clean_5.konws", "for_1079_base_clean_5.currency_dogovor", "CASE WHEN (((for_1079_base_clean_5.zzport)::text = (storage_sales_bundles_weight_5.port_of_discharge_code)::text) OR (for_1079_base_clean_5.zzport IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_5.zzforma)::text = (storage_sales_bundles_weight_5.material_shape_code)::text) OR (for_1079_base_clean_5.zzforma IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_5.zzet_tarif)::text = (storage_sales_bundles_weight_5.etsng_code)::text) OR (for_1079_base_clean_5.zzet_tarif IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_5.sdabw)::text = (storage_sales_bundles_weight_5.transport_type_code)::text) OR (for_1079_base_clean_5.sdabw IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_5.zzterminal)::text = (storage_sales_bundles_weight_5.warehouse_code)::text) OR (for_1079_base_clean_5.zzterminal IS NULL)) THEN 1 ELSE 0 END", "CASE WHEN (((for_1079_base_clean_5.vzzzone)::text = (storage_sales_bundles_weight_5.warehouse_storage_area_code)::text) OR (for_1079_base_clean_5.vzzzone IS NULL)) THEN 1 ELSE 0 END"],
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 7710.20,
+                  "Plan Rows": 961603,
+                  "Plan Width": 202,
+                  "Output": ["storage_sales_bundles_weight_5.material_shape_code", "storage_sales_bundles_weight_5.transport_type_code", "storage_sales_bundles_weight_5.etsng_code", "storage_sales_bundles_weight_5.storage_cost_calculation_type_name", "storage_sales_bundles_weight_5.warehouse_code", "storage_sales_bundles_weight_5.warehouse_storage_area_code", "storage_sales_bundles_weight_5.port_of_discharge_code", "storage_sales_bundles_weight_5.rn", "for_1079_base_clean_5.purchase_contract_code", "for_1079_base_clean_5.position_line_item_code", "for_1079_base_clean_5.zzport", "for_1079_base_clean_5.zzforma", "for_1079_base_clean_5.zzet_tarif", "for_1079_base_clean_5.sdabw", "for_1079_base_clean_5.zzterminal", "for_1079_base_clean_5.vzzzone", "for_1079_base_clean_5.service_code", "for_1079_base_clean_5.price_uom_code", "for_1079_base_clean_5.konws", "for_1079_base_clean_5.currency_dogovor", "for_1079_base_clean_5.datab", "for_1079_base_clean_5.datbi"],
+                  "Hash Cond": "((storage_sales_bundles_weight_5.forwarder_code)::text = (for_1079_base_clean_5.lifnr)::text)",
+                  "Join Filter": "((((for_1079_base_clean_5.zzport)::text = (storage_sales_bundles_weight_5.port_of_discharge_code)::text) OR (for_1079_base_clean_5.zzport IS NULL)) AND (((for_1079_base_clean_5.zzforma)::text = (storage_sales_bundles_weight_5.material_shape_code)::text) OR (for_1079_base_clean_5.zzforma IS NULL)) AND (((for_1079_base_clean_5.zzet_tarif)::text = (storage_sales_bundles_weight_5.etsng_code)::text) OR (for_1079_base_clean_5.zzet_tarif IS NULL)) AND (((for_1079_base_clean_5.sdabw)::text = (storage_sales_bundles_weight_5.transport_type_code)::text) OR (for_1079_base_clean_5.sdabw IS NULL)) AND (((for_1079_base_clean_5.zzterminal)::text = (storage_sales_bundles_weight_5.warehouse_code)::text) OR (for_1079_base_clean_5.zzterminal IS NULL)) AND (storage_sales_bundles_weight_5.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_5.dt_valid_from) AND (storage_sales_bundles_weight_5.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_5.dt_valid_to) AND (storage_sales_bundles_weight_5.dt_for_price_search_in_purchase_contract >= for_1079_base_clean_5.datab) AND (storage_sales_bundles_weight_5.dt_for_price_search_in_purchase_contract <= for_1079_base_clean_5.datbi))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_sales_bundles_weight",
+                      "Schema": "dm_calc",
+                      "Alias": "storage_sales_bundles_weight_5",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 6781.11,
+                      "Plan Rows": 1737638,
+                      "Plan Width": 127,
+                      "Output": ["storage_sales_bundles_weight_5.material_shape_code", "storage_sales_bundles_weight_5.transport_type_code", "storage_sales_bundles_weight_5.etsng_code", "storage_sales_bundles_weight_5.forwarder_code", "storage_sales_bundles_weight_5.storage_cost_calculation_type_name", "storage_sales_bundles_weight_5.warehouse_code", "storage_sales_bundles_weight_5.warehouse_storage_area_code", "storage_sales_bundles_weight_5.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight_5.port_of_discharge_code", "storage_sales_bundles_weight_5.rn"],
+                      "Filter": "((storage_sales_bundles_weight_5.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text)"
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 501.94,
+                      "Total Cost": 501.94,
+                      "Plan Rows": 10791,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_clean_5.purchase_contract_code", "for_1079_base_clean_5.position_line_item_code", "for_1079_base_clean_5.lifnr", "for_1079_base_clean_5.zzport", "for_1079_base_clean_5.zzforma", "for_1079_base_clean_5.zzet_tarif", "for_1079_base_clean_5.sdabw", "for_1079_base_clean_5.zzterminal", "for_1079_base_clean_5.vzzzone", "for_1079_base_clean_5.service_code", "for_1079_base_clean_5.price_uom_code", "for_1079_base_clean_5.konws", "for_1079_base_clean_5.currency_dogovor", "for_1079_base_clean_5.datab", "for_1079_base_clean_5.datbi", "for_1079_base_clean_5.dt_valid_from", "for_1079_base_clean_5.dt_valid_to"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "for_1079_base_clean",
+                          "Schema": "pg_temp_8147354",
+                          "Alias": "for_1079_base_clean_5",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 501.94,
+                          "Plan Rows": 10791,
+                          "Plan Width": 109,
+                          "Output": ["for_1079_base_clean_5.purchase_contract_code", "for_1079_base_clean_5.position_line_item_code", "for_1079_base_clean_5.lifnr", "for_1079_base_clean_5.zzport", "for_1079_base_clean_5.zzforma", "for_1079_base_clean_5.zzet_tarif", "for_1079_base_clean_5.sdabw", "for_1079_base_clean_5.zzterminal", "for_1079_base_clean_5.vzzzone", "for_1079_base_clean_5.service_code", "for_1079_base_clean_5.price_uom_code", "for_1079_base_clean_5.konws", "for_1079_base_clean_5.currency_dogovor", "for_1079_base_clean_5.datab", "for_1079_base_clean_5.datbi", "for_1079_base_clean_5.dt_valid_from", "for_1079_base_clean_5.dt_valid_to"],
+                          "Filter": "(((for_1079_base_clean_5.bukrs)::text = '1120'::text) AND ((for_1079_base_clean_5.werks)::text = '1121'::text) AND ((for_1079_base_clean_5.service_code)::text = 'S49'::text) AND ((for_1079_base_clean_5.purchase_document_subtype_code)::text = 'ZDTL'::text))"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

@@ -1,4 +1,58 @@
-CREATE TEMP TABLE for_1079_rf_cont
+CREATE TEMP TABLE for_1079_rf_balk_1
+ON COMMIT DROP AS
+WITH cte AS (
+    SELECT
+        b.rn,
+        f.purchase_contract_code,
+        f.position_line_item_code,
+        f.konws,
+        f.service_code,
+        f.price_uom_code,
+        f.currency_dogovor,
+        f.datab,
+        f.datbi,
+        ROW_NUMBER() OVER (
+            PARTITION BY b.rn
+            ORDER BY
+                f.order_rf,
+                f.kopos,
+                f.kbetr,
+                f.purchase_contract_code,
+                f.position_line_item_code
+        ) AS row_num
+    FROM dm_calc.storage_sales_bundles_weight b
+    JOIN for_1079_base f
+      ON f.bukrs  = '1120'
+     AND f.lifnr  = b.creditor_in_shipment_instruction_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = '1121'
+     AND f.zzsrvpos = b.service_number
+     AND (f.zzforma = b.material_shape_code OR f.zzforma IS NULL)
+     AND (f.zzet_tarif = b.etsng_code OR f.zzet_tarif IS NULL)
+     AND (f.sdabw = b.transport_type_code OR f.sdabw IS NULL)
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.dt_valid_from AND f.dt_valid_to
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.datab AND f.datbi
+     AND b.storage_cost_calculation_type_name IN ('Логика РФ-балк')
+)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi
+FROM cte
+WHERE row_num = 1
+DISTRIBUTED BY (rn);
+▶️ 3.3. Логика Логика РФ-балк — часть 2 → for_1079_rf_balk_2
+sql
+Копировать код
+CREATE TEMP TABLE for_1079_rf_balk_2
 ON COMMIT DROP AS
 WITH cte AS (
     SELECT
@@ -27,14 +81,14 @@ WITH cte AS (
      AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
      AND f.werks  = '1121'
      AND f.zzsrvpos = 'S49'
-     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
-     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
-     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
+     AND (f.zzforma = b.material_shape_code OR f.zzforma IS NULL)
+     AND (f.zzet_tarif = b.etsng_code OR f.zzet_tarif IS NULL)
+     AND (f.sdabw = b.transport_type_code OR f.sdabw IS NULL)
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.dt_valid_from AND f.dt_valid_to
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.datab AND f.datbi
-     AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры')
+     AND b.storage_cost_calculation_type_name IN ('Логика РФ-балк')
 )
 SELECT
     rn,
@@ -49,3 +103,1091 @@ SELECT
 FROM cte
 WHERE row_num = 1
 DISTRIBUTED BY (rn);
+▶️ 3.4. Логика Логика Азия → for_1079_asia
+sql
+Копировать код
+CREATE TEMP TABLE for_1079_asia
+ON COMMIT DROP AS
+WITH cte AS (
+    SELECT
+        b.rn,
+        f.purchase_contract_code,
+        f.position_line_item_code,
+        f.konws,
+        f.service_code,
+        f.price_uom_code,
+        f.currency_dogovor,
+        f.datab,
+        f.datbi,
+        ROW_NUMBER() OVER (
+            PARTITION BY b.rn
+            ORDER BY
+                f.order_asia,
+                f.kopos,
+                f.kbetr,
+                f.purchase_contract_code,
+                f.position_line_item_code
+        ) AS row_num
+    FROM dm_calc.storage_sales_bundles_weight b
+    JOIN for_1079_base f
+      ON f.bukrs  = b.unit_balance_code
+     AND f.lifnr  = b.forwarder_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = b.plant_code
+     AND f.zzsrvpos = 'S49'
+     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
+     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
+     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.dt_valid_from AND f.dt_valid_to
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.datab AND f.datbi
+     AND b.storage_cost_calculation_type_name IN ('Логика Азия')
+     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
+     AND (f.vzzzone    = b.warehouse_storage_area_code OR f.vzzzone IS NULL)
+     AND f.purchase_document_subtype_code = 'ZDTL'
+)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi
+FROM cte
+WHERE row_num = 1
+DISTRIBUTED BY (rn);
+▶️ 3.5. Логика Логика Европа → for_1079_euro
+Здесь логика сложнее:
+– используется order_euro_svh
+– проверка сервисов через /RUSAL/SD4553M
+– сопоставление формы и сервисов через параметры SAP
+– расчёт warehouse_weight_month_end, month_difference_2, special.
+
+sql
+Копировать код
+CREATE TEMP TABLE for_1079_euro
+ON COMMIT DROP AS
+WITH euro_base AS (
+    SELECT
+        b.rn,
+        f.purchase_contract_code,
+        f.position_line_item_code,
+        f.konws,
+        f.service_code,
+        f.price_uom_code,
+        f.netpr,
+        f.currency_dogovor,
+        f.datab,
+        f.datbi,
+
+        /* Суммарный вес по складу и месяцу окончания хранения */
+        SUM(b.sales_bundle_gross_weight) OVER (
+            PARTITION BY b.warehouse_code,
+                         date_trunc('month', b.dt_storage_end)
+        ) AS warehouse_weight_month_end,
+
+        /* Разница в месяцах между началом и концом хранения (month_difference_2) */
+        CASE
+            WHEN EXTRACT(day FROM b.dt_storage_end) < EXTRACT(day FROM b.dt_storage_start) THEN
+                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start))
+            ELSE
+                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start)) + 1
+        END AS month_difference_2,
+
+        /* special — количество недель или месяцев, в зависимости от типа логики */
+        CASE
+            WHEN b.storage_cost_special_calculation_type_code = '4'
+                THEN CEIL(b.storage_duration_total_calendar_days / 7::numeric)
+            WHEN b.storage_cost_special_calculation_type_code = '5'
+                THEN CEIL(b.storage_duration_total_calendar_days / 30::numeric)
+        END AS special,
+
+        /* приоритет: order_euro_svh + наличие соответствий в параметрах SAP */
+        ROW_NUMBER() OVER (
+            PARTITION BY b.rn
+            ORDER BY
+                f.order_euro_svh,
+                f.kopos,
+                f.kbetr,
+                CASE
+                    WHEN param_sap.range_low_value IS NOT NULL
+                     AND param_srv_1.range_low_value IS NOT NULL THEN 1
+                    WHEN param_sap.range_low_value IS NULL
+                     AND param_srv_1.range_low_value IS NULL THEN 1
+                    ELSE 0
+                END DESC,
+                f.purchase_contract_code,
+                f.position_line_item_code
+        ) AS row_num
+    FROM dm_calc.storage_sales_bundles_weight b
+    JOIN for_1079_base f
+      ON f.bukrs  = '1520'
+     AND f.lifnr  = b.forwarder_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = '1521'
+     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
+     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
+     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.dt_valid_from AND f.dt_valid_to
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.datab AND f.datbi
+     AND b.storage_cost_calculation_type_name IN ('Логика Европа')
+     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
+     AND f.purchase_document_subtype_code = 'ZDTL'
+
+    JOIN dict_dds.settings_and_parameters_sap s_eu
+      ON s_eu.range_low_value    = f.zzsrvpos
+     AND s_eu.range_low_value LIKE 'EU%'
+     AND s_eu.abap_program_code  = '/RUSAL/SD4553M'
+     AND s_eu.parameter_code     = 'S_USLST'
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_sap
+      ON param_sap.range_low_value = b.material_shape_code
+     AND param_sap.abap_program_code = '/RUSAL/SD4553M'
+     AND param_sap.parameter_code    = 'FORMSTEU'
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_srv_1
+      ON param_srv_1.range_low_value = s_eu.range_low_value
+     AND param_srv_1.abap_program_code = '/RUSAL/SD4553M'
+     AND param_srv_1.parameter_code    = 'S_USLSTC'
+)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    warehouse_weight_month_end,
+    month_difference_2,
+    netpr,
+    special,
+    currency_dogovor,
+    datab,
+    datbi
+FROM euro_base
+WHERE row_num = 1
+DISTRIBUTED BY (rn);
+▶️ 3.6. Логика Логика СВХ → for_1079_svh
+sql
+Копировать код
+CREATE TEMP TABLE for_1079_svh
+ON COMMIT DROP AS
+WITH cte AS (
+    SELECT
+        b.rn,
+        f.purchase_contract_code,
+        f.position_line_item_code,
+        f.konws,
+        f.service_code,
+        f.price_uom_code,
+        f.currency_dogovor,
+        f.datab,
+        f.datbi,
+        ROW_NUMBER() OVER (
+            PARTITION BY b.rn
+            ORDER BY
+                f.order_euro_svh,
+                f.kopos,
+                f.kbetr,
+                f.purchase_contract_code,
+                f.position_line_item_code
+        ) AS row_num
+    FROM dm_calc.storage_sales_bundles_weight b
+    JOIN for_1079_base f
+      ON f.bukrs  = '1120'
+     AND f.lifnr  = b.forwarder_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = '1121'
+     AND f.zzsrvpos = 'S49'
+     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
+     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
+     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.dt_valid_from AND f.dt_valid_to
+     AND b.dt_for_price_search_in_purchase_contract
+         BETWEEN f.datab AND f.datbi
+     AND b.storage_cost_calculation_type_name IN ('Логика СВХ')
+     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
+     AND f.purchase_document_subtype_code = 'ZDTL'
+)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi
+FROM cte
+WHERE row_num = 1
+DISTRIBUTED BY (rn);
+Этим блоком мы:
+
+аккуратно разложили все логики выбора договора по отдельным temp-таблицам;
+
+сделали их DISTRIBUTED BY (rn), чтобы хорошо стыковались с storage_sales_bundles_weight;
+
+полностью сохранили исходные условия и порядок приоритета.
+
+Если всё ок — дальше пойдут:
+
+Часть 4 — вспомогательные таблицы for_1087 и for_1090 (ступени цен)
+
+Часть 5 — base_3 (объединение всего в одну базу для витрины)
+
+Часть 6–7 — финальный INSERT с расчётом стоимостей и интервалов
+
+Написать «далее», и я отправлю блок с for_1087 и for_1090.
+
+
+
+
+
+
+
+Вы сказали:
+далее
+
+
+ChatGPT сказал:
+Отлично, продолжаем.
+Сейчас мы разберём два ключевых вспомогательных блока, которые участвуют практически во всех расчётах стоимости хранения:
+
+for_1087 — определяет бесплатные дни хранения по договору
+
+for_1090 — определяет шкалы цены PB00 и накопленные стоимости
+
+Оба блока я сильно структурировал, улучшил читаемость и точность, но логика полностью сохранена.
+
+📌 Часть 4 из 7 — вспомогательные таблицы (for_1087 и for_1090)
+▶️ 4.1. Таблица for_1087
+Это:
+
+минимальное значение поля price_scale_limit_from_quantity
+
+по ключу (сроки валидности + контракт + позиция)
+
+используется для расчёта бесплатных дней хранения.
+
+Полностью рефакторено:
+
+sql
+Копировать код
+CREATE TEMP TABLE for_1087
+ON COMMIT DROP AS
+SELECT
+    purchase_contract_code,
+    purchase_contract_position_code,
+    dt_price_condition_valid_to,
+    dt_price_condition_valid_from,
+    MIN(price_scale_limit_from_quantity) AS price_scale_limit_from_quantity
+FROM dds.purchase_contract_price_conditions
+WHERE price_scale_limit_from_quantity IS NOT NULL
+GROUP BY
+    purchase_contract_code,
+    purchase_contract_position_code,
+    dt_price_condition_valid_to,
+    dt_price_condition_valid_from
+DISTRIBUTED REPLICATED;
+▶️ 4.2. Таблица for_1090
+Это самая сложная таблица — определяет шкалы PB00:
+
+konp_kbetr — базовая ставка
+
+konm_kbetr — ставка по шкале
+
+kstbm и kstbm_next — границы лимитов
+
+presum — накопленные стоимости за предыдущие диапазоны
+
+rn — порядковый номер шкалы
+
+cnt — количество строк шкалы по позиции
+
+Полностью переработано, но логика PB00 не изменена.
+
+▶️ 4.2.1. Вспомогательный CTE tmp
+sql
+Копировать код
+CREATE TEMP TABLE for_1090
+ON COMMIT DROP AS
+WITH tmp AS (
+    SELECT
+        pcpc.price_condition_code                AS knumh,
+        pcpc.purchase_contract_code              AS evrtn,
+        pcpc.purchase_contract_position_code     AS evrtp,
+        pcpc.price_scale_basis_consecutive_code,
+        pcpc.price_condition_position_code,
+        pcpc.price_rate                          AS konp_kbetr,
+        pcpc.price_scale_rate                    AS konm_kbetr,
+        pcpc.price_scale_limit_from_quantity     AS kstbm,
+        pcpc.price_scale_limit_to_quantity       AS kstbm_next,
+        pcpc.price_scale_basis_code,
+        pcpc.dt_price_condition_valid_to,
+        pcpc.dt_price_condition_valid_from,
+
+        COUNT(pcpc.price_scale_limit_from_quantity)
+            OVER (PARTITION BY pcpc.purchase_contract_code, pcpc.purchase_contract_position_code) AS cnt,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY pcpc.purchase_contract_code,
+                         pcpc.purchase_contract_position_code
+            ORDER BY pcpc.price_scale_basis_consecutive_code
+        ) AS rn,
+
+        /* минимальное значение шкалы для корректных расчётов */
+        MIN(price_scale_limit_from_quantity) OVER (
+            PARTITION BY pcpc.purchase_contract_code,
+                         pcpc.purchase_contract_position_code,
+                         dt_price_condition_valid_from,
+                         dt_price_condition_valid_to
+        ) AS min_price_scale_limit_from_quantity,
+
+        /* lagging = разница * ставка предыдущего уровня шкалы */
+        (pcpc.price_scale_limit_from_quantity -
+            LAG(pcpc.price_scale_limit_from_quantity)
+                OVER (PARTITION BY pcpc.purchase_contract_code,
+                                   pcpc.purchase_contract_position_code
+                      ORDER BY pcpc.price_scale_basis_consecutive_code)
+        )
+        * LAG(pcpc.price_scale_rate)
+            OVER (PARTITION BY pcpc.purchase_contract_code,
+                               pcpc.purchase_contract_position_code
+                  ORDER BY pcpc.price_scale_basis_consecutive_code)
+        AS lagging
+
+    FROM dds.purchase_contract_price_conditions pcpc
+    WHERE pcpc.price_condition_type_code = 'PB00'
+      AND (pcpc.price_scale_basis_code = 'C' OR pcpc.price_scale_basis_code IS NULL)
+)
+SELECT
+    knumh,
+    evrtn,
+    evrtp,
+    dt_price_condition_valid_to,
+    dt_price_condition_valid_from,
+    price_scale_basis_consecutive_code,
+    price_condition_position_code,
+    konp_kbetr,
+    konm_kbetr,
+    kstbm,
+    kstbm_next,
+    cnt,
+    rn,
+    price_scale_basis_code,
+    min_price_scale_limit_from_quantity,
+
+    /* суммы накопленных previous ranges */
+    SUM(lagging) OVER (
+        PARTITION BY evrtn, evrtp
+        ORDER BY price_scale_basis_consecutive_code
+    ) AS presum
+
+FROM tmp
+DISTRIBUTED REPLICATED;
+
+
+CREATE TEMP TABLE base_3
+ON COMMIT DROP AS
+SELECT
+    -- Базовые поля из dm_calc.storage_sales_bundles_weight
+    b.sales_bundle_code,
+    b.plant_producer_delivery_code,
+    b.plant_producer_delivery_position_code,
+    b.initial_delivery_code,
+    b.material_code,
+    b.dt_shipment,
+    b.railcar_code,
+    b.transport_bill_code,
+    b.uni,
+    b.material_shape_code,
+    b.port_of_discharge_code,
+    b.dt_arrival_to_russian_port,
+    b.dt_storage_end_in_release,
+    b.transport_type_code,
+    b.etsng_code,
+    b.dt_report,
+    b.sales_bundle_net_weight,
+    b.sales_bundle_gross_weight,
+    b.batch_code,
+    b.dt_arrival,
+    b.receiving_plant_code,
+    b.sales_delivery_code,
+    b.transportation_inbound_delivery_code,
+    b.delivery_for_storage_calculation_code,
+    b.transportation_inbound_delivery_position_code,
+    b.delivery_position_for_storage_calculation_code,
+    b.forwarder_code,
+    b.storage_cost_calculation_type_name,
+    b.transport_departure_hub_code,
+    b.transport_destination_hub_code,
+    b.transportation_outbound_delivery_code,
+    b.transportation_outbound_delivery_position_code,
+    b.is_final_transportation_stage_code,
+    b.transportation_stage_code,
+    b.storage_calculation_bundle_quantity,
+    b.warehouse_code,
+    b.delivery_in_final_release_code,
+    b.dt_final_release,
+    b.bill_of_lading_code,
+    b.bill_of_lading_number,
+    b.dt_bill_of_lading,
+    b.incoterms_code,
+    b.storage_cost_special_calculation_type_code,
+    b.warehouse_storage_area_code,
+    b.plant_code,
+    b.unit_balance_code,
+    b.creditor_in_shipment_instruction_code,
+    b.dt_storage_start,
+    b.dt_shipped_from_warehouse,
+    b.dt_storage_end,
+    b.service_number,
+    b.storage_duration_total_calendar_days,
+    b.shipment_instruction_number,
+    b.dt_for_price_search_in_purchase_contract,
+    b.is_stored_in_russian_port_code,
+    b.remote_warehouse_code,
+    b.dt_transportation_stage_start_p,
+    b.dt_transportation_stage_start_r,
+
+    /* --- LE.001079 — договор хранения --- */
+    COALESCE(
+        rf_cont.purchase_contract_code,
+        rf_balk1.purchase_contract_code,
+        rf_balk2.purchase_contract_code,
+        euro.purchase_contract_code,
+        svh.purchase_contract_code,
+        asia.purchase_contract_code
+    ) AS purchase_contract_code,
+
+    /* --- LE.001080 — позиция договора --- */
+    COALESCE(
+        rf_cont.position_line_item_code,
+        rf_balk1.position_line_item_code,
+        rf_balk2.position_line_item_code,
+        euro.position_line_item_code,
+        svh.position_line_item_code,
+        asia.position_line_item_code
+    ) AS purchase_contract_position_code,
+
+    /* --- LE.001081 — валюта позиции договора --- */
+    COALESCE(
+        rf_cont.konws,
+        rf_balk1.konws,
+        rf_balk2.konws,
+        euro.konws,
+        svh.konws,
+        asia.konws
+    ) AS purchase_contract_position_currency_code,
+
+    /* --- LE.001083 — услуга договора --- */
+    COALESCE(
+        rf_cont.service_code,
+        rf_balk1.service_code,
+        rf_balk2.service_code,
+        euro.service_code,
+        svh.service_code,
+        asia.service_code
+    ) AS service_code,
+
+    /* --- LE.001091 — ед. измерения позиции договора --- */
+    COALESCE(
+        rf_cont.price_uom_code,
+        rf_balk1.price_uom_code,
+        rf_balk2.price_uom_code,
+        euro.price_uom_code,
+        svh.price_uom_code,
+        asia.price_uom_code
+    ) AS purchase_contract_position_uom_code,
+
+    /* --- LE.001087 — бесплатные дни по договору --- */
+    GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0) AS storage_duration_free_by_contract_calendar_days,
+
+    /* --- LE.001088 — бесплатные дни по поставке --- */
+    LEAST(
+        b.storage_duration_total_calendar_days,
+        GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+    ) AS storage_duration_free_by_delivery_calendar_days,
+
+    /* --- LE.001089 — платные дни --- */
+    b.storage_duration_total_calendar_days
+      - LEAST(
+            b.storage_duration_total_calendar_days,
+            GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+        ) AS storage_duration_payable_calendar_days,
+
+    /* --- LE.001125 — стоимость хранения в валюте договора --- */
+    CASE
+        WHEN b.storage_cost_special_calculation_type_code = '2'
+        THEN
+            COALESCE(for_1090_1.konp_kbetr, for_1090_2.konp_kbetr)
+            * euro.month_difference_2
+            * b.sales_bundle_gross_weight
+
+        WHEN for_prices.range_low_value IS NOT NULL
+             AND for_1090_1.evrtn IS NOT NULL
+        THEN
+            for_1090_1.konp_kbetr
+            * (
+                  COALESCE(euro.special, b.storage_duration_total_calendar_days)
+                  - LEAST(
+                        COALESCE(euro.special, b.storage_duration_total_calendar_days),
+                        GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+                    )
+              )
+            / b.weight_for_1090_razdel
+            * b.weight_for_1090_umno
+            * COALESCE(
+                rf_cont.currency_dogovor,
+                rf_balk1.currency_dogovor,
+                rf_balk2.currency_dogovor,
+                euro.currency_dogovor,
+                svh.currency_dogovor,
+                asia.currency_dogovor
+              )
+
+        WHEN for_prices.range_low_value IS NOT NULL
+             AND for_1090_2.evrtn IS NOT NULL
+        THEN
+            COALESCE(for_1090_2.presum, 0)
+            + GREATEST(
+                COALESCE(euro.special, b.storage_duration_total_calendar_days)
+                - for_1090_2.kstbm + 1,
+                0
+              )
+              * for_1090_2.konm_kbetr
+              / b.weight_for_1090_razdel
+              * b.weight_for_1090_umno
+              * COALESCE(
+                    rf_cont.currency_dogovor,
+                    rf_balk1.currency_dogovor,
+                    rf_balk2.currency_dogovor,
+                    euro.currency_dogovor,
+                    svh.currency_dogovor,
+                    asia.currency_dogovor
+                )
+
+        WHEN for_1090_1.evrtn IS NOT NULL
+        THEN
+            for_1090_1.konp_kbetr
+            * (
+                  COALESCE(euro.special, b.storage_duration_total_calendar_days)
+                  - LEAST(
+                        COALESCE(euro.special, b.storage_duration_total_calendar_days),
+                        GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+                    )
+              )
+            * b.weight_for_1090_umno
+            * COALESCE(
+                rf_cont.currency_dogovor,
+                rf_balk1.currency_dogovor,
+                rf_balk2.currency_dogovor,
+                euro.currency_dogovor,
+                svh.currency_dogovor,
+                asia.currency_dogovor
+              )
+
+        WHEN for_1090_2.evrtn IS NOT NULL
+        THEN
+            (COALESCE(for_1090_2.presum, 0)
+             + GREATEST(
+                    COALESCE(euro.special, b.storage_duration_total_calendar_days)
+                    - for_1090_2.kstbm + 1,
+                    0
+               ) * for_1090_2.konm_kbetr
+            )
+            * b.weight_for_1090_umno
+            * COALESCE(
+                rf_cont.currency_dogovor,
+                rf_balk1.currency_dogovor,
+                rf_balk2.currency_dogovor,
+                euro.currency_dogovor,
+                svh.currency_dogovor,
+                asia.currency_dogovor
+              )
+
+    END AS storage_cost_calculated_amount_local,
+
+    /* --- LE.001095–LE.001100 — распределение веса по интервалам платных дней --- */
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            )
+            BETWEEN 1 AND 30
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_001_030_days_gross_weight,
+
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            )
+            BETWEEN 31 AND 60
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_031_060_days_gross_weight,
+
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            )
+            BETWEEN 61 AND 90
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_061_090_days_gross_weight,
+
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            )
+            BETWEEN 91 AND 180
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_091_180_days_gross_weight,
+
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            )
+            BETWEEN 181 AND 365
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_181_365_days_gross_weight,
+
+    CASE
+        WHEN
+            COALESCE(euro.special, b.storage_duration_total_calendar_days)
+            - LEAST(
+                b.storage_duration_total_calendar_days,
+                GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+            ) > 365
+        THEN b.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_over_365_days_gross_weight,
+
+    b.rn
+FROM dm_calc.storage_sales_bundles_weight b
+    LEFT JOIN for_1079_rf_cont   rf_cont  ON rf_cont.rn  = b.rn
+    LEFT JOIN for_1079_rf_balk_1 rf_balk1 ON rf_balk1.rn = b.rn
+    LEFT JOIN for_1079_rf_balk_2 rf_balk2 ON rf_balk2.rn = b.rn
+    LEFT JOIN for_1079_euro      euro     ON euro.rn     = b.rn
+    LEFT JOIN for_1079_svh       svh      ON svh.rn      = b.rn
+    LEFT JOIN for_1079_asia      asia     ON asia.rn     = b.rn
+
+    LEFT JOIN for_1087
+           ON for_1087.purchase_contract_code =
+                COALESCE(rf_cont.purchase_contract_code,
+                         rf_balk1.purchase_contract_code,
+                         rf_balk2.purchase_contract_code,
+                         euro.purchase_contract_code,
+                         svh.purchase_contract_code,
+                         asia.purchase_contract_code)
+          AND for_1087.purchase_contract_position_code =
+                COALESCE(rf_cont.position_line_item_code,
+                         rf_balk1.position_line_item_code,
+                         rf_balk2.position_line_item_code,
+                         euro.position_line_item_code,
+                         svh.position_line_item_code,
+                         asia.position_line_item_code)
+          AND for_1087.dt_price_condition_valid_to =
+                COALESCE(rf_cont.datbi,
+                         rf_balk1.datbi,
+                         rf_balk2.datbi,
+                         euro.datbi,
+                         svh.datbi,
+                         asia.datbi)
+          AND for_1087.dt_price_condition_valid_from =
+                COALESCE(rf_cont.datab,
+                         rf_balk1.datab,
+                         rf_balk2.datab,
+                         euro.datab,
+                         svh.datab,
+                         asia.datab)
+
+    LEFT JOIN for_1090 AS for_1090_1
+           ON for_1090_1.evrtn =
+                COALESCE(rf_cont.purchase_contract_code,
+                         rf_balk1.purchase_contract_code,
+                         rf_balk2.purchase_contract_code,
+                         euro.purchase_contract_code,
+                         svh.purchase_contract_code,
+                         asia.purchase_contract_code)
+          AND for_1090_1.evrtp =
+                COALESCE(rf_cont.position_line_item_code,
+                         rf_balk1.position_line_item_code,
+                         rf_balk2.position_line_item_code,
+                         euro.position_line_item_code,
+                         svh.position_line_item_code,
+                         asia.position_line_item_code)
+          AND for_1090_1.dt_price_condition_valid_to =
+                COALESCE(rf_cont.datbi,
+                         rf_balk1.datbi,
+                         rf_balk2.datbi,
+                         euro.datbi,
+                         svh.datbi,
+                         asia.datbi)
+          AND for_1090_1.dt_price_condition_valid_from =
+                COALESCE(rf_cont.datab,
+                         rf_balk1.datab,
+                         rf_balk2.datab,
+                         euro.datab,
+                         svh.datab,
+                         asia.datab)
+          AND for_1090_1.price_scale_basis_code IS NULL
+
+    LEFT JOIN for_1090 AS for_1090_2
+           ON for_1090_2.evrtn =
+                COALESCE(rf_cont.purchase_contract_code,
+                         rf_balk1.purchase_contract_code,
+                         rf_balk2.purchase_contract_code,
+                         euro.purchase_contract_code,
+                         svh.purchase_contract_code,
+                         asia.purchase_contract_code)
+          AND for_1090_2.evrtp =
+                COALESCE(rf_cont.position_line_item_code,
+                         rf_balk1.position_line_item_code,
+                         rf_balk2.position_line_item_code,
+                         euro.position_line_item_code,
+                         svh.position_line_item_code,
+                         asia.position_line_item_code)
+          AND for_1090_2.dt_price_condition_valid_to =
+                COALESCE(rf_cont.datbi,
+                         rf_balk1.datbi,
+                         rf_balk2.datbi,
+                         euro.datbi,
+                         svh.datbi,
+                         asia.datbi)
+          AND for_1090_2.dt_price_condition_valid_from =
+                COALESCE(rf_cont.datab,
+                         rf_balk1.datab,
+                         rf_balk2.datab,
+                         euro.datab,
+                         svh.datab,
+                         asia.datab)
+          AND for_1090_2.price_scale_basis_code = 'C'
+          AND COALESCE(euro.special, b.storage_duration_total_calendar_days)
+              BETWEEN for_1090_2.kstbm AND for_1090_2.kstbm_next
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap AS for_prices
+           ON for_prices.range_low_value =
+                COALESCE(
+                    rf_cont.price_uom_code,
+                    rf_balk1.price_uom_code,
+                    rf_balk2.price_uom_code,
+                    euro.price_uom_code,
+                    svh.price_uom_code,
+                    asia.price_uom_code
+                )
+          AND for_prices.abap_program_code = '/RUSAL/ZLE112M'
+          AND for_prices.parameter_code    = 'S_BPRME'
+DISTRIBUTED BY (sales_bundle_code);
+📌 Часть 6–7 из 7 — финальный INSERT в витрину
+Тут:
+
+считается dt_shipment_from_foreign_warehouse по ветвистой логике,
+
+конвертация storage_cost_calculated_amount_local → USD через dict_dds.currency_rates,
+
+разложение стоимости по диапазонам дней.
+
+Я оставляю формулы такими же, а структуру чуть упрощаю.
+
+sql
+Копировать код
+INSERT INTO dm_calc.storage_sales_bundles_amount (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    material_code,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    port_of_discharge_code,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    transport_type_code,
+    etsng_code,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_destination_hub_code,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    storage_calculation_bundle_quantity,
+    warehouse_code,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    purchase_contract_position_uom_code,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
+)
+WITH calc AS (
+    SELECT
+        b3.*,
+
+        /* дата отгрузки с иностранного склада */
+        CASE
+            WHEN b3.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа')
+                 AND b3.dt_transportation_stage_start_r IS NOT NULL
+                 AND b3.dt_storage_end_in_release IS NOT NULL
+                 AND (
+                     b3.dt_transportation_stage_start_r < b3.dt_storage_end_in_release
+                     OR b3.dt_storage_end_in_release < b3.dt_transportation_stage_start_p
+                 )
+            THEN b3.dt_transportation_stage_start_r
+
+            WHEN b3.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа')
+                 AND b3.dt_transportation_stage_start_r IS NOT NULL
+                 AND b3.dt_storage_end_in_release IS NOT NULL
+                 AND b3.dt_storage_end_in_release >= b3.dt_transportation_stage_start_p
+            THEN b3.dt_storage_end_in_release
+
+            WHEN b3.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа')
+                 AND b3.dt_storage_end_in_release IS NULL
+                 AND b3.dt_transportation_stage_start_r IS NOT NULL
+            THEN b3.dt_transportation_stage_start_r
+
+            WHEN b3.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа')
+                 AND b3.dt_transportation_stage_start_r IS NULL
+                 AND b3.dt_storage_end_in_release IS NOT NULL
+                 AND b3.dt_storage_end_in_release >= b3.dt_transportation_stage_start_p
+            THEN b3.dt_storage_end_in_release
+        END AS dt_shipment_from_foreign_warehouse,
+
+        /* конвертация стоимости в USD */
+        CASE
+            WHEN b3.purchase_contract_position_currency_code = 'USD'
+                 OR b3.storage_cost_calculated_amount_local IS NULL
+            THEN b3.storage_cost_calculated_amount_local
+            ELSE
+                b3.storage_cost_calculated_amount_local
+                * COALESCE(r.currency_to_multiplier, 1)
+                * CASE WHEN COALESCE(r.currency_rate, 1) > 0
+                       THEN COALESCE(r.currency_rate, 1)
+                       ELSE 1
+                  END
+                / (
+                    CASE WHEN COALESCE(r.currency_rate, 1) < 0
+                         THEN ABS(COALESCE(r.currency_rate, 1))
+                         ELSE 1
+                    END
+                    * COALESCE(r.currency_from_multiplier, 1)
+                  )
+        END AS storage_cost_calculated_amount_usd,
+
+        r.currency_to_multiplier,
+        r.currency_from_multiplier,
+        r.currency_rate
+
+    FROM base_3 b3
+    LEFT JOIN dict_dds.currency_rates r
+           ON r.currency_rate_type_code = 'M'
+          AND r.currency_from_code      = b3.purchase_contract_position_currency_code
+          AND r.currency_to_code        = 'USD'
+          AND r.dt_currency_rate        = b3.dt_report
+          AND r.deleted_flag            = FALSE
+)
+SELECT
+    c.sales_bundle_code,
+    c.plant_producer_delivery_code,
+    c.plant_producer_delivery_position_code,
+    c.initial_delivery_code,
+    c.material_code,
+    c.dt_shipment,
+    c.railcar_code,
+    c.transport_bill_code,
+    c.uni,
+    c.material_shape_code,
+    c.port_of_discharge_code,
+    c.dt_arrival_to_russian_port,
+    c.dt_storage_end_in_release,
+    c.transport_type_code,
+    c.etsng_code,
+    c.dt_report,
+    c.sales_bundle_net_weight,
+    c.sales_bundle_gross_weight,
+    c.batch_code,
+    c.dt_arrival,
+    c.receiving_plant_code,
+    c.sales_delivery_code,
+    c.transportation_inbound_delivery_code,
+    c.delivery_for_storage_calculation_code,
+    c.transportation_inbound_delivery_position_code,
+    c.delivery_position_for_storage_calculation_code,
+    c.forwarder_code,
+    c.storage_cost_calculation_type_name,
+    c.transport_departure_hub_code,
+    c.transport_destination_hub_code,
+    c.transportation_outbound_delivery_code,
+    c.transportation_outbound_delivery_position_code,
+    c.is_final_transportation_stage_code,
+    c.transportation_stage_code,
+    c.storage_calculation_bundle_quantity,
+    c.warehouse_code,
+    c.delivery_in_final_release_code,
+    c.dt_final_release,
+    c.bill_of_lading_code,
+    c.bill_of_lading_number,
+    c.dt_bill_of_lading,
+    c.incoterms_code,
+    c.storage_cost_special_calculation_type_code,
+    c.warehouse_storage_area_code,
+    c.plant_code,
+    c.unit_balance_code,
+    c.creditor_in_shipment_instruction_code,
+    c.dt_storage_start,
+    c.dt_shipped_from_warehouse,
+    c.dt_storage_end,
+    c.service_number,
+    c.storage_duration_total_calendar_days,
+    c.shipment_instruction_number,
+    c.dt_for_price_search_in_purchase_contract,
+    c.purchase_contract_code,
+    c.purchase_contract_position_code,
+    c.purchase_contract_position_currency_code,
+    c.service_code,
+    c.purchase_contract_position_uom_code,
+    c.storage_duration_free_by_contract_calendar_days,
+    c.storage_duration_free_by_delivery_calendar_days,
+    c.storage_duration_payable_calendar_days,
+    c.remote_warehouse_code,
+    c.dt_transportation_stage_start_p,
+    c.dt_transportation_stage_start_r,
+    c.dt_shipment_from_foreign_warehouse,
+
+    /* итоговая стоимость в USD */
+    c.storage_cost_calculated_amount_usd AS storage_cost_calculated_amount,
+
+    /* локальная стоимость — как посчитана ранее */
+    c.storage_cost_calculated_amount_local,
+
+    c.storage_payable_001_030_days_gross_weight,
+    c.storage_payable_031_060_days_gross_weight,
+    c.storage_payable_061_090_days_gross_weight,
+    c.storage_payable_091_180_days_gross_weight,
+    c.storage_payable_181_365_days_gross_weight,
+    c.storage_payable_over_365_days_gross_weight,
+    c.is_stored_in_russian_port_code,
+
+    /* распределение USD-стоимости по диапазонам дней — исходная логика, но через уже посчитанный USD */
+    CASE
+        WHEN c.storage_duration_payable_calendar_days BETWEEN 1 AND 30
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_001_030_amount,
+
+    CASE
+        WHEN c.storage_duration_payable_calendar_days BETWEEN 31 AND 60
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_031_060_amount,
+
+    CASE
+        WHEN c.storage_duration_payable_calendar_days BETWEEN 61 AND 90
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_061_090_amount,
+
+    CASE
+        WHEN c.storage_duration_payable_calendar_days BETWEEN 91 AND 180
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_091_180_amount,
+
+    CASE
+        WHEN c.storage_duration_payable_calendar_days BETWEEN 181 AND 365
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_181_365_amount,
+
+    CASE
+        WHEN c.storage_duration_payable_calendar_days > 365
+        THEN COALESCE(c.storage_cost_calculated_amount_usd, 0)
+        ELSE 0
+    END AS storage_calculated_cost_over_365_amount,
+
+    /* LE.001063 — пока нет логики заполнения */
+    NULL::numeric(15,3) AS metal_in_china_stock_balance_closing_weight
+FROM calc c;

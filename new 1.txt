@@ -1,244 +1,92 @@
--- 1. База PB00-условий с флагом специфичности
-DROP TABLE IF EXISTS for_1079_base;
-
-CREATE TEMP TABLE for_1079_base AS
-WITH base AS (
+CREATE TEMP TABLE for_1079_euro
+ AS
+WITH euro_base AS (
     SELECT
-        ekpo.purchase_contract_code,
-        ekpo.position_line_item_code,
+        b.rn,
+        f.purchase_contract_code,
+        f.position_line_item_code,
+        f.konws,
+        f.service_code,
+        f.price_uom_code,
+        f.netpr,
+        f.currency_dogovor,
+        f.datab,
+        f.datbi,
 
-        ekko.unit_balance_code                    AS bukrs,
-        ekko.supplier_code                        AS lifnr,
-        ekko.port_code                            AS zzport,
-        ekko.dt_valid_from                        AS kdatb,
-        ekko.dt_valid_to                          AS kdate,
-        ekpo.plant_code                           AS werks,
-        ekpo.service_code                         AS zzsrvpos,
-        ekpo.shape_code                           AS zzforma,
-        ekpo.etsng_code                           AS zzet_tarif,
-        ekpo.transport_type_code                  AS sdabw,
+        /* Суммарный вес по складу и месяцу окончания хранения */
+        SUM(b.sales_bundle_gross_weight) OVER (
+            PARTITION BY b.warehouse_code,
+                         date_trunc('month', b.dt_storage_end)
+        ) AS warehouse_weight_month_end,
 
-        pr.dt_price_condition_valid_to            AS datbi,
-        pr.dt_price_condition_valid_from          AS datab,
-
-        ekko.dt_valid_to,
-        ekko.dt_valid_from,
-        ekko.purchase_document_subtype_code,
-
-        pr.price_condition_position_code          AS kopos,
-        pr.price_condition_position_currency_code AS konwa,
-
-        ekpo.terminal_code                        AS zzterminal,
-        ekpo.warehouse_storage_area_code          AS vzzzone,
-
-        COALESCE(pr.price_scale_currency_code,
-                 pr.price_condition_position_currency_code) AS konws,
-
-        ekpo.service_code,
-        ekpo.price_uom_code,
-        ekpo.price_vat_excluded_document_currency_amount AS netpr,
-        pr.price_rate                             AS kbetr,
-
-        /* ----- ORDER_WEIGHTS FOR RFC / ASIA / EURO ----- */
-        (CASE WHEN ekko.port_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.shape_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.etsng_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.transport_type_code IS NULL THEN 1 ELSE 0 END) AS order_rf,
-
-        (CASE WHEN ekko.port_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.shape_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.etsng_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.transport_type_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.terminal_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.warehouse_storage_area_code IS NULL THEN 1 ELSE 0 END) AS order_asia,
-
-        (CASE WHEN ekko.port_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.shape_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.etsng_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.transport_type_code IS NULL THEN 1 ELSE 0 END +
-         CASE WHEN ekpo.terminal_code IS NULL THEN 1 ELSE 0 END) AS order_euro_svh,
-
-        /* флаг "специфичного" контракта:
-           TRUE, если есть ХОТЯ БЫ ОДИН заполненный параметр детализации */
+        /* Разница в месяцах между началом и концом хранения (month_difference_2) */
         CASE
-            WHEN ekko.port_code IS NOT NULL
-              OR ekpo.shape_code IS NOT NULL
-              OR ekpo.etsng_code IS NOT NULL
-              OR ekpo.transport_type_code IS NOT NULL
-              OR ekpo.terminal_code IS NOT NULL
-              OR ekpo.warehouse_storage_area_code IS NOT NULL
-            THEN 1 ELSE 0
-        END AS is_specific,
+            WHEN EXTRACT(day FROM b.dt_storage_end) < EXTRACT(day FROM b.dt_storage_start) THEN
+                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start))
+            ELSE
+                (EXTRACT(year  FROM b.dt_storage_end) - EXTRACT(year  FROM b.dt_storage_start)) * 12 +
+                (EXTRACT(month FROM b.dt_storage_end) - EXTRACT(month FROM b.dt_storage_start)) + 1
+        END AS month_difference_2,
 
-        CASE WHEN curdpr.currency_code IS NOT NULL THEN 100 ELSE 1 END AS currency_dogovor,
+        /* special — количество недель или месяцев, в зависимости от типа логики */
+        CASE
+            WHEN b.storage_cost_special_calculation_type_code = '4'
+                THEN CEIL(b.storage_duration_total_calendar_days / 7::numeric)
+            WHEN b.storage_cost_special_calculation_type_code = '5'
+                THEN CEIL(b.storage_duration_total_calendar_days / 30::numeric)
+        END AS special,
 
-        pr.is_price_condition_position_deleted_code,
-        COUNT(*) OVER (
-            PARTITION BY ekpo.purchase_contract_code, ekpo.position_line_item_code
-        ) AS cnt,
-
-        ROW_NUMBER() OVER (
-            PARTITION BY ekpo.purchase_contract_code,
-                         ekpo.position_line_item_code,
-                         pr.dt_price_condition_valid_from,
-                         pr.dt_price_condition_valid_to,
-                         pr.price_scale_basis_code
-            ORDER BY pr.price_scale_basis_consecutive_code
-        ) AS rwn
-
-    FROM dds.purchase_contract_price_conditions pr
-    JOIN dds.purchase_contract_header ekko
-         ON ekko.purchase_contract_code = pr.purchase_contract_code
-    JOIN dds.purchase_contract_position ekpo
-         ON ekpo.purchase_contract_code = ekko.purchase_contract_code
-        AND ekpo.position_line_item_code = pr.purchase_contract_position_code
-
-    LEFT JOIN dict_dds.currency_decimal_place_ral curdpr
-           ON curdpr.currency_code = COALESCE(pr.price_scale_currency_code,
-                                              pr.price_condition_position_currency_code)
-          AND curdpr.decimal_place_number = '0'
-
-    WHERE
-        ekko.purchase_document_subtype_code IN ('ZDTL','ZDT','ZDE','ZDP','ZDF','ZDS')
-        AND ekko.paydox_contract_type_code IN ('1','6')
-        AND ekpo.is_deleted IS NULL
-        AND pr.is_price_condition_position_deleted_code IS NULL
-        AND pr.price_condition_type_code = 'PB00'
-        AND (pr.price_scale_basis_code = 'C' OR pr.price_scale_basis_code IS NULL)
-)
-SELECT *
-FROM base
-WHERE rwn = 1
-DISTRIBUTED REPLICATED;
-
-
-
-DROP TABLE IF EXISTS for_1079_asia;
-
-CREATE TEMP TABLE for_1079_asia AS
-WITH
--- 1) Специфичные контракты (есть детализация по форме/тарифу/транспорту/терминалу/зоне/порту)
-asia_specific AS (
-    SELECT
-        b.rn,
-        f.purchase_contract_code,
-        f.position_line_item_code,
-        f.konws,
-        f.service_code,
-        f.price_uom_code,
-        f.currency_dogovor,
-        f.datab,
-        f.datbi,
+        /* приоритет: order_euro_svh + наличие соответствий в параметрах SAP */
         ROW_NUMBER() OVER (
             PARTITION BY b.rn
             ORDER BY
-                f.order_asia,
+                f.order_euro_svh,
                 f.kopos,
                 f.kbetr,
+                CASE
+                    WHEN param_sap.range_low_value IS NOT NULL
+                     AND param_srv_1.range_low_value IS NOT NULL THEN 1
+                    WHEN param_sap.range_low_value IS NULL
+                     AND param_srv_1.range_low_value IS NULL THEN 1
+                    ELSE 0
+                END DESC,
                 f.purchase_contract_code,
                 f.position_line_item_code
         ) AS row_num
     FROM dm_calc.storage_sales_bundles_weight b
     JOIN for_1079_base f
-      ON f.bukrs   = b.unit_balance_code
-     AND f.lifnr   = b.forwarder_code
-     AND f.werks   = b.plant_code
-     AND f.zzsrvpos = 'S49'
-     AND f.is_specific = 1
-     -- поля детализации: при наличии значения в договоре фильтруем, при NULL — "джокер"
-     AND (f.zzport    = b.port_of_discharge_code      OR f.zzport    IS NULL)
-     AND (f.zzforma   = b.material_shape_code         OR f.zzforma   IS NULL)
-     AND (f.zzet_tarif= b.etsng_code                  OR f.zzet_tarif IS NULL)
-     AND (f.sdabw     = b.transport_type_code         OR f.sdabw     IS NULL)
-     AND (f.zzterminal= b.warehouse_code             OR f.zzterminal IS NULL)
-     AND (f.vzzzone   = b.warehouse_storage_area_code OR f.vzzzone   IS NULL)
-     -- даты и типы
+      ON f.bukrs  = '1520'
+     AND f.lifnr  = b.forwarder_code
+     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
+     AND f.werks  = '1521'
+     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
+     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
+     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.dt_valid_from AND f.dt_valid_to
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.datab AND f.datbi
+     AND b.storage_cost_calculation_type_name IN ('Логика Европа')
+     AND (f.zzterminal = b.warehouse_code OR f.zzterminal IS NULL)
      AND f.purchase_document_subtype_code = 'ZDTL'
-     AND b.storage_cost_calculation_type_name IN ('Логика Азия')
-),
 
-asia_specific_best AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        service_code,
-        price_uom_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM asia_specific
-    WHERE row_num = 1
-),
+    JOIN dict_dds.settings_and_parameters_sap s_eu
+      ON s_eu.range_low_value    = f.zzsrvpos
+     AND s_eu.range_low_value LIKE 'EU%'
+     AND s_eu.abap_program_code  = '/RUSAL/SD4553M'
+     AND s_eu.parameter_code     = 'S_USLST'
 
--- 2) Дефолтные (универсальные) контракты: все параметры детализации NULL
---    Берём ТОЛЬКО для тех rn, где специфичных контрактов нет.
-asia_default_candidates AS (
-    SELECT
-        b.rn,
-        f.purchase_contract_code,
-        f.position_line_item_code,
-        f.konws,
-        f.service_code,
-        f.price_uom_code,
-        f.currency_dogovor,
-        f.datab,
-        f.datbi,
-        ROW_NUMBER() OVER (
-            PARTITION BY b.rn
-            ORDER BY
-                f.order_asia,
-                f.kopos,
-                f.kbetr,
-                f.purchase_contract_code,
-                f.position_line_item_code
-        ) AS row_num
-    FROM dm_calc.storage_sales_bundles_weight b
-    JOIN for_1079_base f
-      ON f.bukrs   = b.unit_balance_code
-     AND f.lifnr   = b.forwarder_code
-     AND f.werks   = b.plant_code
-     AND f.zzsrvpos = 'S49'
-     AND f.is_specific = 0              -- <== ВСЕ zz* поля NULL, поэтому ниже они не нужны
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.dt_valid_from AND f.dt_valid_to
-     AND b.dt_for_price_search_in_purchase_contract
-         BETWEEN f.datab AND f.datbi
-     AND f.purchase_document_subtype_code = 'ZDTL'
-     AND b.storage_cost_calculation_type_name IN ('Логика Азия')
-    WHERE NOT EXISTS (
-        SELECT 1
-        FROM asia_specific_best s
-        WHERE s.rn = b.rn
-    )
-),
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_sap
+      ON param_sap.range_low_value = b.material_shape_code
+     AND param_sap.abap_program_code = '/RUSAL/SD4553M'
+     AND param_sap.parameter_code    = 'FORMSTEU'
 
-asia_default_best AS (
-    SELECT
-        rn,
-        purchase_contract_code,
-        position_line_item_code,
-        konws,
-        service_code,
-        price_uom_code,
-        currency_dogovor,
-        datab,
-        datbi
-    FROM asia_default_candidates
-    WHERE row_num = 1
-),
-
-final_asia AS (
-    SELECT * FROM asia_specific_best
-    UNION ALL
-    SELECT * FROM asia_default_best
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_srv_1
+      ON param_srv_1.range_low_value = s_eu.range_low_value
+     AND param_srv_1.abap_program_code = '/RUSAL/SD4553M'
+     AND param_srv_1.parameter_code    = 'S_USLSTC'
 )
-
 SELECT
     rn,
     purchase_contract_code,
@@ -246,8 +94,13 @@ SELECT
     konws,
     service_code,
     price_uom_code,
+    warehouse_weight_month_end,
+    month_difference_2,
+    netpr,
+    special,
     currency_dogovor,
     datab,
     datbi
-FROM final_asia
+FROM euro_base
+WHERE row_num = 1
 DISTRIBUTED BY (rn);

@@ -1,5 +1,5 @@
-CREATE TEMP TABLE for_1079_rf_cont
-ON COMMIT DROP AS
+CREATE TEMP  TABLE for_1079_asia
+ AS
 WITH cte AS (
     SELECT
         b.rn,
@@ -14,7 +14,7 @@ WITH cte AS (
         ROW_NUMBER() OVER (
             PARTITION BY b.rn
             ORDER BY
-                f.order_rf,
+                f.order_asia,
                 f.kopos,
                 f.kbetr,
                 f.purchase_contract_code,
@@ -22,22 +22,32 @@ WITH cte AS (
         ) AS row_num
     FROM dm_calc.storage_sales_bundles_weight b
     JOIN for_1079_base f
-      ON f.bukrs  = '1120'
-     AND f.lifnr  = b.creditor_in_shipment_instruction_code
-     AND (f.zzport = b.port_of_discharge_code OR f.zzport IS NULL)
-     AND f.werks  = '1121'
+      ON f.bukrs  = b.unit_balance_code
+     AND f.lifnr  = b.forwarder_code
+     AND (f.zzport = b.port_of_discharge_code-- OR f.zzport IS null
+     )
+     AND f.werks  = b.plant_code
      AND f.zzsrvpos = 'S49'
-     AND (f.zzforma   = b.material_shape_code OR f.zzforma   IS NULL)
-     AND (f.zzet_tarif= b.etsng_code         OR f.zzet_tarif IS NULL)
-     AND (f.sdabw     = b.transport_type_code OR f.sdabw     IS NULL)
+     --AND (f.zzforma   = b.material_shape_code --OR f.zzforma   IS null
+     --)
+     --AND (f.zzet_tarif= b.etsng_code         --OR f.zzet_tarif IS null
+     --)
+     --AND (f.sdabw     = b.transport_type_code-- OR f.sdabw     IS null
+     --)
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.dt_valid_from AND f.dt_valid_to
      AND b.dt_for_price_search_in_purchase_contract
          BETWEEN f.datab AND f.datbi
-     AND b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры')
+     AND b.storage_cost_calculation_type_name IN ('Логика Азия')
+    -- AND (f.zzterminal = b.warehouse_code --OR f.zzterminal IS null
+     --)
+   --  AND (f.vzzzone    = b.warehouse_storage_area_code --OR f.vzzzone IS null
+    -- )
+     AND f.purchase_document_subtype_code = 'ZDTL'
 )
-SELECT
-    rn,
+select
+count(*)
+   /* rn,
     purchase_contract_code,
     position_line_item_code,
     konws,
@@ -45,7 +55,7 @@ SELECT
     price_uom_code,
     currency_dogovor,
     datab,
-    datbi
+    datbi */
 FROM cte
 WHERE row_num = 1
-DISTRIBUTED BY (rn);
+DISTRIBUTED BY (rn); --3.15

@@ -4,29 +4,26 @@ CREATE TEMP TABLE base_1_5
 --ON COMMIT DROP
 AS
 WITH bounds AS (
-    -- границы периода: управляем диапазоном через date_for_vitr_tmp
-    SELECT 
+    SELECT
         MIN(dt_balance)::date AS dt_min,
         MAX(dt_balance)::date AS dt_max
     FROM date_for_vitr_tmp
 )
 SELECT
-    b_exp.*,
-    -- тех. ключ на случай дублей
+    b.*,
+    gs.dt_report,
     row_number() OVER (
-        PARTITION BY b_exp.id_for_unique, b_exp.dt_report
-        ORDER BY b_exp.sales_bundle_code
+        PARTITION BY b.id_for_unique, gs.dt_report
+        ORDER BY b.sales_bundle_code
     ) AS rn
-FROM (
-    SELECT
-        b.*,
-        -- дата отчёта (будущее поле dt_report в витрине)
-        generate_series(
-            GREATEST(b.dt_transportation_stage_start_p, bd.dt_min),                       -- начало интервала
-            LEAST(COALESCE(b.dt_transportation_stage_start_r, current_date), bd.dt_max),  -- конец интервала
-            INTERVAL '1 day'
-        )::date AS dt_report
-    FROM base b
-    CROSS JOIN bounds bd
-) AS b_exp
+FROM base b
+CROSS JOIN bounds bd
+-- LATERAL считается строго построчно и оптимизируется лучше
+JOIN LATERAL (
+    SELECT generate_series(
+        GREATEST(b.dt_transportation_stage_start_p, bd.dt_min),
+        LEAST(COALESCE(b.dt_transportation_stage_start_r, CURRENT_DATE), bd.dt_max),
+        INTERVAL '1 day'
+    )::date AS dt_report
+) gs ON TRUE
 DISTRIBUTED BY (sales_bundle_code, dt_report);

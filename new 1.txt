@@ -1,139 +1,35 @@
+DROP TABLE IF EXISTS base_1_5;
+
 CREATE TEMP TABLE base_1_5
 --ON COMMIT DROP
-as
-explain(verbose, format json)
+AS
+WITH bounds AS (
+    -- Берём границы периода из date_for_vitr_tmp,
+    -- чтобы ты мог менять период в одной таблице.
+    SELECT 
+        MIN(dt_balance)::date AS dt_min,
+        MAX(dt_balance)::date AS dt_max
+    FROM date_for_vitr_tmp
+)
+
 SELECT
     -- все поля из base
     b.*,
 
-    -- дата отчёта (будущое поле dt_report в витрине)
-    d.dt_balance AS dt_report,
+    -- дата отчёта (будущее поле dt_report в витрине)
+    gs.dt_balance AS dt_report,
 
     -- тех. ключ на случай дублей
     row_number() OVER (
-        PARTITION BY b.id_for_unique, d.dt_balance
+        PARTITION BY b.id_for_unique, gs.dt_balance
         ORDER BY b.sales_bundle_code
     ) AS rn
 FROM base b
-JOIN date_for_vitr_tmp d
-  ON d.dt_balance BETWEEN b.dt_transportation_stage_start_p
-                      AND COALESCE(b.dt_transportation_stage_start_r, current_date)
+CROSS JOIN bounds bd
+-- Для КАЖДОЙ строки base генерим только свои дни хранения
+JOIN LATERAL generate_series(
+        GREATEST(b.dt_transportation_stage_start_p, bd.dt_min),                     -- начало
+        LEAST(COALESCE(b.dt_transportation_stage_start_r, current_date), bd.dt_max), -- конец
+        INTERVAL '1 day'
+     ) AS gs(dt_balance)
 DISTRIBUTED BY (sales_bundle_code, dt_report);
-
-
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 6,
-      "Receivers": 1,
-      "Slice": 2,
-      "Segments": 6,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 160054346.77,
-      "Plan Rows": 383810194,
-      "Plan Width": 380,
-      "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance", "(row_number() OVER (?))"],
-      "Plans": [
-        {
-          "Node Type": "WindowAgg",
-          "Parent Relationship": "Outer",
-          "Slice": 2,
-          "Segments": 6,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 159622150.91,
-          "Plan Rows": 383810194,
-          "Plan Width": 380,
-          "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance", "row_number() OVER (?)"],
-          "Partition By": ["base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
-          "Order By": ["base.sales_bundle_code"],
-          "Plans": [
-            {
-              "Node Type": "Sort",
-              "Parent Relationship": "Outer",
-              "Slice": 2,
-              "Segments": 6,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 159593748.95,
-              "Plan Rows": 383810194,
-              "Plan Width": 444,
-              "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
-              "Sort Key": ["base.id_for_unique", "date_for_vitr_tmp.dt_balance", "base.sales_bundle_code"],
-              "Plans": [
-                {
-                  "Node Type": "Redistribute Motion",
-                  "Senders": 6,
-                  "Receivers": 6,
-                  "Parent Relationship": "Outer",
-                  "Slice": 1,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 155417867.84,
-                  "Plan Rows": 383810194,
-                  "Plan Width": 444,
-                  "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
-                  "Hash Key": "base.id_for_unique, date_for_vitr_tmp.dt_balance",
-                  "Plans": [
-                    {
-                      "Node Type": "Nested Loop",
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Inner",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 155328969.72,
-                      "Plan Rows": 383810194,
-                      "Plan Width": 444,
-                      "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
-                      "Join Filter": "((date_for_vitr_tmp.dt_balance >= base.dt_transportation_stage_start_p) AND (date_for_vitr_tmp.dt_balance <= COALESCE(base.dt_transportation_stage_start_r, '2025-12-02'::date)))",
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 1,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "base",
-                          "Schema": "pg_temp_4463445",
-                          "Alias": "base",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 769.85,
-                          "Plan Rows": 7864963,
-                          "Plan Width": 440,
-                          "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique"]
-                        },
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Inner",
-                          "Slice": 1,
-                          "Segments": 6,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "date_for_vitr_tmp",
-                          "Schema": "pg_temp_4463445",
-                          "Alias": "date_for_vitr_tmp",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 431.01,
-                          "Plan Rows": 2196,
-                          "Plan Width": 4,
-                          "Output": ["date_for_vitr_tmp.dt_balance"]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]

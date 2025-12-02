@@ -1,12 +1,10 @@
-------------------------------------------------------
+/* ============================================================
    ПЕРИОД — последние 12 месяцев
---------------------------------------------------------- */
+   ============================================================ */
 
 DROP TABLE IF EXISTS date_for_vitr_tmp;
 
-CREATE TEMP TABLE date_for_vitr_tmp
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE date_for_vitr_tmp AS
 SELECT 
     dt::date AS dt_balance
 FROM generate_series(
@@ -17,17 +15,12 @@ FROM generate_series(
 DISTRIBUTED REPLICATED;
 
 
+/* ============================================================
+   СПРАВОЧНИКИ — оптимизированные под Greenplum
+   ============================================================ */
 
-/* ---------------------------------------------------------
-   СПРАВОЧНИКИ — оптимизированные для GP
---------------------------------------------------------- */
-
-
--- ADRC – убираем дубли
 DROP TABLE IF EXISTS adrc;
-CREATE TEMP TABLE adrc
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE adrc AS
 SELECT
     address_code,
     MIN(country_code) AS country_code
@@ -35,47 +28,27 @@ FROM dict_dds.address
 GROUP BY address_code
 DISTRIBUTED REPLICATED;
 
-
-
--- Азия — контрагенты
 DROP TABLE IF EXISTS asia;
-CREATE TEMP TABLE asia
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE asia AS
 SELECT DISTINCT counterparty_code
 FROM dict_dds.transportation_storage_calculation_method
 DISTRIBUTED REPLICATED;
 
-
-
--- Европа 1 — сервисы EU%
 DROP TABLE IF EXISTS euro_1;
-CREATE TEMP TABLE euro_1
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE euro_1 AS
 SELECT DISTINCT counterparty_code
 FROM dict_dds.transportation_storage_calculation_method
 WHERE service_code LIKE 'EU%'
 DISTRIBUTED REPLICATED;
 
-
-
--- Европа 2 — все контрагенты
 DROP TABLE IF EXISTS euro_2;
-CREATE TEMP TABLE euro_2
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE euro_2 AS
 SELECT DISTINCT counterparty_code
 FROM dict_dds.transportation_storage_calculation_method
 DISTRIBUTED REPLICATED;
 
-
-
--- Europa — таблица логики
 DROP TABLE IF EXISTS euro_log;
-CREATE TEMP TABLE euro_log
---ON COMMIT drop
-AS
+CREATE TEMP TABLE euro_log AS
 SELECT DISTINCT range_low_value
 FROM dict_dds.settings_and_parameters_sap
 WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
@@ -84,25 +57,15 @@ WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
   AND range_low_value IS NOT NULL
 DISTRIBUTED REPLICATED;
 
-
-
--- СВХ
 DROP TABLE IF EXISTS svh;
-CREATE TEMP TABLE svh
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE svh AS
 SELECT DISTINCT counterparty_code
 FROM dict_dds.transportation_general_calculation_method
-WHERE general_calculation_method_code IN ('16', '04')
+WHERE general_calculation_method_code IN ('16','04')
 DISTRIBUTED REPLICATED;
 
-
-
--- Азия — логика параметров
 DROP TABLE IF EXISTS asia_log;
-CREATE TEMP TABLE asia_log
---ON COMMIT drop
-AS
+CREATE TEMP TABLE asia_log AS
 SELECT DISTINCT range_low_value
 FROM dict_dds.settings_and_parameters_sap
 WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
@@ -111,13 +74,8 @@ WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
   AND range_low_value IS NOT NULL
 DISTRIBUTED REPLICATED;
 
-
-
--- LE.001035 — количество пакетов
 DROP TABLE IF EXISTS for_LE_001035;
-CREATE TEMP TABLE for_LE_001035
---ON COMMIT drop
-AS
+CREATE TEMP TABLE for_LE_001035 AS
 SELECT
     delivery_code,
     batch_code,
@@ -127,25 +85,15 @@ WHERE is_deleted_code IS NULL
 GROUP BY delivery_code, batch_code
 DISTRIBUTED BY (delivery_code);
 
-
-
--- DEDOPO_2 — уникальная связь delivery → sales_document
 DROP TABLE IF EXISTS dedopo_2;
-CREATE TEMP TABLE dedopo_2
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE dedopo_2 AS
 SELECT DISTINCT delivery_code, sales_document_code
 FROM dds.delivery_document_position
 WHERE sales_document_code IS NOT NULL
 DISTRIBUTED BY (delivery_code);
 
-
-
--- FOR_1055 — дата окончания бесплатного хранения
 DROP TABLE IF EXISTS for_1055;
-CREATE TEMP TABLE for_1055
---ON COMMIT DROP 
-AS
+CREATE TEMP TABLE for_1055 AS
 SELECT
     vbss.delivery_code AS vbeln,
     MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
@@ -159,28 +107,18 @@ WHERE frel_kod.abap_program_code = '/RUSAL/SD2921M'
   AND frel_kod.parameter_code = 'FREL_KOD'
   AND frel_kod.range_sign_code = 'I'
   AND frel_kod.range_option_code = 'EQ'
-  AND vbsk.release_code IS NOT NULL
   AND vbsk.dt_end_of_free_storage IS NOT NULL
 GROUP BY vbss.delivery_code
 DISTRIBUTED REPLICATED;
 
 
-
-/* ---------------------------------------------------------
-   Часть 1 полностью готова для Greenplum
---------------------------------------------------------- */
-
-
-/* ==========================================================
+/* ============================================================
    LAKE — оптимизированный под Greenplum
-   Выбираем уникальные sd_sales_main_scm по sales_bundle_code
-========================================================== */
+   ============================================================ */
 
 DROP TABLE IF EXISTS lake;
 
-CREATE TEMP TABLE lake
---ON COMMIT drop
-AS
+CREATE TEMP TABLE lake AS
 SELECT DISTINCT ON (sd4798.sales_bundle_code)
     ssms.delivery_number_sales,
     ssms.delivery_number_of_producer_plant      AS SD_000003,
@@ -214,13 +152,15 @@ DISTRIBUTED BY (sales_bundle_code);
 
 
 
+/* ============================================================
+   BASE — полностью переписанный и оптимизированный
+   ============================================================ */
+
 DROP TABLE IF EXISTS base;
 
-CREATE TEMP TABLE base
---ON COMMIT drop
-AS
+CREATE TEMP TABLE base AS
 WITH
--- границы периода отчёта (чтобы не дергать MIN/MAX в WHERE)
+-- границы периода (чтобы не дергать MIN/MAX в WHERE)
 date_bounds AS (
     SELECT 
         MIN(dt_balance)::date AS dt_min,
@@ -243,14 +183,14 @@ forwapd_1 AS (
     GROUP BY transport_hub_code
 ),
 
--- признак "российский порт"
+-- российский порт
 forwapd_2 AS (
     SELECT DISTINCT transport_hub_code
     FROM dict_dds.foreign_warehouse_priority_definition
     WHERE is_russian_port_code IS NOT NULL
 ),
 
--- коды стадий для Европы
+-- стадии для Европы
 stage_eu AS (
     SELECT range_low_value
     FROM dict_dds.settings_and_parameters_sap
@@ -259,7 +199,7 @@ stage_eu AS (
       AND range_low_value IS NOT NULL
 ),
 
--- коды стадий для Азии
+-- стадии для Азии
 stage_a AS (
     SELECT range_low_value
     FROM dict_dds.settings_and_parameters_sap
@@ -268,7 +208,7 @@ stage_a AS (
       AND range_low_value IS NOT NULL
 ),
 
--- связи bundle–delivery для Европы (уже отфильтрованы по стадиям)
+-- связи для Европы (отфильтрованы)
 sabadr_03 AS (
     SELECT s.*
     FROM dds.sales_bundle_and_delivery_relationship s
@@ -277,7 +217,7 @@ sabadr_03 AS (
     WHERE s.is_deleted_code IS NULL
 ),
 
--- связи bundle–delivery для Азии (уже отфильтрованы по стадиям)
+-- связи для Азии (отфильтрованы)
 sabadr_04 AS (
     SELECT s.*
     FROM dds.sales_bundle_and_delivery_relationship s
@@ -339,7 +279,7 @@ SELECT
     /* Экспедитор */
     COALESCE(ascr_1.supplier_code, ascr_2.supplier_code) AS forwarder_code,
 
-    /* Тип логики хранения (РФ/Европа/Азия/СВХ) */
+    /* Тип логики хранения */
     CASE
         WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 = 'TL04' THEN 'Логика РФ-контейнеры'
         WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 <> 'TL04' THEN 'Логика РФ-балк'
@@ -351,6 +291,20 @@ SELECT
         WHEN likp.delivery_type_code = 'ZLE' AND svh.counterparty_code IS NOT NULL THEN 'Логика СВХ'
         ELSE 'Логика не определена'
     END AS storage_cost_calculation_type_name,
+
+    /* Особая логика LE.001065 */
+    CASE
+        WHEN (
+            likp.delivery_type_code = 'ZLE'
+            AND euro_1.counterparty_code IS NOT NULL
+        )
+        OR (
+            likp.delivery_type_code = 'ZLE'
+            AND euro_2.counterparty_code IS NOT NULL
+            AND euro_log.range_low_value IS NOT NULL
+        )
+        THEN trscm.calculation_method_code
+    END AS storage_cost_special_calculation_type_code,
 
     /* Узлы */
     sbudr_base.transport_route_departure_hub_code,
@@ -394,11 +348,11 @@ SELECT
     t4.dt_transportation_stage_start_p,
     COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
 
-    /* ID для уникальности */
+    /* ID */
     CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique
 
 FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-CROSS JOIN date_bounds db
+CROSS JOIN date_bounds
 
 LEFT JOIN lake
        ON t4.sales_bundle_code = lake.sales_bundle_code
@@ -415,7 +369,6 @@ LEFT JOIN forwapd_1 fw1
 LEFT JOIN forwapd_2 fw2
        ON fw2.transport_hub_code = t4.knote
 
-/* Азия / Европа / СВХ логика: заранее отфильтрованные sabadr_03/sabadr_04 */
 LEFT JOIN sabadr_03 sab03
        ON sab03.sales_bundle_code              = t4.sales_bundle_code
       AND sab03.transport_route_destination_hub_code = t4.knote
@@ -426,14 +379,12 @@ LEFT JOIN sabadr_04 sab04
       AND sab04.transport_route_destination_hub_code = t4.knote
       AND fw1.market_region1_code             = '04'
 
-/* Основной sbudr-запись */
 LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
        ON sbudr_base.sales_bundle_code      = t4.sales_bundle_code
       AND sbudr_base.delivery_code          = t4.delivery_code_le_p
-      AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
+      AND sbuddr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
       AND sbudr_base.is_deleted_code IS NULL
 
-/* Завод */
 LEFT JOIN dds.delivery_document_position dedopo_1
        ON dedopo_1.delivery_code = lake.delivery_number_sales
 
@@ -445,7 +396,6 @@ LEFT JOIN dds.sales_document_counterparty_role ascr_2
        ON ascr_2.sales_document_code   = t4.delivery_code_le_p
       AND ascr_2.counterparty_role_code = 'ZU'
 
-/* likp – теперь один раз, без вложенных SELECT-ов в ON */
 LEFT JOIN dds.delivery_document_header likp
        ON likp.delivery_code =
           CASE
@@ -454,7 +404,6 @@ LEFT JOIN dds.delivery_document_header likp
              WHEN fw2.transport_hub_code  IS NOT NULL THEN lake.delivery_number_sales
           END
 
-/* справочники по логике регионов */
 LEFT JOIN asia 
        ON asia.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
 
@@ -480,18 +429,15 @@ LEFT JOIN for_LE_001035
        ON for_LE_001035.delivery_code = t4.delivery_code_le_p
       AND for_LE_001035.batch_code   = lake.SD_000004
 
+/* Спец-логика для расчёта хранения */
+LEFT JOIN dict_dds.transportation_storage_calculation_method trscm
+       ON trscm.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+
 WHERE
-    -- ограничение по периоду (из временной таблицы)
-    t4.dt_transportation_stage_start_p <= db.dt_max
-    AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= db.dt_min
-
-    -- отфильтровываем "странные" интервалы
+    t4.dt_transportation_stage_start_p <= date_bounds.dt_max
+    AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= date_bounds.dt_min
     AND t4.dt_transportation_stage_start_p <> COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-
-    -- только узлы G*
     AND t4.transport_route_destination_hub_code LIKE 'G%'
-
-    -- обязательна определена поставка расчёта хранения
     AND (
         CASE
             WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
@@ -499,104 +445,76 @@ WHERE
             WHEN fw2.transport_hub_code  IS NOT NULL THEN lake.delivery_number_sales
         END
     ) IS NOT NULL
+
 DISTRIBUTED BY (sales_bundle_code);
 
 
 DROP TABLE IF EXISTS base_1_5;
 
 CREATE TEMP TABLE base_1_5
---ON COMMIT DROP 
+--ON COMMIT DROP
 AS
-WITH 
-bounds AS (
-    SELECT 
-        MIN(dt_balance)::date AS dt_min,
-        MAX(dt_balance)::date AS dt_max
-    FROM date_for_vitr_tmp
-),
+SELECT
+    -- все поля из base
+    b.*,
 
--- Основной интервал хранения
-intervals AS (
-    SELECT
-        b.*,
-        -- начало интервала
-        b.dt_transportation_stage_start_p AS dt_start,
-        -- конец интервала хранения
-        COALESCE(b.dt_transportation_stage_start_r, current_date) AS dt_end
-    FROM base b
-    CROSS JOIN bounds
-    WHERE b.dt_transportation_stage_start_p <= bounds.dt_max
-      AND COALESCE(b.dt_transportation_stage_start_r, current_date) >= bounds.dt_min
-),
+    -- дата отчёта (будущое поле dt_report в витрине)
+    d.dt_balance AS dt_report,
 
--- Пересечение интервала bundle с периодом витрины
-expanded AS (
-    SELECT 
-        i.sales_bundle_code,
-        i.plant_producer_delivery_code,
-        i.dt_start,
-        i.dt_end,
-        d.dt_balance AS dt_calc,
-        i.sales_bundle_gross_weight,
-        i.sales_bundle_net_weight,
-        i.storage_cost_calculation_type_name,
-        i.material_code,
-        i.batch_code,
-        i.transport_type_code,
-        i.incoterms_code,
-        i.forwarder_code,
-        i.transportation_stage_code,
-        i.transport_route_destination_hub_code,
-        i.transport_route_departure_hub_code,
-        i.transportation_inbound_delivery_code,
-        i.delivery_for_storage_calculation_code,
-        i.transportation_inbound_delivery_position_code,
-        i.delivery_position_for_storage_calculation_code,
-        i.storage_calculation_bundle_quantity,
-        i.storage_cost_special_calculation_type_code,
-        i.remote_warehouse_code,
-        i.material_shape_code,
-        i.dt_arrival,
-        i.dt_arrival_to_russian_port,
-        i.id_for_unique
-    FROM intervals i
-    JOIN date_for_vitr_tmp d
-      ON d.dt_balance BETWEEN i.dt_start AND i.dt_end
-),
+    -- тех. ключ на случай дублей
+    row_number() OVER (
+        PARTITION BY b.id_for_unique, d.dt_balance
+        ORDER BY b.sales_bundle_code
+    ) AS rn
+FROM base b
+JOIN date_for_vitr_tmp d
+  ON d.dt_balance BETWEEN b.dt_transportation_stage_start_p
+                      AND COALESCE(b.dt_transportation_stage_start_r, current_date)
+DISTRIBUTED BY (sales_bundle_code, dt_report);
 
--- Справочник бесплатных дней по договору
-free_days AS (
-    SELECT 
-        f1087.purchase_contract_code,
-        f1087.purchase_contract_position_code,
-        f1087.dt_price_condition_valid_from,
-        f1087.dt_price_condition_valid_to,
-        GREATEST(f1087.price_scale_limit_from_quantity - 1, 0) AS free_days
-    FROM for_1087 f1087
-),
 
--- Спец-логика LE.001089–001125
-calc_days AS (
+DROP TABLE IF EXISTS base_final;
+
+CREATE TEMP TABLE base_final
+AS
+WITH normalized AS (
     SELECT 
-        e.*,
-        fd.free_days,
-        -- фактический номер дня в интервале хранения
-        (e.dt_calc - e.dt_start) + 1 AS storage_day_number,
-        CASE WHEN (e.dt_calc - e.dt_start) + 1 <= fd.free_days THEN 1 ELSE 0 END AS is_free_day,
-        CASE WHEN (e.dt_calc - e.dt_start) + 1  > fd.free_days THEN 1 ELSE 0 END AS is_pay_day
-    FROM expanded e
-    LEFT JOIN free_days fd
-      ON fd.purchase_contract_code          = e.purchase_contract_code
-     AND fd.purchase_contract_position_code = e.purchase_contract_position_code
-     AND fd.dt_price_condition_valid_from   = e.dt_price_condition_valid_from
-     AND fd.dt_price_condition_valid_to     = e.dt_price_condition_valid_to
+        b1.*,
+
+        /* начало хранения = дата старта этапа */
+        b1.dt_transportation_stage_start_p AS dt_storage_start,
+
+        /* конец хранения = дата отчёта */
+        b1.dt_report AS dt_storage_end,
+
+        /* длительность хранения */
+        (b1.dt_report - b1.dt_transportation_stage_start_p) + 1 
+            AS storage_duration_total_calendar_days,
+
+        /* номер услуги = просто ранжирование по bundle/день */
+        row_number() OVER (
+            PARTITION BY b1.sales_bundle_code, b1.dt_report
+            ORDER BY b1.rn
+        ) AS service_number
+    FROM base_1_5 b1
 )
 
-SELECT
+SELECT *
+FROM normalized
+DISTRIBUTED BY (sales_bundle_code, dt_report);
+
+
+INSERT INTO dm_calc.storage_sales_bundles_weight (
     sales_bundle_code,
-    dt_calc                           AS dt_balance,
+    dt_report,
+    dt_storage_start,
+    dt_storage_end,
+    storage_duration_total_calendar_days,
+    service_number,
     material_code,
     batch_code,
+    sales_bundle_gross_weight,
+    sales_bundle_net_weight,
     storage_cost_calculation_type_name,
     transport_type_code,
     incoterms_code,
@@ -614,23 +532,35 @@ SELECT
     material_shape_code,
     dt_arrival,
     dt_arrival_to_russian_port,
-
-    /* ключевой вес */
+    id_for_unique
+)
+SELECT
+    sales_bundle_code,
+    dt_report,
+    dt_storage_start,
+    dt_storage_end,
+    storage_duration_total_calendar_days,
+    service_number,
+    material_code,
+    batch_code,
     sales_bundle_gross_weight,
     sales_bundle_net_weight,
-
-    /* дни хранения */
-    storage_day_number,
-    free_days,
-    is_free_day,
-    is_pay_day,
-
-    /* айди для уникальности */
+    storage_cost_calculation_type_name,
+    transport_type_code,
+    incoterms_code,
+    forwarder_code,
+    transportation_stage_code,
+    transport_route_departure_hub_code,
+    transport_route_destination_hub_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    storage_calculation_bundle_quantity,
+    storage_cost_special_calculation_type_code,
+    remote_warehouse_code,
+    material_shape_code,
+    dt_arrival,
+    dt_arrival_to_russian_port,
     id_for_unique
-
-FROM calc_days
-DISTRIBUTED BY (sales_bundle_code, dt_calc);
-
-
-SQL Error [42703]: ERROR: column i.storage_cost_special_calculation_type_code does not exist
-  Позиция: 1555
+FROM base_final;

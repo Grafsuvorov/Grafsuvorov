@@ -1,459 +1,7 @@
-/* ============================================================
-   ПЕРИОД — последние 12 месяцев
-   ============================================================ */
-
-DROP TABLE IF EXISTS date_for_vitr_tmp;
-
-CREATE TEMP TABLE date_for_vitr_tmp AS
-SELECT 
-    dt::date AS dt_balance
-FROM generate_series(
-        current_date - interval '1 year',
-        current_date,
-        interval '1 day'
-     ) AS gs(dt)
-DISTRIBUTED REPLICATED;
-
-
-/* ============================================================
-   СПРАВОЧНИКИ — оптимизированные под Greenplum
-   ============================================================ */
-
-DROP TABLE IF EXISTS adrc;
-CREATE TEMP TABLE adrc AS
-SELECT
-    address_code,
-    MIN(country_code) AS country_code
-FROM dict_dds.address
-GROUP BY address_code
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS asia;
-CREATE TEMP TABLE asia AS
-SELECT DISTINCT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS euro_1;
-CREATE TEMP TABLE euro_1 AS
-SELECT DISTINCT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-WHERE service_code LIKE 'EU%'
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS euro_2;
-CREATE TEMP TABLE euro_2 AS
-SELECT DISTINCT counterparty_code
-FROM dict_dds.transportation_storage_calculation_method
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS euro_log;
-CREATE TEMP TABLE euro_log AS
-SELECT DISTINCT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
-  AND case_code = 'PERET_FRN'
-  AND parameter_code = 'S_LIFNRA'
-  AND range_low_value IS NOT NULL
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS svh;
-CREATE TEMP TABLE svh AS
-SELECT DISTINCT counterparty_code
-FROM dict_dds.transportation_general_calculation_method
-WHERE general_calculation_method_code IN ('16','04')
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS asia_log;
-CREATE TEMP TABLE asia_log AS
-SELECT DISTINCT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
-  AND case_code = 'PERET_FRN'
-  AND parameter_code = 'LIFNR_FR'
-  AND range_low_value IS NOT NULL
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS for_LE_001035;
-CREATE TEMP TABLE for_LE_001035 AS
-SELECT
-    delivery_code,
-    batch_code,
-    COUNT(*) AS cnt
-FROM dds.sales_bundle_and_delivery_relationship
-WHERE is_deleted_code IS NULL
-GROUP BY delivery_code, batch_code
-DISTRIBUTED BY (delivery_code);
-
-DROP TABLE IF EXISTS dedopo_2;
-CREATE TEMP TABLE dedopo_2 AS
-SELECT DISTINCT delivery_code, sales_document_code
-FROM dds.delivery_document_position
-WHERE sales_document_code IS NOT NULL
-DISTRIBUTED BY (delivery_code);
-
-DROP TABLE IF EXISTS for_1055;
-CREATE TEMP TABLE for_1055 AS
-SELECT
-    vbss.delivery_code AS vbeln,
-    MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
-FROM dds.logistics_document_and_delivery_relationship vbss
-LEFT JOIN dds.release vbsk
-       ON vbsk.release_code = vbss.logistics_document_code
-      AND vbsk.release_type_code = 'X'
-LEFT JOIN dict_dds.settings_and_parameters_sap frel_kod
-       ON vbsk.release_template_code = frel_kod.range_low_value
-WHERE frel_kod.abap_program_code = '/RUSAL/SD2921M'
-  AND frel_kod.parameter_code = 'FREL_KOD'
-  AND frel_kod.range_sign_code = 'I'
-  AND frel_kod.range_option_code = 'EQ'
-  AND vbsk.dt_end_of_free_storage IS NOT NULL
-GROUP BY vbss.delivery_code
-DISTRIBUTED REPLICATED;
-
-
-/* ============================================================
-   LAKE — оптимизированный под Greenplum
-   ============================================================ */
-
-DROP TABLE IF EXISTS lake;
-
-CREATE TEMP TABLE lake AS
-SELECT DISTINCT ON (sd4798.sales_bundle_code)
-    ssms.delivery_number_sales,
-    ssms.delivery_number_of_producer_plant      AS SD_000003,
-    ssms.delivery_item_of_plant                AS SD_000110,
-    ssms.delivery_number_initial               AS SD_000001,
-    ssms.material_code                         AS SD_000143,
-    ssms.dt_shipment                           AS SD_000010,
-    ssms.railcar                               AS SD_000013,
-    ssms.transport_bill                        AS SD_000014,
-    ssms.uni                                   AS SD_000151,
-    ssms.port_of_discharge_in_foreign_port_code AS SD_000054,
-    ssms.port_of_loading_code                  AS SD_000649,
-    ssms.port_of_discharge_code                AS SD_000044,
-    ssms.transport_railcar_type_code           AS SD_000028,
-    ssms.bill_of_lading_group_code             AS SD_000040,
-    ssms.bill_of_lading_number                 AS SD_000041,
-    ssms.dt_bill_of_lading                     AS SD_000042,
-    ssms.dt_final_release                      AS SD_000482,
-    ssms.batch                                 AS SD_000004,
-    ssms.delivery_basis                        AS SD_000067,
-    ssms.bill_of_lading_group_code_in_foreign_port AS SD_000047,
-    ssms.bill_of_lading_in_foreign_port        AS SD_000048,
-    ssms.dt_bill_of_lading_in_foreign_port     AS SD_000049,
-    ssms.dt_warehouse                          AS SD_000024,
-    sd4798.sales_bundle_code
-FROM dm_calc.sd_sales_main_scm ssms
-JOIN dds.sales_bundle_and_delivery_relationship sd4798
-  ON ssms.delivery_number_sales = sd4798.delivery_code
-ORDER BY sd4798.sales_bundle_code, ssms.delivery_number_initial DESC
-DISTRIBUTED BY (sales_bundle_code);
-
-
-
-/* ============================================================
-   BASE — полностью переписанный и оптимизированный
-   ============================================================ */
-
-DROP TABLE IF EXISTS base;
-
-CREATE TEMP TABLE base AS
-WITH
--- границы периода (чтобы не дергать MIN/MAX в WHERE)
-date_bounds AS (
-    SELECT 
-        MIN(dt_balance)::date AS dt_min,
-        MAX(dt_balance)::date AS dt_max
-    FROM date_for_vitr_tmp
-),
-
--- приоритеты складов (Азия / Европа)
-forwapd_1 AS (
-    SELECT 
-        transport_hub_code,
-        MIN(market_region1_code) AS market_region1_code
-    FROM dict_dds.foreign_warehouse_priority_definition
-    WHERE market_region1_code IN ('03','04')
-      AND (
-            is_terminal_code          IS NOT NULL
-         OR is_foreign_warehouse_code IS NOT NULL
-         OR is_temporary_warehouse_code IS NOT NULL
-      )
-    GROUP BY transport_hub_code
-),
-
--- российский порт
-forwapd_2 AS (
-    SELECT DISTINCT transport_hub_code
-    FROM dict_dds.foreign_warehouse_priority_definition
-    WHERE is_russian_port_code IS NOT NULL
-),
-
--- стадии для Европы
-stage_eu AS (
-    SELECT range_low_value
-    FROM dict_dds.settings_and_parameters_sap
-    WHERE abap_program_code = '/RUSAL/SD2973M_2'
-      AND parameter_code     = 'STAGE_EU'
-      AND range_low_value IS NOT NULL
-),
-
--- стадии для Азии
-stage_a AS (
-    SELECT range_low_value
-    FROM dict_dds.settings_and_parameters_sap
-    WHERE abap_program_code = '/RUSAL/SD2973M_2'
-      AND parameter_code     = 'STAGE_A'
-      AND range_low_value IS NOT NULL
-),
-
--- связи для Европы (отфильтрованы)
-sabadr_03 AS (
-    SELECT s.*
-    FROM dds.sales_bundle_and_delivery_relationship s
-    JOIN stage_eu se
-      ON se.range_low_value = s.transportation_stage_code
-    WHERE s.is_deleted_code IS NULL
-),
-
--- связи для Азии (отфильтрованы)
-sabadr_04 AS (
-    SELECT s.*
-    FROM dds.sales_bundle_and_delivery_relationship s
-    JOIN stage_a sa
-      ON sa.range_low_value = s.transportation_stage_code
-    WHERE s.is_deleted_code IS NULL
-)
-
-SELECT
-    /* ключи и базовые поля */
-    t4.sales_bundle_code,
-    lake.SD_000003  AS plant_producer_delivery_code,
-    lake.SD_000110  AS plant_producer_delivery_position_code,
-    lake.SD_000001  AS initial_delivery_code,
-    lake.SD_000143  AS material_code,
-    lake.SD_000010  AS dt_shipment,
-    lake.SD_000013  AS railcar_code,
-    lake.SD_000014  AS transport_bill_code,
-    lake.SD_000151  AS uni,
-    maspe.shape_code AS material_shape_code,
-    lake.SD_000028  AS transport_type_code,
-    mater.etsng_code,
-    sabu.sales_bundle_net_weight  / 1000 AS sales_bundle_net_weight,
-    sabu.sales_bundle_gross_weight / 1000 AS sales_bundle_gross_weight,
-    lake.SD_000004 AS batch_code,
-
-    /* Дата прибытия */
-    t4.dt_transportation_stage_start_r AS dt_arrival,
-
-    /* Завод продажной поставки */
-    dedopo_1.plant_producer_code AS receiving_plant_code,
-
-    lake.delivery_number_sales AS sales_delivery_code,
-
-    /* Входящая тех. поставка по складской логике */
-    CASE 
-        WHEN fw1.transport_hub_code IS NOT NULL 
-        THEN t4.delivery_code_le_p 
-    END AS transportation_inbound_delivery_code,
-
-    /* Поставка расчёта хранения (LE.001016) */
-    CASE
-        WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
-        WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
-        WHEN fw2.transport_hub_code  IS NOT NULL THEN lake.delivery_number_sales
-    END AS delivery_for_storage_calculation_code,
-
-    /* Позиция тех. поставки входа */
-    t4.transportation_inbound_delivery_position_code,
-
-    /* Позиция поставки расчета хранения */
-    CASE
-        WHEN fw1.market_region1_code IN ('03','04')
-         AND (sab03.delivery_code IS NOT NULL OR sab04.delivery_code IS NOT NULL)
-        THEN t4.transportation_inbound_delivery_position_code
-        ELSE '10'
-    END AS delivery_position_for_storage_calculation_code,
-
-    /* Экспедитор */
-    COALESCE(ascr_1.supplier_code, ascr_2.supplier_code) AS forwarder_code,
-
-    /* Тип логики хранения */
-    CASE
-        WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 = 'TL04' THEN 'Логика РФ-контейнеры'
-        WHEN likp.delivery_type_code <> 'ZLE' AND lake.SD_000028 <> 'TL04' THEN 'Логика РФ-балк'
-        WHEN likp.delivery_type_code = 'ZLE' AND asia_log.range_low_value IS NOT NULL 
-             AND asia.counterparty_code IS NULL THEN 'Логика Азия'
-        WHEN likp.delivery_type_code = 'ZLE' AND euro_1.counterparty_code IS NOT NULL THEN 'Логика Европа'
-        WHEN likp.delivery_type_code = 'ZLE' AND euro_2.counterparty_code IS NOT NULL 
-             AND euro_log.range_low_value IS NOT NULL THEN 'Логика Европа'
-        WHEN likp.delivery_type_code = 'ZLE' AND svh.counterparty_code IS NOT NULL THEN 'Логика СВХ'
-        ELSE 'Логика не определена'
-    END AS storage_cost_calculation_type_name,
-
-    /* Особая логика LE.001065 */
-    CASE
-        WHEN (
-            likp.delivery_type_code = 'ZLE'
-            AND euro_1.counterparty_code IS NOT NULL
-        )
-        OR (
-            likp.delivery_type_code = 'ZLE'
-            AND euro_2.counterparty_code IS NOT NULL
-            AND euro_log.range_low_value IS NOT NULL
-        )
-        THEN trscm.calculation_method_code
-    END AS storage_cost_special_calculation_type_code,
-
-    /* Узлы */
-    sbudr_base.transport_route_departure_hub_code,
-    sbudr_base.transport_route_destination_hub_code,
-    sbudr_base.is_final_transportation_stage_code,
-    sbudr_base.transportation_stage_code,
-
-    for_LE_001035.cnt AS storage_calculation_bundle_quantity,
-
-    /* Разное */
-    lake.SD_000482 AS dt_final_release,
-    lake.SD_000041 AS bill_of_lading_number,
-    lake.SD_000042 AS dt_bill_of_lading,
-    lake.SD_000047 AS SD_000047,
-    lake.SD_000048 AS SD_000048,
-    lake.SD_000054 AS SD_000054,
-    lake.SD_000049 AS SD_000049,
-    lake.SD_000067 AS incoterms_code,
-    lake.SD_000649,
-    lake.SD_000044,
-    lake.SD_000040,
-    t4.delivery_code_le_r                 AS SD_000516,
-    t4.transportation_outbound_delivery_position_code AS SD_000897,
-
-    /* NET / BRUTTO */
-    likp.weight_net              AS ntgew,
-    likp.weight_net_with_wirerod AS btgew,
-
-    /* Удалённый склад */
-    t4.knote AS remote_warehouse_code,
-
-    /* Дата прибытия в РФ порт */
-    CASE
-        WHEN fw1.market_region1_code IN ('03','04')
-         AND (sab03.delivery_code IS NOT NULL OR sab04.delivery_code IS NOT NULL)
-        THEN NULL
-        ELSE lake.SD_000024
-    END AS dt_arrival_to_russian_port,
-
-    /* Интервалы */
-    t4.dt_transportation_stage_start_p,
-    COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
-
-    /* ID */
-    CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique
-
-FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
-CROSS JOIN date_bounds
-
-LEFT JOIN lake
-       ON t4.sales_bundle_code = lake.sales_bundle_code
-
-LEFT JOIN dict_dds.material mater
-       ON mater.material_code = lake.SD_000143
-
-LEFT JOIN dds.sales_bundle sabu
-       ON sabu.sales_bundle_code = t4.sales_bundle_code
-
-LEFT JOIN forwapd_1 fw1
-       ON fw1.transport_hub_code = t4.knote
-
-LEFT JOIN forwapd_2 fw2
-       ON fw2.transport_hub_code = t4.knote
-
-LEFT JOIN sabadr_03 sab03
-       ON sab03.sales_bundle_code              = t4.sales_bundle_code
-      AND sab03.transport_route_destination_hub_code = t4.knote
-      AND fw1.market_region1_code             = '03'
-
-LEFT JOIN sabadr_04 sab04
-       ON sab04.sales_bundle_code              = t4.sales_bundle_code
-      AND sab04.transport_route_destination_hub_code = t4.knote
-      AND fw1.market_region1_code             = '04'
-
-LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
-       ON sbudr_base.sales_bundle_code      = t4.sales_bundle_code
-      AND sbudr_base.delivery_code          = t4.delivery_code_le_p
-      AND sbuddr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
-      AND sbudr_base.is_deleted_code IS NULL
-
-LEFT JOIN dds.delivery_document_position dedopo_1
-       ON dedopo_1.delivery_code = lake.delivery_number_sales
-
-LEFT JOIN dds.sales_document_counterparty_role ascr_1
-       ON ascr_1.sales_document_code   = t4.delivery_code_le_p
-      AND ascr_1.counterparty_role_code = 'XR'
-
-LEFT JOIN dds.sales_document_counterparty_role ascr_2
-       ON ascr_2.sales_document_code   = t4.delivery_code_le_p
-      AND ascr_2.counterparty_role_code = 'ZU'
-
-LEFT JOIN dds.delivery_document_header likp
-       ON likp.delivery_code =
-          CASE
-             WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
-             WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
-             WHEN fw2.transport_hub_code  IS NOT NULL THEN lake.delivery_number_sales
-          END
-
-LEFT JOIN asia 
-       ON asia.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN euro_1 
-       ON euro_1.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN euro_2 
-       ON euro_2.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN svh    
-       ON svh.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN asia_log 
-       ON asia_log.range_low_value = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN euro_log 
-       ON euro_log.range_low_value = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-LEFT JOIN dict_dds.material_specification maspe
-       ON maspe.material_code = lake.SD_000143
-
-LEFT JOIN for_LE_001035
-       ON for_LE_001035.delivery_code = t4.delivery_code_le_p
-      AND for_LE_001035.batch_code   = lake.SD_000004
-
-/* Спец-логика для расчёта хранения */
-LEFT JOIN dict_dds.transportation_storage_calculation_method trscm
-       ON trscm.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
-
-WHERE
-    t4.dt_transportation_stage_start_p <= date_bounds.dt_max
-    AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= date_bounds.dt_min
-    AND t4.dt_transportation_stage_start_p <> COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
-    AND t4.transport_route_destination_hub_code LIKE 'G%'
-    AND (
-        CASE
-            WHEN fw1.market_region1_code = '03' AND sab03.delivery_code IS NOT NULL THEN sab03.delivery_code
-            WHEN fw1.market_region1_code = '04' AND sab04.delivery_code IS NOT NULL THEN sab04.delivery_code
-            WHEN fw2.transport_hub_code  IS NOT NULL THEN lake.delivery_number_sales
-        END
-    ) IS NOT NULL
-
-DISTRIBUTED BY (sales_bundle_code);
-
-
-DROP TABLE IF EXISTS base_1_5;
-
 CREATE TEMP TABLE base_1_5
 --ON COMMIT DROP
-AS
+as
+explain(verbose, format json)
 SELECT
     -- все поля из base
     b.*,
@@ -473,94 +21,119 @@ JOIN date_for_vitr_tmp d
 DISTRIBUTED BY (sales_bundle_code, dt_report);
 
 
-DROP TABLE IF EXISTS base_final;
-
-CREATE TEMP TABLE base_final
-AS
-WITH normalized AS (
-    SELECT 
-        b1.*,
-
-        /* начало хранения = дата старта этапа */
-        b1.dt_transportation_stage_start_p AS dt_storage_start,
-
-        /* конец хранения = дата отчёта */
-        b1.dt_report AS dt_storage_end,
-
-        /* длительность хранения */
-        (b1.dt_report - b1.dt_transportation_stage_start_p) + 1 
-            AS storage_duration_total_calendar_days,
-
-        /* номер услуги = просто ранжирование по bundle/день */
-        row_number() OVER (
-            PARTITION BY b1.sales_bundle_code, b1.dt_report
-            ORDER BY b1.rn
-        ) AS service_number
-    FROM base_1_5 b1
-)
-
-SELECT *
-FROM normalized
-DISTRIBUTED BY (sales_bundle_code, dt_report);
-
-
-INSERT INTO dm_calc.storage_sales_bundles_weight (
-    sales_bundle_code,
-    dt_report,
-    dt_storage_start,
-    dt_storage_end,
-    storage_duration_total_calendar_days,
-    service_number,
-    material_code,
-    batch_code,
-    sales_bundle_gross_weight,
-    sales_bundle_net_weight,
-    storage_cost_calculation_type_name,
-    transport_type_code,
-    incoterms_code,
-    forwarder_code,
-    transportation_stage_code,
-    transport_route_departure_hub_code,
-    transport_route_destination_hub_code,
-    transportation_inbound_delivery_code,
-    delivery_for_storage_calculation_code,
-    transportation_inbound_delivery_position_code,
-    delivery_position_for_storage_calculation_code,
-    storage_calculation_bundle_quantity,
-    storage_cost_special_calculation_type_code,
-    remote_warehouse_code,
-    material_shape_code,
-    dt_arrival,
-    dt_arrival_to_russian_port,
-    id_for_unique
-)
-SELECT
-    sales_bundle_code,
-    dt_report,
-    dt_storage_start,
-    dt_storage_end,
-    storage_duration_total_calendar_days,
-    service_number,
-    material_code,
-    batch_code,
-    sales_bundle_gross_weight,
-    sales_bundle_net_weight,
-    storage_cost_calculation_type_name,
-    transport_type_code,
-    incoterms_code,
-    forwarder_code,
-    transportation_stage_code,
-    transport_route_departure_hub_code,
-    transport_route_destination_hub_code,
-    transportation_inbound_delivery_code,
-    delivery_for_storage_calculation_code,
-    transportation_inbound_delivery_position_code,
-    delivery_position_for_storage_calculation_code,
-    storage_calculation_bundle_quantity,
-    storage_cost_special_calculation_type_code,
-    remote_warehouse_code,
-    material_shape_code,
-    dt_arrival,
-    dt_arrival_to_russian_port,
-    id_for_unique
-FROM base_final;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 6,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 6,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 160054346.77,
+      "Plan Rows": 383810194,
+      "Plan Width": 380,
+      "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance", "(row_number() OVER (?))"],
+      "Plans": [
+        {
+          "Node Type": "WindowAgg",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 159622150.91,
+          "Plan Rows": 383810194,
+          "Plan Width": 380,
+          "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance", "row_number() OVER (?)"],
+          "Partition By": ["base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
+          "Order By": ["base.sales_bundle_code"],
+          "Plans": [
+            {
+              "Node Type": "Sort",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 159593748.95,
+              "Plan Rows": 383810194,
+              "Plan Width": 444,
+              "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
+              "Sort Key": ["base.id_for_unique", "date_for_vitr_tmp.dt_balance", "base.sales_bundle_code"],
+              "Plans": [
+                {
+                  "Node Type": "Redistribute Motion",
+                  "Senders": 6,
+                  "Receivers": 6,
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 155417867.84,
+                  "Plan Rows": 383810194,
+                  "Plan Width": 444,
+                  "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
+                  "Hash Key": "base.id_for_unique, date_for_vitr_tmp.dt_balance",
+                  "Plans": [
+                    {
+                      "Node Type": "Nested Loop",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Join Type": "Inner",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 155328969.72,
+                      "Plan Rows": 383810194,
+                      "Plan Width": 444,
+                      "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique", "date_for_vitr_tmp.dt_balance"],
+                      "Join Filter": "((date_for_vitr_tmp.dt_balance >= base.dt_transportation_stage_start_p) AND (date_for_vitr_tmp.dt_balance <= COALESCE(base.dt_transportation_stage_start_r, '2025-12-02'::date)))",
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "base",
+                          "Schema": "pg_temp_4463445",
+                          "Alias": "base",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 769.85,
+                          "Plan Rows": 7864963,
+                          "Plan Width": 440,
+                          "Output": ["base.sales_bundle_code", "base.plant_producer_delivery_code", "base.plant_producer_delivery_position_code", "base.initial_delivery_code", "base.material_code", "base.dt_shipment", "base.railcar_code", "base.transport_bill_code", "base.uni", "base.material_shape_code", "base.transport_type_code", "base.etsng_code", "base.sales_bundle_net_weight", "base.sales_bundle_gross_weight", "base.batch_code", "base.dt_arrival", "base.receiving_plant_code", "base.sales_delivery_code", "base.transportation_inbound_delivery_code", "base.delivery_for_storage_calculation_code", "base.transportation_inbound_delivery_position_code", "base.delivery_position_for_storage_calculation_code", "base.forwarder_code", "base.storage_cost_calculation_type_name", "base.storage_cost_special_calculation_type_code", "base.transport_route_departure_hub_code", "base.transport_route_destination_hub_code", "base.is_final_transportation_stage_code", "base.transportation_stage_code", "base.storage_calculation_bundle_quantity", "base.dt_final_release", "base.bill_of_lading_number", "base.dt_bill_of_lading", "base.sd_000047", "base.sd_000048", "base.sd_000054", "base.sd_000049", "base.incoterms_code", "base.sd_000649", "base.sd_000044", "base.sd_000040", "base.sd_000516", "base.sd_000897", "base.ntgew", "base.btgew", "base.remote_warehouse_code", "base.dt_arrival_to_russian_port", "base.dt_transportation_stage_start_p", "base.dt_transportation_stage_start_r", "base.id_for_unique"]
+                        },
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Inner",
+                          "Slice": 1,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "date_for_vitr_tmp",
+                          "Schema": "pg_temp_4463445",
+                          "Alias": "date_for_vitr_tmp",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 431.01,
+                          "Plan Rows": 2196,
+                          "Plan Width": 4,
+                          "Output": ["date_for_vitr_tmp.dt_balance"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

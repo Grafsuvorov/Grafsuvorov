@@ -1,29 +1,6 @@
-DROP TABLE IF EXISTS base_1_5;
+SQL Error [42P01]: ERROR: invalid reference to FROM-clause entry for table "b"
+  Подсказка: There is an entry for table "b", but it cannot be referenced from this part of the query.
+  Позиция: 424
 
-CREATE TEMP TABLE base_1_5
---ON COMMIT DROP
-AS
-WITH bounds AS (
-    SELECT 
-        MIN(dt_balance)::date AS dt_min,
-        MAX(dt_balance)::date AS dt_max
-    FROM date_for_vitr_tmp
-)
-SELECT
-    b.*,
-    gs.dt_balance AS dt_report,
 
-    row_number() OVER (
-        PARTITION BY b.id_for_unique, gs.dt_balance
-        ORDER BY b.sales_bundle_code
-    ) AS rn
-FROM base b
-CROSS JOIN bounds bd
-JOIN (
-    SELECT generate_series(
-               GREATEST(b.dt_transportation_stage_start_p, bd.dt_min),
-               LEAST(COALESCE(b.dt_transportation_stage_start_r, current_date), bd.dt_max),
-               INTERVAL '1 day'
-           ) AS dt_balance
-) gs ON true
-DISTRIBUTED BY (sales_bundle_code, dt_report);
+Позиция ошибки: line: 479 pos: 423

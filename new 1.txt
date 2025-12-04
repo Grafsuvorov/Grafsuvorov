@@ -1,159 +1,193 @@
-CREATE TEMP TABLE for_1079_map
-ON COMMIT DROP AS
-WITH fb AS (
-    -- Предфильтруем for_1079_base максимально рано
-    SELECT
-        purchase_contract_code,
-        position_line_item_code,
-        bukrs,
-        lifnr,
-        zzport,
-        werks,
-        zzsrvpos,
-        zzforma,
-        zzet_tarif,
-        sdabw,
-        dt_valid_from,
-        dt_valid_to,
-        datab,
-        datbi,
-        konws,
-        service_code,
-        price_uom_code,
-        currency_dogovor,
-        purchase_document_subtype_code,
-        tmp_1,
-        tmp_2,
-        order_rf,
-        order_asia,
-        order_euro_svh,
-        kopos,
-        kbetr,
-        netpr,
-        zzterminal,
-        vzzzone
-    FROM for_1079_base
-    WHERE (
-        bukrs IN ('1120','1121')  -- РФ/Европа/Азия/СВХ
-        OR bukrs IS NULL
-    )
-),
-bsw AS (
-    SELECT *
-    FROM base_sw
-    WHERE storage_cost_calculation_type_name IN
-        ('Логика РФ-контейнеры',
-         'Логика РФ-балк',
-         'Логика Азия',
-         'Логика Европа',
-         'Логика СВХ')
-),
-match_rules AS (
-    SELECT
-        bsw.rn,
-        fb.purchase_contract_code,
-        fb.position_line_item_code,
-        fb.konws,
-        fb.service_code,
-        fb.price_uom_code,
-        fb.currency_dogovor,
-        fb.datab,
-        fb.datbi,
-
-        /* EURO FIELDS — только для Европы */
-        CASE
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика Европа'
-                THEN CASE
-                        WHEN EXTRACT(day FROM bsw.dt_storage_end) < EXTRACT(day FROM bsw.dt_storage_start)
-                             THEN (EXTRACT(year FROM bsw.dt_storage_end) - EXTRACT(year FROM bsw.dt_storage_start)) * 12
-                                  + (EXTRACT(month FROM bsw.dt_storage_end) - EXTRACT(month FROM bsw.dt_storage_start))
-                        ELSE (EXTRACT(year FROM bsw.dt_storage_end) - EXTRACT(year FROM bsw.dt_storage_start)) * 12
-                             + (EXTRACT(month FROM bsw.dt_storage_end) - EXTRACT(month FROM bsw.dt_storage_start)) + 1
-                     END
-        END AS euro_month_difference_2,
-
-        CASE
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика Европа'
-                THEN CASE
-                        WHEN bsw.storage_cost_special_calculation_type_code = '4'
-                             THEN CEIL(bsw.storage_duration_total_calendar_days / 7.0)
-                        WHEN bsw.storage_cost_special_calculation_type_code = '5'
-                             THEN CEIL(bsw.storage_duration_total_calendar_days / 30.0)
-                     END
-        END AS euro_special,
-
-        /* Приоритеты логик */
-        CASE
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
-                THEN 10
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика РФ-балк'
-                AND fb.zzsrvpos = bsw.service_number THEN 20
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика РФ-балк'
-                THEN 30
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика Азия'
-                THEN 40
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика Европа'
-                THEN 50
-            WHEN bsw.storage_cost_calculation_type_name = 'Логика СВХ'
-                THEN 60
-        END AS priority,
-
-        /* Флаг совпадений условий для сортировки */
-        (
-            (CASE WHEN fb.zzport = bsw.port_of_discharge_code OR fb.zzport IS NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN fb.zzforma = bsw.material_shape_code OR fb.zzforma IS NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN fb.zzet_tarif = bsw.etsng_code OR fb.zzet_tarif IS NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN fb.sdabw = bsw.transport_type_code OR fb.sdabw IS NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN fb.zzterminal = bsw.warehouse_code OR fb.zzterminal IS NULL THEN 1 ELSE 0 END) +
-            (CASE WHEN fb.vzzzone = bsw.warehouse_storage_area_code OR fb.vzzzone IS NULL THEN 1 ELSE 0 END)
-        ) AS match_score
-
-    FROM bsw
-    JOIN fb
-        ON fb.lifnr = bsw.forwarder_code
-       AND bsw.dt_for_price_search_in_purchase_contract
-              BETWEEN fb.dt_valid_from AND fb.dt_valid_to
-       AND bsw.dt_for_price_search_in_purchase_contract
-              BETWEEN fb.datab AND fb.datbi
-
-       /* Логики */
-       AND (
-            (bsw.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
-             AND fb.bukrs = '1120'
-             AND fb.werks = '1121'
-             AND fb.zzsrvpos = 'S49')
-
-            OR (bsw.storage_cost_calculation_type_name = 'Логика РФ-балк'
-                AND fb.bukrs = '1120'
-                AND fb.werks = '1121')
-
-            OR (bsw.storage_cost_calculation_type_name = 'Логика Азия'
-                AND fb.bukrs = bsw.unit_balance_code
-                AND fb.werks = bsw.plant_code)
-
-            OR (bsw.storage_cost_calculation_type_name = 'Логика Европа'
-                AND fb.purchase_document_subtype_code = 'ZDTL'
-                AND fb.bukrs = bsw.unit_balance_code
-                AND fb.werks = bsw.plant_code)
-
-            OR (bsw.storage_cost_calculation_type_name = 'Логика СВХ'
-                AND fb.bukrs = '1120'
-                AND fb.werks = '1121'
-                AND fb.purchase_document_subtype_code = 'ZDTL')
-       )
-)
-SELECT DISTINCT ON (rn)
-    rn,
-    purchase_contract_code,
-    position_line_item_code,
-    konws,
-    service_code,
-    price_uom_code,
-    currency_dogovor,
-    datab,
-    datbi,
-    euro_month_difference_2,
-    euro_special
-FROM match_rules
-ORDER BY rn, priority, match_score DESC, konws DESC, datab DESC
-DISTRIBUTED BY (rn);
+[
+  {
+    "Plan": {
+      "Node Type": "Unique",
+      "Slice": 0,
+      "Segments": 0,
+      "Gang Type": "unallocated",
+      "Startup Cost": 3127420201.02,
+      "Total Cost": 3127420201.67,
+      "Plan Rows": 86,
+      "Plan Width": 870,
+      "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+      "Group Key": ["match_rules.rn"],
+      "Plans": [
+        {
+          "Node Type": "Gather Motion",
+          "Senders": 8,
+          "Receivers": 1,
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 3127420201.02,
+          "Total Cost": 3127420201.45,
+          "Plan Rows": 86,
+          "Plan Width": 870,
+          "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+          "Merge Key": ["match_rules.rn", "match_rules.priority", "match_rules.match_score", "match_rules.konws", "match_rules.datab"],
+          "Plans": [
+            {
+              "Node Type": "Unique",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 3127420201.02,
+              "Total Cost": 3127420201.45,
+              "Plan Rows": 86,
+              "Plan Width": 870,
+              "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+              "Group Key": ["match_rules.rn"],
+              "Plans": [
+                {
+                  "Node Type": "Sort",
+                  "Parent Relationship": "Outer",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 3127420201.02,
+                  "Total Cost": 3127420201.24,
+                  "Plan Rows": 86,
+                  "Plan Width": 870,
+                  "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+                  "Sort Key (Distinct)": ["match_rules.rn", "match_rules.priority", "match_rules.match_score", "match_rules.konws", "match_rules.datab"],
+                  "Plans": [
+                    {
+                      "Node Type": "Redistribute Motion",
+                      "Senders": 8,
+                      "Receivers": 8,
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 5172.16,
+                      "Total Cost": 3127420198.26,
+                      "Plan Rows": 86,
+                      "Plan Width": 870,
+                      "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+                      "Hash Key": "match_rules.rn",
+                      "Plans": [
+                        {
+                          "Node Type": "Subquery Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Alias": "match_rules",
+                          "Startup Cost": 5172.16,
+                          "Total Cost": 3127420196.54,
+                          "Plan Rows": 86,
+                          "Plan Width": 870,
+                          "Output": ["match_rules.rn", "match_rules.purchase_contract_code", "match_rules.position_line_item_code", "match_rules.konws", "match_rules.service_code", "match_rules.price_uom_code", "match_rules.currency_dogovor", "match_rules.datab", "match_rules.datbi", "match_rules.euro_month_difference_2", "match_rules.euro_special", "match_rules.priority", "match_rules.match_score"],
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Subquery",
+                              "Slice": 1,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Inner",
+                              "Startup Cost": 5172.16,
+                              "Total Cost": 3127420195.68,
+                              "Plan Rows": 86,
+                              "Plan Width": 870,
+                              "Output": ["bsw.rn", "fb.purchase_contract_code", "fb.position_line_item_code", "fb.konws", "fb.service_code", "fb.price_uom_code", "fb.currency_dogovor", "fb.datab", "fb.datbi", "CASE WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика Европа'::text) THEN CASE WHEN (date_part('day'::text, (bsw.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (bsw.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (bsw.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (bsw.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (bsw.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (bsw.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (bsw.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (bsw.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (bsw.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (bsw.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END ELSE NULL::double precision END", "CASE WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика Европа'::text) THEN CASE WHEN ((bsw.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((bsw.storage_duration_total_calendar_days)::numeric / 7.0)) WHEN ((bsw.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((bsw.storage_duration_total_calendar_days)::numeric / 30.0)) ELSE NULL::numeric END ELSE NULL::numeric END", "CASE WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 10 WHEN (((bsw.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) AND ((fb.zzsrvpos)::text = bsw.service_number)) THEN 20 WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 30 WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика Азия'::text) THEN 40 WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика Европа'::text) THEN 50 WHEN ((bsw.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 60 ELSE NULL::integer END", "(((((CASE WHEN (((fb.zzport)::text = (bsw.port_of_discharge_code)::text) OR (fb.zzport IS NULL)) THEN 1 ELSE 0 END + CASE WHEN (((fb.zzforma)::text = (bsw.material_shape_code)::text) OR (fb.zzforma IS NULL)) THEN 1 ELSE 0 END) + CASE WHEN (((fb.zzet_tarif)::text = (bsw.etsng_code)::text) OR (fb.zzet_tarif IS NULL)) THEN 1 ELSE 0 END) + CASE WHEN (((fb.sdabw)::text = (bsw.transport_type_code)::text) OR (fb.sdabw IS NULL)) THEN 1 ELSE 0 END) + CASE WHEN (((fb.zzterminal)::text = (bsw.warehouse_code)::text) OR (fb.zzterminal IS NULL)) THEN 1 ELSE 0 END) + CASE WHEN (((fb.vzzzone)::text = (bsw.warehouse_storage_area_code)::text) OR (fb.vzzzone IS NULL)) THEN 1 ELSE 0 END)"],
+                              "Hash Cond": "((bsw.forwarder_code)::text = (fb.lifnr)::text)",
+                              "Join Filter": "((bsw.dt_for_price_search_in_purchase_contract >= fb.dt_valid_from) AND (bsw.dt_for_price_search_in_purchase_contract <= fb.dt_valid_to) AND (bsw.dt_for_price_search_in_purchase_contract >= fb.datab) AND (bsw.dt_for_price_search_in_purchase_contract <= fb.datbi) AND ((((bsw.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) AND ((fb.bukrs)::text = '1120'::text) AND ((fb.werks)::text = '1121'::text) AND ((fb.zzsrvpos)::text = 'S49'::text)) OR (((bsw.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) AND ((fb.bukrs)::text = '1120'::text) AND ((fb.werks)::text = '1121'::text)) OR (((bsw.storage_cost_calculation_type_name)::text = 'Логика Азия'::text) AND ((fb.bukrs)::text = (bsw.unit_balance_code)::text) AND ((fb.werks)::text = (bsw.plant_code)::text)) OR (((bsw.storage_cost_calculation_type_name)::text = 'Логика Европа'::text) AND ((fb.purchase_document_subtype_code)::text = 'ZDTL'::text) AND ((fb.bukrs)::text = (bsw.unit_balance_code)::text) AND ((fb.werks)::text = (bsw.plant_code)::text)) OR (((bsw.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) AND ((fb.bukrs)::text = '1120'::text) AND ((fb.werks)::text = '1121'::text) AND ((fb.purchase_document_subtype_code)::text = 'ZDTL'::text))))",
+                              "Plans": [
+                                {
+                                  "Node Type": "Subquery Scan",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 1,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Alias": "bsw",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 7922489.50,
+                                  "Plan Rows": 109089676,
+                                  "Plan Width": 505,
+                                  "Output": ["bsw.rn", "bsw.storage_cost_calculation_type_name", "bsw.dt_storage_end", "bsw.dt_storage_start", "bsw.storage_cost_special_calculation_type_code", "bsw.storage_duration_total_calendar_days", "bsw.service_number", "bsw.port_of_discharge_code", "bsw.material_shape_code", "bsw.etsng_code", "bsw.transport_type_code", "bsw.warehouse_code", "bsw.warehouse_storage_area_code", "bsw.forwarder_code", "bsw.dt_for_price_search_in_purchase_contract", "bsw.unit_balance_code", "bsw.plant_code", "bsw.sales_bundle_code"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Subquery",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "base_sw",
+                                      "Schema": "pg_temp_8672889",
+                                      "Alias": "base_sw",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 6831592.74,
+                                      "Plan Rows": 109089676,
+                                      "Plan Width": 505,
+                                      "Output": ["base_sw.rn", "base_sw.sales_bundle_code", "base_sw.plant_producer_delivery_code", "base_sw.plant_producer_delivery_position_code", "base_sw.initial_delivery_code", "base_sw.material_code", "base_sw.dt_shipment", "base_sw.railcar_code", "base_sw.transport_bill_code", "base_sw.uni", "base_sw.material_shape_code", "base_sw.port_of_discharge_code", "base_sw.dt_arrival_to_russian_port", "base_sw.dt_storage_end_in_release", "base_sw.transport_type_code", "base_sw.etsng_code", "base_sw.dt_report", "base_sw.sales_bundle_net_weight", "base_sw.sales_bundle_gross_weight", "base_sw.batch_code", "base_sw.dt_arrival", "base_sw.receiving_plant_code", "base_sw.sales_delivery_code", "base_sw.transportation_inbound_delivery_code", "base_sw.delivery_for_storage_calculation_code", "base_sw.transportation_inbound_delivery_position_code", "base_sw.delivery_position_for_storage_calculation_code", "base_sw.forwarder_code", "base_sw.storage_cost_calculation_type_name", "base_sw.transport_departure_hub_code", "base_sw.transport_destination_hub_code", "base_sw.transportation_outbound_delivery_code", "base_sw.transportation_outbound_delivery_position_code", "base_sw.is_final_transportation_stage_code", "base_sw.transportation_stage_code", "base_sw.storage_calculation_bundle_quantity", "base_sw.warehouse_code", "base_sw.delivery_in_final_release_code", "base_sw.dt_final_release", "base_sw.bill_of_lading_code", "base_sw.bill_of_lading_number", "base_sw.dt_bill_of_lading", "base_sw.incoterms_code", "base_sw.storage_cost_special_calculation_type_code", "base_sw.warehouse_storage_area_code", "base_sw.plant_code", "base_sw.unit_balance_code", "base_sw.creditor_in_shipment_instruction_code", "base_sw.dt_storage_start", "base_sw.dt_shipped_from_warehouse", "base_sw.dt_storage_end", "base_sw.service_number", "base_sw.storage_duration_total_calendar_days", "base_sw.shipment_instruction_number", "base_sw.dt_for_price_search_in_purchase_contract", "base_sw.is_stored_in_russian_port_code", "base_sw.remote_warehouse_code", "base_sw.dt_transportation_stage_start_p", "base_sw.dt_transportation_stage_start_r", "base_sw.weight_for_1090_razdel", "base_sw.weight_for_1090_umno"],
+                                      "Filter": "(((base_sw.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\",\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) AND (((base_sw.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) OR ((base_sw.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) OR ((base_sw.storage_cost_calculation_type_name)::text = 'Логика Азия'::text) OR ((base_sw.storage_cost_calculation_type_name)::text = 'Логика Европа'::text) OR ((base_sw.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text)))"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 1,
+                                  "Segments": 1,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 6952.22,
+                                  "Total Cost": 6952.22,
+                                  "Plan Rows": 159143,
+                                  "Plan Width": 204,
+                                  "Output": ["fb.purchase_contract_code", "fb.position_line_item_code", "fb.konws", "fb.service_code", "fb.price_uom_code", "fb.currency_dogovor", "fb.datab", "fb.datbi", "fb.zzsrvpos", "fb.zzport", "fb.zzforma", "fb.zzet_tarif", "fb.sdabw", "fb.zzterminal", "fb.vzzzone", "fb.lifnr", "fb.dt_valid_from", "fb.dt_valid_to", "fb.bukrs", "fb.werks", "fb.purchase_document_subtype_code"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Subquery Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 1,
+                                      "Gang Type": "primary reader",
+                                      "Alias": "fb",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 6952.22,
+                                      "Plan Rows": 159143,
+                                      "Plan Width": 204,
+                                      "Output": ["fb.purchase_contract_code", "fb.position_line_item_code", "fb.konws", "fb.service_code", "fb.price_uom_code", "fb.currency_dogovor", "fb.datab", "fb.datbi", "fb.zzsrvpos", "fb.zzport", "fb.zzforma", "fb.zzet_tarif", "fb.sdabw", "fb.zzterminal", "fb.vzzzone", "fb.lifnr", "fb.dt_valid_from", "fb.dt_valid_to", "fb.bukrs", "fb.werks", "fb.purchase_document_subtype_code"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Subquery",
+                                          "Slice": 1,
+                                          "Segments": 1,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "for_1079_base",
+                                          "Schema": "pg_temp_8672889",
+                                          "Alias": "for_1079_base",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 5360.79,
+                                          "Plan Rows": 159143,
+                                          "Plan Width": 204,
+                                          "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.bukrs", "for_1079_base.lifnr", "for_1079_base.zzport", "for_1079_base.werks", "for_1079_base.zzsrvpos", "for_1079_base.zzforma", "for_1079_base.zzet_tarif", "for_1079_base.sdabw", "for_1079_base.dt_valid_from", "for_1079_base.dt_valid_to", "for_1079_base.datab", "for_1079_base.datbi", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.currency_dogovor", "for_1079_base.purchase_document_subtype_code", "for_1079_base.tmp_1", "for_1079_base.tmp_2", "for_1079_base.order_rf", "for_1079_base.order_asia", "for_1079_base.order_euro_svh", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.netpr", "for_1079_base.zzterminal", "for_1079_base.vzzzone"],
+                                          "Filter": "(((for_1079_base.bukrs)::text = ANY ('{1120,1121}'::text[])) OR (for_1079_base.bukrs IS NULL))"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Postgres query optimizer"
+    }
+  }
+]

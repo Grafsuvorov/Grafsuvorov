@@ -96,29 +96,21 @@ WITH (
     appendonly = true,
     orientation = column,
     compresstype = zstd,
-    compresslevel = 3
+    compresslevel = 5
 )
 DISTRIBUTED BY (sales_bundle_code);
 
 TRUNCATE TABLE userdata.storage_sales_bundles_amount;
 
-
 ----------------------------------------------------------------------
--- 2. Подготовка базовой таблицы по весам (base_sw)
---    RN = md5(...) по ключевым полям хранения
+-- 2. Подготовка базовой таблицы по весам (ОБЩИЙ base для всех логик)
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE base_sw
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 SELECT
-    md5(
-        sales_bundle_code || ':' ||
-        COALESCE(dt_storage_start::text,'') || ':' ||
-        COALESCE(dt_storage_end::text,'')   || ':' ||
-        COALESCE(warehouse_code,'')         || ':' ||
-        COALESCE(material_code,'')          || ':' ||
-        COALESCE(batch_code,'')
-    ) AS rn,
+    rn,
     sales_bundle_code,
     plant_producer_delivery_code,
     plant_producer_delivery_position_code,
@@ -179,7 +171,10 @@ SELECT
     dt_transportation_stage_start_r,
     weight_for_1090_razdel,
     weight_for_1090_umno
-FROM dm_calc.storage_sales_bundles_weight;
+FROM dm_calc.storage_sales_bundles_weight
+DISTRIBUTED BY (sales_bundle_code, dt_storage_start, warehouse_code);
+
+ANALYZE base_sw;
 
 
 ----------------------------------------------------------------------
@@ -187,6 +182,7 @@ FROM dm_calc.storage_sales_bundles_weight;
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE for_1079_base
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 SELECT
     for_1079_base_calc.purchase_contract_code,
@@ -251,6 +247,7 @@ FROM (
         ekpo.price_vat_excluded_document_currency_amount   AS netpr,
         ekpo_price.price_rate                              AS kbetr,
 
+        -- приоритеты для РФ/Азия/Европа-СВХ
         (CASE WHEN ekko.port_code IS NULL THEN 1 ELSE 0 END +
          CASE WHEN ekpo.shape_code IS NULL THEN 1 ELSE 0 END +
          CASE WHEN ekpo.etsng_code IS NULL THEN 1 ELSE 0 END +
@@ -312,17 +309,23 @@ LEFT JOIN dict_dds.settings_and_parameters_sap AS tmp_2
  AND tmp_2.parameter_code = 'S_USLST'
  AND tmp_2.range_low_value LIKE 'EU%'
  AND tmp_2.range_low_value = for_1079_base_calc.zzsrvpos
-WHERE for_1079_base_calc.rwn = 1;
+WHERE for_1079_base_calc.rwn = 1
+DISTRIBUTED REPLICATED;
+
+ANALYZE for_1079_base;
 
 
 ----------------------------------------------------------------------
 -- 4. Общая маппинг-таблица договора/позиции по RN (for_1079_map)
+--    Вместо 6 отдельных таблиц rf_cont / rf_balk_1 / rf_balk_2 / asia / euro / svh
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE for_1079_map
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 WITH
 
+-- Логика РФ-контейнеры
 rf_cont AS (
     SELECT
         s.rn,
@@ -378,6 +381,7 @@ rf_cont AS (
     WHERE s.row_num = 1
 ),
 
+-- Логика РФ-балк (точное совпадение услуги)
 rf_balk_1 AS (
     SELECT
         s.rn,
@@ -433,6 +437,7 @@ rf_balk_1 AS (
     WHERE s.row_num = 1
 ),
 
+-- Логика РФ-балк (fallback S49)
 rf_balk_2 AS (
     SELECT
         s.rn,
@@ -488,6 +493,7 @@ rf_balk_2 AS (
     WHERE s.row_num = 1
 ),
 
+-- Логика Азия
 asia AS (
     SELECT
         s.rn,
@@ -546,6 +552,7 @@ asia AS (
     WHERE s.row_num = 1
 ),
 
+-- Логика Европа (с доп. полями month_difference_2 / special)
 euro AS (
     SELECT
         s.rn,
@@ -673,6 +680,7 @@ euro AS (
     WHERE s.row_num = 1
 ),
 
+-- Логика СВХ
 svh AS (
     SELECT
         s.rn,
@@ -766,7 +774,10 @@ SELECT
     euro_month_difference_2,
     euro_special
 FROM ranked
-WHERE rn_priority = 1;
+WHERE rn_priority = 1
+DISTRIBUTED BY (rn);
+
+ANALYZE for_1079_map;
 
 
 ----------------------------------------------------------------------
@@ -774,6 +785,7 @@ WHERE rn_priority = 1;
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE for_1087
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 SELECT
     purchase_contract_code,
@@ -787,7 +799,10 @@ GROUP BY
     purchase_contract_code,
     purchase_contract_position_code,
     dt_price_condition_valid_to,
-    dt_price_condition_valid_from;
+    dt_price_condition_valid_from
+DISTRIBUTED REPLICATED;
+
+ANALYZE for_1087;
 
 
 ----------------------------------------------------------------------
@@ -795,6 +810,7 @@ GROUP BY
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE for_1090
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 WITH tmp AS (
     SELECT
@@ -856,7 +872,10 @@ SELECT
         PARTITION BY tmp.evrtn, tmp.evrtp
         ORDER BY tmp.price_scale_basis_consecutive_code
     ) AS presum
-FROM tmp;
+FROM tmp
+DISTRIBUTED REPLICATED;
+
+ANALYZE for_1090;
 
 
 ----------------------------------------------------------------------
@@ -864,6 +883,7 @@ FROM tmp;
 ----------------------------------------------------------------------
 
 CREATE TEMPORARY TABLE base_2_5
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 SELECT
     base_2.sales_bundle_code,
@@ -1008,7 +1028,10 @@ LEFT JOIN for_1087 AS f1087
   ON f1087.purchase_contract_code = m.purchase_contract_code
  AND f1087.purchase_contract_position_code = m.position_line_item_code
  AND f1087.dt_price_condition_valid_to = m.datbi
- AND f1087.dt_price_condition_valid_from = m.datab;
+ AND f1087.dt_price_condition_valid_from = m.datab
+DISTRIBUTED BY (sales_bundle_code, dt_storage_start, warehouse_code);
+
+ANALYZE base_2_5;
 
 
 ----------------------------------------------------------------------
@@ -1018,6 +1041,7 @@ LEFT JOIN for_1087 AS f1087
 DROP TABLE IF EXISTS base_3;
 
 CREATE TEMPORARY TABLE base_3
+WITH (appendonly = true, compresstype = zstd, compresslevel = 5)
 ON COMMIT DROP AS
 WITH base_local AS (
     SELECT
@@ -1091,6 +1115,7 @@ WITH base_local AS (
             - base_2_5.storage_duration_free_by_delivery_calendar_days
             AS storage_duration_payable_calendar_days,
 
+        -- локальная стоимость хранения в валюте договора
         CASE
             WHEN base_2_5.storage_cost_special_calculation_type_code = '1' THEN NULL
 
@@ -1146,6 +1171,7 @@ WITH base_local AS (
                      * base_2_5.currency_dogovor
         END AS storage_cost_calculated_amount_local,
 
+        -- сегменты платного хранения по интервалам дней
         CASE
             WHEN COALESCE(base_2_5.for_1079_euro_special,
                           base_2_5.storage_duration_total_calendar_days)
@@ -1240,7 +1266,10 @@ LEFT JOIN dict_dds.currency_rates AS rates
  AND rates.currency_from_code = bl.purchase_contract_position_currency_code
  AND rates.currency_to_code = 'USD'
  AND rates.dt_currency_rate = bl.dt_report
- AND rates.deleted_flag = FALSE;
+ AND rates.deleted_flag = FALSE
+DISTRIBUTED BY (sales_bundle_code, dt_storage_start, warehouse_code);
+
+ANALYZE base_3;
 
 
 ----------------------------------------------------------------------
@@ -1421,7 +1450,10 @@ SELECT
             THEN b3.dt_storage_end_in_release
     END AS dt_shipment_from_foreign_warehouse,
 
+    -- итоговая стоимость в USD
     b3.storage_cost_calculated_amount_usd AS storage_cost_calculated_amount,
+
+    -- локальная стоимость (валюта договора)
     b3.storage_cost_calculated_amount_local,
 
     b3.storage_payable_001_030_days_gross_weight,
@@ -1470,3 +1502,5 @@ SELECT
 
     NULL::numeric(15,3) AS metal_in_china_stock_balance_closing_weight
 FROM base_3 AS b3;
+
+ANALYZE userdata.storage_sales_bundles_amount;

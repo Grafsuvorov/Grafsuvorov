@@ -1,2 +1,254 @@
-SQL Error [42703]: ERROR: column base_2_5.storage_cost_calculated_amount_local does not exist
-  Позиция: 8334
+----------------------------------------------------------------------
+-- 8. base_3 — расчёт стоимости, платных дней и USD-конверсии (FIX)
+----------------------------------------------------------------------
+
+CREATE TEMP TABLE base_3
+ON COMMIT DROP AS
+WITH calc AS (
+    SELECT
+        base_2_5.*,
+
+        -- локальная стоимость хранения в валюте договора
+        CASE
+            WHEN base_2_5.storage_cost_special_calculation_type_code = '1' THEN NULL
+            WHEN base_2_5.storage_cost_special_calculation_type_code = '2'
+                THEN COALESCE(f1090_1.konp_kbetr, f1090_2.konp_kbetr)
+                     * base_2_5.for_1079_euro_month_difference_2
+                     * base_2_5.sales_bundle_gross_weight
+            WHEN for_prices.range_low_value IS NOT NULL
+                 AND f1090_1.evrtn IS NOT NULL
+                THEN f1090_1.konp_kbetr
+                     * (COALESCE(base_2_5.for_1079_euro_special,
+                                 base_2_5.storage_duration_total_calendar_days)
+                       - LEAST(
+                           COALESCE(base_2_5.for_1079_euro_special,
+                                    base_2_5.storage_duration_total_calendar_days),
+                           base_2_5.storage_duration_free_by_contract_calendar_days
+                         ))
+                     / base_2_5.weight_for_1090_razdel
+                     * base_2_5.weight_for_1090_umno
+                     * base_2_5.currency_dogovor
+            WHEN for_prices.range_low_value IS NOT NULL
+                 AND f1090_2.evrtn IS NOT NULL
+                THEN COALESCE(f1090_2.presum, 0)
+                     + GREATEST(
+                           COALESCE(base_2_5.for_1079_euro_special,
+                                    base_2_5.storage_duration_total_calendar_days)
+                           - f1090_2.kstbm + 1,
+                           0
+                       ) * f1090_2.konm_kbetr
+                     / base_2_5.weight_for_1090_razdel
+                     * base_2_5.weight_for_1090_umno
+                     * base_2_5.currency_dogovor
+            WHEN f1090_1.evrtn IS NOT NULL
+                THEN f1090_1.konp_kbetr
+                     * (COALESCE(base_2_5.for_1079_euro_special,
+                                 base_2_5.storage_duration_total_calendar_days)
+                       - LEAST(
+                           COALESCE(base_2_5.for_1079_euro_special,
+                                    base_2_5.storage_duration_total_calendar_days),
+                           base_2_5.storage_duration_free_by_contract_calendar_days
+                         ))
+                     * base_2_5.weight_for_1090_umno
+                     * base_2_5.currency_dogovor
+            WHEN f1090_2.evrtn IS NOT NULL
+                THEN (COALESCE(f1090_2.presum, 0)
+                      + GREATEST(
+                            COALESCE(base_2_5.for_1079_euro_special,
+                                     base_2_5.storage_duration_total_calendar_days)
+                            - f1090_2.kstbm + 1,
+                            0
+                        ) * f1090_2.konm_kbetr)
+                     * base_2_5.weight_for_1090_umno
+                     * base_2_5.currency_dogovor
+        END AS storage_cost_calculated_amount_local
+
+    FROM base_2_5
+    LEFT JOIN for_1090 AS f1090_1
+      ON f1090_1.evrtn = base_2_5.purchase_contract_code
+     AND f1090_1.evrtp = base_2_5.purchase_contract_position_code
+     AND f1090_1.dt_price_condition_valid_to = base_2_5.datbi
+     AND f1090_1.dt_price_condition_valid_from = base_2_5.datab
+     AND f1090_1.price_scale_basis_code IS NULL
+    LEFT JOIN for_1090 AS f1090_2
+      ON f1090_2.evrtn = base_2_5.purchase_contract_code
+     AND f1090_2.evrtp = base_2_5.purchase_contract_position_code
+     AND f1090_2.dt_price_condition_valid_to = base_2_5.datbi
+     AND f1090_2.dt_price_condition_valid_from = base_2_5.datab
+     AND f1090_2.price_scale_basis_code = 'C'
+     AND COALESCE(base_2_5.for_1079_euro_special,
+                  base_2_5.storage_duration_total_calendar_days)
+         BETWEEN f1090_2.kstbm AND f1090_2.kstbm_next
+    LEFT JOIN dict_dds.settings_and_parameters_sap AS for_prices
+      ON for_prices.range_low_value = base_2_5.purchase_contract_position_uom_code
+     AND for_prices.abap_program_code = '/RUSAL/ZLE112M'
+     AND for_prices.parameter_code = 'S_BPRME'
+)
+
+SELECT
+    c.sales_bundle_code,
+    c.plant_producer_delivery_code,
+    c.plant_producer_delivery_position_code,
+    c.initial_delivery_code,
+    c.material_code,
+    c.dt_shipment,
+    c.railcar_code,
+    c.transport_bill_code,
+    c.uni,
+    c.material_shape_code,
+    c.port_of_discharge_code,
+    c.dt_arrival_to_russian_port,
+    c.dt_storage_end_in_release,
+    c.transport_type_code,
+    c.etsng_code,
+    c.dt_report,
+    c.sales_bundle_net_weight,
+    c.sales_bundle_gross_weight,
+    c.batch_code,
+    c.dt_arrival,
+    c.receiving_plant_code,
+    c.sales_delivery_code,
+    c.transportation_inbound_delivery_code,
+    c.delivery_for_storage_calculation_code,
+    c.transportation_inbound_delivery_position_code,
+    c.delivery_position_for_storage_calculation_code,
+    c.forwarder_code,
+    c.storage_cost_calculation_type_name,
+    c.transport_departure_hub_code,
+    c.transport_destination_hub_code,
+    c.transportation_outbound_delivery_code,
+    c.transportation_outbound_delivery_position_code,
+    c.is_final_transportation_stage_code,
+    c.transportation_stage_code,
+    c.storage_calculation_bundle_quantity,
+    c.warehouse_code,
+    c.delivery_in_final_release_code,
+    c.dt_final_release,
+    c.bill_of_lading_code,
+    c.bill_of_lading_number,
+    c.dt_bill_of_lading,
+    c.incoterms_code,
+    c.storage_cost_special_calculation_type_code,
+    c.warehouse_storage_area_code,
+    c.plant_code,
+    c.unit_balance_code,
+    c.creditor_in_shipment_instruction_code,
+    c.dt_storage_start,
+    c.dt_shipped_from_warehouse,
+    c.dt_storage_end,
+    c.service_number,
+    c.storage_duration_total_calendar_days,
+    c.shipment_instruction_number,
+    c.dt_for_price_search_in_purchase_contract,
+    c.is_stored_in_russian_port_code,
+    c.remote_warehouse_code,
+    c.dt_transportation_stage_start_p,
+    c.dt_transportation_stage_start_r,
+    c.purchase_contract_code,
+    c.purchase_contract_position_code,
+    c.purchase_contract_position_currency_code,
+    c.service_code,
+    c.purchase_contract_position_uom_code,
+    c.storage_duration_free_by_contract_calendar_days,
+    c.storage_duration_free_by_delivery_calendar_days,
+
+    -- платные дни
+    c.storage_duration_total_calendar_days
+        - c.storage_duration_free_by_delivery_calendar_days
+        AS storage_duration_payable_calendar_days,
+
+    c.for_1079_euro_month_difference_2,
+    c.for_1079_euro_special,
+    c.currency_dogovor,
+    c.for_1087_price_scale_limit_from_quantity,
+    c.weight_for_1090_razdel,
+    c.weight_for_1090_umno,
+    c.datbi,
+    c.datab,
+    c.rn,
+
+    -- локальная стоимость (валюта договора)
+    c.storage_cost_calculated_amount_local,
+
+    -- стоимость в USD
+    CASE
+        WHEN c.purchase_contract_position_currency_code = 'USD'
+             OR c.storage_cost_calculated_amount_local IS NULL
+            THEN c.storage_cost_calculated_amount_local
+        ELSE
+            c.storage_cost_calculated_amount_local
+            * COALESCE(rates.currency_to_multiplier, 1)
+            * CASE
+                  WHEN COALESCE(rates.currency_rate, 1) > 0
+                      THEN COALESCE(rates.currency_rate, 1)
+                  ELSE 1
+              END
+            / (CASE
+                   WHEN COALESCE(rates.currency_rate, 1) < 0
+                       THEN ABS(COALESCE(rates.currency_rate, 1))
+                   ELSE 1
+               END * COALESCE(rates.currency_from_multiplier, 1))
+    END AS storage_cost_calculated_amount_usd,
+
+    -- сегменты платного хранения по интервалам дней
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days
+             BETWEEN 1 AND 30
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_001_030_days_gross_weight,
+
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days
+             BETWEEN 31 AND 60
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_031_060_days_gross_weight,
+
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days
+             BETWEEN 61 AND 90
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_061_090_days_gross_weight,
+
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days
+             BETWEEN 91 AND 180
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_091_180_days_gross_weight,
+
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days
+             BETWEEN 181 AND 365
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_181_365_days_gross_weight,
+
+    CASE
+        WHEN COALESCE(c.for_1079_euro_special,
+                      c.storage_duration_total_calendar_days)
+             - c.storage_duration_free_by_delivery_calendar_days > 365
+            THEN c.sales_bundle_gross_weight
+        ELSE 0
+    END AS storage_payable_over_365_days_gross_weight
+
+FROM calc c
+LEFT JOIN dict_dds.currency_rates AS rates
+  ON rates.currency_rate_type_code = 'M'
+ AND rates.currency_from_code = c.purchase_contract_position_currency_code
+ AND rates.currency_to_code = 'USD'
+ AND rates.dt_currency_rate = c.dt_report
+ AND rates.deleted_flag = FALSE
+DISTRIBUTED BY (sales_bundle_code);

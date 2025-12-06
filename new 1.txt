@@ -1,6 +1,3 @@
-SQL Error [42601]: ERROR: syntax error at or near "WHERE"
-  Позиция: 13078
-
 WITH bounds AS (
     SELECT
         MIN(dt_balance) AS dt_min,
@@ -249,7 +246,7 @@ SELECT
     base_1_5.id_for_unique || gs.dt_balance::text AS rn
 FROM base_1_5
 CROSS JOIN bounds b
-JOIN LATERAL generate_series(
+CROSS JOIN LATERAL generate_series(
     GREATEST(base_1_5.prev_lddat_4798, b.dt_min),
     LEAST(base_1_5.next_lddat_4798, b.dt_max),
     INTERVAL '1 day'
@@ -299,7 +296,3 @@ WHERE (base_1_5.wwgsg_01 IS NULL
        OR (base_1_5.wwgsg_01 IS NOT NULL
            AND COALESCE(base_1_5.wwgsg_01_date, DATE '9999-12-31') >= gs.dt_balance))
   AND base_1_5.rn = 1;
-
-------------------------------------------------------------
--- 7. Витрина DM (структура + распределение как в исходнике)
-------------------------------------------------------------

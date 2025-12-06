@@ -1,6 +1,325 @@
-SQL Error [42883]: ERROR: operator does not exist: interval + integer
-  Подсказка: No operator matches the given name and argument type(s). You might need to add explicit type casts.
-  Позиция: 6138
+WITH bounds AS (
+    SELECT
+        MIN(dt_balance) AS dt_min,
+        MAX(dt_balance) AS dt_max
+    FROM date_for_vitr
+)
 
+INSERT INTO userdata.storage_sales_bundles_weight (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    material_code,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    transport_type_code,
+    etsng_code,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_destination_hub_code,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    storage_calculation_bundle_quantity,
+    warehouse_code,
+    is_stored_in_russian_port_code,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    port_of_discharge_code,
+    service_number,
+    weight_for_1090_umno,
+    weight_for_1090_razdel,
+    remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    rn
+)
 
-Позиция ошибки: line: 172 pos: 6137
+SELECT
+    b.sales_bundle_code,
+    b.plant_producer_delivery_code,
+    b.plant_producer_delivery_position_code,
+    b.initial_delivery_code,
+    b.material_code,
+    b.dt_shipment,
+    b.railcar_code,
+    b.transport_bill_code,
+    b.uni,
+    b.material_shape_code,
+    b.dt_arrival_to_russian_port,
+    b.dt_storage_end_in_release,
+    b.transport_type_code,
+    b.etsng_code,
+    gs.dt_balance AS dt_report,
+    b.sales_bundle_net_weight,
+    b.sales_bundle_gross_weight,
+    b.batch_code,
+    b.dt_arrival,
+    b.receiving_plant_code,
+    b.sales_delivery_code,
+    b.transportation_inbound_delivery_code,
+    b.delivery_for_storage_calculation_code,
+    b.transportation_inbound_delivery_position_code,
+    b.delivery_position_for_storage_calculation_code,
+    b.forwarder_code,
+    b.storage_cost_calculation_type_name,
+    b.transport_departure_hub_code,
+    b.transport_destination_hub_code,
+    b.transportation_outbound_delivery_code,
+    b.transportation_outbound_delivery_position_code,
+    b.is_final_transportation_stage_code,
+    b.transportation_stage_code,
+    b.storage_calculation_bundle_quantity,
+    b.warehouse_code,
+    b.is_stored_in_russian_port_code,
+    b.delivery_in_final_release_code,
+    b.dt_final_release,
+    b.bill_of_lading_code,
+    b.bill_of_lading_number,
+    b.dt_bill_of_lading,
+    b.incoterms_code,
+    b.storage_cost_special_calculation_type_code,
+    b.warehouse_storage_area_code,
+    b.plant_code,
+    b.unit_balance_code,
+    b.creditor_in_shipment_instruction_code,
+    b.dt_storage_start,
+    b.dt_shipped_from_warehouse,
+
+    /* =========== dt_storage_end =========== */
+    CASE
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN current_date
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+             AND b.dt_shipped_from_warehouse <= gs.dt_balance
+            THEN b.dt_shipped_from_warehouse
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+            THEN gs.dt_balance
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+             AND b.dt_storage_end_in_release IS NULL
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN gs.dt_balance
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN LEAST(
+                b.dt_storage_end_in_release,
+                b.dt_shipped_from_warehouse,
+                gs.dt_balance
+            )
+    END AS dt_storage_end,
+
+    /* ==== storage_duration_total_calendar_days ==== */
+    CASE
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN (current_date - b.dt_storage_start)::int + 1
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+             AND b.dt_shipped_from_warehouse <= gs.dt_balance
+            THEN (b.dt_shipped_from_warehouse - b.dt_storage_start)::int + 1
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+            THEN (gs.dt_balance - b.dt_storage_start)::int + 1
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+             AND b.dt_storage_end_in_release IS NULL
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN (gs.dt_balance - b.dt_storage_start)::int + 1
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN (
+                LEAST(
+                    b.dt_storage_end_in_release,
+                    b.dt_shipped_from_warehouse,
+                    gs.dt_balance
+                ) - b.dt_storage_start
+            )::int + 1
+    END AS storage_duration_total_calendar_days,
+
+    b.shipment_instruction_number,
+
+    /* ===== dt_for_price_search_in_purchase_contract ===== */
+    CASE
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND b.for_1076_1_lifnr IS NOT NULL
+            THEN b.dt_arrival_to_russian_port
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN current_date
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND b.dt_shipped_from_warehouse <= gs.dt_balance
+            THEN b.dt_shipped_from_warehouse
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN gs.dt_balance
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+             AND b.dt_storage_end_in_release IS NULL
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN gs.dt_balance
+
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN LEAST(
+                b.dt_storage_end_in_release,
+                b.dt_shipped_from_warehouse,
+                gs.dt_balance
+            )
+
+        WHEN b.storage_cost_calculation_type_name = 'Логика СВХ'
+             AND b.for_1076_2_counterparty_code IS NOT NULL
+            THEN b.dt_arrival_to_russian_port
+
+        WHEN b.storage_cost_calculation_type_name = 'Логика СВХ'
+             AND b.dt_shipped_from_warehouse IS NULL
+            THEN current_date
+
+        WHEN b.storage_cost_calculation_type_name = 'Логика СВХ'
+             AND b.dt_shipped_from_warehouse <= gs.dt_balance
+            THEN b.dt_shipped_from_warehouse
+
+        WHEN b.storage_cost_calculation_type_name = 'Логика СВХ'
+            THEN gs.dt_balance
+    END AS dt_for_price_search_in_purchase_contract,
+
+    /* ===== port_of_discharge_code ===== */
+    CASE
+        WHEN b.storage_cost_calculation_type_name = 'Логика РФ-балк'
+            THEN b.SD_000649
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+             AND b.SD_000049 < gs.dt_balance
+            THEN b.SD_000054
+        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN b.SD_000044
+    END AS port_of_discharge_code,
+
+    /* ========= service_number ========== */
+    CASE
+        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика Азия','Логика СВХ')
+            THEN 'S49'
+        WHEN b.storage_cost_calculation_type_name = 'Логика РФ-балк'
+             AND stmatl.storage_method_code = '1'
+            THEN 'S49/3'
+        WHEN b.storage_cost_calculation_type_name = 'Логика РФ-балк'
+            THEN 'S49/2'
+        WHEN b.storage_cost_calculation_type_name = 'Логика Европа'
+             AND for_1083_4.range_low_value IS NOT NULL
+            THEN 'S49'
+        WHEN b.storage_cost_calculation_type_name = 'Логика Европа'
+             AND for_1082_1.range_low_value IS NOT NULL
+            THEN for_1082_2.res
+        WHEN b.storage_cost_calculation_type_name = 'Логика Европа'
+            THEN for_1082_3.res
+    END AS service_number,
+
+    b.weight_for_1090_umno,
+    NULLIF(b.weight_for_1090_razdel, 0) AS weight_for_1090_razdel,
+    b.SD_000420 AS remote_warehouse_code,
+
+    CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+         THEN b.dt_transportation_stage_start_p END,
+    CASE WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+         THEN b.dt_arrival END,
+
+    b.id_for_unique || gs.dt_balance::text AS rn
+
+FROM base_1_5 b
+CROSS JOIN bounds d
+CROSS JOIN LATERAL generate_series(
+    GREATEST(b.prev_lddat_4798, d.dt_min),
+    LEAST(b.next_lddat_4798, d.dt_max),
+    INTERVAL '1 day'
+) AS gs(dt_balance)
+
+LEFT JOIN dict_dds.location_sales losa
+    ON b.storage_cost_calculation_type_name = 'Логика РФ-балк'
+   AND losa.transport_hub_code =
+        CASE
+            WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+                THEN b.SD_000649
+            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+                 AND b.SD_000049 < gs.dt_balance
+                THEN b.SD_000054
+            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+                THEN b.SD_000044
+        END
+
+LEFT JOIN dict_dds.storage_method_at_tsw_location stmatl
+    ON b.storage_cost_calculation_type_name = 'Логика РФ-балк'
+   AND stmatl.tsw_location_code = losa.location_code
+   AND stmatl.material_shape_code =
+        CASE
+            WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+                THEN b.SD_000649
+            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+                 AND b.SD_000049 < gs.dt_balance
+                THEN b.SD_000054
+            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+                THEN b.SD_000044
+        END
+
+LEFT JOIN for_1082_1
+    ON b.storage_cost_calculation_type_name = 'Логика Европа'
+   AND for_1082_1.range_low_value = b.material_shape_code
+
+LEFT JOIN for_1082_2
+    ON b.storage_cost_calculation_type_name = 'Логика Европа'
+   AND for_1082_2.rn = 1
+
+LEFT JOIN for_1082_3
+    ON b.storage_cost_calculation_type_name = 'Логика Европа'
+   AND for_1082_3.rn = 1
+
+LEFT JOIN dict_dds.settings_and_parameters_sap for_1083_4
+    ON for_1083_4.abap_program_code = '/RUSAL/ZLE112M'
+   AND for_1083_4.case_code = 'PERET_FRN'
+   AND for_1083_4.parameter_code = 'S_LIFNRA'
+   AND for_1083_4.range_low_value = b.forwarder_code
+
+LEFT JOIN dict_dds.transportation_warehouse_storage_area trwsa
+    ON trwsa.plant_code = b.receiving_plant_code
+   AND trwsa.transport_hub_code = b.warehouse_code
+   AND trwsa.transportation_stage_code = b.transportation_stage_code
+
+WHERE
+    (b.wwgsg_01 IS NULL OR COALESCE(b.wwgsg_01_date, DATE '9999-12-31') >= gs.dt_balance)
+    AND b.rn = 1;

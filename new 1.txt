@@ -1,3 +1,984 @@
+------------------------------------------------------------
+-- 1. Целевая таблица dm_calc.storage_sales_bundles_weight
+------------------------------------------------------------
+
+
+------------------------------------------------------------
+-- 2. Вспомогательные временные таблицы
+------------------------------------------------------------
+
+-- LAKE: данные из озера (sd_sales_main_scm + 4798)
+CREATE TEMP TABLE lake --ON COMMIT drop
+AS
+WITH ranked AS (
+    SELECT
+        ssms.delivery_number_sales,
+        ssms.delivery_number_of_producer_plant    AS SD_000003,
+        ssms.delivery_item_of_plant               AS SD_000110,
+        ssms.delivery_number_initial              AS SD_000001,
+        ssms.material_code                        AS SD_000143,
+        ssms.dt_shipment                          AS SD_000010,
+        ssms.railcar                              AS SD_000013,
+        ssms.transport_bill                       AS SD_000014,
+        ssms.uni                                  AS SD_000151,
+        ssms.port_of_discharge_in_foreign_port_code AS SD_000054,
+        ssms.port_of_loading_code                 AS SD_000649,
+        ssms.port_of_discharge_code               AS SD_000044,
+        ssms.transport_railcar_type_code          AS SD_000028,
+        ssms.bill_of_lading_group_code            AS SD_000040,
+        ssms.bill_of_lading_number                AS SD_000041,
+        ssms.dt_bill_of_lading                    AS SD_000042,
+        ssms.dt_final_release                     AS SD_000482,
+        ssms.batch                                AS SD_000004,
+        ssms.delivery_basis                       AS SD_000067,
+        ssms.bill_of_lading_group_code_in_foreign_port AS SD_000047,
+        ssms.bill_of_lading_in_foreign_port       AS SD_000048,
+        ssms.dt_bill_of_lading_in_foreign_port    AS SD_000049,
+        ssms.dt_warehouse                         AS SD_000024,
+        sd4798.sales_bundle_code,
+        ROW_NUMBER() OVER (
+            PARTITION BY sd4798.sales_bundle_code
+            ORDER BY source_system_position_code DESC, ssms.delivery_number_initial DESC
+        ) AS rn
+    FROM dm_calc.sd_sales_main_scm AS ssms
+    JOIN dds.sales_bundle_and_delivery_relationship AS sd4798
+      ON ssms.delivery_number_sales = sd4798.delivery_code
+)
+SELECT *
+FROM ranked
+WHERE rn = 1
+DISTRIBUTED BY (sales_bundle_code);
+
+-- Уникальное соответствие адрес → страна
+CREATE TEMP TABLE adrc-- ON COMMIT drop
+AS
+SELECT
+    address_code,
+    MIN(country_code) AS country_code
+FROM dict_dds.address
+GROUP BY address_code
+DISTRIBUTED REPLICATED;
+
+-- Азия (LE.001064)
+CREATE TEMP TABLE asia --ON COMMIT drop
+AS
+SELECT
+    counterparty_code
+FROM dict_dds.transportation_storage_calculation_method
+GROUP BY counterparty_code
+DISTRIBUTED REPLICATED;
+
+-- Европа: вариант 1 (по service_code)
+CREATE TEMP TABLE euro_1 --ON COMMIT DROP 
+AS
+SELECT
+    counterparty_code
+FROM dict_dds.transportation_storage_calculation_method
+WHERE service_code LIKE 'EU%'
+GROUP BY counterparty_code
+DISTRIBUTED REPLICATED;
+
+-- Европа: вариант 2 (все контрагенты)
+CREATE TEMP TABLE euro_2-- ON COMMIT drop
+AS
+SELECT
+    counterparty_code
+FROM dict_dds.transportation_storage_calculation_method
+GROUP BY counterparty_code
+DISTRIBUTED REPLICATED;
+
+-- Настройки для логики Европа
+CREATE TEMP TABLE euro_log-- ON COMMIT DROP 
+AS
+SELECT
+    range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
+  AND case_code = 'PERET_FRN'
+  AND parameter_code = 'S_LIFNRA'
+  AND range_low_value IS NOT NULL
+GROUP BY range_low_value
+DISTRIBUTED REPLICATED;
+
+-- СВХ
+CREATE TEMP TABLE svh --ON COMMIT DROP 
+AS
+SELECT
+    counterparty_code
+FROM dict_dds.transportation_general_calculation_method
+WHERE general_calculation_method_code IN ('16','04')
+GROUP BY counterparty_code
+DISTRIBUTED REPLICATED;
+
+-- Азия лог
+CREATE TEMP TABLE asia_log --ON COMMIT DROP 
+AS
+SELECT
+    range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code ILIKE '/RUSAL/ZLE112m'
+  AND case_code = 'PERET_FRN'
+  AND parameter_code = 'LIFNR_FR'
+  AND range_low_value IS NOT NULL
+GROUP BY range_low_value
+DISTRIBUTED REPLICATED;
+
+-- Кол-во пакетов в поставке хранения (LE.001035)
+CREATE TEMP TABLE for_LE_001035-- ON COMMIT drop
+AS
+SELECT
+    delivery_code,
+    batch_code,
+    COUNT(*) AS cnt
+FROM dds.sales_bundle_and_delivery_relationship
+WHERE is_deleted_code IS NULL
+GROUP BY delivery_code, batch_code
+DISTRIBUTED BY (delivery_code);
+
+-- Календарь для витрины (весь нужный период)
+CREATE TEMP TABLE date_for_vitr-- ON COMMIT DROP 
+AS
+SELECT
+    dt_balance::date AS dt_balance
+FROM generate_series(
+        current_date - INTERVAL '1 year',
+        current_date,
+        INTERVAL '1 day'
+     ) AS t(dt_balance)
+DISTRIBUTED REPLICATED;
+
+-- Настройка даты окончания бесплатного хранения (LE.001055)
+CREATE TEMP TABLE for_1055 --ON COMMIT drop
+AS
+SELECT
+    vbss.delivery_code AS vbeln,
+    MIN(vbsk.dt_end_of_free_storage) AS dt_end_of_free_storage
+FROM dds.logistics_document_and_delivery_relationship vbss
+LEFT JOIN dds.release vbsk
+    ON vbsk.release_code = vbss.logistics_document_code
+   AND vbsk.release_type_code = 'X'
+LEFT JOIN dict_dds.settings_and_parameters_sap frel_kod
+    ON vbsk.release_template_code = frel_kod.range_low_value
+WHERE frel_kod.abap_program_code = '/RUSAL/SD2921M'
+  AND frel_kod.parameter_code = 'FREL_KOD'
+  AND frel_kod.range_sign_code = 'I'
+  AND frel_kod.range_option_code = 'EQ'
+  AND vbsk.release_code IS NOT NULL
+  AND vbsk.dt_end_of_free_storage IS NOT NULL
+GROUP BY vbss.delivery_code
+DISTRIBUTED REPLICATED;
+
+-- Связка delivery → sales_document
+CREATE TEMP TABLE dedopo_2-- ON COMMIT drop
+AS
+SELECT
+    delivery_code,
+    sales_document_code
+FROM dds.delivery_document_position
+WHERE sales_document_code IS NOT NULL
+GROUP BY delivery_code, sales_document_code
+DISTRIBUTED BY (delivery_code);
+
+------------------------------------------------------------
+-- 3. BASE: начальный набор полей витрины
+------------------------------------------------------------
+
+CREATE TEMP TABLE base-- ON COMMIT DROP 
+AS
+WITH forwapd_1 AS (
+    SELECT
+        transport_hub_code,
+        MIN(market_region1_code) AS market_region1_code
+    FROM dict_dds.foreign_warehouse_priority_definition
+    WHERE market_region1_code IN ('03','04')
+      AND (is_terminal_code IS NOT NULL
+           OR is_foreign_warehouse_code IS NOT NULL
+           OR is_temporary_warehouse_code IS NOT NULL)
+    GROUP BY transport_hub_code
+),
+forwapd_2 AS (
+    SELECT DISTINCT transport_hub_code
+    FROM dict_dds.foreign_warehouse_priority_definition
+    WHERE is_russian_port_code IS NOT NULL
+)
+SELECT
+    t4.sales_bundle_code                             AS sales_bundle_code,
+    lake.SD_000003                                   AS plant_producer_delivery_code,
+    lake.SD_000110                                   AS plant_producer_delivery_position_code,
+    lake.SD_000001                                   AS initial_delivery_code,
+    lake.SD_000143                                   AS material_code,
+    lake.SD_000010                                   AS dt_shipment,
+    lake.SD_000013                                   AS railcar_code,
+    lake.SD_000014                                   AS transport_bill_code,
+    lake.SD_000151                                   AS uni,
+    maspe.shape_code                                 AS material_shape_code,
+    lake.SD_000028                                   AS transport_type_code,
+    mater.etsng_code                                 AS etsng_code,
+    sabu.sales_bundle_net_weight / 1000              AS sales_bundle_net_weight,
+    sabu.sales_bundle_gross_weight / 1000            AS sales_bundle_gross_weight,
+    lake.SD_000004                                   AS batch_code,
+    t4.dt_transportation_stage_start_r               AS dt_arrival,
+
+    dedopo_1.plant_producer_code                     AS receiving_plant_code,
+    lake.delivery_number_sales                       AS sales_delivery_code,
+
+    CASE
+        WHEN forwapd_1.transport_hub_code IS NOT NULL
+        THEN t4.delivery_code_le_p
+    END                                              AS transportation_inbound_delivery_code,
+
+    CASE
+        WHEN forwapd_1.market_region1_code = '03'
+             AND sabadr_03.delivery_code IS NOT NULL
+             THEN sabadr_03.delivery_code
+        WHEN forwapd_1.market_region1_code = '04'
+             AND sabadr_04.delivery_code IS NOT NULL
+             THEN sabadr_04.delivery_code
+        WHEN forwapd_2.transport_hub_code IS NOT NULL
+             THEN lake.delivery_number_sales
+    END                                              AS delivery_for_storage_calculation_code,
+
+    CASE
+        WHEN forwapd_1.market_region1_code = '03'
+             AND sabadr_03.delivery_code IS NOT NULL
+             THEN NULL
+        WHEN forwapd_1.market_region1_code = '04'
+             AND sabadr_04.delivery_code IS NOT NULL
+             THEN NULL
+        WHEN forwapd_2.transport_hub_code IS NOT NULL
+             THEN '1'
+    END                                              AS wwgsg_01,
+
+    CASE
+        WHEN forwapd_1.market_region1_code = '03'
+             AND sabadr_03.delivery_code IS NOT NULL
+             THEN NULL
+        WHEN forwapd_1.market_region1_code = '04'
+             AND sabadr_04.delivery_code IS NOT NULL
+             THEN NULL
+        WHEN forwapd_2.transport_hub_code IS NOT NULL
+             THEN vbsk.dt_bill_of_lading
+    END                                              AS wwgsg_01_date,
+
+    t4.transportation_inbound_delivery_position_code AS transportation_inbound_delivery_position_code,
+
+    CASE
+        WHEN forwapd_1.market_region1_code = '03'
+             AND sabadr_03.delivery_code IS NOT NULL
+             THEN t4.transportation_inbound_delivery_position_code
+        WHEN forwapd_1.market_region1_code = '04'
+             AND sabadr_04.delivery_code IS NOT NULL
+             THEN t4.transportation_inbound_delivery_position_code
+        ELSE '10'
+    END                                              AS delivery_position_for_storage_calculation_code,
+
+    COALESCE(ascr_1.supplier_code, ascr_2.supplier_code) AS forwarder_code,
+
+    CASE
+        WHEN likp.delivery_type_code <> 'ZLE'
+             AND lake.SD_000028 = 'TL04'
+             THEN 'Логика РФ-контейнеры'
+        WHEN likp.delivery_type_code <> 'ZLE'
+             AND lake.SD_000028 <> 'TL04'
+             THEN 'Логика РФ-балк'
+        WHEN likp.delivery_type_code = 'ZLE'
+             AND asia_log.range_low_value IS NOT NULL
+             AND asia.counterparty_code IS NULL
+             THEN 'Логика Азия'
+        WHEN likp.delivery_type_code = 'ZLE'
+             AND euro_1.counterparty_code IS NOT NULL
+             THEN 'Логика Европа'
+        WHEN likp.delivery_type_code = 'ZLE'
+             AND euro_2.counterparty_code IS NOT NULL
+             AND euro_log.range_low_value IS NOT NULL
+             THEN 'Логика Европа'
+        WHEN likp.delivery_type_code = 'ZLE'
+             AND svh.counterparty_code IS NOT NULL
+             THEN 'Логика СВХ'
+        ELSE 'Логика не определена'
+    END                                              AS storage_cost_calculation_type_name,
+
+    sbudr_base.transport_route_departure_hub_code   AS transport_departure_hub_code,
+    sbudr_base.transport_route_destination_hub_code AS transport_destination_hub_code,
+    sbudr_base.is_final_transportation_stage_code   AS SD_000902,
+    sbudr_base.transportation_stage_code            AS SD_000903,
+    for_LE_001035.cnt                               AS SD_000905,
+
+    lake.SD_000482,
+    lake.SD_000041,
+    lake.SD_000042,
+    lake.SD_000047,
+    lake.SD_000048,
+    lake.SD_000054,
+    lake.SD_000049,
+    lake.SD_000067,
+    lake.SD_000649,
+    lake.SD_000044,
+    lake.SD_000040,
+    t4.delivery_code_le_r                           AS SD_000516,
+    t4.transportation_outbound_delivery_position_code AS SD_000897,
+    likp.weight_net                                 AS ntgew,
+    likp.weight_net_with_wirerod                    AS btgew,
+    t4.knote                                        AS SD_000420,
+    likp.dt_loaded                                  AS likp_lddat,
+
+    CASE
+        WHEN forwapd_1.market_region1_code = '03'
+             AND sabadr_03.delivery_code IS NOT NULL
+             THEN NULL
+        WHEN forwapd_1.market_region1_code = '04'
+             AND sabadr_04.delivery_code IS NOT NULL
+             THEN NULL
+        ELSE lake.SD_000024
+    END                                              AS dt_arrival_to_russian_port,
+
+    t4.dt_transportation_stage_start_p,
+    COALESCE(t4.dt_transportation_stage_start_r, current_date) AS dt_transportation_stage_start_r,
+    CONCAT(t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code) AS id_for_unique,
+
+    COALESCE(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start) AS lddat_4798,
+    COALESCE(sabadr_03.delivery_code, sabadr_04.delivery_code)                                 AS vbeln_4798,
+
+    LAG(COALESCE(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start))
+        OVER (PARTITION BY t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code
+              ORDER BY COALESCE(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start)) AS prev_lddat_4798_raw,
+
+    LEAD(COALESCE(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start))
+        OVER (PARTITION BY t4.sales_bundle_code, t4.delivery_code, t4.delivery_position_code
+              ORDER BY COALESCE(sabadr_03.dt_transportation_stage_start, sabadr_04.dt_transportation_stage_start)) AS next_lddat_4798_raw,
+
+    for_1055.dt_end_of_free_storage AS dt_storage_end_in_release
+FROM dm_calc.sales_bundle_transport_hub_turnover_sdt0004 AS t4
+LEFT JOIN lake
+    ON t4.sales_bundle_code = lake.sales_bundle_code
+LEFT JOIN dds.bill_of_lading vbsk
+    ON vbsk.bill_of_lading_code = lake.SD_000040
+   AND vbsk.bill_of_lading_type_code = 'Y'
+LEFT JOIN for_1055
+    ON for_1055.vbeln = lake.delivery_number_sales
+LEFT JOIN dict_dds.material mater
+    ON mater.material_code = lake.SD_000143
+LEFT JOIN dds.sales_bundle sabu
+    ON sabu.sales_bundle_code = t4.sales_bundle_code
+LEFT JOIN forwapd_1
+    ON forwapd_1.transport_hub_code = t4.knote
+LEFT JOIN forwapd_2
+    ON forwapd_2.transport_hub_code = t4.knote
+LEFT JOIN dds.sales_bundle_and_delivery_relationship sabadr_03
+    ON sabadr_03.sales_bundle_code = t4.sales_bundle_code
+   AND sabadr_03.transportation_stage_code IN (
+        SELECT range_low_value
+        FROM dict_dds.settings_and_parameters_sap
+        WHERE abap_program_code = '/RUSAL/SD2973M_2'
+          AND parameter_code IN ('STAGE_EU')
+          AND range_low_value IS NOT NULL
+        GROUP BY range_low_value
+   )
+   AND sabadr_03.transport_route_destination_hub_code = t4.knote
+   AND forwapd_1.market_region1_code = '03'
+   AND sabadr_03.is_deleted_code IS NULL
+   AND sabadr_03.dt_transportation_stage_start <= COALESCE(t4.dt_transportation_stage_start_r, current_date)
+   AND sabadr_03.dt_transportation_stage_start >= COALESCE(t4.dt_transportation_stage_start_p, current_date)
+LEFT JOIN dds.sales_bundle_and_delivery_relationship sabadr_04
+    ON sabadr_04.sales_bundle_code = t4.sales_bundle_code
+   AND sabadr_04.transportation_stage_code IN (
+        SELECT range_low_value
+        FROM dict_dds.settings_and_parameters_sap
+        WHERE abap_program_code = '/RUSAL/SD2973M_2'
+          AND parameter_code IN ('STAGE_A')
+          AND range_low_value IS NOT NULL
+        GROUP BY range_low_value
+   )
+   AND sabadr_04.transport_route_destination_hub_code = t4.knote
+   AND forwapd_1.market_region1_code = '04'
+   AND sabadr_04.is_deleted_code IS NULL
+   AND sabadr_04.dt_transportation_stage_start <= COALESCE(t4.dt_transportation_stage_start_r, current_date)
+   AND sabadr_04.dt_transportation_stage_start >= COALESCE(t4.dt_transportation_stage_start_p, current_date)
+LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_base
+    ON sbudr_base.sales_bundle_code = t4.sales_bundle_code
+   AND sbudr_base.delivery_code = t4.delivery_code_le_p
+   AND sbudr_base.delivery_position_code = t4.transportation_inbound_delivery_position_code
+   AND sbudr_base.is_deleted_code IS NULL
+LEFT JOIN dds.delivery_document_position dedopo_1
+    ON dedopo_1.delivery_code = lake.delivery_number_sales
+LEFT JOIN dds.sales_document_counterparty_role ascr_1
+    ON ascr_1.sales_document_code = t4.delivery_code_le_p
+   AND ascr_1.counterparty_role_code IN ('XR')
+LEFT JOIN dds.sales_document_counterparty_role ascr_2
+    ON ascr_2.sales_document_code = t4.delivery_code_le_p
+   AND ascr_2.counterparty_role_code IN ('ZU')
+LEFT JOIN dds.delivery_document_header likp
+    ON likp.delivery_code = CASE
+                                WHEN forwapd_1.market_region1_code = '03'
+                                     AND sabadr_03.delivery_code IS NOT NULL
+                                     THEN sabadr_03.delivery_code
+                                WHEN forwapd_1.market_region1_code = '04'
+                                     AND sabadr_04.delivery_code IS NOT NULL
+                                     THEN sabadr_04.delivery_code
+                                WHEN forwapd_2.transport_hub_code IS NOT NULL
+                                     THEN lake.delivery_number_sales
+                             END
+LEFT JOIN asia
+    ON asia.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN euro_1
+    ON euro_1.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN euro_2
+    ON euro_2.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN svh
+    ON svh.counterparty_code = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN asia_log
+    ON asia_log.range_low_value = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN euro_log
+    ON euro_log.range_low_value = COALESCE(ascr_1.supplier_code, ascr_2.supplier_code)
+LEFT JOIN dict_dds.material_specification maspe
+    ON maspe.material_code = lake.SD_000143
+LEFT JOIN for_LE_001035
+    ON for_LE_001035.delivery_code = t4.delivery_code_le_p
+   AND for_LE_001035.batch_code = lake.SD_000004
+WHERE t4.dt_transportation_stage_start_p <= (SELECT MAX(dt_balance) FROM date_for_vitr)
+  AND COALESCE(t4.dt_transportation_stage_start_r, current_date) >= (SELECT MIN(dt_balance) FROM date_for_vitr)
+  AND t4.dt_transportation_stage_start_p <> COALESCE(t4.dt_transportation_stage_start_r, DATE '2299-12-31')
+  AND t4.transport_route_destination_hub_code LIKE 'G%'
+  AND CASE
+          WHEN forwapd_1.market_region1_code = '03' AND sabadr_03.delivery_code IS NOT NULL
+              THEN sabadr_03.delivery_code
+          WHEN forwapd_1.market_region1_code = '04' AND sabadr_04.delivery_code IS NOT NULL
+              THEN sabadr_04.delivery_code
+          WHEN forwapd_2.transport_hub_code IS NOT NULL
+              THEN lake.delivery_number_sales
+      END IS NOT NULL
+DISTRIBUTED BY (sales_bundle_code, plant_producer_delivery_code);
+
+-- Нормализация prev/next дат (чтобы не было NULL)
+ALTER TABLE base
+    ADD COLUMN prev_lddat_4798 date,
+    ADD COLUMN next_lddat_4798 date;
+
+UPDATE base
+SET prev_lddat_4798 = GREATEST(
+        COALESCE(prev_lddat_4798_raw, lddat_4798),
+        dt_transportation_stage_start_p
+    )::date,
+    next_lddat_4798 = COALESCE(
+        (next_lddat_4798_raw - INTERVAL '1 day')::date,
+        dt_transportation_stage_start_r
+    );
+
+------------------------------------------------------------
+-- 4. TEMP для 1082 / 1047 / 1078 / 1076 / 1083 и проч.
+------------------------------------------------------------
+
+CREATE TEMP TABLE for_1082_1 --ON COMMIT DROP 
+AS
+SELECT
+    range_low_value
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/SD4553M'
+  AND parameter_code = 'FORMSTEU'
+  AND range_low_value IS NOT NULL
+GROUP BY range_low_value
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE for_1082_2 --ON COMMIT drop
+AS
+SELECT
+    string_agg(range_low_value, ', ') AS res,
+    1 AS rn
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/SD4553M'
+  AND parameter_code = 'S_USLSTC'
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE for_1082_3 --ON COMMIT drop
+AS
+SELECT
+    string_agg(range_low_value, ', ') AS res,
+    1 AS rn
+FROM dict_dds.settings_and_parameters_sap
+WHERE abap_program_code = '/RUSAL/SD4553M'
+  AND parameter_code = 'S_USLST'
+  AND range_low_value LIKE 'EU%'
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE for_1047_1 --ON COMMIT DROP 
+AS
+SELECT
+    sales_bundle_code,
+    transportation_stage_code,
+    transport_route_departure_hub_code,
+    transport_route_destination_hub_code
+FROM (
+    SELECT
+        sabasr.sales_bundle_code,
+        sabasr.transportation_stage_code,
+        sabasr.transport_route_departure_hub_code,
+        sabasr.transport_route_destination_hub_code,
+        ROW_NUMBER() OVER (
+            PARTITION BY sabasr.sales_bundle_code
+            ORDER BY sabasr.transportation_stage_code DESC,
+                     sabasr.delivery_code DESC,
+                     sabasr.transport_route_departure_hub_code,
+                     sabasr.transport_route_destination_hub_code
+        ) AS rn
+    FROM dds.sales_bundle_and_delivery_relationship sabasr
+    JOIN dict_dds.foreign_warehouse_priority_definition fowapde
+      ON sabasr.is_deleted_code IS NULL
+     AND sabasr.transportation_stage_code IN ('10','15','16','25')
+     AND fowapde.is_russian_port_code IS NOT NULL
+     AND fowapde.market_region1_code = '01'
+     AND fowapde.transport_hub_code = CASE
+                                         WHEN transportation_stage_code = '25'
+                                             THEN sabasr.transport_route_departure_hub_code
+                                         ELSE sabasr.transport_route_destination_hub_code
+                                      END
+) AS t
+WHERE rn = 1
+DISTRIBUTED BY (sales_bundle_code);
+
+CREATE TEMP TABLE trscm --ON COMMIT DROP 
+AS
+SELECT
+    counterparty_code,
+    calculation_method_code
+FROM dict_dds.transportation_storage_calculation_method
+GROUP BY counterparty_code, calculation_method_code
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE sbudr_1 --ON COMMIT drop
+AS
+SELECT
+    sales_bundle_code,
+    delivery_code,
+    batch_code,
+    transportation_stage_code,
+    transport_route_destination_hub_code
+FROM (
+    SELECT
+        sales_bundle_code,
+        delivery_code,
+        batch_code,
+        transportation_stage_code,
+        transport_route_destination_hub_code,
+        ROW_NUMBER() OVER (PARTITION BY sales_bundle_code, delivery_code) AS rn
+    FROM dds.sales_bundle_and_delivery_relationship
+    WHERE is_deleted_code IS NULL
+) AS t
+WHERE rn = 1
+DISTRIBUTED BY (sales_bundle_code);
+
+CREATE TEMP TABLE zlet43_1 --ON COMMIT drop
+AS
+SELECT
+    plant_code,
+    counterparty_code,
+    unit_balance_of_storage_agreement_code
+FROM (
+    SELECT
+        plant_code,
+        counterparty_code,
+        unit_balance_of_storage_agreement_code,
+        ROW_NUMBER() OVER (PARTITION BY plant_code, counterparty_code
+                           ORDER BY unit_balance_of_storage_agreement_code) AS rn
+    FROM dict_dds.map_trader_to_unit_balance_of_storage_agreement
+) AS t
+WHERE rn = 1
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE ekpa --ON COMMIT DROP 
+AS
+SELECT
+    shipment_instruction_code AS objek,
+    shipment_instruction_counterparty_code AS counterparty_code
+FROM dds.sales_order_header
+WHERE shipment_instruction_counterparty_code IS NOT NULL
+GROUP BY shipment_instruction_code, shipment_instruction_counterparty_code
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE vbak --ON COMMIT drop
+AS
+SELECT
+    sales_request_for_proposal_code AS vbeln,
+    shipment_instruction_code       AS zznoi
+FROM dds.sales_request_for_proposal_header
+WHERE shipment_instruction_code IS NOT NULL
+
+UNION ALL
+SELECT
+    sales_contract_code AS vbeln,
+    shipment_instruction_code
+FROM dds.sales_contract_header
+WHERE shipment_instruction_code IS NOT NULL
+
+UNION ALL
+SELECT
+    sales_order_code AS vbeln,
+    shipment_instruction_code
+FROM dds.sales_order_header
+WHERE shipment_instruction_code IS NOT NULL
+DISTRIBUTED REPLICATED;
+
+CREATE TEMP TABLE for_1078-- ON COMMIT DROP 
+AS
+SELECT
+    tech_etl.util_text_to_null_validation("LIFNR") AS counterparty_code,
+    MAX(tech_etl.util_text_to_null_validation("WERKS")) AS plant_code
+FROM dict_stg."ZLE112T33"
+WHERE tech_etl.util_text_to_null_validation("WERKS") IS NOT NULL
+GROUP BY "LIFNR"
+DISTRIBUTED REPLICATED;
+
+------------------------------------------------------------
+-- 5. BASE_1_5: продолжение логики на основе base
+------------------------------------------------------------
+
+CREATE TEMP  TABLE base_1_5 --ON COMMIT drop
+AS
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    base.material_code,
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+    base.material_shape_code,
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.transport_type_code,
+    base.etsng_code,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+    base.transport_departure_hub_code,
+    base.transport_destination_hub_code,
+    base.SD_000049,
+    base.SD_000044,
+    base.wwgsg_01_date,
+    base.id_for_unique,
+    base.vbeln_4798,
+    base.SD_000054,
+    base.wwgsg_01,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000516
+    END AS transportation_outbound_delivery_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000897
+    END AS transportation_outbound_delivery_position_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000902
+    END AS is_final_transportation_stage_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000903
+    END AS transportation_stage_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000905
+    END AS storage_calculation_bundle_quantity,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code = '25'
+             THEN for_1047_1.transport_route_departure_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code <> '25'
+             THEN for_1047_1.transport_route_destination_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN for_1047_2.transport_route_destination_hub_code
+    END AS warehouse_code,
+
+    tr_hub.is_seaport AS is_stored_in_russian_port_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.sales_delivery_code
+    END AS delivery_in_final_release_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000482
+    END AS dt_final_release,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.SD_000040
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN base.SD_000047
+    END AS bill_of_lading_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.SD_000041
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN base.SD_000048
+    END AS bill_of_lading_number,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.SD_000042
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа')
+            THEN base.SD_000049
+    END AS dt_bill_of_lading,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.SD_000067
+    END AS incoterms_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика Европа'
+            THEN trscm.calculation_method_code
+    END AS storage_cost_special_calculation_type_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика Азия'
+            THEN trwsa.warehouse_storage_area_code
+    END AS warehouse_storage_area_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+            THEN '1121'
+        WHEN base.storage_cost_calculation_type_name = 'Логика Европа'
+            THEN COALESCE(for_1078.plant_code, '1521')
+        WHEN base.storage_cost_calculation_type_name = 'Логика Азия'
+            THEN COALESCE(zlet43_1.unit_balance_of_storage_agreement_code, zlet43_2.unit_balance_of_storage_agreement_code)
+    END AS plant_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+            THEN '1120'
+        WHEN base.storage_cost_calculation_type_name = 'Логика Европа'
+            THEN valuar.unit_balance_code
+        WHEN base.storage_cost_calculation_type_name = 'Логика Азия'
+            THEN valuar.unit_balance_code
+    END AS unit_balance_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN COALESCE(ekpa.counterparty_code, vbpa.supplier_code)
+    END AS creditor_in_shipment_instruction_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.dt_arrival_to_russian_port
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.likp_lddat
+    END AS dt_storage_start,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.SD_000042
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN sbudr_2.dt_transportation_stage_start
+    END AS dt_shipped_from_warehouse,
+
+    CASE
+        WHEN base.delivery_for_storage_calculation_code = base.transportation_inbound_delivery_code
+            THEN NULL
+        ELSE vbak.zznoi
+    END AS shipment_instruction_number,
+
+    sbudr_2.dt_transportation_stage_start AS sbudr_2_dt_transportation_stage_start,
+    base.SD_000042,
+    base.SD_000649,
+    base.SD_000420,
+    for_1076_1.counterparty_code AS for_1076_1_lifnr,
+    for_1076_2.counterparty_code AS for_1076_2_counterparty_code,
+    base.likp_lddat,
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.sales_bundle_net_weight
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ')
+             AND zle112t37t3.lifnr IS NOT NULL
+            THEN base.sales_bundle_net_weight
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ')
+            THEN base.sales_bundle_gross_weight
+    END AS weight_for_1090_umno,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN base.ntgew
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ')
+             AND zle112t37t3.lifnr IS NOT NULL
+            THEN base.ntgew
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Европа','Логика Азия','Логика СВХ')
+            THEN base.btgew
+    END AS weight_for_1090_razdel,
+
+    base.lddat_4798,
+    CASE
+        WHEN base.prev_lddat_4798 IS NULL
+            THEN GREATEST(base.lddat_4798, base.dt_transportation_stage_start_p)
+        ELSE GREATEST(base.lddat_4798, base.dt_transportation_stage_start_p)
+    END AS prev_lddat_4798,
+    CASE
+        WHEN base.next_lddat_4798 = base.lddat_4798
+            THEN base.dt_transportation_stage_start_r
+        ELSE COALESCE(base.next_lddat_4798, base.dt_transportation_stage_start_r)::date
+    END AS next_lddat_4798,
+
+    ROW_NUMBER() OVER (
+        PARTITION BY base.id_for_unique,
+                     CASE
+                         WHEN base.prev_lddat_4798 = base.lddat_4798
+                             THEN GREATEST(base.lddat_4798, base.dt_transportation_stage_start_p)
+                         ELSE COALESCE(base.prev_lddat_4798 + INTERVAL '1 day',
+                                       base.dt_transportation_stage_start_p)::date
+                     END
+        ORDER BY base.vbeln_4798 DESC, sbudr_2.dt_transportation_stage_start
+    ) AS rn
+FROM base
+LEFT JOIN dict_dds.tech_zle112t37t3 zle112t37t3
+    ON zle112t37t3.lifnr = base.forwarder_code
+   AND zle112t37t3.brutto IS NULL
+LEFT JOIN for_1078
+    ON base.storage_cost_calculation_type_name = 'Логика Европа'
+   AND for_1078.counterparty_code = base.forwarder_code
+LEFT JOIN dedopo_2
+    ON dedopo_2.delivery_code = base.plant_producer_delivery_code
+LEFT JOIN vbak
+    ON vbak.vbeln = dedopo_2.sales_document_code
+LEFT JOIN for_1047_1
+    ON for_1047_1.sales_bundle_code = base.sales_bundle_code
+LEFT JOIN dds.sales_bundle_and_delivery_relationship for_1047_2
+    ON for_1047_2.sales_bundle_code = base.sales_bundle_code
+   AND for_1047_2.delivery_code = base.delivery_for_storage_calculation_code
+   AND for_1047_2.is_deleted_code IS NULL
+   AND base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+LEFT JOIN trscm
+    ON trscm.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.transportation_warehouse_storage_area trwsa
+    ON trwsa.plant_code = base.receiving_plant_code
+   AND trwsa.transport_hub_code = CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code = '25'
+             THEN for_1047_1.transport_route_departure_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code <> '25'
+             THEN for_1047_1.transport_route_destination_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN for_1047_2.transport_route_destination_hub_code
+   END
+   AND trwsa.transportation_stage_code = CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN base.SD_000903
+   END
+LEFT JOIN sbudr_1
+    ON sbudr_1.sales_bundle_code = base.sales_bundle_code
+   AND sbudr_1.delivery_code = base.delivery_for_storage_calculation_code
+   AND base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+LEFT JOIN dds.sales_bundle_and_delivery_relationship sbudr_2
+    ON sbudr_2.sales_bundle_code = base.sales_bundle_code
+   AND sbudr_2.batch_code = sbudr_1.batch_code
+   AND sbudr_2.transportation_stage_code > sbudr_1.transportation_stage_code
+   AND sbudr_2.transport_route_departure_hub_code = sbudr_1.transport_route_destination_hub_code
+   AND sbudr_2.dt_transportation_stage_start >= base.likp_lddat
+   AND sbudr_2.is_deleted_code IS NULL
+LEFT JOIN zlet43_1
+    ON zlet43_1.plant_code = base.receiving_plant_code
+   AND zlet43_1.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.map_trader_to_unit_balance_of_storage_agreement zlet43_2
+    ON zlet43_2.plant_code = base.receiving_plant_code
+   AND zlet43_2.counterparty_code IS NULL
+LEFT JOIN dict_dds.plant_and_subsidiary pas
+    ON pas.plant_code = CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк','Логика СВХ')
+            THEN '1121'
+        WHEN base.storage_cost_calculation_type_name = 'Логика Европа'
+            THEN COALESCE(for_1078.plant_code, '1521')
+        WHEN base.storage_cost_calculation_type_name = 'Логика Азия'
+            THEN COALESCE(zlet43_1.unit_balance_of_storage_agreement_code, zlet43_2.unit_balance_of_storage_agreement_code)
+    END
+LEFT JOIN dict_dds.valuation_area valuar
+    ON valuar.valuation_area_code = pas.valuation_area_code
+LEFT JOIN ekpa
+    ON ekpa.objek = CASE
+        WHEN base.delivery_for_storage_calculation_code = base.transportation_inbound_delivery_code
+            THEN NULL
+        ELSE vbak.zznoi
+    END
+   AND base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+LEFT JOIN dds.sales_document_counterparty_role vbpa
+    ON vbpa.sales_document_code = CASE
+        WHEN base.delivery_for_storage_calculation_code = base.transportation_inbound_delivery_code
+            THEN NULL
+        ELSE vbak.zznoi
+    END
+   AND base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+   AND vbpa.counterparty_role_code = CASE
+        WHEN base.SD_000649 IN (
+            SELECT range_low_value
+            FROM dict_dds.settings_and_parameters_sap
+            WHERE abap_program_code = '/RUSAL/SD4553M'
+              AND parameter_code = 'S_PORTZJ'
+              AND range_low_value IS NOT NULL
+        )
+        THEN 'ZJ'
+        ELSE 'YP'
+    END
+LEFT JOIN (
+    SELECT
+        counterparty_code
+    FROM dict_dds.tech_additional_transportation_service_calculation_rule
+    WHERE service_code = 'STO'
+      AND date_of_rate_determination_rule_code = '3'
+    GROUP BY counterparty_code
+) AS for_1076_1
+    ON for_1076_1.counterparty_code = COALESCE(ekpa.counterparty_code, vbpa.supplier_code)
+LEFT JOIN (
+    SELECT
+        counterparty_code
+    FROM dict_dds.transportation_storage_date_search_method
+    WHERE storage_date_search_method_code = '1'
+    GROUP BY counterparty_code
+) AS for_1076_2
+    ON for_1076_2.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.transport_hub trhu
+    ON trhu.transport_hub_code = CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code = '25'
+             THEN for_1047_1.transport_route_departure_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code <> '25'
+             THEN for_1047_1.transport_route_destination_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN for_1047_2.transport_route_destination_hub_code
+    END
+LEFT JOIN dict_dds.transport_hub tr_hub
+    ON tr_hub.transport_hub_code = CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code = '25'
+             THEN for_1047_1.transport_route_departure_hub_code
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+             AND for_1047_1.transportation_stage_code <> '25'
+             THEN for_1047_1.transport_route_destination_hub_code
+    END
+   AND base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+DISTRIBUTED BY (sales_bundle_code);
+
+------------------------------------------------------------
+-- 6. ВСТАВКА В ВЕСОВУЮ ВИТРИНУ С LATERAL generate_series
+------------------------------------------------------------
+
+-- Границы календаря (как в исходнике)
 WITH bounds AS (
     SELECT
         MIN(dt_balance) AS dt_min,
@@ -323,3 +1304,11 @@ LEFT JOIN dict_dds.transportation_warehouse_storage_area trwsa
 WHERE
     (b.wwgsg_01 IS NULL OR COALESCE(b.wwgsg_01_date, DATE '9999-12-31') >= gs.dt_balance)
     AND b.rn = 1;
+
+
+
+SQL Error [42846]: ERROR: cannot cast type interval to integer
+  Позиция: 5742
+
+
+Позиция ошибки: line: 169 pos: 5741

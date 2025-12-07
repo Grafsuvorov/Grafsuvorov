@@ -1,3 +1,204 @@
+create temp table base_1_5 on commit drop as ( -- продолжение собирания витрины. Основывается на base.
+    select
+        base.sales_bundle_code,
+        base.plant_producer_delivery_code,
+        base.plant_producer_delivery_position_code,
+        base.initial_delivery_code,
+        base.material_code,
+        base.dt_shipment,
+        base.railcar_code,
+        base.transport_bill_code,
+        base.uni,
+        base.material_shape_code,
+        base.dt_arrival_to_russian_port,
+        base.dt_storage_end_in_release,
+        base.transport_type_code,
+        base.etsng_code,
+        base.sales_bundle_net_weight,
+        base.sales_bundle_gross_weight,
+        base.batch_code,
+        base.dt_arrival,
+        base.receiving_plant_code,
+        base.sales_delivery_code,
+        base.transportation_inbound_delivery_code,
+        base.delivery_for_storage_calculation_code,
+        base.transportation_inbound_delivery_position_code,
+        base.delivery_position_for_storage_calculation_code,
+        base.forwarder_code,
+        base.storage_cost_calculation_type_name,
+        base.transport_departure_hub_code,
+        base.transport_destination_hub_code,
+        base.SD_000049,
+        base.SD_000044,
+        base.wwgsg_01_date,
+        base.id_for_unique,
+--      base.lddat_4798,
+        base.vbeln_4798,
+        base.SD_000054,
+        base.wwgsg_01,
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000516
+        end as transportation_outbound_delivery_code, -- LE.001009
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000897
+        end as transportation_outbound_delivery_position_code, -- LE.001010
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000902
+        end as is_final_transportation_stage_code, -- LE.001025
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000903
+        end as transportation_stage_code, -- LE.001026
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000905
+        end as storage_calculation_bundle_quantity, -- LE.001035
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                and for_1047_1.transportation_stage_code = '25' then for_1047_1.transport_route_departure_hub_code
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                and for_1047_1.transportation_stage_code <> '25' then for_1047_1.transport_route_destination_hub_code
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then for_1047_2.transport_route_destination_hub_code
+        end as warehouse_code, -- LE.001047
+
+        tr_hub.is_seaport as is_stored_in_russian_port_code, -- LE.001123
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.sales_delivery_code
+        end as delivery_in_final_release_code, -- LE.001053
+        case
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000482
+        end as dt_final_release, -- LE.001054
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then base.SD_000040
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа') then base.SD_000047
+        end as bill_of_lading_code, -- LE.001056
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then base.SD_000041
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа') then base.SD_000048
+        end as bill_of_lading_number, -- LE.001057
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then base.SD_000042
+            when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then sbudr_2.dt_transportation_stage_start
+        end as dt_shipped_from_warehouse, -- LE.001071
+
+        case
+            when base.delivery_for_storage_calculation_code = base.transportation_inbound_delivery_code then null
+            else vbak.zznoi
+        end as shipment_instruction_number, -- LE.001043
+
+        sbudr_2.dt_transportation_stage_start as sbudr_2_dt_transportation_stage_start,
+        base.SD_000042,
+        base.SD_000649,
+        base.SD_000420,
+
+        for_1076_1.counterparty_code as for_1076_1_lifnr,
+        for_1076_2.counterparty_code as for_1076_2_counterparty_code,
+        base.likp_lddat,
+--      base.prev_lddat_4798,
+--      base.next_lddat_4798,
+        base.dt_transportation_stage_start_p,
+        base.dt_transportation_stage_start_r,
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then base.sales_bundle_net_weight
+            when base.storage_cost_calculation_type_name in ('Логика Европа', 'Логика Азия', 'Логика СВХ') and zle112t37t3.lifnr is not null then base.sales_bundle_net_weight
+            when base.storage_cost_calculation_type_name in ('Логика Европа', 'Логика Азия', 'Логика СВХ') then base.sales_bundle_gross_weight
+        end as weight_for_1090_umno,
+
+        case
+            when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then base.ntgew
+            when base.storage_cost_calculation_type_name in ('Логика Европа', 'Логика Азия', 'Логика СВХ') and zle112t37t3.lifnr is not null then base.ntgew
+            when base.storage_cost_calculation_type_name in ('Логика Европа', 'Логика Азия', 'Логика СВХ') then base.btgew
+        end as weight_for_1090_razdel,
+
+        base.lddat_4798,
+        case
+            when base.prev_lddat_4798 is null then greatest(base.lddat_4798, base.dt_transportation_stage_start_p)
+            when base.prev_lddat_4798 is not null then greatest(base.lddat_4798, base.dt_transportation_stage_start_p)
+        end as prev_lddat_4798,
+
+        case
+            when base.next_lddat_4798 = base.lddat_4798
+                then base.dt_transportation_stage_start_r
+            else
+                coalesce(base.next_lddat_4798 - interval '1 day', base.dt_transportation_stage_start_r)::date
+        end as next_lddat_4798,
+
+        row_number() over (
+            partition by base.id_for_unique,
+                         case
+                             when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                                 then coalesce(base.SD_000040, base.SD_000047)
+                             when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+                                 then coalesce(base.vbeln_4798, base.SD_000040)
+                         end
+        ) as rn
+    from
+        base
+        left join trscm on
+            trscm.counterparty_code = base.forwarder_code
+        left join dict_dds.transportation_warehouse_storage_area as trwsa on
+            trwsa.plant_code = base.receiving_plant_code
+            and trwsa.transport_hub_code = case
+                when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                     and for_1047_1.transportation_stage_code = '25' then for_1047_1.transport_route_departure_hub_code
+                when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк')
+                     and for_1047_1.transportation_stage_code <> '25' then for_1047_1.transport_route_destination_hub_code
+                when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then for_1047_2.transport_route_destination_hub_code
+            end
+            and trwsa.transportation_stage_code = case
+                when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.SD_000903
+            end
+        left join sbudr_1 on
+            sbudr_1.sales_bundle_code = base.sales_bundle_code
+            and sbudr_1.delivery_code = base.delivery_for_storage_calculation_code
+            and base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+        left join dds.sales_bundle_and_delivery_relationship as sbudr_2 on
+            sbudr_2.sales_bundle_code = base.sales_bundle_code
+            and sbudr_2.batch_code = sbudr_1.batch_code
+            and sbudr_2.transportation_stage_code > sbudr_1.transportation_stage_code
+            and sbudr_2.transport_route_departure_hub_code = sbudr_1.transport_route_destination_hub_code
+            and sbudr_2.dt_transportation_stage_start >= base.likp_lddat
+            and sbudr_2.is_deleted_code is null
+        left join zlet43_1 on
+            zlet43_1.plant_code = base.receiving_plant_code
+            and zlet43_1.counterparty_code = base.forwarder_code
+        left join dict_dds.map_trader_to_unit_balance_of_storage_agreement as zlet43_2 on
+            zlet43_2.plant_code = base.receiving_plant_code
+            and zlet43_2.counterparty_code is null
+        left join dict_dds.plant_and_subsidiary as pas on
+            pas.plant_code = case
+                when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк', 'Логика СВХ') then '1121'
+                when base.storage_cost_calculation_type_name in ('Логика Европа') then coalesce(for_1078.plant_code, '1521')
+                when base.storage_cost_calculation_type_name in ('Логика Азия') then coalesce(for_1078.plant_code, '1121')
+            end
+        left join dict_dds.unit_balance as valuar on
+            valuar.plant_code = pas.plant_code
+            and valuar.subsidiary_code = pas.subsidiary_code
+            and valuar.is_default_unit_balance_for_storage_calculation_code = '1'
+        left join ekpa on
+            ekpa.objek = base.shipment_instruction_number
+        left join dds.sales_order_position_partner as vbpa on
+            vbpa.sales_order_code = base.shipment_instruction_number
+            and vbpa.partner_function_code = 'ZF'
+        left join dict_dds.transport_hub as tr_hub on
+            tr_hub.transport_hub_code = base.transport_dest_hub_for_warehouse_code
+    where
+        base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры',
+                                                    'Логика РФ-балк',
+                                                    'Логика Азия',
+                                                    'Логика Европа',
+                                                    'Логика СВХ')
+)
+distributed by (sales_bundle_code);
+
+
 insert into dm_calc.storage_sales_bundles_weight (
     sales_bundle_code,
     plant_producer_delivery_code,
@@ -266,3 +467,4 @@ where
      or (base_1_5.wwgsg_01 is not null
          and coalesce(base_1_5.wwgsg_01_date, '9999-12-31'::date) >= date_for_vitr.dt_balance))
     and base_1_5.rn = 1;
+

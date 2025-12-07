@@ -1,742 +1,270 @@
-explain(verbose, format json)
-    select
-        base_2.sales_bundle_code,
-        base_2.plant_producer_delivery_code,
-        base_2.plant_producer_delivery_position_code,
-        base_2.initial_delivery_code,
-        base_2.material_code,
-        base_2.dt_shipment,
-        base_2.railcar_code,
-        base_2.transport_bill_code,
-        base_2.uni,
-        base_2.material_shape_code,
-        base_2.port_of_discharge_code,
-        base_2.dt_arrival_to_russian_port,
-        base_2.dt_storage_end_in_release,
-        base_2.transport_type_code,
-        base_2.etsng_code,
-        base_2.dt_report,
-        base_2.sales_bundle_net_weight,
-        base_2.sales_bundle_gross_weight,
-        base_2.batch_code,
-        base_2.dt_arrival,
-        base_2.receiving_plant_code,
-        base_2.sales_delivery_code,
-        base_2.transportation_inbound_delivery_code,
-        base_2.delivery_for_storage_calculation_code,
-        base_2.transportation_inbound_delivery_position_code,
-        base_2.delivery_position_for_storage_calculation_code,
-        base_2.forwarder_code,
-        base_2.storage_cost_calculation_type_name,
-        base_2.transport_departure_hub_code,
-        base_2.transport_destination_hub_code,
-        base_2.transportation_outbound_delivery_code,
-        base_2.transportation_outbound_delivery_position_code,
-        base_2.is_final_transportation_stage_code,
-        base_2.transportation_stage_code,
-        base_2.storage_calculation_bundle_quantity,
-        base_2.warehouse_code,
-        base_2.delivery_in_final_release_code,
-        base_2.dt_final_release,
-        base_2.bill_of_lading_code,
-        base_2.bill_of_lading_number,
-        base_2.dt_bill_of_lading,
-        base_2.incoterms_code,
-        base_2.storage_cost_special_calculation_type_code,
-        base_2.warehouse_storage_area_code,
-        base_2.plant_code,
-        base_2.unit_balance_code,
-        base_2.creditor_in_shipment_instruction_code,
-        base_2.dt_storage_start,
-        base_2.dt_shipped_from_warehouse,
-        base_2.dt_storage_end,
-        base_2.service_number,
-        base_2.storage_duration_total_calendar_days,
-        base_2.shipment_instruction_number,
-        base_2.dt_for_price_search_in_purchase_contract,
-        base_2.is_stored_in_russian_port_code,
-        base_2.remote_warehouse_code,
-        base_2.dt_transportation_stage_start_p,
-        base_2.dt_transportation_stage_start_r,
-        coalesce(
-            for_1079_rf_cont.purchase_contract_code,
-            for_1079_rf_balk_1.purchase_contract_code,
-            for_1079_rf_balk_2.purchase_contract_code,
-            for_1079_euro.purchase_contract_code,
-            for_1079_svh.purchase_contract_code,
-            for_1079_asia.purchase_contract_code
-        ) as purchase_contract_code,
-        coalesce(
-            for_1079_rf_cont.position_line_item_code,
-            for_1079_rf_balk_1.position_line_item_code,
-            for_1079_rf_balk_2.position_line_item_code,
-            for_1079_euro.position_line_item_code,
-            for_1079_svh.position_line_item_code,
-            for_1079_asia.position_line_item_code
-        ) as purchase_contract_position_code,
-        coalesce(
-            for_1079_rf_cont.konws,
-            for_1079_rf_balk_1.konws,
-            for_1079_rf_balk_2.konws,
-            for_1079_euro.konws,
-            for_1079_svh.konws,
-            for_1079_asia.konws
-        ) as purchase_contract_position_currency_code,
-        coalesce(
-            for_1079_rf_cont.service_code,
-            for_1079_rf_balk_1.service_code,
-            for_1079_rf_balk_2.service_code,
-            for_1079_euro.service_code,
-            for_1079_svh.service_code,
-            for_1079_asia.service_code
-        ) as service_code,
-        coalesce(
-            for_1079_rf_cont.price_uom_code,
-            for_1079_rf_balk_1.price_uom_code,
-            for_1079_rf_balk_2.price_uom_code,
-            for_1079_euro.price_uom_code,
-            for_1079_svh.price_uom_code,
-            for_1079_asia.price_uom_code
-        ) as purchase_contract_position_uom_code,
-        greatest(for_1087.price_scale_limit_from_quantity - 1, 0)
-            as storage_duration_free_by_contract_calendar_days,
-        case
-            when coalesce(base_2.storage_cost_special_calculation_type_code,'fdgdfg') <> '6'
-                then least(
+DROP TABLE IF EXISTS for_1079_all;
+
+CREATE TEMP TABLE for_1079_all
+DISTRIBUTED BY (rn)
+AS
+-- РФ-контейнеры
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    NULL::numeric        AS month_difference_2,
+    NULL::varchar(50)    AS special
+FROM for_1079_rf_cont
+
+UNION ALL
+-- РФ-балка 1
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    NULL::numeric        AS month_difference_2,
+    NULL::varchar(50)    AS special
+FROM for_1079_rf_balk_1
+
+UNION ALL
+-- РФ-балка 2
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    NULL::numeric        AS month_difference_2,
+    NULL::varchar(50)    AS special
+FROM for_1079_rf_balk_2
+
+UNION ALL
+-- EURO (тут уже есть month_difference_2 и special)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    month_difference_2,
+    special
+FROM for_1079_euro
+
+UNION ALL
+-- СВХ
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    NULL::numeric        AS month_difference_2,
+    NULL::varchar(50)    AS special
+FROM for_1079_svh
+
+UNION ALL
+-- ASIA
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    currency_dogovor,
+    datab,
+    datbi,
+    NULL::numeric        AS month_difference_2,
+    NULL::varchar(50)    AS special
+FROM for_1079_asia;
+
+
+
+SELECT
+    base_2.sales_bundle_code,
+    base_2.plant_producer_delivery_code,
+    base_2.plant_producer_delivery_position_code,
+    base_2.initial_delivery_code,
+    base_2.material_code,
+    base_2.dt_shipment,
+    base_2.railcar_code,
+    base_2.transport_bill_code,
+    base_2.uni,
+    base_2.material_shape_code,
+    base_2.port_of_discharge_code,
+    base_2.dt_arrival_to_russian_port,
+    base_2.dt_storage_end_in_release,
+    base_2.transport_type_code,
+    base_2.etsng_code,
+    base_2.dt_report,
+    base_2.sales_bundle_net_weight,
+    base_2.sales_bundle_gross_weight,
+    base_2.batch_code,
+    base_2.dt_arrival,
+    base_2.receiving_plant_code,
+    base_2.sales_delivery_code,
+    base_2.transportation_inbound_delivery_code,
+    base_2.delivery_for_storage_calculation_code,
+    base_2.transportation_inbound_delivery_position_code,
+    base_2.delivery_position_for_storage_calculation_code,
+    base_2.forwarder_code,
+    base_2.storage_cost_calculation_type_name,
+    base_2.transport_departure_hub_code,
+    base_2.transport_destination_hub_code,
+    base_2.transportation_outbound_delivery_code,
+    base_2.transportation_outbound_delivery_position_code,
+    base_2.is_final_transportation_stage_code,
+    base_2.transportation_stage_code,
+    base_2.storage_calculation_bundle_quantity,
+    base_2.warehouse_code,
+    base_2.delivery_in_final_release_code,
+    base_2.dt_final_release,
+    base_2.bill_of_lading_code,
+    base_2.bill_of_lading_number,
+    base_2.dt_bill_of_lading,
+    base_2.incoterms_code,
+    base_2.storage_cost_special_calculation_type_code,
+    base_2.warehouse_storage_area_code,
+    base_2.plant_code,
+    base_2.unit_balance_code,
+    base_2.creditor_in_shipment_instruction_code,
+    base_2.dt_storage_start,
+    base_2.dt_shipped_from_warehouse,
+    base_2.dt_storage_end,
+    base_2.service_number,
+    base_2.storage_duration_total_calendar_days,
+    base_2.shipment_instruction_number,
+    base_2.dt_for_price_search_in_purchase_contract,
+    base_2.is_stored_in_russian_port_code,
+    base_2.remote_warehouse_code,
+    base_2.dt_transportation_stage_start_p,
+    base_2.dt_transportation_stage_start_r,
+
+    -- вместо длинного COALESCE по 6 таблицам:
+    f1079.purchase_contract_code                                    AS purchase_contract_code,
+    f1079.position_line_item_code                                   AS purchase_contract_position_code,
+    f1079.konws                                                     AS purchase_contract_position_currency_code,
+    f1079.service_code                                              AS service_code,
+    f1079.price_uom_code                                            AS purchase_contract_position_uom_code,
+
+    GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)       AS storage_duration_free_by_contract_calendar_days,
+
+    CASE
+        WHEN COALESCE(base_2.storage_cost_special_calculation_type_code,'fdgdfg') <> '6'
+            THEN LEAST(
                     base_2.storage_duration_total_calendar_days,
-                    greatest(for_1087.price_scale_limit_from_quantity - 1, 0)
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and calendar_start.calendar_year = calendar_end.calendar_year
-             and calendar_start.calendar_month = calendar_end.calendar_month
-             and base_2.storage_duration_total_calendar_days < 15
-                then 0
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and calendar_start.calendar_year = calendar_end.calendar_year
-             and calendar_start.calendar_month = calendar_end.calendar_month
-             and base_2.storage_duration_total_calendar_days < 30
-                then 1
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and calendar_start.calendar_year = calendar_end.calendar_year
-             and calendar_start.calendar_month = calendar_end.calendar_month
-             and base_2.storage_duration_total_calendar_days > 29
-                then 3
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 15
-             and calendar_end.calendar_day <> calendar_end.days_in_month
-                then 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month) - 1
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 30
-             and calendar_end.calendar_day <> calendar_end.days_in_month
-                then 1 + 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month) - 1
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) > 29
-             and calendar_end.calendar_day <> calendar_end.days_in_month
-                then 3 + 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month) - 1
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 15
-             and calendar_end.calendar_day = calendar_end.days_in_month
-                then 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month)
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 30
-             and calendar_end.calendar_day = calendar_end.days_in_month
-                then 1 + 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month)
-                )
-            when base_2.storage_cost_special_calculation_type_code = '6'
-             and (calendar_start.days_in_month - calendar_start.calendar_day + 1) > 29
-             and calendar_end.calendar_day = calendar_end.days_in_month
-                then 3 + 3 * (
-                    (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
-                    (calendar_end.calendar_month - calendar_start.calendar_month)
-                )
-        end as storage_duration_free_by_delivery_calendar_days,
-        for_1079_euro.month_difference_2     as for_1079_euro_month_difference_2,
-        for_1079_euro.special                as for_1079_euro_special,
-        coalesce(
-            for_1079_rf_cont.currency_dogovor,
-            for_1079_rf_balk_1.currency_dogovor,
-            for_1079_rf_balk_2.currency_dogovor,
-            for_1079_euro.currency_dogovor,
-            for_1079_svh.currency_dogovor,
-            for_1079_asia.currency_dogovor
-        ) as currency_dogovor,
-        for_1087.price_scale_limit_from_quantity as for_1087_price_scale_limit_from_quantity,
-        base_2.weight_for_1090_razdel,
-        base_2.weight_for_1090_umno,
-        coalesce(
-            for_1079_rf_cont.datbi,
-            for_1079_rf_balk_1.datbi,
-            for_1079_rf_balk_2.datbi,
-            for_1079_euro.datbi,
-            for_1079_svh.datbi,
-            for_1079_asia.datbi
-        ) as datbi,
-        coalesce(
-            for_1079_rf_cont.datab,
-            for_1079_rf_balk_1.datab,
-            for_1079_rf_balk_2.datab,
-            for_1079_euro.datab,
-            for_1079_svh.datab,
-            for_1079_asia.datab
-        ) as datab,
-        base_2.rn
-    from dm_calc.storage_sales_bundles_weight as base_2
-    left join dict_dds.calendar as calendar_start
-      on base_2.storage_cost_special_calculation_type_code = '6'
-     and calendar_start.dt = base_2.dt_storage_start
-    left join dict_dds.calendar as calendar_end
-      on base_2.storage_cost_special_calculation_type_code = '6'
-     and calendar_end.dt = base_2.dt_storage_end
-    left join for_1079_rf_cont
-      on for_1079_rf_cont.rn = base_2.rn
-    left join for_1079_rf_balk_1
-      on for_1079_rf_balk_1.rn = base_2.rn
-    left join for_1079_rf_balk_2
-      on for_1079_rf_balk_2.rn = base_2.rn
-    left join for_1079_euro
-      on for_1079_euro.rn = base_2.rn
-    left join for_1079_svh
-      on for_1079_svh.rn = base_2.rn
-    left join for_1079_asia
-      on for_1079_asia.rn = base_2.rn
-    left join for_1087
-      on for_1087.purchase_contract_code = coalesce(
-                for_1079_rf_cont.purchase_contract_code,
-                for_1079_rf_balk_1.purchase_contract_code,
-                for_1079_rf_balk_2.purchase_contract_code,
-                for_1079_euro.purchase_contract_code,
-                for_1079_svh.purchase_contract_code,
-                for_1079_asia.purchase_contract_code
-          )
-     and for_1087.purchase_contract_position_code = coalesce(
-                for_1079_rf_cont.position_line_item_code,
-                for_1079_rf_balk_1.position_line_item_code,
-                for_1079_rf_balk_2.position_line_item_code,
-                for_1079_euro.position_line_item_code,
-                for_1079_svh.position_line_item_code,
-                for_1079_asia.position_line_item_code
-          )
-     and for_1087.dt_price_condition_valid_to = coalesce(
-                for_1079_rf_cont.datbi,
-                for_1079_rf_balk_1.datbi,
-                for_1079_rf_balk_2.datbi,
-                for_1079_euro.datbi,
-                for_1079_svh.datbi,
-                for_1079_asia.datbi
-          )
-     and for_1087.dt_price_condition_valid_from = coalesce(
-                for_1079_rf_cont.datab,
-                for_1079_rf_balk_1.datab,
-                for_1079_rf_balk_2.datab,
-                for_1079_euro.datab,
-                for_1079_svh.datab,
-                for_1079_asia.datab
-          )
+                    GREATEST(for_1087.price_scale_limit_from_quantity - 1, 0)
+                 )
 
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND calendar_start.calendar_year = calendar_end.calendar_year
+         AND calendar_start.calendar_month = calendar_end.calendar_month
+         AND base_2.storage_duration_total_calendar_days < 15
+            THEN 0
 
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND calendar_start.calendar_year = calendar_end.calendar_year
+         AND calendar_start.calendar_month = calendar_end.calendar_month
+         AND base_2.storage_duration_total_calendar_days < 30
+            THEN 1
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 3,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 5373073.13,
-      "Plan Rows": 1112125974,
-      "Plan Width": 524,
-      "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "(COALESCE(for_1079_rf_cont.purchase_contract_code, for_1079_rf_balk_1.purchase_contract_code, for_1079_rf_balk_2.purchase_contract_code, for_1079_euro.purchase_contract_code, for_1079_svh.purchase_contract_code, for_1079_asia.purchase_contract_code))", "(COALESCE(for_1079_rf_cont.position_line_item_code, for_1079_rf_balk_1.position_line_item_code, for_1079_rf_balk_2.position_line_item_code, for_1079_euro.position_line_item_code, for_1079_svh.position_line_item_code, for_1079_asia.position_line_item_code))", "(COALESCE(for_1079_rf_cont.konws, for_1079_rf_balk_1.konws, for_1079_rf_balk_2.konws, for_1079_euro.konws, for_1079_svh.konws, for_1079_asia.konws))", "(COALESCE(for_1079_rf_cont.service_code, for_1079_rf_balk_1.service_code, for_1079_rf_balk_2.service_code, for_1079_euro.service_code, for_1079_svh.service_code, for_1079_asia.service_code))", "(COALESCE(for_1079_rf_cont.price_uom_code, for_1079_rf_balk_1.price_uom_code, for_1079_rf_balk_2.price_uom_code, for_1079_euro.price_uom_code, for_1079_svh.price_uom_code, for_1079_asia.price_uom_code))", "(GREATEST((for_1087.price_scale_limit_from_quantity - '1'::numeric), '0'::numeric))", "(CASE WHEN ((COALESCE(storage_sales_bundles_weight.storage_cost_special_calculation_type_code, 'fdgdfg'::character varying))::text <> '6'::text) THEN LEAST((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric, GREATEST((for_1087.price_scale_limit_from_quantity - '1'::numeric), '0'::numeric)) WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days < 15)) THEN '0'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days < 30)) THEN '1'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days > 29)) THEN '3'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 15) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1)))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 30) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((1 + (3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) > 29) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((3 + (3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 15) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 30) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((1 + (3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) > 29) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((3 + (3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)))))::numeric ELSE NULL::numeric END)", "for_1079_euro.month_difference_2", "for_1079_euro.special", "(COALESCE(for_1079_rf_cont.currency_dogovor, for_1079_rf_balk_1.currency_dogovor, for_1079_rf_balk_2.currency_dogovor, for_1079_euro.currency_dogovor, for_1079_svh.currency_dogovor, for_1079_asia.currency_dogovor))", "for_1087.price_scale_limit_from_quantity", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.weight_for_1090_umno", "(COALESCE(for_1079_rf_cont.datbi, for_1079_rf_balk_1.datbi, for_1079_rf_balk_2.datbi, for_1079_euro.datbi, for_1079_svh.datbi, for_1079_asia.datbi))", "(COALESCE(for_1079_rf_cont.datab, for_1079_rf_balk_1.datab, for_1079_rf_balk_2.datab, for_1079_euro.datab, for_1079_svh.datab, for_1079_asia.datab))", "storage_sales_bundles_weight.rn"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 3,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 3757387.63,
-          "Plan Rows": 1112125974,
-          "Plan Width": 524,
-          "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "COALESCE(for_1079_rf_cont.purchase_contract_code, for_1079_rf_balk_1.purchase_contract_code, for_1079_rf_balk_2.purchase_contract_code, for_1079_euro.purchase_contract_code, for_1079_svh.purchase_contract_code, for_1079_asia.purchase_contract_code)", "COALESCE(for_1079_rf_cont.position_line_item_code, for_1079_rf_balk_1.position_line_item_code, for_1079_rf_balk_2.position_line_item_code, for_1079_euro.position_line_item_code, for_1079_svh.position_line_item_code, for_1079_asia.position_line_item_code)", "COALESCE(for_1079_rf_cont.konws, for_1079_rf_balk_1.konws, for_1079_rf_balk_2.konws, for_1079_euro.konws, for_1079_svh.konws, for_1079_asia.konws)", "COALESCE(for_1079_rf_cont.service_code, for_1079_rf_balk_1.service_code, for_1079_rf_balk_2.service_code, for_1079_euro.service_code, for_1079_svh.service_code, for_1079_asia.service_code)", "COALESCE(for_1079_rf_cont.price_uom_code, for_1079_rf_balk_1.price_uom_code, for_1079_rf_balk_2.price_uom_code, for_1079_euro.price_uom_code, for_1079_svh.price_uom_code, for_1079_asia.price_uom_code)", "GREATEST((for_1087.price_scale_limit_from_quantity - '1'::numeric), '0'::numeric)", "CASE WHEN ((COALESCE(storage_sales_bundles_weight.storage_cost_special_calculation_type_code, 'fdgdfg'::character varying))::text <> '6'::text) THEN LEAST((storage_sales_bundles_weight.storage_duration_total_calendar_days)::numeric, GREATEST((for_1087.price_scale_limit_from_quantity - '1'::numeric), '0'::numeric)) WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days < 15)) THEN '0'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days < 30)) THEN '1'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (calendar.calendar_year = calendar_1.calendar_year) AND (calendar.calendar_month = calendar_1.calendar_month) AND (storage_sales_bundles_weight.storage_duration_total_calendar_days > 29)) THEN '3'::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 15) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1)))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 30) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((1 + (3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) > 29) AND (calendar_1.calendar_day <> calendar_1.days_in_month)) THEN ((3 + (3 * ((((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)) - 1))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 15) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) < 30) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((1 + (3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)))))::numeric WHEN (((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text) AND (((calendar.days_in_month - calendar.calendar_day) + 1) > 29) AND (calendar_1.calendar_day = calendar_1.days_in_month)) THEN ((3 + (3 * (((calendar_1.calendar_year - calendar.calendar_year) * 12) + (calendar_1.calendar_month - calendar.calendar_month)))))::numeric ELSE NULL::numeric END", "for_1079_euro.month_difference_2", "for_1079_euro.special", "COALESCE(for_1079_rf_cont.currency_dogovor, for_1079_rf_balk_1.currency_dogovor, for_1079_rf_balk_2.currency_dogovor, for_1079_euro.currency_dogovor, for_1079_svh.currency_dogovor, for_1079_asia.currency_dogovor)", "for_1087.price_scale_limit_from_quantity", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.weight_for_1090_umno", "COALESCE(for_1079_rf_cont.datbi, for_1079_rf_balk_1.datbi, for_1079_rf_balk_2.datbi, for_1079_euro.datbi, for_1079_svh.datbi, for_1079_asia.datbi)", "COALESCE(for_1079_rf_cont.datab, for_1079_rf_balk_1.datab, for_1079_rf_balk_2.datab, for_1079_euro.datab, for_1079_svh.datab, for_1079_asia.datab)", "storage_sales_bundles_weight.rn"],
-          "Plans": [
-            {
-              "Node Type": "Hash Join",
-              "Parent Relationship": "Outer",
-              "Slice": 3,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Join Type": "Left",
-              "Startup Cost": 0.00,
-              "Total Cost": 3684543.38,
-              "Plan Rows": 1112125974,
-              "Plan Width": 793,
-              "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi", "for_1079_svh.purchase_contract_code", "for_1079_svh.position_line_item_code", "for_1079_svh.konws", "for_1079_svh.service_code", "for_1079_svh.price_uom_code", "for_1079_svh.currency_dogovor", "for_1079_svh.datab", "for_1079_svh.datbi", "for_1079_asia.purchase_contract_code", "for_1079_asia.position_line_item_code", "for_1079_asia.konws", "for_1079_asia.service_code", "for_1079_asia.price_uom_code", "for_1079_asia.currency_dogovor", "for_1079_asia.datab", "for_1079_asia.datbi", "for_1087.price_scale_limit_from_quantity"],
-              "Hash Cond": "(((COALESCE(for_1079_rf_cont.purchase_contract_code, for_1079_rf_balk_1.purchase_contract_code, for_1079_rf_balk_2.purchase_contract_code, for_1079_euro.purchase_contract_code, for_1079_svh.purchase_contract_code, for_1079_asia.purchase_contract_code))::text = (for_1087.purchase_contract_code)::text) AND ((COALESCE(for_1079_rf_cont.position_line_item_code, for_1079_rf_balk_1.position_line_item_code, for_1079_rf_balk_2.position_line_item_code, for_1079_euro.position_line_item_code, for_1079_svh.position_line_item_code, for_1079_asia.position_line_item_code))::text = (for_1087.purchase_contract_position_code)::text) AND (COALESCE(for_1079_rf_cont.datbi, for_1079_rf_balk_1.datbi, for_1079_rf_balk_2.datbi, for_1079_euro.datbi, for_1079_svh.datbi, for_1079_asia.datbi) = for_1087.dt_price_condition_valid_to) AND (COALESCE(for_1079_rf_cont.datab, for_1079_rf_balk_1.datab, for_1079_rf_balk_2.datab, for_1079_euro.datab, for_1079_svh.datab, for_1079_asia.datab) = for_1087.dt_price_condition_valid_from))",
-              "Plans": [
-                {
-                  "Node Type": "Hash Join",
-                  "Parent Relationship": "Outer",
-                  "Slice": 3,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Join Type": "Left",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 2893192.43,
-                  "Plan Rows": 1112125974,
-                  "Plan Width": 789,
-                  "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi", "for_1079_svh.purchase_contract_code", "for_1079_svh.position_line_item_code", "for_1079_svh.konws", "for_1079_svh.service_code", "for_1079_svh.price_uom_code", "for_1079_svh.currency_dogovor", "for_1079_svh.datab", "for_1079_svh.datbi", "for_1079_asia.purchase_contract_code", "for_1079_asia.position_line_item_code", "for_1079_asia.konws", "for_1079_asia.service_code", "for_1079_asia.price_uom_code", "for_1079_asia.currency_dogovor", "for_1079_asia.datab", "for_1079_asia.datbi"],
-                  "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_asia.rn)::text)",
-                  "Plans": [
-                    {
-                      "Node Type": "Hash Join",
-                      "Parent Relationship": "Outer",
-                      "Slice": 3,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Left",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 2207588.86,
-                      "Plan Rows": 874336343,
-                      "Plan Width": 748,
-                      "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi", "for_1079_svh.purchase_contract_code", "for_1079_svh.position_line_item_code", "for_1079_svh.konws", "for_1079_svh.service_code", "for_1079_svh.price_uom_code", "for_1079_svh.currency_dogovor", "for_1079_svh.datab", "for_1079_svh.datbi"],
-                      "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_svh.rn)::text)",
-                      "Plans": [
-                        {
-                          "Node Type": "Hash Join",
-                          "Parent Relationship": "Outer",
-                          "Slice": 3,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Join Type": "Left",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 1855229.45,
-                          "Plan Rows": 865532807,
-                          "Plan Width": 707,
-                          "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi"],
-                          "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_euro.rn)::text)",
-                          "Plans": [
-                            {
-                              "Node Type": "Hash Join",
-                              "Parent Relationship": "Outer",
-                              "Slice": 3,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Join Type": "Left",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 1353228.58,
-                              "Plan Rows": 778631249,
-                              "Plan Width": 646,
-                              "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi"],
-                              "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_rf_balk_2.rn)::text)",
-                              "Plans": [
-                                {
-                                  "Node Type": "Hash Join",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 3,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Join Type": "Left",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 938962.31,
-                                  "Plan Rows": 674250401,
-                                  "Plan Width": 605,
-                                  "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi"],
-                                  "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_rf_balk_1.rn)::text)",
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Hash Join",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 3,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Join Type": "Left",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 592793.11,
-                                      "Plan Rows": 628188986,
-                                      "Plan Width": 562,
-                                      "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi"],
-                                      "Hash Cond": "((storage_sales_bundles_weight.rn)::text = (for_1079_rf_cont.rn)::text)",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Redistribute Motion",
-                                          "Senders": 8,
-                                          "Receivers": 8,
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 1,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 399328.56,
-                                          "Plan Rows": 624263125,
-                                          "Plan Width": 521,
-                                          "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month"],
-                                          "Hash Key": "storage_sales_bundles_weight.rn",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Hash Join",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 1,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Join Type": "Left",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 272077.98,
-                                              "Plan Rows": 624263125,
-                                              "Plan Width": 521,
-                                              "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month"],
-                                              "Hash Cond": "(storage_sales_bundles_weight.dt_storage_end = calendar_1.dt)",
-                                              "Join Filter": "((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text)",
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Hash Join",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Join Type": "Left",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 106819.81,
-                                                  "Plan Rows": 313566128,
-                                                  "Plan Width": 513,
-                                                  "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month"],
-                                                  "Hash Cond": "(storage_sales_bundles_weight.dt_storage_start = calendar.dt)",
-                                                  "Join Filter": "((storage_sales_bundles_weight.storage_cost_special_calculation_type_code)::text = '6'::text)",
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Seq Scan",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 1,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Relation Name": "storage_sales_bundles_weight",
-                                                      "Schema": "dm_calc",
-                                                      "Alias": "storage_sales_bundles_weight",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 6311.74,
-                                                      "Plan Rows": 157239136,
-                                                      "Plan Width": 505,
-                                                      "Output": ["storage_sales_bundles_weight.sales_bundle_code", "storage_sales_bundles_weight.plant_producer_delivery_code", "storage_sales_bundles_weight.plant_producer_delivery_position_code", "storage_sales_bundles_weight.initial_delivery_code", "storage_sales_bundles_weight.material_code", "storage_sales_bundles_weight.dt_shipment", "storage_sales_bundles_weight.railcar_code", "storage_sales_bundles_weight.transport_bill_code", "storage_sales_bundles_weight.uni", "storage_sales_bundles_weight.material_shape_code", "storage_sales_bundles_weight.dt_arrival_to_russian_port", "storage_sales_bundles_weight.dt_storage_end_in_release", "storage_sales_bundles_weight.transport_type_code", "storage_sales_bundles_weight.etsng_code", "storage_sales_bundles_weight.dt_report", "storage_sales_bundles_weight.sales_bundle_net_weight", "storage_sales_bundles_weight.sales_bundle_gross_weight", "storage_sales_bundles_weight.batch_code", "storage_sales_bundles_weight.dt_arrival", "storage_sales_bundles_weight.receiving_plant_code", "storage_sales_bundles_weight.sales_delivery_code", "storage_sales_bundles_weight.transportation_inbound_delivery_code", "storage_sales_bundles_weight.delivery_for_storage_calculation_code", "storage_sales_bundles_weight.transportation_inbound_delivery_position_code", "storage_sales_bundles_weight.delivery_position_for_storage_calculation_code", "storage_sales_bundles_weight.forwarder_code", "storage_sales_bundles_weight.storage_cost_calculation_type_name", "storage_sales_bundles_weight.transport_departure_hub_code", "storage_sales_bundles_weight.transport_destination_hub_code", "storage_sales_bundles_weight.transportation_outbound_delivery_code", "storage_sales_bundles_weight.transportation_outbound_delivery_position_code", "storage_sales_bundles_weight.is_final_transportation_stage_code", "storage_sales_bundles_weight.transportation_stage_code", "storage_sales_bundles_weight.storage_calculation_bundle_quantity", "storage_sales_bundles_weight.warehouse_code", "storage_sales_bundles_weight.is_stored_in_russian_port_code", "storage_sales_bundles_weight.delivery_in_final_release_code", "storage_sales_bundles_weight.dt_final_release", "storage_sales_bundles_weight.bill_of_lading_code", "storage_sales_bundles_weight.bill_of_lading_number", "storage_sales_bundles_weight.dt_bill_of_lading", "storage_sales_bundles_weight.incoterms_code", "storage_sales_bundles_weight.storage_cost_special_calculation_type_code", "storage_sales_bundles_weight.warehouse_storage_area_code", "storage_sales_bundles_weight.plant_code", "storage_sales_bundles_weight.unit_balance_code", "storage_sales_bundles_weight.creditor_in_shipment_instruction_code", "storage_sales_bundles_weight.dt_storage_start", "storage_sales_bundles_weight.dt_shipped_from_warehouse", "storage_sales_bundles_weight.dt_storage_end", "storage_sales_bundles_weight.storage_duration_total_calendar_days", "storage_sales_bundles_weight.shipment_instruction_number", "storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_weight.port_of_discharge_code", "storage_sales_bundles_weight.service_number", "storage_sales_bundles_weight.weight_for_1090_umno", "storage_sales_bundles_weight.weight_for_1090_razdel", "storage_sales_bundles_weight.remote_warehouse_code", "storage_sales_bundles_weight.dt_transportation_stage_start_p", "storage_sales_bundles_weight.dt_transportation_stage_start_r", "storage_sales_bundles_weight.rn"]
-                                                    },
-                                                    {
-                                                      "Node Type": "Hash",
-                                                      "Parent Relationship": "Inner",
-                                                      "Slice": 1,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Startup Cost": 436.46,
-                                                      "Total Cost": 436.46,
-                                                      "Plan Rows": 1168776,
-                                                      "Plan Width": 12,
-                                                      "Output": ["calendar.dt", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month"],
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Seq Scan",
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 1,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Relation Name": "calendar",
-                                                          "Schema": "dict_dds",
-                                                          "Alias": "calendar",
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 436.46,
-                                                          "Plan Rows": 1168776,
-                                                          "Plan Width": 12,
-                                                          "Output": ["calendar.dt", "calendar.calendar_year", "calendar.calendar_month", "calendar.calendar_day", "calendar.days_in_month"]
-                                                        }
-                                                      ]
-                                                    }
-                                                  ]
-                                                },
-                                                {
-                                                  "Node Type": "Hash",
-                                                  "Parent Relationship": "Inner",
-                                                  "Slice": 1,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Startup Cost": 436.46,
-                                                  "Total Cost": 436.46,
-                                                  "Plan Rows": 1168776,
-                                                  "Plan Width": 12,
-                                                  "Output": ["calendar_1.dt", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month"],
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Seq Scan",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 1,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Relation Name": "calendar",
-                                                      "Schema": "dict_dds",
-                                                      "Alias": "calendar_1",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 436.46,
-                                                      "Plan Rows": 1168776,
-                                                      "Plan Width": 12,
-                                                      "Output": ["calendar_1.dt", "calendar_1.calendar_year", "calendar_1.calendar_month", "calendar_1.calendar_day", "calendar_1.days_in_month"]
-                                                    }
-                                                  ]
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        },
-                                        {
-                                          "Node Type": "Hash",
-                                          "Parent Relationship": "Inner",
-                                          "Slice": 3,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 438.34,
-                                          "Total Cost": 438.34,
-                                          "Plan Rows": 988844,
-                                          "Plan Width": 78,
-                                          "Output": ["for_1079_rf_cont.rn", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi"],
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 3,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Relation Name": "for_1079_rf_cont",
-                                              "Schema": "pg_temp_8957068",
-                                              "Alias": "for_1079_rf_cont",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 438.34,
-                                              "Plan Rows": 988844,
-                                              "Plan Width": 78,
-                                              "Output": ["for_1079_rf_cont.rn", "for_1079_rf_cont.purchase_contract_code", "for_1079_rf_cont.position_line_item_code", "for_1079_rf_cont.konws", "for_1079_rf_cont.service_code", "for_1079_rf_cont.price_uom_code", "for_1079_rf_cont.currency_dogovor", "for_1079_rf_cont.datab", "for_1079_rf_cont.datbi"]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "Node Type": "Hash",
-                                      "Parent Relationship": "Inner",
-                                      "Slice": 3,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 518.19,
-                                      "Total Cost": 518.19,
-                                      "Plan Rows": 11529424,
-                                      "Plan Width": 80,
-                                      "Output": ["for_1079_rf_balk_1.rn", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 3,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Relation Name": "for_1079_rf_balk_1",
-                                          "Schema": "pg_temp_8957068",
-                                          "Alias": "for_1079_rf_balk_1",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 518.19,
-                                          "Plan Rows": 11529424,
-                                          "Plan Width": 80,
-                                          "Output": ["for_1079_rf_balk_1.rn", "for_1079_rf_balk_1.purchase_contract_code", "for_1079_rf_balk_1.position_line_item_code", "for_1079_rf_balk_1.konws", "for_1079_rf_balk_1.service_code", "for_1079_rf_balk_1.price_uom_code", "for_1079_rf_balk_1.currency_dogovor", "for_1079_rf_balk_1.datab", "for_1079_rf_balk_1.datbi"]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "Node Type": "Hash",
-                                  "Parent Relationship": "Inner",
-                                  "Slice": 3,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 611.74,
-                                  "Total Cost": 611.74,
-                                  "Plan Rows": 24342224,
-                                  "Plan Width": 78,
-                                  "Output": ["for_1079_rf_balk_2.rn", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 3,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Relation Name": "for_1079_rf_balk_2",
-                                      "Schema": "pg_temp_8957068",
-                                      "Alias": "for_1079_rf_balk_2",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 611.74,
-                                      "Plan Rows": 24342224,
-                                      "Plan Width": 78,
-                                      "Output": ["for_1079_rf_balk_2.rn", "for_1079_rf_balk_2.purchase_contract_code", "for_1079_rf_balk_2.position_line_item_code", "for_1079_rf_balk_2.konws", "for_1079_rf_balk_2.service_code", "for_1079_rf_balk_2.price_uom_code", "for_1079_rf_balk_2.currency_dogovor", "for_1079_rf_balk_2.datab", "for_1079_rf_balk_2.datbi"]
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "Node Type": "Hash",
-                              "Parent Relationship": "Inner",
-                              "Slice": 3,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 601.12,
-                              "Total Cost": 601.12,
-                              "Plan Rows": 17549162,
-                              "Plan Width": 98,
-                              "Output": ["for_1079_euro.rn", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 3,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "for_1079_euro",
-                                  "Schema": "pg_temp_8957068",
-                                  "Alias": "for_1079_euro",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 601.12,
-                                  "Plan Rows": 17549162,
-                                  "Plan Width": 98,
-                                  "Output": ["for_1079_euro.rn", "for_1079_euro.purchase_contract_code", "for_1079_euro.position_line_item_code", "for_1079_euro.konws", "for_1079_euro.service_code", "for_1079_euro.price_uom_code", "for_1079_euro.month_difference_2", "for_1079_euro.special", "for_1079_euro.currency_dogovor", "for_1079_euro.datab", "for_1079_euro.datbi"]
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "Node Type": "Hash",
-                          "Parent Relationship": "Inner",
-                          "Slice": 3,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 442.87,
-                          "Total Cost": 442.87,
-                          "Plan Rows": 1599316,
-                          "Plan Width": 78,
-                          "Output": ["for_1079_svh.rn", "for_1079_svh.purchase_contract_code", "for_1079_svh.position_line_item_code", "for_1079_svh.konws", "for_1079_svh.service_code", "for_1079_svh.price_uom_code", "for_1079_svh.currency_dogovor", "for_1079_svh.datab", "for_1079_svh.datbi"],
-                          "Plans": [
-                            {
-                              "Node Type": "Seq Scan",
-                              "Parent Relationship": "Outer",
-                              "Slice": 3,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Relation Name": "for_1079_svh",
-                              "Schema": "pg_temp_8957068",
-                              "Alias": "for_1079_svh",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 442.87,
-                              "Plan Rows": 1599316,
-                              "Plan Width": 78,
-                              "Output": ["for_1079_svh.rn", "for_1079_svh.purchase_contract_code", "for_1079_svh.position_line_item_code", "for_1079_svh.konws", "for_1079_svh.service_code", "for_1079_svh.price_uom_code", "for_1079_svh.currency_dogovor", "for_1079_svh.datab", "for_1079_svh.datbi"]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "Node Type": "Hash",
-                      "Parent Relationship": "Inner",
-                      "Slice": 3,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 748.52,
-                      "Total Cost": 748.52,
-                      "Plan Rows": 42763676,
-                      "Plan Width": 78,
-                      "Output": ["for_1079_asia.rn", "for_1079_asia.purchase_contract_code", "for_1079_asia.position_line_item_code", "for_1079_asia.konws", "for_1079_asia.service_code", "for_1079_asia.price_uom_code", "for_1079_asia.currency_dogovor", "for_1079_asia.datab", "for_1079_asia.datbi"],
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 3,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "for_1079_asia",
-                          "Schema": "pg_temp_8957068",
-                          "Alias": "for_1079_asia",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 748.52,
-                          "Plan Rows": 42763676,
-                          "Plan Width": 78,
-                          "Output": ["for_1079_asia.rn", "for_1079_asia.purchase_contract_code", "for_1079_asia.position_line_item_code", "for_1079_asia.konws", "for_1079_asia.service_code", "for_1079_asia.price_uom_code", "for_1079_asia.currency_dogovor", "for_1079_asia.datab", "for_1079_asia.datbi"]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Hash",
-                  "Parent Relationship": "Inner",
-                  "Slice": 3,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 434.16,
-                  "Total Cost": 434.16,
-                  "Plan Rows": 109888,
-                  "Plan Width": 29,
-                  "Output": ["for_1087.purchase_contract_code", "for_1087.purchase_contract_position_code", "for_1087.dt_price_condition_valid_to", "for_1087.dt_price_condition_valid_from", "for_1087.price_scale_limit_from_quantity"],
-                  "Plans": [
-                    {
-                      "Node Type": "Broadcast Motion",
-                      "Senders": 8,
-                      "Receivers": 8,
-                      "Parent Relationship": "Outer",
-                      "Slice": 2,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 434.16,
-                      "Plan Rows": 109888,
-                      "Plan Width": 29,
-                      "Output": ["for_1087.purchase_contract_code", "for_1087.purchase_contract_position_code", "for_1087.dt_price_condition_valid_to", "for_1087.dt_price_condition_valid_from", "for_1087.price_scale_limit_from_quantity"],
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 2,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "for_1087",
-                          "Schema": "pg_temp_8957068",
-                          "Alias": "for_1087",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 431.06,
-                          "Plan Rows": 13736,
-                          "Plan Width": 29,
-                          "Output": ["for_1087.purchase_contract_code", "for_1087.purchase_contract_position_code", "for_1087.dt_price_condition_valid_to", "for_1087.dt_price_condition_valid_from", "for_1087.price_scale_limit_from_quantity"]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND calendar_start.calendar_year = calendar_end.calendar_year
+         AND calendar_start.calendar_month = calendar_end.calendar_month
+         AND base_2.storage_duration_total_calendar_days > 29
+            THEN 3
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 15
+         AND calendar_end.calendar_day <> calendar_end.days_in_month
+            THEN 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month) - 1
+            )
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 30
+         AND calendar_end.calendar_day <> calendar_end.days_in_month
+            THEN 1 + 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month) - 1
+            )
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) > 29
+         AND calendar_end.calendar_day <> calendar_end.days_in_month
+            THEN 3 + 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month) - 1
+            )
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 15
+         AND calendar_end.calendar_day = calendar_end.days_in_month
+            THEN 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month)
+            )
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) < 30
+         AND calendar_end.calendar_day = calendar_end.days_in_month
+            THEN 1 + 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month)
+            )
+
+        WHEN base_2.storage_cost_special_calculation_type_code = '6'
+         AND (calendar_start.days_in_month - calendar_start.calendar_day + 1) > 29
+         AND calendar_end.calendar_day = calendar_end.days_in_month
+            THEN 3 + 3 * (
+                (calendar_end.calendar_year - calendar_start.calendar_year) * 12 +
+                (calendar_end.calendar_month - calendar_start.calendar_month)
+            )
+    END AS storage_duration_free_by_delivery_calendar_days,
+
+    -- euro-специфика (будет NULL для остальных типов)
+    f1079.month_difference_2                                         AS for_1079_euro_month_difference_2,
+    f1079.special                                                    AS for_1079_euro_special,
+
+    f1079.currency_dogovor                                           AS currency_dogovor,
+    for_1087.price_scale_limit_from_quantity                         AS for_1087_price_scale_limit_from_quantity,
+    base_2.weight_for_1090_razdel,
+    base_2.weight_for_1090_umno,
+    f1079.datbi                                                      AS datbi,
+    f1079.datab                                                      AS datab,
+    base_2.rn
+FROM dm_calc.storage_sales_bundles_weight AS base_2
+LEFT JOIN dict_dds.calendar AS calendar_start
+  ON base_2.storage_cost_special_calculation_type_code = '6'
+ AND calendar_start.dt = base_2.dt_storage_start
+LEFT JOIN dict_dds.calendar AS calendar_end
+  ON base_2.storage_cost_special_calculation_type_code = '6'
+ AND calendar_end.dt = base_2.dt_storage_end
+LEFT JOIN for_1079_all AS f1079
+  ON f1079.rn = base_2.rn
+LEFT JOIN for_1087
+  ON  for_1087.purchase_contract_code          = f1079.purchase_contract_code
+ AND for_1087.purchase_contract_position_code  = f1079.position_line_item_code
+ AND for_1087.dt_price_condition_valid_to      = f1079.datbi
+ AND for_1087.dt_price_condition_valid_from    = f1079.datab;

@@ -1,59 +1,554 @@
-DROP TABLE IF EXISTS dict_dds.transport_hub CASCADE;
+----------------------------------------------------------------------
+-- 1. Очистка витрины (полная загрузка)
+----------------------------------------------------------------------
 
-CREATE TABLE dict_dds.transport_hub(
+TRUNCATE TABLE userdata.transportation_external_location_metal_stock;
 
-transport_hub_code varchar(30),
-address_code varchar(30),
-is_border_cross varchar(3),
-is_transit_point varchar(3),
-is_airport varchar(3),
-is_seaport varchar(3),
-is_domestic_port varchar(3),
-is_railway_station varchar(3),
-railway_station_rzd_code varchar(30),
-is_railway_station_express varchar(3),
-is_railway_station_of_loading varchar(3),
-railway_code varchar(21),
-customs_code varchar(18),
-plant_code varchar(12),
-is_transport_hub_locked varchar(3),
-location_code varchar(15),
-transport_hub_name_rus varchar(90),
-transport_hub_name_eng varchar(90),
-latitude varchar(30),
-longitude varchar(30),
-DTTM_INSERTED TIMESTAMP default NOW(),
-DTTM_UPDATED TIMESTAMP default NOW(),
-JOB_NAME VARCHAR(50) default 'airflow',
-DELETED_FLAG BOOL default false
+----------------------------------------------------------------------
+-- 2. Вспомогательные временные таблицы (справочники)
+--    Всё реплицируется, чтобы джойны к большому base шли быстро
+----------------------------------------------------------------------
+
+-- 2.1. Адрес → страна
+CREATE TEMP TABLE tmp_address_country AS
+SELECT
+    a.address_code,
+    MIN(a.country_code) AS country_code
+FROM dict_dds.address a
+GROUP BY a.address_code
+DISTRIBUTED REPLICATED;
+
+
+-- 2.2. Страна (название)
+CREATE TEMP TABLE tmp_country_texts AS
+SELECT
+    ct.country_code,
+    ct.country_full_name
+FROM dict_dds.country_texts ct
+WHERE ct.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.3. Страна → регион рынка (market_region1)
+CREATE TEMP TABLE tmp_country_region AS
+SELECT
+    c.country_code,
+    mr.market_region1_name
+FROM dict_dds.country c
+LEFT JOIN dict_dds.market_region1_texts mr
+    ON mr.market_region1_code = c.market_region1_code
+   AND mr.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.4. Транспортные узлы с уже подтянутой страной и регионом
+CREATE TEMP TABLE tmp_hub_ext AS
+SELECT
+    h.transport_hub_code,
+    h.address_code,
+    ac.country_code,
+    ct.country_full_name,
+    cr.market_region1_name,
+    h.transport_hub_name_rus,
+    h.transport_hub_name_eng
+FROM dict_dds.transport_hub h
+LEFT JOIN tmp_address_country ac
+    ON ac.address_code = h.address_code
+LEFT JOIN tmp_country_texts ct
+    ON ct.country_code = ac.country_code
+LEFT JOIN tmp_country_region cr
+    ON cr.country_code = ac.country_code
+DISTRIBUTED REPLICATED;
+
+
+-- 2.5. Материалы (название)
+CREATE TEMP TABLE tmp_material_texts AS
+SELECT
+    m.material_code,
+    m.material_name
+FROM dict_dds.material_texts m
+WHERE m.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.6. Услуги транспортировки (название)
+CREATE TEMP TABLE tmp_service_texts AS
+SELECT
+    t.transportation_service_code,
+    t.transportation_service_name
+FROM dict_dds.transportation_service_texts t
+WHERE t.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.7. ЕТСНГ (название)
+CREATE TEMP TABLE tmp_etsng_texts AS
+SELECT
+    e.etsng_code,
+    e.etsng_name
+FROM dict_dds.etsng_texts e
+WHERE e.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.8. Заводы (короткое и полное имя)
+CREATE TEMP TABLE tmp_plant AS
+SELECT
+    p.plant_code,
+    p.plant_short_name,
+    p.plant_full_name
+FROM dict_dds.plant_and_subsidiary p
+DISTRIBUTED REPLICATED;
+
+
+-- 2.9. Этапы перевозки
+CREATE TEMP TABLE tmp_transportation_stage AS
+SELECT
+    s.transportation_stage_code,
+    s.transportation_stage_name
+FROM dict_dds.transportation_stage_texts s
+WHERE s.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.10. Контрагенты (экспедиторы, кредиторы)
+CREATE TEMP TABLE tmp_counterparty AS
+SELECT
+    c.counterparty_code,
+    c.counterparty_short_name,
+    c.address_code
+FROM dict_dds.counterparty c
+DISTRIBUTED REPLICATED;
+
+
+-- 2.11. Материал → форма (shape)
+CREATE TEMP TABLE tmp_material_shape AS
+SELECT
+    ms.material_code,
+    mst.shape_code,
+    mst.material_shape_full_name
+FROM dict_dds.material_specification ms
+LEFT JOIN dict_dds.material_shape_texts mst
+    ON mst.shape_code = ms.shape_code
+   AND mst.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+-- 2.12. Адреса для кредитора (только нужные нам)
+CREATE TEMP TABLE tmp_creditor_address AS
+SELECT
+    a.address_code,
+    a.address_full_name
+FROM dict_dds.address a
+WHERE a.international_display_format_code IS NULL
+DISTRIBUTED REPLICATED;
+
+
+-- 2.13. Поставка → завод производителя (для собственника металла)
+CREATE TEMP TABLE tmp_delivery_plant AS
+SELECT
+    d.delivery_code,
+    d.plant_producer_code
+FROM dds.delivery_document_position d
+WHERE d.delivery_position_line_item_code = '000010'
+DISTRIBUTED REPLICATED;
+
+
+----------------------------------------------------------------------
+-- 3. Загрузка данных в витрину
+----------------------------------------------------------------------
+
+INSERT INTO userdata.transportation_external_location_metal_stock (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    initial_delivery_position_code,
+    sales_delivery_position_code,
+    material_code,
+    material_name,
+    material_search_name,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    material_shape_name,
+    material_shape_search_name,
+    port_of_discharge_code,
+    port_of_discharge_name,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    port_of_discharge_search_name,
+    transport_type_code,
+    transport_type_name,
+    transport_type_search_name,
+    etsng_code,
+    etsng_name,
+    etsng_search_name,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    region_of_remote_warehouse_name,
+    receiving_plant_name,
+    receiving_plant_search_name,
+    country_of_remote_warehouse_name,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_departure_hub_name,
+    transport_destination_hub_code,
+    transport_destination_hub_name,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    transportation_stage_name,
+    transportation_stage_search_name,
+    storage_calculation_bundle_quantity,
+    forwarder_name,
+    forwarder_search_name,
+    warehouse_code,
+    warehouse_name,
+    warehouse_search_name,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    warehouse_storage_area_name,
+    warehouse_storage_area_search_name,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    service_name,
+    service_search_name,
+    purchase_contract_position_uom_code,
+    creditor_in_shipment_instruction_name,
+    creditor_in_shipment_instruction_search_name,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    remote_warehouse_name,
+    country_of_remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    type_warehouse_name,
+    type_freight_name,
+    metal_owner_for_reporting_name,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
 )
-with (
-    appendonly = true,
-    orientation = column,
-    compresstype = zstd,
-    compresslevel = 3
-)
-distributed replicated;
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10' AS initial_delivery_position_code,           -- LE.001004
+    '10' AS sales_delivery_position_code,             -- LE.001006
 
-COMMENT ON TABLE dict_dds.transport_hub IS 'Маршруты: транспортные узлы';
+    base.material_code,
+    matet.material_name AS material_name,             -- LE.001013
+    base.material_code || '-' || matet.material_name AS material_search_name,  -- LE.001014
 
-COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_code IS 'Транспортный узел (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.address_code IS 'Номер адреса из таблицы ADRC (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.is_border_cross IS 'Индикатор: Пересечение границы ?';
-COMMENT ON COLUMN dict_dds.transport_hub.is_transit_point IS 'Индикатор: перевалочный пункт';
-COMMENT ON COLUMN dict_dds.transport_hub.is_airport IS 'Индикатор:  аэропорт';
-COMMENT ON COLUMN dict_dds.transport_hub.is_seaport IS 'Индикатор:  Морской порт';
-COMMENT ON COLUMN dict_dds.transport_hub.is_domestic_port IS 'Индикатор:  Внутренний порт';
-COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station IS 'Индикатор: станция';
-COMMENT ON COLUMN dict_dds.transport_hub.railway_station_rzd_code IS '№ железнодорожной станции (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station_express IS 'Индикатор: ж.-д. станция - экспресс';
-COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station_of_loading IS 'Индикатор:  Ж.-д. станция погрузки';
-COMMENT ON COLUMN dict_dds.transport_hub.railway_code IS 'Класс трассы - ж.-д. Транспорт (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.customs_code IS 'Таможня: таможня вывоза/поступления для внешней торговли (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.plant_code IS 'Завод (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.is_transport_hub_locked IS 'Признак блокировки транспортного узла';
-COMMENT ON COLUMN dict_dds.transport_hub.location_code IS 'Локация (код)';
-COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_name_rus IS 'Название транспортного узла на русском';
-COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_name_eng IS 'Название транспортного узла на английском';
-COMMENT ON COLUMN dict_dds.transport_hub.latitude IS 'Широта';
-COMMENT ON COLUMN dict_dds.transport_hub.longitude IS 'Долгота';
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+
+    base.material_shape_code,
+    mf.material_shape_full_name AS material_shape_name,   -- форма
+    base.material_shape_code || '-' || mf.material_shape_full_name AS material_shape_search_name,
+
+    base.port_of_discharge_code,
+    port_hub.transport_hub_name_eng AS port_of_discharge_name,   -- порт (ENG)
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' || port_hub.transport_hub_name_eng AS port_of_discharge_search_name,
+
+    base.transport_type_code,
+    ipd.transport_transfer_type_name AS transport_type_name,
+    base.transport_type_code || '-' || ipd.transport_transfer_type_name AS transport_type_search_name,
+
+    base.etsng_code,
+    ette.etsng_name AS etsng_name,
+    base.etsng_code || '-' || ette.etsng_name AS etsng_search_name,
+
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+
+    -- Регион удалённого склада (через регион страны склада)
+    CASE
+        WHEN wh_hub.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN wh_hub.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN wh_hub.market_region1_name IN ('Азия', 'Китай') THEN 'Восточная Азия'
+        ELSE wh_hub.market_region1_name
+    END AS region_of_remote_warehouse_name,
+
+    -- Завод поставки
+    (pas.plant_short_name || ' ' || pas.plant_full_name) AS receiving_plant_name,
+    (base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name) AS receiving_plant_search_name,
+
+    -- Страна удалённого склада (по стране склада, как в исходной логике)
+    CASE
+        WHEN wh_hub.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN wh_hub.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+        ELSE wh_hub.country_full_name
+    END AS country_of_remote_warehouse_name,
+
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+
+    base.transport_departure_hub_code,
+    dep_hub.transport_hub_name_rus AS transport_departure_hub_name,
+
+    base.transport_destination_hub_code,
+    dest_hub.transport_hub_name_rus AS transport_destination_hub_name,
+
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+            THEN trst.transportation_stage_name
+    END AS transportation_stage_name,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
+    END AS transportation_stage_search_name,
+
+    base.storage_calculation_bundle_quantity,
+
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+                THEN counter.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_name,
+
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+                THEN base.forwarder_code || '-' || counter.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_search_name,
+
+    base.warehouse_code,
+
+    -- Название склада: A) Россия → русское, B) иначе → английское
+    CASE
+        WHEN wh_hub.country_full_name = 'Россия'
+            THEN wh_hub.transport_hub_name_rus
+        ELSE wh_hub.transport_hub_name_eng
+    END AS warehouse_name,
+
+    base.warehouse_code || '-' ||
+    CASE
+        WHEN wh_hub.country_full_name = 'Россия'
+            THEN wh_hub.transport_hub_name_rus
+        ELSE wh_hub.transport_hub_name_eng
+    END AS warehouse_search_name,
+
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+
+    base.warehouse_storage_area_code,
+    area_hub.transport_hub_name_rus AS warehouse_storage_area_name,
+    base.warehouse_storage_area_code || '-' || area_hub.transport_hub_name_rus AS warehouse_storage_area_search_name,
+
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+
+    base.service_code,
+    zsrvpost.transportation_service_name AS service_name,
+    base.service_code || '-' || zsrvpost.transportation_service_name AS service_search_name,
+
+    base.purchase_contract_position_uom_code,
+
+    addr_8.address_full_name AS creditor_in_shipment_instruction_name,
+    base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name
+        AS creditor_in_shipment_instruction_search_name,
+
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+
+    base.remote_warehouse_code,
+
+    -- Удалённый склад: та же логика A (Россия → RUS, иначе → ENG)
+    CASE
+        WHEN remote_hub.country_full_name = 'Россия'
+            THEN remote_hub.transport_hub_name_rus
+        ELSE remote_hub.transport_hub_name_eng
+    END AS remote_warehouse_name,
+
+    remote_hub.country_code AS country_of_remote_warehouse_code,
+
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+
+    base.is_stored_in_russian_port_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры', 'Логика РФ-балк')
+            THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name IN ('Логика СВХ')
+            THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END AS type_warehouse_name,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
+            THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк'
+            THEN 'Балк'
+        ELSE 'Не определено'
+    END AS type_freight_name,
+
+    (pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name) AS metal_owner_for_reporting_name,
+
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+    base.metal_in_china_stock_balance_closing_weight
+FROM dm_calc.storage_sales_bundles_amount base
+    -- материалы
+    LEFT JOIN tmp_material_texts matet
+        ON matet.material_code = base.material_code
+    LEFT JOIN tmp_material_shape mf
+        ON mf.material_code = base.material_code
+
+    -- услуги
+    LEFT JOIN tmp_service_texts zsrvpost
+        ON zsrvpost.transportation_service_code = base.service_code
+
+    -- ЕТСНГ
+    LEFT JOIN tmp_etsng_texts ette
+        ON ette.etsng_code = base.etsng_code
+
+    -- склады / хабы
+    LEFT JOIN tmp_hub_ext wh_hub
+        ON wh_hub.transport_hub_code = base.warehouse_code
+    LEFT JOIN tmp_hub_ext port_hub
+        ON port_hub.transport_hub_code = base.port_of_discharge_code
+    LEFT JOIN tmp_hub_ext dep_hub
+        ON dep_hub.transport_hub_code = base.transport_departure_hub_code
+    LEFT JOIN tmp_hub_ext dest_hub
+        ON dest_hub.transport_hub_code = base.transport_destination_hub_code
+    LEFT JOIN tmp_hub_ext area_hub
+        ON area_hub.transport_hub_code = base.warehouse_storage_area_code
+    LEFT JOIN tmp_hub_ext remote_hub
+        ON remote_hub.transport_hub_code = base.remote_warehouse_code
+
+    -- заводы
+    LEFT JOIN tmp_plant pas
+        ON pas.plant_code = base.receiving_plant_code
+
+    -- собственник металла (завод из договора хранения)
+    LEFT JOIN tmp_delivery_plant deldp
+        ON deldp.delivery_code = base.delivery_for_storage_calculation_code
+    LEFT JOIN tmp_plant pas_1124
+        ON pas_1124.plant_code = deldp.plant_producer_code
+
+    -- этап перевозки
+    LEFT JOIN tmp_transportation_stage trst
+        ON trst.transportation_stage_code = base.transportation_stage_code
+
+    -- экспедитор
+    LEFT JOIN tmp_counterparty counter
+        ON counter.counterparty_code = base.forwarder_code
+
+    -- кредитор + адрес
+    LEFT JOIN tmp_counterparty counter_2
+        ON counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
+    LEFT JOIN tmp_creditor_address addr_8
+        ON addr_8.address_code = counter_2.address_code
+
+    -- тип ПС
+    LEFT JOIN dict_dds.transport_transfer_type_texts ipd
+        ON ipd.transport_transfer_type_code = base.transport_type_code
+       AND ipd.language_code = 'R'
+;

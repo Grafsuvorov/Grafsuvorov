@@ -1,204 +1,4 @@
-------------------------------------------------------------
--- 2. Вспомогательные временные таблицы (все REPLICATED)
-------------------------------------------------------------
-
--- 2.1. Адрес → страна
-DROP TABLE IF EXISTS tmp_address_country;
-CREATE TEMP TABLE tmp_address_country AS
-SELECT
-    a.address_code,
-    MIN(a.country_code) AS country_code
-FROM dict_dds.address a
-GROUP BY a.address_code
-DISTRIBUTED REPLICATED;
-
-
--- 2.2. Страна (название)
-DROP TABLE IF EXISTS tmp_country_texts;
-CREATE TEMP TABLE tmp_country_texts AS
-SELECT
-    ct.country_code,
-    ct.country_full_name
-FROM dict_dds.country_texts ct
-WHERE ct.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.3. Страна → регион рынка (market_region1)
-DROP TABLE IF EXISTS tmp_country_region;
-CREATE TEMP TABLE tmp_country_region AS
-SELECT
-    c.country_code,
-    mr.market_region1_name
-FROM dict_dds.country c
-LEFT JOIN dict_dds.market_region1_texts mr
-    ON mr.market_region1_code = c.market_region1_code
-   AND mr.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.4. Транспортные узлы с уже подтянутой страной и регионом
-DROP TABLE IF EXISTS tmp_hub_ext;
-CREATE TEMP TABLE tmp_hub_ext AS
-SELECT
-    h.transport_hub_code,
-    h.address_code,
-    ac.country_code,
-    ct.country_full_name,
-    cr.market_region1_name,
-    h.transport_hub_name_rus,
-    h.transport_hub_name_eng
-FROM dict_dds.transport_hub h
-LEFT JOIN tmp_address_country ac
-    ON ac.address_code = h.address_code
-LEFT JOIN tmp_country_texts ct
-    ON ct.country_code = ac.country_code
-LEFT JOIN tmp_country_region cr
-    ON cr.country_code = ac.country_code
-DISTRIBUTED REPLICATED;
-
-
--- 2.5. Материалы (название)
-DROP TABLE IF EXISTS tmp_material_texts;
-CREATE TEMP TABLE tmp_material_texts AS
-SELECT
-    m.material_code,
-    m.material_name
-FROM dict_dds.material_texts m
-WHERE m.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.6. Услуги транспортировки (название)
-DROP TABLE IF EXISTS tmp_service_texts;
-CREATE TEMP TABLE tmp_service_texts AS
-SELECT
-    t.transportation_service_code,
-    t.transportation_service_name
-FROM dict_dds.transportation_service_texts t
-WHERE t.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.7. ЕТСНГ (название)
-DROP TABLE IF EXISTS tmp_etsng_texts;
-CREATE TEMP TABLE tmp_etsng_texts AS
-SELECT
-    e.etsng_code,
-    e.etsng_name
-FROM dict_dds.etsng_texts e
-WHERE e.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.8. Заводы (короткое и полное имя)
-DROP TABLE IF EXISTS tmp_plant;
-CREATE TEMP TABLE tmp_plant AS
-SELECT
-    p.plant_code,
-    p.plant_short_name,
-    p.plant_full_name
-FROM dict_dds.plant_and_subsidiary p
-DISTRIBUTED REPLICATED;
-
-
--- 2.9. Этапы перевозки
-DROP TABLE IF EXISTS tmp_transportation_stage;
-CREATE TEMP TABLE tmp_transportation_stage AS
-SELECT
-    s.transportation_stage_code,
-    s.transportation_stage_name
-FROM dict_dds.transportation_stage_texts s
-WHERE s.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
--- 2.10. Контрагенты (экспедиторы, кредиторы)
-DROP TABLE IF EXISTS tmp_counterparty;
-CREATE TEMP TABLE tmp_counterparty AS
-SELECT
-    c.counterparty_code,
-    c.counterparty_short_name,
-    c.address_code
-FROM dict_dds.counterparty c
-DISTRIBUTED REPLICATED;
-
-
--- 2.11. Материал → форма (shape)
-DROP TABLE IF EXISTS tmp_material_shape;
-CREATE TEMP TABLE tmp_material_shape AS
-SELECT
-    ms.material_code,
-    MIN(mst.material_shape_full_name) AS material_shape_full_name
-FROM dict_dds.material_specification ms
-LEFT JOIN dict_dds.material_shape_texts mst
-    ON mst.shape_code = ms.shape_code
-   AND mst.language_code = 'R'
-GROUP BY ms.material_code
-DISTRIBUTED REPLICATED;
-
-
--- 2.12. Адреса для кредитора (только нужные нам)
-DROP TABLE IF EXISTS tmp_creditor_address;
-CREATE TEMP TABLE tmp_creditor_address AS
-SELECT
-    a.address_code,
-    a.address_full_name
-FROM dict_dds.address a
-WHERE a.international_display_format_code IS NULL
-DISTRIBUTED REPLICATED;
-
-
--- 2.13. Поставка → завод производителя (для собственника металла)
-DROP TABLE IF EXISTS tmp_delivery_plant;
-CREATE TEMP TABLE tmp_delivery_plant AS
-SELECT
-    d.delivery_code,
-    d.plant_producer_code
-FROM dds.delivery_document_position d
-WHERE d.delivery_position_line_item_code = '000010'
-DISTRIBUTED REPLICATED;
-
-
--- 2.14. Тип перевозки (transport_transfer_type_texts, язык R)
-DROP TABLE IF EXISTS tmp_transport_type;
-CREATE TEMP TABLE tmp_transport_type AS
-SELECT
-    t.transport_transfer_type_code,
-    t.transport_transfer_type_name
-FROM dict_dds.transport_transfer_type_texts t
-WHERE t.language_code = 'R'
-DISTRIBUTED REPLICATED;
-
-
-------------------------------------------------------------
--- 2.x. Анализ статистик по факт-таблице и справочникам
-------------------------------------------------------------
-
-ANALYZE dm_calc.storage_sales_bundles_amount;
-
-ANALYZE tmp_address_country;
-ANALYZE tmp_country_texts;
-ANALYZE tmp_country_region;
-ANALYZE tmp_hub_ext;
-ANALYZE tmp_material_texts;
-ANALYZE tmp_service_texts;
-ANALYZE tmp_etsng_texts;
-ANALYZE tmp_plant;
-ANALYZE tmp_transportation_stage;
-ANALYZE tmp_counterparty;
-ANALYZE tmp_material_shape;
-ANALYZE tmp_creditor_address;
-ANALYZE tmp_delivery_plant;
-ANALYZE tmp_transport_type;
-
-
-------------------------------------------------------------
--- 2.y. ПЕРВЫЙ СЛОЙ ОБОГАЩЕНИЯ ФАКТА (без хабов)
-------------------------------------------------------------
-
-DROP TABLE IF EXISTS tmp_base_stage1;
-CREATE TEMP TABLE tmp_base_stage1 AS
+explain(verbose, format json)
 SELECT
     base.*,
 
@@ -274,402 +74,582 @@ FROM dm_calc.storage_sales_bundles_amount base
 
     -- тип ПС (через temp, а не напрямую dict_dds)
     LEFT JOIN tmp_transport_type ipd
-        ON ipd.transport_transfer_type_code = base.transport_type_code
-DISTRIBUTED RANDOMLY;
+        ON ipd.transport_transfer_type_code = base.transport_type_code;
 
-ANALYZE tmp_base_stage1;
-
-
-------------------------------------------------------------
--- 2.z. ВТОРОЙ СЛОЙ ОБОГАЩЕНИЯ (хабы / склады / порты)
-------------------------------------------------------------
-
-DROP TABLE IF EXISTS tmp_base_stage2;
-CREATE TEMP TABLE tmp_base_stage2 AS
-SELECT
-    b.*,
-
-    -- склад (warehouse)
-    wh_hub.country_full_name        AS wh_country_full_name,
-    wh_hub.market_region1_name      AS wh_market_region1_name,
-    wh_hub.transport_hub_name_rus   AS wh_name_rus,
-    wh_hub.transport_hub_name_eng   AS wh_name_eng,
-
-    -- порт отгрузки
-    port_hub.transport_hub_name_eng AS port_name_eng,
-
-    -- хаб отправления
-    dep_hub.transport_hub_name_rus  AS dep_name_rus,
-
-    -- хаб назначения
-    dest_hub.transport_hub_name_rus AS dest_name_rus,
-
-    -- зона хранения (area)
-    area_hub.transport_hub_name_rus AS area_name_rus,
-
-    -- удалённый склад
-    remote_hub.transport_hub_name_rus  AS remote_name_rus,
-    remote_hub.transport_hub_name_eng  AS remote_name_eng,
-    remote_hub.country_full_name       AS remote_country_full_name,
-    remote_hub.country_code            AS remote_country_code,
-    remote_hub.market_region1_name     AS remote_market_region1_name
-FROM tmp_base_stage1 b
-    LEFT JOIN tmp_hub_ext wh_hub
-        ON wh_hub.transport_hub_code = b.warehouse_code
-    LEFT JOIN tmp_hub_ext port_hub
-        ON port_hub.transport_hub_code = b.port_of_discharge_code
-    LEFT JOIN tmp_hub_ext dep_hub
-        ON dep_hub.transport_hub_code = b.transport_departure_hub_code
-    LEFT JOIN tmp_hub_ext dest_hub
-        ON dest_hub.transport_hub_code = b.transport_destination_hub_code
-    LEFT JOIN tmp_hub_ext area_hub
-        ON area_hub.transport_hub_code = b.warehouse_storage_area_code
-    LEFT JOIN tmp_hub_ext remote_hub
-        ON remote_hub.transport_hub_code = b.remote_warehouse_code
-DISTRIBUTED RANDOMLY;
-
-ANALYZE tmp_base_stage2;
-
-
-------------------------------------------------------------
--- 3. Загрузка данных в витрину (БЕЗ JOIN-ОВ)
-------------------------------------------------------------
-
-INSERT INTO userdata.transportation_external_location_metal_stock (
-    sales_bundle_code,
-    plant_producer_delivery_code,
-    plant_producer_delivery_position_code,
-    initial_delivery_code,
-    initial_delivery_position_code,
-    sales_delivery_position_code,
-    material_code,
-    material_name,
-    material_search_name,
-    dt_shipment,
-    railcar_code,
-    transport_bill_code,
-    uni,
-    material_shape_code,
-    material_shape_name,
-    material_shape_search_name,
-    port_of_discharge_code,
-    port_of_discharge_name,
-    dt_arrival_to_russian_port,
-    dt_storage_end_in_release,
-    port_of_discharge_search_name,
-    transport_type_code,
-    transport_type_name,
-    transport_type_search_name,
-    etsng_code,
-    etsng_name,
-    etsng_search_name,
-    dt_report,
-    sales_bundle_net_weight,
-    sales_bundle_gross_weight,
-    batch_code,
-    dt_arrival,
-    region_of_remote_warehouse_name,
-    receiving_plant_name,
-    receiving_plant_search_name,
-    country_of_remote_warehouse_name,
-    receiving_plant_code,
-    sales_delivery_code,
-    transportation_inbound_delivery_code,
-    delivery_for_storage_calculation_code,
-    transportation_inbound_delivery_position_code,
-    delivery_position_for_storage_calculation_code,
-    forwarder_code,
-    storage_cost_calculation_type_name,
-    transport_departure_hub_code,
-    transport_departure_hub_name,
-    transport_destination_hub_code,
-    transport_destination_hub_name,
-    transportation_outbound_delivery_code,
-    transportation_outbound_delivery_position_code,
-    is_final_transportation_stage_code,
-    transportation_stage_code,
-    transportation_stage_name,
-    transportation_stage_search_name,
-    storage_calculation_bundle_quantity,
-    forwarder_name,
-    forwarder_search_name,
-    warehouse_code,
-    warehouse_name,
-    warehouse_search_name,
-    delivery_in_final_release_code,
-    dt_final_release,
-    bill_of_lading_code,
-    bill_of_lading_number,
-    dt_bill_of_lading,
-    incoterms_code,
-    storage_cost_special_calculation_type_code,
-    warehouse_storage_area_code,
-    warehouse_storage_area_name,
-    warehouse_storage_area_search_name,
-    plant_code,
-    unit_balance_code,
-    creditor_in_shipment_instruction_code,
-    dt_storage_start,
-    dt_shipped_from_warehouse,
-    dt_storage_end,
-    service_number,
-    storage_duration_total_calendar_days,
-    shipment_instruction_number,
-    dt_for_price_search_in_purchase_contract,
-    purchase_contract_code,
-    purchase_contract_position_code,
-    purchase_contract_position_currency_code,
-    service_code,
-    service_name,
-    service_search_name,
-    purchase_contract_position_uom_code,
-    creditor_in_shipment_instruction_name,
-    creditor_in_shipment_instruction_search_name,
-    storage_duration_free_by_contract_calendar_days,
-    storage_duration_free_by_delivery_calendar_days,
-    storage_duration_payable_calendar_days,
-    remote_warehouse_code,
-    remote_warehouse_name,
-    country_of_remote_warehouse_code,
-    dt_transportation_stage_start_p,
-    dt_transportation_stage_start_r,
-    dt_shipment_from_foreign_warehouse,
-    storage_cost_calculated_amount,
-    storage_cost_calculated_amount_local,
-    storage_payable_001_030_days_gross_weight,
-    storage_payable_031_060_days_gross_weight,
-    storage_payable_061_090_days_gross_weight,
-    storage_payable_091_180_days_gross_weight,
-    storage_payable_181_365_days_gross_weight,
-    storage_payable_over_365_days_gross_weight,
-    is_stored_in_russian_port_code,
-    type_warehouse_name,
-    type_freight_name,
-    metal_owner_for_reporting_name,
-    storage_calculated_cost_001_030_amount,
-    storage_calculated_cost_031_060_amount,
-    storage_calculated_cost_061_090_amount,
-    storage_calculated_cost_091_180_amount,
-    storage_calculated_cost_181_365_amount,
-    storage_calculated_cost_over_365_amount,
-    metal_in_china_stock_balance_closing_weight
-)
-SELECT
-    b.sales_bundle_code,
-    b.plant_producer_delivery_code,
-    b.plant_producer_delivery_position_code,
-    b.initial_delivery_code,
-    '10' AS initial_delivery_position_code,           -- LE.001004
-    '10' AS sales_delivery_position_code,             -- LE.001006
-
-    b.material_code,
-    b.material_name,
-    b.material_code || '-' || b.material_name AS material_search_name,
-
-    b.dt_shipment,
-    b.railcar_code,
-    b.transport_bill_code,
-    b.uni,
-
-    b.material_shape_code,
-    b.material_shape_full_name AS material_shape_name,
-    b.material_shape_code || '-' || b.material_shape_full_name AS material_shape_search_name,
-
-    b.port_of_discharge_code,
-    b.port_name_eng AS port_of_discharge_name,
-    b.dt_arrival_to_russian_port,
-    b.dt_storage_end_in_release,
-    b.port_of_discharge_code || '-' || b.port_name_eng AS port_of_discharge_search_name,
-
-    b.transport_type_code,
-    b.transport_transfer_type_name AS transport_type_name,
-    b.transport_type_code || '-' || b.transport_transfer_type_name AS transport_type_search_name,
-
-    b.etsng_code,
-    b.etsng_name,
-    b.etsng_code || '-' || b.etsng_name AS etsng_search_name,
-
-    b.dt_report,
-    b.sales_bundle_net_weight,
-    b.sales_bundle_gross_weight,
-    b.batch_code,
-    b.dt_arrival,
-
-    -- Регион удалённого склада (как в исходной логике: по региону склада)
-    CASE
-        WHEN b.wh_market_region1_name = 'Турция' THEN 'Западная Азия'
-        WHEN b.wh_market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
-        WHEN b.wh_market_region1_name IN ('Азия', 'Китай') THEN 'Восточная Азия'
-        ELSE b.wh_market_region1_name
-    END AS region_of_remote_warehouse_name,
-
-    -- Завод поставки
-    (b.recv_plant_short_name || ' ' || b.recv_plant_full_name) AS receiving_plant_name,
-    (b.receiving_plant_code || '-' || b.recv_plant_short_name || ' ' || b.recv_plant_full_name)
-        AS receiving_plant_search_name,
-
-    -- Страна удалённого склада (по стране склада, как в исходной логике)
-    CASE
-        WHEN b.wh_country_full_name = 'Корея, республика' THEN 'Южная Корея'
-        WHEN b.wh_country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
-        ELSE b.wh_country_full_name
-    END AS country_of_remote_warehouse_name,
-
-    b.receiving_plant_code,
-    b.sales_delivery_code,
-    b.transportation_inbound_delivery_code,
-    b.delivery_for_storage_calculation_code,
-    b.transportation_inbound_delivery_position_code,
-    b.delivery_position_for_storage_calculation_code,
-    b.forwarder_code,
-    b.storage_cost_calculation_type_name,
-
-    b.transport_departure_hub_code,
-    b.dep_name_rus AS transport_departure_hub_name,
-
-    b.transport_destination_hub_code,
-    b.dest_name_rus AS transport_destination_hub_name,
-
-    b.transportation_outbound_delivery_code,
-    b.transportation_outbound_delivery_position_code,
-    b.is_final_transportation_stage_code,
-    b.transportation_stage_code,
-
-    CASE
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
-            THEN b.transportation_stage_name
-    END AS transportation_stage_name,
-
-    CASE
-        WHEN b.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
-            THEN b.transportation_stage_code || '-' || b.transportation_stage_name
-    END AS transportation_stage_search_name,
-
-    b.storage_calculation_bundle_quantity,
-
-    COALESCE(
-        CASE
-            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
-                THEN b.forwarder_short_name
-        END,
-        'Не определено'
-    ) AS forwarder_name,
-
-    COALESCE(
-        CASE
-            WHEN b.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
-                THEN b.forwarder_code || '-' || b.forwarder_short_name
-        END,
-        'Не определено'
-    ) AS forwarder_search_name,
-
-    b.warehouse_code,
-
-    -- Название склада: A) Россия → русское, B) иначе → английское
-    CASE
-        WHEN b.wh_country_full_name = 'Россия'
-            THEN b.wh_name_rus
-        ELSE b.wh_name_eng
-    END AS warehouse_name,
-
-    b.warehouse_code || '-' ||
-    CASE
-        WHEN b.wh_country_full_name = 'Россия'
-            THEN b.wh_name_rus
-        ELSE b.wh_name_eng
-    END AS warehouse_search_name,
-
-    b.delivery_in_final_release_code,
-    b.dt_final_release,
-    b.bill_of_lading_code,
-    b.bill_of_lading_number,
-    b.dt_bill_of_lading,
-    b.incoterms_code,
-    b.storage_cost_special_calculation_type_code,
-
-    b.warehouse_storage_area_code,
-    b.area_name_rus AS warehouse_storage_area_name,
-    b.warehouse_storage_area_code || '-' || b.area_name_rus AS warehouse_storage_area_search_name,
-
-    b.plant_code,
-    b.unit_balance_code,
-    b.creditor_in_shipment_instruction_code,
-
-    b.dt_storage_start,
-    b.dt_shipped_from_warehouse,
-    b.dt_storage_end,
-
-    b.service_number,
-    b.storage_duration_total_calendar_days,
-    b.shipment_instruction_number,
-    b.dt_for_price_search_in_purchase_contract,
-    b.purchase_contract_code,
-    b.purchase_contract_position_code,
-    b.purchase_contract_position_currency_code,
-
-    b.service_code,
-    b.transportation_service_name AS service_name,
-    b.service_code || '-' || b.transportation_service_name AS service_search_name,
-
-    b.purchase_contract_position_uom_code,
-
-    b.creditor_address_full_name AS creditor_in_shipment_instruction_name,
-    b.creditor_in_shipment_instruction_code || '-' || b.creditor_address_full_name
-        AS creditor_in_shipment_instruction_search_name,
-
-    b.storage_duration_free_by_contract_calendar_days,
-    b.storage_duration_free_by_delivery_calendar_days,
-    b.storage_duration_payable_calendar_days,
-
-    b.remote_warehouse_code,
-
-    -- Удалённый склад: та же логика A (Россия → RUS, иначе → ENG)
-    CASE
-        WHEN b.remote_country_full_name = 'Россия'
-            THEN b.remote_name_rus
-        ELSE b.remote_name_eng
-    END AS remote_warehouse_name,
-
-    b.remote_country_code AS country_of_remote_warehouse_code,
-
-    b.dt_transportation_stage_start_p,
-    b.dt_transportation_stage_start_r,
-    b.dt_shipment_from_foreign_warehouse,
-
-    b.storage_cost_calculated_amount,
-    b.storage_cost_calculated_amount_local,
-    b.storage_payable_001_030_days_gross_weight,
-    b.storage_payable_031_060_days_gross_weight,
-    b.storage_payable_061_090_days_gross_weight,
-    b.storage_payable_091_180_days_gross_weight,
-    b.storage_payable_181_365_days_gross_weight,
-    b.storage_payable_over_365_days_gross_weight,
-
-    b.is_stored_in_russian_port_code,
-
-    CASE
-        WHEN b.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры', 'Логика РФ-балк')
-            THEN 'Терминал порта'
-        WHEN b.storage_cost_calculation_type_name IN ('Логика СВХ')
-            THEN 'Склад СВХ'
-        ELSE 'Не определено'
-    END AS type_warehouse_name,
-
-    CASE
-        WHEN b.storage_cost_calculation_type_name = 'Логика РФ-контейнеры'
-            THEN 'Контейнеры'
-        WHEN b.storage_cost_calculation_type_name = 'Логика РФ-балк'
-            THEN 'Балк'
-        ELSE 'Не определено'
-    END AS type_freight_name,
-
-    (b.owner_plant_short_name || ' ' || b.owner_plant_full_name) AS metal_owner_for_reporting_name,
-
-    b.storage_calculated_cost_001_030_amount,
-    b.storage_calculated_cost_031_060_amount,
-    b.storage_calculated_cost_061_090_amount,
-    b.storage_calculated_cost_091_180_amount,
-    b.storage_calculated_cost_181_365_amount,
-    b.storage_calculated_cost_over_365_amount,
-    b.metal_in_china_stock_balance_closing_weight
-FROM tmp_base_stage2 b;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 2612878453.54,
+      "Plan Rows": 644045382583,
+      "Plan Width": 1070,
+      "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_etsng_texts.etsng_name", "tmp_service_texts.transportation_service_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name", "tmp_counterparty.counterparty_short_name", "tmp_counterparty_1.counterparty_short_name", "tmp_creditor_address.address_full_name", "tmp_transport_type.transport_transfer_type_name"],
+      "Plans": [
+        {
+          "Node Type": "Hash Join",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Join Type": "Left",
+          "Startup Cost": 0.00,
+          "Total Cost": 702269522.71,
+          "Plan Rows": 644045382583,
+          "Plan Width": 1070,
+          "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_etsng_texts.etsng_name", "tmp_service_texts.transportation_service_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name", "tmp_counterparty.counterparty_short_name", "tmp_counterparty_1.counterparty_short_name", "tmp_creditor_address.address_full_name", "tmp_transport_type.transport_transfer_type_name"],
+          "Hash Cond": "((storage_sales_bundles_amount.transport_type_code)::text = (tmp_transport_type.transport_transfer_type_code)::text)",
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Join Type": "Left",
+              "Startup Cost": 0.00,
+              "Total Cost": 368137783.66,
+              "Plan Rows": 322022691291,
+              "Plan Width": 1046,
+              "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name", "tmp_counterparty.counterparty_short_name", "tmp_counterparty_1.counterparty_short_name", "tmp_creditor_address.address_full_name"],
+              "Hash Cond": "((tmp_counterparty_1.address_code)::text = (tmp_creditor_address.address_code)::text)",
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Left",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 151674840.21,
+                  "Plan Rows": 161011345646,
+                  "Plan Width": 1013,
+                  "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name", "tmp_counterparty.counterparty_short_name", "tmp_counterparty_1.counterparty_short_name", "tmp_counterparty_1.address_code"],
+                  "Hash Cond": "((storage_sales_bundles_amount.creditor_in_shipment_instruction_code)::text = (tmp_counterparty_1.counterparty_code)::text)",
+                  "Plans": [
+                    {
+                      "Node Type": "Hash Join",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Join Type": "Left",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 72689192.40,
+                      "Plan Rows": 80505994847,
+                      "Plan Width": 959,
+                      "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name", "tmp_counterparty.counterparty_short_name"],
+                      "Hash Cond": "((storage_sales_bundles_amount.forwarder_code)::text = (tmp_counterparty.counterparty_code)::text)",
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Left",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 35229465.42,
+                          "Plan Rows": 40252997423,
+                          "Plan Width": 916,
+                          "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_transportation_stage.transportation_stage_name"],
+                          "Hash Cond": "((storage_sales_bundles_amount.transportation_stage_code)::text = (tmp_transportation_stage.transportation_stage_code)::text)",
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 1,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Left",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 17345829.25,
+                              "Plan Rows": 20126508775,
+                              "Plan Width": 858,
+                              "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"],
+                              "Hash Cond": "((tmp_delivery_plant.plant_producer_code)::text = (tmp_plant_1.plant_code)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 1,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Join Type": "Left",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 8956634.43,
+                                  "Plan Rows": 10063254387,
+                                  "Plan Width": 803,
+                                  "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_delivery_plant.plant_producer_code"],
+                                  "Hash Cond": "((storage_sales_bundles_amount.delivery_for_storage_calculation_code)::text = (tmp_delivery_plant.delivery_code)::text)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Join Type": "Left",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 3653864.70,
+                                      "Plan Rows": 5031627194,
+                                      "Plan Width": 798,
+                                      "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"],
+                                      "Hash Cond": "((storage_sales_bundles_amount.receiving_plant_code)::text = (tmp_plant.plant_code)::text)",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Hash Join",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Join Type": "Left",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 1699813.19,
+                                          "Plan Rows": 2515813597,
+                                          "Plan Width": 743,
+                                          "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name", "tmp_etsng_texts.etsng_name"],
+                                          "Hash Cond": "((storage_sales_bundles_amount.etsng_code)::text = (tmp_etsng_texts.etsng_code)::text)",
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Hash Join",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 1,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Join Type": "Left",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 787411.13,
+                                              "Plan Rows": 1257906798,
+                                              "Plan Width": 698,
+                                              "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name", "tmp_service_texts.transportation_service_name"],
+                                              "Hash Cond": "((storage_sales_bundles_amount.service_code)::text = (tmp_service_texts.transportation_service_code)::text)",
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Hash Join",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Join Type": "Left",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 358201.62,
+                                                  "Plan Rows": 628956544,
+                                                  "Plan Width": 647,
+                                                  "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name", "tmp_material_shape.material_shape_full_name"],
+                                                  "Hash Cond": "((storage_sales_bundles_amount.material_code)::text = (tmp_material_shape.material_code)::text)",
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Hash Join",
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 1,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Join Type": "Left",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 158024.52,
+                                                      "Plan Rows": 314478272,
+                                                      "Plan Width": 621,
+                                                      "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag", "tmp_material_texts.material_name"],
+                                                      "Hash Cond": "((storage_sales_bundles_amount.material_code)::text = (tmp_material_texts.material_code)::text)",
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Seq Scan",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 1,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Relation Name": "storage_sales_bundles_amount",
+                                                          "Schema": "dm_calc",
+                                                          "Alias": "storage_sales_bundles_amount",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 6809.01,
+                                                          "Plan Rows": 157239136,
+                                                          "Plan Width": 576,
+                                                          "Output": ["storage_sales_bundles_amount.sales_bundle_code", "storage_sales_bundles_amount.plant_producer_delivery_code", "storage_sales_bundles_amount.plant_producer_delivery_position_code", "storage_sales_bundles_amount.initial_delivery_code", "storage_sales_bundles_amount.material_code", "storage_sales_bundles_amount.dt_shipment", "storage_sales_bundles_amount.railcar_code", "storage_sales_bundles_amount.transport_bill_code", "storage_sales_bundles_amount.uni", "storage_sales_bundles_amount.material_shape_code", "storage_sales_bundles_amount.port_of_discharge_code", "storage_sales_bundles_amount.dt_arrival_to_russian_port", "storage_sales_bundles_amount.dt_storage_end_in_release", "storage_sales_bundles_amount.transport_type_code", "storage_sales_bundles_amount.etsng_code", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_net_weight", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.batch_code", "storage_sales_bundles_amount.dt_arrival", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.sales_delivery_code", "storage_sales_bundles_amount.transportation_inbound_delivery_code", "storage_sales_bundles_amount.delivery_for_storage_calculation_code", "storage_sales_bundles_amount.transportation_inbound_delivery_position_code", "storage_sales_bundles_amount.delivery_position_for_storage_calculation_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.transport_departure_hub_code", "storage_sales_bundles_amount.transport_destination_hub_code", "storage_sales_bundles_amount.transportation_outbound_delivery_code", "storage_sales_bundles_amount.transportation_outbound_delivery_position_code", "storage_sales_bundles_amount.is_final_transportation_stage_code", "storage_sales_bundles_amount.transportation_stage_code", "storage_sales_bundles_amount.storage_calculation_bundle_quantity", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.delivery_in_final_release_code", "storage_sales_bundles_amount.dt_final_release", "storage_sales_bundles_amount.bill_of_lading_code", "storage_sales_bundles_amount.bill_of_lading_number", "storage_sales_bundles_amount.dt_bill_of_lading", "storage_sales_bundles_amount.incoterms_code", "storage_sales_bundles_amount.storage_cost_special_calculation_type_code", "storage_sales_bundles_amount.warehouse_storage_area_code", "storage_sales_bundles_amount.plant_code", "storage_sales_bundles_amount.unit_balance_code", "storage_sales_bundles_amount.creditor_in_shipment_instruction_code", "storage_sales_bundles_amount.dt_storage_start", "storage_sales_bundles_amount.dt_shipped_from_warehouse", "storage_sales_bundles_amount.dt_storage_end", "storage_sales_bundles_amount.service_number", "storage_sales_bundles_amount.storage_duration_total_calendar_days", "storage_sales_bundles_amount.shipment_instruction_number", "storage_sales_bundles_amount.dt_for_price_search_in_purchase_contract", "storage_sales_bundles_amount.purchase_contract_code", "storage_sales_bundles_amount.purchase_contract_position_code", "storage_sales_bundles_amount.purchase_contract_position_currency_code", "storage_sales_bundles_amount.service_code", "storage_sales_bundles_amount.purchase_contract_position_uom_code", "storage_sales_bundles_amount.storage_duration_free_by_contract_calendar_days", "storage_sales_bundles_amount.storage_duration_free_by_delivery_calendar_days", "storage_sales_bundles_amount.storage_duration_payable_calendar_days", "storage_sales_bundles_amount.remote_warehouse_code", "storage_sales_bundles_amount.dt_transportation_stage_start_p", "storage_sales_bundles_amount.dt_transportation_stage_start_r", "storage_sales_bundles_amount.dt_shipment_from_foreign_warehouse", "storage_sales_bundles_amount.storage_cost_calculated_amount", "storage_sales_bundles_amount.storage_cost_calculated_amount_local", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.is_stored_in_russian_port_code", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "storage_sales_bundles_amount.metal_in_china_stock_balance_closing_weight", "storage_sales_bundles_amount.dttm_inserted", "storage_sales_bundles_amount.dttm_updated", "storage_sales_bundles_amount.job_name", "storage_sales_bundles_amount.deleted_flag"]
+                                                        },
+                                                        {
+                                                          "Node Type": "Hash",
+                                                          "Parent Relationship": "Inner",
+                                                          "Slice": 1,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Startup Cost": 486.80,
+                                                          "Total Cost": 486.80,
+                                                          "Plan Rows": 8726912,
+                                                          "Plan Width": 63,
+                                                          "Output": ["tmp_material_texts.material_code", "tmp_material_texts.material_name"],
+                                                          "Plans": [
+                                                            {
+                                                              "Node Type": "Seq Scan",
+                                                              "Parent Relationship": "Outer",
+                                                              "Slice": 1,
+                                                              "Segments": 8,
+                                                              "Gang Type": "primary reader",
+                                                              "Relation Name": "tmp_material_texts",
+                                                              "Schema": "pg_temp_8961226",
+                                                              "Alias": "tmp_material_texts",
+                                                              "Startup Cost": 0.00,
+                                                              "Total Cost": 486.80,
+                                                              "Plan Rows": 8726912,
+                                                              "Plan Width": 63,
+                                                              "Output": ["tmp_material_texts.material_code", "tmp_material_texts.material_name"]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "Node Type": "Hash",
+                                                      "Parent Relationship": "Inner",
+                                                      "Slice": 1,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Startup Cost": 431.46,
+                                                      "Total Cost": 431.46,
+                                                      "Plan Rows": 96496,
+                                                      "Plan Width": 40,
+                                                      "Output": ["tmp_material_shape.material_code", "tmp_material_shape.material_shape_full_name"],
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Seq Scan",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 1,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Relation Name": "tmp_material_shape",
+                                                          "Schema": "pg_temp_8961226",
+                                                          "Alias": "tmp_material_shape",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 431.46,
+                                                          "Plan Rows": 96496,
+                                                          "Plan Width": 40,
+                                                          "Output": ["tmp_material_shape.material_code", "tmp_material_shape.material_shape_full_name"]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "Node Type": "Hash",
+                                                  "Parent Relationship": "Inner",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Startup Cost": 431.10,
+                                                  "Total Cost": 431.10,
+                                                  "Plan Rows": 16664,
+                                                  "Plan Width": 57,
+                                                  "Output": ["tmp_service_texts.transportation_service_code", "tmp_service_texts.transportation_service_name"],
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Seq Scan",
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 1,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Relation Name": "tmp_service_texts",
+                                                      "Schema": "pg_temp_8961226",
+                                                      "Alias": "tmp_service_texts",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 431.10,
+                                                      "Plan Rows": 16664,
+                                                      "Plan Width": 57,
+                                                      "Output": ["tmp_service_texts.transportation_service_code", "tmp_service_texts.transportation_service_name"]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "Node Type": "Hash",
+                                              "Parent Relationship": "Inner",
+                                              "Slice": 1,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 431.23,
+                                              "Total Cost": 431.23,
+                                              "Plan Rows": 40392,
+                                              "Plan Width": 52,
+                                              "Output": ["tmp_etsng_texts.etsng_code", "tmp_etsng_texts.etsng_name"],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 1,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "tmp_etsng_texts",
+                                                  "Schema": "pg_temp_8961226",
+                                                  "Alias": "tmp_etsng_texts",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 431.23,
+                                                  "Plan Rows": 40392,
+                                                  "Plan Width": 52,
+                                                  "Output": ["tmp_etsng_texts.etsng_code", "tmp_etsng_texts.etsng_name"]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "Node Type": "Hash",
+                                          "Parent Relationship": "Inner",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 431.03,
+                                          "Total Cost": 431.03,
+                                          "Plan Rows": 4912,
+                                          "Plan Width": 60,
+                                          "Output": ["tmp_plant.plant_code", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Seq Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 1,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Relation Name": "tmp_plant",
+                                              "Schema": "pg_temp_8961226",
+                                              "Alias": "tmp_plant",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 431.03,
+                                              "Plan Rows": 4912,
+                                              "Plan Width": 60,
+                                              "Output": ["tmp_plant.plant_code", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "Node Type": "Hash",
+                                      "Parent Relationship": "Inner",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 1005.60,
+                                      "Total Cost": 1005.60,
+                                      "Plan Rows": 181691584,
+                                      "Plan Width": 16,
+                                      "Output": ["tmp_delivery_plant.delivery_code", "tmp_delivery_plant.plant_producer_code"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 1,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "tmp_delivery_plant",
+                                          "Schema": "pg_temp_8961226",
+                                          "Alias": "tmp_delivery_plant",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 1005.60,
+                                          "Plan Rows": 181691584,
+                                          "Plan Width": 16,
+                                          "Output": ["tmp_delivery_plant.delivery_code", "tmp_delivery_plant.plant_producer_code"]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 1,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 431.03,
+                                  "Total Cost": 431.03,
+                                  "Plan Rows": 4912,
+                                  "Plan Width": 60,
+                                  "Output": ["tmp_plant_1.plant_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 1,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "tmp_plant",
+                                      "Schema": "pg_temp_8961226",
+                                      "Alias": "tmp_plant_1",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 431.03,
+                                      "Plan Rows": 4912,
+                                      "Plan Width": 60,
+                                      "Output": ["tmp_plant_1.plant_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 1,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 431.00,
+                              "Total Cost": 431.00,
+                              "Plan Rows": 472,
+                              "Plan Width": 61,
+                              "Output": ["tmp_transportation_stage.transportation_stage_code", "tmp_transportation_stage.transportation_stage_name"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Seq Scan",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 1,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Relation Name": "tmp_transportation_stage",
+                                  "Schema": "pg_temp_8961226",
+                                  "Alias": "tmp_transportation_stage",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 431.00,
+                                  "Plan Rows": 472,
+                                  "Plan Width": 61,
+                                  "Output": ["tmp_transportation_stage.transportation_stage_code", "tmp_transportation_stage.transportation_stage_name"]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "Node Type": "Hash",
+                          "Parent Relationship": "Inner",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 453.67,
+                          "Total Cost": 453.67,
+                          "Plan Rows": 3471200,
+                          "Plan Width": 54,
+                          "Output": ["tmp_counterparty.counterparty_code", "tmp_counterparty.counterparty_short_name"],
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 1,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "tmp_counterparty",
+                              "Schema": "pg_temp_8961226",
+                              "Alias": "tmp_counterparty",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 453.67,
+                              "Plan Rows": 3471200,
+                              "Plan Width": 54,
+                              "Output": ["tmp_counterparty.counterparty_code", "tmp_counterparty.counterparty_short_name"]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 453.67,
+                      "Total Cost": 453.67,
+                      "Plan Rows": 3471200,
+                      "Plan Width": 65,
+                      "Output": ["tmp_counterparty_1.counterparty_code", "tmp_counterparty_1.counterparty_short_name", "tmp_counterparty_1.address_code"],
+                      "Plans": [
+                        {
+                          "Node Type": "Seq Scan",
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Relation Name": "tmp_counterparty",
+                          "Schema": "pg_temp_8961226",
+                          "Alias": "tmp_counterparty_1",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 453.67,
+                          "Plan Rows": 3471200,
+                          "Plan Width": 65,
+                          "Output": ["tmp_counterparty_1.counterparty_code", "tmp_counterparty_1.counterparty_short_name", "tmp_counterparty_1.address_code"]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Node Type": "Hash",
+                  "Parent Relationship": "Inner",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 497.40,
+                  "Total Cost": 497.40,
+                  "Plan Rows": 11361880,
+                  "Plan Width": 55,
+                  "Output": ["tmp_creditor_address.address_code", "tmp_creditor_address.address_full_name"],
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "tmp_creditor_address",
+                      "Schema": "pg_temp_8961226",
+                      "Alias": "tmp_creditor_address",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 497.40,
+                      "Plan Rows": 11361880,
+                      "Plan Width": 55,
+                      "Output": ["tmp_creditor_address.address_code", "tmp_creditor_address.address_full_name"]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Hash",
+              "Parent Relationship": "Inner",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 431.00,
+              "Total Cost": 431.00,
+              "Plan Rows": 216,
+              "Plan Width": 29,
+              "Output": ["tmp_transport_type.transport_transfer_type_code", "tmp_transport_type.transport_transfer_type_name"],
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Relation Name": "tmp_transport_type",
+                  "Schema": "pg_temp_8961226",
+                  "Alias": "tmp_transport_type",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 431.00,
+                  "Plan Rows": 216,
+                  "Plan Width": 29,
+                  "Output": ["tmp_transport_type.transport_transfer_type_code", "tmp_transport_type.transport_transfer_type_name"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

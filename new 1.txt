@@ -1,74 +1,43 @@
-SELECT material_code, COUNT(*)
+   SELECT material_code, COUNT(*)
 FROM tmp_material_texts
 GROUP BY 1
-HAVING COUNT(*) > 1
+HAVING COUNT(*) > 1 --дублейнет
 LIMIT 50;
-1.2 — взрыв строк при JOIN
-sql
-Копировать код
-SELECT COUNT(*) AS joined_count
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_material_texts t
-    ON t.material_code = base.material_code;
-Ожидаем: = base_count
-Если ↑ — справочник виноват.
 
-2. Форма материала (tmp_material_shape) ← самый вероятный виновник
-2.1 — дубли
+
+
+
 sql
 Копировать код
 SELECT material_code, COUNT(*)
 FROM tmp_material_shape
 GROUP BY 1
 HAVING COUNT(*) > 1
-LIMIT 50;
-2.2 — взрыв строк
-sql
-Копировать код
-SELECT COUNT(*) AS joined_count
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_material_shape t
-    ON t.material_code = base.material_code;
-Если результат > 157 млн → виноват 100%.
+LIMIT 50; --дублейнет
+
 
 3. Услуги (tmp_service_texts)
 sql
 Копировать код
 SELECT transportation_service_code, COUNT(*)
 FROM tmp_service_texts
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_service_texts t
-    ON t.transportation_service_code = base.service_code;
-4. ЕТСНГ (tmp_etsng_texts)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1; --дублейнет
+
+
+
 SELECT etsng_code, COUNT(*)
 FROM tmp_etsng_texts
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_etsng_texts t
-    ON t.etsng_code = base.etsng_code;
-5. Хабы (tmp_hub_ext) ← вторая частая причина взрыва
-5.1 — дубли по transport_hub_code
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1; --дублейнет
+
+
 SELECT transport_hub_code, COUNT(*)
 FROM tmp_hub_ext
 GROUP BY 1
-HAVING COUNT(*) > 1
+HAVING COUNT(*) > 1 --дублейнет
 LIMIT 50;
-5.2 — взрыв при JOIN
-Проверяем все 5 join’ов:
 
-sql
-Копировать код
+
+
 SELECT 'warehouse' AS hub_type, COUNT(*)
 FROM dm_calc.storage_sales_bundles_amount base
 LEFT JOIN tmp_hub_ext hub
@@ -96,80 +65,31 @@ UNION ALL
 SELECT 'area', COUNT(*)
 FROM dm_calc.storage_sales_bundles_amount base
 LEFT JOIN tmp_hub_ext hub
-    ON hub.transport_hub_code = base.warehouse_storage_area_code;
-Каждый результат должен быть = 157 млн.
+    ON hub.transport_hub_code = base.warehouse_storage_area_code; -- везде одинаково
 
-6. Заводы (tmp_plant)
-sql
-Копировать код
 SELECT plant_code, COUNT(*)
 FROM tmp_plant
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_plant p
-    ON p.plant_code = base.receiving_plant_code;
-7. Собственник металла (tmp_delivery_plant)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1; --дублей нет
+
 SELECT delivery_code, COUNT(*)
 FROM tmp_delivery_plant
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_delivery_plant d
-    ON d.delivery_code = base.delivery_for_storage_calculation_code;
-8. Этап перевозки (tmp_transportation_stage)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1; --дублей нет, справочник большой 22 млн
+
 SELECT transportation_stage_code, COUNT(*)
 FROM tmp_transportation_stage
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_transportation_stage s
-    ON s.transportation_stage_code = base.transportation_stage_code;
-9. Контрагенты (tmp_counterparty)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1;--дублей нет
+
+
+
 SELECT counterparty_code, COUNT(*)
 FROM tmp_counterparty
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_counterparty c
-    ON c.counterparty_code = base.forwarder_code;
-10. Адреса кредиторов (tmp_creditor_address)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1;--дублей нет
+
+
 SELECT address_code, COUNT(*)
 FROM tmp_creditor_address
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_counterparty c
-    ON c.counterparty_code = base.creditor_in_shipment_instruction_code
-LEFT JOIN tmp_creditor_address a
-    ON a.address_code = c.address_code;
-11. Тип перевозки (tmp_transport_type)
-sql
-Копировать код
+GROUP BY 1 HAVING COUNT(*) > 1; --дублей нет
+
 SELECT transport_transfer_type_code, COUNT(*)
 FROM tmp_transport_type
-GROUP BY 1 HAVING COUNT(*) > 1;
-sql
-Копировать код
-SELECT COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN tmp_transport_type t
-    ON t.transport_transfer_type_code = base.transport_type_code;
+GROUP BY 1 HAVING COUNT(*) > 1; --дублей нет

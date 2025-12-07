@@ -1,5 +1,59 @@
-SQL Error [42703]: ERROR: column h.country_code does not exist
-  Позиция: 95
+DROP TABLE IF EXISTS dict_dds.transport_hub CASCADE;
 
+CREATE TABLE dict_dds.transport_hub(
 
-Позиция ошибки: line: 3 pos: 9
+transport_hub_code varchar(30),
+address_code varchar(30),
+is_border_cross varchar(3),
+is_transit_point varchar(3),
+is_airport varchar(3),
+is_seaport varchar(3),
+is_domestic_port varchar(3),
+is_railway_station varchar(3),
+railway_station_rzd_code varchar(30),
+is_railway_station_express varchar(3),
+is_railway_station_of_loading varchar(3),
+railway_code varchar(21),
+customs_code varchar(18),
+plant_code varchar(12),
+is_transport_hub_locked varchar(3),
+location_code varchar(15),
+transport_hub_name_rus varchar(90),
+transport_hub_name_eng varchar(90),
+latitude varchar(30),
+longitude varchar(30),
+DTTM_INSERTED TIMESTAMP default NOW(),
+DTTM_UPDATED TIMESTAMP default NOW(),
+JOB_NAME VARCHAR(50) default 'airflow',
+DELETED_FLAG BOOL default false
+)
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed replicated;
+
+COMMENT ON TABLE dict_dds.transport_hub IS 'Маршруты: транспортные узлы';
+
+COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_code IS 'Транспортный узел (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.address_code IS 'Номер адреса из таблицы ADRC (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.is_border_cross IS 'Индикатор: Пересечение границы ?';
+COMMENT ON COLUMN dict_dds.transport_hub.is_transit_point IS 'Индикатор: перевалочный пункт';
+COMMENT ON COLUMN dict_dds.transport_hub.is_airport IS 'Индикатор:  аэропорт';
+COMMENT ON COLUMN dict_dds.transport_hub.is_seaport IS 'Индикатор:  Морской порт';
+COMMENT ON COLUMN dict_dds.transport_hub.is_domestic_port IS 'Индикатор:  Внутренний порт';
+COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station IS 'Индикатор: станция';
+COMMENT ON COLUMN dict_dds.transport_hub.railway_station_rzd_code IS '№ железнодорожной станции (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station_express IS 'Индикатор: ж.-д. станция - экспресс';
+COMMENT ON COLUMN dict_dds.transport_hub.is_railway_station_of_loading IS 'Индикатор:  Ж.-д. станция погрузки';
+COMMENT ON COLUMN dict_dds.transport_hub.railway_code IS 'Класс трассы - ж.-д. Транспорт (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.customs_code IS 'Таможня: таможня вывоза/поступления для внешней торговли (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.plant_code IS 'Завод (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.is_transport_hub_locked IS 'Признак блокировки транспортного узла';
+COMMENT ON COLUMN dict_dds.transport_hub.location_code IS 'Локация (код)';
+COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_name_rus IS 'Название транспортного узла на русском';
+COMMENT ON COLUMN dict_dds.transport_hub.transport_hub_name_eng IS 'Название транспортного узла на английском';
+COMMENT ON COLUMN dict_dds.transport_hub.latitude IS 'Широта';
+COMMENT ON COLUMN dict_dds.transport_hub.longitude IS 'Долгота';

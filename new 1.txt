@@ -1,4 +1,9 @@
+------------------------------------------------------------
+-- 2. Вспомогательные временные таблицы (все REPLICATED)
+------------------------------------------------------------
+
 -- 2.1. Адрес → страна
+DROP TABLE IF EXISTS tmp_address_country;
 CREATE TEMP TABLE tmp_address_country AS
 SELECT
     a.address_code,
@@ -9,6 +14,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.2. Страна (название)
+DROP TABLE IF EXISTS tmp_country_texts;
 CREATE TEMP TABLE tmp_country_texts AS
 SELECT
     ct.country_code,
@@ -19,6 +25,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.3. Страна → регион рынка (market_region1)
+DROP TABLE IF EXISTS tmp_country_region;
 CREATE TEMP TABLE tmp_country_region AS
 SELECT
     c.country_code,
@@ -31,6 +38,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.4. Транспортные узлы с уже подтянутой страной и регионом
+DROP TABLE IF EXISTS tmp_hub_ext;
 CREATE TEMP TABLE tmp_hub_ext AS
 SELECT
     h.transport_hub_code,
@@ -51,6 +59,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.5. Материалы (название)
+DROP TABLE IF EXISTS tmp_material_texts;
 CREATE TEMP TABLE tmp_material_texts AS
 SELECT
     m.material_code,
@@ -61,6 +70,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.6. Услуги транспортировки (название)
+DROP TABLE IF EXISTS tmp_service_texts;
 CREATE TEMP TABLE tmp_service_texts AS
 SELECT
     t.transportation_service_code,
@@ -71,6 +81,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.7. ЕТСНГ (название)
+DROP TABLE IF EXISTS tmp_etsng_texts;
 CREATE TEMP TABLE tmp_etsng_texts AS
 SELECT
     e.etsng_code,
@@ -81,6 +92,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.8. Заводы (короткое и полное имя)
+DROP TABLE IF EXISTS tmp_plant;
 CREATE TEMP TABLE tmp_plant AS
 SELECT
     p.plant_code,
@@ -91,6 +103,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.9. Этапы перевозки
+DROP TABLE IF EXISTS tmp_transportation_stage;
 CREATE TEMP TABLE tmp_transportation_stage AS
 SELECT
     s.transportation_stage_code,
@@ -101,6 +114,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.10. Контрагенты (экспедиторы, кредиторы)
+DROP TABLE IF EXISTS tmp_counterparty;
 CREATE TEMP TABLE tmp_counterparty AS
 SELECT
     c.counterparty_code,
@@ -111,6 +125,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.11. Материал → форма (shape)
+DROP TABLE IF EXISTS tmp_material_shape;
 CREATE TEMP TABLE tmp_material_shape AS
 SELECT
     ms.material_code,
@@ -124,6 +139,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.12. Адреса для кредитора (только нужные нам)
+DROP TABLE IF EXISTS tmp_creditor_address;
 CREATE TEMP TABLE tmp_creditor_address AS
 SELECT
     a.address_code,
@@ -134,6 +150,7 @@ DISTRIBUTED REPLICATED;
 
 
 -- 2.13. Поставка → завод производителя (для собственника металла)
+DROP TABLE IF EXISTS tmp_delivery_plant;
 CREATE TEMP TABLE tmp_delivery_plant AS
 SELECT
     d.delivery_code,
@@ -143,9 +160,42 @@ WHERE d.delivery_position_line_item_code = '000010'
 DISTRIBUTED REPLICATED;
 
 
-----------------------------------------------------------------------
+-- 2.14. Тип перевозки (transport_transfer_type_texts, язык R)
+DROP TABLE IF EXISTS tmp_transport_type;
+CREATE TEMP TABLE tmp_transport_type AS
+SELECT
+    t.transport_transfer_type_code,
+    t.transport_transfer_type_name
+FROM dict_dds.transport_transfer_type_texts t
+WHERE t.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+
+------------------------------------------------------------
+-- 2.x. АНАЛИЗ СТАТИСТИК (КРИТИЧЕСКОЕ МЕСТО)
+------------------------------------------------------------
+
+ANALYZE dm_calc.storage_sales_bundles_amount;
+
+ANALYZE tmp_address_country;
+ANALYZE tmp_country_texts;
+ANALYZE tmp_country_region;
+ANALYZE tmp_hub_ext;
+ANALYZE tmp_material_texts;
+ANALYZE tmp_service_texts;
+ANALYZE tmp_etsng_texts;
+ANALYZE tmp_plant;
+ANALYZE tmp_transportation_stage;
+ANALYZE tmp_counterparty;
+ANALYZE tmp_material_shape;
+ANALYZE tmp_creditor_address;
+ANALYZE tmp_delivery_plant;
+ANALYZE tmp_transport_type;
+
+
+------------------------------------------------------------
 -- 3. Загрузка данных в витрину
-----------------------------------------------------------------------
+------------------------------------------------------------
 
 INSERT INTO userdata.transportation_external_location_metal_stock (
     sales_bundle_code,
@@ -266,7 +316,6 @@ INSERT INTO userdata.transportation_external_location_metal_stock (
     storage_calculated_cost_over_365_amount,
     metal_in_china_stock_balance_closing_weight
 )
-
 SELECT
     base.sales_bundle_code,
     base.plant_producer_delivery_code,
@@ -486,15 +535,13 @@ SELECT
     base.metal_in_china_stock_balance_closing_weight
 FROM dm_calc.storage_sales_bundles_amount base
     -- материалы
-    LEFT JOIN  tmp_material_texts matet 
-
+    LEFT JOIN tmp_material_texts matet 
         ON matet.material_code = base.material_code
     LEFT JOIN tmp_material_shape mf
         ON mf.material_code = base.material_code
 
     -- услуги
-    LEFT JOIN 
-     tmp_service_texts zsrvpost 
+    LEFT JOIN tmp_service_texts zsrvpost 
         ON zsrvpost.transportation_service_code = base.service_code
 
     -- ЕТСНГ
@@ -539,8 +586,7 @@ FROM dm_calc.storage_sales_bundles_amount base
     LEFT JOIN tmp_creditor_address addr_8
         ON addr_8.address_code = counter_2.address_code
 
-    -- тип ПС
-    LEFT JOIN dict_dds.transport_transfer_type_texts ipd
+    -- тип ПС (через temp, а не напрямую dict_dds)
+    LEFT JOIN tmp_transport_type ipd
         ON ipd.transport_transfer_type_code = base.transport_type_code
-       AND ipd.language_code = 'R'
 ;

@@ -315,3 +315,659 @@ DISTRIBUTED RANDOMLY;
     }
   }
 ]
+
+
+
+CREATE TEMP TABLE stage2 as
+explain(verbose, format json)
+SELECT
+    s1.*,
+
+    -- Хабы
+    wh.transport_hub_name_rus  AS wh_name_rus,
+    wh.transport_hub_name_eng  AS wh_name_eng,
+    wh.country_full_name       AS wh_country,
+    wh.market_region1_name     AS wh_region,
+
+    dep.transport_hub_name_rus  AS dep_name,
+    dest.transport_hub_name_rus AS dest_name,
+
+    rem.transport_hub_name_rus  AS remote_name_rus,
+    rem.transport_hub_name_eng  AS remote_name_eng,
+    rem.country_full_name       AS remote_country,
+
+    area.transport_hub_name_rus AS area_name,
+
+    -- Заводы
+    pl.plant_short_name,
+    pl.plant_full_name,
+
+    -- Собственник металла (если есть)
+    pl2.plant_short_name AS owner_short_name,
+    pl2.plant_full_name  AS owner_full_name,
+
+    -- Конрагент / кредитор
+    ctr.counterparty_short_name AS forwarder_short_name,
+    addr.address_full_name AS creditor_address_name
+
+FROM stage1 s1
+LEFT JOIN tmp_hub_ext wh   ON wh.transport_hub_code = s1.warehouse_code
+LEFT JOIN tmp_hub_ext dep  ON dep.transport_hub_code = s1.transport_departure_hub_code
+LEFT JOIN tmp_hub_ext dest ON dest.transport_hub_code = s1.transport_destination_hub_code
+LEFT JOIN tmp_hub_ext rem  ON rem.transport_hub_code = s1.remote_warehouse_code
+LEFT JOIN tmp_hub_ext area ON area.transport_hub_code = s1.warehouse_storage_area_code
+
+LEFT JOIN tmp_plant pl     ON pl.plant_code = s1.receiving_plant_code
+LEFT JOIN tmp_plant pl2    ON pl2.plant_code = s1.plant_code
+
+LEFT JOIN tmp_counterparty ctr ON ctr.counterparty_code = s1.forwarder_code
+LEFT JOIN tmp_creditor_address addr ON addr.address_code = s1.creditor_in_shipment_instruction_code
+
+DISTRIBUTED RANDOMLY;
+
+
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 11,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 334930961.94,
+      "Plan Rows": 80665928258,
+      "Plan Width": 1068,
+      "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_counterparty.counterparty_short_name", "tmp_creditor_address.address_full_name"],
+      "Plans": [
+        {
+          "Node Type": "Hash Join",
+          "Parent Relationship": "Outer",
+          "Slice": 11,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Join Type": "Left",
+          "Startup Cost": 0.00,
+          "Total Cost": 96076728.39,
+          "Plan Rows": 80665928258,
+          "Plan Width": 1068,
+          "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_counterparty.counterparty_short_name", "tmp_creditor_address.address_full_name"],
+          "Hash Cond": "((stage1.creditor_in_shipment_instruction_code)::text = (tmp_creditor_address.address_code)::text)",
+          "Plans": [
+            {
+              "Node Type": "Redistribute Motion",
+              "Senders": 8,
+              "Receivers": 8,
+              "Parent Relationship": "Outer",
+              "Slice": 9,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 54364577.12,
+              "Plan Rows": 40332964129,
+              "Plan Width": 1024,
+              "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_counterparty.counterparty_short_name"],
+              "Hash Key": "stage1.creditor_in_shipment_instruction_code",
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 9,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Left",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 38205578.37,
+                  "Plan Rows": 40332964129,
+                  "Plan Width": 1024,
+                  "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name", "tmp_counterparty.counterparty_short_name"],
+                  "Hash Cond": "((stage1.forwarder_code)::text = (tmp_counterparty.counterparty_code)::text)",
+                  "Plans": [
+                    {
+                      "Node Type": "Hash Join",
+                      "Parent Relationship": "Outer",
+                      "Slice": 9,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Join Type": "Left",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 18191083.27,
+                      "Plan Rows": 20166623231,
+                      "Plan Width": 981,
+                      "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"],
+                      "Hash Cond": "((stage1.plant_code)::text = (tmp_plant_1.plant_code)::text)",
+                      "Plans": [
+                        {
+                          "Node Type": "Hash Join",
+                          "Parent Relationship": "Outer",
+                          "Slice": 9,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Join Type": "Left",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 8605538.24,
+                          "Plan Rows": 10083311615,
+                          "Plan Width": 926,
+                          "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_4.transport_hub_name_rus", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"],
+                          "Hash Cond": "((stage1.receiving_plant_code)::text = (tmp_plant.plant_code)::text)",
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 9,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Left",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 4076288.11,
+                              "Plan Rows": 5041655808,
+                              "Plan Width": 871,
+                              "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng", "tmp_hub_ext_4.transport_hub_name_rus"],
+                              "Hash Cond": "((stage1.warehouse_storage_area_code)::text = (tmp_hub_ext_4.transport_hub_code)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 9,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Join Type": "Left",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 1936438.85,
+                                  "Plan Rows": 2520163454,
+                                  "Plan Width": 852,
+                                  "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng"],
+                                  "Hash Cond": "((stage1.remote_warehouse_code)::text = (tmp_hub_ext_3.transport_hub_code)::text)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 9,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Join Type": "Left",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 891809.38,
+                                      "Plan Rows": 1259744552,
+                                      "Plan Width": 807,
+                                      "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus", "tmp_hub_ext_2.transport_hub_name_rus"],
+                                      "Hash Cond": "((stage1.transport_destination_hub_code)::text = (tmp_hub_ext_2.transport_hub_code)::text)",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Hash Join",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 9,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Join Type": "Left",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 395128.06,
+                                          "Plan Rows": 629703734,
+                                          "Plan Width": 788,
+                                          "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng", "tmp_hub_ext_1.transport_hub_name_rus"],
+                                          "Hash Cond": "((stage1.transport_departure_hub_code)::text = (tmp_hub_ext_1.transport_hub_code)::text)",
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Hash Join",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 9,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Join Type": "Left",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 152314.10,
+                                              "Plan Rows": 314767775,
+                                              "Plan Width": 769,
+                                              "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng"],
+                                              "Hash Cond": "((stage1.warehouse_code)::text = (tmp_hub_ext.transport_hub_code)::text)",
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 9,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "stage1",
+                                                  "Schema": "pg_temp_8982700",
+                                                  "Alias": "stage1",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 8360.04,
+                                                  "Plan Rows": 157341696,
+                                                  "Plan Width": 703,
+                                                  "Output": ["stage1.sales_bundle_code", "stage1.plant_producer_delivery_code", "stage1.plant_producer_delivery_position_code", "stage1.initial_delivery_code", "stage1.material_code", "stage1.dt_shipment", "stage1.railcar_code", "stage1.transport_bill_code", "stage1.uni", "stage1.material_shape_code", "stage1.port_of_discharge_code", "stage1.dt_arrival_to_russian_port", "stage1.dt_storage_end_in_release", "stage1.transport_type_code", "stage1.etsng_code", "stage1.dt_report", "stage1.sales_bundle_net_weight", "stage1.sales_bundle_gross_weight", "stage1.batch_code", "stage1.dt_arrival", "stage1.receiving_plant_code", "stage1.sales_delivery_code", "stage1.transportation_inbound_delivery_code", "stage1.delivery_for_storage_calculation_code", "stage1.transportation_inbound_delivery_position_code", "stage1.delivery_position_for_storage_calculation_code", "stage1.forwarder_code", "stage1.storage_cost_calculation_type_name", "stage1.transport_departure_hub_code", "stage1.transport_destination_hub_code", "stage1.transportation_outbound_delivery_code", "stage1.transportation_outbound_delivery_position_code", "stage1.is_final_transportation_stage_code", "stage1.transportation_stage_code", "stage1.storage_calculation_bundle_quantity", "stage1.warehouse_code", "stage1.delivery_in_final_release_code", "stage1.dt_final_release", "stage1.bill_of_lading_code", "stage1.bill_of_lading_number", "stage1.dt_bill_of_lading", "stage1.incoterms_code", "stage1.storage_cost_special_calculation_type_code", "stage1.warehouse_storage_area_code", "stage1.plant_code", "stage1.unit_balance_code", "stage1.creditor_in_shipment_instruction_code", "stage1.dt_storage_start", "stage1.dt_shipped_from_warehouse", "stage1.dt_storage_end", "stage1.service_number", "stage1.storage_duration_total_calendar_days", "stage1.shipment_instruction_number", "stage1.dt_for_price_search_in_purchase_contract", "stage1.purchase_contract_code", "stage1.purchase_contract_position_code", "stage1.purchase_contract_position_currency_code", "stage1.service_code", "stage1.purchase_contract_position_uom_code", "stage1.storage_duration_free_by_contract_calendar_days", "stage1.storage_duration_free_by_delivery_calendar_days", "stage1.storage_duration_payable_calendar_days", "stage1.remote_warehouse_code", "stage1.dt_transportation_stage_start_p", "stage1.dt_transportation_stage_start_r", "stage1.dt_shipment_from_foreign_warehouse", "stage1.storage_cost_calculated_amount", "stage1.storage_cost_calculated_amount_local", "stage1.storage_payable_001_030_days_gross_weight", "stage1.storage_payable_031_060_days_gross_weight", "stage1.storage_payable_061_090_days_gross_weight", "stage1.storage_payable_091_180_days_gross_weight", "stage1.storage_payable_181_365_days_gross_weight", "stage1.storage_payable_over_365_days_gross_weight", "stage1.is_stored_in_russian_port_code", "stage1.storage_calculated_cost_001_030_amount", "stage1.storage_calculated_cost_031_060_amount", "stage1.storage_calculated_cost_061_090_amount", "stage1.storage_calculated_cost_091_180_amount", "stage1.storage_calculated_cost_181_365_amount", "stage1.storage_calculated_cost_over_365_amount", "stage1.metal_in_china_stock_balance_closing_weight", "stage1.dttm_inserted", "stage1.dttm_updated", "stage1.job_name", "stage1.deleted_flag", "stage1.material_name", "stage1.material_shape_full_name", "stage1.transportation_service_name", "stage1.etsng_name"]
+                                                },
+                                                {
+                                                  "Node Type": "Hash",
+                                                  "Parent Relationship": "Inner",
+                                                  "Slice": 9,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Startup Cost": 447.76,
+                                                  "Total Cost": 447.76,
+                                                  "Plan Rows": 223456,
+                                                  "Plan Width": 76,
+                                                  "Output": ["tmp_hub_ext.transport_hub_code", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng"],
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Broadcast Motion",
+                                                      "Senders": 8,
+                                                      "Receivers": 8,
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 1,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 447.76,
+                                                      "Plan Rows": 223456,
+                                                      "Plan Width": 76,
+                                                      "Output": ["tmp_hub_ext.transport_hub_code", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng"],
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Seq Scan",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 1,
+                                                          "Segments": 8,
+                                                          "Gang Type": "primary reader",
+                                                          "Relation Name": "tmp_hub_ext",
+                                                          "Schema": "pg_temp_8982700",
+                                                          "Alias": "tmp_hub_ext",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 431.23,
+                                                          "Plan Rows": 27932,
+                                                          "Plan Width": 76,
+                                                          "Output": ["tmp_hub_ext.transport_hub_code", "tmp_hub_ext.country_full_name", "tmp_hub_ext.market_region1_name", "tmp_hub_ext.transport_hub_name_rus", "tmp_hub_ext.transport_hub_name_eng"]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "Node Type": "Hash",
+                                              "Parent Relationship": "Inner",
+                                              "Slice": 9,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 437.54,
+                                              "Total Cost": 437.54,
+                                              "Plan Rows": 223456,
+                                              "Plan Width": 29,
+                                              "Output": ["tmp_hub_ext_1.transport_hub_code", "tmp_hub_ext_1.transport_hub_name_rus"],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Broadcast Motion",
+                                                  "Senders": 8,
+                                                  "Receivers": 8,
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 2,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 437.54,
+                                                  "Plan Rows": 223456,
+                                                  "Plan Width": 29,
+                                                  "Output": ["tmp_hub_ext_1.transport_hub_code", "tmp_hub_ext_1.transport_hub_name_rus"],
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Seq Scan",
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 2,
+                                                      "Segments": 8,
+                                                      "Gang Type": "primary reader",
+                                                      "Relation Name": "tmp_hub_ext",
+                                                      "Schema": "pg_temp_8982700",
+                                                      "Alias": "tmp_hub_ext_1",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 431.23,
+                                                      "Plan Rows": 27932,
+                                                      "Plan Width": 29,
+                                                      "Output": ["tmp_hub_ext_1.transport_hub_code", "tmp_hub_ext_1.transport_hub_name_rus"]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "Node Type": "Hash",
+                                          "Parent Relationship": "Inner",
+                                          "Slice": 9,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 437.54,
+                                          "Total Cost": 437.54,
+                                          "Plan Rows": 223456,
+                                          "Plan Width": 29,
+                                          "Output": ["tmp_hub_ext_2.transport_hub_code", "tmp_hub_ext_2.transport_hub_name_rus"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Broadcast Motion",
+                                              "Senders": 8,
+                                              "Receivers": 8,
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 3,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 437.54,
+                                              "Plan Rows": 223456,
+                                              "Plan Width": 29,
+                                              "Output": ["tmp_hub_ext_2.transport_hub_code", "tmp_hub_ext_2.transport_hub_name_rus"],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 3,
+                                                  "Segments": 8,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "tmp_hub_ext",
+                                                  "Schema": "pg_temp_8982700",
+                                                  "Alias": "tmp_hub_ext_2",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 431.23,
+                                                  "Plan Rows": 27932,
+                                                  "Plan Width": 29,
+                                                  "Output": ["tmp_hub_ext_2.transport_hub_code", "tmp_hub_ext_2.transport_hub_name_rus"]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "Node Type": "Hash",
+                                      "Parent Relationship": "Inner",
+                                      "Slice": 9,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 443.20,
+                                      "Total Cost": 443.20,
+                                      "Plan Rows": 223456,
+                                      "Plan Width": 55,
+                                      "Output": ["tmp_hub_ext_3.transport_hub_code", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Broadcast Motion",
+                                          "Senders": 8,
+                                          "Receivers": 8,
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 4,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 443.20,
+                                          "Plan Rows": 223456,
+                                          "Plan Width": 55,
+                                          "Output": ["tmp_hub_ext_3.transport_hub_code", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Seq Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 4,
+                                              "Segments": 8,
+                                              "Gang Type": "primary reader",
+                                              "Relation Name": "tmp_hub_ext",
+                                              "Schema": "pg_temp_8982700",
+                                              "Alias": "tmp_hub_ext_3",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 431.23,
+                                              "Plan Rows": 27932,
+                                              "Plan Width": 55,
+                                              "Output": ["tmp_hub_ext_3.transport_hub_code", "tmp_hub_ext_3.country_full_name", "tmp_hub_ext_3.transport_hub_name_rus", "tmp_hub_ext_3.transport_hub_name_eng"]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 9,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 437.54,
+                                  "Total Cost": 437.54,
+                                  "Plan Rows": 223456,
+                                  "Plan Width": 29,
+                                  "Output": ["tmp_hub_ext_4.transport_hub_code", "tmp_hub_ext_4.transport_hub_name_rus"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Broadcast Motion",
+                                      "Senders": 8,
+                                      "Receivers": 8,
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 5,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 437.54,
+                                      "Plan Rows": 223456,
+                                      "Plan Width": 29,
+                                      "Output": ["tmp_hub_ext_4.transport_hub_code", "tmp_hub_ext_4.transport_hub_name_rus"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 5,
+                                          "Segments": 8,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "tmp_hub_ext",
+                                          "Schema": "pg_temp_8982700",
+                                          "Alias": "tmp_hub_ext_4",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 431.23,
+                                          "Plan Rows": 27932,
+                                          "Plan Width": 29,
+                                          "Output": ["tmp_hub_ext_4.transport_hub_code", "tmp_hub_ext_4.transport_hub_name_rus"]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "Node Type": "Hash",
+                              "Parent Relationship": "Inner",
+                              "Slice": 9,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 431.29,
+                              "Total Cost": 431.29,
+                              "Plan Rows": 4912,
+                              "Plan Width": 60,
+                              "Output": ["tmp_plant.plant_code", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Broadcast Motion",
+                                  "Senders": 8,
+                                  "Receivers": 8,
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 6,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 431.29,
+                                  "Plan Rows": 4912,
+                                  "Plan Width": 60,
+                                  "Output": ["tmp_plant.plant_code", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 6,
+                                      "Segments": 8,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "tmp_plant",
+                                      "Schema": "pg_temp_8982700",
+                                      "Alias": "tmp_plant",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 431.00,
+                                      "Plan Rows": 614,
+                                      "Plan Width": 60,
+                                      "Output": ["tmp_plant.plant_code", "tmp_plant.plant_short_name", "tmp_plant.plant_full_name"]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "Node Type": "Hash",
+                          "Parent Relationship": "Inner",
+                          "Slice": 9,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 431.29,
+                          "Total Cost": 431.29,
+                          "Plan Rows": 4912,
+                          "Plan Width": 60,
+                          "Output": ["tmp_plant_1.plant_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"],
+                          "Plans": [
+                            {
+                              "Node Type": "Broadcast Motion",
+                              "Senders": 8,
+                              "Receivers": 8,
+                              "Parent Relationship": "Outer",
+                              "Slice": 7,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 431.29,
+                              "Plan Rows": 4912,
+                              "Plan Width": 60,
+                              "Output": ["tmp_plant_1.plant_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"],
+                              "Plans": [
+                                {
+                                  "Node Type": "Seq Scan",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 7,
+                                  "Segments": 8,
+                                  "Gang Type": "primary reader",
+                                  "Relation Name": "tmp_plant",
+                                  "Schema": "pg_temp_8982700",
+                                  "Alias": "tmp_plant_1",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 431.00,
+                                  "Plan Rows": 614,
+                                  "Plan Width": 60,
+                                  "Output": ["tmp_plant_1.plant_code", "tmp_plant_1.plant_short_name", "tmp_plant_1.plant_full_name"]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 9,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 616.33,
+                      "Total Cost": 616.33,
+                      "Plan Rows": 3471200,
+                      "Plan Width": 54,
+                      "Output": ["tmp_counterparty.counterparty_code", "tmp_counterparty.counterparty_short_name"],
+                      "Plans": [
+                        {
+                          "Node Type": "Broadcast Motion",
+                          "Senders": 8,
+                          "Receivers": 8,
+                          "Parent Relationship": "Outer",
+                          "Slice": 8,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 616.33,
+                          "Plan Rows": 3471200,
+                          "Plan Width": 54,
+                          "Output": ["tmp_counterparty.counterparty_code", "tmp_counterparty.counterparty_short_name"],
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 8,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "tmp_counterparty",
+                              "Schema": "pg_temp_8982700",
+                              "Alias": "tmp_counterparty",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 433.83,
+                              "Plan Rows": 433900,
+                              "Plan Width": 54,
+                              "Output": ["tmp_counterparty.counterparty_code", "tmp_counterparty.counterparty_short_name"]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Node Type": "Hash",
+              "Parent Relationship": "Inner",
+              "Slice": 11,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Startup Cost": 488.02,
+              "Total Cost": 488.02,
+              "Plan Rows": 1420235,
+              "Plan Width": 55,
+              "Output": ["tmp_creditor_address.address_code", "tmp_creditor_address.address_full_name"],
+              "Plans": [
+                {
+                  "Node Type": "Redistribute Motion",
+                  "Senders": 8,
+                  "Receivers": 8,
+                  "Parent Relationship": "Outer",
+                  "Slice": 10,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 488.02,
+                  "Plan Rows": 1420235,
+                  "Plan Width": 55,
+                  "Output": ["tmp_creditor_address.address_code", "tmp_creditor_address.address_full_name"],
+                  "Hash Key": "tmp_creditor_address.address_code",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 10,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "tmp_creditor_address",
+                      "Schema": "pg_temp_8982700",
+                      "Alias": "tmp_creditor_address",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 439.30,
+                      "Plan Rows": 1420235,
+                      "Plan Width": 55,
+                      "Output": ["tmp_creditor_address.address_code", "tmp_creditor_address.address_full_name"]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]
+

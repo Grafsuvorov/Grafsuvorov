@@ -1,3 +1,148 @@
+---------------------------------------------------------
+-- Адреса с чистой страной
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_adrc;
+CREATE TEMP TABLE temp_adrc AS
+SELECT address_code,
+       MIN(country_code) AS country_code
+FROM dict_dds.address
+GROUP BY address_code
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Полный адрес + страна + регион
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_address_full;
+CREATE TEMP TABLE temp_address_full AS
+SELECT 
+    a.address_code,
+    a.country_code,
+    ct.country_full_name,
+    ct.country_short_name,
+    c.market_region1_code,
+    mrt.market_region1_name
+FROM temp_adrc a
+LEFT JOIN dict_dds.country c 
+       ON c.country_code = a.country_code
+LEFT JOIN dict_dds.country_texts ct
+       ON ct.country_code = a.country_code
+      AND ct.language_code = 'R'
+LEFT JOIN dict_dds.market_region1_texts mrt
+       ON mrt.market_region1_code = c.market_region1_code
+      AND mrt.language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Материал
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_material;
+CREATE TEMP TABLE temp_material AS
+SELECT material_code, material_name
+FROM dict_dds.material_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Форма материала
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_material_shape;
+CREATE TEMP TABLE temp_material_shape AS
+SELECT shape_code, material_shape_full_name
+FROM dict_dds.material_shape_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- ETSNG
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_etsng;
+CREATE TEMP TABLE temp_etsng AS
+SELECT etsng_code, etsng_name
+FROM dict_dds.etsng_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Transportation service
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_service;
+CREATE TEMP TABLE temp_service AS
+SELECT transportation_service_code, transportation_service_name
+FROM dict_dds.transportation_service_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Transport type
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_transport_type;
+CREATE TEMP TABLE temp_transport_type AS
+SELECT transport_transfer_type_code, transport_transfer_type_name
+FROM dict_dds.transport_transfer_type_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Transportation stage
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_stage;
+CREATE TEMP TABLE temp_stage AS
+SELECT transportation_stage_code, transportation_stage_name
+FROM dict_dds.transportation_stage_texts
+WHERE language_code = 'R'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Transport hub + names RU/EU
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_hub;
+CREATE TEMP TABLE temp_hub AS
+SELECT h.transport_hub_code,
+       h.address_code,
+       h.country_code,
+       t_r.transport_hub_name AS hub_name_r,
+       t_e.transport_hub_name AS hub_name_e
+FROM dict_dds.transport_hub h
+LEFT JOIN dict_dds.transport_hub_texts t_r
+       ON t_r.transport_hub_code = h.transport_hub_code
+      AND t_r.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts t_e
+       ON t_e.transport_hub_code = h.transport_hub_code
+      AND t_e.language_code = 'E'
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Counterparty (forwarder + creditor)
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_counterparty;
+CREATE TEMP TABLE temp_counterparty AS
+SELECT counterparty_code,
+       counterparty_short_name,
+       address_code
+FROM dict_dds.counterparty
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Plant
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_plant;
+CREATE TEMP TABLE temp_plant AS
+SELECT plant_code,
+       plant_short_name,
+       plant_full_name
+FROM dict_dds.plant_and_subsidiary
+DISTRIBUTED REPLICATED;
+
+---------------------------------------------------------
+-- Material → shape link
+---------------------------------------------------------
+DROP TABLE IF EXISTS temp_material_spec;
+CREATE TEMP TABLE temp_material_spec AS
+SELECT material_code, shape_code
+FROM dict_dds.material_specification
+DISTRIBUTED REPLICATED;
+
+
 INSERT INTO userdata.transportation_external_location_metal_stock (
     sales_bundle_code,
     plant_producer_delivery_code,
@@ -338,3 +483,4 @@ LEFT JOIN temp_plant p2 ON p2.plant_code = (
       AND delivery_position_line_item_code = '000010'
     LIMIT 1
 );
+

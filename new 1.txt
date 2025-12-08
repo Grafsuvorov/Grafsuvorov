@@ -1,96 +1,216 @@
-Aggregate  (cost=0.00..435.24 rows=1 width=8) (actual time=2.408..2.408 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..435.24 rows=1 width=8) (actual time=2.162..2.378 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..435.24 rows=1 width=8) (actual time=1.783..1.783 rows=1 loops=1)
-              ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=1) (actual time=0.018..1.270 rows=12674 loops=1)
-Planning time: 8.316 ms
-  (slice0)    Executor memory: 123K bytes.
-  (slice1)    Executor memory: 57K bytes avg x 8 workers, 57K bytes max (seg0).
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 3.697 ms
+SELECT
+    n.nspname AS schema_name,
+    c.relname AS table_name,
+    p.attrnums AS dist_cols,
+    pg_get_indexdef(i.indexrelid) AS dist_expr
+FROM gp_distribution_policy p
+JOIN pg_class c ON p.localoid = c.oid
+JOIN pg_namespace n ON c.relnamespace = n.oid
+LEFT JOIN pg_index i ON (i.indrelid = c.oid AND i.indnatts = array_length(p.attrnums, 1))
+WHERE (n.nspname, c.relname) IN (
+    ('dm_calc','storage_sales_bundles_amount'),
+    ('dict_dds','counterparty'),
+    ('dict_dds','address'),
+    ('dict_dds','material_specification'),
+    ('dict_dds','material_shape_texts'),
+    ('dict_dds','transport_hub_texts'),
+    ('dict_dds','transportation_stage_texts'),
+    ('dict_dds','country_texts')
+);
+Если fact = RANDOM → это главная потенциальная причина.
 
+Шаг 2 — Проверка скоса распределения (skew)
+Если на каком-то сегменте в 2–4 раза больше строк — ORCA ломает кардинальности, hash join строится неравномерно.
 
-Aggregate  (cost=0.00..1312.23 rows=1 width=8) (actual time=13.345..13.345 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..1312.23 rows=1 width=8) (actual time=12.267..13.314 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..1312.23 rows=1 width=8) (actual time=12.173..12.173 rows=1 loops=1)
-              ->  Hash Left Join  (cost=0.00..1312.23 rows=37086 width=1) (actual time=4.158..11.743 rows=12674 loops=1)
-                    Hash Cond: ((material_specification.shape_code)::text = (material_shape_texts.shape_code)::text)
-                    Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 43 of 262144 buckets.
-                    ->  Hash Left Join  (cost=0.00..876.67 rows=25000 width=4) (actual time=3.801..9.106 rows=12674 loops=1)
-                          Hash Cond: ((tmp_base_sample.material_code)::text = (material_specification.material_code)::text)
-                          Extra Text: (seg2)   Hash chain length 1.0 avg, 3 max, using 11791 of 262144 buckets.
-                          ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=15) (actual time=0.033..2.111 rows=12674 loops=1)
-                          ->  Hash  (cost=431.93..431.93 rows=12062 width=18) (actual time=3.388..3.388 rows=12062 loops=1)
-                                ->  Seq Scan on material_specification  (cost=0.00..431.93 rows=12062 width=18) (actual time=0.199..1.469 rows=12062 loops=1)
-                    ->  Hash  (cost=431.01..431.01 rows=43 width=4) (actual time=0.071..0.071 rows=43 loops=1)
-                          ->  Seq Scan on material_shape_texts  (cost=0.00..431.01 rows=43 width=4) (actual time=0.049..0.063 rows=43 loops=1)
-                                Filter: ((language_code)::text = 'R'::text)
-Planning time: 19.881 ms
-  (slice0)    Executor memory: 668K bytes.
-  (slice1)    Executor memory: 5738K bytes avg x 8 workers, 5738K bytes max (seg0).  Work_mem: 557K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 15.144 ms
+sql
+Копировать код
+SELECT gp_segment_id, count(*)
+FROM dm_calc.storage_sales_bundles_amount
+GROUP BY 1
+ORDER BY 1;
 
+SELECT gp_segment_id, count(*)
+FROM dict_dds.counterparty
+GROUP BY 1
+ORDER BY 1;
 
-Aggregate  (cost=0.00..889.58 rows=1 width=8) (actual time=33.292..33.292 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..889.58 rows=1 width=8) (actual time=24.550..33.255 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..889.58 rows=1 width=8) (actual time=24.148..24.148 rows=1 loops=1)
-              ->  Hash Left Join  (cost=0.00..889.58 rows=25221 width=1) (actual time=18.135..25.488 rows=12674 loops=1)
-                    Hash Cond: ((tmp_base_sample.transport_departure_hub_code)::text = (transport_hub_texts.transport_hub_code)::text)
-                    Extra Text: (seg2)   Hash chain length 1.0 avg, 4 max, using 27203 of 524288 buckets.
-                    ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.053..3.671 rows=12674 loops=1)
-                    ->  Hash  (cost=441.95..441.95 rows=28039 width=11) (actual time=16.368..16.368 rows=27917 loops=1)
-                          ->  Seq Scan on transport_hub_texts  (cost=0.00..441.95 rows=28039 width=11) (actual time=0.181..12.146 rows=27917 loops=1)
-                                Filter: ((language_code)::text = 'R'::text)
-Planning time: 17.366 ms
-  (slice0)    Executor memory: 460K bytes.
-  (slice1)    Executor memory: 8554K bytes avg x 8 workers, 8554K bytes max (seg0).  Work_mem: 1091K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 34.925 ms
+SELECT gp_segment_id, count(*)
+FROM dict_dds.address
+WHERE international_display_format_code IS NULL
+GROUP BY 1
+ORDER BY 1;
+❗ Если один сегмент слишком “толстый” — это источник проблем.
 
+Шаг 3 — Проверка кардинальностей JOIN-ключей
+Ты проверял по одному полю. Но нужно проверять точно по тем ключам, по которым идёт JOIN.
 
-Aggregate  (cost=0.00..868.58 rows=1 width=8) (actual time=8.103..8.103 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..868.58 rows=1 width=8) (actual time=7.235..8.073 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..868.58 rows=1 width=8) (actual time=6.683..6.683 rows=1 loops=1)
-              ->  Hash Left Join  (cost=0.00..868.58 rows=21346 width=1) (actual time=0.621..6.216 rows=12674 loops=1)
-                    Hash Cond: ((tmp_base_sample.transportation_stage_code)::text = (transportation_stage_texts.transportation_stage_code)::text)
-                    Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 59 of 524288 buckets.
-                    ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=3) (actual time=0.019..3.636 rows=12674 loops=1)
-                    ->  Hash  (cost=431.01..431.01 rows=59 width=3) (actual time=0.081..0.081 rows=59 loops=1)
-                          ->  Seq Scan on transportation_stage_texts  (cost=0.00..431.01 rows=59 width=3) (actual time=0.054..0.065 rows=59 loops=1)
-                                Filter: ((language_code)::text = 'R'::text)
-Planning time: 7.726 ms
-  (slice0)    Executor memory: 460K bytes.
-  (slice1)    Executor memory: 4410K bytes avg x 8 workers, 4410K bytes max (seg0).  Work_mem: 2K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 9.607 ms
+3.1 material_shape_texts
+JOIN → (shape_code, language_code = 'R')
 
+sql
+Копировать код
+SELECT shape_code, COUNT(*)
+FROM dict_dds.material_shape_texts
+WHERE language_code = 'R'
+GROUP BY shape_code
+HAVING COUNT(*) > 1;
+3.2 transport_hub_texts
+JOIN → (transport_hub_code, language='R' or 'E')
 
-Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=615.825..615.825 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..2449.13 rows=1 width=8) (actual time=457.393..615.781 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=556.022..556.022 rows=1 loops=1)
-              ->  Hash Left Join  (cost=0.00..2449.13 rows=52959 width=1) (actual time=441.823..551.953 rows=82617 loops=1)
-                    Hash Cond: ((counterparty.address_code)::text = (address.address_code)::text)
-                    Extra Text: (seg0)   Hash chain length 2.9 avg, 13 max, using 489377 of 524288 buckets.
-                    ->  Hash Right Join  (cost=0.00..1064.38 rows=25000 width=11) (actual time=44.692..112.683 rows=82617 loops=1)
-                          Hash Cond: ((counterparty.counterparty_code)::text = (tmp_base_sample.creditor_in_shipment_instruction_code)::text)
-                          Extra Text: (seg0)   Hash chain length 41308.5 avg, 81979 max, using 2 of 262144 buckets.
-                          ->  Result  (cost=0.00..612.99 rows=54238 width=22) (actual time=0.235..85.379 rows=54447 loops=1)
-                                ->  Seq Scan on counterparty  (cost=0.00..572.04 rows=433900 width=22) (actual time=0.198..44.433 rows=433900 loops=1)
-                          ->  Hash  (cost=435.91..435.91 rows=12500 width=11) (actual time=13.793..13.793 rows=82617 loops=1)
-                                ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..435.91 rows=12500 width=11) (actual time=0.092..7.402 rows=82617 loops=1)
-                                      Hash Key: tmp_base_sample.creditor_in_shipment_instruction_code
-                                      ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.036..5.583 rows=12674 loops=1)
-                    ->  Hash  (cost=883.90..883.90 rows=1418779 width=11) (actual time=396.640..396.640 rows=1420235 loops=1)
-                          ->  Seq Scan on address  (cost=0.00..883.90 rows=1418779 width=11) (actual time=0.122..155.380 rows=1420235 loops=1)
-                                Filter: (international_display_format_code IS NULL)
-Planning time: 13.731 ms
-  (slice0)    Executor memory: 700K bytes.
-  (slice1)    Executor memory: 90K bytes avg x 8 workers, 90K bytes max (seg0).
-  (slice2)    Executor memory: 122279K bytes avg x 8 workers, 125733K bytes max (seg0).  Work_mem: 55478K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 633.984 ms
+sql
+Копировать код
+SELECT transport_hub_code, language_code, COUNT(*)
+FROM dict_dds.transport_hub_texts
+GROUP BY transport_hub_code, language_code
+HAVING COUNT(*) > 1;
+3.3 country_texts
+JOIN → (country_code, language='R')
+
+sql
+Копировать код
+SELECT country_code, language_code, COUNT(*)
+FROM dict_dds.country_texts
+WHERE language_code = 'R'
+GROUP BY country_code, language_code
+HAVING COUNT(*) > 1;
+3.4 transportation_stage_texts
+JOIN → (transportation_stage_code, language='R')
+
+sql
+Копировать код
+SELECT transportation_stage_code, language_code, COUNT(*)
+FROM dict_dds.transportation_stage_texts
+WHERE language_code = 'R'
+GROUP BY transportation_stage_code, language_code
+HAVING COUNT(*) > 1;
+3.5 address (критично!)
+JOIN → address_code WHERE international_display_format_code IS NULL
+
+sql
+Копировать код
+SELECT address_code, COUNT(*)
+FROM dict_dds.address
+WHERE international_display_format_code IS NULL
+GROUP BY address_code
+HAVING COUNT(*) > 1;
+Если тут >1 → гарантированный мультипликатор.
+
+Шаг 4 — Проверка skew в join-ключах (критично!)
+Например, для creditor_in_shipment_instruction_code:
+
+sql
+Копировать код
+SELECT creditor_in_shipment_instruction_code, COUNT(*)
+FROM dm_calc.storage_sales_bundles_amount
+GROUP BY creditor_in_shipment_instruction_instruction_code
+ORDER BY COUNT(*) DESC
+LIMIT 20;
+Если одно значение встречается десятками тысяч раз → hash join перегружен, и ты видел это:
+
+r
+Копировать код
+Hash chain length 41308 avg, 81979 max
+Это 100% указывает на скошенный ключ (heavy hitter).
+
+Шаг 5 — Проверка частоты match’ей для counterparty
+sql
+Копировать код
+SELECT creditor_in_shipment_instruction_code, COUNT(*)
+FROM dm_calc.storage_sales_bundles_amount
+WHERE creditor_in_shipment_instruction_code IS NOT NULL
+GROUP BY creditor_in_shipment_instruction_instruction_code
+ORDER BY COUNT(*) DESC
+LIMIT 20;
+Если одно и то же значение встречается у 1–5 миллионов строк → именно он делает hash chain "раздутым".
+
+Шаг 6 — Проверка match-rate по словарям
+(особенно для counterparty/address)
+
+match rate counterparty:
+sql
+Копировать код
+SELECT
+    SUM(CASE WHEN c.counterparty_code IS NOT NULL THEN 1 ELSE 0 END) AS matched,
+    COUNT(*) AS total,
+    100.0 * SUM(CASE WHEN c.counterparty_code IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*) AS match_pct
+FROM dm_calc.storage_sales_bundles_amount base
+LEFT JOIN dict_dds.counterparty c
+  ON c.counterparty_code = base.creditor_in_shipment_instruction_code;
+match rate address:
+sql
+Копировать код
+SELECT
+    SUM(CASE WHEN a.address_code IS NOT NULL THEN 1 ELSE 0 END) AS matched,
+    COUNT(*) AS total
+FROM dict_dds.counterparty c
+LEFT JOIN dict_dds.address a
+  ON a.address_code = c.address_code
+WHERE a.international_display_format_code IS NULL;
+Почему важно?
+Если match rate низкий → hash join строится зря на огромных таблицах.
+
+Шаг 7 — Проверить sample join на каждом этапе
+(ты уже делал, но нужно сделать ещё 2 проверки)
+
+7.1 Самое тяжёлое место — base + counterparty:
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.counterparty c
+  ON c.counterparty_code = base.creditor_in_shipment_instruction_code;
+7.2 base + counterparty + address:
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT count(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.counterparty c
+  ON c.counterparty_code = base.creditor_in_shipment_instruction_code
+LEFT JOIN dict_dds.address a
+  ON a.address_code = c.address_code
+ AND a.international_display_format_code IS NULL;
+Если тут время ×10 больше — именно это место тормозит весь запрос.
+
+Шаг 8 — Проверить необходимость Redistribute Motion
+Если факт RANDOM:
+
+sql
+Копировать код
+EXPLAIN SELECT …
+Смотри строки вида:
+
+mathematica
+Копировать код
+Redistribute Motion 8:8
+Hash Key: base.creditor_in_shipment_instruction_code
+Если много таких → распределение факта нужно менять.
+
+Шаг 9 — Проверить статистику
+sql
+Копировать код
+ANALYZE dm_calc.storage_sales_bundles_amount;
+ANALYZE dict_dds.counterparty;
+ANALYZE dict_dds.address;
+ANALYZE dict_dds.material_specification;
+ANALYZE dict_dds.transport_hub_texts;
+ANALYZE dict_dds.transportation_stage_texts;
+Старая статистика = плохие кардинальности = ORCA строит кошмар.
+
+Шаг 10 — Проверить распределение join-ключей внутри ORCA
+Очень важно: GPORCA плохо работает с NULL в join-ключах, даже если мы делаем COALESCE.
+
+Проверка:
+
+sql
+Копировать код
+SELECT
+    COUNT(*) FILTER (WHERE material_code IS NULL) AS null_material_code,
+    COUNT(*) FILTER (WHERE service_code IS NULL) AS null_service_code,
+    COUNT(*) FILTER (WHERE etsng_code IS NULL) AS null_etsng_code,
+    COUNT(*) FILTER (WHERE transport_type_code IS NULL) AS null_transport_type_code,
+    COUNT(*) FILTER (WHERE warehouse_code IS NULL) AS null_warehouse_code,
+    COUNT(*) FILTER (WHERE remote_warehouse_code IS NULL) AS null_remote_warehouse_code,
+    COUNT(*) AS total
+FROM dm_calc.storage_sales_bundles_amount;

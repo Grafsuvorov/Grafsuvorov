@@ -1,108 +1,111 @@
- дублей нет
-      SELECT material_code, COUNT(*) AS cnt
-FROM dict_dds.material_specification
-GROUP BY material_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-Плюс:
-
-дублей много
-SELECT shape_code, COUNT(*) AS cnt
-FROM dict_dds.material_specification
-
-GROUP BY shape_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дублей много
-SELECT shape_code, COUNT(*) AS cnt
-FROM dict_dds.material_shape_texts
-GROUP BY shape_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дублей нет
-SELECT shape_code, language_code, COUNT(*) AS cnt
-FROM dict_dds.material_shape_texts
-GROUP BY shape_code, language_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дублей много
-SELECT transport_hub_code, COUNT(*) AS cnt
-FROM dict_dds.transport_hub_texts
-GROUP BY transport_hub_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-
-дублей нет
-SELECT transport_hub_code, language_code, COUNT(*) AS cnt
-FROM dict_dds.transport_hub_texts
-GROUP BY transport_hub_code, language_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дублей много
-SELECT country_code, COUNT(*) AS cnt
-FROM dict_dds.country_texts
-GROUP BY country_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-
-дублей нет
-SELECT country_code, language_code, COUNT(*) AS cnt
-FROM dict_dds.country_texts
-GROUP BY country_code, language_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дубли есть
-SELECT transportation_stage_code, COUNT(*) AS cnt
+SELECT transportation_stage_code, language_code, COUNT(*) AS cnt
 FROM dict_dds.transportation_stage_texts
-GROUP BY transportation_stage_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дублей нет
-SELECT transportation_service_code, COUNT(*) AS cnt
-FROM dict_dds.transportation_service_texts
 WHERE language_code = 'R'
-GROUP BY transportation_service_code
+GROUP BY transportation_stage_code, language_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
+👉 Если здесь вернётся хоть одна строка — значит, JOIN с trst реально умножает строки.
 
-дублей нет
-SELECT counterparty_code, COUNT(*) AS cnt
-FROM dict_dds.counterparty
-GROUP BY counterparty_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-
-дубли есть
+3.2. address / addr_8 — ключ (address_code, international_display_format_code IS NULL)
+sql
+Копировать код
 SELECT address_code, COUNT(*) AS cnt
 FROM dict_dds.address
+WHERE international_display_format_code IS NULL
 GROUP BY address_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
+👉 Если тут есть строки — значит, один counterparty_2.address_code может давать несколько addr_8, то есть реальное умножение строк.
 
-дубли нет
-SELECT address_code, COUNT(*) AS cnt
-FROM adrc
-GROUP BY address_code
+3.3. market_region1_texts (ты ещё не проверял)
+Ты джойнишь её так:
+
+sql
+Копировать код
+LEFT JOIN dict_dds.market_region1_texts t25a1
+       ON t25a1.market_region1_code = r_sd556.market_region1_code
+      AND t25a1.language_code = 'R'
+Проверка:
+
+sql
+Копировать код
+SELECT market_region1_code, language_code, COUNT(*) AS cnt
+FROM dict_dds.market_region1_texts
+WHERE language_code = 'R'
+GROUP BY market_region1_code, language_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
+4. Проверка НЕ теоретическая, а реальная: где именно растут строки?
+Самый надёжный способ — сделать пошаговый EXPLAIN ANALYZE на выборке.
+
+4.1. Создаём sample из факта
+Чтобы не мучить 157 млн каждую проверку:
+
+sql
+Копировать код
+DROP TABLE IF EXISTS tmp_base_sample;
+
+CREATE TEMP TABLE tmp_base_sample AS
+SELECT *
+FROM dm_calc.storage_sales_bundles_amount
+LIMIT 100000;  -- 100k строк для анализа
+
+ANALYZE tmp_base_sample;
+4.2. База без JOIN
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT COUNT(*) 
+FROM tmp_base_sample base;
+Ожидаешь: Actual Rows = 100000
+
+4.3. Добавляем один JOIN и смотрим, растут ли фактические строки
+a) material_spec + shape_texts
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT COUNT(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.material_specification ms
+       ON ms.material_code = base.material_code
+LEFT JOIN dict_dds.material_shape_texts mf
+       ON mf.shape_code     = ms.shape_code
+      AND mf.language_code  = 'R';
+👉 Если Actual Rows ≈ 100000, то здесь нет мультипликатора.
+
+b) transport_hub_texts (например, trht)
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT COUNT(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.transport_hub_texts trht
+       ON trht.transport_hub_code = base.transport_departure_hub_code
+      AND trht.language_code      = 'R';
+👉 Если Actual Rows ≈ 100000 — тоже ок.
+
+c) transportation_stage_texts
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT COUNT(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.transportation_stage_texts trst
+       ON trst.transportation_stage_code = base.transportation_stage_code
+      AND trst.language_code = 'R';
+👉 Если здесь уже, скажем, 200000+ строк → значит trst реально дублирует строки.
+
+d) address / addr_8
+sql
+Копировать код
+EXPLAIN ANALYZE
+SELECT COUNT(*)
+FROM tmp_base_sample base
+LEFT JOIN dict_dds.counterparty counter_2
+       ON counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
+LEFT JOIN dict_dds.address addr_8
+       ON addr_8.address_code = counter_2.address_code
+      AND addr_8.international_display_format_code IS NULL;

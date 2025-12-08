@@ -1,16 +1,9 @@
-SELECT 
-    'dim_material' AS tbl, count(*) FROM dim_material
-UNION ALL SELECT 'dim_material_shape', count(*) FROM dim_material_shape
-UNION ALL SELECT 'dim_service', count(*) FROM dim_service
-UNION ALL SELECT 'dim_etsng', count(*) FROM dim_etsng
-UNION ALL SELECT 'dim_warehouse_geo', count(*) FROM dim_warehouse_geo
-UNION ALL SELECT 'dim_remote_geo', count(*) FROM dim_remote_geo
-UNION ALL SELECT 'dim_owner_plant', count(*) FROM dim_owner_plant
-UNION ALL SELECT 'dim_creditor', count(*) FROM dim_creditor
-UNION ALL SELECT 'dim_hub_text', count(*) FROM dim_hub_text;
-
-
-SELECT delivery_code, count(*)
-FROM dim_owner_plant
-GROUP BY 1
-HAVING count(*) > 1;
+dim_material	1090864
+dim_material_shape	12062
+dim_service	2083
+dim_etsng	5049
+dim_warehouse_geo	27917
+dim_remote_geo	27917
+dim_owner_plant	26001682
+dim_creditor	433900
+dim_hub_text	136529

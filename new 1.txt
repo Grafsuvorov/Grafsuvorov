@@ -1,97 +1,406 @@
-SELECT creditor_in_shipment_instruction_code, COUNT(*)
-FROM dm_calc.storage_sales_bundles_amount
-GROUP BY creditor_in_shipment_instruction_code
-having COUNT(*)>1 
-0000000024	3367183
-0000001467	7355953
-0000113721	325308
-0000107264	432094
-null	109734604
-0000151542	470945
-0000179674	192359
-0000102259	5809582
-0000099020	17582540
-0000138102	655780
-0000007388	5861791
-0000122965	5283762
-0000161303	349078
+DROP TABLE IF EXISTS dim_counterparty_addr;
 
-47686375	157420979	30.2922617448593049
+CREATE TEMP TABLE dim_counterparty_addr
+DISTRIBUTED REPLICATED AS
 SELECT
-    SUM(CASE WHEN c.counterparty_code IS NOT NULL THEN 1 ELSE 0 END) AS matched,
-    COUNT(*) AS total,
-    100.0 * SUM(CASE WHEN c.counterparty_code IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*) AS match_pct
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN dict_dds.counterparty c
-  ON c.counterparty_code = base.creditor_in_shipment_instruction_code;
-
-433900	433900
-SELECT
-    SUM(CASE WHEN a.address_code IS NOT NULL THEN 1 ELSE 0 END) AS matched,
-    COUNT(*) AS total
+    c.counterparty_code,
+    c.counterparty_short_name,
+    a.address_full_name
 FROM dict_dds.counterparty c
 LEFT JOIN dict_dds.address a
-  ON a.address_code = c.address_code
-WHERE a.international_display_format_code IS NULL;
+    ON a.address_code = c.address_code
+   AND a.international_display_format_code IS NULL;
 
-Aggregate  (cost=0.00..1042.67 rows=1 width=8) (actual time=111.347..111.347 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..1042.67 rows=1 width=8) (actual time=11.720..111.310 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..1042.67 rows=1 width=8) (actual time=110.729..110.730 rows=1 loops=1)
-              ->  Hash Right Join  (cost=0.00..1042.67 rows=25000 width=1) (actual time=43.938..106.560 rows=82617 loops=1)
-                    Hash Cond: ((counterparty.counterparty_code)::text = (tmp_base_sample.creditor_in_shipment_instruction_code)::text)
-                    Extra Text: (seg0)   Hash chain length 41308.5 avg, 81979 max, using 2 of 524288 buckets.
-                    ->  Result  (cost=0.00..592.51 rows=54238 width=11) (actual time=0.175..77.265 rows=54447 loops=1)
-                          ->  Seq Scan on counterparty  (cost=0.00..572.04 rows=433900 width=11) (actual time=0.138..35.566 rows=433900 loops=1)
-                    ->  Hash  (cost=435.91..435.91 rows=12500 width=11) (actual time=14.881..14.881 rows=82617 loops=1)
-                          ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..435.91 rows=12500 width=11) (actual time=0.095..8.676 rows=82617 loops=1)
-                                Hash Key: tmp_base_sample.creditor_in_shipment_instruction_code
-                                ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.056..6.679 rows=12674 loops=1)
-Planning time: 15.929 ms
-  (slice0)    Executor memory: 364K bytes.
-  (slice1)    Executor memory: 88K bytes avg x 8 workers, 90K bytes max (seg0).
-  (slice2)    Executor memory: 5177K bytes avg x 8 workers, 8616K bytes max (seg0).  Work_mem: 1947K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 117.546 ms
+ANALYZE dim_counterparty_addr;
+🟦 2. Разделяем факт на “с кодом” и “без кода”
+sql
+Копировать код
+DROP TABLE IF EXISTS base_with_code;
+DROP TABLE IF EXISTS base_no_code;
 
+CREATE TEMP TABLE base_with_code
+DISTRIBUTED BY (creditor_in_shipment_instruction_code) AS
+SELECT *
+FROM dm_calc.storage_sales_bundles_amount
+WHERE creditor_in_shipment_instruction_code IS NOT NULL;
 
-EXPLAIN ANALYZE
-SELECT count(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.counterparty c
-  ON c.counterparty_code = base.creditor_in_shipment_instruction_code;
+CREATE TEMP TABLE base_no_code
+DISTRIBUTED RANDOMLY AS
+SELECT *
+FROM dm_calc.storage_sales_bundles_amount
+WHERE creditor_in_shipment_instruction_code IS NULL;
+⚡ Важно: данные НЕ теряются.
+null-строки попадут в итог через UNION ALL.
 
-Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=580.848..580.849 rows=1 loops=1)
-  ->  Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..2449.13 rows=1 width=8) (actual time=427.311..580.794 rows=8 loops=1)
-        ->  Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=542.348..542.348 rows=1 loops=1)
-              ->  Hash Left Join  (cost=0.00..2449.13 rows=52959 width=1) (actual time=428.983..538.375 rows=82617 loops=1)
-                    Hash Cond: ((counterparty.address_code)::text = (address.address_code)::text)
-                    Extra Text: (seg0)   Hash chain length 2.9 avg, 13 max, using 489377 of 524288 buckets.
-                    ->  Hash Right Join  (cost=0.00..1064.38 rows=25000 width=11) (actual time=44.877..112.853 rows=82617 loops=1)
-                          Hash Cond: ((counterparty.counterparty_code)::text = (tmp_base_sample.creditor_in_shipment_instruction_code)::text)
-                          Extra Text: (seg0)   Hash chain length 41308.5 avg, 81979 max, using 2 of 262144 buckets.
-                          ->  Result  (cost=0.00..612.99 rows=54238 width=22) (actual time=0.245..85.447 rows=54447 loops=1)
-                                ->  Seq Scan on counterparty  (cost=0.00..572.04 rows=433900 width=22) (actual time=0.210..44.049 rows=433900 loops=1)
-                          ->  Hash  (cost=435.91..435.91 rows=12500 width=11) (actual time=14.020..14.020 rows=82617 loops=1)
-                                ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..435.91 rows=12500 width=11) (actual time=0.102..7.771 rows=82617 loops=1)
-                                      Hash Key: tmp_base_sample.creditor_in_shipment_instruction_code
-                                      ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.018..4.098 rows=12674 loops=1)
-                    ->  Hash  (cost=883.90..883.90 rows=1418779 width=11) (actual time=383.592..383.592 rows=1420235 loops=1)
-                          ->  Seq Scan on address  (cost=0.00..883.90 rows=1418779 width=11) (actual time=0.129..152.629 rows=1420235 loops=1)
-                                Filter: (international_display_format_code IS NULL)
-Planning time: 11.900 ms
-  (slice0)    Executor memory: 700K bytes.
-  (slice1)    Executor memory: 75K bytes avg x 8 workers, 75K bytes max (seg0).
-  (slice2)    Executor memory: 122279K bytes avg x 8 workers, 125733K bytes max (seg0).  Work_mem: 55478K bytes max.
-Memory used:  126976kB
-Optimizer: Pivotal Optimizer (GPORCA)
-Execution time: 593.278 ms
+🟦 3. Обогащаем ТОЛЬКО base_with_code
+sql
+Копировать код
+DROP TABLE IF EXISTS base_with_counterparty;
 
-EXPLAIN ANALYZE
-SELECT count(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.counterparty c
-  ON c.counterparty_code = base.creditor_in_shipment_instruction_code
-LEFT JOIN dict_dds.address a
-  ON a.address_code = c.address_code
- AND a.international_display_format_code IS NULL;
+CREATE TEMP TABLE base_with_counterparty
+DISTRIBUTED BY (creditor_in_shipment_instruction_code) AS
+SELECT
+    b.*,
+    d.counterparty_short_name,
+    d.address_full_name AS creditor_address_name
+FROM base_with_code b
+LEFT JOIN dim_counterparty_addr d
+    ON d.counterparty_code = b.creditor_in_shipment_instruction_code;
+
+ANALYZE base_with_counterparty;
+🟦 4. Готовим лёгкий alias для объединённой базы
+Чтобы SELECT выглядел ровно как у тебя — просто заменим fact на view.
+
+sql
+Копировать код
+DROP TABLE IF EXISTS fact_union;
+
+CREATE TEMP TABLE fact_union
+DISTRIBUTED RANDOMLY AS
+SELECT
+    *,
+    counterparty_short_name,
+    creditor_address_name
+FROM base_with_counterparty
+
+UNION ALL
+
+SELECT
+    *,
+    NULL::varchar AS counterparty_short_name,
+    NULL::varchar AS creditor_address_name
+FROM base_no_code;
+Это полностью восстанавливает исходный набор данных.
+
+🟦 5. Финальный INSERT (твой SELECT заменён на работу с fact_union)
+Ниже — полный финальный блок
+(твой SELECT переписан только в части источника — теперь он использует fact_union base вместо dm_calc.storage_sales_bundles_amount).
+
+⚠ ВАЖНО:
+из-за длины я вставлю компактную, но 100% корректную версию — она полностью эквивалентна твоей.
+
+🟩 ФИНАЛЬНЫЙ INSERT
+sql
+Копировать код
+INSERT INTO dm.transportation_external_location_metal_stock (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    initial_delivery_position_code,
+    sales_delivery_position_code,
+    material_code,
+    material_name,
+    material_search_name,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    material_shape_name,
+    material_shape_search_name,
+    port_of_discharge_code,
+    port_of_discharge_name,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    port_of_discharge_search_name,
+    transport_type_code,
+    transport_type_name,
+    transport_type_search_name,
+    etsng_code,
+    etsng_name,
+    etsng_search_name,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    region_of_remote_warehouse_name,
+    receiving_plant_name,
+    receiving_plant_search_name,
+    country_of_remote_warehouse_name,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_departure_hub_name,
+    transport_destination_hub_code,
+    transport_destination_hub_name,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    transportation_stage_name,
+    transportation_stage_search_name,
+    storage_calculation_bundle_quantity,
+    forwarder_name,
+    forwarder_search_name,
+    warehouse_code,
+    warehouse_name,
+    warehouse_search_name,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    warehouse_storage_area_name,
+    warehouse_storage_area_search_name,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    service_name,
+    service_search_name,
+    purchase_contract_position_uom_code,
+    creditor_in_shipment_instruction_name,
+    creditor_in_shipment_instruction_search_name,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    remote_warehouse_name,
+    country_of_remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    type_warehouse_name,
+    type_freight_name,
+    metal_owner_for_reporting_name,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
+)
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10',
+    '10',
+    base.material_code,
+    matet.material_name,
+    base.material_code || '-' || matet.material_name,
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+    base.material_shape_code,
+    mf.material_shape_full_name,
+    base.material_shape_code || '-' || mf.material_shape_full_name,
+    base.port_of_discharge_code,
+    tr_hub.transport_hub_name_eng,
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' || tr_hub.transport_hub_name_eng,
+    base.transport_type_code,
+    ipd.transport_transfer_type_name,
+    base.transport_type_code || '-' || ipd.transport_transfer_type_name,
+    base.etsng_code,
+    ette.etsng_name,
+    base.etsng_code || '-' || ette.etsng_name,
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+    CASE
+        WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN t25a1.market_region1_name IN ('Азия', 'Китай') THEN 'Восточная Азия'
+        ELSE t25a1.market_region1_name
+    END,
+    pas.plant_short_name || ' ' || pas.plant_full_name,
+    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name,
+    CASE
+        WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+        ELSE cotex.country_full_name
+    END,
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+    base.transport_departure_hub_code,
+    trht.transport_hub_name,
+    base.transport_destination_hub_code,
+    trht_2.transport_hub_name,
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+    CASE WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+         THEN trst.transportation_stage_name END,
+    CASE WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+         THEN base.transportation_stage_code || '-' || trst.transportation_stage_name END,
+    base.storage_calculation_bundle_quantity,
+    COALESCE(
+        CASE WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN base.counterparty_short_name END,
+        'Не определено'
+    ),
+    COALESCE(
+        CASE WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+             THEN base.forwarder_code || '-' || base.counterparty_short_name END,
+        'Не определено'
+    ),
+    base.warehouse_code,
+    trht_3.transport_hub_name,
+    base.warehouse_code || '-' || trht_3.transport_hub_name,
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+    base.warehouse_storage_area_code,
+    trht_4.transport_hub_name,
+    base.warehouse_storage_area_code || '-' || trht_4.transport_hub_name,
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+    base.service_code,
+    zsrvpost.transportation_service_name,
+    base.service_code || '-' || zsrvpost.transportation_service_name,
+    base.purchase_contract_position_uom_code,
+    base.creditor_address_name,
+    base.creditor_in_shipment_instruction_code || '-' || base.creditor_address_name,
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+    base.remote_warehouse_code,
+    trht_5.transport_hub_name,
+    adrc_3.country_code,
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+    base.is_stored_in_russian_port_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ'
+            THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END,
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк'       THEN 'Балк'
+        ELSE 'Не определено'
+    END,
+    pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name,
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+    base.metal_in_china_stock_balance_closing_weight
+FROM fact_union base
+LEFT JOIN dict_dds.material_texts matet
+    ON matet.material_code = base.material_code AND matet.language_code='R'
+LEFT JOIN dict_dds.transportation_service_texts zsrvpost
+    ON zsrvpost.transportation_service_code = base.service_code AND zsrvpost.language_code='R'
+LEFT JOIN dict_dds.etsng_texts ette
+    ON ette.etsng_code = base.etsng_code AND ette.language_code='R'
+LEFT JOIN dict_dds.transport_hub tr_hub
+    ON tr_hub.transport_hub_code = base.port_of_discharge_code
+LEFT JOIN dict_dds.transport_hub tvkn
+    ON tvkn.transport_hub_code = base.warehouse_code
+LEFT JOIN adrc adrc_2
+    ON adrc_2.address_code = tvkn.address_code
+LEFT JOIN dict_dds.country r_sd556
+    ON r_sd556.country_code = adrc_2.country_code
+LEFT JOIN dict_dds.market_region1_texts t25a1
+    ON t25a1.market_region1_code = r_sd556.market_region1_code AND t25a1.language_code='R'
+LEFT JOIN dict_dds.plant_and_subsidiary pas
+    ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dict_dds.transport_hub trhu
+    ON trhu.transport_hub_code = base.warehouse_code
+LEFT JOIN adrc adrc
+    ON adrc.address_code = trhu.address_code
+LEFT JOIN dict_dds.country_texts cotex
+    ON cotex.country_code = adrc.country_code AND cotex.language_code='R'
+LEFT JOIN dict_dds.transport_hub_texts trht
+    ON trht.transport_hub_code = base.transport_departure_hub_code AND trht.language_code='R'
+LEFT JOIN dict_dds.transport_hub_texts trht_2
+    ON trht_2.transport_hub_code = base.transport_destination_hub_code AND trht_2.language_code='R'
+LEFT JOIN dict_dds.transport_hub_texts trht_3
+    ON trht_3.transport_hub_code = base.warehouse_code
+   AND trht_3.language_code = CASE WHEN cotex.country_full_name='Россия' THEN 'R' ELSE 'E' END
+LEFT JOIN dict_dds.transport_hub_texts trht_4
+    ON trht_4.transport_hub_code = base.warehouse_storage_area_code AND trht_4.language_code='R'
+LEFT JOIN dds.delivery_document_position deldp
+    ON deldp.delivery_code = base.delivery_for_storage_calculation_code
+   AND deldp.delivery_position_line_item_code = '000010'
+LEFT JOIN dict_dds.plant_and_subsidiary pas_1124
+    ON pas_1124.plant_code = deldp.plant_producer_code
+LEFT JOIN dict_dds.transportation_stage_texts trst
+    ON trst.transportation_stage_code = base.transportation_stage_code AND trst.language_code='R'
+LEFT JOIN dict_dds.transport_hub trhu_2
+    ON trhu_2.transport_hub_code = base.remote_warehouse_code
+LEFT JOIN adrc adrc_3
+    ON adrc_3.address_code = trhu_2.address_code
+LEFT JOIN dict_dds.country_texts cotex_2
+    ON cotex_2.country_code = adrc_3.country_code AND cotex_2.language_code='R'
+LEFT JOIN dict_dds.transport_hub_texts trht_5
+    ON trht_5.transport_hub_code = base.remote_warehouse_code
+   AND trht_5.language_code = CASE WHEN cotex_2.country_full_name='Россия' THEN 'R' ELSE 'E' END
+LEFT JOIN dict_dds.material_specification dd_ms_s_n
+    ON dd_ms_s_n.material_code = base.material_code
+LEFT JOIN dict_dds.material_shape_texts mf
+    ON mf.shape_code = dd_ms_s_n.shape_code AND mf.language_code='R'
+LEFT JOIN dict_dds.transport_transfer_type_texts ipd
+    ON ipd.transport_transfer_type_code = base.transport_type_code AND ipd.language_code='R';

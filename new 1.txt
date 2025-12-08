@@ -1,9 +1,4 @@
-dim_material	1090864
-dim_material_shape	12062
-dim_service	2083
-dim_etsng	5049
-dim_warehouse_geo	27917
-dim_remote_geo	27917
-dim_owner_plant	26001682
-dim_creditor	433900
-dim_hub_text	136529
+SELECT material_code, min(material_name)
+FROM dict_dds.material_texts
+WHERE language_code='R'
+GROUP BY material_code;

@@ -1,350 +1,508 @@
-create temporary table adrc on commit drop as ( -- убираются дубли для поля склада
-select
-	address_code,
-	min(country_code) as country_code
-from
-	dict_dds.address
-group by
-	address_code
-	)
-distributed replicated;
+----------------------------------------------------------------------
+-- 0. Подготовка: адреса без дублей (как у тебя, но явно и чисто)
+----------------------------------------------------------------------
 
+DROP TABLE IF EXISTS adrc;
 
-insert into dm.transportation_external_location_metal_stock (
-	sales_bundle_code,
-	plant_producer_delivery_code,
-	plant_producer_delivery_position_code,
-	initial_delivery_code,
-	initial_delivery_position_code,
-	sales_delivery_position_code,
-	material_code,
-	material_name,
-	material_search_name,
-	dt_shipment,
-	railcar_code,
-	transport_bill_code,
-	uni,
-	material_shape_code,
-	material_shape_name,
-	material_shape_search_name,
-	port_of_discharge_code,
-	port_of_discharge_name,
-	dt_arrival_to_russian_port,
-	dt_storage_end_in_release,
-	port_of_discharge_search_name,
-	transport_type_code,
-	transport_type_name,
-	transport_type_search_name,
-	etsng_code,
-	etsng_name,
-	etsng_search_name,
-	dt_report,
-	sales_bundle_net_weight,
-	sales_bundle_gross_weight,
-	batch_code,
-	dt_arrival,
-	region_of_remote_warehouse_name,
-	receiving_plant_name,
-	receiving_plant_search_name,
-	country_of_remote_warehouse_name,
-	receiving_plant_code,
-	sales_delivery_code,
-	transportation_inbound_delivery_code,
-	delivery_for_storage_calculation_code,
-	transportation_inbound_delivery_position_code,
-	delivery_position_for_storage_calculation_code,
-	forwarder_code,
-	storage_cost_calculation_type_name,
-	transport_departure_hub_code,
-	transport_departure_hub_name,
-	transport_destination_hub_code,
-	transport_destination_hub_name,
-	transportation_outbound_delivery_code,
-	transportation_outbound_delivery_position_code,
-	is_final_transportation_stage_code,
-	transportation_stage_code,
-	transportation_stage_name,
-	transportation_stage_search_name,
-	storage_calculation_bundle_quantity,
-	forwarder_name,
-	forwarder_search_name,
-	warehouse_code,
-	warehouse_name,
-	warehouse_search_name,
-	delivery_in_final_release_code,
-	dt_final_release,
-	bill_of_lading_code,
-	bill_of_lading_number,
-	dt_bill_of_lading,
-	incoterms_code,
-	storage_cost_special_calculation_type_code,
-	warehouse_storage_area_code,
-	warehouse_storage_area_name,
-	warehouse_storage_area_search_name,
-	plant_code,
-	unit_balance_code,
-	creditor_in_shipment_instruction_code,
-	dt_storage_start,
-	dt_shipped_from_warehouse,
-	dt_storage_end,
-	service_number,
-	storage_duration_total_calendar_days,
-	shipment_instruction_number,
-	dt_for_price_search_in_purchase_contract,
-	purchase_contract_code,
-	purchase_contract_position_code,
-	purchase_contract_position_currency_code,
-	service_code,
-	service_name,
-	service_search_name,
-	purchase_contract_position_uom_code,
-	creditor_in_shipment_instruction_name,
-	creditor_in_shipment_instruction_search_name,
-	storage_duration_free_by_contract_calendar_days,
-	storage_duration_free_by_delivery_calendar_days,
-	storage_duration_payable_calendar_days,
-	remote_warehouse_code,
-	remote_warehouse_name,
-	country_of_remote_warehouse_code,
-	dt_transportation_stage_start_p,
-	dt_transportation_stage_start_r,
-	dt_shipment_from_foreign_warehouse,
-	storage_cost_calculated_amount,
-	storage_cost_calculated_amount_local,
-	storage_payable_001_030_days_gross_weight,
-	storage_payable_031_060_days_gross_weight,
-	storage_payable_061_090_days_gross_weight,
-	storage_payable_091_180_days_gross_weight,
-	storage_payable_181_365_days_gross_weight,
-	storage_payable_over_365_days_gross_weight,
-	is_stored_in_russian_port_code,
-	type_warehouse_name,
-	type_freight_name,
-	metal_owner_for_reporting_name,
-	storage_calculated_cost_001_030_amount,
-	storage_calculated_cost_031_060_amount,
-	storage_calculated_cost_061_090_amount,
-	storage_calculated_cost_091_180_amount,
-	storage_calculated_cost_181_365_amount,
-	storage_calculated_cost_over_365_amount,
-	metal_in_china_stock_balance_closing_weight
+CREATE TEMP TABLE adrc
+ON COMMIT DROP AS
+SELECT
+    address_code,
+    MIN(country_code) AS country_code
+FROM dict_dds.address
+GROUP BY
+    address_code
+DISTRIBUTED REPLICATED;
+
+ANALYZE adrc;
+
+----------------------------------------------------------------------
+-- 1. DIM: Склад (warehouse_code) → регион + страна (строковое имя)
+--    (ранее: base -> tvkn -> adrc_2 -> country -> market_region1_texts)
+----------------------------------------------------------------------
+
+DROP TABLE IF EXISTS tmp_wh_geo;
+
+CREATE TEMP TABLE tmp_wh_geo
+ON COMMIT DROP AS
+SELECT
+    tvkn.transport_hub_code AS warehouse_code,
+
+    /* region_of_remote_warehouse_name (LE.001061) */
+    CASE
+        WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN t25a1.market_region1_name IN ('Азия', 'Китай') THEN 'Восточная Азия'
+        ELSE t25a1.market_region1_name
+    END AS region_of_remote_warehouse_name,
+
+    /* country_of_remote_warehouse_name (через country_texts.cotex) */
+    CASE
+        WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN cotex.country_full_name = 'Тайвань (Китай)'   THEN 'Тайвань'
+        ELSE cotex.country_full_name
+    END AS country_of_remote_warehouse_name,
+
+    cotex.country_full_name AS warehouse_country_full_name
+FROM dict_dds.transport_hub tvkn
+LEFT JOIN adrc       adrc_2 ON adrc_2.address_code = tvkn.address_code
+LEFT JOIN dict_dds.country r_sd556
+       ON r_sd556.country_code = adrc_2.country_code
+LEFT JOIN dict_dds.market_region1_texts t25a1
+       ON t25a1.market_region1_code = r_sd556.market_region1_code
+      AND t25a1.language_code = 'R'
+LEFT JOIN dict_dds.country_texts cotex
+       ON cotex.country_code = adrc_2.country_code
+      AND cotex.language_code = 'R'
+GROUP BY
+    tvkn.transport_hub_code,
+    t25a1.market_region1_name,
+    cotex.country_full_name
+DISTRIBUTED REPLICATED;
+
+ANALYZE tmp_wh_geo;
+
+----------------------------------------------------------------------
+-- 2. DIM: Имя склада (warehouse_code → warehouse_name)
+--    (ранее: выбор языка для trht_3 по стране, cotex.country_full_name)
+----------------------------------------------------------------------
+
+DROP TABLE IF EXISTS tmp_wh_name;
+
+CREATE TEMP TABLE tmp_wh_name
+ON COMMIT DROP AS
+SELECT
+    tvkn.transport_hub_code AS warehouse_code,
+    CASE
+        WHEN cotex.country_full_name = 'Россия'
+            THEN trht_r.transport_hub_name
+        ELSE trht_e.transport_hub_name
+    END AS warehouse_name
+FROM dict_dds.transport_hub tvkn
+LEFT JOIN adrc       adrc_2  ON adrc_2.address_code = tvkn.address_code
+LEFT JOIN dict_dds.country_texts cotex
+       ON cotex.country_code = adrc_2.country_code
+      AND cotex.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_r
+       ON trht_r.transport_hub_code = tvkn.transport_hub_code
+      AND trht_r.language_code   = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_e
+       ON trht_e.transport_hub_code = tvkn.transport_hub_code
+      AND trht_e.language_code   = 'E'
+GROUP BY
+    tvkn.transport_hub_code,
+    cotex.country_full_name,
+    trht_r.transport_hub_name,
+    trht_e.transport_hub_name
+DISTRIBUTED REPLICATED;
+
+ANALYZE tmp_wh_name;
+
+----------------------------------------------------------------------
+-- 3. DIM: Удалённый склад (remote_warehouse_code → name + country_code)
+--    (ранее: base -> trhu_2 -> adrc_3 -> country_texts cotex_2 -> trht_5)
+----------------------------------------------------------------------
+
+DROP TABLE IF EXISTS tmp_remote_wh_dim;
+
+CREATE TEMP TABLE tmp_remote_wh_dim
+ON COMMIT DROP AS
+SELECT
+    trhu_2.transport_hub_code AS remote_warehouse_code,
+    /* выбор языка для имени склада по стране (как у тебя для trht_5) */
+    CASE
+        WHEN cotex_2.country_full_name = 'Россия'
+            THEN trht_r.transport_hub_name
+        ELSE trht_e.transport_hub_name
+    END AS remote_warehouse_name,
+    adrc_3.country_code AS country_of_remote_warehouse_code
+FROM dict_dds.transport_hub trhu_2
+LEFT JOIN adrc       adrc_3  ON adrc_3.address_code = trhu_2.address_code
+LEFT JOIN dict_dds.country_texts cotex_2
+       ON cotex_2.country_code = adrc_3.country_code
+      AND cotex_2.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_r
+       ON trht_r.transport_hub_code = trhu_2.transport_hub_code
+      AND trht_r.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_e
+       ON trht_e.transport_hub_code = trhu_2.transport_hub_code
+      AND trht_e.language_code = 'E'
+GROUP BY
+    trhu_2.transport_hub_code,
+    adrc_3.country_code,
+    cotex_2.country_full_name,
+    trht_r.transport_hub_name,
+    trht_e.transport_hub_name
+DISTRIBUTED REPLICATED;
+
+ANALYZE tmp_remote_wh_dim;
+
+----------------------------------------------------------------------
+-- 4. Загрузка витрины
+--    Основной SELECT стал легче: нет длинных цепочек JOIN через 3–4 таблицы
+--    для каждой строки base, тяжёлые куски вынесены в dim-таблицы выше.
+----------------------------------------------------------------------
+
+INSERT INTO dm.transportation_external_location_metal_stock
+(
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    initial_delivery_position_code,
+    sales_delivery_position_code,
+    material_code,
+    material_name,
+    material_search_name,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    material_shape_name,
+    material_shape_search_name,
+    port_of_discharge_code,
+    port_of_discharge_name,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    port_of_discharge_search_name,
+    transport_type_code,
+    transport_type_name,
+    transport_type_search_name,
+    etsng_code,
+    etsng_name,
+    etsng_search_name,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    region_of_remote_warehouse_name,
+    receiving_plant_name,
+    receiving_plant_search_name,
+    country_of_remote_warehouse_name,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_departure_hub_name,
+    transport_destination_hub_code,
+    transport_destination_hub_name,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    transportation_stage_name,
+    transportation_stage_search_name,
+    storage_calculation_bundle_quantity,
+    forwarder_name,
+    forwarder_search_name,
+    warehouse_code,
+    warehouse_name,
+    warehouse_search_name,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    warehouse_storage_area_name,
+    warehouse_storage_area_search_name,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    service_name,
+    service_search_name,
+    purchase_contract_position_uom_code,
+    creditor_in_shipment_instruction_name,
+    creditor_in_shipment_instruction_search_name,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    remote_warehouse_name,
+    country_of_remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    type_warehouse_name,
+    type_freight_name,
+    metal_owner_for_reporting_name,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
 )
-explain(verbose, format json)
-select
-	base.sales_bundle_code,
-	base.plant_producer_delivery_code,
-	base.plant_producer_delivery_position_code,
-	base.initial_delivery_code,
-	'10' as initial_delivery_position_code, -- LE.001004
-	'10' as sales_delivery_position_code, -- LE.001006
-	base.material_code,
-	matet.material_name as material_name, -- -- LE.001013
-	base.material_code || '-' || matet.material_name as material_search_name, -- LE.001014
-	base.dt_shipment,
-	base.railcar_code,
-	base.transport_bill_code,
-	base.uni,
-	base.material_shape_code,
-	mf.material_shape_full_name as material_shape_name,	-- Форма SD.000180
-	base.material_shape_code || '-' || mf.material_shape_full_name as material_shape_search_name, -- LE.001038
-	base.port_of_discharge_code,
-	tr_hub.transport_hub_name_eng as port_of_discharge_name, -- LE.001045
-	base.dt_arrival_to_russian_port,
-	base.dt_storage_end_in_release,
-	base.port_of_discharge_code || '-' || tr_hub.transport_hub_name_eng as port_of_discharge_search_name, -- LE.001046
-	base.transport_type_code,
-	ipd.transport_transfer_type_name as transport_type_name, -- LE.001051
-	base.transport_type_code || '-' || ipd.transport_transfer_type_name as transport_type_search_name, -- LE.001052
-	base.etsng_code,
-	ette.etsng_name as etsng_name, -- LE.001067
-	base.etsng_code || '-' || ette.etsng_name as etsng_search_name,	-- LE.001068
-	base.dt_report,
-	base.sales_bundle_net_weight,
-	base.sales_bundle_gross_weight,
-	base.batch_code,
-	base.dt_arrival,	
-	case
-		when t25a1.market_region1_name = 'Турция' then 'Западная Азия'
-		when t25a1.market_region1_name = 'Средний Восток и Афр' then 'Ближний Восток'
-		when t25a1.market_region1_name in ('Азия', 'Китай') then 'Восточная Азия'
-		else t25a1.market_region1_name
-	end as region_of_remote_warehouse_name, -- LE.001061
-	pas.plant_short_name || ' ' || pas.plant_full_name as receiving_plant_name, -- LE.001030
-	base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name as receiving_plant_search_name, -- LE.001031
-	case
-		when cotex.country_full_name = 'Корея, республика' then 'Южная Корея'
-		when cotex.country_full_name = 'Тайвань (Китай)' then 'Тайвань'
-		else cotex.country_full_name
-	end as country_of_remote_warehouse_name, -- LE.001060	
-	base.receiving_plant_code,
-	base.sales_delivery_code,
-	base.transportation_inbound_delivery_code,
-	base.delivery_for_storage_calculation_code,
-	base.transportation_inbound_delivery_position_code,
-	base.delivery_position_for_storage_calculation_code,
-	base.forwarder_code,
-	base.storage_cost_calculation_type_name,
-	base.transport_departure_hub_code,
-	trht.transport_hub_name as transport_departure_hub_name, -- LE.001022
-	base.transport_destination_hub_code,
-	trht_2.transport_hub_name as transport_destination_hub_name, -- LE.001024 
-	base.transportation_outbound_delivery_code,
-	base.transportation_outbound_delivery_position_code,
-	base.is_final_transportation_stage_code,
-	base.transportation_stage_code,
-	case
-		when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then trst.transportation_stage_name
-	end as transportation_stage_name, -- LE.001027
-	case
-		when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.transportation_stage_code || '-' || trst.transportation_stage_name
-	end as transportation_stage_search_name, -- LE.001028
-	base.storage_calculation_bundle_quantity,
-	coalesce(case when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then counter.counterparty_short_name end, 'Не определено') as forwarder_name, -- LE.001041
-	coalesce(case when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then base.forwarder_code || '-' || counter.counterparty_short_name end, 'Не определено') as forwarder_search_name, -- LE.001042
-	base.warehouse_code,
-	trht_3.transport_hub_name as warehouse_name, -- LE.001048
-	base.warehouse_code || '-' || trht_3.transport_hub_name as warehouse_search_name, -- LE.001049	
-	base.delivery_in_final_release_code,
-	base.dt_final_release,
-	base.bill_of_lading_code,
-	base.bill_of_lading_number,
-	base.dt_bill_of_lading,
-	base.incoterms_code,
-	base.storage_cost_special_calculation_type_code,
-	base.warehouse_storage_area_code,
-	trht_4.transport_hub_name as warehouse_storage_area_name, -- LE.001074
-	base.warehouse_storage_area_code || '-' || trht_4.transport_hub_name as warehouse_storage_area_search_name, -- LE.001075
-	base.plant_code,
-	base.unit_balance_code,
-	base.creditor_in_shipment_instruction_code,
-	base.dt_storage_start,
-	base.dt_shipped_from_warehouse,
-	base.dt_storage_end,
-	base.service_number,
-	base.storage_duration_total_calendar_days,
-	base.shipment_instruction_number,
-	base.dt_for_price_search_in_purchase_contract,
-	base.purchase_contract_code,
-	base.purchase_contract_position_code,
-	base.purchase_contract_position_currency_code,
-	base.service_code,
-	zsrvpost.transportation_service_name as service_name, -- LE.001084
-	base.service_code || '-' || zsrvpost.transportation_service_name as service_search_name, -- LE.001085	
-	base.purchase_contract_position_uom_code,
-	addr_8.address_full_name as creditor_in_shipment_instruction_name, -- LE.001093
-	base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name as creditor_in_shipment_instruction_search_name, -- LE.001094	
-	base.storage_duration_free_by_contract_calendar_days,
-	base.storage_duration_free_by_delivery_calendar_days,
-	base.storage_duration_payable_calendar_days,
-	base.remote_warehouse_code,
-	trht_5.transport_hub_name as remote_warehouse_name,
-	adrc_3.country_code as country_of_remote_warehouse_code,
-	base.dt_transportation_stage_start_p,
-	base.dt_transportation_stage_start_r,
-	base.dt_shipment_from_foreign_warehouse,
-	base.storage_cost_calculated_amount,
-	base.storage_cost_calculated_amount_local,
-	base.storage_payable_001_030_days_gross_weight,
-	base.storage_payable_031_060_days_gross_weight,
-	base.storage_payable_061_090_days_gross_weight,
-	base.storage_payable_091_180_days_gross_weight,
-	base.storage_payable_181_365_days_gross_weight,
-	base.storage_payable_over_365_days_gross_weight,
-	base.is_stored_in_russian_port_code,
-	case
-		when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then 'Терминал порта'
-		when base.storage_cost_calculation_type_name in ('Логика СВХ') then 'Склад СВХ'
-		else 'Не определено'
-	end as type_warehouse_name,
-	case
-		when base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' then 'Контейнеры'
-		when base.storage_cost_calculation_type_name = 'Логика РФ-балк' then 'Балк'
-		else 'Не определено'
-	end as type_freight_name,
-	pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name as metal_owner_for_reporting_name, -- LE.001124
-	base.storage_calculated_cost_001_030_amount,
-	base.storage_calculated_cost_031_060_amount,
-	base.storage_calculated_cost_061_090_amount,
-	base.storage_calculated_cost_091_180_amount,
-	base.storage_calculated_cost_181_365_amount,
-	base.storage_calculated_cost_over_365_amount,
-	base.metal_in_china_stock_balance_closing_weight
-	
-from dm_calc.storage_sales_bundles_amount as base
-	left join dict_dds.material_texts as matet on
-		matet.material_code = base.material_code
-		and matet.language_code = 'R'
-	left join dict_dds.transportation_service_texts as zsrvpost on
-		zsrvpost.transportation_service_code = base.service_code
-		and zsrvpost.language_code = 'R'
-	left join dict_dds.etsng_texts as ette on
-		ette.etsng_code = base.etsng_code
-		and ette.language_code = 'R'
-	left join dict_dds.transport_hub tvkn on
-		tvkn.transport_hub_code = base.warehouse_code
-	left join adrc as adrc_2 on
-		adrc_2.address_code = tvkn.address_code
-	left join dict_dds.country as r_sd556 on
-		r_sd556.country_code = adrc_2.country_code
-	left join dict_dds.market_region1_texts as t25a1 on
-		t25a1.market_region1_code = r_sd556.market_region1_code
-		and t25a1.language_code = 'R'
-		
-	left join dict_dds.plant_and_subsidiary as pas on
-		pas.plant_code = base.receiving_plant_code
-	left join dict_dds.transport_hub as trhu on
-		trhu.transport_hub_code = base.warehouse_code
-	left join adrc as adrc on
-		adrc.address_code = trhu.address_code
-	left join dict_dds.country_texts as cotex on
-		cotex.country_code = adrc.country_code
-		and cotex.language_code = 'R'
-	left join dict_dds.transport_hub_texts as trht on
-		trht.transport_hub_code = base.transport_departure_hub_code
-		and trht.language_code = 'R'
-	left join dict_dds.transport_hub_texts as trht_2 on
-		trht_2.transport_hub_code = base.transport_destination_hub_code
-		and trht_2.language_code = 'R'
-	left join dict_dds.transport_hub_texts as trht_3 on
-		trht_3.language_code = case when cotex.country_full_name = 'Россия' then 'R' else 'E' end
-		and trht_3.transport_hub_code = base.warehouse_code
-	left join dict_dds.transport_hub_texts as trht_4 on
-		trht_4.language_code = 'R'
-		and trht_4.transport_hub_code = base.warehouse_storage_area_code
-	left join dds.delivery_document_position as deldp on
-		deldp.delivery_code = base.delivery_for_storage_calculation_code
-		and deldp.delivery_position_line_item_code = '000010'
-	left join dict_dds.plant_and_subsidiary as pas_1124 on
-		pas_1124.plant_code = deldp.plant_producer_code
-	left join dict_dds.transportation_stage_texts as trst on
-		trst.transportation_stage_code = base.transportation_stage_code
-		and trst.language_code = 'R'
-	left join dict_dds.counterparty as counter on
-		counter.counterparty_code = base.forwarder_code
-	left join dict_dds.transport_hub as tr_hub on
-		tr_hub.transport_hub_code = base.port_of_discharge_code
-	left join dict_dds.transport_hub as trhu_2 on
-		trhu_2.transport_hub_code = base.remote_warehouse_code
-	left join adrc as adrc_3 on
-		adrc_3.address_code = trhu_2.address_code
-	left join dict_dds.country_texts as cotex_2 on
-		cotex_2.country_code = adrc_3.country_code
-		and cotex_2.language_code = 'R'
-	left join dict_dds.transport_hub_texts as trht_5 on
-		trht_5.transport_hub_code = base.remote_warehouse_code
-		and trht_5.language_code = case when cotex_2.country_full_name = 'Россия' then 'R' else 'E' end
-	left join dict_dds.material_specification as dd_ms_s_n on
-		dd_ms_s_n.material_code = base.material_code
-	left join dict_dds.material_shape_texts as mf on
-		mf.shape_code = dd_ms_s_n.shape_code
-		and mf.language_code = 'R'
-	left join dict_dds.transport_transfer_type_texts as ipd on
-		ipd.transport_transfer_type_code = base.transport_type_code
-		and ipd.language_code = 'R'
-	left join dict_dds.counterparty as counter_2 on
-		counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
-	left join dict_dds.address as addr_8 on
-		addr_8.address_code = counter_2.address_code
-		and addr_8.international_display_format_code is null
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10' AS initial_delivery_position_code,                 -- LE.001004
+    '10' AS sales_delivery_position_code,                   -- LE.001006
+    base.material_code,
+    matet.material_name AS material_name,                   -- LE.001013
+    base.material_code || '-' || matet.material_name AS material_search_name, -- LE.001014
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+    base.material_shape_code,
+    mf.material_shape_full_name AS material_shape_name,     -- Форма SD.000180
+    base.material_shape_code || '-' || mf.material_shape_full_name AS material_shape_search_name, -- LE.001038
+    base.port_of_discharge_code,
+    tr_hub.transport_hub_name_eng AS port_of_discharge_name, -- LE.001045
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' || tr_hub.transport_hub_name_eng AS port_of_discharge_search_name, -- LE.001046
+    base.transport_type_code,
+    ipd.transport_transfer_type_name AS transport_type_name, -- LE.001051
+    base.transport_type_code || '-' || ipd.transport_transfer_type_name AS transport_type_search_name, -- LE.001052
+    base.etsng_code,
+    ette.etsng_name AS etsng_name,                          -- LE.001067
+    base.etsng_code || '-' || ette.etsng_name AS etsng_search_name, -- LE.001068
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
 
+    -- Регион удалённого склада (через tmp_wh_geo по warehouse_code)
+    wh_geo.region_of_remote_warehouse_name,                 -- LE.001061
+
+    -- Завод-получатель
+    pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_name, -- LE.001030
+    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_search_name, -- LE.001031
+
+    -- Страна удалённого склада (именованная, через tmp_wh_geo)
+    wh_geo.country_of_remote_warehouse_name,                -- LE.001060
+
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+    base.transport_departure_hub_code,
+    trht.transport_hub_name AS transport_departure_hub_name, -- LE.001022
+    base.transport_destination_hub_code,
+    trht_2.transport_hub_name AS transport_destination_hub_name, -- LE.001024
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+            THEN trst.transportation_stage_name
+    END AS transportation_stage_name,                       -- LE.001027
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
+    END AS transportation_stage_search_name,                -- LE.001028
+    base.storage_calculation_bundle_quantity,
+
+    -- Экспедитор
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+                THEN counter.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_name,                                    -- LE.001041
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия', 'Логика Европа', 'Логика СВХ')
+                THEN base.forwarder_code || '-' || counter.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_search_name,                             -- LE.001042
+
+    -- Склад
+    base.warehouse_code,
+    wh_name.warehouse_name AS warehouse_name,               -- LE.001048
+    base.warehouse_code || '-' || wh_name.warehouse_name AS warehouse_search_name, -- LE.001049
+
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+
+    base.warehouse_storage_area_code,
+    trht_4.transport_hub_name AS warehouse_storage_area_name, -- LE.001074
+    base.warehouse_storage_area_code || '-' || trht_4.transport_hub_name AS warehouse_storage_area_search_name, -- LE.001075
+
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+    base.service_code,
+    zsrvpost.transportation_service_name AS service_name,   -- LE.001084
+    base.service_code || '-' || zsrvpost.transportation_service_name AS service_search_name, -- LE.001085
+    base.purchase_contract_position_uom_code,
+
+    addr_8.address_full_name AS creditor_in_shipment_instruction_name, -- LE.001093
+    base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name AS creditor_in_shipment_instruction_search_name, -- LE.001094
+
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+
+    -- Удалённый склад: имя + страна (через tmp_remote_wh_dim)
+    base.remote_warehouse_code,
+    rwh.remote_warehouse_name AS remote_warehouse_name,
+    rwh.country_of_remote_warehouse_code,
+
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+    base.is_stored_in_russian_port_code,
+
+    -- Тип склада / груза
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры', 'Логика РФ-балк')
+            THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name IN ('Логика СВХ')
+            THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END AS type_warehouse_name,
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк'       THEN 'Балк'
+        ELSE 'Не определено'
+    END AS type_freight_name,
+
+    -- Собственник металла по поставке
+    pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name AS metal_owner_for_reporting_name, -- LE.001124
+
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+    base.metal_in_china_stock_balance_closing_weight
+FROM dm_calc.storage_sales_bundles_amount AS base
+
+    -- Тексты материалов / услуг / ЕТСНГ / формы / типа транспорта
+    LEFT JOIN dict_dds.material_texts AS matet
+           ON matet.material_code = base.material_code
+          AND matet.language_code = 'R'
+    LEFT JOIN dict_dds.transportation_service_texts AS zsrvpost
+           ON zsrvpost.transportation_service_code = base.service_code
+          AND zsrvpost.language_code = 'R'
+    LEFT JOIN dict_dds.etsng_texts AS ette
+           ON ette.etsng_code = base.etsng_code
+          AND ette.language_code = 'R'
+    LEFT JOIN dict_dds.material_specification AS dd_ms_s_n
+           ON dd_ms_s_n.material_code = base.material_code
+    LEFT JOIN dict_dds.material_shape_texts AS mf
+           ON mf.shape_code = dd_ms_s_n.shape_code
+          AND mf.language_code = 'R'
+    LEFT JOIN dict_dds.transport_transfer_type_texts AS ipd
+           ON ipd.transport_transfer_type_code = base.transport_type_code
+          AND ipd.language_code = 'R'
+    LEFT JOIN dict_dds.transportation_stage_texts AS trst
+           ON trst.transportation_stage_code = base.transportation_stage_code
+          AND trst.language_code = 'R'
+
+    -- Заводы
+    LEFT JOIN dict_dds.plant_and_subsidiary AS pas
+           ON pas.plant_code = base.receiving_plant_code
+
+    -- Документ поставки для собственника металла
+    LEFT JOIN dds.delivery_document_position AS deldp
+           ON deldp.delivery_code = base.delivery_for_storage_calculation_code
+          AND deldp.delivery_position_line_item_code = '000010'
+    LEFT JOIN dict_dds.plant_and_subsidiary AS pas_1124
+           ON pas_1124.plant_code = deldp.plant_producer_code
+
+    -- Экспедитор
+    LEFT JOIN dict_dds.counterparty AS counter
+           ON counter.counterparty_code = base.forwarder_code
+
+    -- Порт выгрузки (англ. имя)
+    LEFT JOIN dict_dds.transport_hub AS tr_hub
+           ON tr_hub.transport_hub_code = base.port_of_discharge_code
+
+    -- Хабы отправления/назначения
+    LEFT JOIN dict_dds.transport_hub_texts AS trht
+           ON trht.transport_hub_code = base.transport_departure_hub_code
+          AND trht.language_code = 'R'
+    LEFT JOIN dict_dds.transport_hub_texts AS trht_2
+           ON trht_2.transport_hub_code = base.transport_destination_hub_code
+          AND trht_2.language_code = 'R'
+
+    -- Склад хранения: гео + страна + имя через dim-таблицы
+    LEFT JOIN tmp_wh_geo  AS wh_geo
+           ON wh_geo.warehouse_code = base.warehouse_code
+    LEFT JOIN tmp_wh_name AS wh_name
+           ON wh_name.warehouse_code = base.warehouse_code
+
+    -- Зона склада (складская площадка)
+    LEFT JOIN dict_dds.transport_hub_texts AS trht_4
+           ON trht_4.transport_hub_code = base.warehouse_storage_area_code
+          AND trht_4.language_code = 'R'
+
+    -- Кредитор в распоряжении на отгрузку
+    LEFT JOIN dict_dds.counterparty AS counter_2
+           ON counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
+    LEFT JOIN dict_dds.address AS addr_8
+           ON addr_8.address_code = counter_2.address_code
+          AND addr_8.international_display_format_code IS NULL
+
+    -- Удалённый склад: имя + страна через dim
+    LEFT JOIN tmp_remote_wh_dim AS rwh
+           ON rwh.remote_warehouse_code = base.remote_warehouse_code
 ;

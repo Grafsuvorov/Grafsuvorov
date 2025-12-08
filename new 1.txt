@@ -1,111 +1,96 @@
-SELECT transportation_stage_code, language_code, COUNT(*) AS cnt
-FROM dict_dds.transportation_stage_texts
-WHERE language_code = 'R'
-GROUP BY transportation_stage_code, language_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-👉 Если здесь вернётся хоть одна строка — значит, JOIN с trst реально умножает строки.
+Aggregate  (cost=0.00..435.24 rows=1 width=8) (actual time=2.408..2.408 rows=1 loops=1)
+  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..435.24 rows=1 width=8) (actual time=2.162..2.378 rows=8 loops=1)
+        ->  Aggregate  (cost=0.00..435.24 rows=1 width=8) (actual time=1.783..1.783 rows=1 loops=1)
+              ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=1) (actual time=0.018..1.270 rows=12674 loops=1)
+Planning time: 8.316 ms
+  (slice0)    Executor memory: 123K bytes.
+  (slice1)    Executor memory: 57K bytes avg x 8 workers, 57K bytes max (seg0).
+Memory used:  126976kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 3.697 ms
 
-3.2. address / addr_8 — ключ (address_code, international_display_format_code IS NULL)
-sql
-Копировать код
-SELECT address_code, COUNT(*) AS cnt
-FROM dict_dds.address
-WHERE international_display_format_code IS NULL
-GROUP BY address_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-👉 Если тут есть строки — значит, один counterparty_2.address_code может давать несколько addr_8, то есть реальное умножение строк.
 
-3.3. market_region1_texts (ты ещё не проверял)
-Ты джойнишь её так:
+Aggregate  (cost=0.00..1312.23 rows=1 width=8) (actual time=13.345..13.345 rows=1 loops=1)
+  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..1312.23 rows=1 width=8) (actual time=12.267..13.314 rows=8 loops=1)
+        ->  Aggregate  (cost=0.00..1312.23 rows=1 width=8) (actual time=12.173..12.173 rows=1 loops=1)
+              ->  Hash Left Join  (cost=0.00..1312.23 rows=37086 width=1) (actual time=4.158..11.743 rows=12674 loops=1)
+                    Hash Cond: ((material_specification.shape_code)::text = (material_shape_texts.shape_code)::text)
+                    Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 43 of 262144 buckets.
+                    ->  Hash Left Join  (cost=0.00..876.67 rows=25000 width=4) (actual time=3.801..9.106 rows=12674 loops=1)
+                          Hash Cond: ((tmp_base_sample.material_code)::text = (material_specification.material_code)::text)
+                          Extra Text: (seg2)   Hash chain length 1.0 avg, 3 max, using 11791 of 262144 buckets.
+                          ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=15) (actual time=0.033..2.111 rows=12674 loops=1)
+                          ->  Hash  (cost=431.93..431.93 rows=12062 width=18) (actual time=3.388..3.388 rows=12062 loops=1)
+                                ->  Seq Scan on material_specification  (cost=0.00..431.93 rows=12062 width=18) (actual time=0.199..1.469 rows=12062 loops=1)
+                    ->  Hash  (cost=431.01..431.01 rows=43 width=4) (actual time=0.071..0.071 rows=43 loops=1)
+                          ->  Seq Scan on material_shape_texts  (cost=0.00..431.01 rows=43 width=4) (actual time=0.049..0.063 rows=43 loops=1)
+                                Filter: ((language_code)::text = 'R'::text)
+Planning time: 19.881 ms
+  (slice0)    Executor memory: 668K bytes.
+  (slice1)    Executor memory: 5738K bytes avg x 8 workers, 5738K bytes max (seg0).  Work_mem: 557K bytes max.
+Memory used:  126976kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 15.144 ms
 
-sql
-Копировать код
-LEFT JOIN dict_dds.market_region1_texts t25a1
-       ON t25a1.market_region1_code = r_sd556.market_region1_code
-      AND t25a1.language_code = 'R'
-Проверка:
 
-sql
-Копировать код
-SELECT market_region1_code, language_code, COUNT(*) AS cnt
-FROM dict_dds.market_region1_texts
-WHERE language_code = 'R'
-GROUP BY market_region1_code, language_code
-HAVING COUNT(*) > 1
-ORDER BY cnt DESC
-LIMIT 100;
-4. Проверка НЕ теоретическая, а реальная: где именно растут строки?
-Самый надёжный способ — сделать пошаговый EXPLAIN ANALYZE на выборке.
+Aggregate  (cost=0.00..889.58 rows=1 width=8) (actual time=33.292..33.292 rows=1 loops=1)
+  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..889.58 rows=1 width=8) (actual time=24.550..33.255 rows=8 loops=1)
+        ->  Aggregate  (cost=0.00..889.58 rows=1 width=8) (actual time=24.148..24.148 rows=1 loops=1)
+              ->  Hash Left Join  (cost=0.00..889.58 rows=25221 width=1) (actual time=18.135..25.488 rows=12674 loops=1)
+                    Hash Cond: ((tmp_base_sample.transport_departure_hub_code)::text = (transport_hub_texts.transport_hub_code)::text)
+                    Extra Text: (seg2)   Hash chain length 1.0 avg, 4 max, using 27203 of 524288 buckets.
+                    ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.053..3.671 rows=12674 loops=1)
+                    ->  Hash  (cost=441.95..441.95 rows=28039 width=11) (actual time=16.368..16.368 rows=27917 loops=1)
+                          ->  Seq Scan on transport_hub_texts  (cost=0.00..441.95 rows=28039 width=11) (actual time=0.181..12.146 rows=27917 loops=1)
+                                Filter: ((language_code)::text = 'R'::text)
+Planning time: 17.366 ms
+  (slice0)    Executor memory: 460K bytes.
+  (slice1)    Executor memory: 8554K bytes avg x 8 workers, 8554K bytes max (seg0).  Work_mem: 1091K bytes max.
+Memory used:  126976kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 34.925 ms
 
-4.1. Создаём sample из факта
-Чтобы не мучить 157 млн каждую проверку:
 
-sql
-Копировать код
-DROP TABLE IF EXISTS tmp_base_sample;
+Aggregate  (cost=0.00..868.58 rows=1 width=8) (actual time=8.103..8.103 rows=1 loops=1)
+  ->  Gather Motion 8:1  (slice1; segments: 8)  (cost=0.00..868.58 rows=1 width=8) (actual time=7.235..8.073 rows=8 loops=1)
+        ->  Aggregate  (cost=0.00..868.58 rows=1 width=8) (actual time=6.683..6.683 rows=1 loops=1)
+              ->  Hash Left Join  (cost=0.00..868.58 rows=21346 width=1) (actual time=0.621..6.216 rows=12674 loops=1)
+                    Hash Cond: ((tmp_base_sample.transportation_stage_code)::text = (transportation_stage_texts.transportation_stage_code)::text)
+                    Extra Text: (seg2)   Hash chain length 1.0 avg, 1 max, using 59 of 524288 buckets.
+                    ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=3) (actual time=0.019..3.636 rows=12674 loops=1)
+                    ->  Hash  (cost=431.01..431.01 rows=59 width=3) (actual time=0.081..0.081 rows=59 loops=1)
+                          ->  Seq Scan on transportation_stage_texts  (cost=0.00..431.01 rows=59 width=3) (actual time=0.054..0.065 rows=59 loops=1)
+                                Filter: ((language_code)::text = 'R'::text)
+Planning time: 7.726 ms
+  (slice0)    Executor memory: 460K bytes.
+  (slice1)    Executor memory: 4410K bytes avg x 8 workers, 4410K bytes max (seg0).  Work_mem: 2K bytes max.
+Memory used:  126976kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 9.607 ms
 
-CREATE TEMP TABLE tmp_base_sample AS
-SELECT *
-FROM dm_calc.storage_sales_bundles_amount
-LIMIT 100000;  -- 100k строк для анализа
 
-ANALYZE tmp_base_sample;
-4.2. База без JOIN
-sql
-Копировать код
-EXPLAIN ANALYZE
-SELECT COUNT(*) 
-FROM tmp_base_sample base;
-Ожидаешь: Actual Rows = 100000
-
-4.3. Добавляем один JOIN и смотрим, растут ли фактические строки
-a) material_spec + shape_texts
-sql
-Копировать код
-EXPLAIN ANALYZE
-SELECT COUNT(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.material_specification ms
-       ON ms.material_code = base.material_code
-LEFT JOIN dict_dds.material_shape_texts mf
-       ON mf.shape_code     = ms.shape_code
-      AND mf.language_code  = 'R';
-👉 Если Actual Rows ≈ 100000, то здесь нет мультипликатора.
-
-b) transport_hub_texts (например, trht)
-sql
-Копировать код
-EXPLAIN ANALYZE
-SELECT COUNT(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.transport_hub_texts trht
-       ON trht.transport_hub_code = base.transport_departure_hub_code
-      AND trht.language_code      = 'R';
-👉 Если Actual Rows ≈ 100000 — тоже ок.
-
-c) transportation_stage_texts
-sql
-Копировать код
-EXPLAIN ANALYZE
-SELECT COUNT(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.transportation_stage_texts trst
-       ON trst.transportation_stage_code = base.transportation_stage_code
-      AND trst.language_code = 'R';
-👉 Если здесь уже, скажем, 200000+ строк → значит trst реально дублирует строки.
-
-d) address / addr_8
-sql
-Копировать код
-EXPLAIN ANALYZE
-SELECT COUNT(*)
-FROM tmp_base_sample base
-LEFT JOIN dict_dds.counterparty counter_2
-       ON counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
-LEFT JOIN dict_dds.address addr_8
-       ON addr_8.address_code = counter_2.address_code
-      AND addr_8.international_display_format_code IS NULL;
+Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=615.825..615.825 rows=1 loops=1)
+  ->  Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..2449.13 rows=1 width=8) (actual time=457.393..615.781 rows=8 loops=1)
+        ->  Aggregate  (cost=0.00..2449.13 rows=1 width=8) (actual time=556.022..556.022 rows=1 loops=1)
+              ->  Hash Left Join  (cost=0.00..2449.13 rows=52959 width=1) (actual time=441.823..551.953 rows=82617 loops=1)
+                    Hash Cond: ((counterparty.address_code)::text = (address.address_code)::text)
+                    Extra Text: (seg0)   Hash chain length 2.9 avg, 13 max, using 489377 of 524288 buckets.
+                    ->  Hash Right Join  (cost=0.00..1064.38 rows=25000 width=11) (actual time=44.692..112.683 rows=82617 loops=1)
+                          Hash Cond: ((counterparty.counterparty_code)::text = (tmp_base_sample.creditor_in_shipment_instruction_code)::text)
+                          Extra Text: (seg0)   Hash chain length 41308.5 avg, 81979 max, using 2 of 262144 buckets.
+                          ->  Result  (cost=0.00..612.99 rows=54238 width=22) (actual time=0.235..85.379 rows=54447 loops=1)
+                                ->  Seq Scan on counterparty  (cost=0.00..572.04 rows=433900 width=22) (actual time=0.198..44.433 rows=433900 loops=1)
+                          ->  Hash  (cost=435.91..435.91 rows=12500 width=11) (actual time=13.793..13.793 rows=82617 loops=1)
+                                ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..435.91 rows=12500 width=11) (actual time=0.092..7.402 rows=82617 loops=1)
+                                      Hash Key: tmp_base_sample.creditor_in_shipment_instruction_code
+                                      ->  Seq Scan on tmp_base_sample  (cost=0.00..435.22 rows=12500 width=11) (actual time=0.036..5.583 rows=12674 loops=1)
+                    ->  Hash  (cost=883.90..883.90 rows=1418779 width=11) (actual time=396.640..396.640 rows=1420235 loops=1)
+                          ->  Seq Scan on address  (cost=0.00..883.90 rows=1418779 width=11) (actual time=0.122..155.380 rows=1420235 loops=1)
+                                Filter: (international_display_format_code IS NULL)
+Planning time: 13.731 ms
+  (slice0)    Executor memory: 700K bytes.
+  (slice1)    Executor memory: 90K bytes avg x 8 workers, 90K bytes max (seg0).
+  (slice2)    Executor memory: 122279K bytes avg x 8 workers, 125733K bytes max (seg0).  Work_mem: 55478K bytes max.
+Memory used:  126976kB
+Optimizer: Pivotal Optimizer (GPORCA)
+Execution time: 633.984 ms

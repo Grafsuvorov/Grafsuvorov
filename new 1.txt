@@ -1,4 +1,5 @@
-SELECT material_code, COUNT(*) AS cnt
+ дублей нет
+      SELECT material_code, COUNT(*) AS cnt
 FROM dict_dds.material_specification
 GROUP BY material_code
 HAVING COUNT(*) > 1
@@ -6,87 +7,74 @@ ORDER BY cnt DESC
 LIMIT 100;
 Плюс:
 
-sql
-Копировать код
+дублей много
 SELECT shape_code, COUNT(*) AS cnt
 FROM dict_dds.material_specification
+
 GROUP BY shape_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 2. Проверка дублей в material_shape_texts
-(Очень частый источник мультипликатора)
 
-sql
-Копировать код
+дублей много
 SELECT shape_code, COUNT(*) AS cnt
 FROM dict_dds.material_shape_texts
 GROUP BY shape_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-Отдельно по языкам:
 
-sql
-Копировать код
+дублей нет
 SELECT shape_code, language_code, COUNT(*) AS cnt
 FROM dict_dds.material_shape_texts
 GROUP BY shape_code, language_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 3. Проверка дублей в transport_hub_texts
-(Почти всегда содержит повторяющиеся строки → взрывает JOIN-граф)
 
-sql
-Копировать код
+дублей много
 SELECT transport_hub_code, COUNT(*) AS cnt
 FROM dict_dds.transport_hub_texts
 GROUP BY transport_hub_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-С детализацией по языку:
 
-sql
-Копировать код
+
+дублей нет
 SELECT transport_hub_code, language_code, COUNT(*) AS cnt
 FROM dict_dds.transport_hub_texts
 GROUP BY transport_hub_code, language_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 4. Проверка дублей в country_texts
-sql
-Копировать код
+
+дублей много
 SELECT country_code, COUNT(*) AS cnt
 FROM dict_dds.country_texts
 GROUP BY country_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-Плюс по языкам:
 
-sql
-Копировать код
+
+дублей нет
 SELECT country_code, language_code, COUNT(*) AS cnt
 FROM dict_dds.country_texts
 GROUP BY country_code, language_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 5. Проверка дублей в transportation_stage_texts
-sql
-Копировать код
+
+дубли есть
 SELECT transportation_stage_code, COUNT(*) AS cnt
 FROM dict_dds.transportation_stage_texts
 GROUP BY transportation_stage_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 6. Проверка дублей в transportation_service_texts
-sql
-Копировать код
+
+дублей нет
 SELECT transportation_service_code, COUNT(*) AS cnt
 FROM dict_dds.transportation_service_texts
 WHERE language_code = 'R'
@@ -94,45 +82,27 @@ GROUP BY transportation_service_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 7. Проверка дублей в counterparty
-sql
-Копировать код
+
+дублей нет
 SELECT counterparty_code, COUNT(*) AS cnt
 FROM dict_dds.counterparty
 GROUP BY counterparty_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 8. Проверка дублей в address / adrc
-sql
-Копировать код
+
+дубли есть
 SELECT address_code, COUNT(*) AS cnt
 FROM dict_dds.address
 GROUP BY address_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-И:
 
-sql
-Копировать код
+дубли нет
 SELECT address_code, COUNT(*) AS cnt
 FROM adrc
 GROUP BY address_code
 HAVING COUNT(*) > 1
 ORDER BY cnt DESC
 LIMIT 100;
-✅ 9. Проверка NULL в JOIN-ключах в факте
-(нужно увидеть объёмы)
-
-sql
-Копировать код
-SELECT
-    SUM(CASE WHEN material_code IS NULL THEN 1 END) AS null_material,
-    SUM(CASE WHEN warehouse_code IS NULL THEN 1 END) AS null_warehouse,
-    SUM(CASE WHEN remote_warehouse_code IS NULL THEN 1 END) AS null_remote_wh,
-    SUM(CASE WHEN service_code IS NULL THEN 1 END) AS null_service,
-    SUM(CASE WHEN transport_type_code IS NULL THEN 1 END) AS null_transport,
-    SUM(CASE WHEN etsng_code IS NULL THEN 1 END) AS null_etsng,
-    SUM(CASE WHEN forwarding_agent_code IS NULL THEN 1 END) AS null_forwarder
-FROM dm_calc.storage_sales_bundles_amount;

@@ -1,922 +1,383 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 4,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 24291462126.90,
-      "Plan Rows": 5431884379112,
-      "Plan Width": 876,
-      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "\"outer\".initial_delivery_position_code", "\"outer\".sales_delivery_position_code", "fact_union.material_code", "material_texts.material_name", "((((fact_union.material_code)::text || '-'::text) || (material_texts.material_name)::text))", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "material_shape_texts.material_shape_full_name", "((((fact_union.material_shape_code)::text || '-'::text) || (material_shape_texts.material_shape_full_name)::text))", "fact_union.port_of_discharge_code", "transport_hub.transport_hub_name_eng", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "((((fact_union.port_of_discharge_code)::text || '-'::text) || (transport_hub.transport_hub_name_eng)::text))", "fact_union.transport_type_code", "transport_transfer_type_texts.transport_transfer_type_name", "((((fact_union.transport_type_code)::text || '-'::text) || (transport_transfer_type_texts.transport_transfer_type_name)::text))", "fact_union.etsng_code", "etsng_texts.etsng_name", "((((fact_union.etsng_code)::text || '-'::text) || (etsng_texts.etsng_name)::text))", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "(CASE WHEN ((hub_geo.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((hub_geo.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((hub_geo.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE hub_geo.market_region1_name END)", "((((plant_and_subsidiary.plant_short_name)::text || ' '::text) || (plant_and_subsidiary.plant_full_name)::text))", "((((((fact_union.receiving_plant_code)::text || '-'::text) || (plant_and_subsidiary.plant_short_name)::text) || ' '::text) || (plant_and_subsidiary.plant_full_name)::text))", "(CASE WHEN ((hub_geo.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((hub_geo.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE hub_geo.country_full_name END)", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "transport_hub_texts.transport_hub_name", "fact_union.transport_destination_hub_code", "transport_hub_texts_1.transport_hub_name", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN transportation_stage_texts.transportation_stage_name ELSE NULL::character varying END)", "(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN (((fact_union.transportation_stage_code)::text || '-'::text) || (transportation_stage_texts.transportation_stage_name)::text) ELSE NULL::text END)", "fact_union.storage_calculation_bundle_quantity", "(COALESCE(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN fact_union.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(COALESCE(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN (((fact_union.forwarder_code)::text || '-'::text) || (fact_union.counterparty_short_name)::text) ELSE NULL::text END, 'Не определено'::text))", "fact_union.warehouse_code", "transport_hub_texts_2.transport_hub_name", "((((fact_union.warehouse_code)::text || '-'::text) || (transport_hub_texts_2.transport_hub_name)::text))", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "transport_hub_texts_3.transport_hub_name", "((((fact_union.warehouse_storage_area_code)::text || '-'::text) || (transport_hub_texts_3.transport_hub_name)::text))", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "transportation_service_texts.transportation_service_name", "((((fact_union.service_code)::text || '-'::text) || (transportation_service_texts.transportation_service_name)::text))", "fact_union.purchase_contract_position_uom_code", "fact_union.creditor_address_name", "((((fact_union.creditor_in_shipment_instruction_code)::text || '-'::text) || (fact_union.creditor_address_name)::text))", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "transport_hub_texts_4.transport_hub_name", "hub_geo_1.country_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)", "((((plant_and_subsidiary_1.plant_short_name)::text || ' '::text) || (plant_and_subsidiary_1.plant_full_name)::text))", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 4,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 11098990216.51,
-          "Plan Rows": 5431884379112,
-          "Plan Width": 876,
-          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "'10'", "'10'", "fact_union.material_code", "material_texts.material_name", "(((fact_union.material_code)::text || '-'::text) || (material_texts.material_name)::text)", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "material_shape_texts.material_shape_full_name", "(((fact_union.material_shape_code)::text || '-'::text) || (material_shape_texts.material_shape_full_name)::text)", "fact_union.port_of_discharge_code", "transport_hub.transport_hub_name_eng", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "(((fact_union.port_of_discharge_code)::text || '-'::text) || (transport_hub.transport_hub_name_eng)::text)", "fact_union.transport_type_code", "transport_transfer_type_texts.transport_transfer_type_name", "(((fact_union.transport_type_code)::text || '-'::text) || (transport_transfer_type_texts.transport_transfer_type_name)::text)", "fact_union.etsng_code", "etsng_texts.etsng_name", "(((fact_union.etsng_code)::text || '-'::text) || (etsng_texts.etsng_name)::text)", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "CASE WHEN ((hub_geo.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((hub_geo.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((hub_geo.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE hub_geo.market_region1_name END", "(((plant_and_subsidiary.plant_short_name)::text || ' '::text) || (plant_and_subsidiary.plant_full_name)::text)", "(((((fact_union.receiving_plant_code)::text || '-'::text) || (plant_and_subsidiary.plant_short_name)::text) || ' '::text) || (plant_and_subsidiary.plant_full_name)::text)", "CASE WHEN ((hub_geo.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((hub_geo.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE hub_geo.country_full_name END", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "transport_hub_texts.transport_hub_name", "fact_union.transport_destination_hub_code", "transport_hub_texts_1.transport_hub_name", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN transportation_stage_texts.transportation_stage_name ELSE NULL::character varying END", "CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN (((fact_union.transportation_stage_code)::text || '-'::text) || (transportation_stage_texts.transportation_stage_name)::text) ELSE NULL::text END", "fact_union.storage_calculation_bundle_quantity", "COALESCE(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN fact_union.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying)", "COALESCE(CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN (((fact_union.forwarder_code)::text || '-'::text) || (fact_union.counterparty_short_name)::text) ELSE NULL::text END, 'Не определено'::text)", "fact_union.warehouse_code", "transport_hub_texts_2.transport_hub_name", "(((fact_union.warehouse_code)::text || '-'::text) || (transport_hub_texts_2.transport_hub_name)::text)", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "transport_hub_texts_3.transport_hub_name", "(((fact_union.warehouse_storage_area_code)::text || '-'::text) || (transport_hub_texts_3.transport_hub_name)::text)", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "transportation_service_texts.transportation_service_name", "(((fact_union.service_code)::text || '-'::text) || (transportation_service_texts.transportation_service_name)::text)", "fact_union.purchase_contract_position_uom_code", "fact_union.creditor_address_name", "(((fact_union.creditor_in_shipment_instruction_code)::text || '-'::text) || (fact_union.creditor_address_name)::text)", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "transport_hub_texts_4.transport_hub_name", "hub_geo_1.country_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END", "CASE WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((fact_union.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END", "(((plant_and_subsidiary_1.plant_short_name)::text || ' '::text) || (plant_and_subsidiary_1.plant_full_name)::text)", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight"],
-          "Plans": [
-            {
-              "Node Type": "Hash Join",
-              "Parent Relationship": "Outer",
-              "Slice": 4,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Join Type": "Left",
-              "Startup Cost": 0.00,
-              "Total Cost": 10504198876.99,
-              "Plan Rows": 5431884379112,
-              "Plan Width": 1036,
-              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name", "hub_geo_1.country_code", "transport_hub_texts_4.transport_hub_name", "material_shape_texts.material_shape_full_name", "transport_transfer_type_texts.transport_transfer_type_name"],
-              "Hash Cond": "((fact_union.transport_type_code)::text = (transport_transfer_type_texts.transport_transfer_type_code)::text)",
-              "Plans": [
-                {
-                  "Node Type": "Hash Join",
-                  "Parent Relationship": "Outer",
-                  "Slice": 4,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Join Type": "Left",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 7500762911.88,
-                  "Plan Rows": 5431884379112,
-                  "Plan Width": 1024,
-                  "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name", "hub_geo_1.country_code", "transport_hub_texts_4.transport_hub_name", "material_shape_texts.material_shape_full_name"],
-                  "Hash Cond": "((material_specification.shape_code)::text = (material_shape_texts.shape_code)::text)",
-                  "Plans": [
-                    {
-                      "Node Type": "Hash Join",
-                      "Parent Relationship": "Outer",
-                      "Slice": 4,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Join Type": "Left",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 4705908177.74,
-                      "Plan Rows": 3661766272133,
-                      "Plan Width": 1011,
-                      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name", "hub_geo_1.country_code", "transport_hub_texts_4.transport_hub_name", "material_specification.shape_code"],
-                      "Hash Cond": "((fact_union.material_code)::text = (material_specification.material_code)::text)",
-                      "Plans": [
-                        {
-                          "Node Type": "Hash Join",
-                          "Parent Relationship": "Outer",
-                          "Slice": 4,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Join Type": "Left",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 2906135198.32,
-                          "Plan Rows": 1830883136067,
-                          "Plan Width": 1007,
-                          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name", "hub_geo_1.country_code", "transport_hub_texts_4.transport_hub_name"],
-                          "Hash Cond": "(((fact_union.remote_warehouse_code)::text = (transport_hub_texts_4.transport_hub_code)::text) AND (CASE WHEN ((hub_geo_1.country_full_name)::text = 'Россия'::text) THEN 'R'::text ELSE 'E'::text END = (transport_hub_texts_4.language_code)::text))",
-                          "Plans": [
-                            {
-                              "Node Type": "Hash Join",
-                              "Parent Relationship": "Outer",
-                              "Slice": 4,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Join Type": "Left",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 1879752081.84,
-                              "Plan Rows": 1830883136067,
-                              "Plan Width": 1006,
-                              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name", "hub_geo_1.country_code", "hub_geo_1.country_full_name"],
-                              "Hash Cond": "((fact_union.remote_warehouse_code)::text = (hub_geo_1.transport_hub_code)::text)",
-                              "Plans": [
-                                {
-                                  "Node Type": "Hash Join",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 4,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Join Type": "Left",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 985124798.36,
-                                  "Plan Rows": 915441568033,
-                                  "Plan Width": 989,
-                                  "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name", "transportation_stage_texts.transportation_stage_name"],
-                                  "Hash Cond": "((fact_union.transportation_stage_code)::text = (transportation_stage_texts.transportation_stage_code)::text)",
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Hash Join",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 4,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Join Type": "Left",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 532293147.16,
-                                      "Plan Rows": 606185652337,
-                                      "Plan Width": 944,
-                                      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name"],
-                                      "Hash Cond": "((delivery_document_position.plant_producer_code)::text = (plant_and_subsidiary_1.plant_code)::text)",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Hash Join",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 4,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Join Type": "Left",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 254726139.47,
-                                          "Plan Rows": 303092826169,
-                                          "Plan Width": 894,
-                                          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name", "delivery_document_position.plant_producer_code"],
-                                          "Hash Cond": "((fact_union.delivery_for_storage_calculation_code)::text = (delivery_document_position.delivery_code)::text)",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Redistribute Motion",
-                                              "Senders": 8,
-                                              "Receivers": 8,
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 3,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 128179016.23,
-                                              "Plan Rows": 89457805479,
-                                              "Plan Width": 889,
-                                              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name"],
-                                              "Hash Key": "fact_union.delivery_for_storage_calculation_code",
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Hash Join",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 3,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Join Type": "Left",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 97063690.51,
-                                                  "Plan Rows": 89457805479,
-                                                  "Plan Width": 889,
-                                                  "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name", "transport_hub_texts_3.transport_hub_name"],
-                                                  "Hash Cond": "((fact_union.warehouse_storage_area_code)::text = (transport_hub_texts_3.transport_hub_code)::text)",
-                                                  "Plans": [
-                                                    {
-                                                      "Node Type": "Hash Join",
-                                                      "Parent Relationship": "Outer",
-                                                      "Slice": 3,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Join Type": "Left",
-                                                      "Startup Cost": 0.00,
-                                                      "Total Cost": 58321141.09,
-                                                      "Plan Rows": 44739070992,
-                                                      "Plan Width": 874,
-                                                      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name", "transport_hub_texts_2.transport_hub_name"],
-                                                      "Hash Cond": "(((fact_union.warehouse_code)::text = (transport_hub_texts_2.transport_hub_code)::text) AND (CASE WHEN ((hub_geo.country_full_name)::text = 'Россия'::text) THEN 'R'::text ELSE 'E'::text END = (transport_hub_texts_2.language_code)::text))",
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Hash Join",
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 3,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Join Type": "Left",
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 36344018.84,
-                                                          "Plan Rows": 44739070992,
-                                                          "Plan Width": 859,
-                                                          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_texts_1.transport_hub_name"],
-                                                          "Hash Cond": "((fact_union.transport_destination_hub_code)::text = (transport_hub_texts_1.transport_hub_code)::text)",
-                                                          "Plans": [
-                                                            {
-                                                              "Node Type": "Hash Join",
-                                                              "Parent Relationship": "Outer",
-                                                              "Slice": 3,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Join Type": "Left",
-                                                              "Startup Cost": 0.00,
-                                                              "Total Cost": 17612780.35,
-                                                              "Plan Rows": 22300499372,
-                                                              "Plan Width": 844,
-                                                              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "transport_hub_texts.transport_hub_name"],
-                                                              "Hash Cond": "((fact_union.transport_departure_hub_code)::text = (transport_hub_texts.transport_hub_code)::text)",
-                                                              "Plans": [
-                                                                {
-                                                                  "Node Type": "Hash Join",
-                                                                  "Parent Relationship": "Outer",
-                                                                  "Slice": 3,
-                                                                  "Segments": 8,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Join Type": "Left",
-                                                                  "Startup Cost": 0.00,
-                                                                  "Total Cost": 8440215.70,
-                                                                  "Plan Rows": 11052860490,
-                                                                  "Plan Width": 829,
-                                                                  "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
-                                                                  "Hash Cond": "((fact_union.receiving_plant_code)::text = (plant_and_subsidiary.plant_code)::text)",
-                                                                  "Plans": [
-                                                                    {
-                                                                      "Node Type": "Hash Join",
-                                                                      "Parent Relationship": "Outer",
-                                                                      "Slice": 3,
-                                                                      "Segments": 8,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Join Type": "Left",
-                                                                      "Startup Cost": 0.00,
-                                                                      "Total Cost": 3985364.23,
-                                                                      "Plan Rows": 5526455114,
-                                                                      "Plan Width": 774,
-                                                                      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng", "hub_geo.country_full_name", "hub_geo.market_region1_name"],
-                                                                      "Hash Cond": "((fact_union.warehouse_code)::text = (hub_geo.transport_hub_code)::text)",
-                                                                      "Plans": [
-                                                                        {
-                                                                          "Node Type": "Hash Join",
-                                                                          "Parent Relationship": "Outer",
-                                                                          "Slice": 3,
-                                                                          "Segments": 8,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Join Type": "Left",
-                                                                          "Startup Cost": 0.00,
-                                                                          "Total Cost": 1898022.07,
-                                                                          "Plan Rows": 2763227557,
-                                                                          "Plan Width": 739,
-                                                                          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name", "transport_hub.transport_hub_name_eng"],
-                                                                          "Hash Cond": "((fact_union.port_of_discharge_code)::text = (transport_hub.transport_hub_code)::text)",
-                                                                          "Plans": [
-                                                                            {
-                                                                              "Node Type": "Hash Join",
-                                                                              "Parent Relationship": "Outer",
-                                                                              "Slice": 3,
-                                                                              "Segments": 8,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Join Type": "Left",
-                                                                              "Startup Cost": 0.00,
-                                                                              "Total Cost": 897706.73,
-                                                                              "Plan Rows": 1381613779,
-                                                                              "Plan Width": 727,
-                                                                              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name", "etsng_texts.etsng_name"],
-                                                                              "Hash Cond": "((fact_union.etsng_code)::text = (etsng_texts.etsng_code)::text)",
-                                                                              "Plans": [
-                                                                                {
-                                                                                  "Node Type": "Hash Join",
-                                                                                  "Parent Relationship": "Outer",
-                                                                                  "Slice": 3,
-                                                                                  "Segments": 8,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Join Type": "Left",
-                                                                                  "Startup Cost": 0.00,
-                                                                                  "Total Cost": 406956.23,
-                                                                                  "Plan Rows": 690806889,
-                                                                                  "Plan Width": 682,
-                                                                                  "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name", "transportation_service_texts.transportation_service_name"],
-                                                                                  "Hash Cond": "((fact_union.service_code)::text = (transportation_service_texts.transportation_service_code)::text)",
-                                                                                  "Plans": [
-                                                                                    {
-                                                                                      "Node Type": "Hash Join",
-                                                                                      "Parent Relationship": "Outer",
-                                                                                      "Slice": 3,
-                                                                                      "Segments": 8,
-                                                                                      "Gang Type": "primary reader",
-                                                                                      "Join Type": "Left",
-                                                                                      "Startup Cost": 0.00,
-                                                                                      "Total Cost": 175886.17,
-                                                                                      "Plan Rows": 345415624,
-                                                                                      "Plan Width": 647,
-                                                                                      "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name", "material_texts.material_name"],
-                                                                                      "Hash Cond": "((fact_union.material_code)::text = (material_texts.material_code)::text)",
-                                                                                      "Plans": [
-                                                                                        {
-                                                                                          "Node Type": "Redistribute Motion",
-                                                                                          "Senders": 8,
-                                                                                          "Receivers": 8,
-                                                                                          "Parent Relationship": "Outer",
-                                                                                          "Slice": 1,
-                                                                                          "Segments": 8,
-                                                                                          "Gang Type": "primary reader",
-                                                                                          "Startup Cost": 0.00,
-                                                                                          "Total Cost": 66766.75,
-                                                                                          "Plan Rows": 157432944,
-                                                                                          "Plan Width": 603,
-                                                                                          "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name"],
-                                                                                          "Hash Key": "fact_union.material_code",
-                                                                                          "Plans": [
-                                                                                            {
-                                                                                              "Node Type": "Seq Scan",
-                                                                                              "Parent Relationship": "Outer",
-                                                                                              "Slice": 1,
-                                                                                              "Segments": 8,
-                                                                                              "Gang Type": "primary reader",
-                                                                                              "Relation Name": "fact_union",
-                                                                                              "Schema": "pg_temp_9030660",
-                                                                                              "Alias": "fact_union",
-                                                                                              "Startup Cost": 0.00,
-                                                                                              "Total Cost": 7552.87,
-                                                                                              "Plan Rows": 157432944,
-                                                                                              "Plan Width": 603,
-                                                                                              "Output": ["fact_union.sales_bundle_code", "fact_union.plant_producer_delivery_code", "fact_union.plant_producer_delivery_position_code", "fact_union.initial_delivery_code", "fact_union.material_code", "fact_union.dt_shipment", "fact_union.railcar_code", "fact_union.transport_bill_code", "fact_union.uni", "fact_union.material_shape_code", "fact_union.port_of_discharge_code", "fact_union.dt_arrival_to_russian_port", "fact_union.dt_storage_end_in_release", "fact_union.transport_type_code", "fact_union.etsng_code", "fact_union.dt_report", "fact_union.sales_bundle_net_weight", "fact_union.sales_bundle_gross_weight", "fact_union.batch_code", "fact_union.dt_arrival", "fact_union.receiving_plant_code", "fact_union.sales_delivery_code", "fact_union.transportation_inbound_delivery_code", "fact_union.delivery_for_storage_calculation_code", "fact_union.transportation_inbound_delivery_position_code", "fact_union.delivery_position_for_storage_calculation_code", "fact_union.forwarder_code", "fact_union.storage_cost_calculation_type_name", "fact_union.transport_departure_hub_code", "fact_union.transport_destination_hub_code", "fact_union.transportation_outbound_delivery_code", "fact_union.transportation_outbound_delivery_position_code", "fact_union.is_final_transportation_stage_code", "fact_union.transportation_stage_code", "fact_union.storage_calculation_bundle_quantity", "fact_union.warehouse_code", "fact_union.delivery_in_final_release_code", "fact_union.dt_final_release", "fact_union.bill_of_lading_code", "fact_union.bill_of_lading_number", "fact_union.dt_bill_of_lading", "fact_union.incoterms_code", "fact_union.storage_cost_special_calculation_type_code", "fact_union.warehouse_storage_area_code", "fact_union.plant_code", "fact_union.unit_balance_code", "fact_union.creditor_in_shipment_instruction_code", "fact_union.dt_storage_start", "fact_union.dt_shipped_from_warehouse", "fact_union.dt_storage_end", "fact_union.service_number", "fact_union.storage_duration_total_calendar_days", "fact_union.shipment_instruction_number", "fact_union.dt_for_price_search_in_purchase_contract", "fact_union.purchase_contract_code", "fact_union.purchase_contract_position_code", "fact_union.purchase_contract_position_currency_code", "fact_union.service_code", "fact_union.purchase_contract_position_uom_code", "fact_union.storage_duration_free_by_contract_calendar_days", "fact_union.storage_duration_free_by_delivery_calendar_days", "fact_union.storage_duration_payable_calendar_days", "fact_union.remote_warehouse_code", "fact_union.dt_transportation_stage_start_p", "fact_union.dt_transportation_stage_start_r", "fact_union.dt_shipment_from_foreign_warehouse", "fact_union.storage_cost_calculated_amount", "fact_union.storage_cost_calculated_amount_local", "fact_union.storage_payable_001_030_days_gross_weight", "fact_union.storage_payable_031_060_days_gross_weight", "fact_union.storage_payable_061_090_days_gross_weight", "fact_union.storage_payable_091_180_days_gross_weight", "fact_union.storage_payable_181_365_days_gross_weight", "fact_union.storage_payable_over_365_days_gross_weight", "fact_union.is_stored_in_russian_port_code", "fact_union.storage_calculated_cost_001_030_amount", "fact_union.storage_calculated_cost_031_060_amount", "fact_union.storage_calculated_cost_061_090_amount", "fact_union.storage_calculated_cost_091_180_amount", "fact_union.storage_calculated_cost_181_365_amount", "fact_union.storage_calculated_cost_over_365_amount", "fact_union.metal_in_china_stock_balance_closing_weight", "fact_union.counterparty_short_name", "fact_union.creditor_address_name"]
-                                                                                            }
-                                                                                          ]
-                                                                                        },
-                                                                                        {
-                                                                                          "Node Type": "Hash",
-                                                                                          "Parent Relationship": "Inner",
-                                                                                          "Slice": 3,
-                                                                                          "Segments": 8,
-                                                                                          "Gang Type": "primary reader",
-                                                                                          "Startup Cost": 492.35,
-                                                                                          "Total Cost": 492.35,
-                                                                                          "Plan Rows": 1092875,
-                                                                                          "Plan Width": 62,
-                                                                                          "Output": ["material_texts.material_code", "material_texts.material_name"],
-                                                                                          "Plans": [
-                                                                                            {
-                                                                                              "Node Type": "Redistribute Motion",
-                                                                                              "Senders": 8,
-                                                                                              "Receivers": 8,
-                                                                                              "Parent Relationship": "Outer",
-                                                                                              "Slice": 2,
-                                                                                              "Segments": 8,
-                                                                                              "Gang Type": "primary reader",
-                                                                                              "Startup Cost": 0.00,
-                                                                                              "Total Cost": 492.35,
-                                                                                              "Plan Rows": 1092875,
-                                                                                              "Plan Width": 62,
-                                                                                              "Output": ["material_texts.material_code", "material_texts.material_name"],
-                                                                                              "Hash Key": "material_texts.material_code",
-                                                                                              "Plans": [
-                                                                                                {
-                                                                                                  "Node Type": "Seq Scan",
-                                                                                                  "Parent Relationship": "Outer",
-                                                                                                  "Slice": 2,
-                                                                                                  "Segments": 8,
-                                                                                                  "Gang Type": "primary reader",
-                                                                                                  "Relation Name": "material_texts",
-                                                                                                  "Schema": "dict_dds",
-                                                                                                  "Alias": "material_texts",
-                                                                                                  "Startup Cost": 0.00,
-                                                                                                  "Total Cost": 465.84,
-                                                                                                  "Plan Rows": 1092875,
-                                                                                                  "Plan Width": 62,
-                                                                                                  "Output": ["material_texts.material_code", "material_texts.material_name"],
-                                                                                                  "Filter": "((material_texts.language_code)::text = 'R'::text)"
-                                                                                                }
-                                                                                              ]
-                                                                                            }
-                                                                                          ]
-                                                                                        }
-                                                                                      ]
-                                                                                    },
-                                                                                    {
-                                                                                      "Node Type": "Hash",
-                                                                                      "Parent Relationship": "Inner",
-                                                                                      "Slice": 3,
-                                                                                      "Segments": 8,
-                                                                                      "Gang Type": "primary reader",
-                                                                                      "Startup Cost": 431.54,
-                                                                                      "Total Cost": 431.54,
-                                                                                      "Plan Rows": 16664,
-                                                                                      "Plan Width": 41,
-                                                                                      "Output": ["transportation_service_texts.transportation_service_code", "transportation_service_texts.transportation_service_name"],
-                                                                                      "Plans": [
-                                                                                        {
-                                                                                          "Node Type": "Seq Scan",
-                                                                                          "Parent Relationship": "Outer",
-                                                                                          "Slice": 3,
-                                                                                          "Segments": 8,
-                                                                                          "Gang Type": "primary reader",
-                                                                                          "Relation Name": "transportation_service_texts",
-                                                                                          "Schema": "dict_dds",
-                                                                                          "Alias": "transportation_service_texts",
-                                                                                          "Startup Cost": 0.00,
-                                                                                          "Total Cost": 431.54,
-                                                                                          "Plan Rows": 16664,
-                                                                                          "Plan Width": 41,
-                                                                                          "Output": ["transportation_service_texts.transportation_service_code", "transportation_service_texts.transportation_service_name"],
-                                                                                          "Filter": "((transportation_service_texts.language_code)::text = 'R'::text)"
-                                                                                        }
-                                                                                      ]
-                                                                                    }
-                                                                                  ]
-                                                                                },
-                                                                                {
-                                                                                  "Node Type": "Hash",
-                                                                                  "Parent Relationship": "Inner",
-                                                                                  "Slice": 3,
-                                                                                  "Segments": 8,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Startup Cost": 431.93,
-                                                                                  "Total Cost": 431.93,
-                                                                                  "Plan Rows": 40392,
-                                                                                  "Plan Width": 52,
-                                                                                  "Output": ["etsng_texts.etsng_code", "etsng_texts.etsng_name"],
-                                                                                  "Plans": [
-                                                                                    {
-                                                                                      "Node Type": "Seq Scan",
-                                                                                      "Parent Relationship": "Outer",
-                                                                                      "Slice": 3,
-                                                                                      "Segments": 8,
-                                                                                      "Gang Type": "primary reader",
-                                                                                      "Relation Name": "etsng_texts",
-                                                                                      "Schema": "dict_dds",
-                                                                                      "Alias": "etsng_texts",
-                                                                                      "Startup Cost": 0.00,
-                                                                                      "Total Cost": 431.93,
-                                                                                      "Plan Rows": 40392,
-                                                                                      "Plan Width": 52,
-                                                                                      "Output": ["etsng_texts.etsng_code", "etsng_texts.etsng_name"],
-                                                                                      "Filter": "((etsng_texts.language_code)::text = 'R'::text)"
-                                                                                    }
-                                                                                  ]
-                                                                                }
-                                                                              ]
-                                                                            },
-                                                                            {
-                                                                              "Node Type": "Hash",
-                                                                              "Parent Relationship": "Inner",
-                                                                              "Slice": 3,
-                                                                              "Segments": 8,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Startup Cost": 433.41,
-                                                                              "Total Cost": 433.41,
-                                                                              "Plan Rows": 223336,
-                                                                              "Plan Width": 22,
-                                                                              "Output": ["transport_hub.transport_hub_code", "transport_hub.transport_hub_name_eng"],
-                                                                              "Plans": [
-                                                                                {
-                                                                                  "Node Type": "Seq Scan",
-                                                                                  "Parent Relationship": "Outer",
-                                                                                  "Slice": 3,
-                                                                                  "Segments": 8,
-                                                                                  "Gang Type": "primary reader",
-                                                                                  "Relation Name": "transport_hub",
-                                                                                  "Schema": "dict_dds",
-                                                                                  "Alias": "transport_hub",
-                                                                                  "Startup Cost": 0.00,
-                                                                                  "Total Cost": 433.41,
-                                                                                  "Plan Rows": 223336,
-                                                                                  "Plan Width": 22,
-                                                                                  "Output": ["transport_hub.transport_hub_code", "transport_hub.transport_hub_name_eng"]
-                                                                                }
-                                                                              ]
-                                                                            }
-                                                                          ]
-                                                                        },
-                                                                        {
-                                                                          "Node Type": "Hash",
-                                                                          "Parent Relationship": "Inner",
-                                                                          "Slice": 3,
-                                                                          "Segments": 8,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Startup Cost": 432.37,
-                                                                          "Total Cost": 432.37,
-                                                                          "Plan Rows": 223336,
-                                                                          "Plan Width": 45,
-                                                                          "Output": ["hub_geo.transport_hub_code", "hub_geo.country_full_name", "hub_geo.market_region1_name"],
-                                                                          "Plans": [
-                                                                            {
-                                                                              "Node Type": "Seq Scan",
-                                                                              "Parent Relationship": "Outer",
-                                                                              "Slice": 3,
-                                                                              "Segments": 8,
-                                                                              "Gang Type": "primary reader",
-                                                                              "Relation Name": "hub_geo",
-                                                                              "Schema": "pg_temp_9030660",
-                                                                              "Alias": "hub_geo",
-                                                                              "Startup Cost": 0.00,
-                                                                              "Total Cost": 432.37,
-                                                                              "Plan Rows": 223336,
-                                                                              "Plan Width": 45,
-                                                                              "Output": ["hub_geo.transport_hub_code", "hub_geo.country_full_name", "hub_geo.market_region1_name"]
-                                                                            }
-                                                                          ]
-                                                                        }
-                                                                      ]
-                                                                    },
-                                                                    {
-                                                                      "Node Type": "Hash",
-                                                                      "Parent Relationship": "Inner",
-                                                                      "Slice": 3,
-                                                                      "Segments": 8,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Startup Cost": 431.05,
-                                                                      "Total Cost": 431.05,
-                                                                      "Plan Rows": 4912,
-                                                                      "Plan Width": 60,
-                                                                      "Output": ["plant_and_subsidiary.plant_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
-                                                                      "Plans": [
-                                                                        {
-                                                                          "Node Type": "Seq Scan",
-                                                                          "Parent Relationship": "Outer",
-                                                                          "Slice": 3,
-                                                                          "Segments": 8,
-                                                                          "Gang Type": "primary reader",
-                                                                          "Relation Name": "plant_and_subsidiary",
-                                                                          "Schema": "dict_dds",
-                                                                          "Alias": "plant_and_subsidiary",
-                                                                          "Startup Cost": 0.00,
-                                                                          "Total Cost": 431.05,
-                                                                          "Plan Rows": 4912,
-                                                                          "Plan Width": 60,
-                                                                          "Output": ["plant_and_subsidiary.plant_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"]
-                                                                        }
-                                                                      ]
-                                                                    }
-                                                                  ]
-                                                                },
-                                                                {
-                                                                  "Node Type": "Hash",
-                                                                  "Parent Relationship": "Inner",
-                                                                  "Slice": 3,
-                                                                  "Segments": 8,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Startup Cost": 442.73,
-                                                                  "Total Cost": 442.73,
-                                                                  "Plan Rows": 224308,
-                                                                  "Plan Width": 26,
-                                                                  "Output": ["transport_hub_texts.transport_hub_code", "transport_hub_texts.transport_hub_name"],
-                                                                  "Plans": [
-                                                                    {
-                                                                      "Node Type": "Seq Scan",
-                                                                      "Parent Relationship": "Outer",
-                                                                      "Slice": 3,
-                                                                      "Segments": 8,
-                                                                      "Gang Type": "primary reader",
-                                                                      "Relation Name": "transport_hub_texts",
-                                                                      "Schema": "dict_dds",
-                                                                      "Alias": "transport_hub_texts",
-                                                                      "Startup Cost": 0.00,
-                                                                      "Total Cost": 442.73,
-                                                                      "Plan Rows": 224308,
-                                                                      "Plan Width": 26,
-                                                                      "Output": ["transport_hub_texts.transport_hub_code", "transport_hub_texts.transport_hub_name"],
-                                                                      "Filter": "((transport_hub_texts.language_code)::text = 'R'::text)"
-                                                                    }
-                                                                  ]
-                                                                }
-                                                              ]
-                                                            },
-                                                            {
-                                                              "Node Type": "Hash",
-                                                              "Parent Relationship": "Inner",
-                                                              "Slice": 3,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Startup Cost": 442.73,
-                                                              "Total Cost": 442.73,
-                                                              "Plan Rows": 224308,
-                                                              "Plan Width": 26,
-                                                              "Output": ["transport_hub_texts_1.transport_hub_code", "transport_hub_texts_1.transport_hub_name"],
-                                                              "Plans": [
-                                                                {
-                                                                  "Node Type": "Seq Scan",
-                                                                  "Parent Relationship": "Outer",
-                                                                  "Slice": 3,
-                                                                  "Segments": 8,
-                                                                  "Gang Type": "primary reader",
-                                                                  "Relation Name": "transport_hub_texts",
-                                                                  "Schema": "dict_dds",
-                                                                  "Alias": "transport_hub_texts_1",
-                                                                  "Startup Cost": 0.00,
-                                                                  "Total Cost": 442.73,
-                                                                  "Plan Rows": 224308,
-                                                                  "Plan Width": 26,
-                                                                  "Output": ["transport_hub_texts_1.transport_hub_code", "transport_hub_texts_1.transport_hub_name"],
-                                                                  "Filter": "((transport_hub_texts_1.language_code)::text = 'R'::text)"
-                                                                }
-                                                              ]
-                                                            }
-                                                          ]
-                                                        },
-                                                        {
-                                                          "Node Type": "Hash",
-                                                          "Parent Relationship": "Inner",
-                                                          "Slice": 3,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Startup Cost": 436.78,
-                                                          "Total Cost": 436.78,
-                                                          "Plan Rows": 1092232,
-                                                          "Plan Width": 28,
-                                                          "Output": ["transport_hub_texts_2.language_code", "transport_hub_texts_2.transport_hub_code", "transport_hub_texts_2.transport_hub_name"],
-                                                          "Plans": [
-                                                            {
-                                                              "Node Type": "Seq Scan",
-                                                              "Parent Relationship": "Outer",
-                                                              "Slice": 3,
-                                                              "Segments": 8,
-                                                              "Gang Type": "primary reader",
-                                                              "Relation Name": "transport_hub_texts",
-                                                              "Schema": "dict_dds",
-                                                              "Alias": "transport_hub_texts_2",
-                                                              "Startup Cost": 0.00,
-                                                              "Total Cost": 436.78,
-                                                              "Plan Rows": 1092232,
-                                                              "Plan Width": 28,
-                                                              "Output": ["transport_hub_texts_2.language_code", "transport_hub_texts_2.transport_hub_code", "transport_hub_texts_2.transport_hub_name"]
-                                                            }
-                                                          ]
-                                                        }
-                                                      ]
-                                                    },
-                                                    {
-                                                      "Node Type": "Hash",
-                                                      "Parent Relationship": "Inner",
-                                                      "Slice": 3,
-                                                      "Segments": 8,
-                                                      "Gang Type": "primary reader",
-                                                      "Startup Cost": 442.73,
-                                                      "Total Cost": 442.73,
-                                                      "Plan Rows": 224308,
-                                                      "Plan Width": 26,
-                                                      "Output": ["transport_hub_texts_3.transport_hub_code", "transport_hub_texts_3.transport_hub_name"],
-                                                      "Plans": [
-                                                        {
-                                                          "Node Type": "Seq Scan",
-                                                          "Parent Relationship": "Outer",
-                                                          "Slice": 3,
-                                                          "Segments": 8,
-                                                          "Gang Type": "primary reader",
-                                                          "Relation Name": "transport_hub_texts",
-                                                          "Schema": "dict_dds",
-                                                          "Alias": "transport_hub_texts_3",
-                                                          "Startup Cost": 0.00,
-                                                          "Total Cost": 442.73,
-                                                          "Plan Rows": 224308,
-                                                          "Plan Width": 26,
-                                                          "Output": ["transport_hub_texts_3.transport_hub_code", "transport_hub_texts_3.transport_hub_name"],
-                                                          "Filter": "((transport_hub_texts_3.language_code)::text = 'R'::text)"
-                                                        }
-                                                      ]
-                                                    }
-                                                  ]
-                                                }
-                                              ]
-                                            },
-                                            {
-                                              "Node Type": "Hash",
-                                              "Parent Relationship": "Inner",
-                                              "Slice": 4,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 1077.27,
-                                              "Total Cost": 1077.27,
-                                              "Plan Rows": 22890181,
-                                              "Plan Width": 16,
-                                              "Output": ["delivery_document_position.delivery_code", "delivery_document_position.plant_producer_code"],
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 4,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "delivery_document_position",
-                                                  "Schema": "dds",
-                                                  "Alias": "delivery_document_position",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 1077.27,
-                                                  "Plan Rows": 22890181,
-                                                  "Plan Width": 16,
-                                                  "Output": ["delivery_document_position.delivery_code", "delivery_document_position.plant_producer_code"],
-                                                  "Filter": "((delivery_document_position.delivery_position_line_item_code)::text = '000010'::text)"
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        },
-                                        {
-                                          "Node Type": "Hash",
-                                          "Parent Relationship": "Inner",
-                                          "Slice": 4,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Startup Cost": 431.05,
-                                          "Total Cost": 431.05,
-                                          "Plan Rows": 4912,
-                                          "Plan Width": 60,
-                                          "Output": ["plant_and_subsidiary_1.plant_code", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name"],
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 4,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Relation Name": "plant_and_subsidiary",
-                                              "Schema": "dict_dds",
-                                              "Alias": "plant_and_subsidiary_1",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 431.05,
-                                              "Plan Rows": 4912,
-                                              "Plan Width": 60,
-                                              "Output": ["plant_and_subsidiary_1.plant_code", "plant_and_subsidiary_1.plant_short_name", "plant_and_subsidiary_1.plant_full_name"]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "Node Type": "Hash",
-                                      "Parent Relationship": "Inner",
-                                      "Slice": 4,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 431.02,
-                                      "Total Cost": 431.02,
-                                      "Plan Rows": 472,
-                                      "Plan Width": 48,
-                                      "Output": ["transportation_stage_texts.transportation_stage_code", "transportation_stage_texts.transportation_stage_name"],
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Seq Scan",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 4,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Relation Name": "transportation_stage_texts",
-                                          "Schema": "dict_dds",
-                                          "Alias": "transportation_stage_texts",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 431.02,
-                                          "Plan Rows": 472,
-                                          "Plan Width": 48,
-                                          "Output": ["transportation_stage_texts.transportation_stage_code", "transportation_stage_texts.transportation_stage_name"],
-                                          "Filter": "((transportation_stage_texts.language_code)::text = 'R'::text)"
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                },
-                                {
-                                  "Node Type": "Hash",
-                                  "Parent Relationship": "Inner",
-                                  "Slice": 4,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 432.37,
-                                  "Total Cost": 432.37,
-                                  "Plan Rows": 223336,
-                                  "Plan Width": 27,
-                                  "Output": ["hub_geo_1.transport_hub_code", "hub_geo_1.country_code", "hub_geo_1.country_full_name"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Seq Scan",
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 4,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Relation Name": "hub_geo",
-                                      "Schema": "pg_temp_9030660",
-                                      "Alias": "hub_geo_1",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 432.37,
-                                      "Plan Rows": 223336,
-                                      "Plan Width": 27,
-                                      "Output": ["hub_geo_1.transport_hub_code", "hub_geo_1.country_code", "hub_geo_1.country_full_name"]
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "Node Type": "Hash",
-                              "Parent Relationship": "Inner",
-                              "Slice": 4,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 436.78,
-                              "Total Cost": 436.78,
-                              "Plan Rows": 1092232,
-                              "Plan Width": 28,
-                              "Output": ["transport_hub_texts_4.language_code", "transport_hub_texts_4.transport_hub_code", "transport_hub_texts_4.transport_hub_name"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Seq Scan",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 4,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Relation Name": "transport_hub_texts",
-                                  "Schema": "dict_dds",
-                                  "Alias": "transport_hub_texts_4",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 436.78,
-                                  "Plan Rows": 1092232,
-                                  "Plan Width": 28,
-                                  "Output": ["transport_hub_texts_4.language_code", "transport_hub_texts_4.transport_hub_code", "transport_hub_texts_4.transport_hub_name"]
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "Node Type": "Hash",
-                          "Parent Relationship": "Inner",
-                          "Slice": 4,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 431.93,
-                          "Total Cost": 431.93,
-                          "Plan Rows": 96496,
-                          "Plan Width": 18,
-                          "Output": ["material_specification.material_code", "material_specification.shape_code"],
-                          "Plans": [
-                            {
-                              "Node Type": "Seq Scan",
-                              "Parent Relationship": "Outer",
-                              "Slice": 4,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Relation Name": "material_specification",
-                              "Schema": "dict_dds",
-                              "Alias": "material_specification",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 431.93,
-                              "Plan Rows": 96496,
-                              "Plan Width": 18,
-                              "Output": ["material_specification.material_code", "material_specification.shape_code"]
-                            }
-                          ]
-                        }
-                      ]
-                    },
-                    {
-                      "Node Type": "Hash",
-                      "Parent Relationship": "Inner",
-                      "Slice": 4,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 431.01,
-                      "Total Cost": 431.01,
-                      "Plan Rows": 344,
-                      "Plan Width": 21,
-                      "Output": ["material_shape_texts.shape_code", "material_shape_texts.material_shape_full_name"],
-                      "Plans": [
-                        {
-                          "Node Type": "Seq Scan",
-                          "Parent Relationship": "Outer",
-                          "Slice": 4,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Relation Name": "material_shape_texts",
-                          "Schema": "dict_dds",
-                          "Alias": "material_shape_texts",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 431.01,
-                          "Plan Rows": 344,
-                          "Plan Width": 21,
-                          "Output": ["material_shape_texts.shape_code", "material_shape_texts.material_shape_full_name"],
-                          "Filter": "((material_shape_texts.language_code)::text = 'R'::text)"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Hash",
-                  "Parent Relationship": "Inner",
-                  "Slice": 4,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 431.01,
-                  "Total Cost": 431.01,
-                  "Plan Rows": 216,
-                  "Plan Width": 17,
-                  "Output": ["transport_transfer_type_texts.transport_transfer_type_code", "transport_transfer_type_texts.transport_transfer_type_name"],
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 4,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "transport_transfer_type_texts",
-                      "Schema": "dict_dds",
-                      "Alias": "transport_transfer_type_texts",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 431.01,
-                      "Plan Rows": 216,
-                      "Plan Width": 17,
-                      "Output": ["transport_transfer_type_texts.transport_transfer_type_code", "transport_transfer_type_texts.transport_transfer_type_name"],
-                      "Filter": "((transport_transfer_type_texts.language_code)::text = 'R'::text)"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
+----------------------------------------------------------------------
+-- 1. Гео по складу (warehouse_code) – страна + регион
+----------------------------------------------------------------------
+DROP TABLE IF EXISTS dim_wh_geo;
+
+CREATE TEMP TABLE dim_wh_geo AS
+SELECT
+    th.transport_hub_code AS warehouse_code,
+    /* регион, как у тебя в исходном запросе */
+    CASE
+        WHEN mr.market_region1_name = 'Турция'              THEN 'Западная Азия'
+        WHEN mr.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN mr.market_region1_name IN ('Азия','Китай')     THEN 'Восточная Азия'
+        ELSE mr.market_region1_name
+    END AS region_of_remote_warehouse_name,
+    /* страна, как у тебя в исходном запросе */
+    CASE
+        WHEN ct.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN ct.country_full_name = 'Тайвань (Китай)'   THEN 'Тайвань'
+        ELSE ct.country_full_name
+    END AS country_of_remote_warehouse_name,
+    /* «сырая» страна для выбора языка R/E */
+    ct.country_full_name
+FROM dict_dds.transport_hub th
+LEFT JOIN adrc a
+       ON a.address_code = th.address_code
+LEFT JOIN dict_dds.country c
+       ON c.country_code = a.country_code
+LEFT JOIN dict_dds.market_region1_texts mr
+       ON mr.market_region1_code = c.market_region1_code
+      AND mr.language_code = 'R'
+LEFT JOIN dict_dds.country_texts ct
+       ON ct.country_code = a.country_code
+      AND ct.language_code = 'R';
+
+-- можно при желании добавить индекс
+-- CREATE INDEX ON dim_wh_geo(warehouse_code);
+
+
+----------------------------------------------------------------------
+-- 2. Гео по удалённому складу (remote_warehouse_code) – имя + страна
+----------------------------------------------------------------------
+DROP TABLE IF EXISTS dim_remote_wh;
+
+CREATE TEMP TABLE dim_remote_wh AS
+SELECT
+    th.transport_hub_code AS remote_warehouse_code,
+    /* Имя склада: R, если есть, иначе E */
+    COALESCE(tht_r.transport_hub_name, tht_e.transport_hub_name) AS remote_warehouse_name,
+    a.country_code
+FROM dict_dds.transport_hub th
+LEFT JOIN adrc a
+       ON a.address_code = th.address_code
+LEFT JOIN dict_dds.transport_hub_texts tht_r
+       ON tht_r.transport_hub_code = th.transport_hub_code
+      AND tht_r.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts tht_e
+       ON tht_e.transport_hub_code = th.transport_hub_code
+      AND tht_e.language_code = 'E';
+
+-- тоже можно индекс
+-- CREATE INDEX ON dim_remote_wh(remote_warehouse_code);
+
+
+----------------------------------------------------------------------
+-- 3. Основной INSERT (работает уже по fact_union + двум темповым гео-таблицам)
+----------------------------------------------------------------------
+INSERT INTO dm.transportation_external_location_metal_stock (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    initial_delivery_position_code,
+    sales_delivery_position_code,
+    material_code,
+    material_name,
+    material_search_name,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    material_shape_name,
+    material_shape_search_name,
+    port_of_discharge_code,
+    port_of_discharge_name,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    port_of_discharge_search_name,
+    transport_type_code,
+    transport_type_name,
+    transport_type_search_name,
+    etsng_code,
+    etsng_name,
+    etsng_search_name,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    region_of_remote_warehouse_name,
+    receiving_plant_name,
+    receiving_plant_search_name,
+    country_of_remote_warehouse_name,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_departure_hub_name,
+    transport_destination_hub_code,
+    transport_destination_hub_name,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    transportation_stage_name,
+    transportation_stage_search_name,
+    storage_calculation_bundle_quantity,
+    forwarder_name,
+    forwarder_search_name,
+    warehouse_code,
+    warehouse_name,
+    warehouse_search_name,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    warehouse_storage_area_name,
+    warehouse_storage_area_search_name,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    service_name,
+    service_search_name,
+    purchase_contract_position_uom_code,
+    creditor_in_shipment_instruction_name,
+    creditor_in_shipment_instruction_search_name,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    remote_warehouse_name,
+    country_of_remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    type_warehouse_name,
+    type_freight_name,
+    metal_owner_for_reporting_name,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
+)
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10' AS initial_delivery_position_code,
+    '10' AS sales_delivery_position_code,
+    base.material_code,
+    matet.material_name,
+    base.material_code || '-' || matet.material_name AS material_search_name,
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+    base.material_shape_code,
+    mf.material_shape_full_name AS material_shape_name,
+    base.material_shape_code || '-' || mf.material_shape_full_name AS material_shape_search_name,
+    base.port_of_discharge_code,
+    tr_hub.transport_hub_name_eng AS port_of_discharge_name,
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' || tr_hub.transport_hub_name_eng AS port_of_discharge_search_name,
+    base.transport_type_code,
+    ipd.transport_transfer_type_name AS transport_type_name,
+    base.transport_type_code || '-' || ipd.transport_transfer_type_name AS transport_type_search_name,
+    base.etsng_code,
+    ette.etsng_name,
+    base.etsng_code || '-' || ette.etsng_name AS etsng_search_name,
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+
+    -- регион и страна берём из dim_wh_geo
+    whg.region_of_remote_warehouse_name,
+    pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_name,
+    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_search_name,
+    whg.country_of_remote_warehouse_name,
+
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+    base.transport_departure_hub_code,
+    trht.transport_hub_name AS transport_departure_hub_name,
+    base.transport_destination_hub_code,
+    trht_2.transport_hub_name AS transport_destination_hub_name,
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN trst.transportation_stage_name
+    END AS transportation_stage_name,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
+    END AS transportation_stage_search_name,
+    base.storage_calculation_bundle_quantity,
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+                THEN base.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_name,
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+                THEN base.forwarder_code || '-' || base.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_search_name,
+    base.warehouse_code,
+    trht_3.transport_hub_name AS warehouse_name,
+    base.warehouse_code || '-' || trht_3.transport_hub_name AS warehouse_search_name,
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+    base.warehouse_storage_area_code,
+    trht_4.transport_hub_name AS warehouse_storage_area_name,
+    base.warehouse_storage_area_code || '-' || trht_4.transport_hub_name AS warehouse_storage_area_search_name,
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+    base.service_code,
+    zsrvpost.transportation_service_name AS service_name,
+    base.service_code || '-' || zsrvpost.transportation_service_name AS service_search_name,
+    base.purchase_contract_position_uom_code,
+    base.creditor_address_name AS creditor_in_shipment_instruction_name,
+    base.creditor_in_shipment_instruction_code || '-' || base.creditor_address_name AS creditor_in_shipment_instruction_search_name,
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+    base.remote_warehouse_code,
+    rw.remote_warehouse_name,
+    rw.country_code AS country_of_remote_warehouse_code,
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+    base.is_stored_in_russian_port_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ'                         THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END AS type_warehouse_name,
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк'       THEN 'Балк'
+        ELSE 'Не определено'
+    END AS type_freight_name,
+    pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name AS metal_owner_for_reporting_name,
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+    base.metal_in_china_stock_balance_closing_weight
+FROM fact_union base
+LEFT JOIN dict_dds.material_texts matet
+       ON matet.material_code = base.material_code
+      AND matet.language_code = 'R'
+LEFT JOIN dict_dds.transportation_service_texts zsrvpost
+       ON zsrvpost.transportation_service_code = base.service_code
+      AND zsrvpost.language_code = 'R'
+LEFT JOIN dict_dds.etsng_texts ette
+       ON ette.etsng_code = base.etsng_code
+      AND ette.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub tr_hub
+       ON tr_hub.transport_hub_code = base.port_of_discharge_code
+LEFT JOIN dict_dds.plant_and_subsidiary pas
+       ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dict_dds.transport_hub_texts trht
+       ON trht.transport_hub_code = base.transport_departure_hub_code
+      AND trht.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_2
+       ON trht_2.transport_hub_code = base.transport_destination_hub_code
+      AND trht_2.language_code = 'R'
+/* язык для склада выбираем по стране из dim_wh_geo */
+LEFT JOIN dim_wh_geo whg
+       ON whg.warehouse_code = base.warehouse_code
+LEFT JOIN dict_dds.transport_hub_texts trht_3
+       ON trht_3.transport_hub_code = base.warehouse_code
+      AND trht_3.language_code = CASE
+                                     WHEN whg.country_full_name = 'Россия' THEN 'R'
+                                     ELSE 'E'
+                                 END
+LEFT JOIN dict_dds.transport_hub_texts trht_4
+       ON trht_4.transport_hub_code = base.warehouse_storage_area_code
+      AND trht_4.language_code = 'R'
+LEFT JOIN dds.delivery_document_position deldp
+       ON deldp.delivery_code = base.delivery_for_storage_calculation_code
+      AND deldp.delivery_position_line_item_code = '000010'
+LEFT JOIN dict_dds.plant_and_subsidiary pas_1124
+       ON pas_1124.plant_code = deldp.plant_producer_code
+LEFT JOIN dict_dds.transportation_stage_texts trst
+       ON trst.transportation_stage_code = base.transportation_stage_code
+      AND trst.language_code = 'R'
+LEFT JOIN dict_dds.material_specification dd_ms_s_n
+       ON dd_ms_s_n.material_code = base.material_code
+LEFT JOIN dict_dds.material_shape_texts mf
+       ON mf.shape_code = dd_ms_s_n.shape_code
+      AND mf.language_code = 'R'
+LEFT JOIN dict_dds.transport_transfer_type_texts ipd
+       ON ipd.transport_transfer_type_code = base.transport_type_code
+      AND ipd.language_code = 'R'
+LEFT JOIN dim_remote_wh rw
+       ON rw.remote_warehouse_code = base.remote_warehouse_code;

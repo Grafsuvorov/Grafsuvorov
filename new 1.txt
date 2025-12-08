@@ -1,334 +1,125 @@
--- сколько строк даёт джойн с warehouse_geo?
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount b
-LEFT JOIN warehouse_geo wg 
-       ON wg.transport_hub_code = b.warehouse_code;
-
--- сколько строк даёт джойн с hub_text по складу?
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount b
-LEFT JOIN hub_text htxt
-       ON htxt.transport_hub_code = b.warehouse_code;
-
--- а теперь с учётом языка
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount b
-LEFT JOIN warehouse_geo wg 
-       ON wg.transport_hub_code = b.warehouse_code
-LEFT JOIN hub_text htxt
-       ON htxt.transport_hub_code = b.warehouse_code
-      AND htxt.language_code     = wg.lang_code;
-
-
--- 1. warehouse_geo: сколько строк на один hub_code?
-SELECT transport_hub_code, count(*) AS cnt
-FROM warehouse_geo
-GROUP BY transport_hub_code
-ORDER BY cnt DESC
-LIMIT 20;
-
-
--- 2. remote_geo
-SELECT transport_hub_code, count(*) AS cnt
-FROM remote_geo
-GROUP BY transport_hub_code
-ORDER BY cnt DESC
-LIMIT 20;
-
-
--- 3. hub_text
-SELECT transport_hub_code, language_code, count(*) AS cnt
-FROM hub_text
-GROUP BY transport_hub_code, language_code
-ORDER BY cnt DESC
-LIMIT 20;
-
-
--- 4. owner_plant
-SELECT delivery_code, count(*) AS cnt
-FROM owner_plant
-GROUP BY delivery_code
-ORDER BY cnt DESC
-LIMIT 20;
-
-
--- 5. creditor_info
-SELECT counterparty_code, count(*) AS cnt
-FROM creditor_info
-GROUP BY counterparty_code
-ORDER BY cnt DESC
-LIMIT 20;
-
-
-ANALYZE dm_calc.storage_sales_bundles_amount;
-ANALYZE warehouse_geo;
-ANALYZE remote_geo;
-ANALYZE hub_text;
-ANALYZE owner_plant;
-ANALYZE creditor_info;
-ANALYZE material_texts;
-ANALYZE material_shape;
-ANALYZE transportation_service_texts;
-ANALYZE etsng_texts;
-
-
--- 1. только base
-EXPLAIN ANALYZE
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount base;
-
-
--- 2. base + warehouse_geo
-EXPLAIN ANALYZE
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN warehouse_geo wg 
-       ON wg.transport_hub_code = base.warehouse_code;
-
-
--- 3. base + warehouse_geo + hub_text
-EXPLAIN ANALYZE
-SELECT count(*) 
-FROM dm_calc.storage_sales_bundles_amount base
-LEFT JOIN warehouse_geo wg 
-       ON wg.transport_hub_code = base.warehouse_code
-LEFT JOIN hub_text htxt_wh
-       ON htxt_wh.transport_hub_code = base.warehouse_code
-      AND htxt_wh.language_code     = wg.lang_code;
-
-
-
-
-DROP TABLE IF EXISTS dim_material;
-
-CREATE TEMP TABLE dim_material
-ON COMMIT DROP AS
-SELECT
-    material_code,
-    MIN(material_name) AS material_name
-FROM dict_dds.material_texts
-WHERE language_code = 'R'
-GROUP BY material_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_material;
------------------------------------------------------------
-🟦 2. DIM MATERIAL SHAPE
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_material_shape;
-
-CREATE TEMP TABLE dim_material_shape
-ON COMMIT DROP AS
-SELECT
-    ms.material_code,
-    MIN(mst.material_shape_full_name) AS shape_name
-FROM dict_dds.material_specification ms
-LEFT JOIN dict_dds.material_shape_texts mst
-       ON mst.shape_code = ms.shape_code
-      AND mst.language_code = 'R'
-GROUP BY ms.material_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_material_shape;
------------------------------------------------------------
-🟦 3. DIM SERVICE TEXTS
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_service;
-
-CREATE TEMP TABLE dim_service
-ON COMMIT DROP AS
-SELECT
-    transportation_service_code AS service_code,
-    MIN(transportation_service_name) AS service_name
-FROM dict_dds.transportation_service_texts
-WHERE language_code = 'R'
-GROUP BY transportation_service_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_service;
------------------------------------------------------------
-🟦 4. DIM ETSNG
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_etsng;
-
-CREATE TEMP TABLE dim_etsng
-ON COMMIT DROP AS
-SELECT
-    etsng_code,
-    MIN(etsng_name) AS etsng_name
-FROM dict_dds.etsng_texts
-WHERE language_code = 'R'
-GROUP BY etsng_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_etsng;
------------------------------------------------------------
-🟦 5. DIM WAREHOUSE_GEO
-(вытаскиваем 1 строку на hub)
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_warehouse_geo;
-
-CREATE TEMP TABLE dim_warehouse_geo
-ON COMMIT DROP AS
-SELECT
-    hub.transport_hub_code,
-    MIN(
-        CASE WHEN ct.country_full_name = 'Россия' THEN 'R' ELSE 'E' END
-    ) AS lang_code,
-    MIN(
-        CASE
-            WHEN mr.market_region1_name = 'Турция' THEN 'Западная Азия'
-            WHEN mr.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
-            WHEN mr.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
-            ELSE mr.market_region1_name
-        END
-    ) AS region_name,
-    MIN(ct.country_full_name) AS country_name
-FROM dict_dds.transport_hub hub
-LEFT JOIN adrc adr
-       ON adr.address_code = hub.address_code
-LEFT JOIN dict_dds.country_texts ct
-       ON ct.country_code = adr.country_code
-      AND ct.language_code = 'R'
-LEFT JOIN dict_dds.country c
-       ON c.country_code = adr.country_code
-LEFT JOIN dict_dds.market_region1_texts mr
-       ON mr.market_region1_code = c.market_region1_code
-      AND mr.language_code = 'R'
-GROUP BY hub.transport_hub_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_warehouse_geo;
------------------------------------------------------------
-🟦 6. DIM REMOTE_GEO
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_remote_geo;
-
-CREATE TEMP TABLE dim_remote_geo
-ON COMMIT DROP AS
-SELECT
-    hub.transport_hub_code,
-    MIN(
-        CASE WHEN ct.country_full_name = 'Россия' THEN 'R' ELSE 'E' END
-    ) AS lang_code,
-    MIN(ct.country_full_name) AS country_name,
-    MIN(adr.country_code)     AS country_code
-FROM dict_dds.transport_hub hub
-LEFT JOIN adrc adr
-       ON adr.address_code = hub.address_code
-LEFT JOIN dict_dds.country_texts ct
-       ON ct.country_code = adr.country_code
-      AND ct.language_code = 'R'
-GROUP BY hub.transport_hub_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_remote_geo;
------------------------------------------------------------
-🟦 7. DIM HUB_TEXT
-(корректный 1-к-1 справочник hub+language)
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_hub_text;
-
-CREATE TEMP TABLE dim_hub_text
-ON COMMIT DROP AS
-SELECT
-    transport_hub_code,
-    language_code,
-    MIN(transport_hub_name) AS name
-FROM dict_dds.transport_hub_texts
-GROUP BY transport_hub_code, language_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_hub_text;
------------------------------------------------------------
-🟦 8. DIM OWNER_PLANT
-delivery_code → owner_plant (1 строка на доставку)
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_owner_plant;
-
-CREATE TEMP TABLE dim_owner_plant
-ON COMMIT DROP AS
-SELECT
-    deldp.delivery_code,
-    MIN(pas.plant_short_name || ' ' || pas.plant_full_name) AS owner_name
-FROM dds.delivery_document_position deldp
-LEFT JOIN dict_dds.plant_and_subsidiary pas
-       ON pas.plant_code = deldp.plant_producer_code
-GROUP BY deldp.delivery_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_owner_plant;
------------------------------------------------------------
-🟦 9. DIM CREDITOR
------------------------------------------------------------
-sql
-Копировать код
-DROP TABLE IF EXISTS dim_creditor;
-
-CREATE TEMP TABLE dim_creditor
-ON COMMIT DROP AS
-SELECT
-    counterparty.counterparty_code,
-    MIN(addr.address_full_name) AS creditor_name
-FROM dict_dds.counterparty counterparty
-LEFT JOIN dict_dds.address addr
-       ON addr.address_code = counterparty.address_code
-      AND addr.international_display_format_code IS NULL
-GROUP BY counterparty.counterparty_code
-DISTRIBUTED REPLICATED;
-
-ANALYZE dim_creditor;
------------------------------------------------------------
-🚀 10. ФИНАЛЬНЫЙ SELECT (вместо твоего большого монстра)
------------------------------------------------------------
-Теперь можно делать очень лёгкий JOIN, потому что все таблицы 1-к-1, и GP больше не будет раздувать план.
-
-sql
-Копировать код
-SELECT
-    base.*,
-    mat.material_name,
-    shp.shape_name,
+base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10',
+    '10',
+    base.material_code,
+    mt.material_name,
+    base.material_code || '-' || mt.material_name,
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+    base.material_shape_code,
+    ms.material_shape_full_name,
+    base.material_shape_code || '-' || ms.material_shape_full_name,
+    base.port_of_discharge_code,
+    htxt_pd.transport_hub_name,
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' || htxt_pd.transport_hub_name,
+    base.transport_type_code,
+    ipd.transport_transfer_type_name,
+    base.transport_type_code || '-' || ipd.transport_transfer_type_name,
+    base.etsng_code,
+    et.etsng_name,
+    base.etsng_code || '-' || et.etsng_name,
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+    wg.market_region1_name,
+    pas.plant_short_name || ' ' || pas.plant_full_name,
+    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name,
+    wg.country_full_name,
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+    base.transport_departure_hub_code,
+    htxt_dep.transport_hub_name,
+    base.transport_destination_hub_code,
+    htxt_dest.transport_hub_name,
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+    trst.transportation_stage_name,
+    base.transportation_stage_code || '-' || trst.transportation_stage_name,
+    base.storage_calculation_bundle_quantity,
+    COALESCE(counter.counterparty_short_name,'Не определено'),
+    COALESCE(base.forwarder_code || '-' || counter.counterparty_short_name,'Не определено'),
+    base.warehouse_code,
+    htxt_wh.transport_hub_name,
+    base.warehouse_code || '-' || htxt_wh.transport_hub_name,
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+    base.warehouse_storage_area_code,
+    htxt_area.transport_hub_name,
+    base.warehouse_storage_area_code || '-' || htxt_area.transport_hub_name,
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+    base.service_code,
     srv.service_name,
-    ets.etsng_name,
-    wg.region_name       AS warehouse_region,
-    wg.country_name      AS warehouse_country,
-    htxt_wh.name         AS warehouse_name,
-    rg.country_name      AS remote_country,
-    htxt_remote.name     AS remote_name,
-    op.owner_name        AS metal_owner,
-    cred.creditor_name   AS creditor_name
-FROM dm_calc.storage_sales_bundles_amount base
-
-LEFT JOIN dim_material           mat  ON mat.material_code  = base.material_code
-LEFT JOIN dim_material_shape     shp  ON shp.material_code  = base.material_code
-LEFT JOIN dim_service            srv  ON srv.service_code   = base.service_code
-LEFT JOIN dim_etsng              ets  ON ets.etsng_code     = base.etsng_code
-
-LEFT JOIN dim_warehouse_geo      wg   ON wg.transport_hub_code = base.warehouse_code
-LEFT JOIN dim_remote_geo         rg   ON rg.transport_hub_code = base.remote_warehouse_code
-
-LEFT JOIN dim_hub_text htxt_wh
-       ON htxt_wh.transport_hub_code = base.warehouse_code
-      AND htxt_wh.language_code      = wg.lang_code
-
-LEFT JOIN dim_hub_text htxt_remote
-       ON htxt_remote.transport_hub_code = base.remote_warehouse_code
-      AND htxt_remote.language_code      = rg.lang_code
-
-LEFT JOIN dim_owner_plant        op   ON op.delivery_code   = base.delivery_for_storage_calculation_code
-LEFT JOIN dim_creditor           cred ON cred.counterparty_code = base.creditor_
+    base.service_code || '-' || srv.service_name,
+    base.purchase_contract_position_uom_code,
+    ci.address_full_name,
+    base.creditor_in_shipment_instruction_code || '-' || ci.address_full_name,
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+    base.remote_warehouse_code,
+    htxt_remote.transport_hub_name,
+    rg.country_full_name,
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+    base.is_stored_in_russian_port_code,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name='Логика СВХ' THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END,
+    CASE
+        WHEN base.storage_cost_calculation_type_name='Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name='Логика РФ-балк' THEN 'Балк'
+        ELSE 'Не определено'
+    END,
+    op.plant_short_name || ' ' || op.plant_full_name,
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+    base.metal_in_china_stock_balance_closing_weight

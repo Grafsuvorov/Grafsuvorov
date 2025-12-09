@@ -1,18 +1,3 @@
-Проблема №1: unit_balance_code не находится по префиксу material_code → vbrk пуст.
-
--- Проверяем, что на PREPROD есть строка для prefix '16'
-select *
-from dict_dds.unit_balance
-where fixed_asset_material_prefix_code = '16';
-
-
-👉 Если строка отсутствует — весь блок buyer_ будет NULL*.
-
-✅ СКРИПТ №2 — Проверка invoice_realization + invoice_realization_position
-
-Проблема №2: На PREPROD может быть другой набор документов, другой order или часть документов отсутствует.
-
--- Все документы реализации по активу
 select 
     ir.invoice_realization_code,
     ir.dt_billing_document,
@@ -21,59 +6,90 @@ select
     irp.sales_document_position_type_code,
     irp.document_currency_vat_excluded_amount,
     irp.document_currency_code,
-    irp.material_code
+    irp.material_code,
+    substring(irp.material_code, 3) as asset_main_code_from_material
 from dds.invoice_realization ir
-left join dds.invoice_realization_position irp 
-       on ir.invoice_realization_code = irp.invoice_realization_code
-where substring(irp.material_code, 3) = '160000000136'   -- asset_main_code
+join dds.invoice_realization_position irp 
+      on ir.invoice_realization_code = irp.invoice_realization_code
+where substring(irp.material_code, 3) = '160000000136'
 order by ir.dt_billing_document desc, ir.invoice_realization_code desc;
+👉 Возможные варианты:
 
+0 строк →
+тогда всё логично: никаких реализаций по этому активу нет, CTE vbrk и не должен ничего вернуть.
+Тогда вопрос: откуда в PROD уже лежат buyer_code/buyer_name? Скорее всего:
 
-👉 Сравни следующие поля между PROD и PREPROD:
+старый код вставлял эти значения по другим правилам;
 
-sales_document_position_type_code должно быть ZAOS или ZAKT
+или витрина в PROD давно не пересоздавалась/частично патчилась руками.
 
-document_currency_vat_excluded_amount
+Есть строки, но дальше CTE их отфильтровывает → идём по шагам ниже.
 
-dt_billing_document
+Шаг 2. Проверить, не режет ли тебя фильтр sales_document_position_type_code in ('ZAOS','ZAKT')
+То же самое, но без фильтра и с фильтром:
 
-количество строк
+sql
+Копировать код
+-- 2.1. Все строки по активу
+select distinct irp.sales_document_position_type_code
+from dds.invoice_realization_position irp
+join dds.invoice_realization ir 
+      on ir.invoice_realization_code = irp.invoice_realization_code
+where substring(irp.material_code, 3) = '160000000136';
 
-сортировка (важно для row_number())
+-- 2.2. Только те, что реально попадают в CTE vbrk
+select 
+    ir.invoice_realization_code,
+    ir.dt_billing_document,
+    irp.sales_document_code,
+    irp.sales_document_position_code,
+    irp.sales_document_position_type_code
+from dds.invoice_realization ir
+join dds.invoice_realization_position irp 
+      on ir.invoice_realization_code = irp.invoice_realization_code
+where substring(irp.material_code, 3) = '160000000136'
+  and irp.sales_document_position_type_code in ('ZAOS','ZAKT');
+👉 Если в 2.1 типы есть, а в 2.2 пусто → фильтр на тип позиций тебе полностью высекает актив.
 
-Если на PREPROD меньше строк → vbrk будет пуст.
+Шаг 3. Проверить unit_balance_code из dict_dds.unit_balance
+Внутри CTE vbrk ты берёшь:
 
-✅ СКРИПТ №3 — Проверка sales_document_counterparty_role (роль VE)
+sql
+Копировать код
+rf.unit_balance_code = left(irp.material_code, 2)
+Нужно убедиться, что для нужного префикса вообще есть маппинг:
 
-Проблема №3: Контрагент с ролью VE может быть не загружен на PREPROD → buyer_code NULL.
-
-Сначала получаем список документов:
-
--- получаем все sales_document_code
-select distinct irp.sales_document_code
+sql
+Копировать код
+-- 3. Префикс материала и unit_balance
+select 
+    distinct
+    left(irp.material_code, 2) as material_prefix,
+    substring(irp.material_code, 3) as asset_main_code_from_material
 from dds.invoice_realization_position irp
 where substring(irp.material_code, 3) = '160000000136';
 
+-- 3.2. Проверяем маппинг в справочнике
+select *
+from dict_dds.unit_balance rf
+where rf.fixed_asset_material_prefix_code in (
+    select left(irp.material_code, 2)
+    from dds.invoice_realization_position irp
+    where substring(irp.material_code, 3) = '160000000136'
+);
+👉 Если в 3.2 пусто → unit_balance_code в vbrk всегда NULL, а твой финальный фильтр:
 
-Теперь подставляем список в следующий запрос:
+sql
+Копировать код
+where unit_balance_code = '1520'
+  and asset_main_code   = '160000000136'
+никогда не выполнится.
 
--- Проверяем роль VE по документам
-select 
-    sales_document_code,
-    sales_document_position_code,
-    counterparty_role_code,
-    counterparty_code
-from dds.sales_document_counterparty_role
-where sales_document_code IN ( <подставь список из предыдущего запроса> )
-  and counterparty_role_code = 'VE';
+Шаг 4. Проверить именно CTE vbrk без жёсткого фильтра
+Сейчас ты сразу отфильтровал unit_balance_code = '1520'. Давай посмотрим шире:
 
-
-👉 Если на PREPROD нет строки с role VE → buyer_code будет NULL.
-
-🔍 СКРИПТ №4 — Вывести сам CTE vbrk (точечная проверка)
-
-Это показывает, получает ли vbrk строку на PREPROD.
-
+sql
+Копировать код
 with vbrk as (
     select
         t.unit_balance_code,
@@ -111,8 +127,4 @@ with vbrk as (
 )
 select *
 from vbrk
-where unit_balance_code = '1520'
-  and asset_main_code = '160000000136';
-
-
-👉 Если на PREPROD результат пустой — 100% причина найдена.
+where asset_main_code = '160000000136';

@@ -1,2 +1,17 @@
-SELECT DISTINCT plant_code, plant_short_name, plant_full_name
-FROM dict_dds.plant_and_subsidiary;
+Да, джойнюсь к одному справочнику 2 раза, но в джойны подаю разные значения.
+select
+	
+	pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name as metal_owner_for_reporting_name,
+pas.plant_short_name || ' ' || pas.plant_full_name as receiving_plant_name
+from dm_calc.storage_sales_bundles_amount as base
+	left join dict_dds.plant_and_subsidiary as pas on
+		pas.plant_code = base.receiving_plant_code
+	left join dds.delivery_document_position as deldp on
+		deldp.delivery_code = base.delivery_for_storage_calculation_code
+		and deldp.delivery_position_line_item_code = '000010'
+	left join dict_dds.plant_and_subsidiary as pas_1124 on
+		pas_1124.plant_code = deldp.plant_producer_code
+	where pas.plant_code <> pas_1124.plant_code
+09:55
+
+Таблица  dds.delivery_document_position нужна для того, чтобы определить завод-собственник металла из поставки хранения (у одного куска металла может быть разный собственник в разные периоды времени)

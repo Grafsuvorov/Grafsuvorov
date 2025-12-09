@@ -1,440 +1,394 @@
-INSERT INTO dm.transportation_external_location_metal_stock (
-    sales_bundle_code,
-    plant_producer_delivery_code,
-    plant_producer_delivery_position_code,
-    initial_delivery_code,
-    initial_delivery_position_code,
-    sales_delivery_position_code,
-    material_code,
-    material_name,
-    material_search_name,
-    dt_shipment,
-    railcar_code,
-    transport_bill_code,
-    uni,
-    material_shape_code,
-    material_shape_name,
-    material_shape_search_name,
-    port_of_discharge_code,
-    port_of_discharge_name,
-    dt_arrival_to_russian_port,
-    dt_storage_end_in_release,
-    port_of_discharge_search_name,
-    transport_type_code,
-    transport_type_name,
-    transport_type_search_name,
-    etsng_code,
-    etsng_name,
-    etsng_search_name,
-    dt_report,
-    sales_bundle_net_weight,
-    sales_bundle_gross_weight,
-    batch_code,
-    dt_arrival,
-    region_of_remote_warehouse_name,
-    receiving_plant_name,
-    receiving_plant_search_name,
-    country_of_remote_warehouse_name,
-    receiving_plant_code,
-    sales_delivery_code,
-    transportation_inbound_delivery_code,
-    delivery_for_storage_calculation_code,
-    transportation_inbound_delivery_position_code,
-    delivery_position_for_storage_calculation_code,
-    forwarder_code,
-    storage_cost_calculation_type_name,
-    transport_departure_hub_code,
-    transport_departure_hub_name,
-    transport_destination_hub_code,
-    transport_destination_hub_name,
-    transportation_outbound_delivery_code,
-    transportation_outbound_delivery_position_code,
-    is_final_transportation_stage_code,
-    transportation_stage_code,
-    transportation_stage_name,
-    transportation_stage_search_name,
-    storage_calculation_bundle_quantity,
-    forwarder_name,
-    forwarder_search_name,
-    warehouse_code,
-    warehouse_name,
-    warehouse_search_name,
-    delivery_in_final_release_code,
-    dt_final_release,
-    bill_of_lading_code,
-    bill_of_lading_number,
-    dt_bill_of_lading,
-    incoterms_code,
-    storage_cost_special_calculation_type_code,
-    warehouse_storage_area_code,
-    warehouse_storage_area_name,
-    warehouse_storage_area_search_name,
-    plant_code,
-    unit_balance_code,
-    creditor_in_shipment_instruction_code,
-    dt_storage_start,
-    dt_shipped_from_warehouse,
-    dt_storage_end,
-    service_number,
-    storage_duration_total_calendar_days,
-    shipment_instruction_number,
-    dt_for_price_search_in_purchase_contract,
-    purchase_contract_code,
-    purchase_contract_position_code,
-    purchase_contract_position_currency_code,
-    service_code,
-    service_name,
-    service_search_name,
-    purchase_contract_position_uom_code,
-    creditor_in_shipment_instruction_name,
-    creditor_in_shipment_instruction_search_name,
-    storage_duration_free_by_contract_calendar_days,
-    storage_duration_free_by_delivery_calendar_days,
-    storage_duration_payable_calendar_days,
-    remote_warehouse_code,
-    remote_warehouse_name,
-    country_of_remote_warehouse_code,
-    dt_transportation_stage_start_p,
-    dt_transportation_stage_start_r,
-    dt_shipment_from_foreign_warehouse,
-    storage_cost_calculated_amount,
-    storage_cost_calculated_amount_local,
-    storage_payable_001_030_days_gross_weight,
-    storage_payable_031_060_days_gross_weight,
-    storage_payable_061_090_days_gross_weight,
-    storage_payable_091_180_days_gross_weight,
-    storage_payable_181_365_days_gross_weight,
-    storage_payable_over_365_days_gross_weight,
-    is_stored_in_russian_port_code,
-    type_warehouse_name,
-    type_freight_name,
-    metal_owner_for_reporting_name,
-    storage_calculated_cost_001_030_amount,
-    storage_calculated_cost_031_060_amount,
-    storage_calculated_cost_061_090_amount,
-    storage_calculated_cost_091_180_amount,
-    storage_calculated_cost_181_365_amount,
-    storage_calculated_cost_over_365_amount,
-    metal_in_china_stock_balance_closing_weight
-)
-SELECT
-    -- Ключи и базовые поля
-    base.sales_bundle_code,
-    base.plant_producer_delivery_code,
-    base.plant_producer_delivery_position_code,
-    base.initial_delivery_code,
-    '10' AS initial_delivery_position_code, -- LE.001004
-    '10' AS sales_delivery_position_code,   -- LE.001006
+insert into dm.fixed_asset_operations_and_lend_lease(
+	unit_balance_code,
+	unit_balance_name,
+	asset_main_code,
+	asset_sub_code,
+	valuation_area_code,
+	valuation_area_name,
+	valuation_area_currency_code,
+	valuation_area_currency_name,
+	asset_depreciation_rule_code,
+	asset_depreciation_rule_name,
+	asset_class_code,
+	asset_class_name,
+	asset_inventory_number,
+	asset_name,
+	dt_depreciation_posting_yyyy,  
+	asset_position_code,
+	depreciation_posting_internal_code,
+	asset_movement_type_or_depreciation_calculation_code,
+	dt_posting,
+	depreciation_internal_order_code,
+	depreciation_internal_order_name,
+	dt_depreciation_posting_mmm,
+	dt_reference,
+	business_transaction_code,
+	reference_operation_code,
+	reference_organization_unit_code,
+	is_virtual_asset_movement,
+	reference_asset_main_code,
+	reference_asset_sub_code,
+	general_ledger_operation_type_code,
+	dt_asset_document_created,
+	asset_movement_type_code,
+	asset_movement_type_name,
+	red_reverse_code,
+	red_reverse_reason_code,
+	dt_red_reverse,
+	asset_realization_revenue_amount,
+	proportional_cumulative_revaluation_amount,
+	base_uom_code,
+	base_uom_name,
+	asset_quantity,
+	cost_center_code,
+	cost_center_name,
+	depreciation_cost_center_code,
+	depreciation_cost_center_name, 
+	plant_code,
+	plant_name,  
+	is_asset_conservated,
+	dt_conservated_from, 
+	dt_conservated_to, 
+	dt_conservated_actual,
+	document_type_code,
+	document_type_name,
+	special_order_for_conservation_number,
+	dt_special_order_for_conservation,
+	special_order_for_cancelling_conservation_number,
+	dt_special_order_for_cancelling_conservation,
+	dt_conservation_cancelled_actual,
+	dt_approved_of_techical_state,
+	non_liquid_asset_techical_state_code,
+	non_liquid_asset_techical_state_name,
+	is_non_liquid_asset_record_created_manually,
+	dt_asset_status_reverse_from_non_liquid,
+	non_liquid_asset_type_code,
+	non_liquid_asset_type_name,
+	dt_asset_recognized,
+	dt_asset_write_off,
+	disposal_type_source_name,
+	disposal_type_code,
+	disposal_type_name,
+	valuation_area_currency_amount,
+	acquisition_cost_valuation_area_currency_amount,
+	depreciation_total_amount,
+	depreciation_typical_amount,
+	depreciation_special_amount,
+	depreciation_unplanned_amount,
+	cumulative_acquisition_and_production_cost_amount,
+	cumulative_depreciation_typical_amount,
+	cumulative_depreciation_special_amount,
+	cumulative_depreciation_unplanned_amount,
+	buyer_code,
+	buyer_name,
+	realization_supervisor_code,
+	realization_supervisor_name,
+	realization_document_currency_amount,
+	realization_document_currency_code)
+	
+with vbrk as (
+select
+	t.unit_balance_code,
+	t.asset_main_code,
+	t.payee_or_payer_code as buyer_code,
+	t.personnel_code as realization_supervisor_code,
+	t.document_currency_vat_excluded_amount as realization_document_currency_amount,
+	t.document_currency_code as realization_document_currency_code
+from
+	(
+	select
+		ir.payee_or_payer_code,
+		irp.document_currency_vat_excluded_amount,
+		irp.document_currency_code,
+		sdcr.personnel_code,
+		rf.unit_balance_code as unit_balance_code,
+		substring(irp.material_code, 3) as asset_main_code,
+		row_number() over (partition by irp.material_code  order by ir.invoice_realization_code desc,ir.dt_billing_document desc
+	) as rnum
+	from
+		dds.invoice_realization as ir
+	left join dds.invoice_realization_position as irp on
+		ir.invoice_realization_code = irp.invoice_realization_code
+	left join dds.sales_document_counterparty_role as sdcr on
+		sdcr.sales_document_code = irp.sales_document_code
+		and (sdcr.sales_document_position_code = irp.sales_document_position_code
+			or sdcr.sales_document_position_code = '000000')
+		and sdcr.counterparty_role_code = 'VE'
+	left join dict_dds.unit_balance as rf on
+		rf.fixed_asset_material_prefix_code = left(irp.material_code, 2)
+	where
+		irp.sales_document_position_type_code in ('ZAOS', 'ZAKT')) as t
+where
+	t.rnum = 1
+	and t.unit_balance_code is not null)
+select 
+	fam.unit_balance_code,
+	fam.unit_balance_name,
+	fam.asset_main_code,
+	fam.asset_sub_code,
+	fam.valuation_area_code,
+	fam.valuation_area_name,
+	fam.valuation_area_currency_code,
+	fam.valuation_area_currency_name,
+	fam.asset_depreciation_rule_code,
+	fam.asset_depreciation_rule_name,
+	fam.asset_class_code,
+	fam.asset_class_name,
+	fam.asset_inventory_number,
+	fam.asset_name,
+	fa.dt_depreciation_posting_yyyy,
+	fa.asset_position_code,
+	fa.depreciation_posting_internal_code,
+	fa.asset_movement_type_or_depreciation_calculation_code,
+	fa.dt_posting,
+	fa.depreciation_internal_order_code,
+	ord.order_short_name as depreciation_internal_order_name,
+	fa.dt_depreciation_posting_mmm,
+	fa.dt_reference,
+	fa.business_transaction_code,
+	fa.reference_operation_code,
+	fa.reference_organization_unit_code,
+	fa.is_virtual_asset_movement,
+	fa.reference_asset_main_code,
+	fa.reference_asset_sub_code,
+	fa.general_ledger_operation_type_code,
+	fa.dt_asset_document_created,
+	fa.asset_movement_type_code,
+	mtt.fixed_asset_movement_type_name as asset_movement_type_name,
+	fa.red_reverse_code,
+	fa.red_reverse_reason_code,
+	fa.dt_red_reverse,
+	fa.asset_realization_revenue_amount,
+	fa.proportional_cumulative_revaluation_amount,
+	fam.base_uom_code,
+	fam.base_uom_name,
+	fam.asset_quantity,	
+	fam.cost_center_code,
+	fam.cost_center_name,
+	fa.depreciation_cost_center_code,
+	cc.cost_center_name_rus as depreciation_cost_center_name, 
+	fam.plant_code,
+	fam.plant_name,  
+	fam.is_asset_conservated,
+	fam.dt_conservated_from, 
+	fam.dt_conservated_to, 
+	fam.dt_conservated_actual,
+	fam.document_type_code,
+	fam.document_type_name,
+	fam.special_order_for_conservation_number,
+	fam.dt_special_order_for_conservation,
+	fam.special_order_for_cancelling_conservation_number,
+	fam.dt_special_order_for_cancelling_conservation,
+	fam.dt_conservation_cancelled_actual,
+	fam.dt_approved_of_techical_state,
+	fam.non_liquid_asset_techical_state_code,
+	fam.non_liquid_asset_techical_state_name,
+	fam.is_non_liquid_asset_record_created_manually,
+	fam.dt_asset_status_reverse_from_non_liquid,
+	fa.non_liquid_asset_type_code,
+	fa.non_liquid_asset_type_name,
+	fam.dt_asset_recognized,
+	fam.dt_asset_write_off,
+	fa.disposal_type_source_name,
+	fa.disposal_type_code,
+	dtt.disposal_type_name,
+	fa.valuation_area_currency_amount,
+	fa.acquisition_cost_valuation_area_currency_amount,
+	fa.depreciation_typical_amount + fa.depreciation_special_amount + fa.depreciation_unplanned_amount as depreciation_total_amount,
+	fa.depreciation_typical_amount,
+	fa.depreciation_special_amount,
+	fa.depreciation_unplanned_amount,
+	fa.cumulative_acquisition_and_production_cost_amount,
+	fa.cumulative_depreciation_typical_amount,
+	fa.cumulative_depreciation_special_amount,
+	fa.cumulative_depreciation_unplanned_amount,
+	v.buyer_code,
+	c.counterparty_full_name as buyer_name,
+	v.realization_supervisor_code,
+	p.employee_full_name as realization_supervisor_name,
+	v.realization_document_currency_amount,
+	v.realization_document_currency_code
+from (
+	select 	
+		unit_balance_code,
+		dt_depreciation_posting_mmm, 
+		depreciation_posting_internal_code, 
+		asset_main_code,
+		asset_sub_code,
+		reference_asset_main_code,
+		reference_asset_sub_code,
+		dt_posting_yyyy as dt_depreciation_posting_yyyy,
+		valuation_area_code,
+		depreciation_internal_order_code,
+		asset_position_code,
+		dt_posting::date,
+		dt_reference,
+		business_transaction_code,
+		reference_operation_code,
+		reference_organization_unit_code,
+		general_ledger_operation_type_code,
+		dt_asset_document_created,
+		asset_movement_type_code,		
+		red_reverse_reason_code,
+		dt_red_reverse,
+		red_reverse_code,
+		is_virtual_asset_movement,	
+		depreciation_cost_center_code,
+		depreciation_typical_amount,
+		depreciation_special_amount,
+		valuation_area_currency_amount,
+		acquisition_cost_valuation_area_currency_amount,
+		proportional_cumulative_revaluation_amount,
+	   	asset_realization_revenue_amount,
+		depreciation_unplanned_amount,  
+		cumulative_acquisition_and_production_cost_amount,
+		cumulative_depreciation_typical_amount,
+		cumulative_depreciation_special_amount,
+		cumulative_depreciation_unplanned_amount,
+		valuation_area_currency_code,
+		asset_movement_type_or_depreciation_calculation_code,
+		case when parameter_code = 'BWASL_L' then 'Ликвидация'
+		when parameter_code = 'BWASL_SE' then 'Внешняя продажа'
+		when parameter_code = 'BWASL_SI' then 'Внутренняя продажа'
+		when parameter_code = 'BWASL_TR' then 'Безвозмездная передача'
+		end as  disposal_type_source_name,
+		case when parameter_code = 'BWASL_L' then '3'
+		when parameter_code = 'BWASL_SE' then '5'
+		when parameter_code = 'BWASL_SI' then '8'
+		when parameter_code = 'BWASL_TR' then '1'
+		end as  disposal_type_code,
+		'A'	as non_liquid_asset_type_code,
+		'Основные средства' as non_liquid_asset_type_name
+from 
+	dm_calc.fixed_asset_operations
+left join dict_dds.settings_and_parameters_sap sap on
+	sap.range_low_value = asset_movement_type_code
+	and sap.abap_program_code = 'ZFI5668M'
+	and sap.range_sign_code is not null
+	and is_anlc is null
+where dt_posting >= date_trunc('year', now()- interval '1 year')::date
 
-    -- Материал
-    base.material_code,
-    mat.material_name                                       AS material_name, -- LE.001013
-    base.material_code || '-' || mat.material_name          AS material_search_name, -- LE.001014
+union all
 
-    -- Даты и трансп. реквизиты
-    base.dt_shipment,
-    base.railcar_code,
-    base.transport_bill_code,
-    base.uni,
-
-    -- Форма металла
-    base.material_shape_code,
-    dms.material_shape_full_name                            AS material_shape_name,
-    base.material_shape_code || '-' || dms.material_shape_full_name
-                                                           AS material_shape_search_name,
-
-    -- Порт хранения
-    base.port_of_discharge_code,
-    COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено')
-                                                           AS port_of_discharge_name,
-    base.dt_arrival_to_russian_port,
-    base.dt_storage_end_in_release,
-    base.port_of_discharge_code || '-' ||
-        COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено')
-                                                           AS port_of_discharge_search_name,
-
-    -- Тип ПС
-    base.transport_type_code,
-    dtt.transport_transfer_type_name                        AS transport_type_name,
-    base.transport_type_code || '-' || dtt.transport_transfer_type_name
-                                                           AS transport_type_search_name,
-
-    -- ЕТСНГ
-    base.etsng_code,
-    ette.etsng_name                                         AS etsng_name,
-    base.etsng_code || '-' || ette.etsng_name               AS etsng_search_name,
-
-    -- Отчетная дата и веса
-    base.dt_report,
-    base.sales_bundle_net_weight,
-    base.sales_bundle_gross_weight,
-    base.batch_code,
-    base.dt_arrival,
-
-    -- Регион удалённого склада
-    CASE
-        WHEN hub_remote.market_region1_name = 'Турция'           THEN 'Западная Азия'
-        WHEN hub_remote.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
-        WHEN hub_remote.market_region1_name IN ('Азия','Китай')  THEN 'Восточная Азия'
-        ELSE hub_remote.market_region1_name
-    END                                                      AS region_of_remote_warehouse_name,
-
-    -- Завод поставки
-    pas.plant_short_name || ' ' || pas.plant_full_name      AS receiving_plant_name,
-    base.receiving_plant_code || '-' ||
-        pas.plant_short_name || ' ' || pas.plant_full_name  AS receiving_plant_search_name,
-
-    -- Страна удалённого склада (нормализованная)
-    CASE
-        WHEN hub_remote.country_full_name = 'Корея, республика' THEN 'Южная Корея'
-        WHEN hub_remote.country_full_name = 'Тайвань (Китай)'   THEN 'Тайвань'
-        ELSE hub_remote.country_full_name
-    END                                                      AS country_of_remote_warehouse_name,
-
-    base.receiving_plant_code,
-    base.sales_delivery_code,
-    base.transportation_inbound_delivery_code,
-    base.delivery_for_storage_calculation_code,
-    base.transportation_inbound_delivery_position_code,
-    base.delivery_position_for_storage_calculation_code,
-    base.forwarder_code,
-    base.storage_cost_calculation_type_name,
-
-    -- Узлы отправления / назначения
-    base.transport_departure_hub_code,
-    COALESCE(ht_dep.name_r, ht_dep.name_e, 'Не определено')
-                                                           AS transport_departure_hub_name,
-    base.transport_destination_hub_code,
-    COALESCE(ht_dest.name_r, ht_dest.name_e, 'Не определено')
-                                                           AS transport_destination_hub_name,
-
-    -- Тех. поставка отбытия
-    base.transportation_outbound_delivery_code,
-    base.transportation_outbound_delivery_position_code,
-    base.is_final_transportation_stage_code,
-    base.transportation_stage_code,
-
-    -- Этап перевозки показываем только для Азии/Европы/СВХ
-    CASE
-        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-            THEN trst.transportation_stage_name
-    END                                                      AS transportation_stage_name,
-    CASE
-        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
-    END                                                      AS transportation_stage_search_name,
-
-    -- Кол-во пакетов
-    base.storage_calculation_bundle_quantity,
-
-    -- Экспедитор (только для Азии/Европы/СВХ)
-    COALESCE(
-        CASE
-            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-                THEN counter_forwarder.counterparty_short_name
-        END,
-        'Не определено'
-    )                                                       AS forwarder_name,
-    COALESCE(
-        CASE
-            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-                THEN base.forwarder_code || '-' || counter_forwarder.counterparty_short_name
-        END,
-        'Не определено'
-    )                                                       AS forwarder_search_name,
-
-    -- Склад хранения
-    base.warehouse_code,
-    CASE
-        WHEN hub_wh.country_full_name = 'Россия'
-            THEN COALESCE(ht_wh.name_r, ht_wh.name_e, 'Не определено')
-        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r, 'Не определено')
-    END                                                      AS warehouse_name,
-    base.warehouse_code || '-' ||
-    CASE
-        WHEN hub_wh.country_full_name = 'Россия'
-            THEN COALESCE(ht_wh.name_r, ht_wh.name_e, 'Не определено')
-        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r, 'Не определено')
-    END                                                      AS warehouse_search_name,
-
-    -- Поставка в финальном релизе и коносамент
-    base.delivery_in_final_release_code,
-    base.dt_final_release,
-    base.bill_of_lading_code,
-    base.bill_of_lading_number,
-    base.dt_bill_of_lading,
-
-    -- Инкотермс / особая логика
-    base.incoterms_code,
-    base.storage_cost_special_calculation_type_code,
-
-    -- Складская зона
-    base.warehouse_storage_area_code,
-    COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено')
-                                                           AS warehouse_storage_area_name,
-    base.warehouse_storage_area_code || '-' ||
-        COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено')
-                                                           AS warehouse_storage_area_search_name,
-
-    -- Завод / БЕ / кредитор
-    base.plant_code,
-    base.unit_balance_code,
-    base.creditor_in_shipment_instruction_code,
-
-    -- Даты хранения
-    base.dt_storage_start,
-    base.dt_shipped_from_warehouse,
-    base.dt_storage_end,
-
-    -- Прочие поля хранения
-    base.service_number,
-    base.storage_duration_total_calendar_days,
-    base.shipment_instruction_number,
-    base.dt_for_price_search_in_purchase_contract,
-    base.purchase_contract_code,
-    base.purchase_contract_position_code,
-    base.purchase_contract_position_currency_code,
-
-    -- Услуга хранения
-    base.service_code,
-    svc.transportation_service_name                        AS service_name,
-    base.service_code || '-' || svc.transportation_service_name
-                                                           AS service_search_name,
-
-    base.purchase_contract_position_uom_code,
-
-    -- Кредитор по инструкции
-    addr_8.address_full_name                               AS creditor_in_shipment_instruction_name,
-    base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name
-                                                           AS creditor_in_shipment_instruction_search_name,
-
-    -- Параметры длительности хранения
-    base.storage_duration_free_by_contract_calendar_days,
-    base.storage_duration_free_by_delivery_calendar_days,
-    base.storage_duration_payable_calendar_days,
-
-    -- Удалённый склад
-    base.remote_warehouse_code,
-    CASE
-        WHEN hub_remote.country_full_name = 'Россия'
-            THEN COALESCE(ht_remote.name_r, ht_remote.name_e, 'Не определено')
-        ELSE COALESCE(ht_remote.name_e, ht_remote.name_r, 'Не определено')
-    END                                                      AS remote_warehouse_name,
-    hub_remote.country_code                                  AS country_of_remote_warehouse_code,
-
-    -- Даты этапов
-    base.dt_transportation_stage_start_p,
-    base.dt_transportation_stage_start_r,
-    base.dt_shipment_from_foreign_warehouse,
-
-    -- Стоимость хранения
-    base.storage_cost_calculated_amount,
-    base.storage_cost_calculated_amount_local,
-
-    -- Объем платного хранения по диапазонам
-    base.storage_payable_001_030_days_gross_weight,
-    base.storage_payable_031_060_days_gross_weight,
-    base.storage_payable_061_090_days_gross_weight,
-    base.storage_payable_091_180_days_gross_weight,
-    base.storage_payable_181_365_days_gross_weight,
-    base.storage_payable_over_365_days_gross_weight,
-
-    -- Признак порта РФ
-    base.is_stored_in_russian_port_code,
-
-    -- Тип склада / тип фрахта
-    CASE
-        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
-            THEN 'Терминал порта'
-        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ'
-            THEN 'Склад СВХ'
-        ELSE 'Не определено'
-    END                                                      AS type_warehouse_name,
-    CASE
-        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
-        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк'       THEN 'Балк'
-        ELSE 'Не определено'
-    END                                                      AS type_freight_name,
-
-    -- Собственник металла для отчётности (через dim_storage_owner)
-    pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name
-                                                           AS metal_owner_for_reporting_name,
-
-    -- Стоимости по диапазонам
-    base.storage_calculated_cost_001_030_amount,
-    base.storage_calculated_cost_031_060_amount,
-    base.storage_calculated_cost_061_090_amount,
-    base.storage_calculated_cost_091_180_amount,
-    base.storage_calculated_cost_181_365_amount,
-    base.storage_calculated_cost_over_365_amount,
-
-    -- Китайский остаток
-    base.metal_in_china_stock_balance_closing_weight
-FROM dm_calc.storage_sales_bundles_amount AS base
-    -- Материалы / форма
-    LEFT JOIN dim_material_texts   AS mat
-           ON mat.material_code = base.material_code
-    LEFT JOIN dim_material_shape   AS dms
-           ON dms.material_code = base.material_code
-
-    -- ЕТСНГ
-    LEFT JOIN dict_dds.etsng_texts AS ette
-           ON ette.etsng_code    = base.etsng_code
-          AND ette.language_code = 'R'
-
-    -- Тип ПС
-    LEFT JOIN dim_transport_type  AS dtt
-           ON dtt.transport_transfer_type_code = base.transport_type_code
-
-    -- Услуги
-    LEFT JOIN dim_service_texts   AS svc
-           ON svc.service_code = base.service_code
-
-    -- Завод поставки
-    LEFT JOIN dict_dds.plant_and_subsidiary AS pas
-           ON pas.plant_code = base.receiving_plant_code
-
-    -- Собственник металла через поставку хранения
-    LEFT JOIN dim_storage_owner AS so
-           ON so.delivery_code = base.delivery_for_storage_calculation_code
-    LEFT JOIN dict_dds.plant_and_subsidiary AS pas_1124
-           ON pas_1124.plant_code = so.plant_code
-
-    -- Гео по складу
-    LEFT JOIN dim_hub_geo AS hub_wh
-           ON hub_wh.transport_hub_code = base.warehouse_code
-
-    -- Гео по удалённому складу
-    LEFT JOIN dim_hub_geo AS hub_remote
-           ON hub_remote.transport_hub_code = base.remote_warehouse_code
-
-    -- Тексты хабов (агрегированные)
-    LEFT JOIN dim_hub_texts_agg AS ht_dep
-           ON ht_dep.transport_hub_code = base.transport_departure_hub_code
-    LEFT JOIN dim_hub_texts_agg AS ht_dest
-           ON ht_dest.transport_hub_code = base.transport_destination_hub_code
-    LEFT JOIN dim_hub_texts_agg AS ht_wh
-           ON ht_wh.transport_hub_code = base.warehouse_code
-    LEFT JOIN dim_hub_texts_agg AS ht_area
-           ON ht_area.transport_hub_code = base.warehouse_storage_area_code
-    LEFT JOIN dim_hub_texts_agg AS ht_remote
-           ON ht_remote.transport_hub_code = base.remote_warehouse_code
-    LEFT JOIN dim_hub_texts_agg AS ht_port
-           ON ht_port.transport_hub_code = base.port_of_discharge_code
-
-    -- Экспедитор
-    LEFT JOIN dict_dds.counterparty AS counter_forwarder
-           ON counter_forwarder.counterparty_code = base.forwarder_code
-
-    -- Кредитор (для имени)
-    LEFT JOIN dict_dds.counterparty AS counter_creditor
-           ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
-    LEFT JOIN dict_dds.address AS addr_8
-           ON addr_8.address_code = counter_creditor.address_code
-          AND addr_8.international_display_format_code IS NULL
-
-    -- Этап перевозки
-    LEFT JOIN dict_dds.transportation_stage_texts AS trst
-           ON trst.transportation_stage_code = base.transportation_stage_code
-          AND trst.language_code            = 'R'
+select 
+	unit_balance_code,
+	null as dt_depreciation_posting_mmm, 
+	null as depreciation_posting_internal_code, 
+	asset_main_code,
+	asset_sub_code,
+	null as reference_asset_main_code,
+	null as reference_asset_sub_code,
+	null  as dt_depreciation_posting_yyyy,
+	valuation_area_code,
+	null  as depreciation_internal_order_code,
+	null  as asset_position_code,
+	dt_lend_lease_posting as dt_posting,
+	dt_lend_lease_posting as dt_reference,
+	null  as business_transaction_code,
+	null  as reference_operation_code,
+	null  as reference_organization_unit_code,
+	null  as general_ledger_operation_type_code,
+	null  as dt_asset_document_created,
+	null  as asset_movement_type_code,
+	null  as red_reverse_reason_code,
+	null  as dt_red_reverse,
+	null  as red_reverse_code,
+	null  as is_virtual_asset_movement,
+	null  as depreciation_cost_center_code,
+	depreciation_typical_amount,
+	depreciation_special_amount,
+	valuation_area_currency_amount,
+	acquisition_cost_valuation_area_currency_amount,
+	null as proportional_cumulative_revaluation_amount,
+   	null as asset_realization_revenue_amount,
+	depreciation_unplanned_amount,  
+	null as cumulative_acquisition_and_production_cost_amount,
+	null as cumulative_depreciation_typical_amount,
+	null as cumulative_depreciation_special_amount,
+	null as cumulative_depreciation_unplanned_amount,
+	valuation_area_currency_code,
+	'ZANLU_TRENT' as asset_movement_type_or_depreciation_calculation_code,
+	'Передача в аренду' as  disposal_type_source_name,
+	'7' as  disposal_type_code,
+	non_liquid_asset_type_code,
+	non_liquid_asset_type_name
+	from 
+(
+select 	
+	cd.unit_balance_code,
+	cd.asset_main_code,
+	cd.asset_sub_code,
+	cd.valuation_area_code,
+	ll.dt_lend_lease_posting,
+	cd.depreciation_total_cumulative_amount as depreciation_typical_amount,
+	cd.depreciation_special_cumulative_amount as depreciation_special_amount,
+	cd.acquisition_cost_cumulative_amount as valuation_area_currency_amount,
+	cd.acquisition_cost_cumulative_amount as acquisition_cost_valuation_area_currency_amount,
+	depreciation_unplanned_cumulative_amount as depreciation_unplanned_amount,
+	cd.valuation_area_currency_code,
+	cd.non_liquid_asset_type_code,
+	cd.non_liquid_asset_type_name,
+	row_number() over (partition by cd.unit_balance_code,
+						cd.asset_main_code,
+						cd.asset_sub_code,
+						cd.valuation_area_code
+					order by
+						dt_report desc) as rn
+from
+	dm.fixed_asset_cost_and_depreciation cd
+join dict_dds.fixed_asset_lend_lease ll on
+	ll.unit_balance_code = cd.unit_balance_code
+	and ll.asset_main_code = cd.asset_main_code
+	and ll.asset_sub_code = cd.asset_sub_code
+	and cd.dt_report <= ll.dt_lend_lease_posting
+where 
+	dt_report >= date_trunc('year', now()- interval '1 year')::date	
+) t	
+where 
+rn = 1  )fa
+left join  dm.fixed_asset_main fam on 
+	fa.unit_balance_code = fam.unit_balance_code
+	and fa.asset_main_code = fam.asset_main_code
+	and fa.asset_sub_code = fam.asset_sub_code
+	and fa.valuation_area_code = fam.valuation_area_code
+	and fa.dt_posting between fam.dt_valid_from and fam.dt_valid_to
+left join dict_dds.disposal_type_texts dtt on 
+	fa.disposal_type_code = dtt.disposal_type_code
+	and language_code = 'R'
+left join vbrk v on 	
+	v.unit_balance_code = fa.unit_balance_code
+	and	v.asset_main_code = fa.asset_main_code 
+left join dict_dds.counterparty c on 
+	c.counterparty_code = v.buyer_code
+left join dict_dds.personnel_main_data p on p.
+	employee_code = v.realization_supervisor_code
+	and fa.dt_posting between p.dt_valid_from and p.dt_valid_to
+left join dict_dds.order_controlling ord on
+		fa.depreciation_internal_order_code = ord.order_code
+left join dict_dds.cost_center cc on		
+	 fa.depreciation_cost_center_code = cc.cost_center_code
+	and fa.dt_posting between cc.dt_valid_from and cc.dt_valid_to	
+left join dict_dds.fixed_asset_movement_type_texts mtt on
+		fa.asset_movement_type_code = mtt.fixed_asset_movement_type_code
+		and mtt.language_code = 'R'
 ;
+
+
+buyer_code, buyer_name, realization_supervisor_code, realization_supervisor_name, realization_document_currency_amount, realization_document_currency_code
+
+
+SELECT 'PROD', "unit_balance_code","unit_balance_name","asset_main_code","asset_sub_code","valuation_area_code","valuation_area_name","valuation_area_currency_code","valuation_area_currency_name","asset_depreciation_rule_code","asset_depreciation_rule_name","asset_class_code","asset_class_name","asset_inventory_number","asset_name","dt_depreciation_posting_yyyy","dt_depreciation_posting_mmm","asset_position_code","depreciation_posting_internal_code","asset_movement_type_or_depreciation_calculation_code","dt_posting","depreciation_internal_order_code","depreciation_internal_order_name","dt_reference","business_transaction_code","reference_operation_code","reference_organization_unit_code","is_virtual_asset_movement","reference_asset_main_code","reference_asset_sub_code","general_ledger_operation_type_code","dt_asset_document_created","asset_movement_type_code","asset_movement_type_name","red_reverse_code","red_reverse_reason_code","dt_red_reverse","asset_realization_revenue_amount","proportional_cumulative_revaluation_amount","base_uom_code","base_uom_name","asset_quantity","cost_center_code","cost_center_name","depreciation_cost_center_code","depreciation_cost_center_name","plant_code","plant_name","is_asset_conservated","dt_conservated_from","dt_conservated_to","dt_conservated_actual","document_type_code","document_type_name","special_order_for_conservation_number","dt_special_order_for_conservation","special_order_for_cancelling_conservation_number","dt_special_order_for_cancelling_conservation","dt_conservation_cancelled_actual","dt_approved_of_techical_state","non_liquid_asset_techical_state_code","non_liquid_asset_techical_state_name","is_non_liquid_asset_record_created_manually","dt_asset_status_reverse_from_non_liquid","non_liquid_asset_type_code","non_liquid_asset_type_name","dt_asset_recognized","dt_asset_write_off","disposal_type_source_name","disposal_type_code","disposal_type_name","valuation_area_currency_amount","acquisition_cost_valuation_area_currency_amount","depreciation_total_amount","depreciation_typical_amount","depreciation_special_amount","depreciation_unplanned_amount","cumulative_acquisition_and_production_cost_amount","cumulative_depreciation_typical_amount","cumulative_depreciation_special_amount","cumulative_depreciation_unplanned_amount","buyer_code","buyer_name","realization_supervisor_code","realization_supervisor_name","realization_document_currency_amount","realization_document_currency_code" FROM 
+dm.fixed_asset_operations_and_lend_lease_ft
+where unit_balance_code='1520'
+and asset_main_code='160000000136'
+and dt_depreciation_posting_yyyy='2025'
+and dt_posting='2025-04-30'
+and valuation_area_code='01'
+union all 
+select 'PREPROD', "unit_balance_code","unit_balance_name","asset_main_code","asset_sub_code","valuation_area_code","valuation_area_name","valuation_area_currency_code","valuation_area_currency_name","asset_depreciation_rule_code","asset_depreciation_rule_name","asset_class_code","asset_class_name","asset_inventory_number","asset_name","dt_depreciation_posting_yyyy","dt_depreciation_posting_mmm","asset_position_code","depreciation_posting_internal_code","asset_movement_type_or_depreciation_calculation_code","dt_posting","depreciation_internal_order_code","depreciation_internal_order_name","dt_reference","business_transaction_code","reference_operation_code","reference_organization_unit_code","is_virtual_asset_movement","reference_asset_main_code","reference_asset_sub_code","general_ledger_operation_type_code","dt_asset_document_created","asset_movement_type_code","asset_movement_type_name","red_reverse_code","red_reverse_reason_code","dt_red_reverse","asset_realization_revenue_amount","proportional_cumulative_revaluation_amount","base_uom_code","base_uom_name","asset_quantity","cost_center_code","cost_center_name","depreciation_cost_center_code","depreciation_cost_center_name","plant_code","plant_name","is_asset_conservated","dt_conservated_from","dt_conservated_to","dt_conservated_actual","document_type_code","document_type_name","special_order_for_conservation_number","dt_special_order_for_conservation","special_order_for_cancelling_conservation_number","dt_special_order_for_cancelling_conservation","dt_conservation_cancelled_actual","dt_approved_of_techical_state","non_liquid_asset_techical_state_code","non_liquid_asset_techical_state_name","is_non_liquid_asset_record_created_manually","dt_asset_status_reverse_from_non_liquid","non_liquid_asset_type_code","non_liquid_asset_type_name","dt_asset_recognized","dt_asset_write_off","disposal_type_source_name","disposal_type_code","disposal_type_name","valuation_area_currency_amount","acquisition_cost_valuation_area_currency_amount","depreciation_total_amount","depreciation_typical_amount","depreciation_special_amount","depreciation_unplanned_amount","cumulative_acquisition_and_production_cost_amount","cumulative_depreciation_typical_amount","cumulative_depreciation_special_amount","cumulative_depreciation_unplanned_amount","buyer_code","buyer_name","realization_supervisor_code","realization_supervisor_name","realization_document_currency_amount","realization_document_currency_code" FROM 
+dm.fixed_asset_operations_and_lend_lease
+where unit_balance_code='1520'
+and asset_main_code='160000000136'
+and dt_depreciation_posting_yyyy='2025'
+and dt_posting='2025-04-30'
+and valuation_area_code='01'

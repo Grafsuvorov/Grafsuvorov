@@ -1,9 +1,2 @@
-select count(distinct delivery_for_storage_calculation_code) from dm_calc.storage_sales_bundles_amount --206664
-
-select count(*) from (
-SELECT
-    delivery_code,
-    MIN(plant_producer_code) AS plant_code
-FROM dds.delivery_document_position
-WHERE delivery_position_line_item_code = '000010'
-GROUP BY delivery_code) a --22719190
+SQL Error [42804]: ERROR: column "dt_arrival_to_russian_port" is of type date but expression is of type text
+  Подсказка: You will need to rewrite or cast the expression.

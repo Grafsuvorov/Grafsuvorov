@@ -1,2 +1,147 @@
-SQL Error [42P01]: ERROR: missing FROM-clause entry for table "for_1082_1"
-  Позиция: 2345
+DROP TABLE IF EXISTS for_1079_euro;
+
+CREATE TEMP TABLE for_1079_euro
+ON COMMIT DROP
+AS
+WITH joined AS (
+    SELECT
+        b2.rn,
+        fb.purchase_contract_code,
+        fb.position_line_item_code,
+        fb.konws,
+        fb.service_code,
+        fb.price_uom_code,
+        fb.netpr,
+        fb.currency_dogovor,
+        fb.datab,
+        fb.datbi,
+        fb.order_euro_svh,
+        fb.kopos,
+        fb.kbetr,
+
+        b2.sales_bundle_gross_weight,
+        b2.warehouse_code,
+        b2.storage_cost_special_calculation_type_code,
+        b2.dt_storage_start,
+        b2.dt_storage_end,
+        b2.storage_duration_total_calendar_days,
+
+        /* month difference */
+        CASE
+            WHEN EXTRACT(DAY FROM b2.dt_storage_end)
+                 < EXTRACT(DAY FROM b2.dt_storage_start)
+                THEN (EXTRACT(YEAR FROM b2.dt_storage_end)
+                      - EXTRACT(YEAR FROM b2.dt_storage_start)) * 12
+                   + (EXTRACT(MONTH FROM b2.dt_storage_end)
+                      - EXTRACT(MONTH FROM b2.dt_storage_start))
+            ELSE (EXTRACT(YEAR FROM b2.dt_storage_end)
+                  - EXTRACT(YEAR FROM b2.dt_storage_start)) * 12
+                 + (EXTRACT(MONTH FROM b2.dt_storage_end)
+                    - EXTRACT(MONTH FROM b2.dt_storage_start)) + 1
+        END AS month_difference_2,
+
+        CASE
+            WHEN b2.storage_cost_special_calculation_type_code = '4'
+                THEN ceil(b2.storage_duration_total_calendar_days / 7::numeric)
+            WHEN b2.storage_cost_special_calculation_type_code = '5'
+                THEN ceil(b2.storage_duration_total_calendar_days / 30::numeric)
+        END AS special,
+
+        CASE
+            WHEN param_sap.range_low_value IS NOT NULL
+             AND param_srv_1.range_low_value IS NOT NULL THEN 1
+            WHEN param_sap.range_low_value IS NULL
+             AND param_srv_1.range_low_value IS NULL THEN 1
+            ELSE 0
+        END AS flag_param_pair
+    FROM dm_calc.storage_sales_bundles_weight b2
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap for_1082_1
+      ON for_1082_1.abap_program_code = '/RUSAL/ZLE112M'
+     AND for_1082_1.case_code        = 'PERET_FRN'
+     AND for_1082_1.parameter_code   = 'S_LIFNRA'
+     AND for_1082_1.range_low_value  = b2.forwarder_code
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap for_1082_2
+      ON for_1082_2.abap_program_code = '/RUSAL/SD4553M'
+     AND for_1082_2.parameter_code    = 'S_FORMSTEU'
+     AND for_1082_2.range_low_value   = b2.material_shape_code
+
+    LEFT JOIN for_1079_base fb
+      ON b2.storage_cost_calculation_type_name = 'Логика Европа'
+     AND fb.purchase_document_subtype_code = 'ZDTL'
+     AND (
+            (for_1082_1.range_low_value IS NOT NULL AND fb.zzsrvpos = 'S49')
+         OR (for_1082_1.range_low_value IS NULL
+             AND for_1082_2.range_low_value IS NOT NULL
+             AND fb.tmp_1 IS NOT NULL)
+         OR (for_1082_1.range_low_value IS NULL
+             AND for_1082_2.range_low_value IS NULL
+             AND fb.tmp_2 IS NOT NULL)
+         )
+     AND fb.bukrs = b2.unit_balance_code
+     AND fb.lifnr = b2.forwarder_code
+     AND fb.werks = b2.plant_code
+     AND (fb.zzport = b2.port_of_discharge_code OR fb.zzport IS NULL)
+     AND (fb.zzforma = b2.material_shape_code   OR fb.zzforma IS NULL)
+     AND (fb.zzet_tarif = b2.etsng_code         OR fb.zzet_tarif IS NULL)
+     AND (fb.sdabw = b2.transport_type_code     OR fb.sdabw IS NULL)
+     AND (fb.zzterminal = b2.warehouse_code     OR fb.zzterminal IS NULL)
+     AND b2.dt_for_price_search_in_purchase_contract
+            BETWEEN fb.dt_valid_from AND fb.dt_valid_to
+     AND b2.dt_for_price_search_in_purchase_contract
+            BETWEEN fb.datab AND fb.datbi
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap for_1082_3
+      ON for_1082_3.abap_program_code = '/RUSAL/SD4553M'
+     AND for_1082_3.parameter_code    = 'S_USLST'
+     AND for_1082_3.range_low_value LIKE 'EU%'
+     AND fb.tmp_2 IS NOT NULL
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_sap
+      ON param_sap.abap_program_code = '/RUSAL/SD4553M'
+     AND param_sap.parameter_code    = 'FORMSTEU'
+     AND param_sap.range_low_value   = b2.material_shape_code
+
+    LEFT JOIN dict_dds.settings_and_parameters_sap param_srv_1
+      ON param_srv_1.abap_program_code = '/RUSAL/SD4553M'
+     AND param_srv_1.parameter_code    = 'S_USLSTC'
+     AND param_srv_1.range_low_value   = for_1082_3.range_low_value
+),
+wx AS (
+    SELECT
+        j.*,
+        SUM(sales_bundle_gross_weight) OVER (
+            PARTITION BY j.warehouse_code,
+                         date_trunc('month', j.dt_storage_end)
+        ) AS warehouse_weight_month_end,
+        ROW_NUMBER() OVER (
+            PARTITION BY j.rn
+            ORDER BY j.order_euro_svh,
+                     j.kopos,
+                     j.kbetr,
+                     j.flag_param_pair DESC,
+                     j.purchase_contract_code,
+                     j.position_line_item_code
+        ) AS row_num
+    FROM joined j
+)
+SELECT
+    rn,
+    purchase_contract_code,
+    position_line_item_code,
+    konws,
+    service_code,
+    price_uom_code,
+    warehouse_weight_month_end,
+    month_difference_2,
+    netpr,
+    special,
+    currency_dogovor,
+    datab,
+    datbi
+FROM wx
+WHERE row_num = 1
+;
+
+ALTER TABLE for_1079_euro SET DISTRIBUTED BY (rn);

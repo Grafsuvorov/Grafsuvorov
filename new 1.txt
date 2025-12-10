@@ -1,46 +1,4 @@
-CREATE TEMP TABLE b2_euro AS
-SELECT *
-FROM dm_calc.storage_sales_bundles_weight
-WHERE storage_cost_calculation_type_name = 'Логика Европа';
-
-ALTER TABLE b2_euro SET DISTRIBUTED BY (rn);
-★ Шаг 2. Подготовим словари (без JOIN)
-sql
-Копировать код
-CREATE TEMP TABLE dict_frn AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/ZLE112M'
-  AND case_code='PERET_FRN'
-  AND parameter_code='S_LIFNRA';
-
-CREATE TEMP TABLE dict_formsteu AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/SD4553M'
-  AND parameter_code='S_FORMSTEU';
-
-CREATE TEMP TABLE dict_uslst AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/SD4553M'
-  AND parameter_code='S_USLST'
-  AND range_low_value LIKE 'EU%';
-
-CREATE TEMP TABLE dict_uslstc AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code='/RUSAL/SD4553M'
-  AND parameter_code='S_USLSTC';
-Все эти таблицы по 5–20 строк → GP раздаёт их как replicated.
-
-★ Шаг 3. Предварительный join b2_euro → for_1079_base
-БЕЗ сложных условий, только ключи.
-Это ↓ снижает план ×10.
-
-sql
-Копировать код
-CREATE TEMP TABLE euro_pre AS
+explain(verbose, format json)
 SELECT
     b2.*,
     fb.purchase_contract_code,
@@ -63,59 +21,86 @@ JOIN for_1079_base fb
   ON fb.bukrs = b2.unit_balance_code
  AND fb.lifnr = b2.forwarder_code
  AND fb.werks = b2.plant_code;
-★ Шаг 4. Фильтруем контракты по правилам (S49 / tmp_1 / tmp_2)
-sql
-Копировать код
-CREATE TEMP TABLE euro_rules AS
-SELECT *
-FROM euro_pre
-WHERE (
-        zsrvpos = 'S49' AND forwarder_code IN (SELECT range_low_value FROM dict_frn)
-      )
-   OR (
-        tmp_1 IS NOT NULL AND material_shape_code IN (SELECT range_low_value FROM dict_formsteu)
-      )
-   OR (
-        tmp_2 IS NOT NULL AND material_shape_code IN (SELECT range_low_value FROM dict_uslst)
-      );
-★ Шаг 5. Добавляем вычисляемые поля (month diff, special)
-sql
-Копировать код
-CREATE TEMP TABLE euro_calc AS
-SELECT
-    *,
-    CASE
-        WHEN extract(day FROM dt_storage_end) < extract(day FROM dt_storage_start)
-            THEN (extract(year FROM dt_storage_end) - extract(year FROM dt_storage_start)) * 12
-               + (extract(month FROM dt_storage_end) - extract(month FROM dt_storage_start))
-        ELSE  (extract(year FROM dt_storage_end) - extract(year FROM dt_storage_start)) * 12
-               + (extract(month FROM dt_storage_end) - extract(month FROM dt_storage_start)) + 1
-    END AS month_difference_2,
-    CASE
-        WHEN storage_cost_special_calculation_type_code='4'
-            THEN ceil(storage_duration_total_calendar_days / 7::numeric)
-        WHEN storage_cost_special_calculation_type_code='5'
-            THEN ceil(storage_duration_total_calendar_days / 30::numeric)
-    END AS special
-FROM euro_rules;
-★ Шаг 6. Оконка – отдельно, без JOIN
-Убивает WindowAgg × Hash Join × Redistribute.
 
-sql
-Копировать код
-CREATE TEMP TABLE for_1079_euro AS
-SELECT *
-FROM (
-    SELECT
-        *,
-        SUM(sales_bundle_gross_weight) OVER (
-            PARTITION BY warehouse_code, date_trunc('month', dt_storage_end)
-        ) AS warehouse_weight_month_end,
-
-        ROW_NUMBER() OVER (
-            PARTITION BY rn
-            ORDER BY order_euro_svh, kopos, kbetr, purchase_contract_code, position_line_item_code
-        ) AS row_num
-    FROM euro_calc
-) t
-WHERE row_num = 1;
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 6,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 6,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 2407485.01,
+      "Plan Rows": 1075504242,
+      "Plan Width": 629,
+      "Output": ["b2_euro.sales_bundle_code", "b2_euro.plant_producer_delivery_code", "b2_euro.plant_producer_delivery_position_code", "b2_euro.initial_delivery_code", "b2_euro.material_code", "b2_euro.dt_shipment", "b2_euro.railcar_code", "b2_euro.transport_bill_code", "b2_euro.uni", "b2_euro.material_shape_code", "b2_euro.dt_arrival_to_russian_port", "b2_euro.dt_storage_end_in_release", "b2_euro.transport_type_code", "b2_euro.etsng_code", "b2_euro.dt_report", "b2_euro.sales_bundle_net_weight", "b2_euro.sales_bundle_gross_weight", "b2_euro.batch_code", "b2_euro.dt_arrival", "b2_euro.receiving_plant_code", "b2_euro.sales_delivery_code", "b2_euro.transportation_inbound_delivery_code", "b2_euro.delivery_for_storage_calculation_code", "b2_euro.transportation_inbound_delivery_position_code", "b2_euro.delivery_position_for_storage_calculation_code", "b2_euro.forwarder_code", "b2_euro.storage_cost_calculation_type_name", "b2_euro.transport_departure_hub_code", "b2_euro.transport_destination_hub_code", "b2_euro.transportation_outbound_delivery_code", "b2_euro.transportation_outbound_delivery_position_code", "b2_euro.is_final_transportation_stage_code", "b2_euro.transportation_stage_code", "b2_euro.storage_calculation_bundle_quantity", "b2_euro.warehouse_code", "b2_euro.is_stored_in_russian_port_code", "b2_euro.delivery_in_final_release_code", "b2_euro.dt_final_release", "b2_euro.bill_of_lading_code", "b2_euro.bill_of_lading_number", "b2_euro.dt_bill_of_lading", "b2_euro.incoterms_code", "b2_euro.storage_cost_special_calculation_type_code", "b2_euro.warehouse_storage_area_code", "b2_euro.plant_code", "b2_euro.unit_balance_code", "b2_euro.creditor_in_shipment_instruction_code", "b2_euro.dt_storage_start", "b2_euro.dt_shipped_from_warehouse", "b2_euro.dt_storage_end", "b2_euro.storage_duration_total_calendar_days", "b2_euro.shipment_instruction_number", "b2_euro.dt_for_price_search_in_purchase_contract", "b2_euro.port_of_discharge_code", "b2_euro.service_number", "b2_euro.weight_for_1090_umno", "b2_euro.weight_for_1090_razdel", "b2_euro.remote_warehouse_code", "b2_euro.dt_transportation_stage_start_p", "b2_euro.dt_transportation_stage_start_r", "b2_euro.rn", "b2_euro.dttm_inserted", "b2_euro.dttm_updated", "b2_euro.job_name", "b2_euro.deleted_flag", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "for_1079_base.zzsrvpos", "for_1079_base.tmp_1", "for_1079_base.tmp_2", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
+      "Plans": [
+        {
+          "Node Type": "Hash Join",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Join Type": "Inner",
+          "Startup Cost": 0.00,
+          "Total Cost": 402813.22,
+          "Plan Rows": 1075504242,
+          "Plan Width": 629,
+          "Output": ["b2_euro.sales_bundle_code", "b2_euro.plant_producer_delivery_code", "b2_euro.plant_producer_delivery_position_code", "b2_euro.initial_delivery_code", "b2_euro.material_code", "b2_euro.dt_shipment", "b2_euro.railcar_code", "b2_euro.transport_bill_code", "b2_euro.uni", "b2_euro.material_shape_code", "b2_euro.dt_arrival_to_russian_port", "b2_euro.dt_storage_end_in_release", "b2_euro.transport_type_code", "b2_euro.etsng_code", "b2_euro.dt_report", "b2_euro.sales_bundle_net_weight", "b2_euro.sales_bundle_gross_weight", "b2_euro.batch_code", "b2_euro.dt_arrival", "b2_euro.receiving_plant_code", "b2_euro.sales_delivery_code", "b2_euro.transportation_inbound_delivery_code", "b2_euro.delivery_for_storage_calculation_code", "b2_euro.transportation_inbound_delivery_position_code", "b2_euro.delivery_position_for_storage_calculation_code", "b2_euro.forwarder_code", "b2_euro.storage_cost_calculation_type_name", "b2_euro.transport_departure_hub_code", "b2_euro.transport_destination_hub_code", "b2_euro.transportation_outbound_delivery_code", "b2_euro.transportation_outbound_delivery_position_code", "b2_euro.is_final_transportation_stage_code", "b2_euro.transportation_stage_code", "b2_euro.storage_calculation_bundle_quantity", "b2_euro.warehouse_code", "b2_euro.is_stored_in_russian_port_code", "b2_euro.delivery_in_final_release_code", "b2_euro.dt_final_release", "b2_euro.bill_of_lading_code", "b2_euro.bill_of_lading_number", "b2_euro.dt_bill_of_lading", "b2_euro.incoterms_code", "b2_euro.storage_cost_special_calculation_type_code", "b2_euro.warehouse_storage_area_code", "b2_euro.plant_code", "b2_euro.unit_balance_code", "b2_euro.creditor_in_shipment_instruction_code", "b2_euro.dt_storage_start", "b2_euro.dt_shipped_from_warehouse", "b2_euro.dt_storage_end", "b2_euro.storage_duration_total_calendar_days", "b2_euro.shipment_instruction_number", "b2_euro.dt_for_price_search_in_purchase_contract", "b2_euro.port_of_discharge_code", "b2_euro.service_number", "b2_euro.weight_for_1090_umno", "b2_euro.weight_for_1090_razdel", "b2_euro.remote_warehouse_code", "b2_euro.dt_transportation_stage_start_p", "b2_euro.dt_transportation_stage_start_r", "b2_euro.rn", "b2_euro.dttm_inserted", "b2_euro.dttm_updated", "b2_euro.job_name", "b2_euro.deleted_flag", "for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.kopos", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "for_1079_base.zzsrvpos", "for_1079_base.tmp_1", "for_1079_base.tmp_2", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.currency_dogovor", "for_1079_base.datab", "for_1079_base.datbi"],
+          "Hash Cond": "(((b2_euro.unit_balance_code)::text = (for_1079_base.bukrs)::text) AND ((b2_euro.forwarder_code)::text = (for_1079_base.lifnr)::text) AND ((b2_euro.plant_code)::text = (for_1079_base.werks)::text))",
+          "Plans": [
+            {
+              "Node Type": "Seq Scan",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Relation Name": "b2_euro",
+              "Schema": "pg_temp_4923804",
+              "Alias": "b2_euro",
+              "Startup Cost": 0.00,
+              "Total Cost": 1359.20,
+              "Plan Rows": 17702472,
+              "Plan Width": 542,
+              "Output": ["b2_euro.sales_bundle_code", "b2_euro.plant_producer_delivery_code", "b2_euro.plant_producer_delivery_position_code", "b2_euro.initial_delivery_code", "b2_euro.material_code", "b2_euro.dt_shipment", "b2_euro.railcar_code", "b2_euro.transport_bill_code", "b2_euro.uni", "b2_euro.material_shape_code", "b2_euro.dt_arrival_to_russian_port", "b2_euro.dt_storage_end_in_release", "b2_euro.transport_type_code", "b2_euro.etsng_code", "b2_euro.dt_report", "b2_euro.sales_bundle_net_weight", "b2_euro.sales_bundle_gross_weight", "b2_euro.batch_code", "b2_euro.dt_arrival", "b2_euro.receiving_plant_code", "b2_euro.sales_delivery_code", "b2_euro.transportation_inbound_delivery_code", "b2_euro.delivery_for_storage_calculation_code", "b2_euro.transportation_inbound_delivery_position_code", "b2_euro.delivery_position_for_storage_calculation_code", "b2_euro.forwarder_code", "b2_euro.storage_cost_calculation_type_name", "b2_euro.transport_departure_hub_code", "b2_euro.transport_destination_hub_code", "b2_euro.transportation_outbound_delivery_code", "b2_euro.transportation_outbound_delivery_position_code", "b2_euro.is_final_transportation_stage_code", "b2_euro.transportation_stage_code", "b2_euro.storage_calculation_bundle_quantity", "b2_euro.warehouse_code", "b2_euro.is_stored_in_russian_port_code", "b2_euro.delivery_in_final_release_code", "b2_euro.dt_final_release", "b2_euro.bill_of_lading_code", "b2_euro.bill_of_lading_number", "b2_euro.dt_bill_of_lading", "b2_euro.incoterms_code", "b2_euro.storage_cost_special_calculation_type_code", "b2_euro.warehouse_storage_area_code", "b2_euro.plant_code", "b2_euro.unit_balance_code", "b2_euro.creditor_in_shipment_instruction_code", "b2_euro.dt_storage_start", "b2_euro.dt_shipped_from_warehouse", "b2_euro.dt_storage_end", "b2_euro.storage_duration_total_calendar_days", "b2_euro.shipment_instruction_number", "b2_euro.dt_for_price_search_in_purchase_contract", "b2_euro.port_of_discharge_code", "b2_euro.service_number", "b2_euro.weight_for_1090_umno", "b2_euro.weight_for_1090_razdel", "b2_euro.remote_warehouse_code", "b2_euro.dt_transportation_stage_start_p", "b2_euro.dt_transportation_stage_start_r", "b2_euro.rn", "b2_euro.dttm_inserted", "b2_euro.dttm_updated", "b2_euro.job_name", "b2_euro.deleted_flag"]
+            },
+            {
+              "Node Type": "Hash",
+              "Parent Relationship": "Inner",
+              "Slice": 1,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 465.17,
+              "Total Cost": 465.17,
+              "Plan Rows": 1792062,
+              "Plan Width": 108,
+              "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.bukrs", "for_1079_base.lifnr", "for_1079_base.werks", "for_1079_base.zzsrvpos", "for_1079_base.tmp_1", "for_1079_base.tmp_2", "for_1079_base.datbi", "for_1079_base.datab", "for_1079_base.kopos", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "for_1079_base.currency_dogovor"],
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Relation Name": "for_1079_base",
+                  "Schema": "pg_temp_4923804",
+                  "Alias": "for_1079_base",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 465.17,
+                  "Plan Rows": 1792062,
+                  "Plan Width": 108,
+                  "Output": ["for_1079_base.purchase_contract_code", "for_1079_base.position_line_item_code", "for_1079_base.bukrs", "for_1079_base.lifnr", "for_1079_base.werks", "for_1079_base.zzsrvpos", "for_1079_base.tmp_1", "for_1079_base.tmp_2", "for_1079_base.datbi", "for_1079_base.datab", "for_1079_base.kopos", "for_1079_base.konws", "for_1079_base.service_code", "for_1079_base.price_uom_code", "for_1079_base.netpr", "for_1079_base.kbetr", "for_1079_base.order_euro_svh", "for_1079_base.currency_dogovor"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

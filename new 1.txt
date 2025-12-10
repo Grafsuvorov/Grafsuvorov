@@ -1,51 +1,10 @@
-CREATE TABLE stg.dependencies_time_check (
-	root varchar(100) NULL,
-	dttm_root timestamp NULL,
-	level_1 varchar(100) NULL,
-	dttm_level_1 timestamp NULL,
-	level_2 varchar(100) NULL,
-	dttm_level_2 timestamp NULL,
-	level_3 varchar(100) NULL,
-	dttm_level_3 timestamp NULL,
-	level_4 varchar(100) NULL,
-	dttm_level_4 timestamp NULL,
-	level_5 varchar(100) NULL,
-	dttm_level_5 timestamp NULL,
-	level_6 varchar(100) NULL,
-	dttm_level_6 timestamp NULL,
-	level_7 varchar(100) NULL,
-	dttm_level_7 timestamp NULL,
-	level_8 varchar(100) NULL,
-	dttm_level_8 timestamp NULL,
-	level_9 varchar(100) NULL,
-	dttm_level_9 timestamp NULL,
-	level_10 varchar(100) NULL,
-	dttm_level_10 timestamp NULL,
-	level_11 varchar(100) NULL,
-	dttm_level_11 timestamp NULL,
-	level_12 varchar(100) NULL,
-	dttm_level_12 timestamp NULL
+CREATE TABLE meta.table_dependencies (
+    parent_table      varchar(200) NOT NULL,   -- кто зависит (DM, витрина)
+    child_table       varchar(200) NOT NULL,   -- от кого зависит (DDS/ODS/STG)
+    dependency_level  int          NOT NULL,   -- глубина от parent
+    parent_last_load  timestamp    NULL,        -- время загрузки parent
+    child_last_load   timestamp    NULL,        -- время загрузки child
+    source            varchar(50)  NULL,        -- YAML, SQL, мануал, авто
+    CONSTRAINT uq_dep UNIQUE (parent_table, child_table)
 )
-DISTRIBUTED BY (root);
-
-
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_6_ral"	2025-09-19 01:44:58.937	"stg"."ZTSD8787M_6"	2025-09-19 01:36:20.186	"raw_ext"."ZTSD8787M_6_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_2_ral"	2025-09-19 01:45:08.048	"stg"."ZTSD8787M_2"	2025-09-19 01:36:28.398	"raw_ext"."ZTSD8787M_2_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_1_ral"	2025-09-19 01:45:10.246	"stg"."ZTSD8787M_1"	2025-09-19 01:36:30.509	"raw_ext"."ZTSD8787M_1_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_3_ral"	2025-09-19 01:45:05.544	"stg"."ZTSD8787M_3"	2025-09-19 01:36:26.531	"raw_ext"."ZTSD8787M_3_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_4_ral"	2025-09-19 01:45:03.250	"stg"."ZTSD8787M_4"	2025-09-19 01:36:24.355	"raw_ext"."ZTSD8787M_4_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dds"."sales_location_stay_normative"	2025-09-19 01:59:30.209	"ods"."ztsd8787m_5_ral"	2025-09-19 01:45:01.326	"stg"."ZTSD8787M_5"	2025-09-19 01:36:21.845	"raw_ext"."ZTSD8787M_5_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."counterparty"	2025-09-18 21:37:37.347																				
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."country"	2025-09-18 21:36:42.030	"dict_stg"."/RUSAL/SD556"	2025-09-18 21:26:11.645	"dict_raw_ext"."/RUSAL/SD556_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."country"	2025-09-18 21:36:42.030	"dict_stg"."T005T"	2025-09-18 21:30:04.954	"dict_raw_ext"."T005T_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."country"	2025-09-18 21:36:42.030	"dict_stg"."T005"	2025-09-18 21:19:20.218	"dict_raw_ext"."T005_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."country"	2025-09-18 21:36:42.030	"dict_stg"."/RUSAL/SD556T"	2025-09-18 21:28:36.232	"dict_raw_ext"."/RUSAL/SD556T_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."location_sales"	2025-09-18 21:38:14.476	"dict_stg"."OIJLOC"	2025-09-18 21:28:09.731	"dict_raw_ext"."OIJLOC_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."map_counterparty_to_market_region2"	2025-09-18 21:36:44.010	"dict_stg"."ZTSD_REG_CLIENT"	2025-09-18 21:24:07.564	"dict_raw_ext"."ZTSD_REG_CLIENT_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."market_region1_texts"	2025-09-18 21:36:31.093	"dict_stg"."T25A1"	2025-09-18 21:20:42.859	"dict_raw_ext"."T25A1_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."material_grade"	2025-09-18 21:37:05.272	"dict_stg"."/RUSAL/OT_MMBS"	2025-09-18 21:25:40.689	"dict_raw_ext"."/RUSAL/OT_MMBS_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."material_grade_asked_by_customer"	2025-09-18 21:38:55.842	"dict_stg"."/RUSAL/OT_MMCL"	2025-09-18 21:23:12.962	"dict_raw_ext"."/RUSAL/OT_MMCL_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."material_shape_texts"	2025-09-18 21:39:00.683	"dict_stg"."/RUSAL/FORMA_TT"	2025-09-18 21:34:23.763	"dict_raw_ext"."/RUSAL/FORMA_TT_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."material_specification"	2025-09-18 21:37:37.687	"dict_stg"."/RUSAL/OT_MREL"	2025-09-18 21:25:31.283	"dict_raw_ext"."/RUSAL/OT_MREL_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."sales_market_in_shipment_texts"	2025-09-18 21:38:03.206	"dict_stg"."DD07T"	2025-09-18 21:22:14.533	"dict_raw_ext"."DD07T_READ"																	
-"dm"."sb_wuc"	2025-11-25 12:06:26.518	"dm_calc"."finish_goods_warehouse_stock_plant_by_date"	2025-09-19 02:12:12.609	"dict_dds"."settings_and_parameters_sap"	2025-09-18 21:37:36.854	"dict_stg"."/RUSAL/PARAMS"	2025-09-18 21:20:25.627	"dict_raw_ext"."/RUSAL/PARAMS_READ"																	
+DISTRIBUTED BY (parent_table);

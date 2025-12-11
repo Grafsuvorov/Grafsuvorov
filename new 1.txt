@@ -1,23 +1,9 @@
-systemctl restart airflow-webserver
-2) Проверить загрузку плагинов
-От airflow:
 
-nginx
-Копировать код
-sudo -u airflow airflow info | grep -i plugin
-Если плагин загрузился, увидишь:
-
-yaml
-Копировать код
-Loaded plugins: holiday_theme
-3) Проверить, что webserver считал custom css/js
-От airflow:
-
-bash
-Копировать код
-sudo -u airflow grep -R "holiday_static" $AIRFLOW_HOME -n
-или:
-
-bash
-Копировать код
-sudo -u airflow grep -R "holiday_static" /u01/arf-venv/lib/python3.8/site-packages/airflow -n
+[root@rgm-s-dwhair01 ~]# ^C
+[root@rgm-s-dwhair01 ~]# systemctl restart airflow-webserver
+[root@rgm-s-dwhair01 ~]# sudo -u airflow airflow info | grep -i plugin
+sudo: airflow: command not found
+[root@rgm-s-dwhair01 ~]# sudo -i -u airflow                                     [airflow@rgm-s-dwhair01 ~]$ sudo -u airflow airflow info | grep -i plugin
+airflow is not in the sudoers file.  This incident will be reported.
+[airflow@rgm-s-dwhair01 ~]$ sudo -u airflow grep -R "holiday_static" $AIRFLOW_HOME -n
+airflow is not in the sudoers file.  This incident will be reported.

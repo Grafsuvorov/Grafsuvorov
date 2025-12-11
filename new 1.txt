@@ -1,192 +1,190 @@
-------------------------------------------------------------
--- 0. База: только "Логика Европа" и нужные поля
-------------------------------------------------------------
-DROP TABLE IF EXISTS tmp_storage_eu;
-
-CREATE TEMP TABLE tmp_storage_eu
--- можно подобрать другой ключ, если rn плохой, но rn даёт локальный window по rn
-DISTRIBUTED BY (rn) AS
-SELECT
-    rn,
-    warehouse_code,
-    unit_balance_code,
-    forwarder_code,
-    plant_code,
-    port_of_discharge_code,
-    material_shape_code,
-    etsng_code,
-    transport_type_code,
-    dt_for_price_search_in_purchase_contract,
-    dt_storage_start,
-    dt_storage_end,
-    storage_duration_total_calendar_days,
-    storage_cost_special_calculation_type_code,
-    sales_bundle_gross_weight
-FROM dm_calc.storage_sales_bundles_weight
-WHERE storage_cost_calculation_type_name = 'Логика Европа';
-
-
-------------------------------------------------------------
--- 1. Помесячный вес по складу
-------------------------------------------------------------
-DROP TABLE IF EXISTS tmp_storage_eu_month;
-
-CREATE TEMP TABLE tmp_storage_eu_month
-DISTRIBUTED BY (warehouse_code) AS
-SELECT
-    warehouse_code,
-    date_trunc('month', dt_storage_end)::date AS month_end,
-    SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
-FROM tmp_storage_eu
-GROUP BY 1,2;
+create temp  table base_as_eu as 
+select 
+base_2.rn,
+		for_1079_base.purchase_contract_code,
+		for_1079_base.position_line_item_code,
+		for_1079_base.order_asia, for_1079_base.kopos, for_1079_base.kbetr,
+	    storage_cost_calculation_type_name,
+		for_1079_base.konws,
+		for_1079_base.service_code,
+		for_1079_base.price_uom_code,
+		for_1079_base.currency_dogovor,
+		for_1079_base.datab,
+		for_1079_base.datbi,
+		base_2.sales_bundle_gross_weight,
+		base_2.warehouse_code,
+		base_2.dt_storage_end,
+		base_2.dt_storage_start,
+		base_2.storage_cost_special_calculation_type_code,
+		base_2.storage_duration_total_calendar_days,
+		base_2.forwarder_code,
+		base_2.material_shape_code,
+		for_1079_base.tmp_2
+		
+from
+	dm_calc.storage_sales_bundles_weight as base_2
+		join for_1079_base on
+			for_1079_base.bukrs = base_2.unit_balance_code 
+			and for_1079_base.lifnr = base_2.forwarder_code
+			and for_1079_base.purchase_document_subtype_code = 'ZDTL'
+			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.dt_valid_from and for_1079_base.dt_valid_to
+			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.datab and for_1079_base.datbi
+			and (for_1079_base.zzforma = base_2.material_shape_code or for_1079_base.zzforma is null)
+			and (for_1079_base.zzet_tarif = base_2.etsng_code or for_1079_base.zzet_tarif is null)
+			and (for_1079_base.sdabw = base_2.transport_type_code or for_1079_base.sdabw is null)
+			and (for_1079_base.zzport = base_2.port_of_discharge_code or for_1079_base.zzport is null) 
+			and (for_1079_base.zzterminal = base_2.warehouse_code or for_1079_base.zzterminal is null)
+			and for_1079_base.werks = base_2.plant_code and for_1079_base.zzsrvpos = 'S49'
+			and base_2.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа')
+ distributed by (rn)
 
 
-------------------------------------------------------------
--- 2. Джоин с for_1079_base и всеми SAP-таблицами (без окон)
-------------------------------------------------------------
-DROP TABLE IF EXISTS tmp_storage_eu_with_price;
+			
+			create temporary  table for_1079_asia --on commit drop
+as (
 
-CREATE TEMP TABLE tmp_storage_eu_with_price
-DISTRIBUTED BY (rn) AS
-SELECT
-    base.rn,
-    base.warehouse_code,
-    base.dt_storage_start,
-    base.dt_storage_end,
-    base.storage_duration_total_calendar_days,
-    base.storage_cost_special_calculation_type_code,
-    base.unit_balance_code,
-    base.forwarder_code,
-    base.plant_code,
-    base.port_of_discharge_code,
-    base.material_shape_code,
-    base.etsng_code,
-    base.transport_type_code,
-    base.dt_for_price_search_in_purchase_contract,
-
-    -- поля из for_1079_base
-    for_1079_base.purchase_contract_code,
-    for_1079_base.position_line_item_code,
-    for_1079_base.konws,
-    for_1079_base.service_code,
-    for_1079_base.price_uom_code,
-    for_1079_base.netpr,
-    for_1079_base.currency_dogovor,
-    for_1079_base.datab,
-    for_1079_base.datbi,
-    for_1079_base.order_euro_svh,
-    for_1079_base.kopos,
-    for_1079_base.kbetr,
-
-    -- эквивалент твоего CASE с param_sap / param_srv_1 в ORDER BY
-    CASE
-        WHEN param_sap.range_low_value IS NOT NULL
-             AND param_srv_1.range_low_value IS NOT NULL THEN 1
-        WHEN param_sap.range_low_value IS NULL
-             AND param_srv_1.range_low_value IS NULL THEN 1
-        ELSE 0
-    END AS param_rank
-FROM tmp_storage_eu AS base
-LEFT JOIN dict_dds.settings_and_parameters_sap AS for_1082_1
-  ON for_1082_1.abap_program_code = '/RUSAL/ZLE112M'
- AND for_1082_1.case_code        = 'PERET_FRN'
- AND for_1082_1.parameter_code   = 'S_LIFNRA'
- AND for_1082_1.range_low_value  = base.forwarder_code
-LEFT JOIN dict_dds.settings_and_parameters_sap AS for_1082_2
-  ON for_1082_2.abap_program_code = '/RUSAL/SD4553M'
- AND for_1082_2.parameter_code    = 'S_FORMSTEU'
- AND for_1082_2.range_low_value   = base.material_shape_code
-JOIN for_1079_base
-  ON for_1079_base.purchase_document_subtype_code = 'ZDTL'
- -- основные ключи
- AND for_1079_base.bukrs = base.unit_balance_code
- AND for_1079_base.lifnr = base.forwarder_code
- AND for_1079_base.werks = base.plant_code
- -- опциональные условия
- AND (for_1079_base.zzport    = base.port_of_discharge_code OR for_1079_base.zzport    IS NULL)
- AND (for_1079_base.zzforma   = base.material_shape_code     OR for_1079_base.zzforma   IS NULL)
- AND (for_1079_base.zzet_tarif= base.etsng_code              OR for_1079_base.zzet_tarif IS NULL)
- AND (for_1079_base.sdabw     = base.transport_type_code     OR for_1079_base.sdabw     IS NULL)
- AND base.dt_for_price_search_in_purchase_contract
-        BETWEEN for_1079_base.dt_valid_from AND for_1079_base.dt_valid_to
- AND base.dt_for_price_search_in_purchase_contract
-        BETWEEN for_1079_base.datab        AND for_1079_base.datbi
- AND (for_1079_base.zzterminal = base.warehouse_code OR for_1079_base.zzterminal IS NULL)
- -- логика включения строки как и была
- AND (
-        (for_1082_1.range_low_value IS NOT NULL AND for_1079_base.zzsrvpos = 'S49')
-     OR (for_1082_1.range_low_value IS NULL
-         AND for_1082_2.range_low_value IS NOT NULL
-         AND for_1079_base.tmp_1 IS NOT NULL)
-     OR (for_1082_1.range_low_value IS NULL
-         AND for_1082_2.range_low_value IS NULL
-         AND for_1079_base.tmp_2 IS NOT NULL)
-     )
-LEFT JOIN dict_dds.settings_and_parameters_sap AS for_1082_3
-  ON for_1079_base.tmp_2 IS NOT NULL
- AND for_1082_3.range_low_value LIKE 'EU%'
- AND for_1082_3.abap_program_code = '/RUSAL/SD4553M'
- AND for_1082_3.parameter_code    = 'S_USLST'
-LEFT JOIN dict_dds.settings_and_parameters_sap AS param_sap
-  ON param_sap.range_low_value   = base.material_shape_code
- AND param_sap.abap_program_code = '/RUSAL/SD4553M'
- AND param_sap.parameter_code    = 'FORMSTEU'
-LEFT JOIN dict_dds.settings_and_parameters_sap AS param_srv_1
-  ON param_srv_1.range_low_value   = for_1082_3.range_low_value
- AND param_srv_1.abap_program_code = '/RUSAL/SD4553M'
- AND param_srv_1.parameter_code    = 'S_USLSTC';
+select
+	dfdf.rn,
+	dfdf.purchase_contract_code,
+	dfdf.position_line_item_code,
+	dfdf.konws,
+	dfdf.service_code,
+	dfdf.price_uom_code,
+	dfdf.currency_dogovor,
+	dfdf.datab,
+	dfdf.datbi
+from
+	(
+	select
+		base_2.rn,
+		base_2.purchase_contract_code,
+		base_2.position_line_item_code,
+		row_number() over(partition by base_2.rn order by base_2.order_asia, base_2.kopos, base_2.kbetr, base_2.purchase_contract_code, base_2.position_line_item_code) as row_num,
+		base_2.konws,
+		base_2.service_code,
+		base_2.price_uom_code,
+		base_2.currency_dogovor,
+		base_2.datab,
+		base_2.datbi
+from
+	base_as_eu as base_2
+		where 
+		    base_2.storage_cost_calculation_type_name in ('Логика Азия')
+			
+			--and base_2.purchase_document_subtype_code = 'ZDTL'
+	) as dfdf where dfdf.row_num = 1
+) 
+distributed by (rn);
+			
 
 
-------------------------------------------------------------
--- 3. Финальный запрос = row_number + join помесячного веса
-------------------------------------------------------------
-EXPLAIN (VERBOSE, FORMAT JSON)
-SELECT
-    t.rn,
-    t.purchase_contract_code,
-    t.position_line_item_code,
-    t.konws,
-    t.service_code,
-    t.price_uom_code,
-    m.warehouse_weight_month_end,
-    CASE
-        WHEN EXTRACT(DAY FROM t.dt_storage_end)
-             < EXTRACT(DAY FROM t.dt_storage_start)
-            THEN (EXTRACT(YEAR  FROM t.dt_storage_end) -
-                  EXTRACT(YEAR  FROM t.dt_storage_start)) * 12 +
-                 (EXTRACT(MONTH FROM t.dt_storage_end) -
-                  EXTRACT(MONTH FROM t.dt_storage_start))
-        ELSE (EXTRACT(YEAR  FROM t.dt_storage_end) -
-              EXTRACT(YEAR  FROM t.dt_storage_start)) * 12 +
-             (EXTRACT(MONTH FROM t.dt_storage_end) -
-              EXTRACT(MONTH FROM t.dt_storage_start)) + 1
-    END AS month_difference_2,
-    t.netpr,
-    CASE
-        WHEN t.storage_cost_special_calculation_type_code = '4'
-            THEN ceil(t.storage_duration_total_calendar_days / 7::numeric)
-        WHEN t.storage_cost_special_calculation_type_code = '5'
-            THEN ceil(t.storage_duration_total_calendar_days / 30::numeric)
-    END AS special,
-    t.currency_dogovor,
-    t.datab,
-    t.datbi
-FROM (
-    SELECT
-        tj.*,
-        ROW_NUMBER() OVER (
-            PARTITION BY tj.rn
-            ORDER BY
-                tj.order_euro_svh,
-                tj.kopos,
-                tj.kbetr,
-                tj.param_rank DESC,
-                tj.purchase_contract_code,
-                tj.position_line_item_code
-        ) AS row_num
-    FROM tmp_storage_eu_with_price tj
-) AS t
-JOIN tmp_storage_eu_month m
-  ON m.warehouse_code = t.warehouse_code
- AND m.month_end = date_trunc('month', t.dt_storage_end)::date
-WHERE t.row_num = 1;
+
+	
+
+
+-- определение договора/позиции хранения для записей с логикой Логика Европа. Сейчас обратный джойн к основным данным идет по полю rn.
+create temporary table for_1079_euro-- on commit drop 
+as (
+select
+	dfdf.rn,
+	dfdf.purchase_contract_code,
+	dfdf.position_line_item_code,
+	dfdf.konws,
+	dfdf.service_code,
+	dfdf.price_uom_code,
+	dfdf.warehouse_weight_month_end,
+	dfdf.month_difference_2,
+	dfdf.netpr,
+	dfdf.special,
+	dfdf.currency_dogovor,
+	dfdf.datab,
+	dfdf.datbi
+from
+	(
+
+select
+		base_2.rn,
+		for_1079_base.purchase_contract_code,
+		for_1079_base.position_line_item_code,
+		row_number() over(partition by base_2.rn order by order_euro_svh,
+															for_1079_base.kopos, 
+															for_1079_base.kbetr, 
+		
+															case
+																when param_sap.range_low_value is not null and param_srv_1.range_low_value is not null then 1
+																when param_sap.range_low_value is null and param_srv_1.range_low_value is null then 1
+																else 0
+															end desc,
+															
+														for_1079_base.purchase_contract_code, for_1079_base.position_line_item_code) as row_num,
+		
+		
+		
+		
+		for_1079_base.konws, 
+		for_1079_base.service_code,
+		for_1079_base.price_uom_code,
+		sum(base_2.sales_bundle_gross_weight) over(partition by base_2.warehouse_code, date_trunc('month', base_2.dt_storage_end)) as warehouse_weight_month_end,
+
+       case when extract(day from base_2.dt_storage_end) < extract(day from base_2.dt_storage_start) then
+				(extract(year from base_2.dt_storage_end) - extract(year from base_2.dt_storage_start)) * 12 +
+       			(extract(month from base_2.dt_storage_end) - extract(month from base_2.dt_storage_start))
+			else (extract(year from base_2.dt_storage_end) - extract(year from base_2.dt_storage_start)) * 12 +
+       			(extract(month from base_2.dt_storage_end) - extract(month from base_2.dt_storage_start)) + 1 end as month_difference_2,
+       
+		for_1079_base.netpr,
+
+		case
+			when base_2.storage_cost_special_calculation_type_code = '4' then ceil(base_2.storage_duration_total_calendar_days / 7 :: numeric)
+			when base_2.storage_cost_special_calculation_type_code = '5' then ceil(base_2.storage_duration_total_calendar_days / 30 :: numeric)
+		end as special,
+		for_1079_base.currency_dogovor,
+		for_1079_base.datab,
+		for_1079_base.datbi
+	from dm_calc.storage_sales_bundles_weight as base_2
+	left join dict_dds.settings_and_parameters_sap as for_1082_1 on
+		for_1082_1.abap_program_code = '/RUSAL/ZLE112M'
+		and for_1082_1.case_code = 'PERET_FRN'
+		and for_1082_1.parameter_code = 'S_LIFNRA'
+		and for_1082_1.range_low_value = base_2.forwarder_code
+	left join dict_dds.settings_and_parameters_sap as for_1082_2 on
+		for_1082_2.abap_program_code = '/RUSAL/SD4553M'
+		and for_1082_2.parameter_code = 'S_FORMSTEU'
+		and for_1082_2.range_low_value = base_2.material_shape_code
+	
+		
+	join for_1079_base on
+		base_2.storage_cost_calculation_type_name = 'Логика Европа'
+		and for_1079_base.purchase_document_subtype_code = 'ZDTL'
+		and ((for_1082_1.range_low_value is not null and for_1079_base.zzsrvpos = 'S49')
+		or (for_1082_1.range_low_value is null and for_1082_2.range_low_value is not null and for_1079_base.tmp_1 is not null)
+		or (for_1082_1.range_low_value is null and for_1082_2.range_low_value is null and for_1079_base.tmp_2 is not null))
+			and for_1079_base.bukrs = base_2.unit_balance_code --'1520'
+			and for_1079_base.lifnr = base_2.forwarder_code
+			and for_1079_base.werks = base_2.plant_code --'1521'
+			and (for_1079_base.zzport = base_2.port_of_discharge_code or for_1079_base.zzport is null)
+			and (for_1079_base.zzforma = base_2.material_shape_code or for_1079_base.zzforma is null)
+			and (for_1079_base.zzet_tarif = base_2.etsng_code or for_1079_base.zzet_tarif is null)
+			and (for_1079_base.sdabw = base_2.transport_type_code or for_1079_base.sdabw is null)
+			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.dt_valid_from and for_1079_base.dt_valid_to
+			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.datab and for_1079_base.datbi
+			and (for_1079_base.zzterminal = base_2.warehouse_code or for_1079_base.zzterminal is null)
+			
+		left join dict_dds.settings_and_parameters_sap as for_1082_3 on
+			for_1079_base.tmp_2 is not null
+			and for_1082_3.range_low_value like 'EU%'
+			and for_1082_3.abap_program_code = '/RUSAL/SD4553M'
+			and for_1082_3.parameter_code = 'S_USLST'
+
+		left join dict_dds.settings_and_parameters_sap as param_sap on
+			param_sap.range_low_value = base_2.material_shape_code
+			and param_sap.abap_program_code = '/RUSAL/SD4553M'
+			and param_sap.parameter_code = 'FORMSTEU'
+			   
+		left join dict_dds.settings_and_parameters_sap as param_srv_1 on
+			param_srv_1.range_low_value = for_1082_3.range_low_value
+			and param_srv_1.abap_program_code = '/RUSAL/SD4553M'
+			and param_srv_1.parameter_code = 'S_USLSTC'
+		) as dfdf where dfdf.row_num = 1
+)
+distributed by (rn);

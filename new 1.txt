@@ -1,45 +1,12 @@
-chmod 755 /home/airflow/plugins
-chown airflow:airflow /home/airflow/plugins
-Получим:
-
-arduino
-Копировать код
-drwxr-xr-x airflow airflow /home/airflow/plugins
-🔧 Шаг 2. Исправляем права holiday_theme
-bash
-Копировать код
-chown -R airflow:airflow /home/airflow/plugins/holiday_theme
-chmod -R 755 /home/airflow/plugins/holiday_theme
-🔧 Шаг 3. Проверяем
-Под airflow:
-
-bash
-Копировать код
-ls -ld /home/airflow/plugins
-ls -ld /home/airflow/plugins/holiday_theme
-ls -l /home/airflow/plugins/holiday_theme
-Ожидаем:
-
-scss
-Копировать код
-drwxr-xr-x airflow airflow plugins
-drwxr-xr-x airflow airflow holiday_theme
--rw-r--r-- airflow airflow holiday_theme_plugin.py
-drwxr-xr-x airflow airflow static
-🔧 Шаг 4. Перезапускаем webserver
-Под root:
-
-bash
-Копировать код
-sudo systemctl restart airflow-webserver
-🔧 Шаг 5. Проверяем, что Airflow загрузил плагин:
-Под airflow:
-
-bash
-Копировать код
-grep -R "holiday" /home/airflow/logs 2>/dev/null
-ИЛИ:
-
-nginx
-Копировать код
-airflow info | grep Plugins
+[root@rgm-s-dwhair01 ~]# chmod 755 /home/airflow/plugins
+[root@rgm-s-dwhair01 ~]# chown airflow:airflow /home/airflow/plugins
+[root@rgm-s-dwhair01 ~]# chown -R airflow:airflow /home/airflow/plugins/holiday_theme
+[root@rgm-s-dwhair01 ~]# chmod -R 755 /home/airflow/plugins/holiday_theme
+[root@rgm-s-dwhair01 ~]# ls -ld /home/airflow/plugins
+drwsr-sr-x 5 airflow airflow 115 Dec 11 20:12 /home/airflow/plugins
+[root@rgm-s-dwhair01 ~]# ls -ld /home/airflow/plugins/holiday_theme
+drwxr-sr-x 3 airflow airflow 51 Dec 11 20:15 /home/airflow/plugins/holiday_theme
+[root@rgm-s-dwhair01 ~]# ls -l /home/airflow/plugins/holiday_theme
+total 4
+-rwxr-xr-x 1 airflow airflow 323 Dec 11 20:13 holiday_theme_plugin.py
+drwxr-sr-x 2 airflow airflow  37 Dec 11 20:20 static

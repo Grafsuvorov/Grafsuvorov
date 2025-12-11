@@ -1,6 +1,29 @@
-sudo systemctl restart airflow-webserver
-Если не сработает — пришли вывод:
 
-lua
-Копировать код
-systemctl status airflow-webserver
+[root@rgm-s-dwhair01 ~]# sudo systemctl restart airflow-webserver
+[root@rgm-s-dwhair01 ~]#
+[root@rgm-s-dwhair01 ~]# systemctl status airflow-webserver
+● airflow-webserver.service - Airflow webserver daemon
+   Loaded: loaded (/etc/systemd/system/airflow-webserver.service; enabled; vendo                       r preset: disabled)
+   Active: active (running) since Thu 2025-12-11 20:33:54 MSK; 10s ago
+ Main PID: 73370 (airflow)
+    Tasks: 6
+   Memory: 275.5M
+   CGroup: /system.slice/airflow-webserver.service
+           ├─73370 /u01/arf-venv/bin/python /u01/arf-venv/bin/airflow webserv...
+           ├─73515 gunicorn: master [airflow-webserver]
+           ├─73728 [ready] gunicorn: worker [airflow-webserver]
+           ├─73729 [ready] gunicorn: worker [airflow-webserver]
+           ├─73730 [ready] gunicorn: worker [airflow-webserver]
+           └─73731 [ready] gunicorn: worker [airflow-webserver]
+
+Dec 11 20:33:56 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/s....
+Dec 11 20:33:57 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/si...
+Dec 11 20:33:57 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/s....
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...0
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...)
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...c
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...8
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...9
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...0
+Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...1
+Hint: Some lines were ellipsized, use -l to show in full.

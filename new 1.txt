@@ -1,43 +1,45 @@
-[airflow@rgm-s-dwhair01 ~]$ ls -R /home/airflow/plugins
-/home/airflow/plugins:
-custom_operators  CustomTimetable.py  holiday_theme  __init__.py  __pycache__
+chmod 755 /home/airflow/plugins
+chown airflow:airflow /home/airflow/plugins
+Получим:
 
-/home/airflow/plugins/custom_operators:
-__pycache__  SqlExecuteOperator.py
+arduino
+Копировать код
+drwxr-xr-x airflow airflow /home/airflow/plugins
+🔧 Шаг 2. Исправляем права holiday_theme
+bash
+Копировать код
+chown -R airflow:airflow /home/airflow/plugins/holiday_theme
+chmod -R 755 /home/airflow/plugins/holiday_theme
+🔧 Шаг 3. Проверяем
+Под airflow:
 
-/home/airflow/plugins/custom_operators/__pycache__:
-SqlExecuteOperator.cpython-312.pyc  SqlExecuteOperator.cpython-38.pyc
+bash
+Копировать код
+ls -ld /home/airflow/plugins
+ls -ld /home/airflow/plugins/holiday_theme
+ls -l /home/airflow/plugins/holiday_theme
+Ожидаем:
 
-/home/airflow/plugins/holiday_theme:
-holiday_theme_plugin.py  static
+scss
+Копировать код
+drwxr-xr-x airflow airflow plugins
+drwxr-xr-x airflow airflow holiday_theme
+-rw-r--r-- airflow airflow holiday_theme_plugin.py
+drwxr-xr-x airflow airflow static
+🔧 Шаг 4. Перезапускаем webserver
+Под root:
 
-/home/airflow/plugins/holiday_theme/static:
-snow.css  snow.js
+bash
+Копировать код
+sudo systemctl restart airflow-webserver
+🔧 Шаг 5. Проверяем, что Airflow загрузил плагин:
+Под airflow:
 
-/home/airflow/plugins/__pycache__:
-custom_schedule.cpython-38.pyc   CustomTimetable.cpython-38.pyc
-CustomTimetable1.cpython-38.pyc  __init__.cpython-38.pyc
-[airflow@rgm-s-dwhair01 ~]$ cat /home/airflow/plugins/holiday_theme/holiday_theme_plugin.py
-from airflow.plugins_manager import AirflowPlugin
-from flask import Blueprint
+bash
+Копировать код
+grep -R "holiday" /home/airflow/logs 2>/dev/null
+ИЛИ:
 
-holiday_bp = Blueprint(
-    "holiday_theme",
-    __name__,
-    static_folder="static",
-    static_url_path="/holiday_static",
-)
-
-class HolidayThemePlugin(AirflowPlugin):
-    name = "holiday_theme"
-    flask_blueprints = [holiday_bp][airflow@rgm-s-dwhair01 ~]$
-
-
-drwsrwsrwt 5 airflow airflow 115 Dec 11 20:12 /home/airflow/plugins
-[airflow@rgm-s-dwhair01 ~]$ ls -ld /home/airflow/plugins/holiday_theme
-drwxr-sr-x 3 root airflow 51 Dec 11 20:15 /home/airflow/plugins/holiday_theme
-[airflow@rgm-s-dwhair01 ~]$ ls -l  /home/airflow/plugins/holiday_theme
-total 4
--rw-r--r-- 1 root airflow 323 Dec 11 20:13 holiday_theme_plugin.py
-drwxr-sr-x 2 root airflow  37 Dec 11 20:20 static
-[airflow@rgm-s-dwhair01 ~]$
+nginx
+Копировать код
+airflow info | grep Plugins

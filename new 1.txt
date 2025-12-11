@@ -1,15 +1,85 @@
-CREATE TEMP TABLE for_1079_asia AS
-SELECT DISTINCT ON (rn)
+DROP TABLE IF EXISTS for_1079_euro;
+
+CREATE TEMP TABLE for_1079_euro AS
+WITH prep AS (
+    SELECT
+        b.rn,
+        b.purchase_contract_code,
+        b.position_line_item_code,
+        b.konws,
+        b.service_code,
+        b.price_uom_code,
+        b.currency_dogovor,
+        b.datab,
+        b.datbi,
+
+        b.order_asia AS order_euro_svh,   -- ЕСЛИ ЕСТЬ ОТДЕЛЬНОЕ ПОЛЕ order_euro_svh, ПОДСТАВИМ ЕГО
+        b.kopos,
+        b.kbetr,
+
+        b.sales_bundle_gross_weight,
+        b.warehouse_code,
+        b.dt_storage_start,
+        b.dt_storage_end,
+        b.storage_cost_special_calculation_type_code,
+        b.storage_duration_total_calendar_days,
+        b.material_shape_code,
+        b.tmp_2,
+
+        -- агрегирование по складу за месяц
+        sum(b.sales_bundle_gross_weight)
+            OVER (PARTITION BY b.warehouse_code, date_trunc('month', b.dt_storage_end))
+            AS warehouse_weight_month_end,
+
+        -- расчёт month_difference как раньше
+        CASE
+            WHEN extract(day FROM b.dt_storage_end) < extract(day FROM b.dt_storage_start) THEN
+                (extract(year  FROM b.dt_storage_end) - extract(year  FROM b.dt_storage_start)) * 12 +
+                (extract(month FROM b.dt_storage_end) - extract(month FROM b.dt_storage_start))
+            ELSE
+                (extract(year  FROM b.dt_storage_end) - extract(year  FROM b.dt_storage_start)) * 12 +
+                (extract(month FROM b.dt_storage_end) - extract(month FROM b.dt_storage_start)) + 1
+        END AS month_difference_2,
+
+        CASE
+            WHEN b.storage_cost_special_calculation_type_code = '4' THEN
+                ceil(b.storage_duration_total_calendar_days / 7::numeric)
+            WHEN b.storage_cost_special_calculation_type_code = '5' THEN
+                ceil(b.storage_duration_total_calendar_days / 30::numeric)
+        END AS special
+
+    FROM base_as_eu b
+    WHERE b.storage_cost_calculation_type_name = 'Логика Европа'
+),
+
+ranked AS (
+    SELECT
+        *,
+        row_number() OVER (
+            PARTITION BY rn
+            ORDER BY
+                order_euro_svh,
+                kopos,
+                kbetr,
+                purchase_contract_code,
+                position_line_item_code
+        ) AS row_num
+    FROM prep
+)
+
+SELECT
     rn,
     purchase_contract_code,
     position_line_item_code,
     konws,
     service_code,
     price_uom_code,
+    warehouse_weight_month_end,
+    month_difference_2,
+    special,
     currency_dogovor,
     datab,
     datbi
-FROM base_as_eu
-WHERE storage_cost_calculation_type_name = 'Логика Азия'
-ORDER BY rn, order_asia, kopos, kbetr, purchase_contract_code, position_line_item_code
+FROM ranked
+WHERE row_num = 1
 DISTRIBUTED BY (rn);

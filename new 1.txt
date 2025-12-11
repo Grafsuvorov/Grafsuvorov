@@ -1,75 +1,135 @@
-004154169205029102720000102024-12-11	8700021101	00020	CNY	S49	954	1	2024-12-09	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700021028	00020	CNY	S49	954	1	2024-12-01	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700019106	00160	CNY	S49	TVS	1	2024-06-01	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700019095	00170	CNY	S49	TVS	1	2024-07-01	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700018092	00090	CNY	S49	TVS	1	2024-04-01	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700018092	00080	CNY	S49	TVS	1	2024-04-01	2024-12-31 00:00:00.000
-004154169205029102720000102024-12-11	8700017698	00100	CNY	S49	TVS	1	2024-01-01	2024-12-31 00:00:00.000
+$AIRFLOW_HOME/plugins/holiday_theme/
+    holiday_theme_plugin.py
+    static/
+        snow.css
+        snow.js
+        garland.png
+        airflow_logo_santa.png
+🎅 2. Код плагина (создай файл holiday_theme_plugin.py)
+python
+Копировать код
+from airflow.plugins_manager import AirflowPlugin
+from flask import Blueprint
 
-CREATE TEMP  TABLE for_1079_base_norm AS
-WITH base AS (
-    SELECT 
-        purchase_contract_code,
-        position_line_item_code,
-        bukrs,
-        lifnr,
-        zzport,
-        werks,
-        zzsrvpos,
-        zzforma,
-        zzet_tarif,
-        sdabw,
-        zzterminal,
-        vzzzone,
-        konws,
-        service_code,
-        price_uom_code,
-        netpr,
-        kbetr,
-        order_asia,
-        currency_dogovor,
-        datab,
-        datbi,
-        purchase_document_subtype_code,
-
-        LEAD(datab) OVER (
-            PARTITION BY purchase_contract_code, position_line_item_code
-            ORDER BY datab
-        ) AS next_datab
-
-    FROM for_1079_base
+holiday_bp = Blueprint(
+    "holiday_theme",
+    __name__,
+    static_folder="static",
+    static_url_path="/holiday_static",
 )
-SELECT *,
-       COALESCE(next_datab - INTERVAL '1 day', datbi) AS effective_datbi
-FROM base
-DISTRIBUTED REPLICATED;
 
+class HolidayThemePlugin(AirflowPlugin):
+    name = "holiday_theme"
+    flask_blueprints = [holiday_bp]
+Этот плагин подключит папку static/.
 
-CREATE TEMP TABLE for_1079_asia AS
-SELECT 
-    sw.rn,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.konws,
-    fb.service_code,
-    fb.price_uom_code,
-    fb.currency_dogovor,
-    fb.datab,
-    fb.effective_datbi AS datbi
-FROM dm_calc.storage_sales_bundles_weight sw
-JOIN for_1079_base_norm fb
-    ON fb.bukrs = sw.unit_balance_code
-   AND fb.lifnr = sw.forwarder_code
-   AND (fb.zzport = sw.port_of_discharge_code OR fb.zzport IS NULL)
-   AND fb.werks = sw.plant_code
-   AND fb.zzsrvpos = 'S49'
-   AND (fb.zzforma = sw.material_shape_code OR fb.zzforma IS NULL)
-   AND (fb.zzet_tarif = sw.etsng_code OR fb.zzet_tarif IS NULL)
-   AND (fb.sdabw = sw.transport_type_code OR fb.sdabw IS NULL)
-   AND (fb.zzterminal = sw.warehouse_code OR fb.zzterminal IS NULL)
-   AND (fb.vzzzone = sw.warehouse_storage_area_code OR fb.vzzzone IS NULL)
-   AND fb.purchase_document_subtype_code = 'ZDTL'
-   AND sw.dt_for_price_search_in_purchase_contract 
-           BETWEEN fb.datab AND fb.effective_datbi
-WHERE sw.storage_cost_calculation_type_name = 'Логика Азия'
-DISTRIBUTED BY (rn);
+❄ 3. Добавим снег — файл snow.js
+javascript
+Копировать код
+document.addEventListener("DOMContentLoaded", () => {
+    const snow = document.createElement("div");
+    snow.className = "snowflakes";
+    document.body.appendChild(snow);
+
+    for (let i = 0; i < 60; i++) {
+        const flake = document.createElement("div");
+        flake.className = "snowflake";
+        flake.innerHTML = "❄";
+        snow.appendChild(flake);
+    }
+});
+❄ 4. Стили снега + гирлянда + праздничный фон snow.css
+css
+Копировать код
+/* Падающий снег */
+.snowflakes {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.snowflake {
+  position: absolute;
+  top: -10px;
+  font-size: 20px;
+  opacity: 0.8;
+  color: white;
+  animation: fall 8s linear infinite;
+}
+
+@keyframes fall {
+  0% { transform: translateY(0) translateX(0); }
+  100% { transform: translateY(120vh) translateX(20px); }
+}
+
+.snowflake:nth-child(odd) {
+  animation-duration: 10s;
+  opacity: 0.9;
+}
+
+.snowflake:nth-child(even) {
+  animation-duration: 7s;
+  transform: translateX(30px);
+}
+
+/* Градиент праздничного фона */
+body {
+    background: linear-gradient(180deg, #0a1d2e, #12344d, #0a1d2e) !important;
+}
+
+/* Гирлянда сверху */
+.navbar.navbar-default {
+    background-image: url('/holiday_static/garland.png') !important;
+    background-size: cover;
+    height: 70px !important;
+}
+
+/* Праздничный логотип */
+.navbar-brand img {
+    content: url('/holiday_static/airflow_logo_santa.png') !important;
+    height: 40px !important;
+}
+
+/* Праздничные карточки DAG */
+.card, .dag-card {
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 10px !important;
+    background: rgba(255, 255, 255, 0.05) !important;
+    backdrop-filter: blur(6px);
+    transition: transform 0.2s;
+}
+
+.card:hover, .dag-card:hover {
+    transform: scale(1.03);
+    border-color: #ffcc00 !important;
+}
+🎄 5. Подключить кастомные стили и JS в интерфейс Airflow
+Создай файл:
+
+bash
+Копировать код
+$AIRFLOW_HOME/webserver_config.py
+Если его нет — Airflow его создаст.
+
+Добавь:
+
+python
+Копировать код
+import os
+
+def airflow_custom_css():
+    return ["/holiday_static/snow.css"]
+
+def airflow_custom_js():
+    return ["/holiday_static/snow.js"]
+Airflow сам подхватит эти файлы во фронте.
+
+🎄 6. Перезапусти Airflow Webserver
+Если systemd:
+
+bash
+Копировать код
+sudo systemctl restart airflow-webserver

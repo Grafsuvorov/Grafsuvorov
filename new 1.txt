@@ -1,6 +1,5 @@
-grep -R "holiday" /home/airflow/logs 2>/dev/null
-Если видишь:
-
-yaml
-Копировать код
-Loaded plugin: holiday_theme
+[airflow@rgm-s-dwhair01 ~]$ grep -R "holiday" /home/airflow/logs 2>/dev/null
+[airflow@rgm-s-dwhair01 ~]$ exit
+logout
+[root@rgm-s-dwhair01 ~]# grep -R "holiday" /home/airflow/logs 2>/dev/null
+[root@rgm-s-dwhair01 ~]#

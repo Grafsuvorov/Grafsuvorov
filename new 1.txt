@@ -1,29 +1,90 @@
+grep -i holiday /u01/arf-venv/logs/* -R
+или:
 
-[root@rgm-s-dwhair01 ~]# sudo systemctl restart airflow-webserver
-[root@rgm-s-dwhair01 ~]#
-[root@rgm-s-dwhair01 ~]# systemctl status airflow-webserver
-● airflow-webserver.service - Airflow webserver daemon
-   Loaded: loaded (/etc/systemd/system/airflow-webserver.service; enabled; vendo                       r preset: disabled)
-   Active: active (running) since Thu 2025-12-11 20:33:54 MSK; 10s ago
- Main PID: 73370 (airflow)
-    Tasks: 6
-   Memory: 275.5M
-   CGroup: /system.slice/airflow-webserver.service
-           ├─73370 /u01/arf-venv/bin/python /u01/arf-venv/bin/airflow webserv...
-           ├─73515 gunicorn: master [airflow-webserver]
-           ├─73728 [ready] gunicorn: worker [airflow-webserver]
-           ├─73729 [ready] gunicorn: worker [airflow-webserver]
-           ├─73730 [ready] gunicorn: worker [airflow-webserver]
-           └─73731 [ready] gunicorn: worker [airflow-webserver]
+bash
+Копировать код
+grep -i plugin /u01/arf-venv/logs/* -R | grep holiday
+Airflow при старте пишет:
 
-Dec 11 20:33:56 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/s....
-Dec 11 20:33:57 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/si...
-Dec 11 20:33:57 rgm-s-dwhair01 airflow[73370]: /u01/arf-venv/lib/python3.8/s....
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...0
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...)
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...c
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...8
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...9
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...0
-Dec 11 20:33:59 rgm-s-dwhair01 airflow[73370]: [2025-12-11 20:33:59 +0300] [...1
-Hint: Some lines were ellipsized, use -l to show in full.
+yaml
+Копировать код
+Loaded plugin: holiday_theme
+Если нет такой строки → значит, Airflow не видит плагин.
+
+✅ Шаг 2. Убедимся, что ты положил плагин в ПРАВИЛЬНУЮ директорию
+У тебя Airflow работает из:
+
+bash
+Копировать код
+/u01/arf-venv/bin/airflow
+То есть $AIRFLOW_HOME почти наверняка:
+
+bash
+Копировать код
+/u01/airflow
+или:
+
+bash
+Копировать код
+/u01/arf-venv/airflow
+Проверить:
+
+bash
+Копировать код
+echo $AIRFLOW_HOME
+Если переменная не установлена, смотри в systemd unit:
+
+bash
+Копировать код
+cat /etc/systemd/system/airflow-webserver.service
+Там должно быть:
+
+bash
+Копировать код
+Environment=AIRFLOW_HOME=/u01/airflow
+👉 Тебе нужно положить плагин строго в:
+
+bash
+Копировать код
+$AIRFLOW_HOME/plugins/
+То есть:
+
+swift
+Копировать код
+/u01/airflow/plugins/holiday_theme/holiday_theme_plugin.py
+/u01/airflow/plugins/holiday_theme/static/snow.css
+/u01/airflow/plugins/holiday_theme/static/snow.js
+Если положил в /usr/local/airflow/... — Airflow 2.x это не увидит.
+
+✅ Шаг 3. Проверяем, что CSS реально загружается в браузере
+Открой Airflow — нажми F12 → вкладка Network → обнови страницу.
+
+В списке файлов должны быть:
+
+Копировать код
+snow.css
+snow.js
+или путь вида:
+
+bash
+Копировать код
+/holiday_static/snow.css
+Если 404 → плагин грузится, но статические файлы не находятся.
+
+⚠ Типичная ошибка → путь holiday_static не совпадает
+Убедись, что в плагине у тебя ТАК:
+
+python
+Копировать код
+holiday_bp = Blueprint(
+    "holiday_theme",
+    __name__,
+    static_folder="static",
+    static_url_path="/holiday_static",
+)
+И структура:
+
+swift
+Копировать код
+plugins/holiday_theme/static/snow.css
+plugins/holiday_theme/static/snow.js

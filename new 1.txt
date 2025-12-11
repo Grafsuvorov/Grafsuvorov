@@ -136,3 +136,11 @@ AUTH_TYPE = AUTH_DB
 # APP_THEME = "superhero.css"
 # APP_THEME = "united.css"
 # APP_THEME = "yeti.css"
+[root@rgm-s-dwhair01 ~]# sudo -i -u airflow
+[airflow@rgm-s-dwhair01 ~]$ sudo systemctl restart airflow-webserver
+[sudo] password for airflow:
+Sorry, try again.
+[sudo] password for airflow:
+airflow is not in the sudoers file.  This incident will be reported.
+[airflow@rgm-s-dwhair01 ~]$
+

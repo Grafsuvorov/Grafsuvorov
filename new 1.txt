@@ -1,1 +1,3 @@
-/home/airflow/plugins/holiday_theme
+sudo -i -u airflow
+echo $AIRFLOW_HOME
+airflow info | grep 'airflow_home'

@@ -1,4 +1,12 @@
-CREATE TEMP TABLE for_1079_base_norm AS
+004154169205029102720000102024-12-11	8700021101	00020	CNY	S49	954	1	2024-12-09	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700021028	00020	CNY	S49	954	1	2024-12-01	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700019106	00160	CNY	S49	TVS	1	2024-06-01	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700019095	00170	CNY	S49	TVS	1	2024-07-01	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700018092	00090	CNY	S49	TVS	1	2024-04-01	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700018092	00080	CNY	S49	TVS	1	2024-04-01	2024-12-31 00:00:00.000
+004154169205029102720000102024-12-11	8700017698	00100	CNY	S49	TVS	1	2024-01-01	2024-12-31 00:00:00.000
+
+CREATE TEMP  TABLE for_1079_base_norm AS
 WITH base AS (
     SELECT 
         purchase_contract_code,
@@ -22,6 +30,7 @@ WITH base AS (
         currency_dogovor,
         datab,
         datbi,
+        purchase_document_subtype_code,
 
         LEAD(datab) OVER (
             PARTITION BY purchase_contract_code, position_line_item_code
@@ -34,16 +43,8 @@ SELECT *,
        COALESCE(next_datab - INTERVAL '1 day', datbi) AS effective_datbi
 FROM base
 DISTRIBUTED REPLICATED;
-📌 Теперь каждый договор имеет ИДЕАЛЬНЫЙ период:
 
-nginx
-Копировать код
-datab → effective_datbi
-и всегда ровно один ценовой интервал покрывает dt_for_price_search.
 
-Шаг 2 — оптимальный join для логики Азия (абсолютно без row_number)
-sql
-Копировать код
 CREATE TEMP TABLE for_1079_asia AS
 SELECT 
     sw.rn,

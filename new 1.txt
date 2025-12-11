@@ -1,3 +1,6 @@
-sudo -i -u airflow
-echo $AIRFLOW_HOME
-airflow info | grep 'airflow_home'
+[airflow@rgm-s-dwhair01 ~]$ echo $AIRFLOW_HOME
+/home/airflow
+[airflow@rgm-s-dwhair01 ~]$ airflow info | grep 'airflow_home'
+/u01/arf-venv/lib/python3.8/site-packages/airflow/metrics/statsd_logger.py:178 DeprecationWarning: The statsd_allow_list option in [metrics] has been renamed to metrics_allow_list - the old setting has been used, but please update your config.
+/u01/arf-venv/lib/python3.8/site-packages/airflow/cli/cli_config.py:971 DeprecationWarning: The namespace option in [kubernetes] has been moved to the namespace option in [kubernetes_executor] - the old setting has been used, but please update your config.
+airflow_home    | /home/airflow  

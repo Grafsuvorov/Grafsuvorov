@@ -1,5 +1,11 @@
-[airflow@rgm-s-dwhair01 ~]$ grep -R "holiday" /home/airflow/logs 2>/dev/null
-[airflow@rgm-s-dwhair01 ~]$ exit
-logout
-[root@rgm-s-dwhair01 ~]# grep -R "holiday" /home/airflow/logs 2>/dev/null
-[root@rgm-s-dwhair01 ~]#
+ls -R /home/airflow/plugins
+✔ Просмотр содержимого плагина
+bash
+Копировать код
+cat /home/airflow/plugins/holiday_theme/holiday_theme_plugin.py
+✔ Проверка прав
+bash
+Копировать код
+ls -ld /home/airflow/plugins
+ls -ld /home/airflow/plugins/holiday_theme
+ls -l  /home/airflow/plugins/holiday_theme

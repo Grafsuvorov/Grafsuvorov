@@ -1,3 +1,212 @@
+create table if not exists dm_calc.storage_sales_bundles_weight (
+	sales_bundle_code varchar(10) null,
+	plant_producer_delivery_code varchar(30) null,
+	plant_producer_delivery_position_code varchar(18) null,
+	initial_delivery_code varchar(30) null,
+	material_code varchar(54) null,
+	dt_shipment date null,
+	railcar_code varchar(60) null,
+	transport_bill_code varchar(105) null,
+	uni varchar(180) null,
+	material_shape_code varchar(9) null,
+	dt_arrival_to_russian_port date null,
+	dt_storage_end_in_release date null,
+	transport_type_code varchar(12) null,
+	etsng_code varchar(10) null,
+	dt_report date null,
+	sales_bundle_net_weight numeric(15, 3) null,
+	sales_bundle_gross_weight numeric(15, 3) null,
+	batch_code varchar(30) null,
+	dt_arrival date null,
+	receiving_plant_code varchar(4) null,
+	sales_delivery_code varchar(30) null,
+	transportation_inbound_delivery_code varchar(10) null,
+	delivery_for_storage_calculation_code varchar(30) null,
+	transportation_inbound_delivery_position_code varchar(6) null,
+	delivery_position_for_storage_calculation_code varchar(6) null,
+	forwarder_code varchar(10) null,
+	storage_cost_calculation_type_name varchar(20) null,
+	transport_departure_hub_code varchar(10) null,
+	transport_destination_hub_code varchar(10) null,
+	transportation_outbound_delivery_code varchar(10) null,
+	transportation_outbound_delivery_position_code varchar(6) null,
+	is_final_transportation_stage_code varchar(1) null,
+	transportation_stage_code varchar(2) null,
+	storage_calculation_bundle_quantity int8 null,
+	warehouse_code varchar(10) null,
+	is_stored_in_russian_port_code varchar(1) null,
+	delivery_in_final_release_code varchar(30) null,
+	dt_final_release date null,
+	bill_of_lading_code varchar(30) null,
+	bill_of_lading_number varchar(90) null,
+	dt_bill_of_lading date null,
+	incoterms_code varchar(9) null,
+	storage_cost_special_calculation_type_code varchar(1) null,
+	warehouse_storage_area_code varchar(10) null,
+	plant_code varchar(4) null,
+	unit_balance_code varchar(4) null,
+	creditor_in_shipment_instruction_code varchar(10) null,
+	dt_storage_start date null,
+	dt_shipped_from_warehouse date null,
+	dt_storage_end date null,
+	storage_duration_total_calendar_days int4 null,
+	shipment_instruction_number varchar(30) null,
+	dt_for_price_search_in_purchase_contract date null,
+	port_of_discharge_code varchar(30) null,
+	service_number text null,
+	weight_for_1090_umno numeric null,
+	weight_for_1090_razdel numeric null,
+	remote_warehouse_code varchar(10) null,
+	dt_transportation_stage_start_p date null,
+	dt_transportation_stage_start_r date null,
+	rn varchar(36) null,
+	dttm_inserted timestamp not null default now(),
+	dttm_updated timestamp not null default now(),
+	job_name varchar(60) not null default 'airflow'::character varying,
+	deleted_flag bool not null default false
+)
+with (
+	appendonly = true,
+	orientation = column,
+	compresstype = zstd,
+	compresslevel = 3
+)
+distributed by (sales_bundle_code);
+-------------------------------------------------------------------------------------------------
+
+comment on table dm_calc.storage_sales_bundles_weight is 'Веса для витрины хранения металла на внешних складах после отгрузки с АЗ';
+comment on column dm_calc.storage_sales_bundles_weight.sales_bundle_code is 'Номер плавки металла (код) | Номер плавки металла (код) | sales_bundle_transport_hub_turnover_sdt0004.sales_bundle_code';
+comment on column dm_calc.storage_sales_bundles_weight.plant_producer_delivery_code is 'Поставка завода производителя (код) | Поставка завода производителя (код) | sd_sales_main_scm.delivery_number_of_producer_plant';
+comment on column dm_calc.storage_sales_bundles_weight.plant_producer_delivery_position_code is 'Позиция поставки завода производителя, по которой формируется цепочка продаж на заводе произвидителе (код) | Позиция поставки завода производителя, по которой формируется цепочка продаж на заводе произвидителе (код) | sd_sales_main_scm.delivery_item_of_plant';
+comment on column dm_calc.storage_sales_bundles_weight.initial_delivery_code is 'Исходная (первая) поставка, от которой начинается оформление цепочки продаж (код) | Исходная (первая) поставка, от которой начинается оформление цепочки продаж (код) | sd_sales_main_scm.delivery_number_initial';
+comment on column dm_calc.storage_sales_bundles_weight.material_code is 'Номер материала (код) | Номер материала (код) | sd_sales_main_scm.material_code';
+comment on column dm_calc.storage_sales_bundles_weight.dt_shipment is 'Дата отгрузки поставки с завода | Дата отгрузки поставки с завода | sd_sales_main_scm.dt_shipment';
+comment on column dm_calc.storage_sales_bundles_weight.railcar_code is 'Номер авто, вагона или контейнера, в случае перевозки металла в контенере, в котором металл едет от Завода производителя (код) | Номер авто, вагона или контейнера, в случае перевозки металла в контенере, в котором металл едет от Завода производителя (код) | sd_sales_main_scm.railcar';
+comment on column dm_calc.storage_sales_bundles_weight.transport_bill_code is 'Номер жд накладной, CMR, ТТН, по которой металл едет от Завода производителя (код) | Номер жд накладной, CMR, ТТН, по которой металл едет от Завода производителя (код) | sd_sales_main_scm.transport_bill';
+comment on column dm_calc.storage_sales_bundles_weight.uni is 'Если Причина деления постави = "4- Перевеска", то это: Накладная + Дата коносамента + Судно факт + Номер рейса факт, разделенные знаком‘-’;
+Иначе данные из Продажной поставки, полей Транспортная накладная + Ид. Транспортировки;
+Иначе: Накладная + Вагон | Если Причина деления постави = "4- Перевеска", то это: Накладная + Дата коносамента + Судно факт + Номер рейса факт, разделенные знаком‘-’;
+Иначе данные из Продажной поставки, полей Транспортная накладная + Ид. Транспортировки;
+Иначе: Накладная + Вагон | sd_sales_main_scm.uni';
+comment on column dm_calc.storage_sales_bundles_weight.material_shape_code is 'Форма (код) | Форма (код) | material_specification.shape_code';
+comment on column dm_calc.storage_sales_bundles_weight.dt_arrival_to_russian_port is 'Дата прибытия металла в порт РФ | Дата прибытия металла в порт РФ | sd_sales_main_scm.dt_warehouse';
+comment on column dm_calc.storage_sales_bundles_weight.dt_storage_end_in_release is 'Дата окончания хранения металла за счет РУСАЛа | Дата окончания хранения металла за счет РУСАЛа | release.dt_end_of_free_storage';
+comment on column dm_calc.storage_sales_bundles_weight.transport_type_code is 'Тип подвижного состава, с которым груз зашел для хранения (код) | Тип подвижного состава, с которым груз зашел для хранения (код) | sd_sales_main_scm.transport_railcar_type_code';
+comment on column dm_calc.storage_sales_bundles_weight.etsng_code is 'Код груза ЕТСНГ (код) | Код груза ЕТСНГ (код) | material.etsng_code';
+comment on column dm_calc.storage_sales_bundles_weight.dt_report is 'Дата, на которую производится расчет хранения | Дата, на которую производится расчет хранения | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.sales_bundle_net_weight is 'Вес нетто пакета | Вес нетто пакета | sales_bundle.sales_bundle_net_weight';
+comment on column dm_calc.storage_sales_bundles_weight.sales_bundle_gross_weight is 'Вес брутто пакета | Вес брутто пакета | sales_bundle.sales_bundle_gross_weight';
+comment on column dm_calc.storage_sales_bundles_weight.batch_code is 'Партия (код) | Партия (код) | sd_sales_main_scm.batch';
+comment on column dm_calc.storage_sales_bundles_weight.dt_arrival is 'Дата прибытия металла в пункт назначения | Дата прибытия металла в пункт назначения | sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r';
+comment on column dm_calc.storage_sales_bundles_weight.receiving_plant_code is 'Завод продажной поставки (код) | Завод продажной поставки (код) | delivery_document_position.plant_producer_code';
+comment on column dm_calc.storage_sales_bundles_weight.sales_delivery_code is 'Если поставка разделена - то разделенная поставка.
+Если нет - то Исходная поставка (код) | Если поставка разделена - то разделенная поставка.
+Если нет - то Исходная поставка (код) | sd_sales_main_scm.delivery_number_sales';
+comment on column dm_calc.storage_sales_bundles_weight.transportation_inbound_delivery_code is 'Техническая поставка транспортировки этапа прибытия ГП на склад (код) | Техническая поставка транспортировки этапа прибытия ГП на склад (код) | sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_p';
+comment on column dm_calc.storage_sales_bundles_weight.delivery_for_storage_calculation_code is 'Поставка, на которой выполняется расчет (код) | Поставка, на которой выполняется расчет (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.transportation_inbound_delivery_position_code is 'Позиция технической поставки транспортировки этапа прибытия ГП на склад (код) | Позиция технической поставки транспортировки этапа прибытия ГП на склад (код) | sales_bundle_transport_hub_turnover_sdt0004.transportation_inbound_delivery_position_code';
+comment on column dm_calc.storage_sales_bundles_weight.delivery_position_for_storage_calculation_code is 'Позиция поставки, на которой выполняется расчет (код) | Позиция поставки, на которой выполняется расчет (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.forwarder_code is 'Экспедитор (код) | Экспедитор (код) | sales_document_counterparty_role.supplier_code';
+comment on column dm_calc.storage_sales_bundles_weight.storage_cost_calculation_type_name is 'Регион хранения и логика, применяемая для расчета стоимости хранения (наименование) | Регион хранения и логика, применяемая для расчета стоимости хранения (наименование) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.transport_departure_hub_code is 'Начальный узел поставки (код) | Начальный узел поставки (код) | sales_bundle_and_delivery_relationship.transport_route_departure_hub_code';
+comment on column dm_calc.storage_sales_bundles_weight.transport_destination_hub_code is 'Конечный узел поставки (код) | Конечный узел поставки (код) | sales_bundle_and_delivery_relationship.transport_route_destination_hub_code';
+comment on column dm_calc.storage_sales_bundles_weight.transportation_outbound_delivery_code is 'Техническая поставка транспортировки этапа убытия ГП со склада (код) | Техническая поставка транспортировки этапа убытия ГП со склада (код) | sales_bundle_transport_hub_turnover_sdt0004.delivery_code_le_r';
+comment on column dm_calc.storage_sales_bundles_weight.transportation_outbound_delivery_position_code is 'Позиция технической поставки транспортировки этапа убытия ГП со склада (код) | Позиция технической поставки транспортировки этапа убытия ГП со склада (код) | sales_bundle_transport_hub_turnover_sdt0004.transportation_outbound_delivery_position_code';
+comment on column dm_calc.storage_sales_bundles_weight.is_final_transportation_stage_code is 'Метка Последний этап (код) | Метка Последний этап (код) | sales_bundle_and_delivery_relationship.is_final_transportation_stage_code';
+comment on column dm_calc.storage_sales_bundles_weight.transportation_stage_code is 'Этап перевозки (код) | Этап перевозки (код) | sales_bundle_and_delivery_relationship.transportation_stage_code';
+comment on column dm_calc.storage_sales_bundles_weight.storage_calculation_bundle_quantity is 'Количество пакетов в поставке хранения | Количество пакетов в поставке хранения | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.warehouse_code is 'Склад (код) | Склад (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.is_stored_in_russian_port_code is 'Индикатор: хранение осуществляется на терминале в порту РФ | Индикатор: хранение осуществляется на терминале в порту РФ | transport_hub.is_seaport';
+comment on column dm_calc.storage_sales_bundles_weight.delivery_in_final_release_code is 'Продажная поставка, которая входит в финальный релиз (код) | Продажная поставка, которая входит в финальный релиз (код) | sd_sales_main_scm.delivery_number_sales';
+comment on column dm_calc.storage_sales_bundles_weight.dt_final_release is 'Дата оформления финального релиза | Дата оформления финального релиза | sd_sales_main_scm.dt_final_release';
+comment on column dm_calc.storage_sales_bundles_weight.bill_of_lading_code is 'Группа коносамента (код) | Группа коносамента (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.bill_of_lading_number is 'Номер коносамента | Номер коносамента | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.dt_bill_of_lading is 'Дата выпуска коносамента, оформленного в порту РФ/иностранном порту | Дата выпуска коносамента, оформленного в порту РФ/иностранном порту | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.incoterms_code is 'Инкотермс (код) | Инкотермс (код) | sd_sales_main_scm.delivery_basis';
+comment on column dm_calc.storage_sales_bundles_weight.storage_cost_special_calculation_type_code is 'Особая логика, применяемая для расчета стоимости хранения конкретным контрагентом (код) | Особая логика, применяемая для расчета стоимости хранения конкретным контрагентом (код) | transportation_storage_calculation_method.calculation_method_code';
+comment on column dm_calc.storage_sales_bundles_weight.warehouse_storage_area_code is 'Складская зона (код) | Складская зона (код) | transportation_warehouse_storage_area.warehouse_storage_area_code';
+comment on column dm_calc.storage_sales_bundles_weight.plant_code is 'Завод (код) | Завод (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.unit_balance_code is 'Балансовая единица (код) | Балансовая единица (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.creditor_in_shipment_instruction_code is 'Кредитор, который принимает груз на хранение в порту (код) | Кредитор, который принимает груз на хранение в порту (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.dt_storage_start is 'Дата прихода металла на склад | Дата прихода металла на склад | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.dt_shipped_from_warehouse is 'Дата вывоза со склада | Дата вывоза со склада | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.dt_storage_end is 'Дата вывоза металла со склада либо дата окончания хранения металла за счет Русал (берем то, то наступит раньше) | Дата вывоза металла со склада либо дата окончания хранения металла за счет Русал (берем то, то наступит раньше) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.storage_duration_total_calendar_days is 'Количество дней хранения металла всего | Количество дней хранения металла всего | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.shipment_instruction_number is 'Номер инструкции ДСБ | Номер инструкции ДСБ | sales_request_for_proposal_header / sales_contract_header / sales_order_header.shipment_instruction_code';
+comment on column dm_calc.storage_sales_bundles_weight.dt_for_price_search_in_purchase_contract is 'Дата, на которую производится поиск договора | Дата, на которую производится поиск договора | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.port_of_discharge_code is 'Для РФ - порт погрузки, для ин. портов - порт выгрузки на дату расчета (первый или второй ин. порт) (код) | Для РФ - порт погрузки, для ин. портов - порт выгрузки на дату расчета (первый или второй ин. порт) (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.service_number is 'Услуга для поиска стоимостного приложения хранения (код) | Услуга для поиска стоимостного приложения хранения (код) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.weight_for_1090_umno is 'Техническое поле для вычисления стоимости хранения (числитель) | Техническое поле для вычисления стоимости хранения (числитель) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.weight_for_1090_razdel is 'Техническое поле для вычисления стоимости хранения (знаменатель) | Техническое поле для вычисления стоимости хранения (знаменатель) | Расчетное поле';
+comment on column dm_calc.storage_sales_bundles_weight.remote_warehouse_code is 'Удаленный склад (код) | Удаленный склад (код) | sales_bundle_transport_hub_turnover_sdt0004.knote';
+comment on column dm_calc.storage_sales_bundles_weight.dt_transportation_stage_start_p is 'Дата поступления ГП на терминал/склад | Дата поступления ГП на терминал/склад | sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_p';
+comment on column dm_calc.storage_sales_bundles_weight.dt_transportation_stage_start_r is 'Дата ухода ГП из терминала/склада | Дата ухода ГП из терминала/склада | sales_bundle_transport_hub_turnover_sdt0004.dt_transportation_stage_start_r';
+comment on column dm_calc.storage_sales_bundles_weight.rn is 'Уникальный идентификатор записи (код) | Уникальный идентификатор записи (код) | Расчетное поле';
+
+-------------------------------------------- Первая часть витрины -----------------------------------------------------------------------------------
+-- Первая часть скрипта начинается.
+
+truncate table dm_calc.storage_sales_bundles_weight;
+
+create temporary table lake on commit drop as ( -- данные из озера данных. Для джойна с t4 берутся данные 4798 (dds.sales_bundle_and_delivery_relationship)
+select
+	delivery_number_sales,
+	sdgadg.SD_000003,
+	sdgadg.SD_000110,
+	sdgadg.SD_000001,
+	sdgadg.SD_000143,
+	sdgadg.SD_000010,
+	sdgadg.SD_000013,
+	sdgadg.SD_000014,
+	sdgadg.SD_000151,
+	sdgadg.SD_000054,
+	sdgadg.SD_000649,
+	sdgadg.SD_000044,
+	sdgadg.SD_000028,
+	sdgadg.SD_000040,
+	sdgadg.SD_000041,
+	sdgadg.SD_000042,
+	sdgadg.SD_000482,
+	sdgadg.SD_000004,
+	sdgadg.SD_000067,
+	sdgadg.SD_000047,
+	sdgadg.SD_000048,
+	sdgadg.SD_000049,
+	sdgadg.SD_000024,
+	sdgadg.sales_bundle_code
+from (
+
+	select
+		ssms.delivery_number_sales, --продажная поставка
+		ssms.delivery_number_of_producer_plant as SD_000003,
+		ssms.delivery_item_of_plant as SD_000110,
+		ssms.delivery_number_initial as SD_000001,
+		ssms.material_code as SD_000143,
+		ssms.dt_shipment as SD_000010,
+		ssms.railcar as SD_000013,
+		ssms.transport_bill as SD_000014,
+		ssms.uni as SD_000151,
+		ssms.port_of_discharge_in_foreign_port_code as SD_000054,
+		ssms.port_of_loading_code as SD_000649,
+		ssms.port_of_discharge_code as SD_000044,
+		ssms.transport_railcar_type_code as SD_000028,
+		ssms.bill_of_lading_group_code as SD_000040,
+		ssms.bill_of_lading_number as SD_000041,
+		ssms.dt_bill_of_lading as SD_000042,
+		ssms.dt_final_release as SD_000482,
+		ssms.batch as SD_000004, -- SD.000737 Маша сказала брать партию из озера
+		ssms.delivery_basis as SD_000067,
+		ssms.bill_of_lading_group_code_in_foreign_port as SD_000047,
+		ssms.bill_of_lading_in_foreign_port as SD_000048,
+		ssms.dt_bill_of_lading_in_foreign_port as SD_000049,
+		ssms.dt_warehouse as SD_000024,
+		sd4798.sales_bundle_code, -- id_him
+		row_number() over(partition by sd4798.sales_bundle_code order by source_system_position_code desc, ssms.delivery_number_initial desc) as rn
+	from dm_calc.sd_sales_main_scm as ssms
+	join dds.sales_bundle_and_delivery_relationship as sd4798
+		on ssms.delivery_number_sales = sd4798.delivery_code
+
+
 create temporary table for_1079_base --on commit drop 
 as ( -- в таблице собирается основа для различных логик поля договора/позиции хранения LE.001079/LE.001080
 	select
@@ -106,33 +315,33 @@ where for_1079_base_calc.rwn = 1
 distributed replicated;
 
 
-
-create temporary table for_1079_asia --on commit drop
-as (
---explain(verbose, format json)
 select
-	dfdf.rn,
-	dfdf.purchase_contract_code,
-	dfdf.position_line_item_code,
-	dfdf.konws,
-	dfdf.service_code,
-	dfdf.price_uom_code,
-	dfdf.currency_dogovor,
-	dfdf.datab,
-	dfdf.datbi
-from
-	(
-	select
 		base_2.rn,
 		for_1079_base.purchase_contract_code,
+		
 		for_1079_base.position_line_item_code,
+		for_1079_base.bukrs,
+		for_1079_base.zzport,
+		for_1079_base.werks,
+		for_1079_base.zzforma,
+		
 		row_number() over(partition by base_2.rn order by for_1079_base.order_asia, for_1079_base.kopos, for_1079_base.kbetr, for_1079_base.purchase_contract_code, for_1079_base.position_line_item_code) as row_num,
 		for_1079_base.konws,
 		for_1079_base.service_code,
 		for_1079_base.price_uom_code,
 		for_1079_base.currency_dogovor,
 		for_1079_base.datab,
-		for_1079_base.datbi
+		for_1079_base.datbi,
+		base_2.dt_for_price_search_in_purchase_contract,
+		for_1079_base.dt_valid_from ,
+		for_1079_base.dt_valid_to,
+		for_1079_base.zzterminal,
+		for_1079_base.order_asia,
+		for_1079_base.vzzzone,
+		for_1079_base.kopos,
+		for_1079_base.kbetr,
+		for_1079_base.purchase_contract_code,
+		for_1079_base.position_line_item_code
 from
 	dm_calc.storage_sales_bundles_weight as base_2
 		join for_1079_base on
@@ -149,114 +358,14 @@ from
 			and (for_1079_base.zzterminal = base_2.warehouse_code or for_1079_base.zzterminal is null)
 			and (for_1079_base.vzzzone = base_2.warehouse_storage_area_code or for_1079_base.vzzzone is null)
 			and for_1079_base.purchase_document_subtype_code = 'ZDTL'
-	) as dfdf where dfdf.row_num = 1
-) 
-distributed replicated;
+			where rn='004154169205029102720000102024-12-11'
 
 
 
-create temporary table for_1079_euro-- on commit drop 
-as (
-select
-	dfdf.rn,
-	dfdf.purchase_contract_code,
-	dfdf.position_line_item_code,
-	dfdf.konws,
-	dfdf.service_code,
-	dfdf.price_uom_code,
-	dfdf.warehouse_weight_month_end,
-	dfdf.month_difference_2,
-	dfdf.netpr,
-	dfdf.special,
-	dfdf.currency_dogovor,
-	dfdf.datab,
-	dfdf.datbi
-from
-	(
-
-select
-		base_2.rn,
-		for_1079_base.purchase_contract_code,
-		for_1079_base.position_line_item_code,
-		row_number() over(partition by base_2.rn order by order_euro_svh,
-															for_1079_base.kopos, 
-															for_1079_base.kbetr, 
-		
-															case
-																when param_sap.range_low_value is not null and param_srv_1.range_low_value is not null then 1
-																when param_sap.range_low_value is null and param_srv_1.range_low_value is null then 1
-																else 0
-															end desc,
-															
-														for_1079_base.purchase_contract_code, for_1079_base.position_line_item_code) as row_num,
-		
-		
-		
-		
-		for_1079_base.konws, 
-		for_1079_base.service_code,
-		for_1079_base.price_uom_code,
-		sum(base_2.sales_bundle_gross_weight) over(partition by base_2.warehouse_code, date_trunc('month', base_2.dt_storage_end)) as warehouse_weight_month_end,
-
-       case when extract(day from base_2.dt_storage_end) < extract(day from base_2.dt_storage_start) then
-				(extract(year from base_2.dt_storage_end) - extract(year from base_2.dt_storage_start)) * 12 +
-       			(extract(month from base_2.dt_storage_end) - extract(month from base_2.dt_storage_start))
-			else (extract(year from base_2.dt_storage_end) - extract(year from base_2.dt_storage_start)) * 12 +
-       			(extract(month from base_2.dt_storage_end) - extract(month from base_2.dt_storage_start)) + 1 end as month_difference_2,
-       
-		for_1079_base.netpr,
-
-		case
-			when base_2.storage_cost_special_calculation_type_code = '4' then ceil(base_2.storage_duration_total_calendar_days / 7 :: numeric)
-			when base_2.storage_cost_special_calculation_type_code = '5' then ceil(base_2.storage_duration_total_calendar_days / 30 :: numeric)
-		end as special,
-		for_1079_base.currency_dogovor,
-		for_1079_base.datab,
-		for_1079_base.datbi
-	from dm_calc.storage_sales_bundles_weight as base_2
-	left join dict_dds.settings_and_parameters_sap as for_1082_1 on
-		for_1082_1.abap_program_code = '/RUSAL/ZLE112M'
-		and for_1082_1.case_code = 'PERET_FRN'
-		and for_1082_1.parameter_code = 'S_LIFNRA'
-		and for_1082_1.range_low_value = base_2.forwarder_code
-	left join dict_dds.settings_and_parameters_sap as for_1082_2 on
-		for_1082_2.abap_program_code = '/RUSAL/SD4553M'
-		and for_1082_2.parameter_code = 'S_FORMSTEU'
-		and for_1082_2.range_low_value = base_2.material_shape_code
-	
-		
-	join for_1079_base on
-		base_2.storage_cost_calculation_type_name = 'Логика Европа'
-		and for_1079_base.purchase_document_subtype_code = 'ZDTL'
-		and ((for_1082_1.range_low_value is not null and for_1079_base.zzsrvpos = 'S49')
-		or (for_1082_1.range_low_value is null and for_1082_2.range_low_value is not null and for_1079_base.tmp_1 is not null)
-		or (for_1082_1.range_low_value is null and for_1082_2.range_low_value is null and for_1079_base.tmp_2 is not null))
-			and for_1079_base.bukrs = base_2.unit_balance_code --'1520'
-			and for_1079_base.lifnr = base_2.forwarder_code
-			and for_1079_base.werks = base_2.plant_code --'1521'
-			and (for_1079_base.zzport = base_2.port_of_discharge_code or for_1079_base.zzport is null)
-			and (for_1079_base.zzforma = base_2.material_shape_code or for_1079_base.zzforma is null)
-			and (for_1079_base.zzet_tarif = base_2.etsng_code or for_1079_base.zzet_tarif is null)
-			and (for_1079_base.sdabw = base_2.transport_type_code or for_1079_base.sdabw is null)
-			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.dt_valid_from and for_1079_base.dt_valid_to
-			and base_2.dt_for_price_search_in_purchase_contract between for_1079_base.datab and for_1079_base.datbi
-			and (for_1079_base.zzterminal = base_2.warehouse_code or for_1079_base.zzterminal is null)
-			
-		left join dict_dds.settings_and_parameters_sap as for_1082_3 on
-			for_1079_base.tmp_2 is not null
-			and for_1082_3.range_low_value like 'EU%'
-			and for_1082_3.abap_program_code = '/RUSAL/SD4553M'
-			and for_1082_3.parameter_code = 'S_USLST'
-
-		left join dict_dds.settings_and_parameters_sap as param_sap on
-			param_sap.range_low_value = base_2.material_shape_code
-			and param_sap.abap_program_code = '/RUSAL/SD4553M'
-			and param_sap.parameter_code = 'FORMSTEU'
-			   
-		left join dict_dds.settings_and_parameters_sap as param_srv_1 on
-			param_srv_1.range_low_value = for_1082_3.range_low_value
-			and param_srv_1.abap_program_code = '/RUSAL/SD4553M'
-			and param_srv_1.parameter_code = 'S_USLSTC'
-		) as dfdf where dfdf.row_num = 1
-)
-distributed by (rn);
+004154169205029102720000102024-12-11	8700017698	00100	1515		1515		1	CNY	S49	TVS	1	2024-01-01	2024-12-31	2024-12-11	2024-01-01	2024-12-31	G000001139	5		01	0.33	8700017698	00100
+004154169205029102720000102024-12-11	8700019095	00170	1515		1515		2	CNY	S49	TVS	1	2024-07-01	2024-12-31	2024-12-11	2024-07-01	2024-12-31	G000001139	5		01	0.33	8700019095	00170
+004154169205029102720000102024-12-11	8700019106	00160	1515		1515		3	CNY	S49	TVS	1	2024-06-01	2024-12-31	2024-12-11	2024-06-01	2024-12-31	G000001139	5		01	0.33	8700019106	00160
+004154169205029102720000102024-12-11	8700018092	00090	1515		1515		4	CNY	S49	TVS	1	2024-04-01	2024-12-31	2024-12-11	2024-04-01	2024-12-31		6		01	0.33	8700018092	00090
+004154169205029102720000102024-12-11	8700018092	00080	1515		1515		5	CNY	S49	TVS	1	2024-04-01	2024-12-31	2024-12-11	2024-04-01	2024-12-31		6		01	0.40	8700018092	00080
+004154169205029102720000102024-12-11	8700021028	00020	1515		1515		6	CNY	S49	954	1	2024-12-01	2024-12-31	2024-12-11	2024-12-01	2024-12-31		6		01	160.00	8700021028	00020
+004154169205029102720000102024-12-11	8700021101	00020	1515		1515		7	CNY	S49	954	1	2024-12-09	2024-12-31	2024-12-11	2024-12-09	2024-12-31		6		01	160.00	8700021101	00020

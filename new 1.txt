@@ -1,11 +1,43 @@
-ls -R /home/airflow/plugins
-✔ Просмотр содержимого плагина
-bash
-Копировать код
-cat /home/airflow/plugins/holiday_theme/holiday_theme_plugin.py
-✔ Проверка прав
-bash
-Копировать код
-ls -ld /home/airflow/plugins
-ls -ld /home/airflow/plugins/holiday_theme
-ls -l  /home/airflow/plugins/holiday_theme
+[airflow@rgm-s-dwhair01 ~]$ ls -R /home/airflow/plugins
+/home/airflow/plugins:
+custom_operators  CustomTimetable.py  holiday_theme  __init__.py  __pycache__
+
+/home/airflow/plugins/custom_operators:
+__pycache__  SqlExecuteOperator.py
+
+/home/airflow/plugins/custom_operators/__pycache__:
+SqlExecuteOperator.cpython-312.pyc  SqlExecuteOperator.cpython-38.pyc
+
+/home/airflow/plugins/holiday_theme:
+holiday_theme_plugin.py  static
+
+/home/airflow/plugins/holiday_theme/static:
+snow.css  snow.js
+
+/home/airflow/plugins/__pycache__:
+custom_schedule.cpython-38.pyc   CustomTimetable.cpython-38.pyc
+CustomTimetable1.cpython-38.pyc  __init__.cpython-38.pyc
+[airflow@rgm-s-dwhair01 ~]$ cat /home/airflow/plugins/holiday_theme/holiday_theme_plugin.py
+from airflow.plugins_manager import AirflowPlugin
+from flask import Blueprint
+
+holiday_bp = Blueprint(
+    "holiday_theme",
+    __name__,
+    static_folder="static",
+    static_url_path="/holiday_static",
+)
+
+class HolidayThemePlugin(AirflowPlugin):
+    name = "holiday_theme"
+    flask_blueprints = [holiday_bp][airflow@rgm-s-dwhair01 ~]$
+
+
+drwsrwsrwt 5 airflow airflow 115 Dec 11 20:12 /home/airflow/plugins
+[airflow@rgm-s-dwhair01 ~]$ ls -ld /home/airflow/plugins/holiday_theme
+drwxr-sr-x 3 root airflow 51 Dec 11 20:15 /home/airflow/plugins/holiday_theme
+[airflow@rgm-s-dwhair01 ~]$ ls -l  /home/airflow/plugins/holiday_theme
+total 4
+-rw-r--r-- 1 root airflow 323 Dec 11 20:13 holiday_theme_plugin.py
+drwxr-sr-x 2 root airflow  37 Dec 11 20:20 static
+[airflow@rgm-s-dwhair01 ~]$

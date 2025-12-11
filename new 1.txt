@@ -1,12 +1,23 @@
-[root@rgm-s-dwhair01 ~]# chmod 755 /home/airflow/plugins
-[root@rgm-s-dwhair01 ~]# chown airflow:airflow /home/airflow/plugins
-[root@rgm-s-dwhair01 ~]# chown -R airflow:airflow /home/airflow/plugins/holiday_theme
-[root@rgm-s-dwhair01 ~]# chmod -R 755 /home/airflow/plugins/holiday_theme
-[root@rgm-s-dwhair01 ~]# ls -ld /home/airflow/plugins
-drwsr-sr-x 5 airflow airflow 115 Dec 11 20:12 /home/airflow/plugins
-[root@rgm-s-dwhair01 ~]# ls -ld /home/airflow/plugins/holiday_theme
-drwxr-sr-x 3 airflow airflow 51 Dec 11 20:15 /home/airflow/plugins/holiday_theme
-[root@rgm-s-dwhair01 ~]# ls -l /home/airflow/plugins/holiday_theme
-total 4
--rwxr-xr-x 1 airflow airflow 323 Dec 11 20:13 holiday_theme_plugin.py
-drwxr-sr-x 2 airflow airflow  37 Dec 11 20:20 static
+systemctl restart airflow-webserver
+2) Проверить загрузку плагинов
+От airflow:
+
+nginx
+Копировать код
+sudo -u airflow airflow info | grep -i plugin
+Если плагин загрузился, увидишь:
+
+yaml
+Копировать код
+Loaded plugins: holiday_theme
+3) Проверить, что webserver считал custom css/js
+От airflow:
+
+bash
+Копировать код
+sudo -u airflow grep -R "holiday_static" $AIRFLOW_HOME -n
+или:
+
+bash
+Копировать код
+sudo -u airflow grep -R "holiday_static" /u01/arf-venv/lib/python3.8/site-packages/airflow -n

@@ -1,39 +1,57 @@
-CREATE TEMP TABLE for_1079_asia AS
-SELECT
-    b2.rn,
-    fb.purchase_contract_code,
-    fb.position_line_item_code,
-    fb.konws,
-    fb.service_code,
-    fb.price_uom_code,
-    fb.currency_dogovor,
-    fb.datab,
-    fb.datbi
-FROM dm_calc.storage_sales_bundles_weight b2
-LEFT JOIN LATERAL (
+CREATE TEMP TABLE price_periods AS
+WITH prep AS (
     SELECT
-        f.*
-    FROM for_1079_base f
-    WHERE f.bukrs = b2.unit_balance_code
-      AND f.lifnr = b2.forwarder_code
-      AND (f.zzport = b2.port_of_discharge_code OR f.zzport IS NULL)
-      AND f.werks = b2.plant_code
-      AND f.zzsrvpos = 'S49'
-      AND (f.zzforma = b2.material_shape_code OR f.zzforma IS NULL)
-      AND (f.zzet_tarif = b2.etsng_code OR f.zzet_tarif IS NULL)
-      AND (f.sdabw = b2.transport_type_code OR f.sdabw IS NULL)
-      AND b2.dt_for_price_search_in_purchase_contract BETWEEN f.dt_valid_from AND f.dt_valid_to
-      AND b2.dt_for_price_search_in_purchase_contract BETWEEN f.datab AND f.datbi
-      AND b2.storage_cost_calculation_type_name = 'Логика Азия'
-      AND (f.zzterminal = b2.warehouse_code OR f.zzterminal IS NULL)
-      AND (f.vzzzone = b2.warehouse_storage_area_code OR f.vzzzone IS NULL)
-      AND f.purchase_document_subtype_code = 'ZDTL'
-    ORDER BY
-        f.order_asia,
-        f.kopos,
-        f.kbetr,
-        f.purchase_contract_code,
-        f.position_line_item_code
-    LIMIT 1
-) fb ON TRUE
-DISTRIBUTED BY (rn);
+        purchase_contract_code,
+        position_line_item_code,
+        bukrs,
+        lifnr,
+        zzport,
+        werks,
+        zzsrvpos,
+        zzforma,
+        zzet_tarif,
+        sdabw,
+        datab,
+        datbi,
+        dt_valid_from,
+        dt_valid_to,
+        kopos,
+        kbetr,
+        currency_dogovor,
+
+        LEAD(datab) OVER (PARTITION BY purchase_contract_code, position_line_item_code 
+                          ORDER BY datab) AS next_datab
+
+    FROM for_1079_base_raw
+)
+SELECT
+    *,
+    CASE
+        WHEN next_datab IS NOT NULL AND next_datab <= datbi THEN next_datab - INTERVAL '1 day'
+        ELSE datbi
+    END AS normalized_valid_to
+FROM prep;
+
+
+CREATE TEMP TABLE for_1079_asia AS
+SELECT DISTINCT ON (rn)
+    b.rn,
+    p.purchase_contract_code,
+    p.position_line_item_code,
+    p.konws,
+    p.service_code,
+    p.price_uom_code,
+    p.currency_dogovor,
+    p.datab,
+    p.normalized_valid_to AS datbi
+FROM storage_sales_bundles_weight b
+JOIN price_periods p
+    ON p.bukrs = b.unit_balance_code
+   AND p.lifnr = b.forwarder_code
+   AND (p.zzport = b.port_of_discharge_code OR p.zzport IS NULL)
+   AND (p.zzforma = b.material_shape_code OR p.zzforma IS NULL)
+   AND (p.zzet_tarif = b.etsng_code OR p.zzet_tarif IS NULL)
+   AND (p.sdabw = b.transport_type_code OR p.sdabw IS NULL)
+   AND b.dt_for_price_search_in_purchase_contract BETWEEN p.datab AND p.normalized_valid_to
+WHERE b.storage_cost_calculation_type_name = 'Логика Азия'
+ORDER BY rn, p.order_asia, p.kopos, p.kbetr;

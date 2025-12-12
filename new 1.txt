@@ -1,24 +1,16 @@
-from airflow.plugins_manager import AirflowPlugin
-from flask import Blueprint
+http://rgm-s-dwhair01:8080//holiday_static/snow.js
+document.addEventListener("DOMContentLoaded", () => {
+    const snow = document.createElement("div");
+    snow.className = "snowflakes";
+    document.body.appendChild(snow);
 
-holiday_bp = Blueprint(
-    "holiday_theme",
-    __name__,
-    static_folder="static",
-    static_url_path="/holiday_static",
-)
-
-class HolidayThemePlugin(AirflowPlugin):
-    name = "holiday_theme"
-
-    flask_blueprints = [holiday_bp]
-
-    appbuilder_views = []
-    flask_appbuilder_views = []
-    appbuilder_menu_items = []
+    for (let i = 0; i < 60; i++) {
+        const flake = document.createElement("div");
+        flake.className = "snowflake";
+        flake.innerHTML = "❄";
+        snow.appendChild(flake);
+    }
+});
 
 
-systemctl restart airflow-webserver
-
-
-http://<host>:8080/holiday_static/snow.js
+http://rgm-s-dwhair01:8080/home

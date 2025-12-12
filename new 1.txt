@@ -1,7 +1,20 @@
-http://rgm-s-dwhair01:8080//holiday_static/snow.js
-document.addEventListener("DOMContentLoaded", () => {
+console.log("🎄 Holiday theme JS loaded");
+
+function initSnow() {
+    if (!document.body || document.querySelector(".snowflakes")) {
+        return;
+    }
+
     const snow = document.createElement("div");
     snow.className = "snowflakes";
+    snow.style.position = "fixed";
+    snow.style.top = "0";
+    snow.style.left = "0";
+    snow.style.width = "100vw";
+    snow.style.height = "100vh";
+    snow.style.pointerEvents = "none";
+    snow.style.zIndex = "9999";
+
     document.body.appendChild(snow);
 
     for (let i = 0; i < 60; i++) {
@@ -10,7 +23,12 @@ document.addEventListener("DOMContentLoaded", () => {
         flake.innerHTML = "❄";
         snow.appendChild(flake);
     }
-});
+
+    console.log("❄️ Snow initialized");
+}
+
+// Airflow React UI → ждём
+setTimeout(initSnow, 1500);
 
 
-http://rgm-s-dwhair01:8080/home
+systemctl restart airflow-webserver

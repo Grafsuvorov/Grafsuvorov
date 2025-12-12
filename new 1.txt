@@ -1,1 +1,1 @@
-[airflow@rgm-s-dwhair01 ~]$ grep -R "ded_moroz" /u01/arf-venv/lib/python3.8/site-packages/airflow/www/templates -n
+warehouse_weight_month_end

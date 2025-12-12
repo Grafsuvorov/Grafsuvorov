@@ -1,34 +1,139 @@
-console.log("🎄 Holiday theme JS loaded");
+DROP TABLE IF EXISTS for_1079_base_norm;
 
-function initSnow() {
-    if (!document.body || document.querySelector(".snowflakes")) {
-        return;
-    }
+CREATE TEMP TABLE for_1079_base_norm AS
+WITH base AS (
+    SELECT 
+        purchase_contract_code,
+        position_line_item_code,
+        bukrs,
+        lifnr,
+        zzport,
+        werks,
+        zzsrvpos,
+        zzforma,
+        zzet_tarif,
+        sdabw,
+        zzterminal,
+        vzzzone,
+        konws,
+        service_code,
+        price_uom_code,
+        netpr,
+        kbetr,
+        order_asia,
+        currency_dogovor,
+        datab,
+        datbi,
+        purchase_document_subtype_code,
+        kopos,
 
-    const snow = document.createElement("div");
-    snow.className = "snowflakes";
-    snow.style.position = "fixed";
-    snow.style.top = "0";
-    snow.style.left = "0";
-    snow.style.width = "100vw";
-    snow.style.height = "100vh";
-    snow.style.pointerEvents = "none";
-    snow.style.zIndex = "9999";
+        LEAD(datab) OVER (
+            PARTITION BY purchase_contract_code, position_line_item_code
+            ORDER BY datab
+        ) AS next_datab
+    FROM for_1079_base
+)
+SELECT
+    purchase_contract_code,
+    position_line_item_code,
+    bukrs,
+    lifnr,
+    zzport,
+    werks,
+    zzsrvpos,
+    zzforma,
+    zzet_tarif,
+    sdabw,
+    zzterminal,
+    vzzzone,
+    konws,
+    service_code,
+    price_uom_code,
+    netpr,
+    kbetr,
+    order_asia,
+    currency_dogovor,
+    datab,
+    datbi,
+    purchase_document_subtype_code,
+    kopos,
+    COALESCE(next_datab - INTERVAL '1 day', datbi) AS effective_datbi
+FROM base
+DISTRIBUTED REPLICATED;
+Это даёт тебе:
 
-    document.body.appendChild(snow);
+внутри одного purchase_contract_code + position_line_item_code интервалы не пересекаются, а идут лесенкой;
 
-    for (let i = 0; i < 60; i++) {
-        const flake = document.createElement("div");
-        flake.className = "snowflake";
-        flake.innerHTML = "❄";
-        snow.appendChild(flake);
-    }
+дальше мы всё равно можем получить несколько строк на одну запись склада (разные договоры), и их надо отсечь по приоритету.
 
-    console.log("❄️ Snow initialized");
-}
+2. Предфильтруем веса по Азии
+Чтобы не гонять по джойну лишние 18 млн строк, можно сделать временную таблицу только с Азией и нужными полями:
 
-// Airflow React UI → ждём
-setTimeout(initSnow, 1500);
+sql
+Копировать код
+DROP TABLE IF EXISTS sw_asia;
 
+CREATE TEMP TABLE sw_asia AS
+SELECT
+    rn,
+    unit_balance_code,
+    forwarder_code,
+    plant_code,
+    port_of_discharge_code,
+    material_shape_code,
+    etsng_code,
+    transport_type_code,
+    warehouse_code,
+    warehouse_storage_area_code,
+    dt_for_price_search_in_purchase_contract
+FROM dm_calc.storage_sales_bundles_weight
+WHERE storage_cost_calculation_type_name = 'Логика Азия'
+DISTRIBUTED BY (unit_balance_code, forwarder_code, plant_code);
+Ты уже видел, что фильтр WHERE rn = '...' даёт результат мгновенно — как раз потому что данных мало. Здесь мы делаем аналогичный “срез по логике”.
 
-systemctl restart airflow-webserver
+3. Отбор одного договора на rn без row_number: DISTINCT ON
+Вот ключевой момент. Логика:
+
+Сначала делаем джойн всех подходящих договоров к записям склада.
+
+Потом говорим: “Оставь по одной строке на rn в соответствии с сортировкой (= приоритет).”
+
+sql
+Копировать код
+DROP TABLE IF EXISTS for_1079_asia;
+
+CREATE TEMP TABLE for_1079_asia AS
+SELECT DISTINCT ON (s.rn)
+    s.rn,
+    b.purchase_contract_code,
+    b.position_line_item_code,
+    b.konws,
+    b.service_code,
+    b.price_uom_code,
+    b.currency_dogovor,
+    b.datab,
+    b.effective_datbi AS datbi
+FROM sw_asia s
+JOIN for_1079_base_norm b
+    ON b.bukrs = s.unit_balance_code
+   AND b.lifnr = s.forwarder_code
+   AND (b.zzport = s.port_of_discharge_code OR b.zzport IS NULL)
+   AND b.werks = s.plant_code
+   AND b.zzsrvpos = 'S49'
+   AND (b.zzforma = s.material_shape_code OR b.zzforma IS NULL)
+   AND (b.zzet_tarif = s.etsng_code OR b.zzet_tarif IS NULL)
+   AND (b.sdabw = s.transport_type_code OR b.sdabw IS NULL)
+   AND (b.zzterminal = s.warehouse_code OR b.zzterminal IS NULL)
+   AND (b.vzzzone = s.warehouse_storage_area_code OR b.vzzzone IS NULL)
+   AND b.purchase_document_subtype_code = 'ZDTL'
+   AND s.dt_for_price_search_in_purchase_contract 
+           BETWEEN b.datab AND b.effective_datbi
+-- ВАЖНО: порядок — ровно такой же, как был в row_number()
+ORDER BY
+    s.rn,
+    b.order_asia,
+    b.kopos,
+    b.kbetr,
+    b.purchase_contract_code,
+    b.position_line_item_code
+DISTRIBUTED BY (rn);

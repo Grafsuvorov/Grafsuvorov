@@ -1,9 +1,39 @@
+sudo -i -u airflow
+Теперь видишь:
 
-[root@rgm-s-dwhair01 ~]# ^C
-[root@rgm-s-dwhair01 ~]# systemctl restart airflow-webserver
-[root@rgm-s-dwhair01 ~]# sudo -u airflow airflow info | grep -i plugin
-sudo: airflow: command not found
-[root@rgm-s-dwhair01 ~]# sudo -i -u airflow                                     [airflow@rgm-s-dwhair01 ~]$ sudo -u airflow airflow info | grep -i plugin
-airflow is not in the sudoers file.  This incident will be reported.
-[airflow@rgm-s-dwhair01 ~]$ sudo -u airflow grep -R "holiday_static" $AIRFLOW_HOME -n
-airflow is not in the sudoers file.  This incident will be reported.
+Копировать код
+[airflow@rgm-s-dwhair01 ~]$
+Ты уже airflow.
+
+2️⃣ Проверка плагина:
+Просто:
+
+bash
+Копировать код
+airflow info | grep -i plugin
+❗ без sudo.
+
+3️⃣ Проверка holiday_static:
+bash
+Копировать код
+grep -R "holiday_static" $AIRFLOW_HOME -n
+и:
+
+bash
+Копировать код
+grep -R "holiday_static" /u01/arf-venv/lib/python3.8/site-packages/airflow -n
+4️⃣ Если нужны логи webserver:
+bash
+Копировать код
+tail -n 200 ~/logs/airflow-webserver/*.log
+или:
+
+bash
+Копировать код
+tail -n 200 ~/logs/webserver/*.log
+👉 Пришли вывод команд:
+1) airflow info | grep -i plugin
+2) grep -R "holiday_static" /u01/arf-venv/lib/python3.8/site-packages/airflow -n
+И я скажу, видит ли Airflow твой новогодний плагин 🎄❄️😈
+
+Погнали!

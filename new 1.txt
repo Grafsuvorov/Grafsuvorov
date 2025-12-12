@@ -1,1 +1,131 @@
-warehouse_weight_month_end
+CREATE TEMP TABLE storage_europe_base AS
+SELECT
+    rn,
+    warehouse_code,
+    date_trunc('month', dt_storage_end) AS storage_month,
+    sales_bundle_gross_weight,
+    dt_storage_start,
+    dt_storage_end,
+    storage_cost_special_calculation_type_code,
+    storage_duration_total_calendar_days,
+    material_shape_code,
+    transport_type_code,
+    etsng_code,
+    forwarder_code,
+    unit_balance_code,
+    plant_code,
+    port_of_discharge_code,
+    warehouse_storage_area_code,
+    dt_for_price_search_in_purchase_contract
+FROM dm_calc.storage_sales_bundles_weight
+WHERE storage_cost_calculation_type_name = 'Логика Европа'
+DISTRIBUTED BY (rn);
+✅ Слой 2 — расчёт warehouse_weight_month_end (ОДИН РАЗ)
+sql
+Копировать код
+CREATE TEMP TABLE storage_europe_month_weight AS
+SELECT
+    warehouse_code,
+    storage_month,
+    SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
+FROM storage_europe_base
+GROUP BY warehouse_code, storage_month
+DISTRIBUTED BY (warehouse_code);
+🔑 Это ровно эквивалентно оконной функции, но:
+
+без сортировок
+
+без WindowAgg
+
+без риска логических искажений
+
+✅ Слой 3 — джойн к договорам (быстро и корректно)
+sql
+Копировать код
+CREATE TEMP TABLE storage_europe_prep AS
+SELECT
+    b.rn,
+    b.warehouse_code,
+    mw.warehouse_weight_month_end,
+    b.dt_storage_start,
+    b.dt_storage_end,
+    b.storage_cost_special_calculation_type_code,
+    b.storage_duration_total_calendar_days,
+    b.material_shape_code,
+    b.transport_type_code,
+    b.etsng_code,
+    b.forwarder_code,
+    b.unit_balance_code,
+    b.plant_code,
+    b.port_of_discharge_code,
+    b.warehouse_storage_area_code,
+    b.dt_for_price_search_in_purchase_contract
+FROM storage_europe_base b
+JOIN storage_europe_month_weight mw
+  ON mw.warehouse_code = b.warehouse_code
+ AND mw.storage_month = date_trunc('month', b.dt_storage_end)
+DISTRIBUTED BY (rn);
+✅ Слой 4 — финальный выбор договора (одна строка на rn)
+Тут оставляем row_number(), потому что:
+
+это бизнес-правило SAP
+
+“самый специфичный договор выигрывает”
+
+заменить его нельзя логически
+
+sql
+Копировать код
+CREATE TEMP TABLE for_1079_euro AS
+SELECT *
+FROM (
+    SELECT
+        p.rn,
+        fb.purchase_contract_code,
+        fb.position_line_item_code,
+        fb.konws,
+        fb.service_code,
+        fb.price_uom_code,
+        p.warehouse_weight_month_end,
+        CASE
+            WHEN extract(day from p.dt_storage_end) < extract(day from p.dt_storage_start)
+            THEN (extract(year from p.dt_storage_end) - extract(year from p.dt_storage_start)) * 12 +
+                 (extract(month from p.dt_storage_end) - extract(month from p.dt_storage_start))
+            ELSE (extract(year from p.dt_storage_end) - extract(year from p.dt_storage_start)) * 12 +
+                 (extract(month from p.dt_storage_end) - extract(month from p.dt_storage_start)) + 1
+        END AS month_difference_2,
+        fb.netpr,
+        CASE
+            WHEN p.storage_cost_special_calculation_type_code = '4'
+                THEN ceil(p.storage_duration_total_calendar_days / 7.0)
+            WHEN p.storage_cost_special_calculation_type_code = '5'
+                THEN ceil(p.storage_duration_total_calendar_days / 30.0)
+        END AS special,
+        fb.currency_dogovor,
+        fb.datab,
+        fb.effective_datbi,
+        ROW_NUMBER() OVER (
+            PARTITION BY p.rn
+            ORDER BY fb.order_euro_svh,
+                     fb.kopos,
+                     fb.kbetr,
+                     fb.purchase_contract_code,
+                     fb.position_line_item_code
+        ) AS rn_ord
+    FROM storage_europe_prep p
+    JOIN for_1079_base_norm fb
+      ON fb.bukrs = p.unit_balance_code
+     AND fb.lifnr = p.forwarder_code
+     AND fb.werks = p.plant_code
+     AND (fb.zzport = p.port_of_discharge_code OR fb.zzport IS NULL)
+     AND (fb.zzforma = p.material_shape_code OR fb.zzforma IS NULL)
+     AND (fb.zzet_tarif = p.etsng_code OR fb.zzet_tarif IS NULL)
+     AND (fb.sdabw = p.transport_type_code OR fb.sdabw IS NULL)
+     AND (fb.zzterminal = p.warehouse_code OR fb.zzterminal IS NULL)
+     AND (fb.vzzzone = p.warehouse_storage_area_code OR fb.vzzzone IS NULL)
+     AND p.dt_for_price_search_in_purchase_contract
+         BETWEEN fb.datab AND fb.effective_datbi
+     AND fb.purchase_document_subtype_code = 'ZDTL'
+) t
+WHERE rn_ord = 1
+DISTRIBUTED BY (rn);

@@ -1,74 +1,4 @@
-CREATE TEMP TABLE storage_europe_prep
-DISTRIBUTED BY (rn)
-AS
-SELECT
-    sw.rn,
-    sw.warehouse_code,
-    date_trunc('month', sw.dt_storage_end)::date AS month_key,
-    sw.sales_bundle_gross_weight,
-    sw.dt_storage_start,
-    sw.dt_storage_end,
-    sw.storage_cost_special_calculation_type_code,
-    sw.storage_duration_total_calendar_days,
-    sw.unit_balance_code,
-    sw.forwarder_code,
-    sw.plant_code,
-    sw.port_of_discharge_code,
-    sw.material_shape_code,
-    sw.etsng_code,
-    sw.transport_type_code,
-    sw.warehouse_storage_area_code,
-    sw.dt_for_price_search_in_purchase_contract
-FROM dm_calc.storage_sales_bundles_weight sw
-WHERE sw.storage_cost_calculation_type_name = 'Логика Европа';
-✔ быстро
-✔ без размножения
-✔ без row_number
-
-🔹 ШАГ 2. Считаем складской вес ОДИН РАЗ
-sql
-Копировать код
-CREATE TEMP TABLE warehouse_weight_month
-DISTRIBUTED BY (warehouse_code, month_key)
-AS
-SELECT
-    warehouse_code,
-    month_key,
-    SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
-FROM storage_europe_prep
-GROUP BY warehouse_code, month_key;
-✔ корректная сумма
-✔ объяснимая
-✔ совпадает с бизнес-логикой
-
-🔹 ШАГ 3. Нормализуем договоры (без перекрытий дат)
-sql
-Копировать код
-CREATE TEMP TABLE for_1079_base_norm
-DISTRIBUTED REPLICATED
-AS
-WITH base AS (
-    SELECT
-        *,
-        LEAD(datab) OVER (
-            PARTITION BY purchase_contract_code, position_line_item_code
-            ORDER BY datab
-        ) AS next_datab
-    FROM for_1079_base
-)
-SELECT
-    *,
-    COALESCE(next_datab - INTERVAL '1 day', datbi) AS effective_datbi
-FROM base;
-✔ больше нет перекрывающихся периодов
-✔ join по дате → 1 строка
-
-🔹 ШАГ 4. Финальный джойн Европы (БЕЗ row_number)
-sql
-Копировать код
-CREATE TEMP TABLE for_1079_euro
-DISTRIBUTED BY (rn)
-AS
+explain(verbose, format json)
 SELECT
     s.rn,
     fb.purchase_contract_code,
@@ -117,4 +47,165 @@ JOIN for_1079_base_norm fb
  AND (fb.vzzzone = s.warehouse_storage_area_code OR fb.vzzzone IS NULL)
  AND s.dt_for_price_search_in_purchase_contract
      BETWEEN fb.datab AND fb.effective_datbi
- AND fb.purchase_document_subtype_code = 'ZDTL';
+ AND fb.purchase_document_subtype_code = 'ZDTL' 
+
+
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 2,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 66378.60,
+      "Plan Rows": 175122744,
+      "Plan Width": 96,
+      "Output": ["storage_europe_prep.rn", "for_1079_base_norm.purchase_contract_code", "for_1079_base_norm.position_line_item_code", "for_1079_base_norm.konws", "for_1079_base_norm.service_code", "for_1079_base_norm.price_uom_code", "warehouse_weight_month.warehouse_weight_month_end", "(CASE WHEN (date_part('day'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END)", "for_1079_base_norm.netpr", "(CASE WHEN ((storage_europe_prep.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((storage_europe_prep.storage_duration_total_calendar_days)::numeric / '7'::numeric)) WHEN ((storage_europe_prep.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((storage_europe_prep.storage_duration_total_calendar_days)::numeric / '30'::numeric)) ELSE NULL::numeric END)", "for_1079_base_norm.currency_dogovor", "for_1079_base_norm.datab", "for_1079_base_norm.effective_datbi"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 2,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 19767.93,
+          "Plan Rows": 175122744,
+          "Plan Width": 96,
+          "Output": ["storage_europe_prep.rn", "for_1079_base_norm.purchase_contract_code", "for_1079_base_norm.position_line_item_code", "for_1079_base_norm.konws", "for_1079_base_norm.service_code", "for_1079_base_norm.price_uom_code", "warehouse_weight_month.warehouse_weight_month_end", "CASE WHEN (date_part('day'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) < date_part('day'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) THEN (((date_part('year'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone))) ELSE ((((date_part('year'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('year'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone)) * '12'::double precision) + (date_part('month'::text, (storage_europe_prep.dt_storage_end)::timestamp without time zone) - date_part('month'::text, (storage_europe_prep.dt_storage_start)::timestamp without time zone))) + '1'::double precision) END", "for_1079_base_norm.netpr", "CASE WHEN ((storage_europe_prep.storage_cost_special_calculation_type_code)::text = '4'::text) THEN ceil(((storage_europe_prep.storage_duration_total_calendar_days)::numeric / '7'::numeric)) WHEN ((storage_europe_prep.storage_cost_special_calculation_type_code)::text = '5'::text) THEN ceil(((storage_europe_prep.storage_duration_total_calendar_days)::numeric / '30'::numeric)) ELSE NULL::numeric END", "for_1079_base_norm.currency_dogovor", "for_1079_base_norm.datab", "for_1079_base_norm.effective_datbi"],
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Slice": 2,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Join Type": "Inner",
+              "Startup Cost": 0.00,
+              "Total Cost": 17666.46,
+              "Plan Rows": 175122744,
+              "Plan Width": 109,
+              "Output": ["storage_europe_prep.rn", "storage_europe_prep.dt_storage_start", "storage_europe_prep.dt_storage_end", "storage_europe_prep.storage_cost_special_calculation_type_code", "storage_europe_prep.storage_duration_total_calendar_days", "warehouse_weight_month.warehouse_weight_month_end", "for_1079_base_norm.purchase_contract_code", "for_1079_base_norm.position_line_item_code", "for_1079_base_norm.datab", "for_1079_base_norm.konws", "for_1079_base_norm.service_code", "for_1079_base_norm.price_uom_code", "for_1079_base_norm.netpr", "for_1079_base_norm.currency_dogovor", "for_1079_base_norm.effective_datbi"],
+              "Hash Cond": "(((storage_europe_prep.unit_balance_code)::text = (for_1079_base_norm.bukrs)::text) AND ((storage_europe_prep.forwarder_code)::text = (for_1079_base_norm.lifnr)::text) AND ((storage_europe_prep.plant_code)::text = (for_1079_base_norm.werks)::text))",
+              "Join Filter": "((((for_1079_base_norm.zzport)::text = (storage_europe_prep.port_of_discharge_code)::text) OR (for_1079_base_norm.zzport IS NULL)) AND (((for_1079_base_norm.zzforma)::text = (storage_europe_prep.material_shape_code)::text) OR (for_1079_base_norm.zzforma IS NULL)) AND (((for_1079_base_norm.zzet_tarif)::text = (storage_europe_prep.etsng_code)::text) OR (for_1079_base_norm.zzet_tarif IS NULL)) AND (((for_1079_base_norm.sdabw)::text = (storage_europe_prep.transport_type_code)::text) OR (for_1079_base_norm.sdabw IS NULL)) AND (((for_1079_base_norm.zzterminal)::text = (storage_europe_prep.warehouse_code)::text) OR (for_1079_base_norm.zzterminal IS NULL)) AND (((for_1079_base_norm.vzzzone)::text = (storage_europe_prep.warehouse_storage_area_code)::text) OR (for_1079_base_norm.vzzzone IS NULL)) AND (storage_europe_prep.dt_for_price_search_in_purchase_contract >= for_1079_base_norm.datab) AND (storage_europe_prep.dt_for_price_search_in_purchase_contract <= for_1079_base_norm.effective_datbi))",
+              "Plans": [
+                {
+                  "Node Type": "Hash Join",
+                  "Parent Relationship": "Outer",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Join Type": "Inner",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 4143.86,
+                  "Plan Rows": 16927926,
+                  "Plan Width": 122,
+                  "Output": ["storage_europe_prep.rn", "storage_europe_prep.warehouse_code", "storage_europe_prep.dt_storage_start", "storage_europe_prep.dt_storage_end", "storage_europe_prep.storage_cost_special_calculation_type_code", "storage_europe_prep.storage_duration_total_calendar_days", "storage_europe_prep.unit_balance_code", "storage_europe_prep.forwarder_code", "storage_europe_prep.plant_code", "storage_europe_prep.port_of_discharge_code", "storage_europe_prep.material_shape_code", "storage_europe_prep.etsng_code", "storage_europe_prep.transport_type_code", "storage_europe_prep.warehouse_storage_area_code", "storage_europe_prep.dt_for_price_search_in_purchase_contract", "warehouse_weight_month.warehouse_weight_month_end"],
+                  "Hash Cond": "(((storage_europe_prep.warehouse_code)::text = (warehouse_weight_month.warehouse_code)::text) AND (date_trunc('month'::text, (storage_europe_prep.dt_storage_end)::timestamp with time zone) = (warehouse_weight_month.month_key)::timestamp with time zone))",
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 2,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "storage_europe_prep",
+                      "Schema": "pg_temp_19",
+                      "Alias": "storage_europe_prep",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 711.58,
+                      "Plan Rows": 26674308,
+                      "Plan Width": 114,
+                      "Output": ["storage_europe_prep.rn", "storage_europe_prep.warehouse_code", "storage_europe_prep.dt_storage_start", "storage_europe_prep.dt_storage_end", "storage_europe_prep.storage_cost_special_calculation_type_code", "storage_europe_prep.storage_duration_total_calendar_days", "storage_europe_prep.unit_balance_code", "storage_europe_prep.forwarder_code", "storage_europe_prep.plant_code", "storage_europe_prep.port_of_discharge_code", "storage_europe_prep.material_shape_code", "storage_europe_prep.etsng_code", "storage_europe_prep.transport_type_code", "storage_europe_prep.warehouse_storage_area_code", "storage_europe_prep.dt_for_price_search_in_purchase_contract"]
+                    },
+                    {
+                      "Node Type": "Hash",
+                      "Parent Relationship": "Inner",
+                      "Slice": 2,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 431.05,
+                      "Total Cost": 431.05,
+                      "Plan Rows": 2376,
+                      "Plan Width": 23,
+                      "Output": ["warehouse_weight_month.warehouse_code", "warehouse_weight_month.month_key", "warehouse_weight_month.warehouse_weight_month_end"],
+                      "Plans": [
+                        {
+                          "Node Type": "Broadcast Motion",
+                          "Senders": 8,
+                          "Receivers": 8,
+                          "Parent Relationship": "Outer",
+                          "Slice": 1,
+                          "Segments": 8,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 431.05,
+                          "Plan Rows": 2376,
+                          "Plan Width": 23,
+                          "Output": ["warehouse_weight_month.warehouse_code", "warehouse_weight_month.month_key", "warehouse_weight_month.warehouse_weight_month_end"],
+                          "Plans": [
+                            {
+                              "Node Type": "Seq Scan",
+                              "Parent Relationship": "Outer",
+                              "Slice": 1,
+                              "Segments": 8,
+                              "Gang Type": "primary reader",
+                              "Relation Name": "warehouse_weight_month",
+                              "Schema": "pg_temp_19",
+                              "Alias": "warehouse_weight_month",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 431.00,
+                              "Plan Rows": 297,
+                              "Plan Width": 23,
+                              "Output": ["warehouse_weight_month.warehouse_code", "warehouse_weight_month.month_key", "warehouse_weight_month.warehouse_weight_month_end"]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Node Type": "Hash",
+                  "Parent Relationship": "Inner",
+                  "Slice": 2,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 515.98,
+                  "Total Cost": 515.98,
+                  "Plan Rows": 1445420,
+                  "Plan Width": 109,
+                  "Output": ["for_1079_base_norm.purchase_contract_code", "for_1079_base_norm.position_line_item_code", "for_1079_base_norm.bukrs", "for_1079_base_norm.lifnr", "for_1079_base_norm.zzport", "for_1079_base_norm.werks", "for_1079_base_norm.zzforma", "for_1079_base_norm.zzet_tarif", "for_1079_base_norm.sdabw", "for_1079_base_norm.datab", "for_1079_base_norm.zzterminal", "for_1079_base_norm.vzzzone", "for_1079_base_norm.konws", "for_1079_base_norm.service_code", "for_1079_base_norm.price_uom_code", "for_1079_base_norm.netpr", "for_1079_base_norm.currency_dogovor", "for_1079_base_norm.effective_datbi"],
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 2,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "for_1079_base_norm",
+                      "Schema": "pg_temp_19",
+                      "Alias": "for_1079_base_norm",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 515.98,
+                      "Plan Rows": 1445420,
+                      "Plan Width": 109,
+                      "Output": ["for_1079_base_norm.purchase_contract_code", "for_1079_base_norm.position_line_item_code", "for_1079_base_norm.bukrs", "for_1079_base_norm.lifnr", "for_1079_base_norm.zzport", "for_1079_base_norm.werks", "for_1079_base_norm.zzforma", "for_1079_base_norm.zzet_tarif", "for_1079_base_norm.sdabw", "for_1079_base_norm.datab", "for_1079_base_norm.zzterminal", "for_1079_base_norm.vzzzone", "for_1079_base_norm.konws", "for_1079_base_norm.service_code", "for_1079_base_norm.price_uom_code", "for_1079_base_norm.netpr", "for_1079_base_norm.currency_dogovor", "for_1079_base_norm.effective_datbi"],
+                      "Filter": "((for_1079_base_norm.purchase_document_subtype_code)::text = 'ZDTL'::text)"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]

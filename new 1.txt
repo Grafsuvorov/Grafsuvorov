@@ -1,97 +1,47 @@
-Под root:
+[airflow@rgm-s-dwhair01 ~]$ ls -l /home/airflow/plugins
+total 4
+drwsrwsrwt 3 airflow airflow   54 Aug 26 12:05 custom_operators
+-rw-r--r-- 1 root    airflow 3003 Dec 11 14:14 CustomTimetable.py
+drwxr-sr-x 4 airflow airflow   70 Dec 11 21:58 holiday_theme
+-rw-r--r-- 1 root    airflow    0 Dec 10 16:03 __init__.py
+drwxr-sr-x 2 airflow airflow  152 Dec 11 20:31 __pycache__
+[airflow@rgm-s-dwhair01 ~]$ airflow config get-value core plugins_folder
+/u01/arf-venv/lib/python3.8/site-packages/airflow/metrics/statsd_logger.py:178 DeprecationWarning: The statsd_allow_list option in [metrics] has been renamed to metrics_allow_list - the old setting has been used, but please update your config.
+/u01/arf-venv/lib/python3.8/site-packages/airflow/cli/cli_config.py:971 DeprecationWarning: The namespace option in [kubernetes] has been moved to the namespace option in [kubernetes_executor] - the old setting has been used, but please update your config.
+/home/airflow/plugins
+[airflow@rgm-s-dwhair01 ~]$ cat /etc/systemd/system/airflow-webserver.service
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 
-echo "" > /home/airflow/plugins/__init__.py
-chown airflow:airflow /home/airflow/plugins/__init__.py
-chmod 644 /home/airflow/plugins/__init__.py
+[Unit]
+Description=Airflow webserver daemon
+After=network.target
 
+[Service]
+#EnvironmentFile=/root/airflow
+EnvironmentFile=/etc/sysconfig/airflow
+User=airflow
+Group=airflow
+Type=simple
+ExecStart=/u01/arf-venv/bin/airflow webserver --pid /run/airflow/webserver.pid
+Restart=on-failure
+RestartSec=5s
+PrivateTmp=true
 
-Перезапуск webserver:
-
-systemctl restart airflow-webserver
-
-
-И проверка:
-
-sudo -i -u airflow
-airflow info | grep -i plugin
-
-✅ ПРОБЛЕМА №2 — Airflow загружается из другого каталога PLUGINS_FOLDER
-
-Ты прислал:
-
-plugins_folder | /home/airflow/plugins | /config:/home/airflow/plugins
-
-
-Вот это ПОДОЗРИТЕЛЬНО:
-
-/config:/home/airflow/plugins
-
-
-Это формат Docker-синтаксиса volume mapping.
-TAK Airflow показывает список каталогов, которые он смотрит:
-PLUGINS_FOLDER может быть массивом.
-
-Давай посмотрим точное значение:
-
-airflow config get-value core plugins_folder
-
-
-Если там что-то вроде:
-
-/config:/home/airflow/plugins
-
-
-→ Тогда Airflow ждёт, что плагин будет в /config тоже.
-
-🛠️ Если PLUGINS_FOLDER содержит два пути — дублируем плагин туда:
-
-Проверяем:
-
-ls -l /config
-
-
-Если каталог существует — копируем туда плагин:
-
-cp -r /home/airflow/plugins/holiday_theme /config/
-chown -R airflow:airflow /config/holiday_theme
-
-
-И снова:
-
-systemctl restart airflow-webserver
-
-❗ ПРОБЛЕМА №3 — Webserver в другом окружении (airflow-webserver.service указывает свой путь)
-
-Очень частая проблема:
-Airflow CLI работает в одном окружении, webserver — в другом.
-
-Проверим:
-
-cat /etc/systemd/system/airflow-webserver.service
-
-
-Нужно увидеть параметры:
-
-Environment=AIRFLOW_HOME=/home/airflow
-Environment=AIRFLOW__CORE__PLUGINS_FOLDER=/home/airflow/plugins
-
-
-Если там что-то другое — Airflow-webserver игнорирует твой каталог.
-
-👉 ЧТО ТЕБЕ НУЖНО СДЕЛАТЬ ПРЯМО СЕЙЧАС
-
-Пришли выводы:
-
-1️⃣
-ls -l /home/airflow/plugins
-
-2️⃣
-airflow config get-value core plugins_folder
-
-3️⃣
-cat /etc/systemd/system/airflow-webserver.service
-
-
-После этого я точно скажу, почему плагин не загружается.
-
-Мы уже очень близко — осталось поймать, где Airflow берёт PLUGINS_FOLDER 👍
+[Install]
+WantedBy=multi-user.target

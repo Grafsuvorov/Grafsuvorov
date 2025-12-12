@@ -1,47 +1,24 @@
-[airflow@rgm-s-dwhair01 ~]$ ls -l /home/airflow/plugins
-total 4
-drwsrwsrwt 3 airflow airflow   54 Aug 26 12:05 custom_operators
--rw-r--r-- 1 root    airflow 3003 Dec 11 14:14 CustomTimetable.py
-drwxr-sr-x 4 airflow airflow   70 Dec 11 21:58 holiday_theme
--rw-r--r-- 1 root    airflow    0 Dec 10 16:03 __init__.py
-drwxr-sr-x 2 airflow airflow  152 Dec 11 20:31 __pycache__
-[airflow@rgm-s-dwhair01 ~]$ airflow config get-value core plugins_folder
-/u01/arf-venv/lib/python3.8/site-packages/airflow/metrics/statsd_logger.py:178 DeprecationWarning: The statsd_allow_list option in [metrics] has been renamed to metrics_allow_list - the old setting has been used, but please update your config.
-/u01/arf-venv/lib/python3.8/site-packages/airflow/cli/cli_config.py:971 DeprecationWarning: The namespace option in [kubernetes] has been moved to the namespace option in [kubernetes_executor] - the old setting has been used, but please update your config.
-/home/airflow/plugins
-[airflow@rgm-s-dwhair01 ~]$ cat /etc/systemd/system/airflow-webserver.service
-#
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
+from airflow.plugins_manager import AirflowPlugin
+from flask import Blueprint
 
-[Unit]
-Description=Airflow webserver daemon
-After=network.target
+holiday_bp = Blueprint(
+    "holiday_theme",
+    __name__,
+    static_folder="static",
+    static_url_path="/holiday_static",
+)
 
-[Service]
-#EnvironmentFile=/root/airflow
-EnvironmentFile=/etc/sysconfig/airflow
-User=airflow
-Group=airflow
-Type=simple
-ExecStart=/u01/arf-venv/bin/airflow webserver --pid /run/airflow/webserver.pid
-Restart=on-failure
-RestartSec=5s
-PrivateTmp=true
+class HolidayThemePlugin(AirflowPlugin):
+    name = "holiday_theme"
 
-[Install]
-WantedBy=multi-user.target
+    flask_blueprints = [holiday_bp]
+
+    appbuilder_views = []
+    flask_appbuilder_views = []
+    appbuilder_menu_items = []
+
+
+systemctl restart airflow-webserver
+
+
+http://<host>:8080/holiday_static/snow.js

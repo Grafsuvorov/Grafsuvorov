@@ -1,30 +1,8 @@
-from airflow.plugins_manager import AirflowPlugin
-from flask import Blueprint
 
-holiday_bp = Blueprint(
-    "holiday_theme",
-    __name__,
-    static_folder="static",
-    static_url_path="/holiday_static",
-)
-
-class HolidayThemePlugin(AirflowPlugin):
-    name = "holiday_theme"
-    flask_blueprints = [holiday_bp]
-
-    # Обязательные поля для Airflow 2.6+ 
-    appbuilder_views = []
-    appbuilder_menu_items = []
-
-
-sudo systemctl restart airflow-webserver
-Потом проверяем снова:
-
-Копировать код
-sudo -i -u airflow
-airflow info | grep -i plugin
-Теперь должно появиться:
-
-Копировать код
-Loaded plugins:
-holiday_theme
+[root@rgm-s-dwhair01 ~]# systemctl restart airflow-webserver
+[root@rgm-s-dwhair01 ~]# sudo -i -u airflow
+[airflow@rgm-s-dwhair01 ~]$ airflow info | grep -i plugin
+/u01/arf-venv/lib/python3.8/site-packages/airflow/metrics/statsd_logger.py:178 DeprecationWarn                 ing: The statsd_allow_list option in [metrics] has been renamed to metrics_allow_list - the ol                 d setting has been used, but please update your config.
+/u01/arf-venv/lib/python3.8/site-packages/airflow/cli/cli_config.py:971 DeprecationWarning: Th                 e namespace option in [kubernetes] has been moved to the namespace option in [kubernetes_execu                 tor] - the old setting has been used, but please update your config.
+plugins_folder         | /home/airflow/plugins
+                | /config:/home/airflow/plugins   

@@ -1,128 +1,100 @@
 -- =========================================================
--- 0) Подготовка: исходные записи только "Логика Европа"
---    (распределяем по ключам основного hash join-а)
+-- 0) Маленькие справочники SAP в temp (чтобы не тягать dict_dds многократно)
 -- =========================================================
-DROP TABLE IF EXISTS storage_europe_prep;
-CREATE TEMP TABLE storage_europe_prep AS
-SELECT
+drop table if exists sap_peret_frn;
+create temp table sap_peret_frn as
+select range_low_value
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = '/RUSAL/ZLE112M'
+  and case_code        = 'PERET_FRN'
+  and parameter_code   = 'S_LIFNRA'
+distributed replicated;
+
+drop table if exists sap_s_formsteu;
+create temp table sap_s_formsteu as
+select range_low_value
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = '/RUSAL/SD4553M'
+  and parameter_code    = 'S_FORMSTEU'
+distributed replicated;
+
+drop table if exists sap_eu_uslst;
+create temp table sap_eu_uslst as
+select range_low_value
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = '/RUSAL/SD4553M'
+  and parameter_code    = 'S_USLST'
+  and range_low_value like 'EU%'
+distributed replicated;
+
+drop table if exists sap_formsteu;
+create temp table sap_formsteu as
+select range_low_value
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = '/RUSAL/SD4553M'
+  and parameter_code    = 'FORMSTEU'
+distributed replicated;
+
+drop table if exists sap_uslstc;
+create temp table sap_uslstc as
+select range_low_value
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = '/RUSAL/SD4553M'
+  and parameter_code    = 'S_USLSTC'
+distributed replicated;
+
+analyze sap_peret_frn;
+analyze sap_s_formsteu;
+analyze sap_eu_uslst;
+analyze sap_formsteu;
+analyze sap_uslstc;
+
+-- =========================================================
+-- 1) Подготовка входа по Европе (минимум полей)
+--    (распределяем по (unit_balance_code, forwarder_code, plant_code),
+--     чтобы join с base был дешевле; дальше всё равно перераспределим по rn)
+-- =========================================================
+drop table if exists storage_europe_prep;
+create temp table storage_europe_prep as
+select
     rn,
+    sales_bundle_gross_weight,
     warehouse_code,
     dt_storage_start,
     dt_storage_end,
     storage_cost_special_calculation_type_code,
     storage_duration_total_calendar_days,
-    unit_balance_code,
     forwarder_code,
-    plant_code,
-    port_of_discharge_code,
     material_shape_code,
     etsng_code,
     transport_type_code,
+    port_of_discharge_code,
     warehouse_storage_area_code,
+    plant_code,
+    unit_balance_code,
     dt_for_price_search_in_purchase_contract,
-    sales_bundle_gross_weight
-FROM dm_calc.storage_sales_bundles_weight
-WHERE storage_cost_calculation_type_name = 'Логика Европа'
-DISTRIBUTED BY (unit_balance_code, forwarder_code, plant_code);
+    storage_cost_calculation_type_name
+from dm_calc.storage_sales_bundles_weight
+where storage_cost_calculation_type_name = 'Логика Европа'
+distributed by (unit_balance_code, forwarder_code, plant_code);
 
-ANALYZE storage_europe_prep;
-
-
--- =========================================================
--- 1) Маленькие справочники SAP (лучше реплицировать)
--- =========================================================
-DROP TABLE IF EXISTS sap_peret_frn;
-CREATE TEMP TABLE sap_peret_frn AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/ZLE112M'
-  AND case_code = 'PERET_FRN'
-  AND parameter_code = 'S_LIFNRA'
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS sap_s_formsteu;
-CREATE TEMP TABLE sap_s_formsteu AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'S_FORMSTEU'
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS sap_formsteu;
-CREATE TEMP TABLE sap_formsteu AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'FORMSTEU'
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS sap_eu_uslst;
-CREATE TEMP TABLE sap_eu_uslst AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'S_USLST'
-  AND range_low_value LIKE 'EU%'
-DISTRIBUTED REPLICATED;
-
-DROP TABLE IF EXISTS sap_uslstc;
-CREATE TEMP TABLE sap_uslstc AS
-SELECT range_low_value
-FROM dict_dds.settings_and_parameters_sap
-WHERE abap_program_code = '/RUSAL/SD4553M'
-  AND parameter_code = 'S_USLSTC'
-DISTRIBUTED REPLICATED;
-
+analyze storage_europe_prep;
 
 -- =========================================================
--- 2) Нормализация периодов for_1079_base под "лесенку"
---    ВАЖНО: PARTITION BY должен быть по "ключу условия",
---    иначе лесенка будет неправильной.
---
---    (ниже я делаю "лесенку" в рамках всех полей,
---     которые участвуют в матчинге условий)
+-- 2) Нормализованный base (если ты используешь effective_datbi)
+--    Если effective_datbi тебе НЕ нужен для Европы — можно использовать for_1079_base напрямую,
+--    но тогда верни исходные проверки dt_valid_from/dt_valid_to + datab/datbi как раньше.
 -- =========================================================
-DROP TABLE IF EXISTS for_1079_base_norm;
-CREATE TEMP TABLE for_1079_base_norm AS
-WITH b AS (
-    SELECT
-        fb.*,
-        LEAD(fb.datab) OVER (
-            PARTITION BY
-                fb.bukrs, fb.lifnr, fb.werks,
-                fb.zzsrvpos,
-                fb.zzport,
-                fb.zzforma,
-                fb.zzet_tarif,
-                fb.sdabw,
-                fb.zzterminal,
-                fb.vzzzone,
-                fb.purchase_document_subtype_code
-            ORDER BY fb.datab
-        ) AS next_datab
-    FROM for_1079_base fb
-)
-SELECT
-    b.*,
-    CASE
-        WHEN b.next_datab IS NULL THEN b.datbi
-        ELSE LEAST(b.datbi, (b.next_datab - INTERVAL '1 day')::timestamp)
-    END AS effective_datbi
-FROM b
-DISTRIBUTED BY (bukrs, lifnr, werks);
-
-ANALYZE for_1079_base_norm;
-
+-- предполагаю, что for_1079_base_norm уже создан тобой ранее
+analyze for_1079_base_norm;
 
 -- =========================================================
--- 3) Кандидаты Европа:
---    - делаем тяжелый join локально
---    - считаем warehouse_weight_month_end как в оригинале (ПОСЛЕ join)
---    - считаем rank-ключи для выбора лучшего договора на rn
+-- 3) Собираем кандидатов (это аналог "толстого" куска аналитика),
+--    тут же считаем warehouse_weight_month_end как в оригинале (после join!)
 -- =========================================================
-DROP TABLE IF EXISTS euro_candidates;
-CREATE TEMP TABLE euro_candidates AS
-SELECT
+drop table if exists euro_candidates;
+create temp table euro_candidates as
+select
     s.rn,
 
     fb.purchase_contract_code,
@@ -132,104 +104,95 @@ SELECT
     fb.service_code,
     fb.price_uom_code,
 
-    -- как у аналитика: сумма после join => учитывает мультипликацию
-    SUM(s.sales_bundle_gross_weight) OVER (
-        PARTITION BY s.warehouse_code, date_trunc('month', s.dt_storage_end)
-    ) AS warehouse_weight_month_end,
+    -- ВАЖНО: как у аналитика — сумма ПОСЛЕ JOIN (значит учитывает мультипликацию)
+    sum(s.sales_bundle_gross_weight) over (
+        partition by s.warehouse_code, date_trunc('month', s.dt_storage_end)
+    ) as warehouse_weight_month_end,
 
-    CASE
-        WHEN extract(day from s.dt_storage_end) < extract(day from s.dt_storage_start)
-        THEN (extract(year from s.dt_storage_end) - extract(year from s.dt_storage_start)) * 12
+    case
+        when extract(day from s.dt_storage_end) < extract(day from s.dt_storage_start)
+        then (extract(year from s.dt_storage_end) - extract(year from s.dt_storage_start)) * 12
            + (extract(month from s.dt_storage_end) - extract(month from s.dt_storage_start))
-        ELSE (extract(year from s.dt_storage_end) - extract(year from s.dt_storage_start)) * 12
+        else (extract(year from s.dt_storage_end) - extract(year from s.dt_storage_start)) * 12
            + (extract(month from s.dt_storage_end) - extract(month from s.dt_storage_start)) + 1
-    END AS month_difference_2,
+    end as month_difference_2,
 
     fb.netpr,
 
-    CASE
-        WHEN s.storage_cost_special_calculation_type_code = '4'
-            THEN ceil(s.storage_duration_total_calendar_days / 7::numeric)
-        WHEN s.storage_cost_special_calculation_type_code = '5'
-            THEN ceil(s.storage_duration_total_calendar_days / 30::numeric)
-    END AS special,
+    case
+        when s.storage_cost_special_calculation_type_code = '4'
+            then ceil(s.storage_duration_total_calendar_days / 7::numeric)
+        when s.storage_cost_special_calculation_type_code = '5'
+            then ceil(s.storage_duration_total_calendar_days / 30::numeric)
+    end as special,
 
     fb.currency_dogovor,
     fb.datab,
-    fb.effective_datbi AS datbi,
+    fb.effective_datbi as datbi,
 
-    -- поля для сортировки
+    -- поля для сортировки/приоритета
     fb.order_euro_svh,
     fb.kopos,
     fb.kbetr,
 
-    -- логика приоритета (как у аналитика через param_sap/param_srv_1)
-    CASE
-        WHEN (ps.range_low_value IS NOT NULL AND usc.range_low_value IS NOT NULL) THEN 1
-        WHEN (ps.range_low_value IS NULL AND usc.range_low_value IS NULL) THEN 1
-        ELSE 0
-    END AS pref_ok
+    case
+        when (ps.range_low_value is not null and usc.range_low_value is not null) then 1
+        when (ps.range_low_value is null     and usc.range_low_value is null)     then 1
+        else 0
+    end as pref_ok
 
-FROM storage_europe_prep s
+from storage_europe_prep s
 
--- параметры для ветвления логики (как в оригинале)
-LEFT JOIN sap_peret_frn frn
-  ON frn.range_low_value = s.forwarder_code
+left join sap_peret_frn frn
+  on frn.range_low_value = s.forwarder_code
 
-LEFT JOIN sap_s_formsteu sf
-  ON sf.range_low_value = s.material_shape_code
+left join sap_s_formsteu sf
+  on sf.range_low_value = s.material_shape_code
 
--- base (тяжелый join)
-JOIN for_1079_base_norm fb
-  ON fb.bukrs = s.unit_balance_code
- AND fb.lifnr = s.forwarder_code
- AND fb.werks = s.plant_code
+join for_1079_base_norm fb
+  on fb.purchase_document_subtype_code = 'ZDTL'
+ and fb.bukrs = s.unit_balance_code
+ and fb.lifnr = s.forwarder_code
+ and fb.werks = s.plant_code
 
- -- условия “как в оригинале” (с NULL как "универсально")
- AND (fb.zzport     = s.port_of_discharge_code OR fb.zzport IS NULL)
- AND (fb.zzforma    = s.material_shape_code    OR fb.zzforma IS NULL)
- AND (fb.zzet_tarif = s.etsng_code             OR fb.zzet_tarif IS NULL)
- AND (fb.sdabw      = s.transport_type_code    OR fb.sdabw IS NULL)
- AND (fb.zzterminal = s.warehouse_code         OR fb.zzterminal IS NULL)
+ -- “универсальные” поля
+ and (fb.zzport     = s.port_of_discharge_code or fb.zzport is null)
+ and (fb.zzforma    = s.material_shape_code    or fb.zzforma is null)
+ and (fb.zzet_tarif = s.etsng_code             or fb.zzet_tarif is null)
+ and (fb.sdabw      = s.transport_type_code    or fb.sdabw is null)
+ and (fb.zzterminal = s.warehouse_code         or fb.zzterminal is null)
 
- -- зона для Европы в оригинале не участвует всегда (у тебя в евро-скрипте её нет),
- -- если нужно строго как в Азии — добавь аналогично:
- -- AND (fb.vzzzone = s.warehouse_storage_area_code OR fb.vzzzone IS NULL)
+ -- даты (через effective_datbi)
+ and s.dt_for_price_search_in_purchase_contract >= fb.datab
+ and s.dt_for_price_search_in_purchase_contract <= fb.effective_datbi
 
- AND s.dt_for_price_search_in_purchase_contract >= fb.datab
- AND s.dt_for_price_search_in_purchase_contract <= fb.effective_datbi
+-- EU связка (как в оригинале)
+left join sap_eu_uslst eu
+  on fb.tmp_2 is not null
+ and eu.range_low_value = fb.zzsrvpos
 
-WHERE
-    fb.purchase_document_subtype_code = 'ZDTL'
-    AND (
-        (frn.range_low_value IS NOT NULL AND fb.zzsrvpos = 'S49')
-        OR (frn.range_low_value IS NULL AND sf.range_low_value IS NOT NULL AND fb.tmp_1 IS NOT NULL)
-        OR (frn.range_low_value IS NULL AND sf.range_low_value IS NULL AND fb.tmp_2 IS NOT NULL)
+left join sap_formsteu ps
+  on ps.range_low_value = s.material_shape_code
+
+left join sap_uslstc usc
+  on usc.range_low_value = eu.range_low_value
+
+where
+    (
+        (frn.range_low_value is not null and fb.zzsrvpos = 'S49')
+        or (frn.range_low_value is null and sf.range_low_value is not null and fb.tmp_1 is not null)
+        or (frn.range_low_value is null and sf.range_low_value is null and fb.tmp_2 is not null)
     )
+distributed by (rn);
 
--- связка EU% (как в оригинале)
-LEFT JOIN sap_eu_uslst eu
-  ON fb.tmp_2 IS NOT NULL
- AND eu.range_low_value = fb.zzsrvpos
-
-LEFT JOIN sap_formsteu ps
-  ON ps.range_low_value = s.material_shape_code
-
-LEFT JOIN sap_uslstc usc
-  ON usc.range_low_value = eu.range_low_value
-
-DISTRIBUTED BY (rn);
-
-ANALYZE euro_candidates;
-
+analyze euro_candidates;
 
 -- =========================================================
--- 4) Финальный выбор 1 строки на rn (как row_number=1)
---    DISTINCT ON эквивалентен при одинаковом ORDER BY
+-- 4) Забираем 1 строку на rn тем же приоритетом, что у аналитика
 -- =========================================================
-DROP TABLE IF EXISTS for_1079_euro2;
-CREATE TEMP TABLE for_1079_euro2 AS
-SELECT DISTINCT ON (rn)
+drop table if exists for_1079_euro2;
+create temp table for_1079_euro2 as
+select
     rn,
     purchase_contract_code,
     position_line_item_code,
@@ -243,15 +206,22 @@ SELECT DISTINCT ON (rn)
     currency_dogovor,
     datab,
     datbi
-FROM euro_candidates
-ORDER BY
-    rn,
-    order_euro_svh,
-    kopos,
-    kbetr,
-    pref_ok DESC,
-    purchase_contract_code,
-    position_line_item_code
-DISTRIBUTED BY (rn);
+from (
+    select
+        ec.*,
+        row_number() over (
+            partition by rn
+            order by
+                order_euro_svh,
+                kopos,
+                kbetr,
+                pref_ok desc,
+                purchase_contract_code,
+                position_line_item_code
+        ) as row_num
+    from euro_candidates ec
+) t
+where row_num = 1
+distributed by (rn);
 
-ANALYZE for_1079_euro2;
+analyze for_1079_euro2;

@@ -1,7 +1,18 @@
--- ------------------------------------------------------------
--- ЛОГИКА ЕВРОПА (переписано)
--- ------------------------------------------------------------
+DROP TABLE IF EXISTS euro_wh_month_weight;
 
+CREATE TEMP TABLE euro_wh_month_weight
+ON COMMIT DROP AS
+SELECT
+    warehouse_code,
+    date_trunc('month', dt_storage_end) AS dt_storage_end_month,
+    SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
+FROM dm_calc.storage_sales_bundles_weight
+WHERE storage_cost_calculation_type_name = 'Логика Европа'
+GROUP BY 1,2
+DISTRIBUTED BY (warehouse_code);
+2️⃣ Определение договора / позиции хранения (ЕВРОПА)
+sql
+Копировать код
 DROP TABLE IF EXISTS for_1079_euro;
 
 CREATE TEMP TABLE for_1079_euro
@@ -15,21 +26,6 @@ WITH base_euro AS (
     WHERE b.storage_cost_calculation_type_name = 'Логика Европа'
 ),
 
--- ------------------------------------------------------------
--- Вес склада за месяц (считаем ОДИН раз)
--- ------------------------------------------------------------
-warehouse_month_weight AS (
-    SELECT
-        warehouse_code,
-        dt_storage_end_month,
-        SUM(sales_bundle_gross_weight) AS warehouse_weight_month_end
-    FROM base_euro
-    GROUP BY 1,2
-),
-
--- ------------------------------------------------------------
--- Все кандидаты договоров
--- ------------------------------------------------------------
 candidates AS (
     SELECT
         b.rn,
@@ -66,12 +62,12 @@ candidates AS (
         f.datab,
         f.datbi,
 
-        -- поля для сортировки
+        -- поля приоритета
         f.order_euro_svh,
         f.kopos,
         f.kbetr,
 
-        -- совпадение формы/услуги (как в оригинале, но без размножения)
+        -- совпадение формы / услуги (без EU%-картезиана)
         CASE
             WHEN param_shape.range_low_value IS NOT NULL
              AND param_srv.range_low_value   IS NOT NULL THEN 1
@@ -82,12 +78,13 @@ candidates AS (
 
     FROM base_euro b
 
-    LEFT JOIN warehouse_month_weight w
+    -- корректный физический вес склада за месяц
+    LEFT JOIN euro_wh_month_weight w
         ON w.warehouse_code = b.warehouse_code
        AND w.dt_storage_end_month = b.dt_storage_end_month
 
     -- --------------------------------------------------------
-    -- признаки выбора ветки услуги
+    -- параметры ветвления услуги
     -- --------------------------------------------------------
     LEFT JOIN dict_dds.settings_and_parameters_sap lifnr_param
         ON lifnr_param.abap_program_code = '/RUSAL/ZLE112M'
@@ -122,7 +119,7 @@ candidates AS (
        AND b.dt_for_price_search_in_purchase_contract BETWEEN f.datab AND f.datbi
 
     -- --------------------------------------------------------
-    -- параметры совпадения (БЕЗ EU%-картезиана)
+    -- совпадение формы и услуги
     -- --------------------------------------------------------
     LEFT JOIN dict_dds.settings_and_parameters_sap param_shape
         ON param_shape.abap_program_code = '/RUSAL/SD4553M'
@@ -136,9 +133,6 @@ candidates AS (
        AND param_srv.range_low_value = f.zzsrvpos
 ),
 
--- ------------------------------------------------------------
--- выбор лучшего кандидата
--- ------------------------------------------------------------
 ranked AS (
     SELECT
         c.*,

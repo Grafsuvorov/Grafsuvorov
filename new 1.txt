@@ -1,56 +1,353 @@
-WITH RECURSIVE lineage AS (
-    -- стартуем от витрины
-    SELECT
-        d.parent_table_id,
-        d.parent_table,
-        d.child_table_id,
-        d.child_table,
-        1 AS depth
-    FROM tech_etl.table_dependencies d
-    WHERE d.parent_table = 'dm.sb_wuc'
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 8,
+      "Receivers": 1,
+      "Slice": 1,
+      "Segments": 8,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 4246809.88,
+      "Plan Rows": 2140843912,
+      "Plan Width": 596,
+      "Output": ["base_3.sales_bundle_code", "base_3.plant_producer_delivery_code", "base_3.plant_producer_delivery_position_code", "base_3.initial_delivery_code", "base_3.material_code", "base_3.dt_shipment", "base_3.railcar_code", "base_3.transport_bill_code", "base_3.uni", "base_3.material_shape_code", "base_3.port_of_discharge_code", "base_3.dt_arrival_to_russian_port", "base_3.dt_storage_end_in_release", "base_3.transport_type_code", "base_3.etsng_code", "base_3.dt_report", "base_3.sales_bundle_net_weight", "base_3.sales_bundle_gross_weight", "base_3.batch_code", "base_3.dt_arrival", "base_3.receiving_plant_code", "base_3.sales_delivery_code", "base_3.transportation_inbound_delivery_code", "base_3.delivery_for_storage_calculation_code", "base_3.transportation_inbound_delivery_position_code", "base_3.delivery_position_for_storage_calculation_code", "base_3.forwarder_code", "base_3.storage_cost_calculation_type_name", "base_3.transport_departure_hub_code", "base_3.transport_destination_hub_code", "base_3.transportation_outbound_delivery_code", "base_3.transportation_outbound_delivery_position_code", "base_3.is_final_transportation_stage_code", "base_3.transportation_stage_code", "base_3.storage_calculation_bundle_quantity", "base_3.warehouse_code", "base_3.delivery_in_final_release_code", "base_3.dt_final_release", "base_3.bill_of_lading_code", "base_3.bill_of_lading_number", "base_3.dt_bill_of_lading", "base_3.incoterms_code", "base_3.storage_cost_special_calculation_type_code", "base_3.warehouse_storage_area_code", "base_3.plant_code", "base_3.unit_balance_code", "base_3.creditor_in_shipment_instruction_code", "base_3.dt_storage_start", "base_3.dt_shipped_from_warehouse", "base_3.dt_storage_end", "base_3.service_number", "base_3.storage_duration_total_calendar_days", "base_3.shipment_instruction_number", "base_3.dt_for_price_search_in_purchase_contract", "base_3.purchase_contract_code", "base_3.purchase_contract_position_code", "base_3.purchase_contract_position_currency_code", "base_3.service_code", "base_3.purchase_contract_position_uom_code", "base_3.storage_duration_free_by_contract_calendar_days", "base_3.storage_duration_free_by_delivery_calendar_days", "base_3.storage_duration_payable_calendar_days", "base_3.remote_warehouse_code", "base_3.dt_transportation_stage_start_p", "base_3.dt_transportation_stage_start_r", "(CASE WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL)) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND ((base_3.dt_transportation_stage_start_r < base_3.dt_storage_end_in_release) OR (base_3.dt_storage_end_in_release < base_3.dt_transportation_stage_start_p))) THEN base_3.dt_transportation_stage_start_r WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL)) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND (base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p)) THEN base_3.dt_storage_end_in_release WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (base_3.dt_storage_end_in_release IS NULL) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL))) THEN base_3.dt_transportation_stage_start_r WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (base_3.dt_transportation_stage_start_r IS NULL) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND (base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p)) THEN base_3.dt_storage_end_in_release ELSE NULL::date END)", "(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END)", "base_3.storage_cost_calculated_amount_local", "base_3.storage_payable_001_030_days_gross_weight", "base_3.storage_payable_031_060_days_gross_weight", "base_3.storage_payable_061_090_days_gross_weight", "base_3.storage_payable_091_180_days_gross_weight", "base_3.storage_payable_181_365_days_gross_weight", "base_3.storage_payable_over_365_days_gross_weight", "base_3.is_stored_in_russian_port_code", "(CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '1'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '30'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "(CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '31'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '60'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "(CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '61'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '90'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "(CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '91'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '180'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "(CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '181'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '365'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "(CASE WHEN (base_3.storage_duration_payable_calendar_days > '365'::numeric) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END)", "\"outer\".metal_in_china_stock_balance_closing_weight"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 1,
+          "Segments": 8,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 709257.99,
+          "Plan Rows": 2140843912,
+          "Plan Width": 596,
+          "Output": ["base_3.sales_bundle_code", "base_3.plant_producer_delivery_code", "base_3.plant_producer_delivery_position_code", "base_3.initial_delivery_code", "base_3.material_code", "base_3.dt_shipment", "base_3.railcar_code", "base_3.transport_bill_code", "base_3.uni", "base_3.material_shape_code", "base_3.port_of_discharge_code", "base_3.dt_arrival_to_russian_port", "base_3.dt_storage_end_in_release", "base_3.transport_type_code", "base_3.etsng_code", "base_3.dt_report", "base_3.sales_bundle_net_weight", "base_3.sales_bundle_gross_weight", "base_3.batch_code", "base_3.dt_arrival", "base_3.receiving_plant_code", "base_3.sales_delivery_code", "base_3.transportation_inbound_delivery_code", "base_3.delivery_for_storage_calculation_code", "base_3.transportation_inbound_delivery_position_code", "base_3.delivery_position_for_storage_calculation_code", "base_3.forwarder_code", "base_3.storage_cost_calculation_type_name", "base_3.transport_departure_hub_code", "base_3.transport_destination_hub_code", "base_3.transportation_outbound_delivery_code", "base_3.transportation_outbound_delivery_position_code", "base_3.is_final_transportation_stage_code", "base_3.transportation_stage_code", "base_3.storage_calculation_bundle_quantity", "base_3.warehouse_code", "base_3.delivery_in_final_release_code", "base_3.dt_final_release", "base_3.bill_of_lading_code", "base_3.bill_of_lading_number", "base_3.dt_bill_of_lading", "base_3.incoterms_code", "base_3.storage_cost_special_calculation_type_code", "base_3.warehouse_storage_area_code", "base_3.plant_code", "base_3.unit_balance_code", "base_3.creditor_in_shipment_instruction_code", "base_3.dt_storage_start", "base_3.dt_shipped_from_warehouse", "base_3.dt_storage_end", "base_3.service_number", "base_3.storage_duration_total_calendar_days", "base_3.shipment_instruction_number", "base_3.dt_for_price_search_in_purchase_contract", "base_3.purchase_contract_code", "base_3.purchase_contract_position_code", "base_3.purchase_contract_position_currency_code", "base_3.service_code", "base_3.purchase_contract_position_uom_code", "base_3.storage_duration_free_by_contract_calendar_days", "base_3.storage_duration_free_by_delivery_calendar_days", "base_3.storage_duration_payable_calendar_days", "base_3.remote_warehouse_code", "base_3.dt_transportation_stage_start_p", "base_3.dt_transportation_stage_start_r", "CASE WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL)) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND ((base_3.dt_transportation_stage_start_r < base_3.dt_storage_end_in_release) OR (base_3.dt_storage_end_in_release < base_3.dt_transportation_stage_start_p))) THEN base_3.dt_transportation_stage_start_r WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL)) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND (base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p)) THEN base_3.dt_storage_end_in_release WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (base_3.dt_storage_end_in_release IS NULL) AND (NOT (base_3.dt_transportation_stage_start_r IS NULL))) THEN base_3.dt_transportation_stage_start_r WHEN (((base_3.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\"}'::text[])) AND (base_3.dt_transportation_stage_start_r IS NULL) AND (NOT (base_3.dt_storage_end_in_release IS NULL)) AND (base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p)) THEN base_3.dt_storage_end_in_release ELSE NULL::date END", "CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END", "base_3.storage_cost_calculated_amount_local", "base_3.storage_payable_001_030_days_gross_weight", "base_3.storage_payable_031_060_days_gross_weight", "base_3.storage_payable_061_090_days_gross_weight", "base_3.storage_payable_091_180_days_gross_weight", "base_3.storage_payable_181_365_days_gross_weight", "base_3.storage_payable_over_365_days_gross_weight", "base_3.is_stored_in_russian_port_code", "CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '1'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '30'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '31'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '60'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '61'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '90'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '91'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '180'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "CASE WHEN ((base_3.storage_duration_payable_calendar_days >= '181'::numeric) AND (base_3.storage_duration_payable_calendar_days <= '365'::numeric)) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "CASE WHEN (base_3.storage_duration_payable_calendar_days > '365'::numeric) THEN COALESCE(CASE WHEN (((base_3.purchase_contract_position_currency_code)::text = 'USD'::text) OR (base_3.storage_cost_calculated_amount_local IS NULL)) THEN base_3.storage_cost_calculated_amount_local ELSE (((base_3.storage_cost_calculated_amount_local * (COALESCE(currency_rates.currency_to_multiplier, '1'::numeric))::double precision) * (CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) > '0'::numeric) THEN COALESCE(currency_rates.currency_rate, '1'::numeric) ELSE '1'::numeric END)::double precision) / ((CASE WHEN (COALESCE(currency_rates.currency_rate, '1'::numeric) < '0'::numeric) THEN abs(COALESCE(currency_rates.currency_rate, '1'::numeric)) ELSE '1'::numeric END * COALESCE(currency_rates.currency_from_multiplier, '1'::numeric)))::double precision) END, '0'::double precision) ELSE '0'::double precision END", "NULL::unknown"],
+          "Plans": [
+            {
+              "Node Type": "Hash Join",
+              "Parent Relationship": "Outer",
+              "Slice": 1,
+              "Segments": 8,
+              "Gang Type": "primary reader",
+              "Join Type": "Left",
+              "Startup Cost": 0.00,
+              "Total Cost": 549765.12,
+              "Plan Rows": 2140843912,
+              "Plan Width": 541,
+              "Output": ["base_3.sales_bundle_code", "base_3.plant_producer_delivery_code", "base_3.plant_producer_delivery_position_code", "base_3.initial_delivery_code", "base_3.material_code", "base_3.dt_shipment", "base_3.railcar_code", "base_3.transport_bill_code", "base_3.uni", "base_3.material_shape_code", "base_3.port_of_discharge_code", "base_3.dt_arrival_to_russian_port", "base_3.dt_storage_end_in_release", "base_3.transport_type_code", "base_3.etsng_code", "base_3.dt_report", "base_3.sales_bundle_net_weight", "base_3.sales_bundle_gross_weight", "base_3.batch_code", "base_3.dt_arrival", "base_3.receiving_plant_code", "base_3.sales_delivery_code", "base_3.transportation_inbound_delivery_code", "base_3.delivery_for_storage_calculation_code", "base_3.transportation_inbound_delivery_position_code", "base_3.delivery_position_for_storage_calculation_code", "base_3.forwarder_code", "base_3.storage_cost_calculation_type_name", "base_3.transport_departure_hub_code", "base_3.transport_destination_hub_code", "base_3.transportation_outbound_delivery_code", "base_3.transportation_outbound_delivery_position_code", "base_3.is_final_transportation_stage_code", "base_3.transportation_stage_code", "base_3.storage_calculation_bundle_quantity", "base_3.warehouse_code", "base_3.delivery_in_final_release_code", "base_3.dt_final_release", "base_3.bill_of_lading_code", "base_3.bill_of_lading_number", "base_3.dt_bill_of_lading", "base_3.incoterms_code", "base_3.storage_cost_special_calculation_type_code", "base_3.warehouse_storage_area_code", "base_3.plant_code", "base_3.unit_balance_code", "base_3.creditor_in_shipment_instruction_code", "base_3.dt_storage_start", "base_3.dt_shipped_from_warehouse", "base_3.dt_storage_end", "base_3.service_number", "base_3.storage_duration_total_calendar_days", "base_3.shipment_instruction_number", "base_3.dt_for_price_search_in_purchase_contract", "base_3.is_stored_in_russian_port_code", "base_3.remote_warehouse_code", "base_3.dt_transportation_stage_start_p", "base_3.dt_transportation_stage_start_r", "base_3.purchase_contract_code", "base_3.purchase_contract_position_code", "base_3.purchase_contract_position_currency_code", "base_3.service_code", "base_3.purchase_contract_position_uom_code", "base_3.storage_duration_free_by_contract_calendar_days", "base_3.storage_duration_free_by_delivery_calendar_days", "base_3.storage_duration_payable_calendar_days", "base_3.storage_cost_calculated_amount_local", "base_3.storage_payable_001_030_days_gross_weight", "base_3.storage_payable_031_060_days_gross_weight", "base_3.storage_payable_061_090_days_gross_weight", "base_3.storage_payable_091_180_days_gross_weight", "base_3.storage_payable_181_365_days_gross_weight", "base_3.storage_payable_over_365_days_gross_weight", "currency_rates.currency_rate", "currency_rates.currency_from_multiplier", "currency_rates.currency_to_multiplier"],
+              "Hash Cond": "(((base_3.purchase_contract_position_currency_code)::text = (currency_rates.currency_from_code)::text) AND (base_3.dt_report = currency_rates.dt_currency_rate))",
+              "Plans": [
+                {
+                  "Node Type": "Seq Scan",
+                  "Parent Relationship": "Outer",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Relation Name": "base_3",
+                  "Schema": "pg_temp_346764",
+                  "Alias": "base_3",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 6860.98,
+                  "Plan Rows": 157984752,
+                  "Plan Width": 525,
+                  "Output": ["base_3.sales_bundle_code", "base_3.plant_producer_delivery_code", "base_3.plant_producer_delivery_position_code", "base_3.initial_delivery_code", "base_3.material_code", "base_3.dt_shipment", "base_3.railcar_code", "base_3.transport_bill_code", "base_3.uni", "base_3.material_shape_code", "base_3.port_of_discharge_code", "base_3.dt_arrival_to_russian_port", "base_3.dt_storage_end_in_release", "base_3.transport_type_code", "base_3.etsng_code", "base_3.dt_report", "base_3.sales_bundle_net_weight", "base_3.sales_bundle_gross_weight", "base_3.batch_code", "base_3.dt_arrival", "base_3.receiving_plant_code", "base_3.sales_delivery_code", "base_3.transportation_inbound_delivery_code", "base_3.delivery_for_storage_calculation_code", "base_3.transportation_inbound_delivery_position_code", "base_3.delivery_position_for_storage_calculation_code", "base_3.forwarder_code", "base_3.storage_cost_calculation_type_name", "base_3.transport_departure_hub_code", "base_3.transport_destination_hub_code", "base_3.transportation_outbound_delivery_code", "base_3.transportation_outbound_delivery_position_code", "base_3.is_final_transportation_stage_code", "base_3.transportation_stage_code", "base_3.storage_calculation_bundle_quantity", "base_3.warehouse_code", "base_3.delivery_in_final_release_code", "base_3.dt_final_release", "base_3.bill_of_lading_code", "base_3.bill_of_lading_number", "base_3.dt_bill_of_lading", "base_3.incoterms_code", "base_3.storage_cost_special_calculation_type_code", "base_3.warehouse_storage_area_code", "base_3.plant_code", "base_3.unit_balance_code", "base_3.creditor_in_shipment_instruction_code", "base_3.dt_storage_start", "base_3.dt_shipped_from_warehouse", "base_3.dt_storage_end", "base_3.service_number", "base_3.storage_duration_total_calendar_days", "base_3.shipment_instruction_number", "base_3.dt_for_price_search_in_purchase_contract", "base_3.is_stored_in_russian_port_code", "base_3.remote_warehouse_code", "base_3.dt_transportation_stage_start_p", "base_3.dt_transportation_stage_start_r", "base_3.purchase_contract_code", "base_3.purchase_contract_position_code", "base_3.purchase_contract_position_currency_code", "base_3.service_code", "base_3.purchase_contract_position_uom_code", "base_3.storage_duration_free_by_contract_calendar_days", "base_3.storage_duration_free_by_delivery_calendar_days", "base_3.storage_duration_payable_calendar_days", "base_3.storage_cost_calculated_amount_local", "base_3.storage_payable_001_030_days_gross_weight", "base_3.storage_payable_031_060_days_gross_weight", "base_3.storage_payable_061_090_days_gross_weight", "base_3.storage_payable_091_180_days_gross_weight", "base_3.storage_payable_181_365_days_gross_weight", "base_3.storage_payable_over_365_days_gross_weight"]
+                },
+                {
+                  "Node Type": "Hash",
+                  "Parent Relationship": "Inner",
+                  "Slice": 1,
+                  "Segments": 8,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 2319.76,
+                  "Total Cost": 2319.76,
+                  "Plan Rows": 15155520,
+                  "Plan Width": 24,
+                  "Output": ["currency_rates.currency_from_code", "currency_rates.dt_currency_rate", "currency_rates.currency_rate", "currency_rates.currency_from_multiplier", "currency_rates.currency_to_multiplier"],
+                  "Plans": [
+                    {
+                      "Node Type": "Seq Scan",
+                      "Parent Relationship": "Outer",
+                      "Slice": 1,
+                      "Segments": 8,
+                      "Gang Type": "primary reader",
+                      "Relation Name": "currency_rates",
+                      "Schema": "dict_dds",
+                      "Alias": "currency_rates",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 2319.76,
+                      "Plan Rows": 15155520,
+                      "Plan Width": 24,
+                      "Output": ["currency_rates.currency_from_code", "currency_rates.dt_currency_rate", "currency_rates.currency_rate", "currency_rates.currency_from_multiplier", "currency_rates.currency_to_multiplier"],
+                      "Filter": "(((currency_rates.currency_rate_type_code)::text = 'M'::text) AND ((currency_rates.currency_to_code)::text = 'USD'::text) AND (NOT currency_rates.deleted_flag))"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]
 
-    UNION ALL
 
-    SELECT
-        d.parent_table_id,
-        d.parent_table,
-        d.child_table_id,
-        d.child_table,
-        l.depth + 1
-    FROM tech_etl.table_dependencies d
-    JOIN lineage l
-      ON l.child_table_id = d.parent_table_id
-    WHERE l.depth < 15
-),
--- берём минимальную глубину для каждой таблицы
-dedup AS (
-    SELECT
-        child_table_id,
-        child_table,
-        MIN(depth) AS min_depth
-    FROM lineage
-    GROUP BY child_table_id, child_table
+insert into userdata.storage_sales_bundles_amount (
+	sales_bundle_code,
+	plant_producer_delivery_code,
+	plant_producer_delivery_position_code,
+	initial_delivery_code,
+	material_code,
+	dt_shipment,
+	railcar_code,
+	transport_bill_code,
+	uni,
+	material_shape_code,
+	port_of_discharge_code,
+	dt_arrival_to_russian_port,
+	dt_storage_end_in_release,
+	transport_type_code,
+	etsng_code,
+	dt_report,
+	sales_bundle_net_weight,
+	sales_bundle_gross_weight,
+	batch_code,
+	dt_arrival,
+	receiving_plant_code,
+	sales_delivery_code,
+	transportation_inbound_delivery_code,
+	delivery_for_storage_calculation_code,
+	transportation_inbound_delivery_position_code,
+	delivery_position_for_storage_calculation_code,
+	forwarder_code,
+	storage_cost_calculation_type_name,
+	transport_departure_hub_code,
+	transport_destination_hub_code,
+	transportation_outbound_delivery_code,
+	transportation_outbound_delivery_position_code,
+	is_final_transportation_stage_code,
+	transportation_stage_code,
+	storage_calculation_bundle_quantity,
+	warehouse_code,
+	delivery_in_final_release_code,
+	dt_final_release,
+	bill_of_lading_code,
+	bill_of_lading_number,
+	dt_bill_of_lading,
+	incoterms_code,
+	storage_cost_special_calculation_type_code,
+	warehouse_storage_area_code,
+	plant_code,
+	unit_balance_code,
+	creditor_in_shipment_instruction_code,
+	dt_storage_start,
+	dt_shipped_from_warehouse,
+	dt_storage_end,
+	service_number,
+	storage_duration_total_calendar_days,
+	shipment_instruction_number,
+	dt_for_price_search_in_purchase_contract,
+	purchase_contract_code,
+	purchase_contract_position_code,
+	purchase_contract_position_currency_code,
+	service_code,
+	purchase_contract_position_uom_code,
+	storage_duration_free_by_contract_calendar_days,
+	storage_duration_free_by_delivery_calendar_days,
+	storage_duration_payable_calendar_days,
+	remote_warehouse_code,
+	dt_transportation_stage_start_p,
+	dt_transportation_stage_start_r,
+	dt_shipment_from_foreign_warehouse,
+	storage_cost_calculated_amount,
+	storage_cost_calculated_amount_local,
+	storage_payable_001_030_days_gross_weight,
+	storage_payable_031_060_days_gross_weight,
+	storage_payable_061_090_days_gross_weight,
+	storage_payable_091_180_days_gross_weight,
+	storage_payable_181_365_days_gross_weight,
+	storage_payable_over_365_days_gross_weight,
+	is_stored_in_russian_port_code,
+	storage_calculated_cost_001_030_amount,
+	storage_calculated_cost_031_060_amount,
+	storage_calculated_cost_061_090_amount,
+	storage_calculated_cost_091_180_amount,
+	storage_calculated_cost_181_365_amount,
+	storage_calculated_cost_over_365_amount,
+	metal_in_china_stock_balance_closing_weight
 )
-SELECT
-    d.min_depth               AS depth,
-    tm.table_schema,
-    tm.table_name,
-    tm.table_last_load
-FROM dedup d
-JOIN tech_etl.tables_meta tm
-  ON tm.table_id = d.child_table_id
-ORDER BY
-    d.min_depth,
-    CASE tm.table_schema
-        WHEN 'raw' THEN 1
-        WHEN 'raw_ext' THEN 1
-        WHEN 'stg' THEN 2
-        WHEN 'dict_stg' THEN 2
-        WHEN 'ods' THEN 3
-        WHEN 'dds' THEN 4
-        WHEN 'dict_dds' THEN 4
-        WHEN 'dm_calc' THEN 5
-        WHEN 'dm' THEN 6
-        ELSE 99
-    END,
-    tm.table_name;
+
+select
+	base_3.sales_bundle_code,
+	base_3.plant_producer_delivery_code,
+	base_3.plant_producer_delivery_position_code,
+	base_3.initial_delivery_code,
+	base_3.material_code,
+	base_3.dt_shipment,
+	base_3.railcar_code,
+	base_3.transport_bill_code,
+	base_3.uni,
+	base_3.material_shape_code,
+	base_3.port_of_discharge_code,
+	base_3.dt_arrival_to_russian_port,
+	base_3.dt_storage_end_in_release,
+	base_3.transport_type_code,
+	base_3.etsng_code,
+	base_3.dt_report,
+	base_3.sales_bundle_net_weight,
+	base_3.sales_bundle_gross_weight,
+	base_3.batch_code,
+	base_3.dt_arrival,
+	base_3.receiving_plant_code,
+	base_3.sales_delivery_code,
+	base_3.transportation_inbound_delivery_code,
+	base_3.delivery_for_storage_calculation_code,
+	base_3.transportation_inbound_delivery_position_code,
+	base_3.delivery_position_for_storage_calculation_code,
+	base_3.forwarder_code,
+	base_3.storage_cost_calculation_type_name,
+	base_3.transport_departure_hub_code,
+	base_3.transport_destination_hub_code,
+	base_3.transportation_outbound_delivery_code,
+	base_3.transportation_outbound_delivery_position_code,
+	base_3.is_final_transportation_stage_code,
+	base_3.transportation_stage_code,
+	base_3.storage_calculation_bundle_quantity,
+	base_3.warehouse_code,
+	base_3.delivery_in_final_release_code,
+	base_3.dt_final_release,
+	base_3.bill_of_lading_code,
+	base_3.bill_of_lading_number,
+	base_3.dt_bill_of_lading,
+	base_3.incoterms_code,
+	base_3.storage_cost_special_calculation_type_code,
+	base_3.warehouse_storage_area_code,
+	base_3.plant_code,
+	base_3.unit_balance_code,
+	base_3.creditor_in_shipment_instruction_code,
+	base_3.dt_storage_start,
+	base_3.dt_shipped_from_warehouse,
+	base_3.dt_storage_end,
+	base_3.service_number,
+	base_3.storage_duration_total_calendar_days,
+	base_3.shipment_instruction_number,
+	base_3.dt_for_price_search_in_purchase_contract,
+	base_3.purchase_contract_code,
+	base_3.purchase_contract_position_code,
+	base_3.purchase_contract_position_currency_code,
+	base_3.service_code,
+	base_3.purchase_contract_position_uom_code,
+	base_3.storage_duration_free_by_contract_calendar_days,
+	base_3.storage_duration_free_by_delivery_calendar_days,
+	base_3.storage_duration_payable_calendar_days,
+	base_3.remote_warehouse_code,
+	base_3.dt_transportation_stage_start_p,
+	base_3.dt_transportation_stage_start_r,
+
+	case when base_3.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа')
+			and base_3.dt_transportation_stage_start_r is not null and base_3.dt_storage_end_in_release is not null -- A.1
+			and ((base_3.dt_transportation_stage_start_r < base_3.dt_storage_end_in_release) or (base_3.dt_storage_end_in_release < base_3.dt_transportation_stage_start_p) ) -- A.1.1
+				then base_3.dt_transportation_stage_start_r
+
+		when base_3.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа')
+			and base_3.dt_transportation_stage_start_r is not null and base_3.dt_storage_end_in_release is not null -- A.1
+			and base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p -- A.1.2
+				then base_3.dt_storage_end_in_release 
+
+		when base_3.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа')
+			and base_3.dt_storage_end_in_release is null -- A.2
+			and base_3.dt_transportation_stage_start_r is not null -- A.2.1
+				then base_3.dt_transportation_stage_start_r
+
+		when base_3.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа')
+			and base_3.dt_transportation_stage_start_r is null -- A.2
+			and base_3.dt_storage_end_in_release is not null and base_3.dt_storage_end_in_release >= base_3.dt_transportation_stage_start_p -- A.2.2
+				then base_3.dt_storage_end_in_release
+	end as dt_shipment_from_foreign_warehouse,
+
+	case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier,1) * case when coalesce(rates_for_1090.currency_rate,1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate,1)) else 1 end * coalesce(currency_from_multiplier,1))
+	end as storage_cost_calculated_amount, -- LE.001090 пересчитывание в USD
+
+	base_3.storage_cost_calculated_amount_local as storage_cost_calculated_amount_local,
+	base_3.storage_payable_001_030_days_gross_weight,
+	base_3.storage_payable_031_060_days_gross_weight,
+	base_3.storage_payable_061_090_days_gross_weight,
+	base_3.storage_payable_091_180_days_gross_weight,
+	base_3.storage_payable_181_365_days_gross_weight,
+	base_3.storage_payable_over_365_days_gross_weight,
+	base_3.is_stored_in_russian_port_code,
+
+	case when base_3.storage_duration_payable_calendar_days between 1 and 30
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_001_030_amount, -- LE.001095
+
+	case when base_3.storage_duration_payable_calendar_days between 31 and 60
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_031_060_amount, -- LE.001096
+
+	case when base_3.storage_duration_payable_calendar_days between 61 and 90
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_061_090_amount, -- LE.001097
+
+	case when base_3.storage_duration_payable_calendar_days between 91 and 180
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_091_180_amount, -- LE.001098
+
+	case when base_3.storage_duration_payable_calendar_days between 181 and 365
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_181_365_amount, -- LE.001099
+
+	case when base_3.storage_duration_payable_calendar_days > 365
+			then coalesce(case when base_3.purchase_contract_position_currency_code = 'USD' or base_3.storage_cost_calculated_amount_local is null then base_3.storage_cost_calculated_amount_local
+			else
+			base_3.storage_cost_calculated_amount_local
+			* coalesce(rates_for_1090.currency_to_multiplier, 1) * case when coalesce(rates_for_1090.currency_rate, 1) > 0 then coalesce(rates_for_1090.currency_rate, 1) else 1 end /
+			(case when coalesce(rates_for_1090.currency_rate, 1) < 0 then abs(coalesce(rates_for_1090.currency_rate, 1)) else 1 end * coalesce(currency_from_multiplier, 1))
+			end, 0) else 0
+	end as storage_calculated_cost_over_365_amount, -- LE.001100
+
+	null as metal_in_china_stock_balance_closing_weight -- LE.001063 Нет логики заполнения
+
+from base_3
+left join dict_dds.currency_rates as rates_for_1090 on
+	rates_for_1090.currency_rate_type_code = 'M'
+	and rates_for_1090.currency_from_code = base_3.purchase_contract_position_currency_code
+	and rates_for_1090.currency_to_code = 'USD'
+	and rates_for_1090.dt_currency_rate = base_3.dt_report
+	and rates_for_1090.deleted_flag = false
+;
+-- Вторая часть скрипта Заканчивается.

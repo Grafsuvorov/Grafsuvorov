@@ -1,69 +1,19 @@
-WITH RECURSIVE lineage AS (
-    -- старт
-    SELECT
-        d.parent_table_id,
-        d.parent_table,
-        d.child_table_id,
-        d.child_table,
-        1 AS depth,
-        ARRAY[d.parent_table_id, d.child_table_id] AS path
-    FROM tech_etl.table_dependencies d
-    WHERE d.parent_table = 'dm.sb_wuc'
-
-    UNION ALL
-
-    -- рекурсия вниз
-    SELECT
-        d.parent_table_id,
-        d.parent_table,
-        d.child_table_id,
-        d.child_table,
-        l.depth + 1,
-        l.path || d.child_table_id
-    FROM tech_etl.table_dependencies d
-    JOIN lineage l
-      ON l.child_table_id = d.parent_table_id
-    WHERE
-        l.depth < 10
-        AND NOT d.child_table_id = ANY(l.path)
-)
-SELECT
-    l.depth,
-    l.parent_table,
-    l.child_table,
-    pm.table_last_load AS parent_load,
-    cm.table_last_load AS child_load,
-    (cm.table_last_load - pm.table_last_load) AS lag
-FROM lineage l
-JOIN tech_etl.tables_meta pm ON pm.table_id = l.parent_table_id
-JOIN tech_etl.tables_meta cm ON cm.table_id = l.child_table_id
-ORDER BY l.depth, lag DESC;
-
-
-
-WITH RECURSIVE lineage AS (
-    SELECT parent_table_id, child_table_id, 1 AS depth
-    FROM tech_etl.table_dependencies
-    WHERE parent_table = 'dm.sb_wuc'
-
-    UNION ALL
-
-    SELECT d.parent_table_id, d.child_table_id, l.depth + 1
-    FROM tech_etl.table_dependencies d
-    JOIN lineage l ON l.child_table_id = d.parent_table_id
-    WHERE l.depth < 10
-)
-SELECT DISTINCT *
-FROM lineage;
-
-
-SELECT
-    l.depth,
-    p.table_name AS parent_table,
-    c.table_name AS child_table,
-    pm.table_last_load,
-    cm.table_last_load
-FROM lineage l
-JOIN tech_etl.tables_meta pm ON pm.table_id = l.parent_table_id
-JOIN tech_etl.tables_meta cm ON cm.table_id = l.child_table_id;
-
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg.AUSP	2025-11-25 12:06:26.518	2025-09-19 02:42:05.248
+1	dm.sb_wuc	stg./RUSAL/SD4798M	2025-11-25 12:06:26.518	2025-09-19 01:43:26.024
+1	dm.sb_wuc	stg./RUSAL/SD4798M	2025-11-25 12:06:26.518	2025-09-19 01:43:26.024
+1	dm.sb_wuc	stg./RUSAL/SD4798M	2025-11-25 12:06:26.518	2025-09-19 01:43:26.024
+1	dm.sb_wuc	stg./RUSAL/SD4798M	2025-11-25 12:06:26.518	2025-09-19 01:43:26.024
+1	dm.sb_wuc	stg./RUSAL/SD4798M	2025-11-25 12:06:26.518	2025-09-19 01:43:26.024

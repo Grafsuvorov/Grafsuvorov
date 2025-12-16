@@ -1,12 +1,46 @@
+SELECT
+    d.parent_table,
+    d.child_table,
+    pm.table_last_load  AS parent_load,
+    cm.table_last_load  AS child_load,
+    (cm.table_last_load - pm.table_last_load) AS lag,
+    d.dependency_level
+FROM tech_etl.table_dependencies d
+JOIN tech_etl.tables_meta pm
+  ON pm.table_id = d.parent_table_id
+JOIN tech_etl.tables_meta cm
+  ON cm.table_id = d.child_table_id
+WHERE cm.table_last_load > pm.table_last_load
+ORDER BY lag DESC;
 
-select * from tech_etl.table_dependencies
+
+SELECT DISTINCT
+    d.child_table AS root_cause_table,
+    cm.table_last_load
+FROM tech_etl.table_dependencies d
+JOIN tech_etl.tables_meta pm ON pm.table_id = d.parent_table_id
+JOIN tech_etl.tables_meta cm ON cm.table_id = d.child_table_id
+WHERE cm.table_last_load > pm.table_last_load
+ORDER BY cm.table_last_load DESC;
 
 
-CREATE TABLE tech_etl.table_dependencies (
-    parent_table_id int,
-    parent_table      varchar(200) NOT NULL, 
-    child_table_id    int NOT NULL, 
-    child_table       varchar(200) NOT NULL,    dependency_level  int          NOT NULL,   -- глубина от parent
-    parent_last_load  timestamp    NULL,    child_last_load   timestamp    NULL       
-)
-DISTRIBUTED BY (parent_table);
+SELECT DISTINCT
+    d.parent_table AS broken_table
+FROM tech_etl.table_dependencies d
+JOIN tech_etl.tables_meta pm ON pm.table_id = d.parent_table_id
+JOIN tech_etl.tables_meta cm ON cm.table_id = d.child_table_id
+WHERE cm.table_last_load > pm.table_last_load;
+
+
+SELECT
+    d.child_table,
+    pm.table_last_load AS parent_load,
+    cm.table_last_load AS child_load,
+    (cm.table_last_load - pm.table_last_load) AS lag,
+    d.dependency_level
+FROM tech_etl.table_dependencies d
+JOIN tech_etl.tables_meta pm ON pm.table_id = d.parent_table_id
+JOIN tech_etl.tables_meta cm ON cm.table_id = d.child_table_id
+WHERE d.parent_table = 'dm.sb_wuc'
+ORDER BY lag DESC;
+

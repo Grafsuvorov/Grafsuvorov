@@ -1,7 +1,10 @@
 WITH RECURSIVE lineage AS (
+    -- стартуем от витрины
     SELECT
         d.parent_table_id,
+        d.parent_table,
         d.child_table_id,
+        d.child_table,
         1 AS depth
     FROM tech_etl.table_dependencies d
     WHERE d.parent_table = 'dm.sb_wuc'
@@ -10,22 +13,35 @@ WITH RECURSIVE lineage AS (
 
     SELECT
         d.parent_table_id,
+        d.parent_table,
         d.child_table_id,
+        d.child_table,
         l.depth + 1
     FROM tech_etl.table_dependencies d
     JOIN lineage l
       ON l.child_table_id = d.parent_table_id
-    WHERE l.depth < 10
+    WHERE l.depth < 15
+),
+-- берём минимальную глубину для каждой таблицы
+dedup AS (
+    SELECT
+        child_table_id,
+        child_table,
+        MIN(depth) AS min_depth
+    FROM lineage
+    GROUP BY child_table_id, child_table
 )
-SELECT DISTINCT
-    cm.table_schema AS child_schema,
-    pm.table_schema AS parent_schema
-FROM lineage l
-JOIN tech_etl.tables_meta pm ON pm.table_id = l.parent_table_id
-JOIN tech_etl.tables_meta cm ON cm.table_id = l.child_table_id
-WHERE cm.table_schema <> pm.table_schema   -- 🔥 ВАЖНО
+SELECT
+    d.min_depth               AS depth,
+    tm.table_schema,
+    tm.table_name,
+    tm.table_last_load
+FROM dedup d
+JOIN tech_etl.tables_meta tm
+  ON tm.table_id = d.child_table_id
 ORDER BY
-    CASE cm.table_schema
+    d.min_depth,
+    CASE tm.table_schema
         WHEN 'raw' THEN 1
         WHEN 'raw_ext' THEN 1
         WHEN 'stg' THEN 2
@@ -36,4 +52,5 @@ ORDER BY
         WHEN 'dm_calc' THEN 5
         WHEN 'dm' THEN 6
         ELSE 99
-    END;
+    END,
+    tm.table_name;

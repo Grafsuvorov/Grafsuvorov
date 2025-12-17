@@ -1,109 +1,1441 @@
-CREATE TEMP TABLE base_asia
-AS
-SELECT
-    b.rn,
-    b.unit_balance_code,
-    b.forwarder_code,
-    b.port_of_discharge_code,
-    b.plant_code,
-    b.material_shape_code,
-    b.etsng_code,
-    b.transport_type_code,
-    b.warehouse_code,
-    b.warehouse_storage_area_code,
-    b.dt_for_price_search_in_purchase_contract
-FROM dm_calc.storage_sales_bundles_weight b
-WHERE b.storage_cost_calculation_type_name = 'Логика Азия'
-DISTRIBUTED BY (rn);
-🔹 Важно:
-– тут нет for_1079_base
-– нет оконок
-– нет OR
-– данных резко меньше, чем в исходном join
+[
+  {
+    "Plan": {
+      "Node Type": "Gather Motion",
+      "Senders": 6,
+      "Receivers": 1,
+      "Slice": 4,
+      "Segments": 6,
+      "Gang Type": "primary reader",
+      "Startup Cost": 0.00,
+      "Total Cost": 100982339.99,
+      "Plan Rows": 60717582528,
+      "Plan Width": 272,
+      "Output": ["transport_hub_texts.transport_hub_name", "storage_sales_bundles_amount.dt_report", "\"outer\".period_comparison_rule_code", "(date(((((calendar.dt - '1 day'::interval)))::timestamp with time zone)))", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)", "((((plant_and_subsidiary.plant_short_name)::text || ' '::text) || (plant_and_subsidiary.plant_full_name)::text))", "(sum(storage_sales_bundles_amount.sales_bundle_gross_weight))", "(sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)))", "((((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))) / (sum(storage_sales_bundles_amount.sales_bundle_gross_weight))) * '100'::numeric))", "(sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount)))", "(sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(COALESCE((((sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_001_030_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_031_060_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_061_090_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_091_180_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_181_365_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))", "(sum(((((storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)))", "(sum(((((storage_sales_bundles_amount.storage_calculated_cost_031_060_amount + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount)))", "(COALESCE(((sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)), '0'::numeric))"],
+      "Plans": [
+        {
+          "Node Type": "Result",
+          "Parent Relationship": "Outer",
+          "Slice": 4,
+          "Segments": 6,
+          "Gang Type": "primary reader",
+          "Startup Cost": 0.00,
+          "Total Cost": 52042349.34,
+          "Plan Rows": 60717582528,
+          "Plan Width": 272,
+          "Output": ["transport_hub_texts.transport_hub_name", "storage_sales_bundles_amount.dt_report", "\"outer\".period_comparison_rule_code", "date(((((calendar.dt - '1 day'::interval)))::timestamp with time zone))", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)", "(((plant_and_subsidiary.plant_short_name)::text || ' '::text) || (plant_and_subsidiary.plant_full_name)::text)", "(sum(storage_sales_bundles_amount.sales_bundle_gross_weight))", "(sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)))", "(((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))) / (sum(storage_sales_bundles_amount.sales_bundle_gross_weight))) * '100'::numeric)", "(sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount)))", "(sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight))", "(sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "COALESCE((((sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)) * '100'::numeric), '0'::numeric)", "(sum(storage_sales_bundles_amount.storage_calculated_cost_001_030_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_031_060_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_061_090_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_091_180_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_181_365_amount))", "(sum(storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))", "(sum(((((storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)))", "(sum(((((storage_sales_bundles_amount.storage_calculated_cost_031_060_amount + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount)))", "COALESCE(((sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))) / NULLIF((sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))), '0'::numeric)), '0'::numeric)"],
+          "Plans": [
+            {
+              "Node Type": "Aggregate",
+              "Strategy": "Hashed",
+              "Parent Relationship": "Outer",
+              "Slice": 4,
+              "Segments": 6,
+              "Gang Type": "primary reader",
+              "Startup Cost": 0.00,
+              "Total Cost": 48277859.22,
+              "Plan Rows": 60717582528,
+              "Plan Width": 394,
+              "Output": ["sum(storage_sales_bundles_amount.sales_bundle_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.sales_bundle_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))", "sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)", "sum(storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight)", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(storage_sales_bundles_amount.storage_calculated_cost_001_030_amount)", "sum(storage_sales_bundles_amount.storage_calculated_cost_031_060_amount)", "sum(storage_sales_bundles_amount.storage_calculated_cost_061_090_amount)", "sum(storage_sales_bundles_amount.storage_calculated_cost_091_180_amount)", "sum(storage_sales_bundles_amount.storage_calculated_cost_181_365_amount)", "sum(storage_sales_bundles_amount.storage_calculated_cost_over_365_amount)", "sum(((((storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "sum(((((storage_sales_bundles_amount.storage_calculated_cost_031_060_amount + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))", "sum((((((storage_sales_bundles_amount.storage_calculated_cost_001_030_amount + storage_sales_bundles_amount.storage_calculated_cost_031_060_amount) + storage_sales_bundles_amount.storage_calculated_cost_061_090_amount) + storage_sales_bundles_amount.storage_calculated_cost_091_180_amount) + storage_sales_bundles_amount.storage_calculated_cost_181_365_amount) + storage_sales_bundles_amount.storage_calculated_cost_over_365_amount))", "sum((((((storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight + storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight) + storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight) + storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight) + storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight) + storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight))", "storage_sales_bundles_amount.dt_report", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)"],
+              "Group Key": ["transport_hub_texts.transport_hub_name", "storage_sales_bundles_amount.dt_report", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)", "plant_and_subsidiary.plant_full_name", "plant_and_subsidiary.plant_short_name"],
+              "Plans": [
+                {
+                  "Node Type": "Redistribute Motion",
+                  "Senders": 6,
+                  "Receivers": 6,
+                  "Parent Relationship": "Outer",
+                  "Slice": 3,
+                  "Segments": 6,
+                  "Gang Type": "primary reader",
+                  "Startup Cost": 0.00,
+                  "Total Cost": 27771082.66,
+                  "Plan Rows": 60717582528,
+                  "Plan Width": 171,
+                  "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)"],
+                  "Hash Key": "transport_hub_texts.transport_hub_name, storage_sales_bundles_amount.dt_report, \"outer\".period_comparison_rule_code, ((((calendar.dt - '1 day'::interval)))::timestamp with time zone), (CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END), (CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END), (COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying)), (CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END), (CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END), plant_and_subsidiary.plant_full_name, plant_and_subsidiary.plant_short_name",
+                  "Plans": [
+                    {
+                      "Node Type": "Result",
+                      "Parent Relationship": "Outer",
+                      "Slice": 3,
+                      "Segments": 6,
+                      "Gang Type": "primary reader",
+                      "Startup Cost": 0.00,
+                      "Total Cost": 22354770.71,
+                      "Plan Rows": 60717582528,
+                      "Plan Width": 171,
+                      "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "(CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END)", "(CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END)", "(COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying))", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END)", "(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END)"],
+                      "Plans": [
+                        {
+                          "Node Type": "Result",
+                          "Parent Relationship": "Outer",
+                          "Slice": 3,
+                          "Segments": 6,
+                          "Gang Type": "primary reader",
+                          "Startup Cost": 0.00,
+                          "Total Cost": 22354770.71,
+                          "Plan Rows": 60717582528,
+                          "Plan Width": 171,
+                          "Output": ["CASE WHEN ((country_texts.country_full_name)::text = 'Корея, республика'::text) THEN 'Южная Корея'::character varying WHEN ((country_texts.country_full_name)::text = 'Тайвань (Китай)'::text) THEN 'Тайвань'::character varying ELSE country_texts.country_full_name END", "CASE WHEN ((market_region1_texts.market_region1_name)::text = 'Турция'::text) THEN 'Западная Азия'::character varying WHEN ((market_region1_texts.market_region1_name)::text = 'Средний Восток и Афр'::text) THEN 'Ближний Восток'::character varying WHEN ((market_region1_texts.market_region1_name)::text = ANY ('{Азия,Китай}'::text[])) THEN 'Восточная Азия'::character varying ELSE market_region1_texts.market_region1_name END", "COALESCE(CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика Азия\",\"Логика Европа\",\"Логика СВХ\"}'::text[])) THEN counterparty.counterparty_short_name ELSE NULL::character varying END, 'Не определено'::character varying)", "CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = ANY ('{\"Логика РФ-контейнеры\",\"Логика РФ-балк\"}'::text[])) THEN 'Терминал порта'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика СВХ'::text) THEN 'Склад СВХ'::text ELSE 'Не определено'::text END", "CASE WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-контейнеры'::text) THEN 'Контейнеры'::text WHEN ((storage_sales_bundles_amount.storage_cost_calculation_type_name)::text = 'Логика РФ-балк'::text) THEN 'Балк'::text ELSE 'Не определено'::text END", "storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
+                          "Plans": [
+                            {
+                              "Node Type": "Hash Join",
+                              "Parent Relationship": "Outer",
+                              "Slice": 3,
+                              "Segments": 6,
+                              "Gang Type": "primary reader",
+                              "Join Type": "Left",
+                              "Startup Cost": 0.00,
+                              "Total Cost": 20624319.61,
+                              "Plan Rows": 60717582528,
+                              "Plan Width": 236,
+                              "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "market_region1_texts.market_region1_name", "counterparty.counterparty_short_name"],
+                              "Hash Cond": "((storage_sales_bundles_amount.forwarder_code)::text = (counterparty.counterparty_code)::text)",
+                              "Plans": [
+                                {
+                                  "Node Type": "Hash Join",
+                                  "Parent Relationship": "Outer",
+                                  "Slice": 3,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Join Type": "Left",
+                                  "Startup Cost": 0.00,
+                                  "Total Cost": 10756331.04,
+                                  "Plan Rows": 30358791264,
+                                  "Plan Width": 204,
+                                  "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "market_region1_texts.market_region1_name"],
+                                  "Hash Cond": "((country.market_region1_code)::text = (market_region1_texts.market_region1_code)::text)",
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Hash Join",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 3,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Join Type": "Left",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 6162861.52,
+                                      "Plan Rows": 20105806159,
+                                      "Plan Width": 195,
+                                      "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "country.market_region1_code"],
+                                      "Hash Cond": "(adrc_1.country_code = (country.country_code)::text)",
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Hash Join",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 3,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Join Type": "Left",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 3385223.80,
+                                          "Plan Rows": 10052903080,
+                                          "Plan Width": 195,
+                                          "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name", "adrc_1.country_code"],
+                                          "Hash Cond": "((transport_hub_1.address_code)::text = (adrc_1.address_code)::text)",
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Redistribute Motion",
+                                              "Senders": 6,
+                                              "Receivers": 6,
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 2,
+                                              "Segments": 6,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 1991997.13,
+                                              "Plan Rows": 5026451540,
+                                              "Plan Width": 203,
+                                              "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_1.address_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
+                                              "Hash Key": "transport_hub_1.address_code",
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Hash Join",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 2,
+                                                  "Segments": 6,
+                                                  "Gang Type": "primary reader",
+                                                  "Join Type": "Left",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 1459704.29,
+                                                  "Plan Rows": 5026451540,
+                                                  "Plan Width": 203,
+                                                  "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_1.address_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
+                                                  "Hash Cond": "((storage_sales_bundles_amount.receiving_plant_code)::text = (plant_and_subsidiary.plant_code)::text)",
+                                                  "Plans": [
+                                                    {
+                                                      "Node Type": "Hash Join",
+                                                      "Parent Relationship": "Outer",
+                                                      "Slice": 2,
+                                                      "Segments": 6,
+                                                      "Gang Type": "primary reader",
+                                                      "Join Type": "Left",
+                                                      "Startup Cost": 0.00,
+                                                      "Total Cost": 752227.11,
+                                                      "Plan Rows": 2513239593,
+                                                      "Plan Width": 153,
+                                                      "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name", "transport_hub_1.address_code"],
+                                                      "Hash Cond": "((storage_sales_bundles_amount.warehouse_code)::text = (transport_hub_1.transport_hub_code)::text)",
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Hash Join",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 2,
+                                                          "Segments": 6,
+                                                          "Gang Type": "primary reader",
+                                                          "Join Type": "Left",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 471555.11,
+                                                          "Plan Rows": 1256619796,
+                                                          "Plan Width": 153,
+                                                          "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name", "transport_hub_texts.transport_hub_name"],
+                                                          "Hash Cond": "((CASE WHEN ((country_texts.country_full_name)::text = 'Россия'::text) THEN 'R'::text ELSE 'E'::text END = (transport_hub_texts.language_code)::text) AND ((storage_sales_bundles_amount.warehouse_code)::text = (transport_hub_texts.transport_hub_code)::text))",
+                                                          "Plans": [
+                                                            {
+                                                              "Node Type": "Hash Join",
+                                                              "Parent Relationship": "Outer",
+                                                              "Slice": 2,
+                                                              "Segments": 6,
+                                                              "Gang Type": "primary reader",
+                                                              "Join Type": "Left",
+                                                              "Startup Cost": 0.00,
+                                                              "Total Cost": 268442.16,
+                                                              "Plan Rows": 1256619796,
+                                                              "Plan Width": 138,
+                                                              "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "country_texts.country_full_name"],
+                                                              "Hash Cond": "(adrc.country_code = (country_texts.country_code)::text)",
+                                                              "Plans": [
+                                                                {
+                                                                  "Node Type": "Hash Join",
+                                                                  "Parent Relationship": "Outer",
+                                                                  "Slice": 2,
+                                                                  "Segments": 6,
+                                                                  "Gang Type": "primary reader",
+                                                                  "Join Type": "Left",
+                                                                  "Startup Cost": 0.00,
+                                                                  "Total Cost": 141063.85,
+                                                                  "Plan Rows": 628309898,
+                                                                  "Plan Width": 119,
+                                                                  "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "adrc.country_code"],
+                                                                  "Hash Cond": "((transport_hub.address_code)::text = (adrc.address_code)::text)",
+                                                                  "Plans": [
+                                                                    {
+                                                                      "Node Type": "Redistribute Motion",
+                                                                      "Senders": 6,
+                                                                      "Receivers": 6,
+                                                                      "Parent Relationship": "Outer",
+                                                                      "Slice": 1,
+                                                                      "Segments": 6,
+                                                                      "Gang Type": "primary reader",
+                                                                      "Startup Cost": 0.00,
+                                                                      "Total Cost": 83757.16,
+                                                                      "Plan Rows": 314154949,
+                                                                      "Plan Width": 127,
+                                                                      "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub.address_code"],
+                                                                      "Hash Key": "transport_hub.address_code",
+                                                                      "Plans": [
+                                                                        {
+                                                                          "Node Type": "Hash Join",
+                                                                          "Parent Relationship": "Outer",
+                                                                          "Slice": 1,
+                                                                          "Segments": 6,
+                                                                          "Gang Type": "primary reader",
+                                                                          "Join Type": "Left",
+                                                                          "Startup Cost": 0.00,
+                                                                          "Total Cost": 62943.87,
+                                                                          "Plan Rows": 314154949,
+                                                                          "Plan Width": 127,
+                                                                          "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "transport_hub.address_code"],
+                                                                          "Hash Cond": "((storage_sales_bundles_amount.warehouse_code)::text = (transport_hub.transport_hub_code)::text)",
+                                                                          "Plans": [
+                                                                            {
+                                                                              "Node Type": "Hash Join",
+                                                                              "Parent Relationship": "Outer",
+                                                                              "Slice": 1,
+                                                                              "Segments": 6,
+                                                                              "Gang Type": "primary reader",
+                                                                              "Join Type": "Inner",
+                                                                              "Startup Cost": 0.00,
+                                                                              "Total Cost": 32820.18,
+                                                                              "Plan Rows": 157077475,
+                                                                              "Plan Width": 116,
+                                                                              "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount", "\"outer\".period_comparison_rule_code", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)"],
+                                                                              "Hash Cond": "(storage_sales_bundles_amount.dt_report = calendar.dt)",
+                                                                              "Plans": [
+                                                                                {
+                                                                                  "Node Type": "Seq Scan",
+                                                                                  "Parent Relationship": "Outer",
+                                                                                  "Slice": 1,
+                                                                                  "Segments": 6,
+                                                                                  "Gang Type": "primary reader",
+                                                                                  "Relation Name": "storage_sales_bundles_amount",
+                                                                                  "Schema": "userdata",
+                                                                                  "Alias": "storage_sales_bundles_amount",
+                                                                                  "Startup Cost": 0.00,
+                                                                                  "Total Cost": 8911.54,
+                                                                                  "Plan Rows": 157071216,
+                                                                                  "Plan Width": 100,
+                                                                                  "Output": ["storage_sales_bundles_amount.dt_report", "storage_sales_bundles_amount.sales_bundle_gross_weight", "storage_sales_bundles_amount.receiving_plant_code", "storage_sales_bundles_amount.forwarder_code", "storage_sales_bundles_amount.storage_cost_calculation_type_name", "storage_sales_bundles_amount.warehouse_code", "storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight", "storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight", "storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight", "storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight", "storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight", "storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight", "storage_sales_bundles_amount.storage_calculated_cost_001_030_amount", "storage_sales_bundles_amount.storage_calculated_cost_031_060_amount", "storage_sales_bundles_amount.storage_calculated_cost_061_090_amount", "storage_sales_bundles_amount.storage_calculated_cost_091_180_amount", "storage_sales_bundles_amount.storage_calculated_cost_181_365_amount", "storage_sales_bundles_amount.storage_calculated_cost_over_365_amount"]
+                                                                                },
+                                                                                {
+                                                                                  "Node Type": "Hash",
+                                                                                  "Parent Relationship": "Inner",
+                                                                                  "Slice": 1,
+                                                                                  "Segments": 6,
+                                                                                  "Gang Type": "primary reader",
+                                                                                  "Startup Cost": 2238.62,
+                                                                                  "Total Cost": 2238.62,
+                                                                                  "Plan Rows": 301177,
+                                                                                  "Plan Width": 20,
+                                                                                  "Output": ["calendar.dt", "((((calendar.dt - '1 day'::interval)))::timestamp with time zone)", "\"outer\".period_comparison_rule_code"],
+                                                                                  "Plans": [
+                                                                                    {
+                                                                                      "Node Type": "Append",
+                                                                                      "Parent Relationship": "Outer",
+                                                                                      "Slice": 1,
+                                                                                      "Segments": 6,
+                                                                                      "Gang Type": "primary reader",
+                                                                                      "Startup Cost": 0.00,
+                                                                                      "Total Cost": 2238.62,
+                                                                                      "Plan Rows": 301177,
+                                                                                      "Plan Width": 20,
+                                                                                      "Plans": [
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Member",
+                                                                                          "Slice": 1,
+                                                                                          "Segments": 6,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 442.23,
+                                                                                          "Plan Rows": 112144,
+                                                                                          "Plan Width": 20,
+                                                                                          "Output": ["calendar.dt", "((calendar.dt - '1 day'::interval))", "\"outer\".period_comparison_rule_code"],
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Result",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 1,
+                                                                                              "Segments": 6,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 441.85,
+                                                                                              "Plan Rows": 112144,
+                                                                                              "Plan Width": 20,
+                                                                                              "Output": ["(calendar.dt - '1 day'::interval)", "'1'::text", "calendar.dt"],
+                                                                                              "Plans": [
+                                                                                                {
+                                                                                                  "Node Type": "Seq Scan",
+                                                                                                  "Parent Relationship": "Outer",
+                                                                                                  "Slice": 1,
+                                                                                                  "Segments": 6,
+                                                                                                  "Gang Type": "primary reader",
+                                                                                                  "Relation Name": "calendar",
+                                                                                                  "Schema": "dict_dds",
+                                                                                                  "Alias": "calendar",
+                                                                                                  "Startup Cost": 0.00,
+                                                                                                  "Total Cost": 441.48,
+                                                                                                  "Plan Rows": 112144,
+                                                                                                  "Plan Width": 4,
+                                                                                                  "Output": ["calendar.dt"],
+                                                                                                  "Filter": "((calendar.calendar_year >= '2000'::smallint) AND (calendar.calendar_year <= '2050'::smallint))"
+                                                                                                }
+                                                                                              ]
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Member",
+                                                                                          "Slice": 1,
+                                                                                          "Segments": 6,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 446.34,
+                                                                                          "Plan Rows": 28828,
+                                                                                          "Plan Width": 20,
+                                                                                          "Output": ["calendar_1.dt", "((calendar_1.dt - '7 days'::interval))", "\"outer\".period_comparison_rule_code"],
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Result",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 1,
+                                                                                              "Segments": 6,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 446.24,
+                                                                                              "Plan Rows": 28828,
+                                                                                              "Plan Width": 20,
+                                                                                              "Output": ["(calendar_1.dt - '7 days'::interval)", "'2'::text", "calendar_1.dt"],
+                                                                                              "Plans": [
+                                                                                                {
+                                                                                                  "Node Type": "Seq Scan",
+                                                                                                  "Parent Relationship": "Outer",
+                                                                                                  "Slice": 1,
+                                                                                                  "Segments": 6,
+                                                                                                  "Gang Type": "primary reader",
+                                                                                                  "Relation Name": "calendar",
+                                                                                                  "Schema": "dict_dds",
+                                                                                                  "Alias": "calendar_1",
+                                                                                                  "Startup Cost": 0.00,
+                                                                                                  "Total Cost": 446.15,
+                                                                                                  "Plan Rows": 28828,
+                                                                                                  "Plan Width": 4,
+                                                                                                  "Output": ["calendar_1.dt"],
+                                                                                                  "Filter": "((calendar_1.day_of_week = '1'::smallint) AND (calendar_1.calendar_year >= '2000'::smallint) AND (calendar_1.calendar_year <= '2050'::smallint))"
+                                                                                                }
+                                                                                              ]
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Member",
+                                                                                          "Slice": 1,
+                                                                                          "Segments": 6,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 451.40,
+                                                                                          "Plan Rows": 79747,
+                                                                                          "Plan Width": 20,
+                                                                                          "Output": ["calendar_2.dt", "(date_trunc('month'::text, (calendar_2.dt)::timestamp with time zone) - '1 day'::interval)", "'3'::text"],
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Seq Scan",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 1,
+                                                                                              "Segments": 6,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Relation Name": "calendar",
+                                                                                              "Schema": "dict_dds",
+                                                                                              "Alias": "calendar_2",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 451.13,
+                                                                                              "Plan Rows": 79747,
+                                                                                              "Plan Width": 4,
+                                                                                              "Output": ["calendar_2.dt"],
+                                                                                              "Filter": "((calendar_2.calendar_day = calendar_2.days_in_month) AND (calendar_2.calendar_year >= '2000'::smallint) AND (calendar_2.calendar_year <= '2050'::smallint))"
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Member",
+                                                                                          "Slice": 1,
+                                                                                          "Segments": 6,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 446.76,
+                                                                                          "Plan Rows": 79747,
+                                                                                          "Plan Width": 20,
+                                                                                          "Output": ["calendar_3.dt", "((((calendar_3.dt + '1 day'::interval) - '3 mons'::interval) - '1 day'::interval))", "\"outer\".period_comparison_rule_code"],
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Result",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 1,
+                                                                                              "Segments": 6,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 446.49,
+                                                                                              "Plan Rows": 79747,
+                                                                                              "Plan Width": 20,
+                                                                                              "Output": ["(((calendar_3.dt + '1 day'::interval) - '3 mons'::interval) - '1 day'::interval)", "'4'::text", "calendar_3.dt"],
+                                                                                              "Plans": [
+                                                                                                {
+                                                                                                  "Node Type": "Seq Scan",
+                                                                                                  "Parent Relationship": "Outer",
+                                                                                                  "Slice": 1,
+                                                                                                  "Segments": 6,
+                                                                                                  "Gang Type": "primary reader",
+                                                                                                  "Relation Name": "calendar",
+                                                                                                  "Schema": "dict_dds",
+                                                                                                  "Alias": "calendar_3",
+                                                                                                  "Startup Cost": 0.00,
+                                                                                                  "Total Cost": 446.23,
+                                                                                                  "Plan Rows": 79747,
+                                                                                                  "Plan Width": 4,
+                                                                                                  "Output": ["calendar_3.dt"],
+                                                                                                  "Filter": "((date_part('quarter'::text, (calendar_3.dt)::timestamp without time zone) <> date_part('quarter'::text, (calendar_3.dt + '1 day'::interval))) AND (calendar_3.calendar_year >= '2000'::smallint) AND (calendar_3.calendar_year <= '2050'::smallint))"
+                                                                                                }
+                                                                                              ]
+                                                                                            }
+                                                                                          ]
+                                                                                        },
+                                                                                        {
+                                                                                          "Node Type": "Result",
+                                                                                          "Parent Relationship": "Member",
+                                                                                          "Slice": 1,
+                                                                                          "Segments": 6,
+                                                                                          "Gang Type": "primary reader",
+                                                                                          "Startup Cost": 0.00,
+                                                                                          "Total Cost": 450.89,
+                                                                                          "Plan Rows": 711,
+                                                                                          "Plan Width": 20,
+                                                                                          "Output": ["calendar_4.dt", "((calendar_4.dt - '1 year'::interval))", "\"outer\".period_comparison_rule_code"],
+                                                                                          "Plans": [
+                                                                                            {
+                                                                                              "Node Type": "Result",
+                                                                                              "Parent Relationship": "Outer",
+                                                                                              "Slice": 1,
+                                                                                              "Segments": 6,
+                                                                                              "Gang Type": "primary reader",
+                                                                                              "Startup Cost": 0.00,
+                                                                                              "Total Cost": 450.89,
+                                                                                              "Plan Rows": 711,
+                                                                                              "Plan Width": 20,
+                                                                                              "Output": ["(calendar_4.dt - '1 year'::interval)", "'5'::text", "calendar_4.dt"],
+                                                                                              "Plans": [
+                                                                                                {
+                                                                                                  "Node Type": "Seq Scan",
+                                                                                                  "Parent Relationship": "Outer",
+                                                                                                  "Slice": 1,
+                                                                                                  "Segments": 6,
+                                                                                                  "Gang Type": "primary reader",
+                                                                                                  "Relation Name": "calendar",
+                                                                                                  "Schema": "dict_dds",
+                                                                                                  "Alias": "calendar_4",
+                                                                                                  "Startup Cost": 0.00,
+                                                                                                  "Total Cost": 450.89,
+                                                                                                  "Plan Rows": 711,
+                                                                                                  "Plan Width": 4,
+                                                                                                  "Output": ["calendar_4.dt"],
+                                                                                                  "Filter": "((calendar_4.calendar_month = '12'::smallint) AND (calendar_4.calendar_day = '31'::smallint) AND (calendar_4.calendar_year >= '2000'::smallint) AND (calendar_4.calendar_year <= '2050'::smallint))"
+                                                                                                }
+                                                                                              ]
+                                                                                            }
+                                                                                          ]
+                                                                                        }
+                                                                                      ]
+                                                                                    }
+                                                                                  ]
+                                                                                }
+                                                                              ]
+                                                                            },
+                                                                            {
+                                                                              "Node Type": "Hash",
+                                                                              "Parent Relationship": "Inner",
+                                                                              "Slice": 1,
+                                                                              "Segments": 6,
+                                                                              "Gang Type": "primary reader",
+                                                                              "Startup Cost": 433.41,
+                                                                              "Total Cost": 433.41,
+                                                                              "Plan Rows": 167514,
+                                                                              "Plan Width": 21,
+                                                                              "Output": ["transport_hub.transport_hub_code", "transport_hub.address_code"],
+                                                                              "Plans": [
+                                                                                {
+                                                                                  "Node Type": "Seq Scan",
+                                                                                  "Parent Relationship": "Outer",
+                                                                                  "Slice": 1,
+                                                                                  "Segments": 6,
+                                                                                  "Gang Type": "primary reader",
+                                                                                  "Relation Name": "transport_hub",
+                                                                                  "Schema": "dict_dds",
+                                                                                  "Alias": "transport_hub",
+                                                                                  "Startup Cost": 0.00,
+                                                                                  "Total Cost": 433.41,
+                                                                                  "Plan Rows": 167514,
+                                                                                  "Plan Width": 21,
+                                                                                  "Output": ["transport_hub.transport_hub_code", "transport_hub.address_code"]
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "Node Type": "Hash",
+                                                                      "Parent Relationship": "Inner",
+                                                                      "Slice": 2,
+                                                                      "Segments": 6,
+                                                                      "Gang Type": "primary reader",
+                                                                      "Startup Cost": 436.73,
+                                                                      "Total Cost": 436.73,
+                                                                      "Plan Rows": 1421327,
+                                                                      "Plan Width": 14,
+                                                                      "Output": ["adrc.address_code", "adrc.country_code"],
+                                                                      "Plans": [
+                                                                        {
+                                                                          "Node Type": "Seq Scan",
+                                                                          "Parent Relationship": "Outer",
+                                                                          "Slice": 2,
+                                                                          "Segments": 6,
+                                                                          "Gang Type": "primary reader",
+                                                                          "Relation Name": "adrc",
+                                                                          "Schema": "pg_temp_5366046",
+                                                                          "Alias": "adrc",
+                                                                          "Startup Cost": 0.00,
+                                                                          "Total Cost": 436.73,
+                                                                          "Plan Rows": 1421327,
+                                                                          "Plan Width": 14,
+                                                                          "Output": ["adrc.address_code", "adrc.country_code"]
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                },
+                                                                {
+                                                                  "Node Type": "Hash",
+                                                                  "Parent Relationship": "Inner",
+                                                                  "Slice": 2,
+                                                                  "Segments": 6,
+                                                                  "Gang Type": "primary reader",
+                                                                  "Startup Cost": 431.17,
+                                                                  "Total Cost": 431.17,
+                                                                  "Plan Rows": 1524,
+                                                                  "Plan Width": 25,
+                                                                  "Output": ["country_texts.country_code", "country_texts.country_full_name"],
+                                                                  "Plans": [
+                                                                    {
+                                                                      "Node Type": "Seq Scan",
+                                                                      "Parent Relationship": "Outer",
+                                                                      "Slice": 2,
+                                                                      "Segments": 6,
+                                                                      "Gang Type": "primary reader",
+                                                                      "Relation Name": "country_texts",
+                                                                      "Schema": "dict_dds",
+                                                                      "Alias": "country_texts",
+                                                                      "Startup Cost": 0.00,
+                                                                      "Total Cost": 431.17,
+                                                                      "Plan Rows": 1524,
+                                                                      "Plan Width": 25,
+                                                                      "Output": ["country_texts.country_code", "country_texts.country_full_name"],
+                                                                      "Filter": "((country_texts.language_code)::text = 'R'::text)"
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            },
+                                                            {
+                                                              "Node Type": "Hash",
+                                                              "Parent Relationship": "Inner",
+                                                              "Slice": 2,
+                                                              "Segments": 6,
+                                                              "Gang Type": "primary reader",
+                                                              "Startup Cost": 436.78,
+                                                              "Total Cost": 436.78,
+                                                              "Plan Rows": 819210,
+                                                              "Plan Width": 28,
+                                                              "Output": ["transport_hub_texts.language_code", "transport_hub_texts.transport_hub_code", "transport_hub_texts.transport_hub_name"],
+                                                              "Plans": [
+                                                                {
+                                                                  "Node Type": "Seq Scan",
+                                                                  "Parent Relationship": "Outer",
+                                                                  "Slice": 2,
+                                                                  "Segments": 6,
+                                                                  "Gang Type": "primary reader",
+                                                                  "Relation Name": "transport_hub_texts",
+                                                                  "Schema": "dict_dds",
+                                                                  "Alias": "transport_hub_texts",
+                                                                  "Startup Cost": 0.00,
+                                                                  "Total Cost": 436.78,
+                                                                  "Plan Rows": 819210,
+                                                                  "Plan Width": 28,
+                                                                  "Output": ["transport_hub_texts.language_code", "transport_hub_texts.transport_hub_code", "transport_hub_texts.transport_hub_name"]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "Node Type": "Hash",
+                                                          "Parent Relationship": "Inner",
+                                                          "Slice": 2,
+                                                          "Segments": 6,
+                                                          "Gang Type": "primary reader",
+                                                          "Startup Cost": 433.41,
+                                                          "Total Cost": 433.41,
+                                                          "Plan Rows": 167514,
+                                                          "Plan Width": 21,
+                                                          "Output": ["transport_hub_1.transport_hub_code", "transport_hub_1.address_code"],
+                                                          "Plans": [
+                                                            {
+                                                              "Node Type": "Seq Scan",
+                                                              "Parent Relationship": "Outer",
+                                                              "Slice": 2,
+                                                              "Segments": 6,
+                                                              "Gang Type": "primary reader",
+                                                              "Relation Name": "transport_hub",
+                                                              "Schema": "dict_dds",
+                                                              "Alias": "transport_hub_1",
+                                                              "Startup Cost": 0.00,
+                                                              "Total Cost": 433.41,
+                                                              "Plan Rows": 167514,
+                                                              "Plan Width": 21,
+                                                              "Output": ["transport_hub_1.transport_hub_code", "transport_hub_1.address_code"]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "Node Type": "Hash",
+                                                      "Parent Relationship": "Inner",
+                                                      "Slice": 2,
+                                                      "Segments": 6,
+                                                      "Gang Type": "primary reader",
+                                                      "Startup Cost": 431.05,
+                                                      "Total Cost": 431.05,
+                                                      "Plan Rows": 3684,
+                                                      "Plan Width": 60,
+                                                      "Output": ["plant_and_subsidiary.plant_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"],
+                                                      "Plans": [
+                                                        {
+                                                          "Node Type": "Seq Scan",
+                                                          "Parent Relationship": "Outer",
+                                                          "Slice": 2,
+                                                          "Segments": 6,
+                                                          "Gang Type": "primary reader",
+                                                          "Relation Name": "plant_and_subsidiary",
+                                                          "Schema": "dict_dds",
+                                                          "Alias": "plant_and_subsidiary",
+                                                          "Startup Cost": 0.00,
+                                                          "Total Cost": 431.05,
+                                                          "Plan Rows": 3684,
+                                                          "Plan Width": 60,
+                                                          "Output": ["plant_and_subsidiary.plant_code", "plant_and_subsidiary.plant_short_name", "plant_and_subsidiary.plant_full_name"]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "Node Type": "Hash",
+                                              "Parent Relationship": "Inner",
+                                              "Slice": 3,
+                                              "Segments": 6,
+                                              "Gang Type": "primary reader",
+                                              "Startup Cost": 436.73,
+                                              "Total Cost": 436.73,
+                                              "Plan Rows": 1421327,
+                                              "Plan Width": 14,
+                                              "Output": ["adrc_1.address_code", "adrc_1.country_code"],
+                                              "Plans": [
+                                                {
+                                                  "Node Type": "Seq Scan",
+                                                  "Parent Relationship": "Outer",
+                                                  "Slice": 3,
+                                                  "Segments": 6,
+                                                  "Gang Type": "primary reader",
+                                                  "Relation Name": "adrc",
+                                                  "Schema": "pg_temp_5366046",
+                                                  "Alias": "adrc_1",
+                                                  "Startup Cost": 0.00,
+                                                  "Total Cost": 436.73,
+                                                  "Plan Rows": 1421327,
+                                                  "Plan Width": 14,
+                                                  "Output": ["adrc_1.address_code", "adrc_1.country_code"]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "Node Type": "Hash",
+                                          "Parent Relationship": "Inner",
+                                          "Slice": 3,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Startup Cost": 431.03,
+                                          "Total Cost": 431.03,
+                                          "Plan Rows": 1506,
+                                          "Plan Width": 6,
+                                          "Output": ["country.country_code", "country.market_region1_code"],
+                                          "Plans": [
+                                            {
+                                              "Node Type": "Seq Scan",
+                                              "Parent Relationship": "Outer",
+                                              "Slice": 3,
+                                              "Segments": 6,
+                                              "Gang Type": "primary reader",
+                                              "Relation Name": "country",
+                                              "Schema": "dict_dds",
+                                              "Alias": "country",
+                                              "Startup Cost": 0.00,
+                                              "Total Cost": 431.03,
+                                              "Plan Rows": 1506,
+                                              "Plan Width": 6,
+                                              "Output": ["country.country_code", "country.market_region1_code"]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "Node Type": "Hash",
+                                      "Parent Relationship": "Inner",
+                                      "Slice": 3,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Startup Cost": 431.00,
+                                      "Total Cost": 431.00,
+                                      "Plan Rows": 90,
+                                      "Plan Width": 15,
+                                      "Output": ["market_region1_texts.market_region1_code", "market_region1_texts.market_region1_name"],
+                                      "Plans": [
+                                        {
+                                          "Node Type": "Seq Scan",
+                                          "Parent Relationship": "Outer",
+                                          "Slice": 3,
+                                          "Segments": 6,
+                                          "Gang Type": "primary reader",
+                                          "Relation Name": "market_region1_texts",
+                                          "Schema": "dict_dds",
+                                          "Alias": "market_region1_texts",
+                                          "Startup Cost": 0.00,
+                                          "Total Cost": 431.00,
+                                          "Plan Rows": 90,
+                                          "Plan Width": 15,
+                                          "Output": ["market_region1_texts.market_region1_code", "market_region1_texts.market_region1_name"],
+                                          "Filter": "((market_region1_texts.language_code)::text = 'R'::text)"
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "Node Type": "Hash",
+                                  "Parent Relationship": "Inner",
+                                  "Slice": 3,
+                                  "Segments": 6,
+                                  "Gang Type": "primary reader",
+                                  "Startup Cost": 580.01,
+                                  "Total Cost": 580.01,
+                                  "Plan Rows": 2605074,
+                                  "Plan Width": 54,
+                                  "Output": ["counterparty.counterparty_code", "counterparty.counterparty_short_name"],
+                                  "Plans": [
+                                    {
+                                      "Node Type": "Seq Scan",
+                                      "Parent Relationship": "Outer",
+                                      "Slice": 3,
+                                      "Segments": 6,
+                                      "Gang Type": "primary reader",
+                                      "Relation Name": "counterparty",
+                                      "Schema": "dict_dds",
+                                      "Alias": "counterparty",
+                                      "Startup Cost": 0.00,
+                                      "Total Cost": 580.01,
+                                      "Plan Rows": 2605074,
+                                      "Plan Width": 54,
+                                      "Output": ["counterparty.counterparty_code", "counterparty.counterparty_short_name"]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "Settings": {
+      "Optimizer": "Pivotal Optimizer (GPORCA)"
+    }
+  }
+]
 
-2️⃣ asia_candidates — логика договора (без оконки)
-sql
-Копировать код
-CREATE TEMP TABLE asia_candidates
-AS
-SELECT
-    b.rn,
 
-    f.purchase_contract_code,
-    f.position_line_item_code,
 
-    f.konws,
-    f.service_code,
-    f.price_uom_code,
-    f.currency_dogovor,
-    f.datab,
-    f.datbi,
 
-    -- приоритеты (как в order_asia)
-    f.order_asia,
-    f.kopos,
-    f.kbetr
 
-FROM base_asia b
-JOIN for_1079_base f
-    ON f.purchase_document_subtype_code = 'ZDTL'
-   AND f.zzsrvpos = 'S49'                     -- жёстко, как у тебя
-   AND f.bukrs = b.unit_balance_code
-   AND f.lifnr = b.forwarder_code
-   AND f.werks = b.plant_code
 
-   -- nullable-поля (оставляем, но уже на маленьком base)
-   AND (f.zzport    = b.port_of_discharge_code     OR f.zzport IS NULL)
-   AND (f.zzforma   = b.material_shape_code        OR f.zzforma IS NULL)
-   AND (f.zzet_tarif= b.etsng_code                 OR f.zzet_tarif IS NULL)
-   AND (f.sdabw     = b.transport_type_code        OR f.sdabw IS NULL)
-   AND (f.zzterminal= b.warehouse_code             OR f.zzterminal IS NULL)
-   AND (f.vzzzone   = b.warehouse_storage_area_code OR f.vzzzone IS NULL)
 
-   -- закрытие периодов (КЛЮЧЕВО)
-   AND b.dt_for_price_search_in_purchase_contract
-       BETWEEN f.dt_valid_from AND f.dt_valid_to
-   AND b.dt_for_price_search_in_purchase_contract
-       BETWEEN f.datab AND f.datbi
-DISTRIBUTED BY (rn);
-📌 Ключевое отличие от старой Азии
-→ оконки нет
-→ join работает на резко меньшем base
-→ OR уже не раздувает миллиард строк
 
-3️⃣ asia_ranked — только ранжирование
-sql
-Копировать код
-CREATE TEMP TABLE asia_ranked
-AS
-SELECT
-    c.*,
-    row_number() OVER (
-        PARTITION BY c.rn
-        ORDER BY
-            c.order_asia,
-            c.kopos,
-            c.kbetr,
-            c.purchase_contract_code,
-            c.position_line_item_code
-    ) AS rn_best
-FROM asia_candidates c
-DISTRIBUTED BY (rn);
-4️⃣ Финальная for_1079_asia (как Европа)
-sql
-Копировать код
-CREATE TEMP TABLE for_1079_asia
-AS
-SELECT
-    rn,
-    purchase_contract_code,
-    position_line_item_code,
-    konws,
-    service_code,
-    price_uom_code,
-    currency_dogovor,
-    datab,
-    datbi
-FROM asia_ranked
-WHERE rn_best = 1
-DISTRIBUTED BY (rn);
+
+
+
+
+
+
+
+
+
+create table if not exists userdata.transportation_external_location_metal_stock_aggregated (
+	warehouse_name varchar(90) NULL,
+	dt_report date NULL,
+	period_comparison_rule_code varchar(1) NULL,
+	dt_comparison date NULL,
+	country_of_remote_warehouse_name varchar(300) NULL,
+	region_of_remote_warehouse_name varchar(20) NULL,
+	forwarder_name varchar(35) NULL,
+	type_warehouse_name varchar(14) NULL,
+	type_freight_name varchar(13) NULL,
+	receiving_plant_name varchar NULL,
+	-- ключи
+	sales_bundle_gross_weight numeric(20, 2) NULL,
+	storage_payable_total_gross_weight numeric(20, 2) NULL,
+	storage_payable_total_gross_weight_percentage numeric(5, 2) NULL,
+	storage_calculated_cost_total_amount numeric(20, 2) NULL,
+	storage_payable_001_030_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_031_060_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_061_090_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_091_180_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_181_365_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_over_365_days_gross_weight numeric(20, 3) NULL,
+	storage_payable_001_030_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_payable_031_060_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_payable_061_090_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_payable_091_180_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_payable_181_365_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_payable_over_365_days_gross_weight_percentage numeric(5, 2) NULL,
+	storage_calculated_cost_001_030_amount numeric(20, 2) NULL,
+	storage_calculated_cost_031_060_amount numeric(20, 2) NULL,
+	storage_calculated_cost_061_090_amount numeric(20, 2) NULL,
+	storage_calculated_cost_091_180_amount numeric(20, 2) NULL,
+	storage_calculated_cost_181_365_amount numeric(20, 2) NULL,
+	storage_calculated_cost_over_365_amount numeric(20, 2) NULL,
+	storage_payable_over_one_month_gross_weight numeric(20, 2) NULL,
+	storage_calculated_over_one_month_amount numeric(20, 2) NULL,
+	storage_price_per_tonne numeric(20, 2) NULL,
+	sales_bundle_gross_weight_diff_per_period numeric(20, 2) NULL,
+	
+	
+	previous_day_gross_weight numeric(20, 2) NULL,
+	previous_day_total_gross_weight numeric(20, 2) NULL,
+	previous_day_cost_amount numeric(20, 2) NULL,
+	
+	previous_week_gross_weight numeric(20, 2) NULL,
+	previous_week_total_gross_weight numeric(20, 2) NULL,
+	previous_week_cost_amount numeric(20, 2) NULL,
+	
+	previous_month_gross_weight numeric(20, 2) NULL,
+	previous_month_total_gross_weight numeric(20, 2) NULL,
+	previous_month_cost_amount numeric(20, 2) NULL,
+	
+	previous_quarter_gross_weight numeric(20, 2) NULL,
+	previous_quarter_total_gross_weight numeric(20, 2) NULL,
+	previous_quarter_cost_amount numeric(20, 2) NULL,
+	
+	previous_year_gross_weight numeric(20, 2) NULL,
+	previous_year_total_gross_weight numeric(20, 2) NULL,
+	previous_year_cost_amount numeric(20, 2) NULL,
+	
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+with (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+distributed by (warehouse_name, dt_report);
+
+comment on table dm.transportation_external_location_metal_stock_aggregated is 'Витрина хранения металла на внешних складах после отгрузки с АЗ (агрегированный)';
+comment on column dm.transportation_external_location_metal_stock_aggregated.warehouse_name is 'Склад (наименование) | Системное название склада/терминала, где хранится металл. | transport_hub_texts.transport_hub_name LE.001048';
+comment on column dm.transportation_external_location_metal_stock_aggregated.dt_report is 'Дата, на которую производится расчет хранения | Дата, на которую производится расчет хранения | storage_sales_bundles_amount.dt_report LE.001069';
+comment on column dm.transportation_external_location_metal_stock_aggregated.period_comparison_rule_code is 'Правило сравнения с датой ранее | Правило сравнения с датой ранее | Расчетное поле LE.001113';
+comment on column dm.transportation_external_location_metal_stock_aggregated.dt_comparison is 'Ранняя дата для сравнениия | Ранняя дата для сравнениия | Расчетное поле ';
+comment on column dm.transportation_external_location_metal_stock_aggregated.country_of_remote_warehouse_name is 'Страна удаленного склада (наименование) | Страна склада или терминала хранения | Расчетное поле LE.001060';
+comment on column dm.transportation_external_location_metal_stock_aggregated.region_of_remote_warehouse_name is 'Регион удаленного склада (наименование) | Географический регион склада или терминала хранения | Расчетное поле LE.001061';
+comment on column dm.transportation_external_location_metal_stock_aggregated.forwarder_name is 'Экспедитор (наименование) | Название экспедитора,  который примет груз, после его прибытия с завода в конечную точку по жд или авто, и который  подготовит документы для экспорта. | counterparty.counterparty_short_name LE.001041';
+comment on column dm.transportation_external_location_metal_stock_aggregated.type_warehouse_name is 'Тип склада | Тип склада (СВХ, Терминал порта) | Расчетное поле LE.001133';
+comment on column dm.transportation_external_location_metal_stock_aggregated.type_freight_name is 'Тип фрахта | Тип фрахта | Расчетное поле LE.001134';
+comment on column dm.transportation_external_location_metal_stock_aggregated.receiving_plant_name is 'Завод поставки (наименование) | Наименование завода продажной поставки | plant_and_subsidiary.plant_full_name LE.001030';
+comment on column dm.transportation_external_location_metal_stock_aggregated.sales_bundle_gross_weight is 'Вес брутто пакета | Вес брутто пакета | storage_sales_bundles_amount.sales_bundle_gross_weight LE.001019';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_total_gross_weight is 'Объем платного хранения | Объем платного хранения | Расчетное поле LE.001114';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_total_gross_weight_percentage is 'Доля платного хранения относительно общего | Доля платного хранения относительно общего | Расчетное поле LE.001115';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_total_amount is 'Сумма платного хранения | Сумма платного хранения | Расчетное поле LE.001116';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_001_030_days_gross_weight is 'Объем платного хранения 01-30 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения от 1 до 30 дней | storage_sales_bundles_amount.storage_payable_001_030_days_gross_weight LE.001095';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_031_060_days_gross_weight is 'Объем платного хранения 31-60 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения от 31 до 60 дней | storage_sales_bundles_amount.storage_payable_031_060_days_gross_weight LE.001096';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_061_090_days_gross_weight is 'Объем платного хранения 61-90 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения от 61 до 90 дней | storage_sales_bundles_amount.storage_payable_061_090_days_gross_weight LE.001097';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_091_180_days_gross_weight is 'Объем платного хранения 91-180 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения от 91 до 180 дней | storage_sales_bundles_amount.storage_payable_091_180_days_gross_weight LE.001098';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_181_365_days_gross_weight is 'Объем платного хранения 181-365 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения от 181 до 365 дней | storage_sales_bundles_amount.storage_payable_181_365_days_gross_weight LE.001099';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_over_365_days_gross_weight is 'Объем платного хранения свыше 365 дней, тн брутто | Объем платного хранения тонн брутто за кол-во дней платного хранения свыше 365 дней | storage_sales_bundles_amount.storage_payable_over_365_days_gross_weight LE.001100';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_001_030_days_gross_weight_percentage is 'Доля платного хранения 01-30 дней, тн нетто | Доля платного хранения по периоду | Расчетное поле LE.001117';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_031_060_days_gross_weight_percentage is 'Доля платного хранения 31-60 дней, тн нетто | Доля платного хранения 31-60 дней, тн нетто | Расчетное поле LE.001118';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_061_090_days_gross_weight_percentage is 'Доля платного хранения 61-90 дней, тн нетто | Доля платного хранения 61-90 дней, тн нетто | Расчетное поле LE.001119';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_091_180_days_gross_weight_percentage is 'Доля платного хранения 91-180 дней, тн нетто | Доля платного хранения 91-180 дней, тн нетто | Расчетное поле LE.001120';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_181_365_days_gross_weight_percentage is 'Доля платного хранения 181-365 дней, тн нетто | Доля платного хранения 181-365 дней, тн нетто | Расчетное поле LE.001121';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_over_365_days_gross_weight_percentage is 'Доля платного хранения свыше 365 дней, тн нетто | Доля платного хранения свыше 365 дней, тн нетто | Расчетное поле LE.001122';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_001_030_amount is 'Расчетная стоимость платного хранения 01-30 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения от 1 до 30 дней | storage_sales_bundles_amount.storage_calculated_cost_001_030_amount LE.001107';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_031_060_amount is 'Расчетная стоимость платного хранения 31-60 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения от 31 до 60 дней | storage_sales_bundles_amount.storage_calculated_cost_031_060_amount LE.001108';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_061_090_amount is 'Расчетная стоимость платного хранения 61-90 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения от 61 до 90 дней | storage_sales_bundles_amount.storage_calculated_cost_061_090_amount LE.001109';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_091_180_amount is 'Расчетная стоимость платного хранения 91-180 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения от 91 до 180 дней | storage_sales_bundles_amount.storage_calculated_cost_091_180_amount LE.001110';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_181_365_amount is 'Расчетная стоимость платного хранения 181-365 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения от 181 до 365 дней | storage_sales_bundles_amount.storage_calculated_cost_181_365_amount LE.001111';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_cost_over_365_amount is 'Расчетная стоимость платного хранения свыше 365 дней, в долларах США | Расчетная стоимость платного хранения в валюте договора за кол-во дней платного хранения свыше 365 дней | storage_sales_bundles_amount.storage_calculated_cost_over_365_amount LE.001112';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_payable_over_one_month_gross_weight is 'Сумма платного хранения свыше одного месяца | Сумма платного хранения свыше одного месяца | Расчетное поле LE.001135';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_calculated_over_one_month_amount is 'Объем хранения свыше одного месяца | Объем хранения свыше одного месяца | Расчетное поле LE.001136';
+comment on column dm.transportation_external_location_metal_stock_aggregated.storage_price_per_tonne is 'Ставка за тонну хранения свыше одного месяца | Ставка за тонну хранения свыше одного месяца | Расчетное поле LE.001137';
+comment on column dm.transportation_external_location_metal_stock_aggregated.sales_bundle_gross_weight_diff_per_period is 'Разница объема храненения с предыдущим периодом | Разница объема храненения с предыдущим периодом | Расчетное поле LE.001138';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_day_gross_weight is 'Объем предыдущего дня всего | Объем предыдущего дня всего | Расчетное поле LE.001139';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_day_total_gross_weight is 'Объем предыдущего дня на платном хранении | Объем предыдущего дня на платном хранении | Расчетное поле LE.001140';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_day_cost_amount is 'Сумма предыдущего дня на платном хранении | Сумма предыдущего дня на платном хранении | Расчетное поле LE.001141';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_week_gross_weight is 'Объем предыдущей недели всего | Объем предыдущей недели всего | Расчетное поле LE.001142';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_week_total_gross_weight is 'Объем предыдущей недели на платном хранении | Объем предыдущей недели на платном хранении | Расчетное поле LE.001143';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_week_cost_amount is 'Сумма предыдущей недели на платном хранении | Сумма предыдущей недели на платном хранении | Расчетное поле LE.001144';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_month_gross_weight is 'Объем предыдущего месяца всего | Объем предыдущего месяца всего | Расчетное поле LE.001145';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_month_total_gross_weight is 'Объем предыдущего месяца на платном хранении | Объем предыдущего месяца на платном хранении | Расчетное поле LE.001146';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_month_cost_amount is 'Сумма предыдущего месяца на платном хранении | Сумма предыдущего месяца на платном хранении | Расчетное поле LE.001147';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_quarter_gross_weight is 'Объем предыдущего квартала всего | Объем предыдущего квартала всего | Расчетное поле LE.001148';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_quarter_total_gross_weight is 'Объем предыдущего квартала на платном хранении | Объем предыдущего квартала на платном хранении | Расчетное поле LE.001149';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_quarter_cost_amount is 'Сумма предыдущего квартала на платном хранении | Сумма предыдущего квартала на платном хранении | Расчетное поле LE.001150';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_year_gross_weight is 'Объем предыдущего года всего | Объем предыдущего года всего | Расчетное поле LE.001151';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_year_total_gross_weight is 'Объем предыдущего года на платном хранении | Объем предыдущего года на платном хранении | Расчетное поле LE.001152';
+comment on column dm.transportation_external_location_metal_stock_aggregated.previous_year_cost_amount is 'Сумма предыдущего года на платном хранении | Сумма предыдущего года на платном хранении | Расчетное поле LE.001153';
+
+-- Обновление агрегированной таблицы на dm
+truncate table dm.transportation_external_location_metal_stock_aggregated;
+
+create temporary table adrc --on commit drop 
+as ( -- убираются дубли для поля склада
+select
+	address_code,
+	min(country_code) as country_code
+from
+	dict_dds.address
+group by
+	address_code
+	)
+distributed by (address_code);
+
+create temporary table pre_culc --on commit drop 
+as (
+
+
+		select
+		trht_3.transport_hub_name as warehouse_name, -- LE.001048
+		base.dt_report, -- LE.001069
+		for_1113.period_comparison_rule_code as period_comparison_rule_code, -- LE.001113
+		for_1113.date_comparison::date as dt_comparison, -- LE.001125
+		
+		case
+		when cotex.country_full_name = 'Корея, республика' then 'Южная Корея'
+		when cotex.country_full_name = 'Тайвань (Китай)' then 'Тайвань'
+		else cotex.country_full_name
+		end as country_of_remote_warehouse_name, -- LE.001060
+	
+		case
+		when t25a1.market_region1_name = 'Турция' then 'Западная Азия'
+		when t25a1.market_region1_name = 'Средний Восток и Афр' then 'Ближний Восток'
+		when t25a1.market_region1_name in ('Азия', 'Китай') then 'Восточная Азия'
+		else t25a1.market_region1_name
+		end as region_of_remote_warehouse_name, -- LE.001061
+		
+		coalesce(case when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then counter.counterparty_short_name end, 'Не определено') as forwarder_name, -- LE.001041
+		
+		case
+		when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then 'Терминал порта'
+		when base.storage_cost_calculation_type_name in ('Логика СВХ') then 'Склад СВХ'
+		else 'Не определено'
+		end as type_warehouse_name, -- LE.001126
+			
+		case
+		when base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' then 'Контейнеры'
+		when base.storage_cost_calculation_type_name = 'Логика РФ-балк' then 'Балк'
+		else 'Не определено'
+		end as type_freight_name, -- LE.001127
+
+		pas.plant_short_name || ' ' || pas.plant_full_name as receiving_plant_name, -- LE.001030
+		-- pas.plant_full_name as receiving_plant_name, -- LE.001030
+		-- ключи
+		sum(base.sales_bundle_gross_weight) as sales_bundle_gross_weight, -- LE.001018
+		sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight + base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight +
+		base.storage_payable_181_365_days_gross_weight + base.storage_payable_over_365_days_gross_weight) as storage_payable_total_gross_weight, -- LE.001114
+		sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight + base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight +
+		base.storage_payable_181_365_days_gross_weight + base.storage_payable_over_365_days_gross_weight) / sum(base.sales_bundle_gross_weight) * 100 as storage_payable_total_gross_weight_percentage, -- LE.001115
+		sum(base.storage_calculated_cost_001_030_amount + base.storage_calculated_cost_031_060_amount + base.storage_calculated_cost_061_090_amount + base.storage_calculated_cost_091_180_amount +
+		base.storage_calculated_cost_181_365_amount + base.storage_calculated_cost_over_365_amount) as storage_calculated_cost_total_amount, -- LE.001116
+		
+		sum(base.storage_payable_001_030_days_gross_weight) as storage_payable_001_030_days_gross_weight, -- LE.001095
+		sum(base.storage_payable_031_060_days_gross_weight) as storage_payable_031_060_days_gross_weight, -- LE.001096
+		sum(base.storage_payable_061_090_days_gross_weight) as storage_payable_061_090_days_gross_weight, -- LE.001097
+		sum(base.storage_payable_091_180_days_gross_weight) as storage_payable_091_180_days_gross_weight, -- LE.001098
+		sum(base.storage_payable_181_365_days_gross_weight) as storage_payable_181_365_days_gross_weight, -- LE.001099
+		sum(base.storage_payable_over_365_days_gross_weight) as storage_payable_over_365_days_gross_weight, -- LE.001100
+		
+		coalesce(sum(base.storage_payable_001_030_days_gross_weight) / nullif(sum((base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight)), 0) * 100, 0) as storage_payable_001_030_days_gross_weight_percentage, -- LE.001117
+		
+		coalesce(sum(base.storage_payable_031_060_days_gross_weight) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight), 0) * 100, 0) as storage_payable_031_060_days_gross_weight_percentage, -- LE.001118
+		
+		coalesce(sum(base.storage_payable_061_090_days_gross_weight) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight), 0) * 100, 0) as storage_payable_061_090_days_gross_weight_percentage, -- LE.001119
+		
+		coalesce(sum(base.storage_payable_091_180_days_gross_weight) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight), 0) * 100, 0) as storage_payable_091_180_days_gross_weight_percentage, -- LE.001120
+		
+		coalesce(sum(base.storage_payable_181_365_days_gross_weight) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight), 0) * 100, 0) as storage_payable_181_365_days_gross_weight_percentage, -- LE.001121
+		
+		coalesce(sum(base.storage_payable_over_365_days_gross_weight) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight), 0) * 100, 0) as storage_payable_over_365_days_gross_weight_percentage, -- LE.001122
+		
+		sum(base.storage_calculated_cost_001_030_amount) as storage_calculated_cost_001_030_amount, -- LE.001107
+		sum(base.storage_calculated_cost_031_060_amount) as storage_calculated_cost_031_060_amount, -- LE.001108
+		sum(base.storage_calculated_cost_061_090_amount) as storage_calculated_cost_061_090_amount, -- LE.001109
+		sum(base.storage_calculated_cost_091_180_amount) as storage_calculated_cost_091_180_amount, -- LE.001110
+		sum(base.storage_calculated_cost_181_365_amount) as storage_calculated_cost_181_365_amount, -- LE.001111
+		sum(base.storage_calculated_cost_over_365_amount) as storage_calculated_cost_over_365_amount, -- LE.001112
+		
+		sum(base.storage_payable_031_060_days_gross_weight + base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight +
+		base.storage_payable_over_365_days_gross_weight) as storage_payable_over_one_month_gross_weight, -- LE.001128
+		
+		sum(base.storage_calculated_cost_031_060_amount + base.storage_calculated_cost_061_090_amount + base.storage_calculated_cost_091_180_amount + base.storage_calculated_cost_181_365_amount +
+		base.storage_calculated_cost_over_365_amount) as storage_calculated_over_one_month_amount, -- LE.001129
+		
+		coalesce(sum(base.storage_calculated_cost_001_030_amount + base.storage_calculated_cost_031_060_amount + base.storage_calculated_cost_061_090_amount + base.storage_calculated_cost_091_180_amount +
+		base.storage_calculated_cost_181_365_amount + base.storage_calculated_cost_over_365_amount) / nullif(sum(base.storage_payable_001_030_days_gross_weight + base.storage_payable_031_060_days_gross_weight +
+		base.storage_payable_061_090_days_gross_weight + base.storage_payable_091_180_days_gross_weight + base.storage_payable_181_365_days_gross_weight + base.storage_payable_over_365_days_gross_weight), 0), 0)
+		as storage_price_per_tonne -- LE.001130
+		
+
+		
+		
+		
+		
+		
+		from userdata.storage_sales_bundles_amount as base
+		join (select dt, dt - interval '1 day' as date_comparison, '1' as period_comparison_rule_code from dict_dds.calendar where calendar_year between '2000' and '2050'
+		union all
+		select dt, dt - interval '1 week' as date_comparison, '2' as period_comparison_rule_code from dict_dds.calendar where day_of_week = '1' and calendar_year between '2000' and '2050'
+		union all
+		select dt, date_trunc('month', dt) - interval '1 day' as date_comparison, '3' as period_comparison_rule_code from dict_dds.calendar where calendar_day = days_in_month and calendar_year 
+		between '2000' and '2050'
+		union all
+		select dt, dt + interval '1 day' - interval '3 month' - interval '1 day' as date_comparison, '4' as period_comparison_rule_code 
+		from dict_dds.calendar where date_part('quarter', dt) <> date_part('quarter', dt + interval '1 day') and calendar_year between '2000' and '2050'
+		union all
+		select dt, dt - interval '1 year' as date_comparison, '5' as period_comparison_rule_code from dict_dds.calendar where calendar_month = '12' and calendar_day = '31' and calendar_year 
+		between '2000' and '2050')
+		as for_1113 on for_1113.dt = base.dt_report
+		
+		left join dict_dds.transport_hub as trhu on
+			trhu.transport_hub_code = base.warehouse_code
+		left join adrc as adrc on
+			adrc.address_code = trhu.address_code
+		left join dict_dds.country_texts as cotex on
+			cotex.country_code = adrc.country_code
+		and cotex.language_code = 'R'
+		left join dict_dds.transport_hub_texts as trht_3 on
+			trht_3.language_code = case
+				when cotex.country_full_name = 'Россия' then 'R'
+				else 'E'
+			end
+			and trht_3.transport_hub_code = base.warehouse_code
+		left join dict_dds.transport_hub tvkn on
+			tvkn.transport_hub_code = base.warehouse_code
+		left join dict_dds.plant_and_subsidiary as pas on
+			pas.plant_code = base.receiving_plant_code
+		left join adrc as adrc_2 on
+			adrc_2.address_code = tvkn.address_code
+		left join dict_dds.country r_sd556 on
+			r_sd556.country_code = adrc_2.country_code
+		left join dict_dds.market_region1_texts t25a1 on
+			t25a1.market_region1_code = r_sd556.market_region1_code
+		and t25a1.language_code = 'R'
+			left join dict_dds.counterparty as counter on
+		counter.counterparty_code = base.forwarder_code
+
+		group by trht_3.transport_hub_name, base.dt_report, for_1113.period_comparison_rule_code, for_1113.date_comparison, 	
+		case
+		when cotex.country_full_name = 'Корея, республика' then 'Южная Корея'
+		when cotex.country_full_name = 'Тайвань (Китай)' then 'Тайвань'
+		else cotex.country_full_name
+		end, -- country_of_remote_warehouse_name
+		
+		case
+		when t25a1.market_region1_name = 'Турция' then 'Западная Азия'
+		when t25a1.market_region1_name = 'Средний Восток и Афр' then 'Ближний Восток'
+		when t25a1.market_region1_name in ('Азия', 'Китай') then 'Восточная Азия'
+		else t25a1.market_region1_name
+		end, -- region_of_remote_warehouse_name
+		
+		
+		coalesce(case when base.storage_cost_calculation_type_name in ('Логика Азия', 'Логика Европа', 'Логика СВХ') then counter.counterparty_short_name end, 'Не определено'), -- forwarder_name
+
+		
+		case
+		when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры', 'Логика РФ-балк') then 'Терминал порта'
+		when base.storage_cost_calculation_type_name in ('Логика СВХ') then 'Склад СВХ'
+		else 'Не определено'
+		end, -- type_warehouse_name
+		
+		case
+		when base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' then 'Контейнеры'
+		when base.storage_cost_calculation_type_name = 'Логика РФ-балк' then 'Балк'
+		else 'Не определено'
+		end, -- type_freight_name
+		
+		pas.plant_full_name,-- receiving_plant_name
+        pas.plant_short_name, pas.plant_full_name
+
+	)
+
+distributed by (warehouse_name, dt_report);
+
+
+insert into userdata.transportation_external_location_metal_stock_aggregated (
+	warehouse_name,
+	dt_report,
+	period_comparison_rule_code,
+	dt_comparison,
+	country_of_remote_warehouse_name,
+	region_of_remote_warehouse_name,
+	forwarder_name,
+	type_warehouse_name,
+	type_freight_name,
+	receiving_plant_name,
+	sales_bundle_gross_weight,
+	storage_payable_total_gross_weight,
+	storage_payable_total_gross_weight_percentage,
+	storage_calculated_cost_total_amount,
+	storage_payable_001_030_days_gross_weight,
+	storage_payable_031_060_days_gross_weight,
+	storage_payable_061_090_days_gross_weight,
+	storage_payable_091_180_days_gross_weight,
+	storage_payable_181_365_days_gross_weight,
+	storage_payable_over_365_days_gross_weight,
+	storage_payable_001_030_days_gross_weight_percentage,
+	storage_payable_031_060_days_gross_weight_percentage,
+	storage_payable_061_090_days_gross_weight_percentage,
+	storage_payable_091_180_days_gross_weight_percentage,
+	storage_payable_181_365_days_gross_weight_percentage,
+	storage_payable_over_365_days_gross_weight_percentage,
+	storage_calculated_cost_001_030_amount,
+	storage_calculated_cost_031_060_amount,
+	storage_calculated_cost_061_090_amount,
+	storage_calculated_cost_091_180_amount,
+	storage_calculated_cost_181_365_amount,
+	storage_calculated_cost_over_365_amount,
+	storage_payable_over_one_month_gross_weight,
+	storage_calculated_over_one_month_amount,
+	storage_price_per_tonne,
+	sales_bundle_gross_weight_diff_per_period,
+	previous_day_gross_weight,
+	previous_day_total_gross_weight,
+	previous_day_cost_amount,
+	previous_week_gross_weight,
+	previous_week_total_gross_weight,
+	previous_week_cost_amount,
+	previous_month_gross_weight,
+	previous_month_total_gross_weight,
+	previous_month_cost_amount,
+	previous_quarter_gross_weight,
+	previous_quarter_total_gross_weight,
+	previous_quarter_cost_amount,
+	previous_year_gross_weight,
+	previous_year_total_gross_weight,
+	previous_year_cost_amount
+)
+select
+	base.warehouse_name,
+	base.dt_report,
+	base.period_comparison_rule_code,
+	base.dt_comparison,
+	base.country_of_remote_warehouse_name,
+	base.region_of_remote_warehouse_name,
+	base.forwarder_name,
+	base.type_warehouse_name,
+	base.type_freight_name,
+	base.receiving_plant_name,
+	base.sales_bundle_gross_weight,
+	base.storage_payable_total_gross_weight,
+	base.storage_payable_total_gross_weight_percentage,
+	base.storage_calculated_cost_total_amount,
+	base.storage_payable_001_030_days_gross_weight,
+	base.storage_payable_031_060_days_gross_weight,
+	base.storage_payable_061_090_days_gross_weight,
+	base.storage_payable_091_180_days_gross_weight,
+	base.storage_payable_181_365_days_gross_weight,
+	base.storage_payable_over_365_days_gross_weight,
+	base.storage_payable_001_030_days_gross_weight_percentage,
+	base.storage_payable_031_060_days_gross_weight_percentage,
+	base.storage_payable_061_090_days_gross_weight_percentage,
+	base.storage_payable_091_180_days_gross_weight_percentage,
+	base.storage_payable_181_365_days_gross_weight_percentage,
+	base.storage_payable_over_365_days_gross_weight_percentage,
+	base.storage_calculated_cost_001_030_amount,
+	base.storage_calculated_cost_031_060_amount,
+	base.storage_calculated_cost_061_090_amount,
+	base.storage_calculated_cost_091_180_amount,
+	base.storage_calculated_cost_181_365_amount,
+	base.storage_calculated_cost_over_365_amount,
+	base.storage_payable_over_one_month_gross_weight,
+	base.storage_calculated_over_one_month_amount,
+	base.storage_price_per_tonne, 
+
+	round(base.sales_bundle_gross_weight, 2) - round(previous.sales_bundle_gross_weight, 2) as sales_bundle_gross_weight_diff_per_period, -- LE.001131
+
+	case when base.period_comparison_rule_code = '1' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_day_gross_weight, -- LE.001132
+		
+	case when base.period_comparison_rule_code = '1' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_day_total_gross_weight, -- LE.001133
+		
+	case when base.period_comparison_rule_code = '1' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_day_cost_amount, -- LE.001134
+
+	case when base.period_comparison_rule_code = '2' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_week_gross_weight, -- LE.001135
+		
+	case when base.period_comparison_rule_code = '2' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_week_total_gross_weight, -- LE.001136
+		
+	case when base.period_comparison_rule_code = '2' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_week_cost_amount, -- LE.001137
+
+	case when base.period_comparison_rule_code = '3' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_month_gross_weight, -- LE.001138
+		
+	case when base.period_comparison_rule_code = '3' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_month_total_gross_weight, -- LE.001139
+		
+	case when base.period_comparison_rule_code = '3' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_month_cost_amount, -- LE.001140
+		
+	case when base.period_comparison_rule_code = '4' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_quarter_gross_weight, -- LE.001141
+		
+	case when base.period_comparison_rule_code = '4' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_quarter_total_gross_weight, -- LE.001142
+		
+	case when base.period_comparison_rule_code = '4' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_quarter_cost_amount, -- LE.001143
+		
+	case when base.period_comparison_rule_code = '5' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.sales_bundle_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_year_gross_weight, -- LE.001144
+		
+	case when base.period_comparison_rule_code = '5' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_payable_total_gross_weight) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_year_total_gross_weight, -- LE.001145
+		
+	case when base.period_comparison_rule_code = '5' and
+		lead(base.dt_report) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) is null
+		then
+		lag(base.storage_calculated_cost_total_amount) over (partition by base.warehouse_name, base.period_comparison_rule_code, base.country_of_remote_warehouse_name,
+		base.region_of_remote_warehouse_name, base.forwarder_name, base.type_warehouse_name, base.type_freight_name, base.receiving_plant_name
+		order by base.dt_report) 
+	end as previous_year_cost_amount -- LE.001146
+		
+from pre_culc as base
+left join pre_culc as previous on
+
+coalesce(previous.warehouse_name, 'точно не склад ;%()"?') = coalesce(base.warehouse_name, 'точно не склад ;%()"?')
+and previous.dt_report = base.dt_comparison
+and previous.forwarder_name = base.forwarder_name
+and previous.type_warehouse_name = base.type_warehouse_name
+and previous.type_freight_name = base.type_freight_name
+and previous.period_comparison_rule_code = base.period_comparison_rule_code
+and previous.receiving_plant_name = base.receiving_plant_name;
+

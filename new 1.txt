@@ -1,43 +1,83 @@
-v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	AL PLUS GLOBAL DMCC AL PLUS GLOBAL DMCC	461.907	461.907	100.00000000000000000000	4192.89	0.000	97.689	0.000	364.218	0.000	0.000	0.00000000000000000000	21.14906247361481856700	0.00000000000000000000	78.85093752638518143300	0.00000000000000000000	0.00000000000000000000	0.00	252.44	0.00	3940.45	0.00	0.00	461.907	4192.89	9.0773467386292046
-v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено		100.767	100.767	100.00000000000000000000	0.00	0.000	100.767	0.000	0.000	0.000	0.000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	100.767	0.00	0.00000000000000000000
-v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	RSET Co.Ltd RSET Co.Ltd	913.324	913.324	100.00000000000000000000	0.00	0.000	0.000	0.000	913.324	0.000	0.000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	913.324	0.00	0.00000000000000000000
-v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено		201.534	201.534	100.00000000000000000000	0.00	0.000	201.534	0.000	0.000	0.000	0.000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	201.534	0.00	0.00000000000000000000
-v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	RSET Co.Ltd RSET Co.Ltd	1826.648	1826.648	100.00000000000000000000	0.00	0.000	0.000	0.000	1826.648	0.000	0.000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	1826.648	0.00	0.00000000000000000000
-v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	AL PLUS GLOBAL DMCC AL PLUS GLOBAL DMCC	923.814	923.814	100.00000000000000000000	8385.78	0.000	195.378	0.000	728.436	0.000	0.000	0.00000000000000000000	21.14906247361481856700	0.00000000000000000000	78.85093752638518143300	0.00000000000000000000	0.00000000000000000000	0.00	504.88	0.00	7880.90	0.00	0.00	923.814	8385.78	9.0773467386292046
+SELECT
+    base.dt_report,
+    COUNT(*) AS calendar_rows_joined
+FROM userdata.storage_sales_bundles_amount base
+JOIN (
+    SELECT dt, '1' AS period_comparison_rule_code
+    FROM dict_dds.calendar
+    WHERE calendar_year BETWEEN 2000 AND 2050
+) cal
+    ON cal.dt = base.dt_report
+WHERE base.dt_report = '2025-08-27'
+GROUP BY base.dt_report;
+Что увидишь
+diff
+Копировать код
+dt_report   | calendar_rows_joined
+------------+----------------------
+2025-08-27  | 2
+📌 Это и есть источник ×2
+📌 Был 1 факт → стало 2 строки
 
+✅ Вариант 2. Показать дубли напрямую (ещё нагляднее)
+sql
+Копировать код
+SELECT
+    cal.dt,
+    COUNT(*) AS cnt
+FROM (
+    SELECT dt
+    FROM dict_dds.calendar
+    WHERE calendar_year BETWEEN 2000 AND 2050
+) cal
+WHERE cal.dt = '2025-08-27'
+GROUP BY cal.dt;
+Если вернётся:
 
- select 'v1', 
- warehouse_name, dt_report, period_comparison_rule_code, dt_comparison, country_of_remote_warehouse_name, region_of_remote_warehouse_name, forwarder_name, 
-type_warehouse_name, type_freight_name, receiving_plant_name, sales_bundle_gross_weight, storage_payable_total_gross_weight, storage_payable_total_gross_weight_percentage, storage_calculated_cost_total_amount,
- storage_payable_001_030_days_gross_weight, storage_payable_031_060_days_gross_weight, storage_payable_061_090_days_gross_weight,
- storage_payable_091_180_days_gross_weight, storage_payable_181_365_days_gross_weight, storage_payable_over_365_days_gross_weight,
- storage_payable_001_030_days_gross_weight_percentage, storage_payable_031_060_days_gross_weight_percentage, storage_payable_061_090_days_gross_weight_percentage,
- storage_payable_091_180_days_gross_weight_percentage, storage_payable_181_365_days_gross_weight_percentage, storage_payable_over_365_days_gross_weight_percentage, 
- storage_calculated_cost_001_030_amount, storage_calculated_cost_031_060_amount, storage_calculated_cost_061_090_amount, storage_calculated_cost_091_180_amount, 
- storage_calculated_cost_181_365_amount, storage_calculated_cost_over_365_amount, storage_payable_over_one_month_gross_weight, storage_calculated_over_one_month_amount, 
- storage_price_per_tonne
- from pre_culc 
- where warehouse_name='QINGDAO SINOTRANS RW TRM'
- and dt_report='2025-08-27'
- and period_comparison_rule_code='1'
- and dt_comparison='2025-08-26'
- and country_of_remote_warehouse_name='Китай'
- and region_of_remote_warehouse_name='Восточная Азия'
- union all 
-  select 'v2', 
- warehouse_name, dt_report, period_comparison_rule_code, dt_comparison, country_of_remote_warehouse_name, region_of_remote_warehouse_name, forwarder_name, 
-type_warehouse_name, type_freight_name, receiving_plant_name, sales_bundle_gross_weight, storage_payable_total_gross_weight, storage_payable_total_gross_weight_percentage, storage_calculated_cost_total_amount,
- storage_payable_001_030_days_gross_weight, storage_payable_031_060_days_gross_weight, storage_payable_061_090_days_gross_weight,
- storage_payable_091_180_days_gross_weight, storage_payable_181_365_days_gross_weight, storage_payable_over_365_days_gross_weight,
- storage_payable_001_030_days_gross_weight_percentage, storage_payable_031_060_days_gross_weight_percentage, storage_payable_061_090_days_gross_weight_percentage,
- storage_payable_091_180_days_gross_weight_percentage, storage_payable_181_365_days_gross_weight_percentage, storage_payable_over_365_days_gross_weight_percentage, 
- storage_calculated_cost_001_030_amount, storage_calculated_cost_031_060_amount, storage_calculated_cost_061_090_amount, storage_calculated_cost_091_180_amount, 
- storage_calculated_cost_181_365_amount, storage_calculated_cost_over_365_amount, storage_payable_over_one_month_gross_weight, storage_calculated_over_one_month_amount, 
- storage_price_per_tonne
- from pre_culc1 
- where warehouse_name='QINGDAO SINOTRANS RW TRM'
- and dt_report='2025-08-27'
- and period_comparison_rule_code='1'
- and dt_comparison='2025-08-26'
- and country_of_remote_warehouse_name='Китай'
- and region_of_remote_warehouse_name='Восточная Азия'
+diff
+Копировать код
+dt          | cnt
+------------+-----
+2025-08-27  | 2
+➡️ JOIN по dt физически не может быть 1-к-1
+
+✅ Вариант 3. «Доказательство в лоб» (лучшее для ревью)
+Показываем, что факт дублируется до агрегации.
+
+sql
+Копировать код
+SELECT
+    base.sales_bundle_gross_weight,
+    cal.period_comparison_rule_code
+FROM userdata.storage_sales_bundles_amount base
+JOIN (
+    SELECT dt, '1' AS period_comparison_rule_code
+    FROM dict_dds.calendar
+    WHERE calendar_year BETWEEN 2000 AND 2050
+) cal
+    ON cal.dt = base.dt_report
+WHERE base.dt_report = '2025-08-27'
+  AND base.sales_bundle_gross_weight = 913.324;
+Результат будет типа:
+
+diff
+Копировать код
+sales_bundle_gross_weight | period_comparison_rule_code
+--------------------------+-----------------------------
+913.324                   | 1
+913.324                   | 1
+💣 Один и тот же факт появился дважды ДО GROUP BY
+
+🔥 Контрольный «убийственный» запрос
+Этот можно просто кинуть в чат и всё.
+
+sql
+Копировать код
+SELECT
+    SUM(base.sales_bundle_gross_weight)                    AS sum_before_join,
+    SUM(base.sales_bundle_gross_weight) * COUNT(cal.dt)    AS expected_after_join
+FROM userdata.storage_sales_bundles_amount base
+JOIN dict_dds.calendar cal
+    ON cal.dt = base.dt_report
+WHERE base.dt_report = '2025-08-27'
+GROUP BY base.dt_report;

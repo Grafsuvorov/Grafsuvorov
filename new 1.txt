@@ -1,255 +1,43 @@
-CREATE TEMP TABLE pre_agg
-AS
-SELECT
-    trht_3.transport_hub_name AS warehouse_name,
-    base.dt_report,
+v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	AL PLUS GLOBAL DMCC AL PLUS GLOBAL DMCC	461.907	461.907	100.00000000000000000000	4192.89	0.000	97.689	0.000	364.218	0.000	0.000	0.00000000000000000000	21.14906247361481856700	0.00000000000000000000	78.85093752638518143300	0.00000000000000000000	0.00000000000000000000	0.00	252.44	0.00	3940.45	0.00	0.00	461.907	4192.89	9.0773467386292046
+v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено		100.767	100.767	100.00000000000000000000	0.00	0.000	100.767	0.000	0.000	0.000	0.000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	100.767	0.00	0.00000000000000000000
+v1	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	RSET Co.Ltd RSET Co.Ltd	913.324	913.324	100.00000000000000000000	0.00	0.000	0.000	0.000	913.324	0.000	0.000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	913.324	0.00	0.00000000000000000000
+v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено		201.534	201.534	100.00000000000000000000	0.00	0.000	201.534	0.000	0.000	0.000	0.000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	201.534	0.00	0.00000000000000000000
+v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	RSET Co.Ltd RSET Co.Ltd	1826.648	1826.648	100.00000000000000000000	0.00	0.000	0.000	0.000	1826.648	0.000	0.000	0.00000000000000000000	0.00000000000000000000	0.00000000000000000000	100.00000000000000000000	0.00000000000000000000	0.00000000000000000000	0.00	0.00	0.00	0.00	0.00	0.00	1826.648	0.00	0.00000000000000000000
+v2	QINGDAO SINOTRANS RW TRM	2025-08-27	1	2025-08-26	Китай	Восточная Азия	SINOTRANS CENTRAL CHINA	Не определено	Не определено	AL PLUS GLOBAL DMCC AL PLUS GLOBAL DMCC	923.814	923.814	100.00000000000000000000	8385.78	0.000	195.378	0.000	728.436	0.000	0.000	0.00000000000000000000	21.14906247361481856700	0.00000000000000000000	78.85093752638518143300	0.00000000000000000000	0.00000000000000000000	0.00	504.88	0.00	7880.90	0.00	0.00	923.814	8385.78	9.0773467386292046
 
-    /* измерения */
-    CASE
-        WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
-        WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
-        ELSE cotex.country_full_name
-    END AS country_of_remote_warehouse_name,
 
-    CASE
-        WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
-        WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
-        WHEN t25a1.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
-        ELSE t25a1.market_region1_name
-    END AS region_of_remote_warehouse_name,
-
-    COALESCE(
-        CASE
-            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
-            THEN counter.counterparty_short_name
-        END,
-        'Не определено'
-    ) AS forwarder_name,
-
-    CASE
-        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
-        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ' THEN 'Склад СВХ'
-        ELSE 'Не определено'
-    END AS type_warehouse_name,
-
-    CASE
-        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
-        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
-        ELSE 'Не определено'
-    END AS type_freight_name,
-
-    pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_name,
-
-    /* базовые суммы */
-    SUM(base.sales_bundle_gross_weight) AS sales_bundle_gross_weight,
-
-    SUM(
-        base.storage_payable_001_030_days_gross_weight +
-        base.storage_payable_031_060_days_gross_weight +
-        base.storage_payable_061_090_days_gross_weight +
-        base.storage_payable_091_180_days_gross_weight +
-        base.storage_payable_181_365_days_gross_weight +
-        base.storage_payable_over_365_days_gross_weight
-    ) AS storage_payable_total_gross_weight,
-
-    /* percentage total payable vs total weight */
-    ( SUM(
-        base.storage_payable_001_030_days_gross_weight +
-        base.storage_payable_031_060_days_gross_weight +
-        base.storage_payable_061_090_days_gross_weight +
-        base.storage_payable_091_180_days_gross_weight +
-        base.storage_payable_181_365_days_gross_weight +
-        base.storage_payable_over_365_days_gross_weight
-      )
-      / NULLIF(SUM(base.sales_bundle_gross_weight), 0)
-      * 100
-    ) AS storage_payable_total_gross_weight_percentage,
-
-    SUM(
-        base.storage_calculated_cost_001_030_amount +
-        base.storage_calculated_cost_031_060_amount +
-        base.storage_calculated_cost_061_090_amount +
-        base.storage_calculated_cost_091_180_amount +
-        base.storage_calculated_cost_181_365_amount +
-        base.storage_calculated_cost_over_365_amount
-    ) AS storage_calculated_cost_total_amount,
-
-    /* разрезы payable по корзинам */
-    SUM(base.storage_payable_001_030_days_gross_weight) AS storage_payable_001_030_days_gross_weight,
-    SUM(base.storage_payable_031_060_days_gross_weight) AS storage_payable_031_060_days_gross_weight,
-    SUM(base.storage_payable_061_090_days_gross_weight) AS storage_payable_061_090_days_gross_weight,
-    SUM(base.storage_payable_091_180_days_gross_weight) AS storage_payable_091_180_days_gross_weight,
-    SUM(base.storage_payable_181_365_days_gross_weight) AS storage_payable_181_365_days_gross_weight,
-    SUM(base.storage_payable_over_365_days_gross_weight) AS storage_payable_over_365_days_gross_weight,
-
-    /* доли корзин payable внутри total payable */
-    COALESCE(
-        SUM(base.storage_payable_001_030_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_001_030_days_gross_weight_percentage,
-
-    COALESCE(
-        SUM(base.storage_payable_031_060_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_031_060_days_gross_weight_percentage,
-
-    COALESCE(
-        SUM(base.storage_payable_061_090_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_061_090_days_gross_weight_percentage,
-
-    COALESCE(
-        SUM(base.storage_payable_091_180_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_091_180_days_gross_weight_percentage,
-
-    COALESCE(
-        SUM(base.storage_payable_181_365_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_181_365_days_gross_weight_percentage,
-
-    COALESCE(
-        SUM(base.storage_payable_over_365_days_gross_weight)
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ) * 100,
-        0
-    ) AS storage_payable_over_365_days_gross_weight_percentage,
-
-    /* calculated cost по корзинам */
-    SUM(base.storage_calculated_cost_001_030_amount) AS storage_calculated_cost_001_030_amount,
-    SUM(base.storage_calculated_cost_031_060_amount) AS storage_calculated_cost_031_060_amount,
-    SUM(base.storage_calculated_cost_061_090_amount) AS storage_calculated_cost_061_090_amount,
-    SUM(base.storage_calculated_cost_091_180_amount) AS storage_calculated_cost_091_180_amount,
-    SUM(base.storage_calculated_cost_181_365_amount) AS storage_calculated_cost_181_365_amount,
-    SUM(base.storage_calculated_cost_over_365_amount) AS storage_calculated_cost_over_365_amount,
-
-    /* payable > 1 month (всё кроме 001-030) */
-    SUM(
-        base.storage_payable_031_060_days_gross_weight +
-        base.storage_payable_061_090_days_gross_weight +
-        base.storage_payable_091_180_days_gross_weight +
-        base.storage_payable_181_365_days_gross_weight +
-        base.storage_payable_over_365_days_gross_weight
-    ) AS storage_payable_over_one_month_gross_weight,
-
-    /* cost > 1 month (всё кроме 001-030) */
-    SUM(
-        base.storage_calculated_cost_031_060_amount +
-        base.storage_calculated_cost_061_090_amount +
-        base.storage_calculated_cost_091_180_amount +
-        base.storage_calculated_cost_181_365_amount +
-        base.storage_calculated_cost_over_365_amount
-    ) AS storage_calculated_over_one_month_amount,
-
-    /* цена за тонну (total cost / total payable weight) */
-    COALESCE(
-        SUM(
-            base.storage_calculated_cost_001_030_amount +
-            base.storage_calculated_cost_031_060_amount +
-            base.storage_calculated_cost_061_090_amount +
-            base.storage_calculated_cost_091_180_amount +
-            base.storage_calculated_cost_181_365_amount +
-            base.storage_calculated_cost_over_365_amount
-        )
-        / NULLIF(
-            SUM(
-                base.storage_payable_001_030_days_gross_weight +
-                base.storage_payable_031_060_days_gross_weight +
-                base.storage_payable_061_090_days_gross_weight +
-                base.storage_payable_091_180_days_gross_weight +
-                base.storage_payable_181_365_days_gross_weight +
-                base.storage_payable_over_365_days_gross_weight
-            ),
-            0
-        ),
-        0
-    ) AS storage_price_per_tonne
-
-FROM userdata.storage_sales_bundles_amount base
-LEFT JOIN dict_dds.transport_hub trhu ON trhu.transport_hub_code = base.warehouse_code
-LEFT JOIN adrc adrc ON adrc.address_code = trhu.address_code
-LEFT JOIN dict_dds.country_texts cotex ON cotex.country_code = adrc.country_code AND cotex.language_code = 'R'
-LEFT JOIN dict_dds.transport_hub_texts trht_3
-    ON trht_3.transport_hub_code = base.warehouse_code
-   AND trht_3.language_code = CASE WHEN cotex.country_full_name = 'Россия' THEN 'R' ELSE 'E' END
-LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
-LEFT JOIN dict_dds.counterparty counter ON counter.counterparty_code = base.forwarder_code
-LEFT JOIN dict_dds.country r_sd556 ON r_sd556.country_code = adrc.country_code
-LEFT JOIN dict_dds.market_region1_texts t25a1
-    ON t25a1.market_region1_code = r_sd556.market_region1_code
-   AND t25a1.language_code = 'R'
-
-GROUP BY
-    warehouse_name,
-    base.dt_report,
-    country_of_remote_warehouse_name,
-    region_of_remote_warehouse_name,
-    forwarder_name,
-    type_warehouse_name,
-    type_freight_name,
-    receiving_plant_name
-DISTRIBUTED BY (warehouse_name, dt_report);
+ select 'v1', 
+ warehouse_name, dt_report, period_comparison_rule_code, dt_comparison, country_of_remote_warehouse_name, region_of_remote_warehouse_name, forwarder_name, 
+type_warehouse_name, type_freight_name, receiving_plant_name, sales_bundle_gross_weight, storage_payable_total_gross_weight, storage_payable_total_gross_weight_percentage, storage_calculated_cost_total_amount,
+ storage_payable_001_030_days_gross_weight, storage_payable_031_060_days_gross_weight, storage_payable_061_090_days_gross_weight,
+ storage_payable_091_180_days_gross_weight, storage_payable_181_365_days_gross_weight, storage_payable_over_365_days_gross_weight,
+ storage_payable_001_030_days_gross_weight_percentage, storage_payable_031_060_days_gross_weight_percentage, storage_payable_061_090_days_gross_weight_percentage,
+ storage_payable_091_180_days_gross_weight_percentage, storage_payable_181_365_days_gross_weight_percentage, storage_payable_over_365_days_gross_weight_percentage, 
+ storage_calculated_cost_001_030_amount, storage_calculated_cost_031_060_amount, storage_calculated_cost_061_090_amount, storage_calculated_cost_091_180_amount, 
+ storage_calculated_cost_181_365_amount, storage_calculated_cost_over_365_amount, storage_payable_over_one_month_gross_weight, storage_calculated_over_one_month_amount, 
+ storage_price_per_tonne
+ from pre_culc 
+ where warehouse_name='QINGDAO SINOTRANS RW TRM'
+ and dt_report='2025-08-27'
+ and period_comparison_rule_code='1'
+ and dt_comparison='2025-08-26'
+ and country_of_remote_warehouse_name='Китай'
+ and region_of_remote_warehouse_name='Восточная Азия'
+ union all 
+  select 'v2', 
+ warehouse_name, dt_report, period_comparison_rule_code, dt_comparison, country_of_remote_warehouse_name, region_of_remote_warehouse_name, forwarder_name, 
+type_warehouse_name, type_freight_name, receiving_plant_name, sales_bundle_gross_weight, storage_payable_total_gross_weight, storage_payable_total_gross_weight_percentage, storage_calculated_cost_total_amount,
+ storage_payable_001_030_days_gross_weight, storage_payable_031_060_days_gross_weight, storage_payable_061_090_days_gross_weight,
+ storage_payable_091_180_days_gross_weight, storage_payable_181_365_days_gross_weight, storage_payable_over_365_days_gross_weight,
+ storage_payable_001_030_days_gross_weight_percentage, storage_payable_031_060_days_gross_weight_percentage, storage_payable_061_090_days_gross_weight_percentage,
+ storage_payable_091_180_days_gross_weight_percentage, storage_payable_181_365_days_gross_weight_percentage, storage_payable_over_365_days_gross_weight_percentage, 
+ storage_calculated_cost_001_030_amount, storage_calculated_cost_031_060_amount, storage_calculated_cost_061_090_amount, storage_calculated_cost_091_180_amount, 
+ storage_calculated_cost_181_365_amount, storage_calculated_cost_over_365_amount, storage_payable_over_one_month_gross_weight, storage_calculated_over_one_month_amount, 
+ storage_price_per_tonne
+ from pre_culc1 
+ where warehouse_name='QINGDAO SINOTRANS RW TRM'
+ and dt_report='2025-08-27'
+ and period_comparison_rule_code='1'
+ and dt_comparison='2025-08-26'
+ and country_of_remote_warehouse_name='Китай'
+ and region_of_remote_warehouse_name='Восточная Азия'

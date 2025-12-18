@@ -1,83 +1,26 @@
-SELECT
-    base.dt_report,
-    COUNT(*) AS calendar_rows_joined
-FROM userdata.storage_sales_bundles_amount base
-JOIN (
-    SELECT dt, '1' AS period_comparison_rule_code
-    FROM dict_dds.calendar
-    WHERE calendar_year BETWEEN 2000 AND 2050
-) cal
-    ON cal.dt = base.dt_report
-WHERE base.dt_report = '2025-08-27'
-GROUP BY base.dt_report;
-Что увидишь
-diff
-Копировать код
-dt_report   | calendar_rows_joined
-------------+----------------------
-2025-08-27  | 2
-📌 Это и есть источник ×2
-📌 Был 1 факт → стало 2 строки
+create table if not exists dict_dds.material_texts(
+	material_code 		varchar(54)  not null,
+	language_code 		varchar(3)	 not null,
+	
+	material_name 		varchar(120) null,
+	material_full_name 	varchar(780) null,
+	
+	dttm_inserted 		timestamp	 not null,
+	dttm_updated 		timestamp  	 not null,
+	job_name 			varchar(50)  not null default 'airflow',
+	deleted_flag 		bool 		 not null default false
+)
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+)
+distributed by (material_code, language_code);
 
-✅ Вариант 2. Показать дубли напрямую (ещё нагляднее)
-sql
-Копировать код
-SELECT
-    cal.dt,
-    COUNT(*) AS cnt
-FROM (
-    SELECT dt
-    FROM dict_dds.calendar
-    WHERE calendar_year BETWEEN 2000 AND 2050
-) cal
-WHERE cal.dt = '2025-08-27'
-GROUP BY cal.dt;
-Если вернётся:
-
-diff
-Копировать код
-dt          | cnt
-------------+-----
-2025-08-27  | 2
-➡️ JOIN по dt физически не может быть 1-к-1
-
-✅ Вариант 3. «Доказательство в лоб» (лучшее для ревью)
-Показываем, что факт дублируется до агрегации.
-
-sql
-Копировать код
-SELECT
-    base.sales_bundle_gross_weight,
-    cal.period_comparison_rule_code
-FROM userdata.storage_sales_bundles_amount base
-JOIN (
-    SELECT dt, '1' AS period_comparison_rule_code
-    FROM dict_dds.calendar
-    WHERE calendar_year BETWEEN 2000 AND 2050
-) cal
-    ON cal.dt = base.dt_report
-WHERE base.dt_report = '2025-08-27'
-  AND base.sales_bundle_gross_weight = 913.324;
-Результат будет типа:
-
-diff
-Копировать код
-sales_bundle_gross_weight | period_comparison_rule_code
---------------------------+-----------------------------
-913.324                   | 1
-913.324                   | 1
-💣 Один и тот же факт появился дважды ДО GROUP BY
-
-🔥 Контрольный «убийственный» запрос
-Этот можно просто кинуть в чат и всё.
-
-sql
-Копировать код
-SELECT
-    SUM(base.sales_bundle_gross_weight)                    AS sum_before_join,
-    SUM(base.sales_bundle_gross_weight) * COUNT(cal.dt)    AS expected_after_join
-FROM userdata.storage_sales_bundles_amount base
-JOIN dict_dds.calendar cal
-    ON cal.dt = base.dt_report
-WHERE base.dt_report = '2025-08-27'
-GROUP BY base.dt_report;
+from base
+	left join dict_dds.plant_and_subsidiary as p
+ 		on base.plant_code = p.plant_code
+	left join dict_dds.material_texts as mt
+		on base.material_code = mt.material_code 
+		and mt.language_code = 'R'

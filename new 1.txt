@@ -1,241 +1,174 @@
--- 1) Сначала агрегация БЕЗ period_comparison_rule_code (без умножения на календарь)
-drop table if exists pre_agg_base;
-create temporary table pre_agg_base
-as
-select
-    trht_3.transport_hub_name as warehouse_name,        -- LE.001048
-    base.dt_report,                                     -- LE.001069
+CREATE TABLE IF NOT EXISTS dict_dds.calendar_periods (
+    dt date,
+    period_comparison_rule_code text,
+    dt_comparison date
+)
+DISTRIBUTED BY (dt);
+Заполнение (однократно или по расписанию):
 
-    case
-        when cotex.country_full_name = 'Корея, республика' then 'Южная Корея'
-        when cotex.country_full_name = 'Тайвань (Китай)'  then 'Тайвань'
-        else cotex.country_full_name
-    end as country_of_remote_warehouse_name,            -- LE.001060
+sql
+Копировать код
+TRUNCATE TABLE dict_dds.calendar_periods;
 
-    case
-        when t25a1.market_region1_name = 'Турция'              then 'Западная Азия'
-        when t25a1.market_region1_name = 'Средний Восток и Афр' then 'Ближний Восток'
-        when t25a1.market_region1_name in ('Азия', 'Китай')     then 'Восточная Азия'
-        else t25a1.market_region1_name
-    end as region_of_remote_warehouse_name,             -- LE.001061
+INSERT INTO dict_dds.calendar_periods (dt, period_comparison_rule_code, dt_comparison)
 
-    coalesce(
-        case
-            when base.storage_cost_calculation_type_name in ('Логика Азия','Логика Европа','Логика СВХ')
-            then counter.counterparty_short_name
-        end,
+-- 1. Предыдущий день
+SELECT
+    dt,
+    '1' AS period_comparison_rule_code,
+    (dt - INTERVAL '1 day')::date AS dt_comparison
+FROM dict_dds.calendar
+WHERE calendar_year BETWEEN 2000 AND 2050
+
+UNION ALL
+
+-- 2. Предыдущая неделя (понедельник → понедельник)
+SELECT
+    dt,
+    '2',
+    (dt - INTERVAL '1 week')::date
+FROM dict_dds.calendar
+WHERE day_of_week = 1
+  AND calendar_year BETWEEN 2000 AND 2050
+
+UNION ALL
+
+-- 3. Предыдущий месяц (последний день месяца)
+SELECT
+    dt,
+    '3',
+    (date_trunc('month', dt)::date - 1)
+FROM dict_dds.calendar
+WHERE calendar_day = days_in_month
+  AND calendar_year BETWEEN 2000 AND 2050
+
+UNION ALL
+
+-- 4. Предыдущий квартал (последний день квартала)
+SELECT
+    dt,
+    '4',
+    (dt + INTERVAL '1 day' - INTERVAL '3 month' - INTERVAL '1 day')::date
+FROM dict_dds.calendar
+WHERE date_part('quarter', dt) <> date_part('quarter', dt + INTERVAL '1 day')
+  AND calendar_year BETWEEN 2000 AND 2050
+
+UNION ALL
+
+-- 5. Предыдущий год (31 декабря)
+SELECT
+    dt,
+    '5',
+    (dt - INTERVAL '1 year')::date
+FROM dict_dds.calendar
+WHERE calendar_month = 12
+  AND calendar_day = 31
+  AND calendar_year BETWEEN 2000 AND 2050;
+📌 Здесь дубли по dt допустимы и корректны
+📌 (dt, period_comparison_rule_code) — логический ключ
+
+2️⃣ Агрегация факта (БЕЗ периодов)
+Это замена твоего текущего pre_culc
+
+sql
+Копировать код
+CREATE TEMP TABLE pre_agg
+AS
+SELECT
+    trht_3.transport_hub_name AS warehouse_name,
+    base.dt_report,
+
+    /* измерения */
+    CASE
+        WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+        ELSE cotex.country_full_name
+    END AS country_of_remote_warehouse_name,
+
+    CASE
+        WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN t25a1.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
+        ELSE t25a1.market_region1_name
+    END AS region_of_remote_warehouse_name,
+
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN counter.counterparty_short_name
+        END,
         'Не определено'
-    ) as forwarder_name,                                -- LE.001041
+    ) AS forwarder_name,
 
-    case
-        when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры','Логика РФ-балк') then 'Терминал порта'
-        when base.storage_cost_calculation_type_name = 'Логика СВХ' then 'Склад СВХ'
-        else 'Не определено'
-    end as type_warehouse_name,                         -- LE.001126
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ' THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END AS type_warehouse_name,
 
-    case
-        when base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' then 'Контейнеры'
-        when base.storage_cost_calculation_type_name = 'Логика РФ-балк'       then 'Балк'
-        else 'Не определено'
-    end as type_freight_name,                           -- LE.001127
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+        ELSE 'Не определено'
+    END AS type_freight_name,
 
-    pas.plant_short_name || ' ' || pas.plant_full_name as receiving_plant_name, -- LE.001030
+    pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_name,
 
-    -- агрегаты
-    sum(base.sales_bundle_gross_weight) as sales_bundle_gross_weight, -- LE.001018
+    /* метрики */
+    SUM(base.sales_bundle_gross_weight) AS sales_bundle_gross_weight,
 
-    sum(
+    SUM(
         base.storage_payable_001_030_days_gross_weight +
         base.storage_payable_031_060_days_gross_weight +
         base.storage_payable_061_090_days_gross_weight +
         base.storage_payable_091_180_days_gross_weight +
         base.storage_payable_181_365_days_gross_weight +
         base.storage_payable_over_365_days_gross_weight
-    ) as storage_payable_total_gross_weight, -- LE.001114
+    ) AS storage_payable_total_gross_weight,
 
-    sum(
+    SUM(
         base.storage_calculated_cost_001_030_amount +
         base.storage_calculated_cost_031_060_amount +
         base.storage_calculated_cost_061_090_amount +
         base.storage_calculated_cost_091_180_amount +
         base.storage_calculated_cost_181_365_amount +
         base.storage_calculated_cost_over_365_amount
-    ) as storage_calculated_cost_total_amount, -- LE.001116
+    ) AS storage_calculated_cost_total_amount
 
-    sum(base.storage_payable_001_030_days_gross_weight) as storage_payable_001_030_days_gross_weight, -- LE.001095
-    sum(base.storage_payable_031_060_days_gross_weight) as storage_payable_031_060_days_gross_weight, -- LE.001096
-    sum(base.storage_payable_061_090_days_gross_weight) as storage_payable_061_090_days_gross_weight, -- LE.001097
-    sum(base.storage_payable_091_180_days_gross_weight) as storage_payable_091_180_days_gross_weight, -- LE.001098
-    sum(base.storage_payable_181_365_days_gross_weight) as storage_payable_181_365_days_gross_weight, -- LE.001099
-    sum(base.storage_payable_over_365_days_gross_weight) as storage_payable_over_365_days_gross_weight, -- LE.001100
+FROM userdata.storage_sales_bundles_amount base
+LEFT JOIN dict_dds.transport_hub trhu ON trhu.transport_hub_code = base.warehouse_code
+LEFT JOIN adrc adrc ON adrc.address_code = trhu.address_code
+LEFT JOIN dict_dds.country_texts cotex ON cotex.country_code = adrc.country_code AND cotex.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_3
+    ON trht_3.transport_hub_code = base.warehouse_code
+   AND trht_3.language_code = CASE WHEN cotex.country_full_name = 'Россия' THEN 'R' ELSE 'E' END
+LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dict_dds.counterparty counter ON counter.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.country r_sd556 ON r_sd556.country_code = adrc.country_code
+LEFT JOIN dict_dds.market_region1_texts t25a1
+    ON t25a1.market_region1_code = r_sd556.market_region1_code
+   AND t25a1.language_code = 'R'
 
-    sum(base.storage_calculated_cost_001_030_amount) as storage_calculated_cost_001_030_amount, -- LE.001107
-    sum(base.storage_calculated_cost_031_060_amount) as storage_calculated_cost_031_060_amount, -- LE.001108
-    sum(base.storage_calculated_cost_061_090_amount) as storage_calculated_cost_061_090_amount, -- LE.001109
-    sum(base.storage_calculated_cost_091_180_amount) as storage_calculated_cost_091_180_amount, -- LE.001110
-    sum(base.storage_calculated_cost_181_365_amount) as storage_calculated_cost_181_365_amount, -- LE.001111
-    sum(base.storage_calculated_cost_over_365_amount) as storage_calculated_cost_over_365_amount, -- LE.001112
-
-    sum(
-        base.storage_payable_031_060_days_gross_weight +
-        base.storage_payable_061_090_days_gross_weight +
-        base.storage_payable_091_180_days_gross_weight +
-        base.storage_payable_181_365_days_gross_weight +
-        base.storage_payable_over_365_days_gross_weight
-    ) as storage_payable_over_one_month_gross_weight, -- LE.001128
-
-    sum(
-        base.storage_calculated_cost_031_060_amount +
-        base.storage_calculated_cost_061_090_amount +
-        base.storage_calculated_cost_091_180_amount +
-        base.storage_calculated_cost_181_365_amount +
-        base.storage_calculated_cost_over_365_amount
-    ) as storage_calculated_over_one_month_amount      -- LE.001129
-
-from userdata.storage_sales_bundles_amount as base
-
-left join dict_dds.transport_hub as trhu
-    on trhu.transport_hub_code = base.warehouse_code
-left join adrc as adrc
-    on adrc.address_code = trhu.address_code
-left join dict_dds.country_texts as cotex
-    on cotex.country_code = adrc.country_code
-   and cotex.language_code = 'R'
-left join dict_dds.transport_hub_texts as trht_3
-    on trht_3.language_code = case when cotex.country_full_name = 'Россия' then 'R' else 'E' end
-   and trht_3.transport_hub_code = base.warehouse_code
-
-left join dict_dds.transport_hub tvkn
-    on tvkn.transport_hub_code = base.warehouse_code
-left join dict_dds.plant_and_subsidiary as pas
-    on pas.plant_code = base.receiving_plant_code
-left join adrc as adrc_2
-    on adrc_2.address_code = tvkn.address_code
-left join dict_dds.country r_sd556
-    on r_sd556.country_code = adrc_2.country_code
-left join dict_dds.market_region1_texts t25a1
-    on t25a1.market_region1_code = r_sd556.market_region1_code
-   and t25a1.language_code = 'R'
-
-left join dict_dds.counterparty as counter
-    on counter.counterparty_code = base.forwarder_code
-
-group by
-    trht_3.transport_hub_name,
+GROUP BY
+    warehouse_name,
     base.dt_report,
-    case
-        when cotex.country_full_name = 'Корея, республика' then 'Южная Корея'
-        when cotex.country_full_name = 'Тайвань (Китай)'  then 'Тайвань'
-        else cotex.country_full_name
-    end,
-    case
-        when t25a1.market_region1_name = 'Турция'               then 'Западная Азия'
-        when t25a1.market_region1_name = 'Средний Восток и Афр' then 'Ближний Восток'
-        when t25a1.market_region1_name in ('Азия','Китай')      then 'Восточная Азия'
-        else t25a1.market_region1_name
-    end,
-    coalesce(
-        case
-            when base.storage_cost_calculation_type_name in ('Логика Азия','Логика Европа','Логика СВХ')
-            then counter.counterparty_short_name
-        end,
-        'Не определено'
-    ),
-    case
-        when base.storage_cost_calculation_type_name in ('Логика РФ-контейнеры','Логика РФ-балк') then 'Терминал порта'
-        when base.storage_cost_calculation_type_name = 'Логика СВХ' then 'Склад СВХ'
-        else 'Не определено'
-    end,
-    case
-        when base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' then 'Контейнеры'
-        when base.storage_cost_calculation_type_name = 'Логика РФ-балк'       then 'Балк'
-        else 'Не определено'
-    end,
-    pas.plant_short_name,
-    pas.plant_full_name
-distributed by (warehouse_name, dt_report);
-
--- 2) Теперь добавляем 5 периодов (умножение уже на агрегат, а не на 157 млн строк)
-drop table if exists pre_culc;
-create temporary table pre_culc
-as
-with periods as (
-    select dt, (dt - interval '1 day')::date as date_comparison, '1'::text as period_comparison_rule_code
-    from dict_dds.calendar
-    where calendar_year between 2000 and 2050
-
-    union all
-    select dt, (dt - interval '1 week')::date, '2'::text
-    from dict_dds.calendar
-    where day_of_week = 1 and calendar_year between 2000 and 2050
-
-    union all
-    select dt, (date_trunc('month', dt)::date - 1)::date, '3'::text
-    from dict_dds.calendar
-    where calendar_day = days_in_month and calendar_year between 2000 and 2050
-
-    union all
-    select dt, (dt + interval '1 day' - interval '3 month' - interval '1 day')::date, '4'::text
-    from dict_dds.calendar
-    where date_part('quarter', dt) <> date_part('quarter', dt + interval '1 day')
-      and calendar_year between 2000 and 2050
-
-    union all
-    select dt, (dt - interval '1 year')::date, '5'::text
-    from dict_dds.calendar
-    where calendar_month = 12 and calendar_day = 31 and calendar_year between 2000 and 2050
-)
-select
-    a.warehouse_name,
-    a.dt_report,
-
+    country_of_remote_warehouse_name,
+    region_of_remote_warehouse_name,
+    forwarder_name,
+    type_warehouse_name,
+    type_freight_name,
+    receiving_plant_name
+DISTRIBUTED BY (warehouse_name, dt_report);
+3️⃣ Применение периодов (ФИНАЛ)
+sql
+Копировать код
+CREATE TEMP TABLE pre_culc
+AS
+SELECT
+    a.*,
     p.period_comparison_rule_code,
-    p.date_comparison as dt_comparison,
-
-    a.country_of_remote_warehouse_name,
-    a.region_of_remote_warehouse_name,
-    a.forwarder_name,
-    a.type_warehouse_name,
-    a.type_freight_name,
-    a.receiving_plant_name,
-
-    a.sales_bundle_gross_weight,
-    a.storage_payable_total_gross_weight,
-
-    -- проценты считаем здесь (после агрегации), чтобы не дублировать формулы
-    (a.storage_payable_total_gross_weight / nullif(a.sales_bundle_gross_weight, 0) * 100.0) as storage_payable_total_gross_weight_percentage, -- LE.001115
-
-    a.storage_calculated_cost_total_amount,
-
-    a.storage_payable_001_030_days_gross_weight,
-    a.storage_payable_031_060_days_gross_weight,
-    a.storage_payable_061_090_days_gross_weight,
-    a.storage_payable_091_180_days_gross_weight,
-    a.storage_payable_181_365_days_gross_weight,
-    a.storage_payable_over_365_days_gross_weight,
-
-    coalesce(a.storage_payable_001_030_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_001_030_days_gross_weight_percentage,
-    coalesce(a.storage_payable_031_060_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_031_060_days_gross_weight_percentage,
-    coalesce(a.storage_payable_061_090_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_061_090_days_gross_weight_percentage,
-    coalesce(a.storage_payable_091_180_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_091_180_days_gross_weight_percentage,
-    coalesce(a.storage_payable_181_365_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_181_365_days_gross_weight_percentage,
-    coalesce(a.storage_payable_over_365_days_gross_weight / nullif(a.storage_payable_total_gross_weight, 0) * 100.0, 0) as storage_payable_over_365_days_gross_weight_percentage,
-
-    a.storage_calculated_cost_001_030_amount,
-    a.storage_calculated_cost_031_060_amount,
-    a.storage_calculated_cost_061_090_amount,
-    a.storage_calculated_cost_091_180_amount,
-    a.storage_calculated_cost_181_365_amount,
-    a.storage_calculated_cost_over_365_amount,
-
-    a.storage_payable_over_one_month_gross_weight,
-    a.storage_calculated_over_one_month_amount,
-
-    coalesce(
-        a.storage_calculated_cost_total_amount / nullif(a.storage_payable_total_gross_weight, 0),
-        0
-    ) as storage_price_per_tonne -- LE.001130
-from pre_agg_base a
-join periods p
-  on p.dt = a.dt_report
-distributed by (warehouse_name, dt_report);
+    p.dt_comparison
+FROM pre_agg a
+JOIN dict_dds.calendar_periods p
+  ON p.dt = a.dt_report
+DISTRIBUTED BY (warehouse_name, dt_report);

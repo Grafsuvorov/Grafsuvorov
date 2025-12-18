@@ -1,4 +1,255 @@
-storage_payable_total_gross_weight_percentage
-"storage_payable_001_030_days_gross_weight"
-"storage_payable_031_060_days_gross_weight" 
-"storage_payable_061_090_days_gross_weight" 
+CREATE TEMP TABLE pre_agg
+AS
+SELECT
+    trht_3.transport_hub_name AS warehouse_name,
+    base.dt_report,
+
+    /* измерения */
+    CASE
+        WHEN cotex.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN cotex.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+        ELSE cotex.country_full_name
+    END AS country_of_remote_warehouse_name,
+
+    CASE
+        WHEN t25a1.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN t25a1.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN t25a1.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
+        ELSE t25a1.market_region1_name
+    END AS region_of_remote_warehouse_name,
+
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN counter.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_name,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк') THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ' THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END AS type_warehouse_name,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+        ELSE 'Не определено'
+    END AS type_freight_name,
+
+    pas.plant_short_name || ' ' || pas.plant_full_name AS receiving_plant_name,
+
+    /* базовые суммы */
+    SUM(base.sales_bundle_gross_weight) AS sales_bundle_gross_weight,
+
+    SUM(
+        base.storage_payable_001_030_days_gross_weight +
+        base.storage_payable_031_060_days_gross_weight +
+        base.storage_payable_061_090_days_gross_weight +
+        base.storage_payable_091_180_days_gross_weight +
+        base.storage_payable_181_365_days_gross_weight +
+        base.storage_payable_over_365_days_gross_weight
+    ) AS storage_payable_total_gross_weight,
+
+    /* percentage total payable vs total weight */
+    ( SUM(
+        base.storage_payable_001_030_days_gross_weight +
+        base.storage_payable_031_060_days_gross_weight +
+        base.storage_payable_061_090_days_gross_weight +
+        base.storage_payable_091_180_days_gross_weight +
+        base.storage_payable_181_365_days_gross_weight +
+        base.storage_payable_over_365_days_gross_weight
+      )
+      / NULLIF(SUM(base.sales_bundle_gross_weight), 0)
+      * 100
+    ) AS storage_payable_total_gross_weight_percentage,
+
+    SUM(
+        base.storage_calculated_cost_001_030_amount +
+        base.storage_calculated_cost_031_060_amount +
+        base.storage_calculated_cost_061_090_amount +
+        base.storage_calculated_cost_091_180_amount +
+        base.storage_calculated_cost_181_365_amount +
+        base.storage_calculated_cost_over_365_amount
+    ) AS storage_calculated_cost_total_amount,
+
+    /* разрезы payable по корзинам */
+    SUM(base.storage_payable_001_030_days_gross_weight) AS storage_payable_001_030_days_gross_weight,
+    SUM(base.storage_payable_031_060_days_gross_weight) AS storage_payable_031_060_days_gross_weight,
+    SUM(base.storage_payable_061_090_days_gross_weight) AS storage_payable_061_090_days_gross_weight,
+    SUM(base.storage_payable_091_180_days_gross_weight) AS storage_payable_091_180_days_gross_weight,
+    SUM(base.storage_payable_181_365_days_gross_weight) AS storage_payable_181_365_days_gross_weight,
+    SUM(base.storage_payable_over_365_days_gross_weight) AS storage_payable_over_365_days_gross_weight,
+
+    /* доли корзин payable внутри total payable */
+    COALESCE(
+        SUM(base.storage_payable_001_030_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_001_030_days_gross_weight_percentage,
+
+    COALESCE(
+        SUM(base.storage_payable_031_060_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_031_060_days_gross_weight_percentage,
+
+    COALESCE(
+        SUM(base.storage_payable_061_090_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_061_090_days_gross_weight_percentage,
+
+    COALESCE(
+        SUM(base.storage_payable_091_180_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_091_180_days_gross_weight_percentage,
+
+    COALESCE(
+        SUM(base.storage_payable_181_365_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_181_365_days_gross_weight_percentage,
+
+    COALESCE(
+        SUM(base.storage_payable_over_365_days_gross_weight)
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ) * 100,
+        0
+    ) AS storage_payable_over_365_days_gross_weight_percentage,
+
+    /* calculated cost по корзинам */
+    SUM(base.storage_calculated_cost_001_030_amount) AS storage_calculated_cost_001_030_amount,
+    SUM(base.storage_calculated_cost_031_060_amount) AS storage_calculated_cost_031_060_amount,
+    SUM(base.storage_calculated_cost_061_090_amount) AS storage_calculated_cost_061_090_amount,
+    SUM(base.storage_calculated_cost_091_180_amount) AS storage_calculated_cost_091_180_amount,
+    SUM(base.storage_calculated_cost_181_365_amount) AS storage_calculated_cost_181_365_amount,
+    SUM(base.storage_calculated_cost_over_365_amount) AS storage_calculated_cost_over_365_amount,
+
+    /* payable > 1 month (всё кроме 001-030) */
+    SUM(
+        base.storage_payable_031_060_days_gross_weight +
+        base.storage_payable_061_090_days_gross_weight +
+        base.storage_payable_091_180_days_gross_weight +
+        base.storage_payable_181_365_days_gross_weight +
+        base.storage_payable_over_365_days_gross_weight
+    ) AS storage_payable_over_one_month_gross_weight,
+
+    /* cost > 1 month (всё кроме 001-030) */
+    SUM(
+        base.storage_calculated_cost_031_060_amount +
+        base.storage_calculated_cost_061_090_amount +
+        base.storage_calculated_cost_091_180_amount +
+        base.storage_calculated_cost_181_365_amount +
+        base.storage_calculated_cost_over_365_amount
+    ) AS storage_calculated_over_one_month_amount,
+
+    /* цена за тонну (total cost / total payable weight) */
+    COALESCE(
+        SUM(
+            base.storage_calculated_cost_001_030_amount +
+            base.storage_calculated_cost_031_060_amount +
+            base.storage_calculated_cost_061_090_amount +
+            base.storage_calculated_cost_091_180_amount +
+            base.storage_calculated_cost_181_365_amount +
+            base.storage_calculated_cost_over_365_amount
+        )
+        / NULLIF(
+            SUM(
+                base.storage_payable_001_030_days_gross_weight +
+                base.storage_payable_031_060_days_gross_weight +
+                base.storage_payable_061_090_days_gross_weight +
+                base.storage_payable_091_180_days_gross_weight +
+                base.storage_payable_181_365_days_gross_weight +
+                base.storage_payable_over_365_days_gross_weight
+            ),
+            0
+        ),
+        0
+    ) AS storage_price_per_tonne
+
+FROM userdata.storage_sales_bundles_amount base
+LEFT JOIN dict_dds.transport_hub trhu ON trhu.transport_hub_code = base.warehouse_code
+LEFT JOIN adrc adrc ON adrc.address_code = trhu.address_code
+LEFT JOIN dict_dds.country_texts cotex ON cotex.country_code = adrc.country_code AND cotex.language_code = 'R'
+LEFT JOIN dict_dds.transport_hub_texts trht_3
+    ON trht_3.transport_hub_code = base.warehouse_code
+   AND trht_3.language_code = CASE WHEN cotex.country_full_name = 'Россия' THEN 'R' ELSE 'E' END
+LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dict_dds.counterparty counter ON counter.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.country r_sd556 ON r_sd556.country_code = adrc.country_code
+LEFT JOIN dict_dds.market_region1_texts t25a1
+    ON t25a1.market_region1_code = r_sd556.market_region1_code
+   AND t25a1.language_code = 'R'
+
+GROUP BY
+    warehouse_name,
+    base.dt_report,
+    country_of_remote_warehouse_name,
+    region_of_remote_warehouse_name,
+    forwarder_name,
+    type_warehouse_name,
+    type_freight_name,
+    receiving_plant_name
+DISTRIBUTED BY (warehouse_name, dt_report);

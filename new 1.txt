@@ -1,389 +1,311 @@
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 8,
-      "Receivers": 1,
-      "Slice": 4,
-      "Segments": 8,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 164572.36,
-      "Plan Rows": 37830256,
-      "Plan Width": 380,
-      "Output": ["fixed_asset_main.unit_balance_code", "fixed_asset_main.unit_balance_name", "fixed_asset_main.asset_main_code", "fixed_asset_main.asset_sub_code", "fixed_asset_main.valuation_area_code", "fixed_asset_main.valuation_area_name", "fixed_asset_main.valuation_area_currency_code", "fixed_asset_main.valuation_area_currency_name", "fixed_asset_main.asset_class_code", "fixed_asset_main.asset_class_name", "fixed_asset_main.asset_inventory_number", "fixed_asset_main.asset_name", "fixed_asset_main.dt_assignment_valid_from", "fixed_asset_main.dt_assignment_valid_to", "fixed_asset_main.asset_depreciation_rule_code", "fixed_asset_main.asset_depreciation_rule_name", "fixed_asset_main.dt_asset_recognized", "fixed_asset_main.dt_asset_write_off", "fixed_asset_main.cost_center_code", "fixed_asset_main.cost_center_name", "fixed_asset_main.plant_code", "fixed_asset_main.plant_name", "fixed_asset_main.multiple_shift_coefficient_amount", "fixed_asset_main.is_asset_temporary_shutdown", "fixed_asset_main.asset_location_code", "fixed_asset_main.asset_location_name", "fixed_asset_main.internal_order_code", "fixed_asset_main.internal_order_name", "fixed_asset_main.personnel_code", "fixed_asset_main.personnel_name", "fixed_asset_main.is_asset_conservated", "fixed_asset_main.dt_conservated_from", "fixed_asset_main.dt_conservated_to", "fixed_asset_main.dt_conservated_actual", "fixed_asset_main.document_type_code", "fixed_asset_main.document_type_name", "fixed_asset_main.special_order_for_conservation_number", "fixed_asset_main.dt_special_order_for_conservation", "fixed_asset_main.special_order_for_cancelling_conservation_number", "fixed_asset_main.dt_special_order_for_cancelling_conservation", "fixed_asset_main.dt_conservation_cancelled_actual", "fixed_asset_main.dt_approved_of_techical_state", "fixed_asset_main.non_liquid_asset_techical_state_code", "fixed_asset_main.non_liquid_asset_techical_state_name", "fixed_asset_main.is_non_liquid_asset_record_created_manually", "fixed_asset_main.dt_asset_status_reverse_from_non_liquid", "\"outer\".non_liquid_asset_type_code", "\"outer\".non_liquid_asset_type_name", "unit_balance_operating_periods.dt_end_of_month", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "(((((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric))) + ((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))) + ((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))"],
-      "Plans": [
-        {
-          "Node Type": "Result",
-          "Parent Relationship": "Outer",
-          "Slice": 4,
-          "Segments": 8,
-          "Gang Type": "primary reader",
-          "Startup Cost": 0.00,
-          "Total Cost": 124716.29,
-          "Plan Rows": 37830256,
-          "Plan Width": 380,
-          "Output": ["fixed_asset_main.unit_balance_code", "fixed_asset_main.unit_balance_name", "fixed_asset_main.asset_main_code", "fixed_asset_main.asset_sub_code", "fixed_asset_main.valuation_area_code", "fixed_asset_main.valuation_area_name", "fixed_asset_main.valuation_area_currency_code", "fixed_asset_main.valuation_area_currency_name", "fixed_asset_main.asset_class_code", "fixed_asset_main.asset_class_name", "fixed_asset_main.asset_inventory_number", "fixed_asset_main.asset_name", "fixed_asset_main.dt_assignment_valid_from", "fixed_asset_main.dt_assignment_valid_to", "fixed_asset_main.asset_depreciation_rule_code", "fixed_asset_main.asset_depreciation_rule_name", "fixed_asset_main.dt_asset_recognized", "fixed_asset_main.dt_asset_write_off", "fixed_asset_main.cost_center_code", "fixed_asset_main.cost_center_name", "fixed_asset_main.plant_code", "fixed_asset_main.plant_name", "fixed_asset_main.multiple_shift_coefficient_amount", "fixed_asset_main.is_asset_temporary_shutdown", "fixed_asset_main.asset_location_code", "fixed_asset_main.asset_location_name", "fixed_asset_main.internal_order_code", "fixed_asset_main.internal_order_name", "fixed_asset_main.personnel_code", "fixed_asset_main.personnel_name", "fixed_asset_main.is_asset_conservated", "fixed_asset_main.dt_conservated_from", "fixed_asset_main.dt_conservated_to", "fixed_asset_main.dt_conservated_actual", "fixed_asset_main.document_type_code", "fixed_asset_main.document_type_name", "fixed_asset_main.special_order_for_conservation_number", "fixed_asset_main.dt_special_order_for_conservation", "fixed_asset_main.special_order_for_cancelling_conservation_number", "fixed_asset_main.dt_special_order_for_cancelling_conservation", "fixed_asset_main.dt_conservation_cancelled_actual", "fixed_asset_main.dt_approved_of_techical_state", "fixed_asset_main.non_liquid_asset_techical_state_code", "fixed_asset_main.non_liquid_asset_techical_state_name", "fixed_asset_main.is_non_liquid_asset_record_created_manually", "fixed_asset_main.dt_asset_status_reverse_from_non_liquid", "'A'", "'Основные средства'", "unit_balance_operating_periods.dt_end_of_month", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "((((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric))) + ((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))) + ((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric))))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))"],
-          "Plans": [
-            {
-              "Node Type": "Hash Join",
-              "Parent Relationship": "Outer",
-              "Slice": 4,
-              "Segments": 8,
-              "Gang Type": "primary reader",
-              "Join Type": "Inner",
-              "Startup Cost": 0.00,
-              "Total Cost": 122919.35,
-              "Plan Rows": 37830256,
-              "Plan Width": 773,
-              "Output": ["unit_balance_operating_periods.dt_end_of_month", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))", "fixed_asset_main.unit_balance_code", "fixed_asset_main.unit_balance_name", "fixed_asset_main.asset_main_code", "fixed_asset_main.asset_sub_code", "fixed_asset_main.valuation_area_code", "fixed_asset_main.valuation_area_name", "fixed_asset_main.valuation_area_currency_code", "fixed_asset_main.valuation_area_currency_name", "fixed_asset_main.asset_depreciation_rule_code", "fixed_asset_main.asset_depreciation_rule_name", "fixed_asset_main.asset_class_code", "fixed_asset_main.asset_class_name", "fixed_asset_main.asset_inventory_number", "fixed_asset_main.asset_name", "fixed_asset_main.dt_asset_recognized", "fixed_asset_main.dt_asset_write_off", "fixed_asset_main.dt_assignment_valid_from", "fixed_asset_main.dt_assignment_valid_to", "fixed_asset_main.cost_center_code", "fixed_asset_main.cost_center_name", "fixed_asset_main.plant_code", "fixed_asset_main.plant_name", "fixed_asset_main.multiple_shift_coefficient_amount", "fixed_asset_main.is_asset_temporary_shutdown", "fixed_asset_main.asset_location_code", "fixed_asset_main.asset_location_name", "fixed_asset_main.internal_order_code", "fixed_asset_main.internal_order_name", "fixed_asset_main.personnel_code", "fixed_asset_main.personnel_name", "fixed_asset_main.is_asset_conservated", "fixed_asset_main.dt_conservated_from", "fixed_asset_main.dt_conservated_to", "fixed_asset_main.dt_conservated_actual", "fixed_asset_main.document_type_code", "fixed_asset_main.document_type_name", "fixed_asset_main.special_order_for_conservation_number", "fixed_asset_main.dt_special_order_for_conservation", "fixed_asset_main.special_order_for_cancelling_conservation_number", "fixed_asset_main.dt_special_order_for_cancelling_conservation", "fixed_asset_main.dt_conservation_cancelled_actual", "fixed_asset_main.dt_approved_of_techical_state", "fixed_asset_main.non_liquid_asset_techical_state_code", "fixed_asset_main.non_liquid_asset_techical_state_name", "fixed_asset_main.is_non_liquid_asset_record_created_manually", "fixed_asset_main.dt_asset_status_reverse_from_non_liquid"],
-              "Hash Cond": "(((fixed_asset_main.unit_balance_code)::text = (fixed_asset_operations.unit_balance_code)::text) AND ((fixed_asset_main.asset_main_code)::text = (fixed_asset_operations.asset_main_code)::text) AND ((fixed_asset_main.asset_sub_code)::text = (fixed_asset_operations.asset_sub_code)::text) AND ((fixed_asset_main.valuation_area_code)::text = (fixed_asset_operations.valuation_area_code)::text))",
-              "Join Filter": "((unit_balance_operating_periods.dt_end_of_month >= fixed_asset_main.dt_valid_from) AND (unit_balance_operating_periods.dt_end_of_month <= fixed_asset_main.dt_valid_to))",
-              "Plans": [
-                {
-                  "Node Type": "Redistribute Motion",
-                  "Senders": 8,
-                  "Receivers": 8,
-                  "Parent Relationship": "Outer",
-                  "Slice": 1,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 21191.30,
-                  "Plan Rows": 37830256,
-                  "Plan Width": 745,
-                  "Output": ["fixed_asset_main.unit_balance_code", "fixed_asset_main.unit_balance_name", "fixed_asset_main.asset_main_code", "fixed_asset_main.asset_sub_code", "fixed_asset_main.dt_valid_from", "fixed_asset_main.dt_valid_to", "fixed_asset_main.valuation_area_code", "fixed_asset_main.valuation_area_name", "fixed_asset_main.valuation_area_currency_code", "fixed_asset_main.valuation_area_currency_name", "fixed_asset_main.asset_depreciation_rule_code", "fixed_asset_main.asset_depreciation_rule_name", "fixed_asset_main.asset_class_code", "fixed_asset_main.asset_class_name", "fixed_asset_main.asset_inventory_number", "fixed_asset_main.asset_name", "fixed_asset_main.dt_asset_recognized", "fixed_asset_main.dt_asset_write_off", "fixed_asset_main.dt_assignment_valid_from", "fixed_asset_main.dt_assignment_valid_to", "fixed_asset_main.cost_center_code", "fixed_asset_main.cost_center_name", "fixed_asset_main.plant_code", "fixed_asset_main.plant_name", "fixed_asset_main.multiple_shift_coefficient_amount", "fixed_asset_main.is_asset_temporary_shutdown", "fixed_asset_main.asset_location_code", "fixed_asset_main.asset_location_name", "fixed_asset_main.internal_order_code", "fixed_asset_main.internal_order_name", "fixed_asset_main.personnel_code", "fixed_asset_main.personnel_name", "fixed_asset_main.is_asset_conservated", "fixed_asset_main.dt_conservated_from", "fixed_asset_main.dt_conservated_to", "fixed_asset_main.dt_conservated_actual", "fixed_asset_main.document_type_code", "fixed_asset_main.document_type_name", "fixed_asset_main.special_order_for_conservation_number", "fixed_asset_main.dt_special_order_for_conservation", "fixed_asset_main.special_order_for_cancelling_conservation_number", "fixed_asset_main.dt_special_order_for_cancelling_conservation", "fixed_asset_main.dt_conservation_cancelled_actual", "fixed_asset_main.dt_approved_of_techical_state", "fixed_asset_main.non_liquid_asset_techical_state_code", "fixed_asset_main.non_liquid_asset_techical_state_name", "fixed_asset_main.is_non_liquid_asset_record_created_manually", "fixed_asset_main.dt_asset_status_reverse_from_non_liquid"],
-                  "Hash Key": "fixed_asset_main.unit_balance_code",
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "fixed_asset_main",
-                      "Schema": "dm",
-                      "Alias": "fixed_asset_main",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 3611.82,
-                      "Plan Rows": 37830256,
-                      "Plan Width": 745,
-                      "Output": ["fixed_asset_main.unit_balance_code", "fixed_asset_main.unit_balance_name", "fixed_asset_main.asset_main_code", "fixed_asset_main.asset_sub_code", "fixed_asset_main.dt_valid_from", "fixed_asset_main.dt_valid_to", "fixed_asset_main.valuation_area_code", "fixed_asset_main.valuation_area_name", "fixed_asset_main.valuation_area_currency_code", "fixed_asset_main.valuation_area_currency_name", "fixed_asset_main.asset_depreciation_rule_code", "fixed_asset_main.asset_depreciation_rule_name", "fixed_asset_main.asset_class_code", "fixed_asset_main.asset_class_name", "fixed_asset_main.asset_inventory_number", "fixed_asset_main.asset_name", "fixed_asset_main.dt_asset_recognized", "fixed_asset_main.dt_asset_write_off", "fixed_asset_main.dt_assignment_valid_from", "fixed_asset_main.dt_assignment_valid_to", "fixed_asset_main.cost_center_code", "fixed_asset_main.cost_center_name", "fixed_asset_main.plant_code", "fixed_asset_main.plant_name", "fixed_asset_main.multiple_shift_coefficient_amount", "fixed_asset_main.is_asset_temporary_shutdown", "fixed_asset_main.asset_location_code", "fixed_asset_main.asset_location_name", "fixed_asset_main.internal_order_code", "fixed_asset_main.internal_order_name", "fixed_asset_main.personnel_code", "fixed_asset_main.personnel_name", "fixed_asset_main.is_asset_conservated", "fixed_asset_main.dt_conservated_from", "fixed_asset_main.dt_conservated_to", "fixed_asset_main.dt_conservated_actual", "fixed_asset_main.document_type_code", "fixed_asset_main.document_type_name", "fixed_asset_main.special_order_for_conservation_number", "fixed_asset_main.dt_special_order_for_conservation", "fixed_asset_main.special_order_for_cancelling_conservation_number", "fixed_asset_main.dt_special_order_for_cancelling_conservation", "fixed_asset_main.dt_conservation_cancelled_actual", "fixed_asset_main.dt_approved_of_techical_state", "fixed_asset_main.non_liquid_asset_techical_state_code", "fixed_asset_main.non_liquid_asset_techical_state_name", "fixed_asset_main.is_non_liquid_asset_record_created_manually", "fixed_asset_main.dt_asset_status_reverse_from_non_liquid"]
-                    }
-                  ]
-                },
-                {
-                  "Node Type": "Hash",
-                  "Parent Relationship": "Inner",
-                  "Slice": 4,
-                  "Segments": 8,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 28190.59,
-                  "Total Cost": 28190.59,
-                  "Plan Rows": 145893213,
-                  "Plan Width": 62,
-                  "Output": ["unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))"],
-                  "Plans": [
-                    {
-                      "Node Type": "Redistribute Motion",
-                      "Senders": 8,
-                      "Receivers": 8,
-                      "Parent Relationship": "Outer",
-                      "Slice": 3,
-                      "Segments": 8,
-                      "Gang Type": "primary reader",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 28190.59,
-                      "Plan Rows": 145893213,
-                      "Plan Width": 62,
-                      "Output": ["unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))"],
-                      "Hash Key": "fixed_asset_operations.unit_balance_code",
-                      "Plans": [
-                        {
-                          "Node Type": "Result",
-                          "Parent Relationship": "Outer",
-                          "Slice": 3,
-                          "Segments": 8,
-                          "Gang Type": "primary reader",
-                          "Startup Cost": 0.00,
-                          "Total Cost": 24651.59,
-                          "Plan Rows": 145893213,
-                          "Plan Width": 62,
-                          "Output": ["unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "((COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric)))", "((COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric)))"],
-                          "Plans": [
-                            {
-                              "Node Type": "Result",
-                              "Parent Relationship": "Outer",
-                              "Slice": 3,
-                              "Segments": 8,
-                              "Gang Type": "primary reader",
-                              "Startup Cost": 0.00,
-                              "Total Cost": 24651.59,
-                              "Plan Rows": 145893213,
-                              "Plan Width": 62,
-                              "Output": ["(COALESCE((max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)), '0'::numeric))", "(COALESCE((max(fixed_asset_operations.cumulative_depreciation_typical_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_typical_amount)), '0'::numeric))", "(COALESCE((max(fixed_asset_operations.cumulative_depreciation_special_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_special_amount)), '0'::numeric))", "(COALESCE((max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)), '0'::numeric) + COALESCE((sum(fixed_asset_operations.depreciation_unplanned_amount)), '0'::numeric))", "unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code"],
-                              "Plans": [
-                                {
-                                  "Node Type": "Aggregate",
-                                  "Strategy": "Hashed",
-                                  "Parent Relationship": "Outer",
-                                  "Slice": 3,
-                                  "Segments": 8,
-                                  "Gang Type": "primary reader",
-                                  "Startup Cost": 0.00,
-                                  "Total Cost": 23520.92,
-                                  "Plan Rows": 145893213,
-                                  "Plan Width": 94,
-                                  "Output": ["max(fixed_asset_operations.cumulative_acquisition_and_production_cost_amount)", "sum(fixed_asset_operations.acquisition_cost_valuation_area_currency_amount)", "max(fixed_asset_operations.cumulative_depreciation_typical_amount)", "sum(fixed_asset_operations.depreciation_typical_amount)", "max(fixed_asset_operations.cumulative_depreciation_special_amount)", "sum(fixed_asset_operations.depreciation_special_amount)", "max(fixed_asset_operations.cumulative_depreciation_unplanned_amount)", "sum(fixed_asset_operations.depreciation_unplanned_amount)", "unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code"],
-                                  "Group Key": ["fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "unit_balance_operating_periods.dt_end_of_month"],
-                                  "Plans": [
-                                    {
-                                      "Node Type": "Redistribute Motion",
-                                      "Senders": 8,
-                                      "Receivers": 8,
-                                      "Parent Relationship": "Outer",
-                                      "Slice": 2,
-                                      "Segments": 8,
-                                      "Gang Type": "primary reader",
-                                      "Startup Cost": 0.00,
-                                      "Total Cost": 10657.26,
-                                      "Plan Rows": 145893213,
-                                      "Plan Width": 63,
-                                      "Output": ["unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "fixed_asset_operations.acquisition_cost_valuation_area_currency_amount", "fixed_asset_operations.depreciation_typical_amount", "fixed_asset_operations.depreciation_special_amount", "fixed_asset_operations.depreciation_unplanned_amount", "fixed_asset_operations.cumulative_acquisition_and_production_cost_amount", "fixed_asset_operations.cumulative_depreciation_typical_amount", "fixed_asset_operations.cumulative_depreciation_special_amount", "fixed_asset_operations.cumulative_depreciation_unplanned_amount"],
-                                      "Hash Key": "fixed_asset_operations.unit_balance_code, fixed_asset_operations.asset_main_code, fixed_asset_operations.asset_sub_code, fixed_asset_operations.valuation_area_code, unit_balance_operating_periods.dt_end_of_month",
-                                      "Plans": [
-                                        {
-                                          "Node Type": "Hash Join",
-                                          "Parent Relationship": "Outer",
-                                          "Slice": 2,
-                                          "Segments": 8,
-                                          "Gang Type": "primary reader",
-                                          "Join Type": "Inner",
-                                          "Startup Cost": 0.00,
-                                          "Total Cost": 7061.17,
-                                          "Plan Rows": 145893213,
-                                          "Plan Width": 63,
-                                          "Output": ["unit_balance_operating_periods.dt_end_of_month", "fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "fixed_asset_operations.acquisition_cost_valuation_area_currency_amount", "fixed_asset_operations.depreciation_typical_amount", "fixed_asset_operations.depreciation_special_amount", "fixed_asset_operations.depreciation_unplanned_amount", "fixed_asset_operations.cumulative_acquisition_and_production_cost_amount", "fixed_asset_operations.cumulative_depreciation_typical_amount", "fixed_asset_operations.cumulative_depreciation_special_amount", "fixed_asset_operations.cumulative_depreciation_unplanned_amount"],
-                                          "Hash Cond": "((fixed_asset_operations.unit_balance_code)::text = (unit_balance_operating_periods.unit_balance_code)::text)",
-                                          "Join Filter": "((fixed_asset_operations.dt_posting <= unit_balance_operating_periods.dt_end_of_month) AND (fixed_asset_operations.dt_posting >= date(date_trunc('year'::text, (unit_balance_operating_periods.dt_end_of_month)::timestamp with time zone))))",
-                                          "Plans": [
-                                            {
-                                              "Node Type": "Seq Scan",
-                                              "Parent Relationship": "Outer",
-                                              "Slice": 2,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Relation Name": "fixed_asset_operations",
-                                              "Schema": "dm_calc",
-                                              "Alias": "fixed_asset_operations",
-                                              "Startup Cost": 0.00,
-                                              "Total Cost": 895.27,
-                                              "Plan Rows": 27229856,
-                                              "Plan Width": 63,
-                                              "Output": ["fixed_asset_operations.unit_balance_code", "fixed_asset_operations.asset_main_code", "fixed_asset_operations.asset_sub_code", "fixed_asset_operations.valuation_area_code", "fixed_asset_operations.dt_posting", "fixed_asset_operations.acquisition_cost_valuation_area_currency_amount", "fixed_asset_operations.depreciation_typical_amount", "fixed_asset_operations.depreciation_special_amount", "fixed_asset_operations.depreciation_unplanned_amount", "fixed_asset_operations.cumulative_acquisition_and_production_cost_amount", "fixed_asset_operations.cumulative_depreciation_typical_amount", "fixed_asset_operations.cumulative_depreciation_special_amount", "fixed_asset_operations.cumulative_depreciation_unplanned_amount"]
-                                            },
-                                            {
-                                              "Node Type": "Hash",
-                                              "Parent Relationship": "Inner",
-                                              "Slice": 2,
-                                              "Segments": 8,
-                                              "Gang Type": "primary reader",
-                                              "Startup Cost": 431.58,
-                                              "Total Cost": 431.58,
-                                              "Plan Rows": 11136,
-                                              "Plan Width": 9,
-                                              "Output": ["unit_balance_operating_periods.unit_balance_code", "unit_balance_operating_periods.dt_end_of_month"],
-                                              "Plans": [
-                                                {
-                                                  "Node Type": "Seq Scan",
-                                                  "Parent Relationship": "Outer",
-                                                  "Slice": 2,
-                                                  "Segments": 8,
-                                                  "Gang Type": "primary reader",
-                                                  "Relation Name": "unit_balance_operating_periods",
-                                                  "Schema": "dm_calc",
-                                                  "Alias": "unit_balance_operating_periods",
-                                                  "Startup Cost": 0.00,
-                                                  "Total Cost": 431.58,
-                                                  "Plan Rows": 11136,
-                                                  "Plan Width": 9,
-                                                  "Output": ["unit_balance_operating_periods.unit_balance_code", "unit_balance_operating_periods.dt_end_of_month"],
-                                                  "Filter": "(unit_balance_operating_periods.dt_end_of_month > '2024-01-01'::date)"
-                                                }
-                                              ]
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    }
-                                  ]
-                                }
-                              ]
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Pivotal Optimizer (GPORCA)"
-    }
-  }
-]
-
-
-
-insert into	dm.fixed_asset_cost_and_depreciation (
-	unit_balance_code,
-	unit_balance_name,
-	asset_main_code,
-	asset_sub_code,
-	valuation_area_code,
-	valuation_area_name,
-	valuation_area_currency_code,
-	valuation_area_currency_name,
-	asset_class_code,
-	asset_class_name,
-	asset_inventory_number,
-	asset_name,
-	dt_assignment_valid_from,
-	dt_assignment_valid_to,
-	asset_depreciation_rule_code,
-	asset_depreciation_rule_name,
-	dt_asset_recognized,
-	dt_asset_write_off,
-	cost_center_code,
-	cost_center_name,
-	plant_code,
-	plant_name,
-	multiple_shift_coefficient_amount,
-	is_asset_temporary_shutdown,
-	asset_location_code,
-	asset_location_name,
-	internal_order_code,
-	internal_order_name,
-	personnel_code,
-	personnel_name,
-	is_asset_conservated,
-	dt_conservated_from,
-	dt_conservated_to,
-	dt_conservated_actual,
-	document_type_code,
-	document_type_name,
-	special_order_for_conservation_number,
-	dt_special_order_for_conservation,
-	special_order_for_cancelling_conservation_number,
-	dt_special_order_for_cancelling_conservation,
-	dt_conservation_cancelled_actual,
-	dt_approved_of_techical_state,
-	non_liquid_asset_techical_state_code,
-	non_liquid_asset_techical_state_name,
-	is_non_liquid_asset_record_created_manually,
-	dt_asset_status_reverse_from_non_liquid,
-	non_liquid_asset_type_code,
-	non_liquid_asset_type_name,
-	dt_report,
-	acquisition_cost_cumulative_amount,
-	depreciation_total_cumulative_amount,
-	depreciation_typical_cumulative_amount,
-	depreciation_special_cumulative_amount,
-	depreciation_unplanned_cumulative_amount
+INSERT INTO dm.fixed_asset_cost_and_depreciation (
+    unit_balance_code,
+    unit_balance_name,
+    asset_main_code,
+    asset_sub_code,
+    valuation_area_code,
+    valuation_area_name,
+    valuation_area_currency_code,
+    valuation_area_currency_name,
+    asset_class_code,
+    asset_class_name,
+    asset_inventory_number,
+    asset_name,
+    dt_assignment_valid_from,
+    dt_assignment_valid_to,
+    asset_depreciation_rule_code,
+    asset_depreciation_rule_name,
+    dt_asset_recognized,
+    dt_asset_write_off,
+    cost_center_code,
+    cost_center_name,
+    plant_code,
+    plant_name,
+    multiple_shift_coefficient_amount,
+    is_asset_temporary_shutdown,
+    asset_location_code,
+    asset_location_name,
+    internal_order_code,
+    internal_order_name,
+    personnel_code,
+    personnel_name,
+    is_asset_conservated,
+    dt_conservated_from,
+    dt_conservated_to,
+    dt_conservated_actual,
+    document_type_code,
+    document_type_name,
+    special_order_for_conservation_number,
+    dt_special_order_for_conservation,
+    special_order_for_cancelling_conservation_number,
+    dt_special_order_for_cancelling_conservation,
+    dt_conservation_cancelled_actual,
+    dt_approved_of_techical_state,
+    non_liquid_asset_techical_state_code,
+    non_liquid_asset_techical_state_name,
+    is_non_liquid_asset_record_created_manually,
+    dt_asset_status_reverse_from_non_liquid,
+    non_liquid_asset_type_code,
+    non_liquid_asset_type_name,
+    dt_report,
+    acquisition_cost_cumulative_amount,
+    depreciation_total_cumulative_amount,
+    depreciation_typical_cumulative_amount,
+    depreciation_special_cumulative_amount,
+    depreciation_unplanned_cumulative_amount
 )
+WITH params AS (
+    SELECT
+        -- начало "прошлого года" (как у тебя), можно поменять на нужную границу
+        date_trunc('year', now() - interval '1 year')::date AS dt_year_from
+),
+rt AS (
+    -- периодов мало: режем сразу
+    SELECT
+        unit_balance_code,
+        dt_end_of_month
+    FROM dm_calc.unit_balance_operating_periods
+    WHERE dt_end_of_month > (SELECT dt_year_from FROM params)
+),
+base AS (
+    /*
+      Самое важное: соединяем fao+rt и СРАЗУ применяем SCD-валидность fam.
+      Это резко режет объем данных до агрегации.
+    */
+    SELECT
+        fam.unit_balance_code,
+        fam.unit_balance_name,
+        fam.asset_main_code,
+        fam.asset_sub_code,
+        fam.valuation_area_code,
+        fam.valuation_area_name,
+        fam.valuation_area_currency_code,
+        fam.valuation_area_currency_name,
+        fam.asset_class_code,
+        fam.asset_class_name,
+        fam.asset_inventory_number,
+        fam.asset_name,
+        fam.dt_assignment_valid_from,
+        fam.dt_assignment_valid_to,
+        fam.asset_depreciation_rule_code,
+        fam.asset_depreciation_rule_name,
+        fam.dt_asset_recognized,
+        fam.dt_asset_write_off,
+        fam.cost_center_code,
+        fam.cost_center_name,
+        fam.plant_code,
+        fam.plant_name,
+        fam.multiple_shift_coefficient_amount,
+        fam.is_asset_temporary_shutdown,
+        fam.asset_location_code,
+        fam.asset_location_name,
+        fam.internal_order_code,
+        fam.internal_order_name,
+        fam.personnel_code,
+        fam.personnel_name,
+        fam.is_asset_conservated,
+        fam.dt_conservated_from,
+        fam.dt_conservated_to,
+        fam.dt_conservated_actual,
+        fam.document_type_code,
+        fam.document_type_name,
+        fam.special_order_for_conservation_number,
+        fam.dt_special_order_for_conservation,
+        fam.special_order_for_cancelling_conservation_number,
+        fam.dt_special_order_for_cancelling_conservation,
+        fam.dt_conservation_cancelled_actual,
+        fam.dt_approved_of_techical_state,
+        fam.non_liquid_asset_techical_state_code,
+        fam.non_liquid_asset_techical_state_name,
+        fam.is_non_liquid_asset_record_created_manually,
+        fam.dt_asset_status_reverse_from_non_liquid,
 
-select
-	fam.unit_balance_code,
-	fam.unit_balance_name,
-	fam.asset_main_code,
-	fam.asset_sub_code,
-	fam.valuation_area_code,
-	fam.valuation_area_name,
-	fam.valuation_area_currency_code,
-	fam.valuation_area_currency_name,
-	fam.asset_class_code,
-	fam.asset_class_name,
-	fam.asset_inventory_number,
-	fam.asset_name,
-	fam.dt_assignment_valid_from,
-	fam.dt_assignment_valid_to,
-	fam.asset_depreciation_rule_code,
-	fam.asset_depreciation_rule_name,
-	fam.dt_asset_recognized,
-	fam.dt_asset_write_off,
-	fam.cost_center_code,
-	fam.cost_center_name,
-	fam.plant_code,
-	fam.plant_name,
-	fam.multiple_shift_coefficient_amount,
-	fam.is_asset_temporary_shutdown,
-	fam.asset_location_code,
-	fam.asset_location_name,
-	fam.internal_order_code,
-	fam.internal_order_name,
-	fam.personnel_code,
-	fam.personnel_name,
-	fam.is_asset_conservated,
-	fam.dt_conservated_from,
-	fam.dt_conservated_to,
-	fam.dt_conservated_actual,
-	fam.document_type_code,
-	fam.document_type_name,
-	fam.special_order_for_conservation_number,
-	fam.dt_special_order_for_conservation,
-	fam.special_order_for_cancelling_conservation_number,
-	fam.dt_special_order_for_cancelling_conservation,
-	fam.dt_conservation_cancelled_actual,
-	fam.dt_approved_of_techical_state,
-	fam.non_liquid_asset_techical_state_code,
-	fam.non_liquid_asset_techical_state_name,
-	fam.is_non_liquid_asset_record_created_manually,
-	fam.dt_asset_status_reverse_from_non_liquid,
-	'A' as non_liquid_asset_type_code,
-	'Основные средства' as non_liquid_asset_type_name,
-	fa.dt_report,
-	fa.acquisition_cost_cumulative_amount,
-	fa.depreciation_typical_cumulative_amount + fa.depreciation_special_cumulative_amount + fa.depreciation_unplanned_cumulative_amount as depreciation_total_cumulative_amount,
-	fa.depreciation_typical_cumulative_amount,
-	fa.depreciation_special_cumulative_amount,
-	fa.depreciation_unplanned_cumulative_amount
-from
-	(
-	
-	select
-		fao.unit_balance_code,
-		fao.asset_main_code,
-		fao.asset_sub_code,
-		fao.valuation_area_code,
-		dt_end_of_month as dt_report,
-		coalesce(max(cumulative_acquisition_and_production_cost_amount),0) + coalesce(sum(acquisition_cost_valuation_area_currency_amount),0) as acquisition_cost_cumulative_amount,
-		coalesce(max(cumulative_depreciation_typical_amount),0) + coalesce(sum(depreciation_typical_amount),0) as depreciation_typical_cumulative_amount,
-		coalesce(max(cumulative_depreciation_special_amount),0) + coalesce(sum(depreciation_special_amount),0) as depreciation_special_cumulative_amount,
-		coalesce(max(cumulative_depreciation_unplanned_amount),0) + coalesce(sum(depreciation_unplanned_amount),0) as depreciation_unplanned_cumulative_amount
-	from
-		dm_calc.unit_balance_operating_periods rt 
-	join  dm_calc.fixed_asset_operations fao on
-		fao.unit_balance_code = rt.unit_balance_code
-	--where 
-	and fao.dt_posting <= dt_end_of_month
-		and fao.dt_posting >= date_trunc('year',dt_end_of_month)::date
-		and dt_end_of_month > date_trunc('year', now()- interval '1 year')::date
-		-->'2024-01-01'::date
-	group by
-		fao.unit_balance_code,
-		fao.asset_main_code,
-		fao.asset_sub_code,
-		fao.valuation_area_code,
-		dt_end_of_month
-) fa
-join dm.fixed_asset_main fam on
-	fam.unit_balance_code = fa.unit_balance_code
-	and fam.asset_main_code = fa.asset_main_code
-	and fam.asset_sub_code = fa.asset_sub_code
-	and fam.valuation_area_code = fa.valuation_area_code
-	and fa.dt_report between fam.dt_valid_from and fam.dt_valid_to;
+        rt.dt_end_of_month AS dt_report,
+
+        fao.cumulative_acquisition_and_production_cost_amount,
+        fao.acquisition_cost_valuation_area_currency_amount,
+        fao.cumulative_depreciation_typical_amount,
+        fao.depreciation_typical_amount,
+        fao.cumulative_depreciation_special_amount,
+        fao.depreciation_special_amount,
+        fao.cumulative_depreciation_unplanned_amount,
+        fao.depreciation_unplanned_amount
+
+    FROM rt
+    JOIN dm_calc.fixed_asset_operations fao
+      ON fao.unit_balance_code = rt.unit_balance_code
+     AND fao.dt_posting <= rt.dt_end_of_month
+     AND fao.dt_posting >= date_trunc('year', rt.dt_end_of_month)::date
+
+    JOIN dm.fixed_asset_main fam
+      ON fam.unit_balance_code   = fao.unit_balance_code
+     AND fam.asset_main_code     = fao.asset_main_code
+     AND fam.asset_sub_code      = fao.asset_sub_code
+     AND fam.valuation_area_code = fao.valuation_area_code
+     AND rt.dt_end_of_month BETWEEN fam.dt_valid_from AND fam.dt_valid_to
+),
+agg AS (
+    SELECT
+        unit_balance_code,
+        asset_main_code,
+        asset_sub_code,
+        valuation_area_code,
+        dt_report,
+
+        COALESCE(MAX(cumulative_acquisition_and_production_cost_amount), 0)
+        + COALESCE(SUM(acquisition_cost_valuation_area_currency_amount), 0)
+            AS acquisition_cost_cumulative_amount,
+
+        COALESCE(MAX(cumulative_depreciation_typical_amount), 0)
+        + COALESCE(SUM(depreciation_typical_amount), 0)
+            AS depreciation_typical_cumulative_amount,
+
+        COALESCE(MAX(cumulative_depreciation_special_amount), 0)
+        + COALESCE(SUM(depreciation_special_amount), 0)
+            AS depreciation_special_cumulative_amount,
+
+        COALESCE(MAX(cumulative_depreciation_unplanned_amount), 0)
+        + COALESCE(SUM(depreciation_unplanned_amount), 0)
+            AS depreciation_unplanned_cumulative_amount
+    FROM base
+    GROUP BY
+        unit_balance_code,
+        asset_main_code,
+        asset_sub_code,
+        valuation_area_code,
+        dt_report
+)
+SELECT
+    b.unit_balance_code,
+    b.unit_balance_name,
+    b.asset_main_code,
+    b.asset_sub_code,
+    b.valuation_area_code,
+    b.valuation_area_name,
+    b.valuation_area_currency_code,
+    b.valuation_area_currency_name,
+    b.asset_class_code,
+    b.asset_class_name,
+    b.asset_inventory_number,
+    b.asset_name,
+    b.dt_assignment_valid_from,
+    b.dt_assignment_valid_to,
+    b.asset_depreciation_rule_code,
+    b.asset_depreciation_rule_name,
+    b.dt_asset_recognized,
+    b.dt_asset_write_off,
+    b.cost_center_code,
+    b.cost_center_name,
+    b.plant_code,
+    b.plant_name,
+    b.multiple_shift_coefficient_amount,
+    b.is_asset_temporary_shutdown,
+    b.asset_location_code,
+    b.asset_location_name,
+    b.internal_order_code,
+    b.internal_order_name,
+    b.personnel_code,
+    b.personnel_name,
+    b.is_asset_conservated,
+    b.dt_conservated_from,
+    b.dt_conservated_to,
+    b.dt_conservated_actual,
+    b.document_type_code,
+    b.document_type_name,
+    b.special_order_for_conservation_number,
+    b.dt_special_order_for_conservation,
+    b.special_order_for_cancelling_conservation_number,
+    b.dt_special_order_for_cancelling_conservation,
+    b.dt_conservation_cancelled_actual,
+    b.dt_approved_of_techical_state,
+    b.non_liquid_asset_techical_state_code,
+    b.non_liquid_asset_techical_state_name,
+    b.is_non_liquid_asset_record_created_manually,
+    b.dt_asset_status_reverse_from_non_liquid,
+
+    'A'::text AS non_liquid_asset_type_code,
+    'Основные средства'::text AS non_liquid_asset_type_name,
+
+    a.dt_report,
+    a.acquisition_cost_cumulative_amount,
+    (a.depreciation_typical_cumulative_amount
+     + a.depreciation_special_cumulative_amount
+     + a.depreciation_unplanned_cumulative_amount) AS depreciation_total_cumulative_amount,
+    a.depreciation_typical_cumulative_amount,
+    a.depreciation_special_cumulative_amount,
+    a.depreciation_unplanned_cumulative_amount
+FROM agg a
+JOIN (
+    /*
+      Берём "витринные" поля из fam один раз на ключ+dt_report.
+      base может содержать много строк (по операциям), поэтому здесь устраняем дубли.
+    */
+    SELECT DISTINCT
+        unit_balance_code,
+        unit_balance_name,
+        asset_main_code,
+        asset_sub_code,
+        valuation_area_code,
+        valuation_area_name,
+        valuation_area_currency_code,
+        valuation_area_currency_name,
+        asset_class_code,
+        asset_class_name,
+        asset_inventory_number,
+        asset_name,
+        dt_assignment_valid_from,
+        dt_assignment_valid_to,
+        asset_depreciation_rule_code,
+        asset_depreciation_rule_name,
+        dt_asset_recognized,
+        dt_asset_write_off,
+        cost_center_code,
+        cost_center_name,
+        plant_code,
+        plant_name,
+        multiple_shift_coefficient_amount,
+        is_asset_temporary_shutdown,
+        asset_location_code,
+        asset_location_name,
+        internal_order_code,
+        internal_order_name,
+        personnel_code,
+        personnel_name,
+        is_asset_conservated,
+        dt_conservated_from,
+        dt_conservated_to,
+        dt_conservated_actual,
+        document_type_code,
+        document_type_name,
+        special_order_for_conservation_number,
+        dt_special_order_for_conservation,
+        special_order_for_cancelling_conservation_number,
+        dt_special_order_for_cancelling_conservation,
+        dt_conservation_cancelled_actual,
+        dt_approved_of_techical_state,
+        non_liquid_asset_techical_state_code,
+        non_liquid_asset_techical_state_name,
+        is_non_liquid_asset_record_created_manually,
+        dt_asset_status_reverse_from_non_liquid,
+        dt_report
+    FROM base
+) b
+  ON b.unit_balance_code   = a.unit_balance_code
+ AND b.asset_main_code     = a.asset_main_code
+ AND b.asset_sub_code      = a.asset_sub_code
+ AND b.valuation_area_code = a.valuation_area_code
+ AND b.dt_report           = a.dt_report
+;
+
+
+-- fixed_asset_main
+ALTER TABLE dm.fixed_asset_main
+SET DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+-- fixed_asset_operations
+ALTER TABLE dm_calc.fixed_asset_operations
+SET DISTRIBUTED BY (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+-- operating_periods лучше replicated (если реально маленькая)
+ALTER TABLE dm_calc.unit_balance_operating_periods
+SET DISTRIBUTED REPLICATED;

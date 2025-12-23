@@ -139,11 +139,10 @@ SELECT
     base.material_shape_code || '-' || dms.material_shape_full_name,
 
     base.port_of_discharge_code,
-    COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено'),
+    COALESCE(ht_port.name_e, ht_port.name_r),
     base.dt_arrival_to_russian_port,
     base.dt_storage_end_in_release,
-    base.port_of_discharge_code || '-' ||
-        COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено'),
+    base.port_of_discharge_code || '-' || COALESCE(ht_port.name_e, ht_port.name_r),
 
     base.transport_type_code,
     dtt.transport_transfer_type_name,
@@ -185,9 +184,9 @@ SELECT
     base.storage_cost_calculation_type_name,
 
     base.transport_departure_hub_code,
-    COALESCE(ht_dep.name_r, ht_dep.name_e, 'Не определено'),
+    COALESCE(ht_dep.name_r, ht_dep.name_e),
     base.transport_destination_hub_code,
-    COALESCE(ht_dest.name_r, ht_dest.name_e, 'Не определено'),
+    COALESCE(ht_dest.name_r, ht_dest.name_e),
 
     base.transportation_outbound_delivery_code,
     base.transportation_outbound_delivery_position_code,
@@ -205,7 +204,7 @@ SELECT
 
     base.storage_calculation_bundle_quantity,
 
-    -- FIX: forwarder logic (as original)
+    -- FIX: forwarder logic (как в dm)
     COALESCE(
         CASE
             WHEN base.storage_cost_calculation_type_name
@@ -213,8 +212,7 @@ SELECT
                 THEN counter_forwarder.counterparty_short_name
         END,
         'Не определено'
-    ) AS forwarder_name,
-
+    ),
     COALESCE(
         CASE
             WHEN base.storage_cost_calculation_type_name
@@ -222,7 +220,7 @@ SELECT
                 THEN base.forwarder_code || '-' || counter_forwarder.counterparty_short_name
         END,
         'Не определено'
-    ) AS forwarder_search_name,
+    ),
 
     base.warehouse_code,
     CASE
@@ -247,9 +245,8 @@ SELECT
     base.storage_cost_special_calculation_type_code,
 
     base.warehouse_storage_area_code,
-    COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено'),
-    base.warehouse_storage_area_code || '-' ||
-        COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено'),
+    COALESCE(ht_area.name_r, ht_area.name_e),
+    base.warehouse_storage_area_code || '-' || COALESCE(ht_area.name_r, ht_area.name_e),
 
     base.plant_code,
     base.unit_balance_code,
@@ -337,17 +334,15 @@ LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_p
 LEFT JOIN dim_storage_owner so ON so.delivery_code = base.delivery_for_storage_calculation_code
 LEFT JOIN dict_dds.plant_and_subsidiary pas_1124 ON pas_1124.plant_code = so.plant_code
 LEFT JOIN dim_hub_geo hub_wh ON hub_wh.transport_hub_code = base.warehouse_code
-LEFT JOIN dim_hub_geo hub_remote ON hub_remote.transport_hub_code = base.remote_warehouse_code
+LEFT JOIN dim_hub_geo hub_remote ON hub_remote.transport_hub_code = base.warehouse_code
 LEFT JOIN dim_hub_texts_agg ht_dep ON ht_dep.transport_hub_code = base.transport_departure_hub_code
 LEFT JOIN dim_hub_texts_agg ht_dest ON ht_dest.transport_hub_code = base.transport_destination_hub_code
 LEFT JOIN dim_hub_texts_agg ht_wh ON ht_wh.transport_hub_code = base.warehouse_code
 LEFT JOIN dim_hub_texts_agg ht_area ON ht_area.transport_hub_code = base.warehouse_storage_area_code
 LEFT JOIN dim_hub_texts_agg ht_remote ON ht_remote.transport_hub_code = base.remote_warehouse_code
 LEFT JOIN dim_hub_texts_agg ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
-LEFT JOIN dict_dds.counterparty counter_forwarder
-    ON counter_forwarder.counterparty_code = base.forwarder_code
-LEFT JOIN dict_dds.counterparty counter_creditor
-    ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+LEFT JOIN dict_dds.counterparty counter_forwarder ON counter_forwarder.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.counterparty counter_creditor ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
 LEFT JOIN dict_dds.address addr_8
     ON addr_8.address_code = counter_creditor.address_code
    AND addr_8.international_display_format_code IS NULL

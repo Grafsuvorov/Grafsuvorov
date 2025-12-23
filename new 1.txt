@@ -1,4 +1,356 @@
-Оптимизация	0046445629	0308876285	900001	0110204895	10	10	APT0008ING0064	АлП АТЧ A8 ЧМ ГОСТ 11069-2019	APT0008ING0064-АлП АТЧ A8 ЧМ ГОСТ 11069-2019	2025-04-23	BMOU1083167	ЭЦ284952	ЭЦ284952-BMOU1083167	ING	Чушка мелкая	ING-Чушка мелкая	P000000008	VLADIVOSTOK	2025-05-04		P000000008-VLADIVOSTOK	TL04	Морской контейнер	TL04-Морской контейнер	331016	Алюминий	331016-Алюминий	2025-05-19	0.962	0.963	0013331425		Россия и СНГ	RSET Co.Ltd RSET Co.Ltd	1576-RSET Co.Ltd RSET Co.Ltd	Россия	1576	0110204895		0110204895	000010	10	0000102459	Логика РФ-контейнеры	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК								ООО "ТЛЦ"	0000102459-ООО "ТЛЦ"	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000656-ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ			4000421542	HS001VS004	2025-05-25				Не определено		1121	1120		2025-05-04	2025-05-25	2025-05-19	S49	16	1400256754	2025-05-19										0.000	0.000	16.000	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК	RU						0.963	0.000	0.000	0.000	0.000	0.000	X	Терминал порта	Контейнеры	RSET Co.Ltd RSET Co.Ltd	0.00	0.00	0.00	0.00	0.00	0.00		2025-12-23 17:14:25.618	2025-12-23 17:14:25.618	airflow	false
-Оптимизация	0046445629	0308876285	900001	0110204895	10	10	APT0008ING0064	АлП АТЧ A8 ЧМ ГОСТ 11069-2019	APT0008ING0064-АлП АТЧ A8 ЧМ ГОСТ 11069-2019	2025-04-23	BMOU1083167	ЭЦ284952	ЭЦ284952-BMOU1083167	ING	Чушка мелкая	ING-Чушка мелкая	P000000008	VLADIVOSTOK	2025-05-04		P000000008-VLADIVOSTOK	TL04	Морской контейнер	TL04-Морской контейнер	331016	Алюминий	331016-Алюминий	2025-05-19	0.962	0.963	0013331425		Россия и СНГ	RSET Co.Ltd RSET Co.Ltd	1576-RSET Co.Ltd RSET Co.Ltd	Россия	1576	0110204895		0110204895	000010	10	0000102459	Логика РФ-контейнеры	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК								ООО "ТЛЦ"	0000102459-ООО "ТЛЦ"	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000656-ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ			4000421542	HS001VS004	2025-05-25				Не определено		1121	1120		2025-05-04	2025-05-25	2025-05-19	S49	16	1400256754	2025-05-19										0.000	0.000	16.000	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК	RU						0.963	0.000	0.000	0.000	0.000	0.000	X	Терминал порта	Контейнеры	RSET Co.Ltd RSET Co.Ltd	0.00	0.00	0.00	0.00	0.00	0.00		2025-12-23 17:14:25.618	2025-12-23 17:14:25.618	airflow	false
-Исходная	0046445629	0308876285	900001	0110204895	10	10	APT0008ING0064	АлП АТЧ A8 ЧМ ГОСТ 11069-2019	APT0008ING0064-АлП АТЧ A8 ЧМ ГОСТ 11069-2019	2025-04-23	BMOU1083167	ЭЦ284952	ЭЦ284952-BMOU1083167	ING	Чушка мелкая	ING-Чушка мелкая	P000000008	VLADIVOSTOK	2025-05-04		P000000008-VLADIVOSTOK	TL04	Морской контейнер	TL04-Морской контейнер	331016	Алюминий	331016-Алюминий	2025-05-19	0.962	0.963	0013331425		Россия и СНГ	RSET Co.Ltd	1576-RSET Co.Ltd	Россия	1576	0110204895		0110204895	000010	10	0000102459	Логика РФ-контейнеры	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК								Не определено	Не определено	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000656-ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ			4000421542	HS001VS004	2025-05-25						1121	1120		2025-05-04	2025-05-25	2025-05-19	S49	16	1400256754	2025-05-19										0.000	0.000	16.000	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК	RU						0.963	0.000	0.000	0.000	0.000	0.000	X	Терминал порта	Контейнеры	RSET Co.Ltd	0.00	0.00	0.00	0.00	0.00	0.00		2025-12-22 11:57:11.671	2025-12-22 11:57:11.671	airflow	false
-Исходная	0046445629	0308876285	900001	0110204895	10	10	APT0008ING0064	АлП АТЧ A8 ЧМ ГОСТ 11069-2019	APT0008ING0064-АлП АТЧ A8 ЧМ ГОСТ 11069-2019	2025-04-23	BMOU1083167	ЭЦ284952	ЭЦ284952-BMOU1083167	ING	Чушка мелкая	ING-Чушка мелкая	P000000008	VLADIVOSTOK	2025-05-04		P000000008-VLADIVOSTOK	TL04	Морской контейнер	TL04-Морской контейнер	331016	Алюминий	331016-Алюминий	2025-05-19	0.962	0.963	0013331425		Россия и СНГ	RSET Co.Ltd	1576-RSET Co.Ltd	Россия	1576	0110204895		0110204895	000010	10	0000102459	Логика РФ-контейнеры	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК								Не определено	Не определено	G000000656	ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ	G000000656-ПРИМОРСКИЙ ЗАВОД ТЕРМИНАЛ			4000421542	HS001VS004	2025-05-25						1121	1120		2025-05-04	2025-05-25	2025-05-19	S49	16	1400256754	2025-05-19										0.000	0.000	16.000	G000000540	ДАЛЬНЕВОСТ.КОММ.ХОЛОДИЛЬНИК	RU						0.963	0.000	0.000	0.000	0.000	0.000	X	Терминал порта	Контейнеры	RSET Co.Ltd	0.00	0.00	0.00	0.00	0.00	0.00		2025-12-22 11:57:11.671	2025-12-22 11:57:11.671	airflow	false
+INSERT INTO userdata.transportation_external_location_metal_stock (
+    sales_bundle_code,
+    plant_producer_delivery_code,
+    plant_producer_delivery_position_code,
+    initial_delivery_code,
+    initial_delivery_position_code,
+    sales_delivery_position_code,
+    material_code,
+    material_name,
+    material_search_name,
+    dt_shipment,
+    railcar_code,
+    transport_bill_code,
+    uni,
+    material_shape_code,
+    material_shape_name,
+    material_shape_search_name,
+    port_of_discharge_code,
+    port_of_discharge_name,
+    dt_arrival_to_russian_port,
+    dt_storage_end_in_release,
+    port_of_discharge_search_name,
+    transport_type_code,
+    transport_type_name,
+    transport_type_search_name,
+    etsng_code,
+    etsng_name,
+    etsng_search_name,
+    dt_report,
+    sales_bundle_net_weight,
+    sales_bundle_gross_weight,
+    batch_code,
+    dt_arrival,
+    region_of_remote_warehouse_name,
+    receiving_plant_name,
+    receiving_plant_search_name,
+    country_of_remote_warehouse_name,
+    receiving_plant_code,
+    sales_delivery_code,
+    transportation_inbound_delivery_code,
+    delivery_for_storage_calculation_code,
+    transportation_inbound_delivery_position_code,
+    delivery_position_for_storage_calculation_code,
+    forwarder_code,
+    storage_cost_calculation_type_name,
+    transport_departure_hub_code,
+    transport_departure_hub_name,
+    transport_destination_hub_code,
+    transport_destination_hub_name,
+    transportation_outbound_delivery_code,
+    transportation_outbound_delivery_position_code,
+    is_final_transportation_stage_code,
+    transportation_stage_code,
+    transportation_stage_name,
+    transportation_stage_search_name,
+    storage_calculation_bundle_quantity,
+    forwarder_name,
+    forwarder_search_name,
+    warehouse_code,
+    warehouse_name,
+    warehouse_search_name,
+    delivery_in_final_release_code,
+    dt_final_release,
+    bill_of_lading_code,
+    bill_of_lading_number,
+    dt_bill_of_lading,
+    incoterms_code,
+    storage_cost_special_calculation_type_code,
+    warehouse_storage_area_code,
+    warehouse_storage_area_name,
+    warehouse_storage_area_search_name,
+    plant_code,
+    unit_balance_code,
+    creditor_in_shipment_instruction_code,
+    dt_storage_start,
+    dt_shipped_from_warehouse,
+    dt_storage_end,
+    service_number,
+    storage_duration_total_calendar_days,
+    shipment_instruction_number,
+    dt_for_price_search_in_purchase_contract,
+    purchase_contract_code,
+    purchase_contract_position_code,
+    purchase_contract_position_currency_code,
+    service_code,
+    service_name,
+    service_search_name,
+    purchase_contract_position_uom_code,
+    creditor_in_shipment_instruction_name,
+    creditor_in_shipment_instruction_search_name,
+    storage_duration_free_by_contract_calendar_days,
+    storage_duration_free_by_delivery_calendar_days,
+    storage_duration_payable_calendar_days,
+    remote_warehouse_code,
+    remote_warehouse_name,
+    country_of_remote_warehouse_code,
+    dt_transportation_stage_start_p,
+    dt_transportation_stage_start_r,
+    dt_shipment_from_foreign_warehouse,
+    storage_cost_calculated_amount,
+    storage_cost_calculated_amount_local,
+    storage_payable_001_030_days_gross_weight,
+    storage_payable_031_060_days_gross_weight,
+    storage_payable_061_090_days_gross_weight,
+    storage_payable_091_180_days_gross_weight,
+    storage_payable_181_365_days_gross_weight,
+    storage_payable_over_365_days_gross_weight,
+    is_stored_in_russian_port_code,
+    type_warehouse_name,
+    type_freight_name,
+    metal_owner_for_reporting_name,
+    storage_calculated_cost_001_030_amount,
+    storage_calculated_cost_031_060_amount,
+    storage_calculated_cost_061_090_amount,
+    storage_calculated_cost_091_180_amount,
+    storage_calculated_cost_181_365_amount,
+    storage_calculated_cost_over_365_amount,
+    metal_in_china_stock_balance_closing_weight
+)
+SELECT
+    base.sales_bundle_code,
+    base.plant_producer_delivery_code,
+    base.plant_producer_delivery_position_code,
+    base.initial_delivery_code,
+    '10',
+    '10',
+
+    base.material_code,
+    mat.material_name,
+    base.material_code || '-' || mat.material_name,
+
+    base.dt_shipment,
+    base.railcar_code,
+    base.transport_bill_code,
+    base.uni,
+
+    base.material_shape_code,
+    dms.material_shape_full_name,
+    base.material_shape_code || '-' || dms.material_shape_full_name,
+
+    base.port_of_discharge_code,
+    COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено'),
+    base.dt_arrival_to_russian_port,
+    base.dt_storage_end_in_release,
+    base.port_of_discharge_code || '-' ||
+        COALESCE(ht_port.name_e, ht_port.name_r, 'Не определено'),
+
+    base.transport_type_code,
+    dtt.transport_transfer_type_name,
+    base.transport_type_code || '-' || dtt.transport_transfer_type_name,
+
+    base.etsng_code,
+    ette.etsng_name,
+    base.etsng_code || '-' || ette.etsng_name,
+
+    base.dt_report,
+    base.sales_bundle_net_weight,
+    base.sales_bundle_gross_weight,
+    base.batch_code,
+    base.dt_arrival,
+
+    CASE
+        WHEN hub_remote.market_region1_name = 'Турция' THEN 'Западная Азия'
+        WHEN hub_remote.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+        WHEN hub_remote.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
+        ELSE hub_remote.market_region1_name
+    END,
+
+    pas.plant_short_name || ' ' || pas.plant_full_name,
+    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name,
+
+    CASE
+        WHEN hub_remote.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+        WHEN hub_remote.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+        ELSE hub_remote.country_full_name
+    END,
+
+    base.receiving_plant_code,
+    base.sales_delivery_code,
+    base.transportation_inbound_delivery_code,
+    base.delivery_for_storage_calculation_code,
+    base.transportation_inbound_delivery_position_code,
+    base.delivery_position_for_storage_calculation_code,
+    base.forwarder_code,
+    base.storage_cost_calculation_type_name,
+
+    base.transport_departure_hub_code,
+    COALESCE(ht_dep.name_r, ht_dep.name_e, 'Не определено'),
+    base.transport_destination_hub_code,
+    COALESCE(ht_dest.name_r, ht_dest.name_e, 'Не определено'),
+
+    base.transportation_outbound_delivery_code,
+    base.transportation_outbound_delivery_position_code,
+    base.is_final_transportation_stage_code,
+    base.transportation_stage_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN trst.transportation_stage_name
+    END,
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
+    END,
+
+    base.storage_calculation_bundle_quantity,
+
+    -- FIX: forwarder logic (as original)
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name
+                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+                THEN counter_forwarder.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_name,
+
+    COALESCE(
+        CASE
+            WHEN base.storage_cost_calculation_type_name
+                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+                THEN base.forwarder_code || '-' || counter_forwarder.counterparty_short_name
+        END,
+        'Не определено'
+    ) AS forwarder_search_name,
+
+    base.warehouse_code,
+    CASE
+        WHEN hub_wh.country_full_name = 'Россия'
+            THEN COALESCE(ht_wh.name_r, ht_wh.name_e)
+        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r)
+    END,
+    base.warehouse_code || '-' ||
+    CASE
+        WHEN hub_wh.country_full_name = 'Россия'
+            THEN COALESCE(ht_wh.name_r, ht_wh.name_e)
+        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r)
+    END,
+
+    base.delivery_in_final_release_code,
+    base.dt_final_release,
+    base.bill_of_lading_code,
+    base.bill_of_lading_number,
+    base.dt_bill_of_lading,
+
+    base.incoterms_code,
+    base.storage_cost_special_calculation_type_code,
+
+    base.warehouse_storage_area_code,
+    COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено'),
+    base.warehouse_storage_area_code || '-' ||
+        COALESCE(ht_area.name_r, ht_area.name_e, 'Не определено'),
+
+    base.plant_code,
+    base.unit_balance_code,
+    base.creditor_in_shipment_instruction_code,
+
+    base.dt_storage_start,
+    base.dt_shipped_from_warehouse,
+    base.dt_storage_end,
+
+    base.service_number,
+    base.storage_duration_total_calendar_days,
+    base.shipment_instruction_number,
+    base.dt_for_price_search_in_purchase_contract,
+    base.purchase_contract_code,
+    base.purchase_contract_position_code,
+    base.purchase_contract_position_currency_code,
+
+    base.service_code,
+    svc.transportation_service_name,
+    base.service_code || '-' || svc.transportation_service_name,
+
+    base.purchase_contract_position_uom_code,
+
+    addr_8.address_full_name,
+    base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name,
+
+    base.storage_duration_free_by_contract_calendar_days,
+    base.storage_duration_free_by_delivery_calendar_days,
+    base.storage_duration_payable_calendar_days,
+
+    base.remote_warehouse_code,
+    CASE
+        WHEN hub_remote.country_full_name = 'Россия'
+            THEN COALESCE(ht_remote.name_r, ht_remote.name_e)
+        ELSE COALESCE(ht_remote.name_e, ht_remote.name_r)
+    END,
+    hub_remote.country_code,
+
+    base.dt_transportation_stage_start_p,
+    base.dt_transportation_stage_start_r,
+    base.dt_shipment_from_foreign_warehouse,
+
+    base.storage_cost_calculated_amount,
+    base.storage_cost_calculated_amount_local,
+
+    base.storage_payable_001_030_days_gross_weight,
+    base.storage_payable_031_060_days_gross_weight,
+    base.storage_payable_061_090_days_gross_weight,
+    base.storage_payable_091_180_days_gross_weight,
+    base.storage_payable_181_365_days_gross_weight,
+    base.storage_payable_over_365_days_gross_weight,
+
+    base.is_stored_in_russian_port_code,
+
+    CASE
+        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+            THEN 'Терминал порта'
+        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ'
+            THEN 'Склад СВХ'
+        ELSE 'Не определено'
+    END,
+    CASE
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+        ELSE 'Не определено'
+    END,
+
+    pas_1124.plant_short_name || ' ' || pas_1124.plant_full_name,
+
+    base.storage_calculated_cost_001_030_amount,
+    base.storage_calculated_cost_031_060_amount,
+    base.storage_calculated_cost_061_090_amount,
+    base.storage_calculated_cost_091_180_amount,
+    base.storage_calculated_cost_181_365_amount,
+    base.storage_calculated_cost_over_365_amount,
+
+    base.metal_in_china_stock_balance_closing_weight
+FROM userdata.storage_sales_bundles_amount base
+LEFT JOIN dim_material_texts mat ON mat.material_code = base.material_code
+LEFT JOIN dim_material_shape dms ON dms.material_code = base.material_code
+LEFT JOIN dict_dds.etsng_texts ette ON ette.etsng_code = base.etsng_code AND ette.language_code = 'R'
+LEFT JOIN dim_transport_type dtt ON dtt.transport_transfer_type_code = base.transport_type_code
+LEFT JOIN dim_service_texts svc ON svc.service_code = base.service_code
+LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dim_storage_owner so ON so.delivery_code = base.delivery_for_storage_calculation_code
+LEFT JOIN dict_dds.plant_and_subsidiary pas_1124 ON pas_1124.plant_code = so.plant_code
+LEFT JOIN dim_hub_geo hub_wh ON hub_wh.transport_hub_code = base.warehouse_code
+LEFT JOIN dim_hub_geo hub_remote ON hub_remote.transport_hub_code = base.remote_warehouse_code
+LEFT JOIN dim_hub_texts_agg ht_dep ON ht_dep.transport_hub_code = base.transport_departure_hub_code
+LEFT JOIN dim_hub_texts_agg ht_dest ON ht_dest.transport_hub_code = base.transport_destination_hub_code
+LEFT JOIN dim_hub_texts_agg ht_wh ON ht_wh.transport_hub_code = base.warehouse_code
+LEFT JOIN dim_hub_texts_agg ht_area ON ht_area.transport_hub_code = base.warehouse_storage_area_code
+LEFT JOIN dim_hub_texts_agg ht_remote ON ht_remote.transport_hub_code = base.remote_warehouse_code
+LEFT JOIN dim_hub_texts_agg ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
+LEFT JOIN dict_dds.counterparty counter_forwarder
+    ON counter_forwarder.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.counterparty counter_creditor
+    ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+LEFT JOIN dict_dds.address addr_8
+    ON addr_8.address_code = counter_creditor.address_code
+   AND addr_8.international_display_format_code IS NULL
+LEFT JOIN dict_dds.transportation_stage_texts trst
+    ON trst.transportation_stage_code = base.transportation_stage_code
+   AND trst.language_code = 'R';

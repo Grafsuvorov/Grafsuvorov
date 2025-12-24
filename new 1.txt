@@ -204,19 +204,16 @@ SELECT
 
     base.storage_calculation_bundle_quantity,
 
-    -- FIX: forwarder logic (как в dm)
     COALESCE(
         CASE
-            WHEN base.storage_cost_calculation_type_name
-                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
                 THEN counter_forwarder.counterparty_short_name
         END,
         'Не определено'
     ),
     COALESCE(
         CASE
-            WHEN base.storage_cost_calculation_type_name
-                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+            WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
                 THEN base.forwarder_code || '-' || counter_forwarder.counterparty_short_name
         END,
         'Не определено'
@@ -278,8 +275,8 @@ SELECT
     base.storage_duration_payable_calendar_days,
 
     base.remote_warehouse_code,
-   trht_remote.transport_hub_name AS remote_warehouse_name,
-    hub_remote.country_code,
+    trht_remote.transport_hub_name AS remote_warehouse_name,
+    adrc_rw.country_code           AS country_of_remote_warehouse_code,
 
     base.dt_transportation_stage_start_p,
     base.dt_transportation_stage_start_r,
@@ -304,6 +301,7 @@ SELECT
             THEN 'Склад СВХ'
         ELSE 'Не определено'
     END,
+
     CASE
         WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
         WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
@@ -321,37 +319,65 @@ SELECT
 
     base.metal_in_china_stock_balance_closing_weight
 FROM userdata.storage_sales_bundles_amount base
-LEFT JOIN dim_material_texts mat ON mat.material_code = base.material_code
-LEFT JOIN dim_material_shape dms ON dms.material_code = base.material_code
-LEFT JOIN dict_dds.etsng_texts ette ON ette.etsng_code = base.etsng_code AND ette.language_code = 'R'
-LEFT JOIN dim_transport_type dtt ON dtt.transport_transfer_type_code = base.transport_type_code
-LEFT JOIN dim_service_texts svc ON svc.service_code = base.service_code
-LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
-LEFT JOIN dim_storage_owner so ON so.delivery_code = base.delivery_for_storage_calculation_code
-LEFT JOIN dict_dds.plant_and_subsidiary pas_1124 ON pas_1124.plant_code = so.plant_code
-LEFT JOIN dim_hub_geo hub_wh ON hub_wh.transport_hub_code = base.warehouse_code
-LEFT JOIN dim_hub_geo hub_remote ON hub_remote.transport_hub_code = base.warehouse_code
+LEFT JOIN dim_material_texts mat
+       ON mat.material_code = base.material_code
+LEFT JOIN dim_material_shape dms
+       ON dms.material_code = base.material_code
+LEFT JOIN dict_dds.etsng_texts ette
+       ON ette.etsng_code = base.etsng_code AND ette.language_code = 'R'
+LEFT JOIN dim_transport_type dtt
+       ON dtt.transport_transfer_type_code = base.transport_type_code
+LEFT JOIN dim_service_texts svc
+       ON svc.service_code = base.service_code
+LEFT JOIN dict_dds.plant_and_subsidiary pas
+       ON pas.plant_code = base.receiving_plant_code
+LEFT JOIN dim_storage_owner so
+       ON so.delivery_code = base.delivery_for_storage_calculation_code
+LEFT JOIN dict_dds.plant_and_subsidiary pas_1124
+       ON pas_1124.plant_code = so.plant_code
+
+LEFT JOIN dim_hub_geo hub_wh
+       ON hub_wh.transport_hub_code = base.warehouse_code
+
+-- ВАЖНО: оставляем как у тебя (для региона/страны), НЕ трогаем
+LEFT JOIN dim_hub_geo hub_remote
+       ON hub_remote.transport_hub_code = base.warehouse_code
+
+-- ===== FIX ДЛЯ remote_warehouse_name + country_of_remote_warehouse_code (как в исходном) =====
+LEFT JOIN dict_dds.transport_hub trh_remote
+       ON trh_remote.transport_hub_code = base.remote_warehouse_code
+LEFT JOIN adrc adrc_rw
+       ON adrc_rw.address_code = trh_remote.address_code
+LEFT JOIN dict_dds.country_texts cotex_rw
+       ON cotex_rw.country_code = adrc_rw.country_code
+      AND cotex_rw.language_code = 'R'
 LEFT JOIN dict_dds.transport_hub_texts trht_remote
        ON trht_remote.transport_hub_code = base.remote_warehouse_code
       AND trht_remote.language_code =
           CASE
-              WHEN hub_remote.country_full_name = 'Россия' THEN 'R'
+              WHEN cotex_rw.country_full_name = 'Россия' THEN 'R'
               ELSE 'E'
           END
-LEFT JOIN dim_hub_texts_agg ht_dep ON ht_dep.transport_hub_code = base.transport_departure_hub_code
-LEFT JOIN dim_hub_texts_agg ht_dest ON ht_dest.transport_hub_code = base.transport_destination_hub_code
-LEFT JOIN dim_hub_texts_agg ht_wh ON ht_wh.transport_hub_code = base.warehouse_code
-LEFT JOIN dim_hub_texts_agg ht_area ON ht_area.transport_hub_code = base.warehouse_storage_area_code
-LEFT JOIN dim_hub_texts_agg ht_remote ON ht_remote.transport_hub_code = base.remote_warehouse_code
-LEFT JOIN dim_hub_texts_agg ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
-LEFT JOIN dict_dds.counterparty counter_forwarder ON counter_forwarder.counterparty_code = base.forwarder_code
-LEFT JOIN dict_dds.counterparty counter_creditor ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
-LEFT JOIN dict_dds.address addr_8
-    ON addr_8.address_code = counter_creditor.address_code
-   AND addr_8.international_display_format_code IS NULL
-LEFT JOIN dict_dds.transportation_stage_texts trst
-    ON trst.transportation_stage_code = base.transportation_stage_code
-   AND trst.language_code = 'R';
+-- ===========================================================================================
 
-Оптимизация	G000001185	KALUGA-1 RZD LOGISTICS TRM
-Исходная	G000001185	КАЛУГА-1 РЖД ЛОГИСТИКА ТРМ
+LEFT JOIN dim_hub_texts_agg ht_dep
+       ON ht_dep.transport_hub_code = base.transport_departure_hub_code
+LEFT JOIN dim_hub_texts_agg ht_dest
+       ON ht_dest.transport_hub_code = base.transport_destination_hub_code
+LEFT JOIN dim_hub_texts_agg ht_wh
+       ON ht_wh.transport_hub_code = base.warehouse_code
+LEFT JOIN dim_hub_texts_agg ht_area
+       ON ht_area.transport_hub_code = base.warehouse_storage_area_code
+LEFT JOIN dim_hub_texts_agg ht_port
+       ON ht_port.transport_hub_code = base.port_of_discharge_code
+
+LEFT JOIN dict_dds.counterparty counter_forwarder
+       ON counter_forwarder.counterparty_code = base.forwarder_code
+LEFT JOIN dict_dds.counterparty counter_creditor
+       ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+LEFT JOIN dict_dds.address addr_8
+       ON addr_8.address_code = counter_creditor.address_code
+      AND addr_8.international_display_format_code IS NULL
+LEFT JOIN dict_dds.transportation_stage_texts trst
+       ON trst.transportation_stage_code = base.transportation_stage_code
+      AND trst.language_code = 'R';

@@ -1,54 +1,68 @@
-INFO:     127.0.0.1:61192 - "GET /api/incident?table_fqn=stg.LIPS HTTP/1.1" 500 Internal Server Error
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
-    return await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\applications.py", line 1054, in __call__
-    await super().__call__(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\applications.py", line 113, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
-    await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 716, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 736, in app
-    await route.handle(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 290, in handle
-    await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 78, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 75, in app
-    response = await f(request)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 302, in app
-    raw_response = await run_endpoint_function(
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
-    return await future
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
-    result = context.run(func, *args)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1110, in get_incident
-    impact = build_impact(f"{schema}.{table}", deps, sla_rows) if deps is not None else {
-NameError: name 'build_impact' is not defined
+def build_impact(primary_table_fqn, dependencies, sla_rows):
+    entities = set()
+    for d in dependencies:
+        if d.get("entity_name"):
+            entities.add(d["entity_name"])
+
+    reports_at_risk = {
+        s["report"] for s in sla_rows if not s.get("sla_ok", True)
+    }
+
+    return {
+        "affected_entities": sorted(entities),
+        "blocked_tables_count": len(dependencies),
+        "reports_at_risk": sorted(reports_at_risk),
+        "sla_violations": len(reports_at_risk)
+    }
+
+
+
+def build_impact(table_fqn: str, deps: list, sla_resp):
+    """
+    Строит impact для инцидента:
+    - затронутые сущности
+    - количество downstream-таблиц
+    - отчёты под риском
+    - SLA-нарушения
+    """
+
+    affected_entities = set()
+    blocked_tables = set()
+    reports_at_risk = []
+    sla_violations = 0
+
+    # --- downstream tables ---
+    for d in deps or []:
+        schema = d.get("schema")
+        table = d.get("table_name") or d.get("table")
+        entity = d.get("entity_name")
+
+        if schema and table:
+            blocked_tables.add(f"{schema}.{table}")
+
+        if entity:
+            affected_entities.add(entity)
+
+    # --- SLA ---
+    try:
+        if hasattr(sla_resp, "body"):
+            sla_rows = json.loads(sla_resp.body.decode("utf-8"))
+        else:
+            sla_rows = sla_resp or []
+    except Exception:
+        sla_rows = []
+
+    for row in sla_rows:
+        tables = row.get("tables_info", [])
+        for t in tables:
+            if not t.get("sla_ok", True):
+                sla_violations += 1
+                reports_at_risk.append(row.get("report"))
+                break
+
+    return {
+        "affected_entities": sorted(affected_entities),
+        "blocked_tables_count": len(blocked_tables),
+        "reports_at_risk": sorted(set(reports_at_risk)),
+        "sla_violations": sla_violations,
+    }

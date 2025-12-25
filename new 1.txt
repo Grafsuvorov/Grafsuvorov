@@ -1,12 +1,95 @@
-VITE_API_BASE_URL=http://localhost:8000
+/* FILE: src/components/IncidentsPage.jsx */
+import "../style/app.css";
 
-TABLE_LOADING_HISTORY=tech_etl.log_objects_loading_history
-TABLE_ENTITIES_META=tech_etl.entities_meta
-TABLE_TABLES_META=tech_etl.tables_meta
-TABLE_TABLE_COMPARE=tech_monitoring.vw_table_compare
-TABLE_YT_SLA=tech_etl.yt_sla
-TABLE_TABLES_META_CLICK=tech_etl.tables_meta_clickhouse_upload
-DATABASE_URL=postgresql+psycopg2://postgres:gpetl@00.00.00.00:5432/dwh
+export default function IncidentsPage({ incident, onBack, onSelectTable }) {
+  if (!incident) return null;
 
+  const deps = incident.dependencies || [];
 
+  return (
+    <div className="cc-page">
+      {/* HEADER */}
+      <section className="incident-header">
+        <div className="incident-header-row">
+          <button className="incident-back" onClick={onBack}>
+            ← Инциденты
+          </button>
 
+          <h1>Инцидент: анализ последствий</h1>
+        </div>
+
+        <div className="cc-subtitle">
+          Определение затронутых данных и рекомендуемого порядка восстановления
+        </div>
+      </section>
+
+      {/* SOURCE */}
+      <section className="incident-block">
+        <div className="section-title">Источник инцидента</div>
+
+        <div className="incident-source">
+          <div className="mono incident-source-table">
+            {incident.table_fqn}
+          </div>
+
+          <div className="incident-source-desc muted">
+            Таблица, на которой зафиксирована ошибка загрузки
+          </div>
+        </div>
+      </section>
+
+      {/* DEPENDENCIES */}
+      <section className="incident-block">
+        <div className="section-title">
+          Зависимости
+          <span className="section-meta">{deps.length}</span>
+        </div>
+
+        {deps.length > 0 ? (
+          <div className="cc-surface" style={{ marginTop: 14 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Таблица</th>
+                  <th>Сущность</th>
+                  <th>Среднее, мин</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deps.map(t => {
+                  const fqn = `${t.schema}.${t.table}`;
+                  return (
+                    <tr
+                      key={fqn}
+                      onClick={() => onSelectTable?.({ view: "dependency_graph", table: fqn }, "incident")}
+                      title="Открыть граф зависимостей"
+                    >
+                      <td className="mono">{fqn}</td>
+                      <td>{t.entity || "—"}</td>
+                      <td>{t.avg_duration_minutes ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            <div className="incident-empty">
+              Нажми на строку, чтобы открыть граф зависимостей по конкретной таблице.
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="incident-ok">
+              Downstream-зависимости не обнаружены
+            </div>
+            <div className="incident-empty">
+              Для данной таблицы downstream-зависимости отсутствуют
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+IncidentsPage.jsx

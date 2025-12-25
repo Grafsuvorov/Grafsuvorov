@@ -1,95 +1,59 @@
-/* FILE: src/components/IncidentsPage.jsx */
-import "../style/app.css";
-
-export default function IncidentsPage({ incident, onBack, onSelectTable }) {
-  if (!incident) return null;
-
-  const deps = incident.dependencies || [];
-
-  return (
-    <div className="cc-page">
-      {/* HEADER */}
-      <section className="incident-header">
-        <div className="incident-header-row">
-          <button className="incident-back" onClick={onBack}>
-            ← Инциденты
-          </button>
-
-          <h1>Инцидент: анализ последствий</h1>
-        </div>
-
-        <div className="cc-subtitle">
-          Определение затронутых данных и рекомендуемого порядка восстановления
-        </div>
-      </section>
-
-      {/* SOURCE */}
-      <section className="incident-block">
-        <div className="section-title">Источник инцидента</div>
-
-        <div className="incident-source">
-          <div className="mono incident-source-table">
-            {incident.table_fqn}
-          </div>
-
-          <div className="incident-source-desc muted">
-            Таблица, на которой зафиксирована ошибка загрузки
-          </div>
-        </div>
-      </section>
-
-      {/* DEPENDENCIES */}
-      <section className="incident-block">
-        <div className="section-title">
-          Зависимости
-          <span className="section-meta">{deps.length}</span>
-        </div>
-
-        {deps.length > 0 ? (
-          <div className="cc-surface" style={{ marginTop: 14 }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Таблица</th>
-                  <th>Сущность</th>
-                  <th>Среднее, мин</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deps.map(t => {
-                  const fqn = `${t.schema}.${t.table}`;
-                  return (
-                    <tr
-                      key={fqn}
-                      onClick={() => onSelectTable?.({ view: "dependency_graph", table: fqn }, "incident")}
-                      title="Открыть граф зависимостей"
-                    >
-                      <td className="mono">{fqn}</td>
-                      <td>{t.entity || "—"}</td>
-                      <td>{t.avg_duration_minutes ?? "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            <div className="incident-empty">
-              Нажми на строку, чтобы открыть граф зависимостей по конкретной таблице.
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="incident-ok">
-              Downstream-зависимости не обнаружены
-            </div>
-            <div className="incident-empty">
-              Для данной таблицы downstream-зависимости отсутствуют
-            </div>
-          </>
-        )}
-      </section>
-    </div>
-  );
-}
-
-IncidentsPage.jsx
+INFO:     127.0.0.1:59580 - "GET /api/incidents/active HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 75, in app
+    response = await f(request)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 302, in app
+    raw_response = await run_endpoint_function(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
+    return await future
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
+    result = context.run(func, *args)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1218, in get_active_incidents
+    grouped = group_failures(failures)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1147, in group_failures
+    failures_sorted = sorted(failures, key=lambda x: x["error_time"], reverse=True)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1147, in <lambda>
+    failures_sorted = sorted(failures, key=lambda x: x["error_time"], reverse=True)
+KeyError: 'error_time'
+INFO:     127.0.0.1:59603 - "GET /api/metrics HTTP/1.1" 200 OK

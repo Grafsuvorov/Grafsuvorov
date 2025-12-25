@@ -19,7 +19,19 @@ import time
 from typing import List, Dict, Tuple
 from datetime import datetime
 from sqlalchemy import text
-from config import (TABLE_LOADING_HISTORY, TABLE_ENTITIES_META, TABLE_TABLES_META, TABLE_TABLE_COMPARE, TABLE_YT_SLA,TABLE_TABLES_META_CLICK, DATABASE_URL)
+import re
+import json
+
+from config import (
+    TABLE_LOADING_HISTORY,
+    TABLE_ENTITIES_META,
+    TABLE_TABLES_META,
+    TABLE_TABLE_COMPARE,
+    TABLE_YT_SLA,
+    TABLE_TABLES_META_CLICK,
+    DATABASE_URL,
+)
+
 app = FastAPI()
 # CORS для взаимодействия с фронтом
 app.add_middleware(
@@ -31,8 +43,8 @@ app.add_middleware(
 )
 
 # Подключение
-
 engine = create_engine(DATABASE_URL)
+
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):
@@ -42,21 +54,42 @@ class DependencyItem(BaseModel):
     entity_id: int
     entity_name: str = None
     start_time: str = None
-    avg_duration_minutes: Optional[float]  = None
+    avg_duration_minutes: Optional[float] = None
 
-TOP_DIRS = ["BI_FI", "BI_INVESTMENT", "BI_TAXES", "CASE_4", "DICT_LOADER", "MISHKADEV_TABLES", "FI_COUNTERPARTY", "ISUIP_INVESTMENT", "LOGISTICS", "TRANSPORTATION", "BI_SB_WUC", "BI_FI_FACT_PAYMENTS", "STG_LOADER", "SD_STOCKS", "SALES_SHIPMENT_FROM_PLANT", "SALES_MM", "SALES_MARGIN","MANAGEMENT_REPORTING_1", "TEST_SAP_ODATA_DELTA"]
 
+TOP_DIRS = [
+    "BI_FI",
+    "BI_INVESTMENT",
+    "BI_TAXES",
+    "CASE_4",
+    "DICT_LOADER",
+    "MISHKADEV_TABLES",
+    "FI_COUNTERPARTY",
+    "ISUIP_INVESTMENT",
+    "LOGISTICS",
+    "TRANSPORTATION",
+    "BI_SB_WUC",
+    "BI_FI_FACT_PAYMENTS",
+    "STG_LOADER",
+    "SD_STOCKS",
+    "SALES_SHIPMENT_FROM_PLANT",
+    "SALES_MM",
+    "SALES_MARGIN",
+    "MANAGEMENT_REPORTING_1",
+    "TEST_SAP_ODATA_DELTA",
+]
 
 _cached_meta_index = None
 _cache_timestamp = 0
 _CACHE_TTL = 86400  # 24 часа
+
+
 @app.on_event("startup")
 def warm_up_cache():
     try:
         get_cached_meta_and_index()
     except Exception as e:
         print("Ошибка при старте приложения:", e)
-
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,9 +99,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 def list_routes():
     return [route.path for route in app.routes]
 
+
 @app.get("/ping")
 def ping():
     return {"pong": True}
+
 
 def get_cached_meta_and_index() -> Tuple[List[Dict], Dict[Tuple[str, str], List[Dict]]]:
     global _cached_meta_index, _cache_timestamp
@@ -80,11 +115,6 @@ def get_cached_meta_and_index() -> Tuple[List[Dict], Dict[Tuple[str, str], List[
         _cached_meta_index = (all_meta, reverse_index)
         _cache_timestamp = now
     return _cached_meta_index
-
-
-
-
-
 
 
 def find_all_meta_files(top_dirs: List[str]) -> List[Dict]:
@@ -102,18 +132,21 @@ def find_all_meta_files(top_dirs: List[str]) -> List[Dict]:
                                 start_time = datetime.strptime(meta["start_date"], "%Y-%m-%d %H:%M:%S").time()
                             except:
                                 pass
-                        all_meta.append({
-                            "table_schema": meta.get("table_schema"),
-                            "table_name": meta.get("table_name"),
-                            "entity_id": meta.get("entity_id"),
-                            "entity_name": meta.get("entity_name"),
-                            "depends_on": meta.get("depends_on", {}),
-                            "start_time": start_time,
-                            "table_id": meta.get("table_id")
-                        })
+                        all_meta.append(
+                            {
+                                "table_schema": meta.get("table_schema"),
+                                "table_name": meta.get("table_name"),
+                                "entity_id": meta.get("entity_id"),
+                                "entity_name": meta.get("entity_name"),
+                                "depends_on": meta.get("depends_on", {}),
+                                "start_time": start_time,
+                                "table_id": meta.get("table_id"),
+                            }
+                        )
                 except Exception as e:
                     print(f"Error reading {path}: {e}")
     return all_meta
+
 
 def build_reverse_index(all_meta: List[Dict]) -> Dict[Tuple[str, str], List[Dict]]:
     reverse_index = {}
@@ -128,21 +161,24 @@ def build_reverse_index(all_meta: List[Dict]) -> Dict[Tuple[str, str], List[Dict
         for dep_schema, tables in depends_on.items():
             for table in tables:
                 key = (dep_schema, table)
-                reverse_index.setdefault(key, []).append({
-                    "schema": consumer_schema,
-                    "table_name": consumer_table,
-                    "entity_id": entity_id,
-                    "entity_name": entity_name,
-                    "start_time": start_time,
-                    "table_id": table_id
-                })
+                reverse_index.setdefault(key, []).append(
+                    {
+                        "schema": consumer_schema,
+                        "table_name": consumer_table,
+                        "entity_id": entity_id,
+                        "entity_name": entity_name,
+                        "start_time": start_time,
+                        "table_id": table_id,
+                    }
+                )
     return reverse_index
+
 
 def recursive_reverse_search(
     start_schema: str,
     start_table: str,
     reverse_index: Dict[Tuple[str, str], List[Dict]],
-    visited: Set[Tuple[str, str]] = None
+    visited: Set[Tuple[str, str]] = None,
 ) -> List[Dict]:
     if visited is None:
         visited = set()
@@ -154,10 +190,9 @@ def recursive_reverse_search(
     result = []
     for dep in dependents:
         result.append(dep)
-        result.extend(
-            recursive_reverse_search(dep["schema"], dep["table_name"], reverse_index, visited)
-        )
+        result.extend(recursive_reverse_search(dep["schema"], dep["table_name"], reverse_index, visited))
     return result
+
 
 @app.get("/api/dependencies", response_model=List[DependencyItem])
 def get_dependencies(table: str = Query(..., description="Format: schema.table")):
@@ -171,7 +206,9 @@ def get_dependencies(table: str = Query(..., description="Format: schema.table")
 
     seen = set()
     unique_sorted = []
-    for item in sorted(result, key=lambda x: x.get("start_time") or datetime.strptime("00:00:00", "%H:%M:%S").time()):
+    for item in sorted(
+        result, key=lambda x: x.get("start_time") or datetime.strptime("00:00:00", "%H:%M:%S").time()
+    ):
         key = (item["schema"], item["table_name"])
         if key not in seen:
             seen.add(key)
@@ -181,38 +218,47 @@ def get_dependencies(table: str = Query(..., description="Format: schema.table")
     with engine.connect() as conn:
         for i, row in enumerate(unique_sorted, 1):
             avg_minutes = None
+            last_load = None
+
             if row.get("table_id"):
-                avg_query = text(f"""
+                avg_query = text(
+                    f"""
                     SELECT AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm))/60.0) AS avg_duration
                     FROM {TABLE_LOADING_HISTORY}
                     WHERE object_id = :object_id 
                       and object_type='table'
                       AND loading_state = 'SUCCESS'
                       AND loading_finish_dttm >= NOW() - INTERVAL '7 days'
-                """)
+                """
+                )
                 avg_result = conn.execute(avg_query, {"object_id": row["table_id"]})
                 avg_value = avg_result.scalar()
                 avg_minutes = round(avg_value, 2) if avg_value else None
+
             if row.get("entity_id"):
                 # последнее время загрузки entity
-                load_result = conn.execute(text(f"""
-                           SELECT entity_last_load FROM {TABLE_ENTITIES_META} WHERE entity_id = :eid
-                       """), {"eid": row["entity_id"]})
+                load_result = conn.execute(
+                    text(f"SELECT entity_last_load FROM {TABLE_ENTITIES_META} WHERE entity_id = :eid"),
+                    {"eid": row["entity_id"]},
+                )
                 dt_val = load_result.scalar()
                 if isinstance(dt_val, datetime):
                     last_load = dt_val.strftime("%Y-%m-%d %H:%M:%S")
 
-            output.append(DependencyItem(
-                step=i,
-                schema=row["schema"],
-                table_name=row["table_name"],
-                entity_id=row["entity_id"],
-                entity_name=row.get("entity_name"),
-                start_time=last_load,
-                avg_duration_minutes=avg_minutes
-            ))
+            output.append(
+                DependencyItem(
+                    step=i,
+                    schema=row["schema"],
+                    table_name=row["table_name"],
+                    entity_id=row["entity_id"],
+                    entity_name=row.get("entity_name"),
+                    start_time=last_load,
+                    avg_duration_minutes=avg_minutes,
+                )
+            )
 
     return JSONResponse(content=[item.dict() for item in output], media_type="application/json; charset=utf-8")
+
 
 @app.get("/api/failures")
 def get_failed_tables():
@@ -245,7 +291,9 @@ def get_failed_tables():
                 row = dict(r)
                 row["schema"] = row["object_schema"]
                 row["error_time"] = row["error_time"].strftime("%Y-%m-%d %H:%M:%S") if row["error_time"] else None
-                row["last_success_time"] = row["last_success_time"].strftime("%Y-%m-%d %H:%M:%S") if row["last_success_time"] else None
+                row["last_success_time"] = (
+                    row["last_success_time"].strftime("%Y-%m-%d %H:%M:%S") if row["last_success_time"] else None
+                )
                 cleaned.append(row)
 
             return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
@@ -253,6 +301,7 @@ def get_failed_tables():
     except Exception as e:
         print("❌ Ошибка при получении данных об ошибках:", str(e))
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/entities")
 def get_failed_tables():
@@ -271,20 +320,19 @@ def get_failed_tables():
             for r in rows:
                 row = dict(r)
                 row["entity_id"] = row["entity_id"]
-                row["entity_last_load"] = row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row[
-                    "entity_last_load"] else None
+                row["entity_last_load"] = (
+                    row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row["entity_last_load"] else None
+                )
                 row["entity_name"] = row["entity_name"]
                 row["entity_load_interval"] = row["entity_load_interval"]
                 row["entity_load_status"] = row["entity_load_status"]
                 cleaned.append(row)
-
 
             return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
 
     except Exception as e:
         print("❌ Ошибка при получении данных об ошибках:", str(e))
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 
 
 @app.get("/api/timeline")
@@ -306,46 +354,51 @@ def get_table_timeline(table_name: str):
         columns = result[0].keys() if result else []
         return [dict(zip(columns, row)) for row in result]
 
+
 @app.get("/api/metrics")
 def get_metrics():
     try:
         with engine.connect() as conn:
-            total_tables = conn.execute(text(f"""
-                SELECT COUNT(*) FROM {TABLE_TABLES_META} WHERE flag_active = true
-            """)).scalar()
+            total_tables = conn.execute(text(f"SELECT COUNT(*) FROM {TABLE_TABLES_META} WHERE flag_active = true")).scalar()
 
-            error_count = conn.execute(text(f"""
+            error_count = conn.execute(
+                text(
+                    f"""
                 SELECT COUNT(*)
                 FROM {TABLE_LOADING_HISTORY}
                 WHERE loading_state = 'FAILED' and object_type='table'
                   AND loading_start_dttm >= date_trunc('day', now() - interval '1 day') + interval '21 hour'
                   AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
-            """)).scalar()
+            """
+                )
+            ).scalar()
 
-            avg_duration = conn.execute(text(f"""
+            avg_duration = conn.execute(
+                text(
+                    f"""
                 SELECT ROUND(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                 FROM {TABLE_LOADING_HISTORY}
                 WHERE loading_state = 'SUCCESS' and object_type='table'
                   AND loading_start_dttm >= date_trunc('day', now() - interval '1 day') + interval '21 hour'
                   AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
-            """)).scalar()
+            """
+                )
+            ).scalar()
 
-            active_entities = conn.execute(text(f"""
-                SELECT COUNT(*) FROM {TABLE_ENTITIES_META} WHERE flag_active = true
-            """)).scalar()
+            active_entities = conn.execute(text(f"SELECT COUNT(*) FROM {TABLE_ENTITIES_META} WHERE flag_active = true")).scalar()
 
-            return JSONResponse(content={
-                "total_tables": total_tables,
-                "error_count": error_count,
-                "avg_duration_minutes": float(avg_duration) if avg_duration is not None else None,
-                "active_entities": active_entities
-            }, media_type="application/json; charset=utf-8")
+            return JSONResponse(
+                content={
+                    "total_tables": total_tables,
+                    "error_count": error_count,
+                    "avg_duration_minutes": float(avg_duration) if avg_duration is not None else None,
+                    "active_entities": active_entities,
+                },
+                media_type="application/json; charset=utf-8",
+            )
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-
 
 
 def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
@@ -353,6 +406,7 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
         if item.name.lower() == name.lower():
             return item
     return None
+
 
 @app.get("/api/card/{schema}/{table}")
 def get_table_card_info_by_path(schema: str, table: str):
@@ -396,26 +450,37 @@ def get_table_card_info_by_path(schema: str, table: str):
         if table_id:
             try:
                 with engine.connect() as conn:
-                    duration_result = conn.execute(text(f"""
+                    duration_result = conn.execute(
+                        text(
+                            f"""
                         SELECT round(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                         FROM {TABLE_LOADING_HISTORY}
                         WHERE loading_state = 'SUCCESS'  and object_type='table'
                           AND object_id = :object_id
-                    """), {"object_id": table_id})
+                    """
+                        ),
+                        {"object_id": table_id},
+                    )
                     avg_duration = float(duration_result.scalar() or 0)
 
-                    time_result = conn.execute(text(f"""
+                    time_result = conn.execute(
+                        text(
+                            f"""
                         SELECT table_last_load
                         FROM {TABLE_TABLES_META}
                         WHERE table_id = :object_id
-                    """), {"object_id": table_id})
+                    """
+                        ),
+                        {"object_id": table_id},
+                    )
                     dt_val = time_result.scalar()
                     if isinstance(dt_val, datetime):
                         last_success_time = dt_val.strftime("%Y-%m-%d %H:%M:%S")
 
-                    result = conn.execute(text("""
-                        SELECT pg_total_relation_size(:full_table_name)::bigint / 1024 / 1024
-                    """), {"full_table_name": f"{schema.lower()}.{table.lower()}"})
+                    result = conn.execute(
+                        text("SELECT pg_total_relation_size(:full_table_name)::bigint / 1024 / 1024"),
+                        {"full_table_name": f"{schema.lower()}.{table.lower()}"},
+                    )
                     table_size_mb = int(result.scalar() or 0)
             except Exception as e:
                 print(f"Ошибка при получении метрик: {e}")
@@ -454,11 +519,11 @@ def list_all_tables():
                         continue
     return JSONResponse(content=sorted(all_tables))
 
+
 @app.get("/api/inconsistencies")
 def get_dependency_violations():
     all_meta, _ = get_cached_meta_and_index()
     dependency_pairs = []
-
 
     for meta in all_meta:
         dependent_schema = meta.get("table_schema")
@@ -466,29 +531,28 @@ def get_dependency_violations():
         depends_on = meta.get("depends_on", {})
         for source_schema, source_tables in depends_on.items():
             for source_table in source_tables:
-                dependency_pairs.append((
-                    (source_schema, source_table),
-                    (dependent_schema, dependent_table)
-                ))
-
+                dependency_pairs.append(((source_schema, source_table), (dependent_schema, dependent_table)))
 
     all_tables = set()
     for src, dep in dependency_pairs:
         all_tables.add(src)
         all_tables.add(dep)
 
-
     last_loads = {}
     with engine.connect() as conn:
         for schema, table in all_tables:
-            result = conn.execute(text(f"""
+            result = conn.execute(
+                text(
+                    f"""
                 SELECT table_last_load
                 FROM {TABLE_TABLES_META}
                 WHERE  entity_id not in (50,49,48) and table_schema = :schema AND table_name = :table
-            """), {"schema": schema, "table": table})
+            """
+                ),
+                {"schema": schema, "table": table},
+            )
             dt = result.scalar()
             last_loads[(schema, table)] = dt
-
 
     problems = []
     for (src_schema, src_table), (dep_schema, dep_table) in dependency_pairs:
@@ -496,14 +560,16 @@ def get_dependency_violations():
         dep_time = last_loads.get((dep_schema, dep_table))
 
         if src_time and dep_time and dep_time < src_time:
-            problems.append({
-                "source_schema": src_schema,
-                "source_table": src_table,
-                "source_last_load": src_time.strftime("%Y-%m-%d %H:%M:%S"),
-                "dependent_schema": dep_schema,
-                "dependent_table": dep_table,
-                "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S")
-            })
+            problems.append(
+                {
+                    "source_schema": src_schema,
+                    "source_table": src_table,
+                    "source_last_load": src_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "dependent_schema": dep_schema,
+                    "dependent_table": dep_table,
+                    "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+            )
 
     return JSONResponse(content=problems, media_type="application/json; charset=utf-8")
 
@@ -521,7 +587,6 @@ def get_sla_monitoring():
                 s.load_interval,
                 s.table_name,
                 regexp_split_to_table(s.table_name, E'\\n') AS split_table
-                --regexp_split_to_table(regexp_replace(regexp_replace(table_name, E'_view+', '', 'g'), E'view_+', '', 'g'), E'\\n') AS split_table
             FROM {TABLE_YT_SLA} s
         ),
         cleaned AS (
@@ -533,10 +598,10 @@ def get_sla_monitoring():
         ),
         click as (
         select 
-        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\s+"([^"]+)"\."([^"]+)"'))[1] as schema_name_view,
-        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\s+"([^"]+)"\."([^"]+)"'))[2] as table_name_view,
-        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\s+"([^"]+)"\."([^"]+)"'))[1] as schema_name_table,
-        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\s+"([^"]+)"\."([^"]+)"'))[2] as table_name_table,
+        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[1] as schema_name_view,
+        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[2] as table_name_view,
+        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[1] as schema_name_table,
+        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[2] as table_name_table,
         	table_last_upload
         from {TABLE_TABLES_META_CLICK} ),
         joined AS (
@@ -560,8 +625,6 @@ def get_sla_monitoring():
              left join click clt 
              ON clt.schema_name_table = c.schema_name
              AND clt.table_name_table = c.table_name_only and source_table='Click'
-            
-             
         ),
         with_flags AS (
             SELECT *,
@@ -599,7 +662,6 @@ def get_sla_monitoring():
             result = conn.execute(text(query))
             rows = [dict(row._mapping) for row in result]
 
-
         for row in rows:
             for table in row["tables_info"]:
                 try:
@@ -619,6 +681,7 @@ def get_sla_monitoring():
         print("🔥 Общая ошибка SLA-эндпоинта 🔥")
         print(e)
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/slowest-tables")
 def get_slowest_tables():
@@ -651,10 +714,6 @@ def get_slowest_tables():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-
-
-
-
 def load_all_meta():
     all_meta = {}
     for top_dir in TOP_DIRS:
@@ -677,9 +736,6 @@ def load_all_meta():
     return all_meta
 
 
-
-
-
 def get_downstream_dependencies(start_table: str, all_meta: dict):
     result = set()
     stack = [start_table]
@@ -696,6 +752,7 @@ def get_downstream_dependencies(start_table: str, all_meta: dict):
                         stack.append(full_name)
 
     return sorted(result)
+
 
 def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str]]:
     edges = []
@@ -722,7 +779,6 @@ def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str
     return edges
 
 
-
 @app.get("/api/dependencies-down/{schema}/{table}")
 def get_dependencies_down(schema: str, table: str):
     key = f"{schema}.{table}"
@@ -732,13 +788,11 @@ def get_dependencies_down(schema: str, table: str):
             return JSONResponse(status_code=404, content={"error": "table not found"})
 
         edges = get_dependency_edges(key, all_meta)
-        return {
-            "central_node": key,
-            "edges": edges
-        }
+        return {"central_node": key, "edges": edges}
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @app.get("/api/dependencies-graph/{schema}/{table}")
 def get_dependency_graph(schema: str, table: str):
@@ -771,21 +825,21 @@ def get_dependency_graph(schema: str, table: str):
         print("Ошибка при построении графа зависимостей:", e)
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
 from fastapi import APIRouter, HTTPException
+
 router = APIRouter()
 app.include_router(router)
 
 from sqlalchemy import bindparam
+
 
 @router.get("/api/gantt/{schema}/{table:path}")
 def get_gantt_data(schema: str, table: str):
     try:
         raw_meta = get_cached_meta_and_index()
         all_meta_list, _ = get_cached_meta_and_index()
-        all_meta = {
-            f"{m['table_schema']}.{m['table_name']}": m
-            for m in all_meta_list
-        }
+        all_meta = {f"{m['table_schema']}.{m['table_name']}": m for m in all_meta_list}
 
         start_table = f"{schema}.{table}"
         if start_table not in all_meta:
@@ -795,18 +849,16 @@ def get_gantt_data(schema: str, table: str):
         all_tables = {edge["source"] for edge in edges} | {edge["target"] for edge in edges}
         all_tables.add(start_table)
 
-        table_to_id = {
-            t: all_meta[t]["table_id"]
-            for t in all_tables
-            if t in all_meta and all_meta[t].get("table_id")
-        }
+        table_to_id = {t: all_meta[t]["table_id"] for t in all_tables if t in all_meta and all_meta[t].get("table_id")}
 
         if not table_to_id:
             return JSONResponse(content=[], media_type="application/json")
 
         id_list = list(table_to_id.values())
 
-        query = text(f"""
+        query = (
+            text(
+                f"""
             WITH cte AS (
                 SELECT object_id, loading_start_dttm, loading_finish_dttm,
                        row_number() OVER (PARTITION BY object_id ORDER BY loading_start_dttm DESC) rn
@@ -818,17 +870,16 @@ def get_gantt_data(schema: str, table: str):
             FROM cte
             WHERE rn = 1
             ORDER BY loading_start_dttm
-        """).bindparams(bindparam("id_list", expanding=True))
+        """
+            )
+            .bindparams(bindparam("id_list", expanding=True))
+        )
 
         with engine.connect() as conn:
             rows = conn.execute(query, {"id_list": id_list}).mappings().all()
 
         loading_times = {
-            row["object_id"]: {
-                "start": row["loading_start_dttm"],
-                "end": row["loading_finish_dttm"]
-            }
-            for row in rows
+            row["object_id"]: {"start": row["loading_start_dttm"], "end": row["loading_finish_dttm"]} for row in rows
         }
 
         id_to_table = {v: k for k, v in table_to_id.items()}
@@ -848,18 +899,21 @@ def get_gantt_data(schema: str, table: str):
         result = []
         for row in rows:
             table_name = id_to_table.get(row["object_id"], str(row["object_id"]))
-            result.append({
-                "table_id": row["object_id"],
-                "table_name": table_name,
-                "start": row["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_start_dttm"] else None,
-                "end": row["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_finish_dttm"] else None,
-                "is_bad": table_name in bad_tables
-            })
+            result.append(
+                {
+                    "table_id": row["object_id"],
+                    "table_name": table_name,
+                    "start": row["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_start_dttm"] else None,
+                    "end": row["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_finish_dttm"] else None,
+                    "is_bad": table_name in bad_tables,
+                }
+            )
 
         return JSONResponse(content=result, media_type="application/json")
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 @router.get("/api/entities/{entity_id}/table-info")
 def get_entity_table_info(entity_id: int):
@@ -883,8 +937,9 @@ def get_entity_table_info(entity_id: int):
             for r in rows:
                 row = dict(r)
                 row["table_schema"] = row["table_schema"]
-                row["table_last_load"] = row["table_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row[
-                    "table_last_load"] else None
+                row["table_last_load"] = (
+                    row["table_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row["table_last_load"] else None
+                )
                 row["table_name"] = row["table_name"]
                 row["entity_name"] = row["entity_name"]
                 cleaned.append(row)
@@ -904,32 +959,30 @@ def normalize_fqn(table_fqn: str) -> str:
     if not table_fqn:
         return table_fqn
 
-    # stg./RUSAL/PERW -> stg.RUSALPERW? (в твоём фронте раньше было replaceAll("/", ""))
-    # но правильнее: schema.table, поэтому если пришло с /, пытаемся восстановить:
-    # stg./RUSAL/PERW => schema=stg, table=RUSALPERW (как у тебя раньше)
-    # Если у тебя таблицы реально называются PERW, тогда лучше передавать нормальный fqn.
     s = table_fqn.strip()
 
-    # если видим "schema./SOMETHING/NAME" -> schema.NAME (склейка)
     if "/" in s and "." in s:
         schema_part = s.split(".", 1)[0]
         rest = s.split(".", 1)[1]
         rest = rest.replace("/", "").replace("-", "").replace(" ", "")
         s = f"{schema_part}.{rest}"
 
-    # просто подчистим мусор
     s = s.replace(" ", "")
     return s
 
+
 def get_table_id_by_fqn(conn, schema: str, table: str):
-    q = text("""
+    q = text(
+        f"""
         SELECT table_id
-        FROM public.tables_meta
+        FROM {TABLE_TABLES_META}
         WHERE table_schema = :schema
           AND table_name   = :table
         LIMIT 1
-    """)
+    """
+    )
     return conn.execute(q, {"schema": schema, "table": table}).scalar()
+
 
 @app.get("/api/incident")
 def get_incident(table_fqn: str = Query(..., description="Format: schema.table")):
@@ -951,21 +1004,25 @@ def get_incident(table_fqn: str = Query(..., description="Format: schema.table")
         table_id = get_table_id_by_fqn(conn, schema, table)
 
         if not table_id:
-            return JSONResponse(status_code=404, content={"error": "table not found in tables_meta", "table_fqn": table_fqn})
+            return JSONResponse(
+                status_code=404, content={"error": "table not found in tables_meta", "table_fqn": table_fqn}
+            )
 
         # --- timeline (последние 15) ---
-        tl_q = text("""
+        tl_q = text(
+            f"""
             SELECT
                 loading_start_dttm,
                 loading_finish_dttm,
                 loading_state,
                 message,
                 EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) AS duration_seconds
-            FROM public.log_objects_loading_history
+            FROM {TABLE_LOADING_HISTORY}
             WHERE object_id = :object_id
             ORDER BY loading_finish_dttm DESC
             LIMIT 15
-        """)
+        """
+        )
         rows = conn.execute(tl_q, {"object_id": table_id}).mappings().all()
 
         timeline = []
@@ -974,49 +1031,61 @@ def get_incident(table_fqn: str = Query(..., description="Format: schema.table")
             msg = re.sub(r"\s+", " ", msg).strip()
             snippet = msg[:180] if msg else None
 
-            timeline.append({
-                "start": r["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S") if r["loading_start_dttm"] else None,
-                "finish": r["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S") if r["loading_finish_dttm"] else None,
-                "state": r["loading_state"],
-                "duration_sec": float(r["duration_seconds"]) if r["duration_seconds"] is not None else None,
-                "message": snippet
-            })
+            timeline.append(
+                {
+                    "start": r["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S") if r["loading_start_dttm"] else None,
+                    "finish": r["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S")
+                    if r["loading_finish_dttm"]
+                    else None,
+                    "state": r["loading_state"],
+                    "duration_sec": float(r["duration_seconds"]) if r["duration_seconds"] is not None else None,
+                    "message": snippet,
+                }
+            )
 
         # --- counts 24h / 7d ---
-        c24_q = text("""
+        c24_q = text(
+            f"""
             SELECT COUNT(*) 
-            FROM public.log_objects_loading_history
+            FROM {TABLE_LOADING_HISTORY}
             WHERE object_id = :object_id
               AND loading_state = 'FAILED'
               AND loading_finish_dttm >= NOW() - INTERVAL '24 hours'
-        """)
-        c7d_q = text("""
+        """
+        )
+        c7d_q = text(
+            f"""
             SELECT COUNT(*) 
-            FROM public.log_objects_loading_history
+            FROM {TABLE_LOADING_HISTORY}
             WHERE object_id = :object_id
               AND loading_state = 'FAILED'
               AND loading_finish_dttm >= NOW() - INTERVAL '7 days'
-        """)
+        """
+        )
         failures_24h = int(conn.execute(c24_q, {"object_id": table_id}).scalar() or 0)
-        failures_7d  = int(conn.execute(c7d_q,  {"object_id": table_id}).scalar() or 0)
+        failures_7d = int(conn.execute(c7d_q, {"object_id": table_id}).scalar() or 0)
 
         # --- last success / last fail ---
-        last_fail_q = text("""
+        last_fail_q = text(
+            f"""
             SELECT MAX(loading_finish_dttm)
-            FROM public.log_objects_loading_history
+            FROM {TABLE_LOADING_HISTORY}
             WHERE object_id = :object_id
               AND loading_state = 'FAILED'
-        """)
-        last_succ_q = text("""
+        """
+        )
+        last_succ_q = text(
+            f"""
             SELECT MAX(loading_finish_dttm)
-            FROM public.log_objects_loading_history
+            FROM {TABLE_LOADING_HISTORY}
             WHERE object_id = :object_id
               AND loading_state = 'SUCCESS'
-        """)
+        """
+        )
         last_failure = conn.execute(last_fail_q, {"object_id": table_id}).scalar()
         last_success = conn.execute(last_succ_q, {"object_id": table_id}).scalar()
 
-        # --- consecutive failures (считаем подряд сверху таймлайна до первого SUCCESS) ---
+        # --- consecutive failures ---
         consecutive_failures = 0
         for ev in timeline:
             if ev["state"] == "FAILED":
@@ -1029,25 +1098,25 @@ def get_incident(table_fqn: str = Query(..., description="Format: schema.table")
         if timeline:
             state = "FAILING" if timeline[0]["state"] == "FAILED" else "RECOVERED"
 
-        # --- dependencies (downstream из твоего /api/dependencies) ---
+        # --- dependencies ---
         try:
             deps_resp = get_dependencies(table=f"{schema}.{table}")
             deps = json.loads(deps_resp.body.decode("utf-8"))
         except Exception:
             deps = []
 
-        # --- sla / impact (используем твою логику, как в /api/control-center) ---
+        # --- sla / impact ---
         sla_rows = get_sla_monitoring()
         impact = build_impact(f"{schema}.{table}", deps, sla_rows) if deps is not None else {
             "affected_entities": [],
             "blocked_tables_count": 0,
             "reports_at_risk": [],
-            "sla_violations": 0
+            "sla_violations": 0,
         }
 
-        # --- severity (простая и честная логика) ---
-        # CRITICAL если сейчас FAILING или есть sla violations, иначе HIGH если много падений
-        severity = "CRITICAL" if (state == "FAILING" or (impact.get("sla_violations", 0) > 0)) else ("HIGH" if failures_24h >= 2 else "MEDIUM")
+        severity = "CRITICAL" if (state == "FAILING" or (impact.get("sla_violations", 0) > 0)) else (
+            "HIGH" if failures_24h >= 2 else "MEDIUM"
+        )
 
         summary = {
             "table_fqn": f"{schema}.{table}",
@@ -1062,27 +1131,20 @@ def get_incident(table_fqn: str = Query(..., description="Format: schema.table")
         }
 
         return JSONResponse(
-            content={
-                "summary": summary,
-                "timeline": timeline,
-                "dependencies": deps,
-                "impact": impact
-            },
-            media_type="application/json; charset=utf-8"
+            content={"summary": summary, "timeline": timeline, "dependencies": deps, "impact": impact},
+            media_type="application/json; charset=utf-8",
         )
+
 
 from collections import defaultdict
 from datetime import timedelta
 
 INCIDENT_WINDOW_MIN = 60  # минут
 
+
 def group_failures(failures: list):
     incidents = []
-    failures_sorted = sorted(
-        failures,
-        key=lambda x: x["error_time"],
-        reverse=True
-    )
+    failures_sorted = sorted(failures, key=lambda x: x["error_time"], reverse=True)
 
     used = set()
 
@@ -1093,11 +1155,10 @@ def group_failures(failures: list):
         entity = f.get("entity_name")
 
         if not entity:
+            all_meta, _ = get_cached_meta_and_index()
             meta = next(
-                (m for m in get_cached_meta_and_index()
-                 if m["table_schema"] == f["schema"]
-                 and m["table_name"] == f["table_name"]),
-                None
+                (m for m in all_meta if m["table_schema"] == f["schema"] and m["table_name"] == f["table_name"]),
+                None,
             )
             entity = meta.get("entity_name") if meta else None
 
@@ -1109,18 +1170,21 @@ def group_failures(failures: list):
         group = [f]
         used.add(i)
 
-        for j, other in enumerate(failures_sorted[i+1:], start=i+1):
+        for j, other in enumerate(failures_sorted[i + 1 :], start=i + 1):
             if j in used:
                 continue
 
             other_entity = other.get("entity_name")
 
             if not other_entity:
+                all_meta, _ = get_cached_meta_and_index()
                 meta = next(
-                    (m for m in get_cached_meta_and_index()
-                     if m["table_schema"] == other["schema"]
-                     and m["table_name"] == other["table_name"]),
-                    None
+                    (
+                        m
+                        for m in all_meta
+                        if m["table_schema"] == other["schema"] and m["table_name"] == other["table_name"]
+                    ),
+                    None,
                 )
                 other_entity = meta.get("entity_name") if meta else None
                 other_entity = other_entity or f"{other['schema']}"
@@ -1141,7 +1205,7 @@ def group_failures(failures: list):
 
 
 from collections import defaultdict
-import json
+
 
 @app.get("/api/incidents/active")
 def get_active_incidents():
@@ -1176,22 +1240,19 @@ def get_active_incidents():
             if not last_failure or r["error_time"] > last_failure:
                 last_failure = r["error_time"]
 
-        incidents.append({
-            "entity": entity,
-            "severity": "CRITICAL",
-            "failed_tables": len(failed_tables),      # ← сколько реально упало
-            "root_tables": sorted(failed_tables)[:3], # ← точки входа
-            "last_failure_time": last_failure
-        })
+        incidents.append(
+            {
+                "entity": entity,
+                "severity": "CRITICAL",
+                "failed_tables": len(failed_tables),
+                "root_tables": sorted(failed_tables)[:3],
+                "last_failure_time": last_failure,
+            }
+        )
 
-    # 3️⃣ самые свежие сверху
-    incidents.sort(
-        key=lambda x: x["last_failure_time"],
-        reverse=True
-    )
+    incidents.sort(key=lambda x: x["last_failure_time"], reverse=True)
 
     return incidents
 
+
 app.include_router(router)
-
-

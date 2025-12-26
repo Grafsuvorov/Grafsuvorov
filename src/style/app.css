@@ -1704,3 +1704,335 @@ h1 {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* INCIDENTS */
+.incident-page { max-width: 1200px; margin: auto; }
+.incident-header { display: flex; justify-content: space-between; gap: 24px; }
+.incident-name { font-size: 20px; }
+.incident-kpis { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin: 20px 0; }
+
+.kpi { background: var(--surface); padding: 14px; border-radius: 10px; text-align: center; }
+.kpi-value { font-size: 20px; font-weight: 600; }
+
+.timeline-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.timeline-row.fail { background: rgba(239,68,68,0.05); }
+.timeline-row.ok { background: rgba(34,197,94,0.05); }
+
+.timeline-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: currentColor; }
+
+.table-row { display: grid; grid-template-columns: 1fr 1fr auto; padding: 10px; border-radius: 8px; }
+.table-row:hover { background: rgba(255,255,255,0.04); }
+
+/* DEPENDENCIES */
+.dep-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+.dep-step {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+
+/* ===== Buttons ===== */
+.btn-back {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-back:hover {
+  color: #e5e7eb;
+}
+
+/* ===== Incident ===== */
+.incident-page {
+  max-width: 1200px;
+  margin: auto;
+}
+
+.incident-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.incident-title {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.incident-sub {
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.incident-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.kpi {
+  background: rgba(255,255,255,0.04);
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.kpi-value {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* ===== Cards ===== */
+.card {
+  background: rgba(255,255,255,0.035);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.incident-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+
+/* ===== Tables ===== */
+.clean-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.clean-table th {
+  text-align: left;
+  font-size: 12px;
+  color: #9ca3af;
+  padding-bottom: 6px;
+}
+
+.clean-table td {
+  padding: 6px 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.clean-table tr:hover {
+  background: rgba(255,255,255,0.03);
+  cursor: pointer;
+}
+
+/* ===== Timeline ===== */
+.event {
+  display: grid;
+  grid-template-columns: 80px 1fr 80px;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.event.fail { color: #f87171; }
+.event.ok { color: #6ee7b7; }
+
+
+/* Buttons */
+.btn-back {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+.btn-back:hover { color: #fff; }
+
+/* Incident */
+.incident-page { padding: 24px; }
+.incident-header {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.incident-title { font-size: 18px; font-weight: 600; }
+.incident-table { color: #9ca3af; }
+
+.incident-severity {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.sev-critical { background: rgba(239,68,68,.15); color:#ef4444; }
+.sev-high { background: rgba(245,158,11,.15); color:#f59e0b; }
+
+.incident-hero {
+  display:grid;
+  grid-template-columns: repeat(3,1fr);
+  gap:16px;
+  margin:20px 0;
+}
+.hero-label { font-size:12px; color:#9ca3af; }
+.hero-value { font-size:16px; }
+.hero-value.danger { color:#ef4444; }
+
+.incident-impact {
+  display:grid;
+  grid-template-columns: repeat(3,1fr);
+  gap:16px;
+}
+.impact-card {
+  background: rgba(255,255,255,.03);
+  padding:14px;
+  border-radius:12px;
+}
+.impact-title { font-size:12px; color:#9ca3af; }
+.impact-value { font-size:20px; }
+.impact-value.danger { color:#ef4444; }
+
+.incident-section { margin-top:28px; }
+.section-title { margin-bottom:12px; font-weight:600; }
+
+.timeline-row {
+  padding:10px;
+  border-radius:8px;
+  background: rgba(255,255,255,.02);
+  margin-bottom:6px;
+}
+.timeline-row.fail { border-left:3px solid #ef4444; }
+
+/* Dependencies */
+.dep-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
+  gap:12px;
+}
+.dep-card {
+  padding:14px;
+  background: rgba(255,255,255,.03);
+  border-radius:12px;
+  cursor:pointer;
+}
+.dep-card:hover { background: rgba(255,255,255,.06); }
+.dep-meta { font-size:12px; color:#9ca3af; }
+
+
+/* buttons */
+.btn-link {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  font-size: 14px;
+}
+.btn-link:hover {
+  color: #e5e7eb;
+}
+
+/* cards */
+.card {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 16px;
+}
+.card.wide { margin-top: 24px; }
+
+/* badges */
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.sev-critical { background:#7f1d1d; }
+.sev-high { background:#78350f; }
+.sev-medium { background:#1e293b; }
+
+/* dependency */
+.dep-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dep-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.dep-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+/* timeline */
+.event {
+  padding: 10px;
+  border-left: 3px solid transparent;
+}
+.event.fail { border-color: #ef4444; }
+.event.ok { border-color: #22c55e; }
+
+.incident-page {
+  padding: 24px;
+}
+
+.incident-header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.incident-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.incident-badges {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(255,255,255,0.08);
+}
+
+.badge.danger { background: rgba(239,68,68,0.25); }
+.badge.ok { background: rgba(34,197,94,0.25); }
+
+.card {
+  margin-top: 16px;
+  background: var(--card);
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.dep-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.dep-card {
+  background: var(--card-soft);
+  padding: 12px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.dep-card:hover {
+  background: rgba(255,255,255,0.08);
+}

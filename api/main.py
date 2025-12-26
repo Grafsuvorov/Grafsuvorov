@@ -304,7 +304,7 @@ def get_failed_tables():
 
 
 @app.get("/api/entities")
-def get_failed_tables():
+def get_entities():
     query = f"""
      SELECT
         entity_id,entity_name,entity_last_load,entity_load_interval::varchar
@@ -367,7 +367,7 @@ def get_metrics():
                 SELECT COUNT(*)
                 FROM {TABLE_LOADING_HISTORY}
                 WHERE loading_state = 'FAILED' and object_type='table'
-                  AND loading_start_dttm >= date_trunc('day', now() - interval '1 day') + interval '21 hour'
+                  AND loading_start_dttm >= date_trunc('day', now() - interval '10 day') + interval '21 hour'
                   AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
             """
                 )
@@ -984,6 +984,56 @@ def get_table_id_by_fqn(conn, schema: str, table: str):
     return conn.execute(q, {"schema": schema, "table": table}).scalar()
 
 
+def build_impact(table_fqn: str, deps: list, sla_resp):
+    """
+    Строит impact для инцидента:
+    - затронутые сущности
+    - количество downstream-таблиц
+    - отчёты под риском
+    - SLA-нарушения
+    """
+
+    affected_entities = set()
+    blocked_tables = set()
+    reports_at_risk = []
+    sla_violations = 0
+
+    # --- downstream tables ---
+    for d in deps or []:
+        schema = d.get("schema")
+        table = d.get("table_name") or d.get("table")
+        entity = d.get("entity_name")
+
+        if schema and table:
+            blocked_tables.add(f"{schema}.{table}")
+
+        if entity:
+            affected_entities.add(entity)
+
+    # --- SLA ---
+    try:
+        if hasattr(sla_resp, "body"):
+            sla_rows = json.loads(sla_resp.body.decode("utf-8"))
+        else:
+            sla_rows = sla_resp or []
+    except Exception:
+        sla_rows = []
+
+    for row in sla_rows:
+        tables = row.get("tables_info", [])
+        for t in tables:
+            if not t.get("sla_ok", True):
+                sla_violations += 1
+                reports_at_risk.append(row.get("report"))
+                break
+
+    return {
+        "affected_entities": sorted(affected_entities),
+        "blocked_tables_count": len(blocked_tables),
+        "reports_at_risk": sorted(set(reports_at_risk)),
+        "sla_violations": sla_violations,
+    }
+
 @app.get("/api/incident")
 def get_incident(table_fqn: str = Query(..., description="Format: schema.table")):
     """
@@ -1144,7 +1194,11 @@ INCIDENT_WINDOW_MIN = 60  # минут
 
 def group_failures(failures: list):
     incidents = []
-    failures_sorted = sorted(failures, key=lambda x: x["error_time"], reverse=True)
+    failures_sorted = sorted(
+        [f for f in failures if f.get("error_time")],
+        key=lambda x: x["error_time"],
+        reverse=True
+    )
 
     used = set()
 
@@ -1165,7 +1219,10 @@ def group_failures(failures: list):
         entity = entity or f"{f['schema']}"
         f["entity_name"] = entity  # 🔴 фикс
 
-        t0 = datetime.strptime(f["error_time"], "%Y-%m-%d %H:%M:%S")
+        try:
+            t0 = datetime.strptime(f["error_time"], "%Y-%m-%d %H:%M:%S")
+        except Exception:
+            continue
 
         group = [f]
         used.add(i)

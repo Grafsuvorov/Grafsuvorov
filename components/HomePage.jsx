@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function HomePage({ onSelectTable }) {
-  const [entities, setEntities] = useState([]);
+  const [activeIncidents, setActiveIncidents] = useState([]);
+  const [history, setHistory] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -15,20 +16,23 @@ export default function HomePage({ onSelectTable }) {
       try {
         setLoading(true);
 
-        const [incResp, metResp] = await Promise.all([
+        const [activeResp, historyResp, metricsResp] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
+          fetch(`${API_BASE}/api/incidents/history`),
           fetch(`${API_BASE}/api/metrics`)
         ]);
 
-        const incidents = await incResp.json();
-        const metricsJson = await metResp.json();
+        const activeJson = await activeResp.json();
+        const historyJson = await historyResp.json();
+        const metricsJson = await metricsResp.json();
 
         if (!cancelled) {
-          setEntities(incidents || []);
+          setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
+          setHistory(Array.isArray(historyJson) ? historyJson : []);
           setMetrics(metricsJson);
         }
       } catch (e) {
-        console.error("Control Center load error:", e);
+        console.error("HomePage load error:", e);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -38,17 +42,34 @@ export default function HomePage({ onSelectTable }) {
     return () => { cancelled = true; };
   }, []);
 
+  /* =============================
+     TREND ANALYSIS (simple)
+     ============================= */
+  const incidentTrend = useMemo(() => {
+    if (!history.length) return null;
+
+    const counts = history.map(h => h.count);
+    const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
+
+    const max = Math.max(...counts);
+
+    if (max > avg * 1.3) return "up";
+    if (max < avg * 0.9) return "down";
+    return "stable";
+  }, [history]);
+
   return (
-    <div className="container">
-      {/* ===== Header ===== */}
+    <div className="container cc-page">
+
+      {/* ===== HEADER ===== */}
       <section className="cc-header-zone">
         <h1>Control Center</h1>
         <div className="cc-subtitle">
-          Инциденты, зависимости и SLA — единая картина системы
+          Инциденты, стабильность и операционная надёжность системы
         </div>
       </section>
 
-      {/* ===== Metrics ===== */}
+      {/* ===== OVERVIEW ===== */}
       {metrics && (
         <section className="cc-overview-bar">
           <div className="overview-item">
@@ -75,93 +96,121 @@ export default function HomePage({ onSelectTable }) {
         </section>
       )}
 
-      {/* ===== Degradation by entity ===== */}
-      <section className="cc-surface">
-  <div className="section-title">
-    Деградация по сущностям
-    <span className="section-meta">{entities.length}</span>
-  </div>
+      {/* ===== STATUS ===== */}
+      <section className="cc-status-line">
+        <span
+          className={`status-dot ${
+            activeIncidents.length ? "degraded" : ""
+          }`}
+        />
+        <span className="status-text">
+          {activeIncidents.length
+            ? "Обнаружены активные инциденты"
+            : "Система работает штатно"}
+        </span>
 
-  {loading && (
-    <div className="muted">Загрузка…</div>
-  )}
+        {incidentTrend && (
+          <span className="status-meta">
+            Тренд инцидентов:&nbsp;
+            {incidentTrend === "up" && "рост ↑"}
+            {incidentTrend === "down" && "спад ↓"}
+            {incidentTrend === "stable" && "стабильно"}
+          </span>
+        )}
+      </section>
 
-  {/* ===== SYSTEM OK STATE ===== */}
-  {!loading && entities.length === 0 && (
-    <div className="system-ok">
-      <div className="system-ok-icon">✓</div>
+      {/* ===== ACTIVE INCIDENTS ===== */}
+      {loading && <div className="muted">Загрузка…</div>}
 
-      <div className="system-ok-title">
-        Система работает штатно
-      </div>
-
-      <div className="system-ok-sub">
-        За последние 24 часа не зафиксировано ошибок загрузки
-        и нарушений SLA
-      </div>
-
-      <div className="system-ok-metrics">
-        <div>
-          <strong>{metrics?.total_tables}</strong>
-          <span>таблиц</span>
-        </div>
-
-        <div>
-          <strong>{metrics?.active_entities}</strong>
-          <span>сущностей</span>
-        </div>
-
-        <div>
-          <strong>{metrics?.avg_duration_minutes ?? "—"}</strong>
-          <span>ср. время, мин</span>
-        </div>
-      </div>
-    </div>
-  )}
-
-  {/* ===== INCIDENTS ===== */}
-  {!loading && entities.length > 0 && (
-    <div className="entity-grid">
-      {entities.map((e, idx) => (
-        <div key={`${e.entity}-${idx}`} className="entity-card critical">
-          <div className="entity-card-head">
-            <div className="entity-name">{e.entity}</div>
-            <span className="pill pill-critical">CRITICAL</span>
-          </div>
-
-          <div className="entity-impact">
-            <div>
-              <strong>{e.affected_tables}</strong> таблиц под риском
-            </div>
-            <div className="muted">
-              Упало: {e.failed_tables}
-            </div>
-          </div>
-
-          <div className="entity-meta">
-            Последнее падение: {e.last_failure_time}
-          </div>
-
-          <div className="entity-actions">
-            <button
-              className="btn btn-primary"
-              disabled={!e.root_tables?.length}
-              onClick={() =>
-                onSelectTable(
-                  { view: "incident", table: e.root_tables[0] },
-                  "home"
-                )
-              }
-            >
-              Анализ последствий
-            </button>
+      {!loading && activeIncidents.length === 0 && (
+        <div className="system-ok">
+          <div className="system-ok-icon">✓</div>
+          <div className="system-ok-title">Активных инцидентов нет</div>
+          <div className="system-ok-sub">
+            За последние 24 часа система отработала без ошибок
           </div>
         </div>
-      ))}
-    </div>
-  )}
-</section>
+      )}
 
+      {!loading && activeIncidents.length > 0 && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Активные инциденты
+            <span className="section-meta">{activeIncidents.length}</span>
+          </div>
+
+          <div className="entity-grid">
+            {activeIncidents.map((i, idx) => (
+              <div
+                key={idx}
+                className="entity-card critical clickable"
+                onClick={() =>
+                  onSelectTable(
+                    { view: "incident", table: i.root_tables[0] },
+                    "home"
+                  )
+                }
+              >
+                <div className="entity-card-head">
+                  <div className="entity-name">{i.entity}</div>
+                  <span className="pill pill-critical">CRITICAL</span>
+                </div>
+
+                <div className="entity-meta">
+                  Упало таблиц: {i.failed_tables}
+                </div>
+
+                <div className="entity-meta">
+                  Последнее падение: {i.last_failure_time}
+                </div>
+
+                <div className="incident-hint">
+                  Нажмите для разбора инцидента →
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ===== INCIDENT HISTORY ===== */}
+      {!loading && history.length > 0 && (
+        <section className="cc-surface">
+          <div className="section-title">
+            История инцидентов (300 дней)
+            <span className="section-meta">топ проблемных таблиц</span>
+          </div>
+
+          <div className="history-list">
+            {history.map((h, idx) => (
+              <div
+                key={idx}
+                className="history-row clickable"
+                onClick={() =>
+                  onSelectTable(
+                    { view: "incident", table: h.table },
+                    "home"
+                  )
+                }
+              >
+                <div className="history-left">
+                  <span className="history-rank">#{idx + 1}</span>
+                  <span className="history-table-name mono">
+                    {h.table}
+                  </span>
+                </div>
+
+                <div className="history-right">
+                  <span className="history-count">{h.count}</span>
+                  <span className="history-last">
+                    &nbsp;последний:&nbsp;{h.last_incident}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

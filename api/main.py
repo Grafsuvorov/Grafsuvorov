@@ -22,14 +22,13 @@ function relTime(dtStr) {
   if (mins < 60) return `${mins}м назад`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 48) return `${hrs}ч назад`;
-  const days = Math.floor(hrs / 24);
-  return `${days}д назад`;
+  return `${Math.floor(hrs / 24)}д назад`;
 }
 
 export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(true); // Blast radius block
+  const [expanded, setExpanded] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -39,11 +38,10 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
     async function load() {
       try {
         setLoading(true);
-        setError(null);
-
-        const res = await fetch(`${API_BASE}/api/incident?table_fqn=${encodeURIComponent(tableFqn)}`);
+        const res = await fetch(
+          `${API_BASE}/api/incident?table_fqn=${encodeURIComponent(tableFqn)}`
+        );
         const json = await res.json();
-
         if (!cancelled) setData(json);
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -52,8 +50,7 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
       }
     }
     load();
-
-    return () => { cancelled = true; };
+    return () => (cancelled = true);
   }, [tableFqn]);
 
   const summary = data?.summary;
@@ -62,371 +59,185 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
   const timeline = data?.timeline || [];
 
   const severityClass = useMemo(() => {
-    const s = summary?.severity || "MEDIUM";
-    if (s === "CRITICAL") return "pill-critical";
-    if (s === "HIGH") return "pill-high";
+    if (summary?.severity === "CRITICAL") return "pill-critical";
+    if (summary?.severity === "HIGH") return "pill-high";
     return "pill-medium";
   }, [summary?.severity]);
 
-  const stateLabel = useMemo(() => {
-    if (!summary?.state) return "UNKNOWN";
-    return summary.state === "FAILING" ? "FAILING" : "RECOVERED";
-  }, [summary?.state]);
-
   return (
-    <div className="incident2-page">
-      <div className="incident2-top">
-        <button className="incident2-back" onClick={onBack}>← Инциденты</button>
-        <div className="incident2-title">
-          <div className="incident2-h1">Инцидент</div>
-          <div className="incident2-sub">Повторяемость, таймлайн, риск и цепочки влияния</div>
+    <div className="incident-page">
+      <div className="incident-header">
+        <button className="link-back" onClick={onBack}>← Инциденты</button>
+
+        <div className="incident-title">
+          <div className="incident-name mono">{summary?.table_fqn}</div>
+          <div className="incident-sub">
+            Последнее падение: <b>{summary?.last_failure_time || "—"}</b>
+            <span className="muted"> ({relTime(summary?.last_failure_time)})</span>
+          </div>
         </div>
-        <div className="incident2-badges">
-          <span className={`incident2-pill ${severityClass}`}>{summary?.severity || "—"}</span>
-          <span className={`incident2-pill ${stateLabel === "FAILING" ? "pill-state-bad" : "pill-state-ok"}`}>
-            {stateLabel}
+
+        <div className="incident-badges">
+          <span className={`pill ${severityClass}`}>{summary?.severity}</span>
+          <span className={`pill ${summary?.state === "FAILING" ? "pill-bad" : "pill-ok"}`}>
+            {summary?.state}
           </span>
         </div>
       </div>
 
-      <div className="incident2-hero">
-        <div className="incident2-hero-left">
-          <div className="incident2-fqn mono">{summary?.table_fqn || tableFqn}</div>
-          <div className="incident2-meta">
-            <span className="incident2-meta-item">
-              Последнее падение: <b>{summary?.last_failure_time || "—"}</b> <span className="muted">({relTime(summary?.last_failure_time)})</span>
-            </span>
-            <span className="incident2-meta-dot" />
-            <span className="incident2-meta-item">
-              Последний успех: <b>{summary?.last_success_time || "—"}</b> <span className="muted">({relTime(summary?.last_success_time)})</span>
-            </span>
-          </div>
-        </div>
-
-        <div className="incident2-hero-actions">
-          <button className="btn btn-primary" onClick={() => onOpenGraph?.(summary?.table_fqn || tableFqn)}>
-            Открыть граф
-          </button>
-          <button className="btn" onClick={() => setExpanded(v => !v)}>
-            {expanded ? "Свернуть последствия" : "Показать последствия"}
-          </button>
-        </div>
-      </div>
-
       {/* KPI */}
-      <div className="incident2-kpis">
-        <div className="incident2-kpi">
-          <div className="incident2-kpi-value">{summary?.failures_24h ?? "—"}</div>
-          <div className="incident2-kpi-label">Падений за 24ч</div>
-        </div>
-
-        <div className="incident2-kpi">
-          <div className="incident2-kpi-value">{summary?.failures_7d ?? "—"}</div>
-          <div className="incident2-kpi-label">Падений за 7д</div>
-        </div>
-
-        <div className="incident2-kpi">
-          <div className="incident2-kpi-value">{summary?.consecutive_failures ?? "—"}</div>
-          <div className="incident2-kpi-label">Подряд</div>
-        </div>
-
-        <div className="incident2-kpi">
-          <div className="incident2-kpi-value">{impact?.blocked_tables_count ?? deps.length}</div>
-          <div className="incident2-kpi-label">Затронуто таблиц</div>
-        </div>
-
-        <div className="incident2-kpi">
-          <div className="incident2-kpi-value">{(impact?.reports_at_risk || []).length}</div>
-          <div className="incident2-kpi-label">Отчётов под риском</div>
-        </div>
+      <div className="incident-kpis">
+        <Kpi label="24ч" value={summary?.failures_24h} />
+        <Kpi label="7д" value={summary?.failures_7d} />
+        <Kpi label="Подряд" value={summary?.consecutive_failures} />
+        <Kpi label="Таблиц" value={impact?.blocked_tables_count} />
+        <Kpi label="Отчётов" value={(impact?.reports_at_risk || []).length} />
       </div>
 
-      {/* Timeline (главный смысл страницы) */}
-      <div className="incident2-grid">
-        <section className="incident2-card incident2-card-main">
-          <div className="incident2-card-head">
-            <div className="incident2-card-title">История падений</div>
-            <div className="incident2-card-sub muted">Последние события по этой таблице</div>
-          </div>
+      {/* Timeline */}
+      <section className="card">
+        <h3>История событий</h3>
 
-          {loading && <div className="incident2-skeleton">Загрузка таймлайна…</div>}
-          {error && <div className="incident2-error">Ошибка: {error}</div>}
+        {loading && <div className="muted">Загрузка…</div>}
+        {error && <div className="error">{error}</div>}
 
-          {!loading && !error && timeline.length === 0 && (
-            <div className="incident2-empty">Нет событий в истории</div>
-          )}
-
-          {!loading && !error && timeline.length > 0 && (
-            <div className="incident2-timeline">
-              {timeline.map((ev, idx) => {
-                const isFail = ev.state === "FAILED";
-                return (
-                  <div key={idx} className="incident2-event">
-                    <div className={`incident2-dot ${isFail ? "dot-fail" : "dot-ok"}`} />
-                    <div className="incident2-event-body">
-                      <div className="incident2-event-row">
-                        <div className={`incident2-event-state ${isFail ? "state-fail" : "state-ok"}`}>
-                          {ev.state}
-                        </div>
-                        <div className="incident2-event-time mono">{ev.finish || "—"}</div>
-                        <div className="incident2-event-dur">{formatDuration(ev.duration_sec)}</div>
-                      </div>
-                      {ev.message && (
-                        <div className="incident2-event-msg">{ev.message}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+        <div className="timeline">
+          {timeline.map((e, i) => (
+            <div key={i} className={`timeline-row ${e.state === "FAILED" ? "fail" : "ok"}`}>
+              <div className="timeline-dot" />
+              <div className="timeline-main">
+                <div className="timeline-head">
+                  <span className="state">{e.state}</span>
+                  <span className="mono">{e.finish}</span>
+                  <span className="muted">{formatDuration(e.duration_sec)}</span>
+                </div>
+                {e.message && <div className="timeline-msg">{e.message}</div>}
+              </div>
             </div>
-          )}
-        </section>
+          ))}
+        </div>
+      </section>
 
-        {/* Side card: impact quick view */}
-        <section className="incident2-card">
-          <div className="incident2-card-head">
-            <div className="incident2-card-title">Риск и влияние</div>
-            <div className="incident2-card-sub muted">SLA / сущности / отчёты</div>
-          </div>
-
-          <div className="incident2-mini">
-            <div className="incident2-mini-row">
-              <span className="muted">SLA нарушений</span>
-              <b>{impact?.sla_violations ?? 0}</b>
-            </div>
-
-            <div className="incident2-mini-row">
-              <span className="muted">Сущностей</span>
-              <b>{(impact?.affected_entities || []).length}</b>
-            </div>
-
-            <div className="incident2-mini-row">
-              <span className="muted">Отчётов под риском</span>
-              <b>{(impact?.reports_at_risk || []).length}</b>
-            </div>
-          </div>
-
-          <div className="incident2-divider" />
-
-          <div className="incident2-list-title">Сущности</div>
-          <div className="incident2-chips">
-            {(impact?.affected_entities || []).slice(0, 10).map(x => (
-              <span key={x} className="chip">{x}</span>
-            ))}
-            {(impact?.affected_entities || []).length === 0 && (
-              <div className="muted">—</div>
-            )}
-          </div>
-
-          <div className="incident2-list-title" style={{ marginTop: 14 }}>Отчёты под риском</div>
-          <ul className="incident2-ul">
-            {(impact?.reports_at_risk || []).slice(0, 8).map(r => (
-              <li key={r}>{r}</li>
-            ))}
-            {(impact?.reports_at_risk || []).length === 0 && (
-              <li className="muted">—</li>
-            )}
-          </ul>
-        </section>
-      </div>
-
-      {/* Blast radius */}
+      {/* Downstream */}
       {expanded && (
-        <section className="incident2-card incident2-card-wide">
-          <div className="incident2-card-head">
-            <div className="incident2-card-title">Последствия (downstream)</div>
-            <div className="incident2-card-sub muted">
-              Таблицы, которые зависят от источника (клик — открыть граф по таблице)
-            </div>
+        <section className="card">
+          <h3>Последствия</h3>
+          <div className="sub muted">Клик — открыть граф</div>
+
+          <div className="table-list">
+            {deps.map(d => {
+              const fqn = `${d.schema}.${d.table_name}`;
+              return (
+                <div
+                  key={fqn}
+                  className="table-row clickable"
+                  onClick={() => onOpenGraph?.(fqn)}
+                >
+                  <span className="mono">{fqn}</span>
+                  <span className="muted">{d.entity_name || "—"}</span>
+                  <span>{d.avg_duration_minutes ?? "—"} мин</span>
+                </div>
+              );
+            })}
           </div>
-
-          {deps.length === 0 ? (
-            <div className="incident2-empty">Downstream зависимостей не найдено</div>
-          ) : (
-            <table className="table incident2-table">
-              <thead>
-                <tr>
-                  <th>Таблица</th>
-                  <th>Сущность</th>
-                  <th>Среднее, мин</th>
-                </tr>
-              </thead>
-              <tbody>
-                {deps.map((t) => {
-                  const fqn = `${t.schema}.${t.table_name || t.table || t.table_name}`;
-                  const schema = t.schema;
-                  const name = t.table_name || t.table;
-                  const rowFqn = `${schema}.${name}`;
-
-                  return (
-                    <tr key={rowFqn} onClick={() => onOpenGraph?.(rowFqn)} title="Открыть граф зависимостей">
-                      <td className="mono">{rowFqn}</td>
-                      <td>{t.entity_name || t.entity || "—"}</td>
-                      <td>{t.avg_duration_minutes ?? "—"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
         </section>
       )}
     </div>
   );
 }
 
+function Kpi({ label, value }) {
+  return (
+    <div className="kpi">
+      <div className="kpi-value">{value ?? "—"}</div>
+      <div className="kpi-label">{label}</div>
+    </div>
+  );
+}
 
 
-                    import { useEffect, useState } from 'react';
-import '../style/app.css';
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+
+
+dep
+import { useEffect, useState } from "react";
+import "../style/app.css";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function DependencyViewer({ table, onBack }) {
-  const [results, setResults] = useState([]);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const fetchDependencies = async () => {
-    if (!table) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`${API_BASE}/api/dependencies?table=${table}`);
-      if (!response.ok) throw new Error(`Ошибка: ${response.status}`);
-      const data = await response.json();
-
-      setResults(data);
-    } catch (err) {
-      setError(err.message);
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
-    if (table) fetchDependencies();
+    if (!table) return;
+    setLoading(true);
+    fetch(`${API_BASE}/api/dependencies?table=${table}`)
+      .then(r => r.json())
+      .then(setRows)
+      .finally(() => setLoading(false));
   }, [table]);
-
-  // Уникальные сущности
-  const uniqueEntities = [];
-  const entitySet = new Set();
-  results.forEach((item) => {
-    const key = `${item.entity_id}-${item.entity_name}`;
-    if (!entitySet.has(key)) {
-      entitySet.add(key);
-      uniqueEntities.push(item);
-    }
-  });
-
-  // Уникальные таблицы
-  const uniqueTables = [];
-  const tableSet = new Set();
-  results.forEach((item) => {
-    const key = `${item.schema}.${item.table_name}`;
-    if (!tableSet.has(key)) {
-      tableSet.add(key);
-      uniqueTables.push(item);
-    }
-  });
-
-  // Сортировка после фильтрации
-  const parseTime = (t) => {
-    if (!t) return 0;
-    const timePart = t.split(' ')[1];
-    const [h, m, s] = timePart.split(':').map(Number);
-    return h * 3600 + m * 60 + s;
-  };
-
-  uniqueEntities.sort((a, b) => {
-    const aSec = parseTime(a.start_time);
-    const bSec = parseTime(b.start_time);
-    const isALate = aSec >= 21 * 3600;
-    const isBLate = bSec >= 21 * 3600;
-    if (isALate && !isBLate) return -1;
-    if (!isALate && isBLate) return 1;
-    return aSec - bSec;
-  });
-
-
 
   if (!table) return null;
 
   return (
-    <div>
-      <button onClick={onBack} style={{ marginBottom: 10 }}>← Назад</button>
-      <h2 className="center">
-        Зависимости для: <span className="monospace">{table.split('.')[1]}</span>
-      </h2>
+    <div className="dependency-page">
+      <button className="link-back" onClick={onBack}>← Назад</button>
 
-      {loading && (
-        <div className="loading-bar-container">
-          <div className="loading-bar" />
-          <p className="center muted">Ищем зависимости... расслабься и ожидай 🙂</p>
-        </div>
-      )}
+      <h2 className="mono">{table}</h2>
+      <div className="sub muted">План восстановления цепочки</div>
 
-      {error && <p className="center error">Ошибка: {error}</p>}
+      {loading && <div className="muted">Загрузка зависимостей…</div>}
 
-      {uniqueEntities.length > 0 && (
-        <>
-          <h3>Сущности, которые надо перезапустить:</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Шаг</th>
-                <th>Entity ID</th>
-                <th>Entity Name</th>
-                <th>Время запуска</th>
-              </tr>
-            </thead>
-            <tbody>
-              {uniqueEntities.map((item, i) => (
-                <tr key={i}>
-                  <td>{i + 1}</td>
-                  <td>{item.entity_id}</td>
-                  <td>{item.entity_name || '-'}</td>
-                  <td>{item.start_time || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      {uniqueTables.length > 0 && (
-        <>
-          <h3>Зависимые таблицы:</h3>
-          <table>
-            <thead>
-              <tr>
-                <th>Схема</th>
-                <th>Таблица</th>
-                <th>Entity ID</th>
-                <th>Entity Name</th>
-                <th>Время запуска</th>
-                <th>⏱ Среднее время загрузки (мин)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {uniqueTables.map((item, i) => (
-                <tr key={`${item.schema}.${item.table_name}-${i}`}>
-                  <td>{item.schema}</td>
-                  <td className="monospace">{item.table_name}</td>
-                  <td>{item.entity_id}</td>
-                  <td>{item.entity_name || '-'}</td>
-                  <td>{item.start_time || '-'}</td>
-                  <td>
-                    {typeof item.avg_duration_minutes === 'number'
-                      ? item.avg_duration_minutes.toFixed(1)
-                      : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
+      <div className="dep-list">
+        {rows.map((r, i) => (
+          <div key={i} className="dep-row">
+            <div className="dep-step">{i + 1}</div>
+            <div className="dep-main">
+              <div className="mono">{r.schema}.{r.table_name}</div>
+              <div className="muted">{r.entity_name || "—"}</div>
+            </div>
+            <div className="dep-meta">
+              <span>{r.start_time || "—"}</span>
+              <span>{r.avg_duration_minutes ?? "—"} мин</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
+}
+
+
+/* INCIDENTS */
+.incident-page { max-width: 1200px; margin: auto; }
+.incident-header { display: flex; justify-content: space-between; gap: 24px; }
+.incident-name { font-size: 20px; }
+.incident-kpis { display: grid; grid-template-columns: repeat(5,1fr); gap: 12px; margin: 20px 0; }
+
+.kpi { background: var(--surface); padding: 14px; border-radius: 10px; text-align: center; }
+.kpi-value { font-size: 20px; font-weight: 600; }
+
+.timeline-row { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.timeline-row.fail { background: rgba(239,68,68,0.05); }
+.timeline-row.ok { background: rgba(34,197,94,0.05); }
+
+.timeline-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: currentColor; }
+
+.table-row { display: grid; grid-template-columns: 1fr 1fr auto; padding: 10px; border-radius: 8px; }
+.table-row:hover { background: rgba(255,255,255,0.04); }
+
+/* DEPENDENCIES */
+.dep-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  margin-bottom: 8px;
+}
+.dep-step {
+  font-weight: 600;
+  color: var(--muted);
 }

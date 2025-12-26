@@ -3,18 +3,11 @@ import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-function formatDuration(sec) {
-  if (sec == null) return "—";
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return m > 0 ? `${m}м ${s}с` : `${s}с`;
-}
-
 function relTime(dtStr) {
   if (!dtStr) return "—";
   const dt = new Date(dtStr.replace(" ", "T"));
   const diff = Math.floor((Date.now() - dt) / 1000);
-  if (diff < 60) return `${diff}с назад`;
+  if (diff < 60) return `${diff}s назад`;
   if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
   return `${Math.floor(diff / 86400)}д назад`;
@@ -32,92 +25,104 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
       .finally(() => setLoading(false));
   }, [tableFqn]);
 
-  if (loading) return <div className="page-loading">Загрузка инцидента…</div>;
+  if (loading) return <div className="incident-loading">Загрузка инцидента…</div>;
   if (!data) return null;
 
-  const { summary, timeline = [], dependencies = [], impact = {} } = data;
+  const { summary, impact, timeline, dependencies } = data;
 
   return (
     <div className="incident-page">
+      {/* Header */}
       <div className="incident-header">
-        <button className="btn-back" onClick={onBack}>← Инциденты</button>
+        <button className="btn-back" onClick={onBack}>← К списку инцидентов</button>
+        <div>
+          <div className="incident-title">Инцидент</div>
+          <div className="incident-table mono">{summary.table_fqn}</div>
+        </div>
+        <div className={`incident-severity sev-${summary.severity.toLowerCase()}`}>
+          {summary.severity}
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div className="incident-hero">
+        <div>
+          <div className="hero-label">Последнее падение</div>
+          <div className="hero-value danger">
+            {summary.last_failure_time} <span>{relTime(summary.last_failure_time)}</span>
+          </div>
+        </div>
 
         <div>
-          <div className="incident-title">{summary.table_fqn}</div>
-          <div className="incident-sub">
-            {summary.severity} · {summary.state}
+          <div className="hero-label">Последний успех</div>
+          <div className="hero-value">
+            {summary.last_success_time || "—"}
+          </div>
+        </div>
+
+        <div>
+          <div className="hero-label">Подряд</div>
+          <div className="hero-value">{summary.consecutive_failures}</div>
+        </div>
+      </div>
+
+      {/* Impact */}
+      <div className="incident-impact">
+        <div className="impact-card">
+          <div className="impact-title">SLA</div>
+          <div className={`impact-value ${impact.sla_violations > 0 ? "danger" : ""}`}>
+            {impact.sla_violations}
+          </div>
+        </div>
+
+        <div className="impact-card">
+          <div className="impact-title">Отчёты под риском</div>
+          <div className="impact-list">
+            {impact.reports_at_risk.length
+              ? impact.reports_at_risk.map(r => <span key={r}>{r}</span>)
+              : <span className="muted">Нет</span>}
+          </div>
+        </div>
+
+        <div className="impact-card">
+          <div className="impact-title">Сущности</div>
+          <div className="impact-list">
+            {impact.affected_entities.map(e => <span key={e}>{e}</span>)}
           </div>
         </div>
       </div>
 
-      <div className="incident-kpis">
-        <Kpi label="24ч" value={summary.failures_24h} />
-        <Kpi label="7д" value={summary.failures_7d} />
-        <Kpi label="Подряд" value={summary.consecutive_failures} />
-        <Kpi label="Таблиц" value={impact.blocked_tables_count} />
-        <Kpi label="Отчётов" value={(impact.reports_at_risk || []).length} />
-      </div>
-
-      <div className="incident-grid">
-        <section className="card">
-          <h3>История падений</h3>
-          {timeline.map((e, i) => (
-            <div key={i} className={`event ${e.state === "FAILED" ? "fail" : "ok"}`}>
-              <span>{e.state}</span>
-              <span>{e.finish}</span>
-              <span>{formatDuration(e.duration_sec)}</span>
+      {/* Timeline */}
+      <div className="incident-section">
+        <div className="section-title">История падений</div>
+        <div className="timeline">
+          {timeline.map((t, i) => (
+            <div key={i} className={`timeline-row ${t.state === "FAILED" ? "fail" : ""}`}>
+              <div className="mono">{t.finish}</div>
+              <div>{t.state}</div>
+              <div className="muted">{t.message}</div>
             </div>
           ))}
-        </section>
-
-        <section className="card">
-          <h3>SLA и отчёты</h3>
-          <div className="metric-row">
-            <span>SLA нарушений</span>
-            <b>{impact.sla_violations}</b>
-          </div>
-
-          <ul className="list">
-            {(impact.reports_at_risk || []).map(r => (
-              <li key={r}>{r}</li>
-            ))}
-            {(!impact.reports_at_risk || impact.reports_at_risk.length === 0) && (
-              <li className="muted">Нарушений нет</li>
-            )}
-          </ul>
-        </section>
+        </div>
       </div>
 
-      <section className="card">
-        <h3>Затронутые таблицы</h3>
-        <table className="clean-table">
-          <thead>
-            <tr>
-              <th>Таблица</th>
-              <th>Сущность</th>
-              <th>Среднее, мин</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dependencies.map(d => (
-              <tr key={`${d.schema}.${d.table_name}`} onClick={() => onOpenGraph(`${d.schema}.${d.table_name}`)}>
-                <td className="mono">{d.schema}.{d.table_name}</td>
-                <td>{d.entity_name || "—"}</td>
-                <td>{d.avg_duration_minutes ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-    </div>
-  );
-}
-
-function Kpi({ label, value }) {
-  return (
-    <div className="kpi">
-      <div className="kpi-value">{value ?? "—"}</div>
-      <div className="kpi-label">{label}</div>
+      {/* Dependencies */}
+      <div className="incident-section">
+        <div className="section-title">Затронутые таблицы</div>
+        <div className="dep-grid">
+          {dependencies.map(d => (
+            <div
+              key={`${d.schema}.${d.table_name}`}
+              className="dep-card"
+              onClick={() => onOpenGraph(`${d.schema}.${d.table_name}`)}
+            >
+              <div className="mono">{d.schema}.{d.table_name}</div>
+              <div className="muted">{d.entity_name || "—"}</div>
+              <div className="dep-meta">⏱ {d.avg_duration_minutes ?? "—"} мин</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -131,154 +136,116 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function DependencyViewer({ table, onBack }) {
   const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!table) return;
     fetch(`${API_BASE}/api/dependencies?table=${table}`)
       .then(r => r.json())
-      .then(setRows);
+      .then(setRows)
+      .finally(() => setLoading(false));
   }, [table]);
 
   if (!table) return null;
 
   return (
-    <div className="dependency-page">
+    <div className="dep-page">
       <button className="btn-back" onClick={onBack}>← Назад</button>
 
-      <h2>Зависимости</h2>
-      <div className="mono muted">{table}</div>
+      <div className="dep-title mono">{table}</div>
 
-      <section className="card">
-        <h3>Порядок перезапуска</h3>
-        <table className="clean-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Таблица</th>
-              <th>Сущность</th>
-              <th>Среднее, мин</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i}>
-                <td>{i + 1}</td>
-                <td className="mono">{r.schema}.{r.table_name}</td>
-                <td>{r.entity_name}</td>
-                <td>{r.avg_duration_minutes ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      {loading && <div className="muted">Загрузка зависимостей…</div>}
+
+      <div className="dep-grid">
+        {rows.map((r, i) => (
+          <div key={i} className="dep-card">
+            <div className="dep-step">Шаг {r.step}</div>
+            <div className="mono">{r.schema}.{r.table_name}</div>
+            <div className="muted">{r.entity_name}</div>
+            <div className="dep-meta">
+              ⏱ {r.avg_duration_minutes ?? "—"} мин
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
 
-/* ===== Buttons ===== */
+/* Buttons */
 .btn-back {
   background: none;
   border: none;
   color: #9ca3af;
-  font-size: 13px;
   cursor: pointer;
   padding: 0;
+  font-size: 13px;
 }
-.btn-back:hover {
-  color: #e5e7eb;
-}
+.btn-back:hover { color: #fff; }
 
-/* ===== Incident ===== */
-.incident-page {
-  max-width: 1200px;
-  margin: auto;
-}
-
+/* Incident */
+.incident-page { padding: 24px; }
 .incident-header {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin-bottom: 16px;
+  display: flex; justify-content: space-between; align-items: center;
 }
+.incident-title { font-size: 18px; font-weight: 600; }
+.incident-table { color: #9ca3af; }
 
-.incident-title {
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.incident-sub {
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-.incident-kpis {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.kpi {
-  background: rgba(255,255,255,0.04);
-  padding: 12px;
-  border-radius: 8px;
-  text-align: center;
-}
-
-.kpi-value {
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.kpi-label {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
-/* ===== Cards ===== */
-.card {
-  background: rgba(255,255,255,0.035);
-  border-radius: 10px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.incident-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 16px;
-}
-
-/* ===== Tables ===== */
-.clean-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.clean-table th {
-  text-align: left;
+.incident-severity {
+  padding: 6px 12px;
+  border-radius: 999px;
   font-size: 12px;
-  color: #9ca3af;
-  padding-bottom: 6px;
 }
+.sev-critical { background: rgba(239,68,68,.15); color:#ef4444; }
+.sev-high { background: rgba(245,158,11,.15); color:#f59e0b; }
 
-.clean-table td {
-  padding: 6px 0;
-  border-top: 1px solid rgba(255,255,255,0.05);
+.incident-hero {
+  display:grid;
+  grid-template-columns: repeat(3,1fr);
+  gap:16px;
+  margin:20px 0;
 }
+.hero-label { font-size:12px; color:#9ca3af; }
+.hero-value { font-size:16px; }
+.hero-value.danger { color:#ef4444; }
 
-.clean-table tr:hover {
-  background: rgba(255,255,255,0.03);
-  cursor: pointer;
+.incident-impact {
+  display:grid;
+  grid-template-columns: repeat(3,1fr);
+  gap:16px;
 }
+.impact-card {
+  background: rgba(255,255,255,.03);
+  padding:14px;
+  border-radius:12px;
+}
+.impact-title { font-size:12px; color:#9ca3af; }
+.impact-value { font-size:20px; }
+.impact-value.danger { color:#ef4444; }
 
-/* ===== Timeline ===== */
-.event {
-  display: grid;
-  grid-template-columns: 80px 1fr 80px;
-  padding: 6px 0;
-  font-size: 13px;
+.incident-section { margin-top:28px; }
+.section-title { margin-bottom:12px; font-weight:600; }
+
+.timeline-row {
+  padding:10px;
+  border-radius:8px;
+  background: rgba(255,255,255,.02);
+  margin-bottom:6px;
 }
-.event.fail { color: #f87171; }
-.event.ok { color: #6ee7b7; }
+.timeline-row.fail { border-left:3px solid #ef4444; }
+
+/* Dependencies */
+.dep-grid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill,minmax(260px,1fr));
+  gap:12px;
+}
+.dep-card {
+  padding:14px;
+  background: rgba(255,255,255,.03);
+  border-radius:12px;
+  cursor:pointer;
+}
+.dep-card:hover { background: rgba(255,255,255,.06); }
+.dep-meta { font-size:12px; color:#9ca3af; }

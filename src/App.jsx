@@ -88,16 +88,32 @@ export default function App() {
         return;
       }
 
+      if (target.view === "table_info") {
+        setReturnView(source || view || "home");
+        const table = typeof target.table === "string" ? target.table.trim() : null;
+
+        if (table && table.includes(".")) {
+          const clean = table.replaceAll("/", "").replaceAll("-", "");
+          const [sch, tbl] = clean.split(".");
+          setSchema(sch);
+          setTableName(tbl);
+          setSelectedTable(`${sch}.${tbl}`);
+        }
+
+        setView("table_info");
+        return;
+      }
+
       if (target.view === "dependency_graph") {
         setReturnView(source || view || "home");
-        const table = target.table;
+        const table = typeof target.table === "string" ? target.table.trim() : target.table;
 
         if (typeof table === "string" && table.includes(".")) {
           const clean = table.replaceAll("/", "").replaceAll("-", "");
           const [sch, tbl] = clean.split(".");
           setSchema(sch);
           setTableName(tbl);
-          setSelectedTable(`${sch}.${tbl}`);
+          setSelectedTable(table);
         } else {
           setSelectedTable(table);
         }
@@ -116,7 +132,7 @@ export default function App() {
 
       setSchema(sch);
       setTableName(tbl);
-      setSelectedTable(`${sch}.${tbl}`);
+      setSelectedTable(target.trim());
 
       setView("dependencies");
       return;
@@ -144,7 +160,7 @@ export default function App() {
           <IncidentDetailsPage
             tableFqn={selectedTable}
             onBack={() => setView(returnView || "home")}
-            onOpenGraph={(table) => openView({ view: "dependency_graph", table }, "incident")}
+            onOpenTable={(table) => openView({ view: "table_info", table }, "incident")}
           />
         );
 
@@ -177,7 +193,7 @@ export default function App() {
             tableName={tableName}
             setSchema={setSchema}
             setTableName={setTableName}
-            onBack={() => setView("table_search")}
+            onBack={() => setView(returnView || "table_search")}
           />
         );
 

@@ -22,7 +22,7 @@ from sqlalchemy import text
 import re
 import json
 
-from config import (
+from .config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
     TABLE_TABLES_META,
@@ -90,8 +90,8 @@ def get_cached_meta_and_index():
         return _cached_meta_index
 
     all_meta = []
-    for top in TOP_DIRS:
-        for root, _, files in os.walk(BASE_DIR / top):
+    for entity_root in iter_meta_dirs():
+        for root, _, files in os.walk(entity_root):
             if "meta_data_file.yaml" not in files:
                 continue
             path = Path(root) / "meta_data_file.yaml"
@@ -153,6 +153,25 @@ def warm_up_cache():
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+META_PARENT_DIRS = [BASE_DIR / "project", BASE_DIR]
+
+
+def iter_meta_dirs(targets: List[str] | None = None):
+    """Yield existing metadata directories, searching both root and project/* trees."""
+    seen = set()
+    names = targets or TOP_DIRS
+    for parent in META_PARENT_DIRS:
+        if not parent.exists():
+            continue
+        for name in names:
+            candidate = parent / name
+            if not candidate.exists():
+                continue
+            real = candidate.resolve()
+            if real in seen:
+                continue
+            seen.add(real)
+            yield candidate
 
 def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
     all_meta, reverse_index = get_cached_meta_and_index()
@@ -218,8 +237,8 @@ def ping():
 def find_all_meta_files(top_dirs: list[str]) -> list[dict]:
     all_meta = []
 
-    for top_dir in top_dirs:
-        for root, _, files in os.walk(BASE_DIR / top_dir):
+    for entity_root in iter_meta_dirs(top_dirs):
+        for root, _, files in os.walk(entity_root):
             if "meta_data_file.yaml" not in files:
                 continue
 
@@ -457,11 +476,7 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
 
 @app.get("/api/card/{schema}/{table}")
 def get_table_card_info_by_path(schema: str, table: str):
-    for top in TOP_DIRS:
-        entity_folder = BASE_DIR / top
-        if not entity_folder.exists():
-            continue
-
+    for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)
         if not schema_folder:
             continue
@@ -545,8 +560,7 @@ def get_table_card_info_by_path(schema: str, table: str):
 @app.get("/api/tables")
 def list_all_tables():
     all_tables = []
-    for top in TOP_DIRS:
-        top_path = BASE_DIR / top
+    for top_path in iter_meta_dirs():
         for schema_path in top_path.iterdir():
             if not schema_path.is_dir():
                 continue
@@ -763,10 +777,7 @@ def get_slowest_tables():
 
 def load_all_meta():
     all_meta = {}
-    for top_dir in TOP_DIRS:
-        top_path = BASE_DIR / top_dir
-        if not top_path.exists():
-            continue
+    for top_path in iter_meta_dirs():
         for schema_dir in top_path.iterdir():
             if not schema_dir.is_dir():
                 continue

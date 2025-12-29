@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -13,7 +13,7 @@ function relTime(dtStr) {
   return `${Math.floor(diff / 86400)}д назад`;
 }
 
-export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
+export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -23,6 +23,7 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
     if (!tableFqn) return;
 
     let cancelled = false;
+
     (async () => {
       try {
         setLoading(true);
@@ -55,24 +56,28 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
     <div className="incident-page">
       {/* HEADER */}
       <div className="incident-header">
-        <button className="btn" onClick={onBack}>← Назад</button>
+  <div className="incident-nav" onClick={onBack}>
+    ← Назад
+  </div>
 
-        <div>
-          <div className="incident-title">{summary.table_fqn}</div>
-          <div className="incident-meta">
-            Последнее падение: {summary.last_failure_time || "—"} ({relTime(summary.last_failure_time)})
-          </div>
-        </div>
+  <div>
+    <div className="incident-title">{summary.table_fqn}</div>
+    <div className="incident-meta">
+      Последнее падение: {summary.last_failure_time || "—"} (
+      {relTime(summary.last_failure_time)})
+    </div>
+  </div>
 
-        <div className="incident-badges">
-          <span className={`badge ${summary.severity?.toLowerCase()}`}>
-            {summary.severity}
-          </span>
-          <span className={`badge ${summary.state === "FAILING" ? "danger" : "ok"}`}>
-            {summary.state}
-          </span>
-        </div>
-      </div>
+  <div className="incident-badges">
+    <span className={`badge ${summary.severity?.toLowerCase()}`}>
+      {summary.severity}
+    </span>
+    <span className={`badge ${summary.state === "FAILING" ? "danger" : "ok"}`}>
+      {summary.state}
+    </span>
+  </div>
+</div>
+
 
       {/* IMPACT */}
       <div className="incident-impact">
@@ -81,11 +86,15 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
           <div className="impact-label">SLA нарушений</div>
         </div>
         <div>
-          <div className="impact-value">{impact.blocked_tables_count || 0}</div>
+          <div className="impact-value">
+            {impact.blocked_tables_count || 0}
+          </div>
           <div className="impact-label">Затронуто таблиц</div>
         </div>
         <div>
-          <div className="impact-value">{impact.reports_at_risk?.length || 0}</div>
+          <div className="impact-value">
+            {impact.reports_at_risk?.length || 0}
+          </div>
           <div className="impact-label">Отчётов под риском</div>
         </div>
       </div>
@@ -95,11 +104,23 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
         <div className="card-title">История загрузок</div>
         <div className="timeline">
           {timeline.map((t, i) => (
-            <div key={i} className={`timeline-row ${t.state === "FAILED" ? "fail" : "ok"}`}>
+            <div
+              key={i}
+              className={`timeline-row ${
+                t.state === "FAILED" ? "fail" : "ok"
+              }`}
+            >
               <span>{t.state}</span>
               <span>{t.finish}</span>
-              <span>{Math.round(t.duration_sec / 60)} мин</span>
-              {t.message && <div className="timeline-msg">{t.message}</div>}
+              <span>
+                {t.duration_sec
+                  ? Math.round(t.duration_sec / 60)
+                  : "—"}{" "}
+                мин
+              </span>
+              {t.message && (
+                <div className="timeline-msg">{t.message}</div>
+              )}
             </div>
           ))}
         </div>
@@ -108,19 +129,34 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenGraph }) {
       {/* DEPENDENCIES */}
       {expanded && (
         <div className="card">
-          <div className="card-title">Что блокируется</div>
-          <div className="dep-grid">
-            {dependencies.map(d => {
+          <div className="card-title">
+            Что блокируется
+            <span className="card-subtitle">
+              downstream · {dependencies.length}
+            </span>
+          </div>
+
+          <div className="dep-list">
+            {dependencies.map((d, idx) => {
               const fqn = `${d.schema}.${d.table_name}`;
               return (
                 <div
                   key={fqn}
-                  className="dep-card"
-                  onClick={() => onOpenGraph(fqn)}
+                  className="dep-row"
+                  onClick={() => onOpenTable && onOpenTable(fqn)}
                 >
-                  <div className="mono">{fqn}</div>
-                  <div className="muted">{d.entity_name || "—"}</div>
-                  <div className="muted">{d.avg_duration_minutes ?? "—"} мин</div>
+                  <div className="dep-step">{idx + 1}</div>
+
+                  <div className="dep-main">
+                    <div className="dep-fqn mono">{fqn}</div>
+                    <div className="dep-entity muted">
+                      {d.entity_name || "—"}
+                    </div>
+                  </div>
+
+                  <div className="dep-metrics">
+                    {d.avg_duration_minutes ?? "—"} мин
+                  </div>
                 </div>
               );
             })}

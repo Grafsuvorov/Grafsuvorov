@@ -1,138 +1,280 @@
-// src/components/GraphViewer.jsx
-import React, { useEffect } from 'react';
+import React, { useMemo } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  useNodesState,
-  useEdgesState,
-  MarkerType
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import '../style/app.css';
+  MarkerType,
+} from "reactflow";
+import "reactflow/dist/style.css";
 
-const getLayer = (tableName) => {
-  if (tableName.startsWith("raw_ext")) return 0;
-  if (tableName.startsWith("stg")) return 1;
-  if (tableName.startsWith("ods")) return 2;
-  if (tableName.startsWith("dds")) return 3;
-  if (tableName.startsWith("dict_stg")) return 4;
-  if (tableName.startsWith("dict_dds")) return 5;
-  if (tableName.startsWith("dm_calc")) return 6;
-  if (tableName.startsWith("dm")) return 7;
-  return 8;
+/* =========================================================
+   CONFIG
+   ========================================================= */
+
+const LAYER_ORDER = [
+  "landing",
+  "raw_ext",
+  "dict_stg",
+  "stg",
+  "ods",
+  "dds",
+  "dm_calc",
+  "dm",
+  "dm_view",
+];
+
+const X_GAP = 340;
+const EXTRA_GAP_AFTER_DM_CALC = 180; // увеличенный разрыв dm_calc → dm
+const Y_GAP = 96;
+
+const NODE_WIDTH_BY_LAYER = {
+  landing: 220,
+  raw_ext: 230,
+  dict_stg: 210,
+  stg: 230,
+  ods: 260,
+  dds: 280,
+  dm_calc: 360,
+  dm: 420,
+  dm_view: 320,
+  other: 240,
 };
 
-const getColor = (layer, isCentral) => {
-  if (isCentral) return '#245ca6';
-  const colors = [
-    '#e3f2fd', '#c8e6c9', '#ffe0b2', '#f8bbd0', '#d1c4e9',
-    '#f0f4c3', '#b2ebf2', '#ffcdd2', '#cfd8dc'
-  ];
-  return colors[layer] || '#f0f0f0';
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+const layerOf = (fqn) =>
+  LAYER_ORDER.find((l) => fqn === l || fqn.startsWith(`${l}.`)) || "other";
+
+const isDict = (fqn) =>
+  fqn.startsWith("dict_") || fqn.includes(".dict_");
+
+/* вывод строго как в БД */
+const formatFqn = (fqn) => {
+  const parts = fqn.split(".");
+  if (parts.length <= 1) return fqn;
+  return `${parts.slice(0, -1).join(".")}.${parts.at(-1)}`;
 };
 
-export default function GraphViewer({ centralNode, edges, onNodeClick }) {
-  const [rfNodes, setNodes, onNodesChange] = useNodesState([]);
-  const [rfEdges, setEdges, onEdgesChange] = useEdgesState([]);
+/* =========================================================
+   STYLES
+   ========================================================= */
 
-  useEffect(() => {
-    const allTables = new Set();
-    const grouped = {};
+const baseNodeStyle = {
+  borderRadius: 12,
+  fontSize: 13,
+  padding: "12px 14px",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+};
 
-    edges.forEach(({ source, target }) => {
-      allTables.add(source);
-      allTables.add(target);
-    });
+const NODE_STYLE_BY_LAYER = {
+  landing: { background: "#0f766e", color: "#ecfeff" },
+  raw_ext: { background: "#155e75", color: "#ecfeff" },
+  dict_stg: {
+    background: "#020617",
+    color: "#9ca3af",
+    border: "1px dashed rgba(255,255,255,.35)",
+  },
+  stg: { background: "#334155", color: "#e5e7eb" },
+  ods: { background: "#3f4a5a", color: "#e5e7eb" },
+  dds: { background: "#475569", color: "#e5e7eb" },
+  dm_calc: { background: "#1f2937", color: "#e5e7eb" },
+  dm: { background: "#2563eb", color: "#ffffff" },
+  dm_view: { background: "#020617", color: "#e5e7eb" },
+};
 
-    const tableList = Array.from(allTables);
+const CENTRAL_STYLE = {
+  background: "#2563eb",
+  color: "#ffffff",
+  border: "2px solid #3b82f6",
+  width: 460,
+  fontWeight: 700,
+};
 
-    tableList.forEach((table) => {
-      const layer = getLayer(table);
-      if (!grouped[layer]) grouped[layer] = [];
-      grouped[layer].push(table);
-    });
+/* =========================================================
+   GRAPH BUILDER
+   ========================================================= */
 
-    const nodeElements = [];
-    const layerSpacingY = 140;
-    const nodeSpacingX = 200;
+function buildGraph(centralNode, edges, entities) {
+  if (!centralNode) {
+    return { nodes: [], rfEdges: [] };
+  }
 
-    Object.entries(grouped).forEach(([layerStr, tables]) => {
-      const layer = parseInt(layerStr, 10);
-      tables.forEach((table, idx) => {
-        const isCentral = table === centralNode;
-        const shortLabel = table.length > 25 ? table.slice(0, 22) + '…' : table;
+  const adj = {};
+  const rev = {};
 
-        nodeElements.push({
-          id: table,
-          data: {
-            label: shortLabel
-          },
-          position: {
-            x: layer * nodeSpacingX,
-            y: idx * layerSpacingY
-          },
-          style: {
-            background: getColor(layer, isCentral),
-            color: isCentral ? 'white' : 'black',
-            borderRadius: 6,
-            padding: 8,
-            fontWeight: isCentral ? 'bold' : 'normal',
-            border: isCentral ? '2px solid #1d3a63' : '1px solid #ccc',
-            cursor: 'pointer',
-            fontSize: 12,
-            width: 140
-          },
-          sourcePosition: 'right',
-          targetPosition: 'left',
-          draggable: false,
-          selectable: false,
-          className: 'graph-node',
-          type: 'default',
-          title: table
-        });
-      });
-    });
+  edges?.forEach(({ source, target }) => {
+    adj[source] ??= [];
+    rev[target] ??= [];
+    adj[source].push(target);
+    rev[target].push(source);
+  });
 
-    const edgeElements = edges.map(({ source, target }) => ({
-      id: `${source}->${target}`,
-      source,
-      target,
-      animated: true,
-      style: { stroke: '#3578e5' },
-      type: 'smoothstep',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        color: '#3578e5'
+  const collected = new Set([centralNode]);
+
+  const dfsUp = (n) => {
+    (rev[n] || []).forEach((p) => {
+      if (!collected.has(p)) {
+        collected.add(p);
+        dfsUp(p);
       }
+    });
+  };
+
+  const dfsDown = (n) => {
+    (adj[n] || []).forEach((c) => {
+      if (!collected.has(c)) {
+        collected.add(c);
+        dfsDown(c);
+      }
+    });
+  };
+
+  dfsUp(centralNode);
+  dfsDown(centralNode);
+
+  const layers = {};
+  [...collected].forEach((fqn) => {
+    const layer = layerOf(fqn);
+    layers[layer] ??= [];
+    layers[layer].push(fqn);
+  });
+
+  /* X координаты с увеличенным разрывом после dm_calc */
+  const layerX = {};
+  let accX = 0;
+
+  LAYER_ORDER.forEach((layer) => {
+    layerX[layer] = accX;
+    accX += X_GAP;
+    if (layer === "dm_calc") {
+      accX += EXTRA_GAP_AFTER_DM_CALC;
+    }
+  });
+
+  const nodeMap = {};
+
+  Object.entries(layers).forEach(([layer, list]) => {
+    list.forEach((fqn, idx) => {
+      const isCentral = fqn === centralNode;
+      const entityName = entities?.[fqn];
+
+      const width = isCentral
+        ? CENTRAL_STYLE.width
+        : NODE_WIDTH_BY_LAYER[layer] ?? 240;
+
+      const style = isCentral
+        ? CENTRAL_STYLE
+        : {
+            width,
+            border: "1px solid rgba(255,255,255,.18)",
+            ...NODE_STYLE_BY_LAYER[layer],
+          };
+
+      nodeMap[fqn] = {
+        id: fqn,
+        position: {
+          x: layerX[layer] ?? 0,
+          y: idx * Y_GAP,
+        },
+        draggable: false,
+        selectable: false,
+        sourcePosition: "right",
+        targetPosition: "left",
+        data: {
+          label: (
+            <div title={fqn}>
+              <div style={{ fontWeight: 700 }}>
+                {formatFqn(fqn)}
+              </div>
+
+              {entityName && (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 10,
+                    opacity: 0.7,
+                  }}
+                >
+                  {entityName}
+                </div>
+              )}
+            </div>
+          ),
+        },
+        style: { ...baseNodeStyle, ...style },
+      };
+    });
+  });
+
+  const nodes = Object.values(nodeMap);
+  const validIds = new Set(nodes.map((n) => n.id));
+
+  const rfEdges = (edges || [])
+    .filter((e) => validIds.has(e.source) && validIds.has(e.target))
+    .map((e) => ({
+      id: `${e.source}->${e.target}`,
+      source: e.source,
+      target: e.target,
+      type: "smoothstep",
+      markerEnd: { type: MarkerType.ArrowClosed },
+      style: {
+        stroke: isDict(e.source) ? "#64748b" : "#6b7280",
+        strokeWidth: e.target === centralNode ? 2.4 : 1.3,
+      },
     }));
 
-    setNodes(nodeElements);
-    setEdges(edgeElements);
-  }, [centralNode, edges]);
+  return { nodes, rfEdges };
+}
+
+/* =========================================================
+   COMPONENT
+   ========================================================= */
+
+export default function GraphViewer({
+  centralNode,
+  edges = [],
+  entities = {},
+  onNodeClick,
+}) {
+  const graph = useMemo(
+    () => buildGraph(centralNode, edges, entities),
+    [centralNode, edges, entities]
+  );
 
   const handleNodeClick = (_, node) => {
-    if (onNodeClick) {
-      const [schema, tableName] = node.id.split('.');
-      onNodeClick(schema, tableName);
-    }
+    if (!onNodeClick) return;
+
+    const parts = node.id.split(".");
+    const table = parts.pop();
+    const schema = parts.join(".");
+
+    onNodeClick(schema, table);
   };
 
   return (
-    <div style={{ height: 640, marginTop: 20, border: '1px solid #ccc', borderRadius: 12 }}>
+    <div style={{ height: 740, borderRadius: 16, overflow: "hidden" }}>
       <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
+        nodes={graph.nodes}
+        edges={graph.rfEdges}
         onNodeClick={handleNodeClick}
-        defaultViewport={{ zoom: 0.75 }}
-        fitViewOptions={{ padding: 0.15, includeHiddenNodes: true }}
+        nodesDraggable={false}
+        zoomOnDoubleClick={false}
+
+        zoomOnScroll
+        panOnScroll
+        panOnDrag
+        minZoom={0.3}
+        maxZoom={1.6}
+
         fitView
+        fitViewOptions={{ padding: 0.35 }}
       >
-        <MiniMap zoomable pannable />
+        <MiniMap />
         <Controls showInteractive={false} />
-        <Background color="#eee" gap={16} />
+        <Background gap={26} color="#1f2937" />
       </ReactFlow>
     </div>
   );

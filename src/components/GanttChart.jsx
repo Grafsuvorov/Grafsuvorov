@@ -6,218 +6,269 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  ReferenceLine,
 } from "recharts";
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
-// Цвета по схемам
+/* =========================================================
+   CONFIG
+   ========================================================= */
+
 const schemaColorMap = {
-  stg: "#8884d8",
-  dict_stg: "#a28dd0",
-  dict_dds: "#7f90d4",
-  ods: "#82ca9d",
-  dds: "#20b2aa",
-  dm_calc: "#ffc658",
-  dm: "#ff7f50",
-  export: "#84d8d8",
-  default: "#c0c0c0"
+  stg: "#64748b",
+  ods: "#0d9488",
+  dds: "#0891b2",
+  dm_calc: "#f59e0b",
+  dm: "#2563eb",
+  default: "#6b7280",
 };
+
+const ROW_HEIGHT = 44;      // фиксированная высота строкиО
+const HEADER_OFFSET = 90;   // запас под оси/заголовок
+const DM_EXTRA_OFFSET = 20 * 60; // +20 минут вправо для dm
+
+/* =========================================================
+   COMPONENT
+   ========================================================= */
 
 export default function GanttChart({ schema, table }) {
   const [data, setData] = useState([]);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+
+  /* ----------------------------------------------------- */
+  /* LOAD DATA                                             */
+  /* ----------------------------------------------------- */
 
   useEffect(() => {
     if (!schema || !table) return;
-    setLoading(true);
-    fetch(`${API_BASE}/api/gantt/${schema}/${table}`)
-      .then((res) => res.ok ? res.json() : Promise.reject("Ошибка загрузки"))
+
+    fetch(`http://localhost:8000/api/gantt/${schema}/${table}`)
+      .then((res) =>
+        res.ok ? res.json() : Promise.reject("Ошибка загрузки данных")
+      )
       .then((raw) => {
-        const latestByTable = raw.reduce((acc, item) => {
-          const key = item.table_name;
-          const start = new Date(item.start).getTime();
-          const end = new Date(item.end).getTime();
-          if (!acc[key] || new Date(acc[key].start).getTime() < start) {
-            acc[key] = {
-              name: key,
+        const latestByTable = Object.values(
+          raw.reduce((acc, r) => {
+            const start = new Date(r.start).getTime();
+            const end = new Date(r.end).getTime();
+
+            acc[r.table_name] = {
+              name: r.table_name,
+              schema: r.table_name.split(".")[0],
               start,
               end,
               duration: (end - start) / 1000,
               offset: start,
-              is_bad: item.is_bad
+              is_bad: r.is_bad,
             };
-          }
-          return acc;
-        }, {});
-        setData(Object.values(latestByTable));
+            return acc;
+          }, {})
+        );
+
+        setData(latestByTable);
       })
-      .catch(setError)
-      .finally(() => setLoading(false));
+      .catch(setError);
   }, [schema, table]);
 
-  if (loading) return <p>Загрузка диаграммы Ганта...</p>;
-  if (error) return <p className="error">Ошибка: {error}</p>;
-  if (!data.length) return <p>Нет данных для отображения</p>;
+  if (error) {
+    return <div className="card-error">Ошибка: {error}</div>;
+  }
+
+  if (!data.length) {
+    return <div className="card-muted">Нет данных</div>;
+  }
+
+  /* ----------------------------------------------------- */
+  /* PREPARE DATA                                          */
+  /* ----------------------------------------------------- */
 
   const minStart = Math.min(...data.map((d) => d.offset));
 
-  const dayStarts = [...new Set(data.map(d => {
-    const dt = new Date(d.offset);
-    dt.setHours(0, 0, 0, 0);
-    return dt.getTime();
-  }))];
-
-  const normalizeVisual = (duration) => {
-    const base = 20;
-    return duration < base ? duration : Math.log(duration) * base;
+  // мягкое ограничение длительности (без логарифмов)
+  const normalizeDuration = (seconds) => {
+    const min = 6;
+    const max = 140;
+    return Math.min(Math.max(seconds, min), max);
   };
 
-  const normalizedData = data.map((d) => ({
-    ...d,
-    offset: d.offset - minStart + 20000,
-    visualDuration: normalizeVisual(d.duration),
-  }));
+  const prepared = data.map((d) => {
+    const isDm = d.schema === "dm";
+    return {
+      ...d,
+      offset:
+        d.offset -
+        minStart +
+        (isDm ? DM_EXTRA_OFFSET : 0),
+      visualDuration: normalizeDuration(d.duration),
+    };
+  });
 
-  const getSchemaColor = (tableName) => {
-    const schema = (tableName || "").split(".")[0].toLowerCase();
-    return schemaColorMap[schema] || schemaColorMap.default;
-  };
+  const maxX =
+    Math.max(...prepared.map((d) => d.offset + d.visualDuration)) + 60;
 
-  const formatDuration = (seconds) => {
-    return seconds >= 60
-      ? `${Math.round(seconds / 60)} мин`
-      : `${Math.round(seconds)} сек`;
-  };
+  /* ----------------------------------------------------- */
+  /* RENDER                                                */
+  /* ----------------------------------------------------- */
 
   return (
-    <div style={{
-      border: '1px solid #ccc',
-      borderRadius: '8px',
-      padding: '20px',
-      margin: '20px 0',
-      backgroundColor: '#f9f9f9'
-    }}>
-      <h3 style={{ fontWeight: 'bold', fontSize: '18px', marginBottom: '10px' }}>
-        📊 Диаграмма Ганта загрузки таблиц
-      </h3>
+    <div
+      style={{
+        borderRadius: 16,
+        padding: "18px 20px",
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015))",
+        border: "1px solid rgba(255,255,255,.08)",
+        marginTop: 24,
+      }}
+    >
+      {/* HEADER */}
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          marginBottom: 14,
+          color: "#e5e7eb",
+        }}
+      >
+        Хронология загрузки зависимых таблиц
+      </div>
 
-      {/* График */}
-      <div style={{ height: Math.max(800, data.length * 50), width: "100%", minWidth: 1400 }}>
+      {/* CHART */}
+      <div
+        style={{
+          height: prepared.length * ROW_HEIGHT + HEADER_OFFSET,
+          minHeight: 520,
+          width: "100%",
+          minWidth: 1400,
+        }}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             layout="vertical"
-            data={normalizedData}
-            barCategoryGap={25}
-            barSize={50}
-            margin={{ top: 20, right: 100, left: 140, bottom: 60 }}
+            data={prepared}
+            barCategoryGap={12}
+            barSize={28}
+            margin={{ left: 300, right: 120, top: 20, bottom: 20 }}
           >
-            {dayStarts.map((start, i) => (
-              <ReferenceLine
-                key={i}
-                x={start - minStart}
-                stroke="#ccc"
-                strokeDasharray="3 3"
-                label={{
-                  position: "top",
-                  value: new Date(start).toLocaleDateString("ru-RU"),
-                  fontSize: 12,
-                  fill: "#555"
-                }}
-              />
-            ))}
             <XAxis
               type="number"
-              domain={[0, Math.max(...normalizedData.map(d => d.offset + d.visualDuration)) + 60000]}
-              tickFormatter={(ms) =>
-                new Date(minStart + ms).toLocaleString("ru-RU", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit"
-                })
+              domain={[0, maxX]}
+              tickFormatter={(v) =>
+                new Date(minStart + v * 1000).toLocaleTimeString("ru-RU")
               }
-              tick={{ fontSize: 12 }}
+              tick={{ fill: "#9ca3af", fontSize: 11 }}
+              axisLine={{ stroke: "rgba(255,255,255,.1)" }}
+              tickLine={{ stroke: "rgba(255,255,255,.1)" }}
             />
+
             <YAxis
               type="category"
               dataKey="name"
-              width={260}
-              tick={{ fontSize: 16 }}
+              width={300}
+              interval={0}
+              tick={{
+                fontFamily: "monospace",
+                fontSize: 12,
+                fill: "#e5e7eb",
+              }}
             />
+
             <Tooltip
+              wrapperStyle={{ pointerEvents: "none" }}
               content={({ payload }) => {
-                if (!payload || !payload.length) return null;
+                if (!payload?.length) return null;
                 const d = payload[1]?.payload;
                 if (!d) return null;
+
                 return (
-                  <div style={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #ccc",
-                    padding: "6px 10px",
-                    fontSize: "13px",
-                    maxWidth: "250px",
-                    whiteSpace: "normal",
-                    boxShadow: "2px 2px 6px rgba(0,0,0,0.1)",
-                    lineHeight: "1.4em"
-                  }}>
-                    <div><strong>Таблица:</strong> {d.name}</div>
-                    <div><strong>Длительность:</strong> {formatDuration(d.duration)}</div>
-                    <div><strong>Статус:</strong> {d.is_bad ? "⚠️ Загрузка раньше источника" : "✅ Всё корректно"}</div>
+                  <div
+                    style={{
+                      background:
+                        "linear-gradient(180deg,#020617,#020617dd)",
+                      border: "1px solid rgba(255,255,255,.18)",
+                      padding: "10px 12px",
+                      borderRadius: 8,
+                      boxShadow: "0 12px 32px rgba(0,0,0,.6)",
+                      color: "#e5e7eb",
+                      fontSize: 12,
+                      maxWidth: 280,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "monospace",
+                        fontWeight: 600,
+                        marginBottom: 6,
+                      }}
+                    >
+                      {d.name}
+                    </div>
+                    <div>
+                      Длительность:{" "}
+                      {Math.round(d.duration / 60)} мин
+                    </div>
+                    {d.is_bad && (
+                      <div
+                        style={{
+                          color: "#f87171",
+                          marginTop: 6,
+                        }}
+                      >
+                        ⚠ блокирует последующие витрины
+                      </div>
+                    )}
                   </div>
                 );
               }}
             />
+
+            {/* invisible offset */}
             <Bar dataKey="offset" stackId="a" fill="transparent" />
+
+            {/* actual bars */}
             <Bar
               dataKey="visualDuration"
               stackId="a"
               isAnimationActive={false}
-              shape={(props) => {
-                const { x, y, width, height, payload } = props;
-                const color = getSchemaColor(payload.name);
-                const strokeColor = payload.is_bad ? "#e53935" : "#43a047";
-                const strokeWidth = 1.2;
-                return (
+              shape={({ x, y, width, height, payload, index }) => (
+                <>
+                  {/* фон строки для ровной сетки */}
+                  <rect
+                    x={0}
+                    y={y - 6}
+                    width={maxX + 200}
+                    height={height + 12}
+                    fill={
+                      index % 2 === 0
+                        ? "rgba(255,255,255,0.02)"
+                        : "rgba(255,255,255,0.035)"
+                    }
+                  />
+
                   <rect
                     x={x}
                     y={y}
                     width={Math.max(width, 6)}
                     height={height}
-                    fill={color}
-                    stroke={strokeColor}
-                    strokeWidth={strokeWidth}
                     rx={4}
+                    fill={
+                      schemaColorMap[payload.schema] ||
+                      schemaColorMap.default
+                    }
+                    stroke={
+                      payload.schema === "dm"
+                        ? "#60a5fa"
+                        : payload.is_bad
+                        ? "#f87171"
+                        : "rgba(0,0,0,.35)"
+                    }
+                    strokeWidth={
+                      payload.schema === "dm" ? 2 : 1
+                    }
                   />
-                );
-              }}
+                </>
+              )}
             />
           </BarChart>
         </ResponsiveContainer>
-      </div>
-
-      {/* Легенда */}
-      <div style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "16px",
-        marginTop: "20px",
-        fontSize: "14px"
-      }}>
-        {Object.entries(schemaColorMap).map(([schemaKey, color]) => (
-          schemaKey !== "default" && (
-            <div key={schemaKey} style={{ display: "flex", alignItems: "center" }}>
-              <div style={{
-                width: "16px",
-                height: "16px",
-                backgroundColor: color,
-                marginRight: "6px",
-                borderRadius: "3px",
-                border: "1px solid #999"
-              }} />
-              <span style={{ fontFamily: "monospace" }}>{schemaKey}</span>
-            </div>
-          )
-        ))}
       </div>
     </div>
   );

@@ -1247,7 +1247,7 @@ main.content {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  height: 8px;                 /* ← НЕ ТОНКО */
+  height: 8px;                 /* ?   */
   border-radius: 6px;
   opacity: 0.9;
   cursor: pointer;
@@ -1259,7 +1259,7 @@ main.content {
 
 /* hover */
 .load-graph-bar:hover {
-  height: 12px;                /* ← ЧИТАЕМО */
+  height: 12px;                /* ?  */
   opacity: 1;
   z-index: 3;
   box-shadow: 0 0 0 1px rgba(255,255,255,0.25);
@@ -1321,4 +1321,103 @@ main.content {
     border-top: 1px solid rgba(255,255,255,0.08);
     margin-top: 12px;
   }
+}
+
+
+/* Order breach list */
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.order-row {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-left: 3px solid rgba(234,179,8,0.6);
+  border-radius: 14px;
+  padding: 16px 20px;
+  background: rgba(255,255,255,0.02);
+}
+
+.order-row-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.order-row-target {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.order-row-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.order-row-text {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.order-violations {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.order-violation {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+}
+
+.order-violation-gap {
+  color: var(--muted);
+}
+
+.order-row-actions {
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  flex-wrap: wrap;
+
+}
+
+
+.order-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.order-pill-critical {
+  background: rgba(239,68,68,0.18);
+  color: #fca5a5;
+}
+
+.order-pill-major {
+  background: rgba(251,191,36,0.18);
+  color: #fef3c7;
+}
+
+.order-pill-warning,
+.order-pill-undefined {
+  background: rgba(59,130,246,0.15);
+  color: #bfdbfe;
 }

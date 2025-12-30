@@ -14,11 +14,25 @@ import {
 
 const schemaColorMap = {
   stg: "#64748b",
+  dict_stg: "#4c6b9b",
+  dict_dds: "#3d4d82",
   ods: "#0d9488",
   dds: "#0891b2",
   dm_calc: "#f59e0b",
   dm: "#2563eb",
   default: "#6b7280",
+};
+
+const SCHEMA_PRIORITY = {
+  dict_stg: 0,
+  dict_dds: 1,
+  stg: 2,
+  ods: 3,
+  dds: 4,
+  dm_calc: 5,
+  dm: 6,
+  dm_view: 7,
+  default: 50,
 };
 
 const ROW_HEIGHT = 44;      // фиксированная высота строкиО
@@ -89,7 +103,14 @@ export default function GanttChart({ schema, table }) {
     return Math.min(Math.max(seconds, min), max);
   };
 
-  const prepared = data.map((d) => {
+  const sortedData = [...data].sort((a, b) => {
+    const pa = SCHEMA_PRIORITY[a.schema] ?? SCHEMA_PRIORITY.default;
+    const pb = SCHEMA_PRIORITY[b.schema] ?? SCHEMA_PRIORITY.default;
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+
+  const prepared = sortedData.map((d) => {
     const isDm = d.schema === "dm";
     return {
       ...d,

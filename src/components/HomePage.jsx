@@ -5,6 +5,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function HomePage({ onSelectTable }) {
   const [activeIncidents, setActiveIncidents] = useState([]);
+  const [orderBreaches, setOrderBreaches] = useState([]);
   const [history, setHistory] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,18 +17,26 @@ export default function HomePage({ onSelectTable }) {
       try {
         setLoading(true);
 
-        const [activeResp, historyResp, metricsResp] = await Promise.all([
+        const [
+          activeResp,
+          orderResp,
+          historyResp,
+          metricsResp
+        ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
+          fetch(`${API_BASE}/api/order-breaches`),
           fetch(`${API_BASE}/api/incidents/history`),
           fetch(`${API_BASE}/api/metrics`)
         ]);
 
         const activeJson = await activeResp.json();
+        const orderJson = await orderResp.json();
         const historyJson = await historyResp.json();
         const metricsJson = await metricsResp.json();
 
         if (!cancelled) {
           setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
+          setOrderBreaches(Array.isArray(orderJson) ? orderJson : []);
           setHistory(Array.isArray(historyJson) ? historyJson : []);
           setMetrics(metricsJson);
         }
@@ -39,18 +48,19 @@ export default function HomePage({ onSelectTable }) {
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /* =============================
-     TREND ANALYSIS (simple)
+     INCIDENT TREND (simple)
      ============================= */
   const incidentTrend = useMemo(() => {
     if (!history.length) return null;
 
     const counts = history.map(h => h.count);
     const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-
     const max = Math.max(...counts);
 
     if (max > avg * 1.3) return "up";
@@ -166,6 +176,54 @@ export default function HomePage({ onSelectTable }) {
 
                 <div className="incident-hint">
                   Нажмите для разбора инцидента →
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ===== ORDER BREACHES ===== */}
+      {!loading && orderBreaches.length > 0 && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Нарушения порядка загрузки
+            <span className="section-meta">
+              {orderBreaches.length}
+            </span>
+          </div>
+
+          <div className="entity-grid">
+            {orderBreaches.slice(0, 4).map((b, idx) => (
+              <div
+                key={idx}
+                className="entity-card warning clickable"
+                onClick={() =>
+                  onSelectTable(
+                    { view: "table_info", table: b.target_fqn },
+                    "home"
+                  )
+                }
+              >
+                <div className="entity-card-head">
+                  <div className="entity-name mono">
+                    {b.target_fqn}
+                  </div>
+                  <span className="pill pill-warning">
+                    ORDER · {b.severity}
+                  </span>
+                </div>
+
+                <div className="entity-meta">
+                  Источник: {b.worst_upstream}
+                </div>
+
+                <div className="entity-meta">
+                  Gap: +{b.gap_minutes} мин
+                </div>
+
+                <div className="incident-hint">
+                  Нарушен порядок загрузки →
                 </div>
               </div>
             ))}

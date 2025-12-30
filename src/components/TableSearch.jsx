@@ -1,45 +1,96 @@
-// src/components/TableSearch.jsx
-import { useState, useEffect } from 'react';
-import '../style/app.css';
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+import { useState, useEffect, useMemo } from "react";
+import "../style/app.css";
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function TableSearch({ onSelectTable }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [tables, setTables] = useState([]);
-  const [filtered, setFiltered] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
     fetch(`${API_BASE}/api/tables`)
-      .then(res => res.json())
-      .then(data => {
-        setTables(data);
-        setFiltered(data);
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load tables")))
+      .then((data) => {
+        if (!cancelled) {
+          setTables(Array.isArray(data) ? data : []);
+        }
       })
-      .catch(err => {
-        console.error('Ошибка загрузки таблиц:', err);
+      .catch((err) => {
+        if (!cancelled) setError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    const lower = query.toLowerCase();
-    setFiltered(tables.filter(t => t.toLowerCase().includes(lower)));
+  const filtered = useMemo(() => {
+    const lower = query.trim().toLowerCase();
+    if (!lower) return tables;
+    return tables.filter((t) => t.toLowerCase().includes(lower));
   }, [query, tables]);
 
+  const handleSelect = (table) => {
+    if (!table) return;
+    onSelectTable({ view: "table_info", table });
+  };
+
   return (
-    <div className="table-search">
-      <h2 className="search-header">🔍 Поиск таблицы</h2>
-      <input
-        type="text"
-        placeholder="Введите имя таблицы..."
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        className="search-input"
-      />
-      <ul className="search-results">
-        {filtered.map((name, idx) => (
-          <li key={idx} onClick={() => onSelectTable(name)}>{name}</li>
-        ))}
-      </ul>
+    <div className="table-search-page">
+      <div className="table-search-panel">
+        <div className="table-search-head">
+          <div>
+            <p className="table-search-label">Таблицы</p>
+            <h2 className="table-search-title">Найдите нужную таблицу</h2>
+          </div>
+          <div className="table-search-count">
+            <span className="table-search-count-value">{tables.length}</span>
+            <span className="table-search-count-hint">в каталоге</span>
+          </div>
+        </div>
+        <div className="table-search-input-wrapper">
+          <input
+            type="text"
+            className="table-search-input"
+            placeholder="Например, stg.lips или ods.sales"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="table-search-results">
+        {loading && <div className="muted">Загружаем список таблиц…</div>}
+        {!loading && error && (
+          <div className="table-search-empty">Не удалось загрузить таблицы</div>
+        )}
+        {!loading && !error && filtered.length === 0 && (
+          <div className="table-search-empty">Нет таблиц, подходящих под запрос</div>
+        )}
+
+        {!loading && !error && filtered.length > 0 && (
+          <div className="table-search-list">
+            {filtered.map((name) => (
+              <button
+                key={name}
+                className="table-search-item"
+                onClick={() => handleSelect(name)}
+              >
+                <span className="table-search-name mono">{name}</span>
+                <span className="table-search-action">Открыть</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -195,28 +195,36 @@ export default function HomePage({ onSelectTable }) {
               <article key={breach.target_fqn} className="order-row">
                 <header className="order-row-header">
                   <div>
-                    <div className="order-row-target mono">{breach.target_fqn}</div>
+                    <div className="order-row-target mono" title={breach.target_fqn}>{breach.target_fqn}</div>
                     <div className="order-row-meta">
-                      Источник стартовал позже: {breach.worst_upstream}
+                      Источник стартовал позже: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
                     </div>
                   </div>
                   <div className={`order-pill order-pill-${breach.severity?.toLowerCase() || "warning"}`}>
                     {severityLabel(breach.severity)}
                   </div>
                 </header>
+                <div className="order-row-chain">
+                  <span className="order-node mono" title={breach.worst_upstream}>{breach.worst_upstream}</span>
+                  <span className="order-arrow">→</span>
+                  <span className="order-node mono" title={breach.target_fqn}>{breach.target_fqn}</span>
+                  <span className="order-arrow">→</span>
+                  <span className="order-node">витрины и отчёты</span>
+                </div>
                 <p className="order-row-text">
-                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn}
-                  стартовала {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
+                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} стартовала
+                  {" "}
+                  {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
                 </p>
                 <p className="order-row-text" style={{ color: "#9ca3af" }}>
-                  Нарушение влияет на {breach.violations_count} upstream‑табл. Чтобы увидеть цепочку и витрины,
+                  Нарушение зацепило {breach.violations_count} источников. Чтобы увидеть полную цепочку и витрины,
                   откройте карточку или граф зависимостей.
                 </p>
                 {breach.violations && breach.violations.length > 0 && (
                   <div className="order-violations">
                     {breach.violations.slice(0, 3).map((v) => (
                       <div key={`${breach.target_fqn}-${v.source_fqn}`} className="order-violation">
-                        <span className="mono">{v.source_fqn}</span>
+                        <span className="mono" title={v.source_fqn}>{v.source_fqn}</span>
                         <span className="order-violation-gap">+{Math.round(v.gap_sec / 60)} мин</span>
                       </div>
                     ))}
@@ -227,13 +235,13 @@ export default function HomePage({ onSelectTable }) {
                     className="btn btn-secondary"
                     onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn }, "home")}
                   >
-                    Открыть карточку
+                    Карточка таблицы
                   </button>
                   <button
                     className="btn btn-ghost"
                     onClick={() => onSelectTable({ view: "dependency_graph", table: breach.target_fqn }, "home")}
                   >
-                    Цепочка зависимостей
+                    Граф зависимостей
                   </button>
                 </div>
               </article>
@@ -249,33 +257,24 @@ export default function HomePage({ onSelectTable }) {
             История инцидентов (300 дней)
             <span className="section-meta">топ проблемных таблиц</span>
           </div>
-
-          <div className="history-list">
+          <div className="history-board">
+            <div className="history-board-head">
+              <span>#</span>
+              <span>Таблица</span>
+              <span>Инцидентов</span>
+              <span>Последний случай</span>
+            </div>
             {history.map((h, idx) => (
-              <div
-                key={idx}
-                className="history-row clickable"
-                onClick={() =>
-                  onSelectTable(
-                    { view: "incident", table: h.table },
-                    "home"
-                  )
-                }
+              <button
+                key={h.table}
+                className="history-board-row"
+                onClick={() => onSelectTable({ view: "incident", table: h.table }, "home")}
               >
-                <div className="history-left">
-                  <span className="history-rank">#{idx + 1}</span>
-                  <span className="history-table-name mono">
-                    {h.table}
-                  </span>
-                </div>
-
-                <div className="history-right">
-                  <span className="history-count">{h.count}</span>
-                  <span className="history-last">
-                    &nbsp;последний:&nbsp;{h.last_incident}
-                  </span>
-                </div>
-              </div>
+                <span className="history-rank">#{idx + 1}</span>
+                <span className="history-table mono" title={h.table}>{h.table}</span>
+                <span className="history-count-chip">{h.count}</span>
+                <span className="history-last-date">{h.last_incident || "—"}</span>
+              </button>
             ))}
           </div>
         </section>

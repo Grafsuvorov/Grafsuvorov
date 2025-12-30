@@ -24,7 +24,7 @@ export default function HomePage({ onSelectTable }) {
           metricsResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
-          fetch(`${API_BASE}/api/order-breaches`),
+          fetch(`${API_BASE}/api/orderbreaches`),
           fetch(`${API_BASE}/api/incidents/history`),
           fetch(`${API_BASE}/api/metrics`)
         ]);

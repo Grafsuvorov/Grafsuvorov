@@ -12,8 +12,9 @@ from datetime import datetime
 from sqlalchemy import create_engine, text
 from typing import Optional
 from pathlib import Path
+from openpyxl import load_workbook
 import traceback
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 import time
 from typing import List, Dict, Tuple
@@ -22,12 +23,13 @@ from sqlalchemy import text
 import re
 import json
 
-from .config import (
+from config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
     TABLE_TABLES_META,
     TABLE_TABLE_COMPARE,
     TABLE_YT_SLA,
+    TABLE_YTREK_INCIDENTS,
     TABLE_TABLES_META_CLICK,
     DATABASE_URL,
 )
@@ -44,7 +46,10 @@ app.add_middleware(
 
 # Подключение
 engine = create_engine(DATABASE_URL)
+from fastapi import APIRouter, HTTPException
 
+router = APIRouter()
+print("BOOT FILE:", __file__)
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):
@@ -82,6 +87,81 @@ TOP_DIRS = [
 _cached_meta_index = None
 _cache_timestamp = 0
 _CACHE_TTL = 86400  # 24 часа
+
+_order_breaches_cache = None
+_order_breaches_ts = 0
+_ORDER_BREACHES_TTL = 300  # 5 минут
+
+def compute_order_breaches():
+    """
+    ТЯЖЁЛАЯ логика расчёта order breaches.
+    НИЧЕГО НЕ ЗНАЕТ ПРО HTTP.
+    """
+    resp = get_dependency_violations()
+    rows = json.loads(resp.body)
+
+    grouped = {}
+
+    for r in rows:
+        target = f"{r['dependent_schema']}.{r['dependent_table']}"
+        source = f"{r['source_schema']}.{r['source_table']}"
+
+        src_time = datetime.fromisoformat(r["source_last_load"])
+        tgt_time = datetime.fromisoformat(r["dependent_last_load"])
+        gap_sec = (src_time - tgt_time).total_seconds()
+
+        g = grouped.setdefault(target, {
+            "target_fqn": target,
+            "target_last_load": r["dependent_last_load"],
+            "worst_upstream": None,
+            "worst_upstream_time": None,
+            "worst_gap_sec": 0,
+            "violations": []
+        })
+
+        g["violations"].append({
+            "source_fqn": source,
+            "gap_sec": gap_sec,
+            "source_last_load": r["source_last_load"],
+            "dependent_last_load": r["dependent_last_load"],
+        })
+
+        if gap_sec > g["worst_gap_sec"]:
+            g["worst_gap_sec"] = gap_sec
+            g["worst_upstream"] = source
+            g["worst_upstream_time"] = r["source_last_load"]
+
+    result = []
+    for g in grouped.values():
+        gap_min = g["worst_gap_sec"] / 60
+        if gap_min > 30:
+            sev = "CRITICAL"
+        elif gap_min > 5:
+            sev = "MAJOR"
+        else:
+            sev = "WARNING"
+
+        g["severity"] = sev
+        g["gap_minutes"] = round(gap_min, 1)
+        g["violations_count"] = len(g["violations"])
+        result.append(g)
+
+    result.sort(key=lambda x: x["worst_gap_sec"], reverse=True)
+    return result
+
+def get_cached_order_breaches():
+    global _order_breaches_cache, _order_breaches_ts
+
+    now = time.time()
+    if _order_breaches_cache and now - _order_breaches_ts < _ORDER_BREACHES_TTL:
+        return _order_breaches_cache
+
+    print("⚠️ rebuilding orderbreaches cache")
+    result = compute_order_breaches()
+
+    _order_breaches_cache = result
+    _order_breaches_ts = now
+    return result
 
 def get_cached_meta_and_index():
     global _cached_meta_index, _cache_timestamp
@@ -148,6 +228,7 @@ def normalize_fqn(table_fqn: str) -> tuple[str, str]:
 def warm_up_cache():
     try:
         get_cached_meta_and_index()
+        get_cached_order_breaches()  # 🔥 прогрев orderbreaches
     except Exception as e:
         print("Ошибка при старте приложения:", e)
 
@@ -172,6 +253,505 @@ def iter_meta_dirs(targets: List[str] | None = None):
                 continue
             seen.add(real)
             yield candidate
+
+
+def normalize_excel_table_name(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    cleaned = (
+        str(value)
+        .strip()
+        .replace('"', "")
+        .replace("'", "")
+        .replace("`", "")
+        .replace("[", "")
+        .replace("]", "")
+        .replace(" ", "")
+        .replace("\n", "")
+    )
+
+    if not cleaned or cleaned == "-":
+        return None
+
+    cleaned = cleaned.lower()
+    cleaned = cleaned.replace("..", ".")
+
+    if "." in cleaned:
+        schema, table = cleaned.split(".", 1)
+        schema = schema.strip()
+        table = table.strip()
+        if not schema or not table:
+            return None
+        return f"{schema}.{table}"
+
+    return cleaned or None
+
+
+def format_excel_datetime(value) -> str | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time()).strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        parsed = datetime.fromisoformat(str(value))
+        return parsed.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(value)
+
+
+def parse_ytrek_excel(file_path: Path) -> List[dict]:
+    if not file_path.exists():
+        raise FileNotFoundError(file_path)
+
+    header_map = {
+        "№": "index",
+        "id задачи": "issue_id",
+        "название задачи": "title",
+        "дата начала сбоя": "start_at",
+        "дата обнаружения": "detected_at",
+        "дата окончания работ": "resolved_at",
+        "ссылка на задачу": "link",
+        "название таблицы": "table_raw",
+        "название сущности": "entity_name",
+    }
+
+    def norm_header(value):
+        return (value or "").strip().lower()
+
+    workbook = load_workbook(file_path, read_only=True, data_only=True)
+    sheet = workbook.active
+
+    header_row = next(sheet.iter_rows(min_row=1, max_row=1, values_only=True))
+    normalized_headers = [norm_header(h) for h in header_row]
+
+    incidents = []
+    for raw_row in sheet.iter_rows(min_row=2, values_only=True):
+        record = {}
+        for idx, cell_value in enumerate(raw_row):
+            header_key = normalized_headers[idx] if idx < len(normalized_headers) else None
+            mapped_key = header_map.get(header_key)
+            if not mapped_key:
+                continue
+            record[mapped_key] = cell_value
+
+        issue_id = str(record.get("issue_id") or "").strip()
+        title = str(record.get("title") or "").strip()
+
+        if not issue_id and not title:
+            continue
+
+        table_raw = str(record.get("table_raw") or "").strip()
+        incidents.append(
+            {
+                "issue_id": issue_id,
+                "title": title or "Без названия",
+                "start_at": format_excel_datetime(record.get("start_at")),
+                "detected_at": format_excel_datetime(record.get("detected_at")),
+                "resolved_at": format_excel_datetime(record.get("resolved_at")),
+                "link": record.get("link"),
+                "table_raw": table_raw,
+                "table_normalized": normalize_excel_table_name(table_raw),
+                "entity_name": str(record.get("entity_name") or "").strip(),
+            }
+        )
+
+    incidents.sort(key=lambda x: x.get("start_at") or "", reverse=True)
+    return incidents
+
+
+def build_tables_meta_index() -> tuple[dict, dict]:
+    """Return lookup dictionaries for tables_meta: by fqn and by table name."""
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT t.table_id, t.table_schema, t.table_name, t.entity_id, e.entity_name
+                FROM {TABLE_TABLES_META} t
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE t.table_schema IS NOT NULL AND t.table_name IS NOT NULL
+                """
+            )
+        ).mappings().all()
+
+    by_fqn = {}
+    by_name = {}
+
+    for row in rows:
+        schema = (row["table_schema"] or "").lower()
+        table = (row["table_name"] or "").lower()
+        if not schema or not table:
+            continue
+        key = f"{schema}.{table}"
+        by_fqn[key] = row
+        by_name.setdefault(table, []).append(row)
+
+    return by_fqn, by_name
+
+
+def ensure_ytrek_table_exists(conn) -> None:
+    conn.execute(
+        text(
+            f"""
+            CREATE TABLE IF NOT EXISTS {TABLE_YTREK_INCIDENTS} (
+                issue_id TEXT PRIMARY KEY,
+                title TEXT,
+                start_at TIMESTAMP NULL,
+                detected_at TIMESTAMP NULL,
+                resolved_at TIMESTAMP NULL,
+                link TEXT,
+                table_raw TEXT,
+                table_normalized TEXT,
+                table_schema TEXT,
+                table_name TEXT,
+                table_id BIGINT,
+                entity_name_excel TEXT,
+                entity_name TEXT,
+                inserted_at TIMESTAMP DEFAULT NOW()
+            )
+            """
+        )
+    )
+
+
+def parse_timestamp_value(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
+
+
+def pick_table_match(table_normalized: str | None, entity_hint: str | None, by_fqn: dict, by_name: dict):
+    if not table_normalized:
+        return None
+
+    normalized = table_normalized.lower()
+    entity_hint = (entity_hint or "").lower()
+
+    if "." in normalized and normalized in by_fqn:
+        return by_fqn[normalized]
+
+    # Fall back to table-name-only match
+    table_name = normalized.split(".")[-1]
+    candidates = by_name.get(table_name) or []
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    if entity_hint:
+        filtered = [c for c in candidates if (c.get("entity_name") or "").lower() == entity_hint]
+        if len(filtered) == 1:
+            return filtered[0]
+    return candidates[0]
+
+
+def import_ytrek_from_excel(file_path: str | Path) -> int:
+    """Load incidents from an Excel export into the database table."""
+    path = Path(file_path)
+    incidents = parse_ytrek_excel(path)
+    by_fqn, by_name = build_tables_meta_index()
+
+    rows = []
+    for record in incidents:
+        table_norm = record.get("table_normalized")
+        entity_hint = record.get("entity_name")
+        match = pick_table_match(table_norm, entity_hint, by_fqn, by_name)
+
+        matched_schema = match.get("table_schema") if match else None
+        matched_table = match.get("table_name") if match else None
+        consolidated_entity = match.get("entity_name") if match else None
+        if not consolidated_entity:
+            consolidated_entity = entity_hint or None
+
+        rows.append(
+            {
+                "issue_id": record.get("issue_id"),
+                "title": record.get("title"),
+                "start_at": parse_timestamp_value(record.get("start_at")),
+                "detected_at": parse_timestamp_value(record.get("detected_at")),
+                "resolved_at": parse_timestamp_value(record.get("resolved_at")),
+                "link": record.get("link"),
+                "table_raw": record.get("table_raw"),
+                "table_normalized": table_norm,
+                "table_schema": matched_schema,
+                "table_name": matched_table,
+                "table_id": match.get("table_id") if match else None,
+                "entity_name_excel": entity_hint or None,
+                "entity_name": consolidated_entity,
+            }
+        )
+
+    with engine.begin() as conn:
+        ensure_ytrek_table_exists(conn)
+        conn.execute(text(f"TRUNCATE TABLE {TABLE_YTREK_INCIDENTS}"))
+        if rows:
+            conn.execute(
+                text(
+                    f"""
+                    INSERT INTO {TABLE_YTREK_INCIDENTS} (
+                        issue_id, title, start_at, detected_at, resolved_at,
+                        link, table_raw, table_normalized, table_schema, table_name,
+                        table_id, entity_name_excel, entity_name
+                    ) VALUES (
+                        :issue_id, :title, :start_at, :detected_at, :resolved_at,
+                        :link, :table_raw, :table_normalized, :table_schema, :table_name,
+                        :table_id, :entity_name_excel, :entity_name
+                    )
+                    """
+                ),
+                rows,
+            )
+
+    return len(rows)
+
+
+def extract_incident_day(row: dict) -> date | None:
+    for key in ("start_at", "detected_at", "resolved_at"):
+        value = row.get(key)
+        if not value:
+            continue
+        if isinstance(value, datetime):
+            return value.date()
+        try:
+            return datetime.fromisoformat(str(value)).date()
+        except Exception:
+            continue
+    return None
+
+
+def fetch_failure_lookup(conn, incident_rows):
+    combos = []
+    for row in incident_rows:
+        table_id = row.get("table_id")
+        if not table_id:
+            continue
+        day = extract_incident_day(row)
+        if not day:
+            continue
+        combos.append((table_id, day))
+
+    if not combos:
+        return {}
+
+    unique_ids = sorted({tid for tid, _ in combos})
+    min_day = min(day for _, day in combos)
+    max_day = max(day for _, day in combos)
+
+    start_bound = datetime.combine(min_day, datetime.min.time())
+    end_bound = datetime.combine(max_day + timedelta(days=1), datetime.min.time())
+
+    placeholders = ", ".join(f":id{i}" for i in range(len(unique_ids)))
+    params = {f"id{i}": tid for i, tid in enumerate(unique_ids)}
+    params.update({"start_bound": start_bound, "end_bound": end_bound})
+
+    query = text(
+        f"""
+        SELECT object_id, DATE(loading_finish_dttm) AS incident_day, COUNT(*) AS fail_count
+        FROM {TABLE_LOADING_HISTORY}
+        WHERE object_id IN ({placeholders})
+          AND loading_state = 'FAILED'
+          AND loading_finish_dttm >= :start_bound
+          AND loading_finish_dttm < :end_bound
+        GROUP BY object_id, DATE(loading_finish_dttm)
+        """
+    )
+
+    rows = conn.execute(query, params).mappings().all()
+    lookup = {}
+    for row in rows:
+        lookup[(row["object_id"], row["incident_day"])] = row["fail_count"]
+
+    return lookup
+
+
+def build_ytrek_dashboard(top_limit: int):
+    with engine.begin() as conn:
+        ensure_ytrek_table_exists(conn)
+
+    with engine.connect() as conn:
+        incident_rows = conn.execute(
+            text(
+                f"""
+                SELECT issue_id, title, start_at, detected_at, resolved_at, link,
+                       table_raw, table_normalized, table_schema, table_name,
+                       table_id, entity_name_excel, entity_name
+                FROM {TABLE_YTREK_INCIDENTS}
+                ORDER BY COALESCE(start_at, detected_at, resolved_at) DESC NULLS LAST,
+                         issue_id DESC
+                """
+            )
+        ).mappings().all()
+
+        timeline_rows = conn.execute(
+            text(
+                f"""
+                SELECT DATE(COALESCE(start_at, detected_at, resolved_at)) AS incident_day,
+                       COUNT(*) AS incidents_count
+                FROM {TABLE_YTREK_INCIDENTS}
+                WHERE COALESCE(start_at, detected_at, resolved_at) IS NOT NULL
+                GROUP BY DATE(COALESCE(start_at, detected_at, resolved_at))
+                ORDER BY incident_day DESC
+                LIMIT 30
+                """
+            )
+        ).mappings().all()
+
+        top_tables_rows = conn.execute(
+            text(
+                f"""
+                SELECT
+                    table_schema,
+                    table_name,
+                    table_raw,
+                    COUNT(*) AS incidents_count,
+                    MAX(COALESCE(start_at, detected_at, resolved_at)) AS last_incident
+                FROM {TABLE_YTREK_INCIDENTS}
+                GROUP BY table_schema, table_name, table_raw
+                ORDER BY incidents_count DESC, last_incident DESC
+                LIMIT :limit
+                """
+            ),
+            {"limit": top_limit},
+        ).mappings().all()
+
+        top_entities_rows = conn.execute(
+            text(
+                f"""
+                SELECT
+                    COALESCE(NULLIF(entity_name, ''), NULLIF(entity_name_excel, ''), 'Не указано') AS entity_key,
+                    COUNT(*) AS incidents_count,
+                    MAX(COALESCE(start_at, detected_at, resolved_at)) AS last_incident
+                FROM {TABLE_YTREK_INCIDENTS}
+                GROUP BY entity_key
+                ORDER BY incidents_count DESC, entity_key
+                LIMIT :limit
+                """
+            ),
+            {"limit": top_limit},
+        ).mappings().all()
+
+        failure_lookup = fetch_failure_lookup(conn, incident_rows)
+
+    incidents = []
+    tables_set = set()
+    entities_set = set()
+    mapped_count = 0
+    db_matches = 0
+
+    for row in incident_rows:
+        table_schema = row.get("table_schema")
+        table_name = row.get("table_name")
+        table_fqn = None
+        if table_schema and table_name:
+            table_fqn = f"{table_schema}.{table_name}"
+            tables_set.add(table_fqn)
+            mapped_count += 1
+
+        entity_value = row.get("entity_name") or row.get("entity_name_excel")
+        if isinstance(entity_value, str):
+            entity_value = entity_value.strip()
+        if entity_value:
+            entities_set.add(entity_value)
+
+        incident_day = extract_incident_day(row)
+        day_key = incident_day.strftime("%Y-%m-%d") if incident_day else None
+        failures = 0
+        if row.get("table_id") and incident_day:
+            failures = failure_lookup.get((row["table_id"], incident_day), 0)
+        if failures:
+            db_matches += 1
+
+        incidents.append(
+            {
+                "issue_id": row["issue_id"],
+                "title": row["title"],
+                "link": row.get("link"),
+                "start_at": serialize_datetime(row.get("start_at")),
+                "detected_at": serialize_datetime(row.get("detected_at")),
+                "resolved_at": serialize_datetime(row.get("resolved_at")),
+                "table_raw": row.get("table_raw"),
+                "table_normalized": row.get("table_normalized"),
+                "table_schema": table_schema,
+                "table_name": table_name,
+                "table_fqn": table_fqn,
+                "table_id": row.get("table_id"),
+                "entity_name": row.get("entity_name") or row.get("entity_name_excel"),
+                "entity_name_excel": row.get("entity_name_excel"),
+                "has_table": bool(table_fqn),
+                "incident_day": day_key,
+                "has_db_failures": failures > 0,
+                "db_failures_count": failures,
+            }
+        )
+
+    stats = {
+        "total": len(incidents),
+        "with_table": mapped_count,
+        "unique_tables": len(tables_set),
+        "unique_entities": len(entities_set),
+        "with_db_failures": db_matches,
+    }
+
+    timeline = [
+        {
+            "day": row["incident_day"].strftime("%Y-%m-%d"),
+            "count": row["incidents_count"],
+        }
+        for row in reversed(timeline_rows)
+        if row.get("incident_day")
+    ]
+
+    top_tables = []
+    for row in top_tables_rows:
+        schema = row.get("table_schema")
+        table = row.get("table_name")
+        table_fqn = f"{schema}.{table}" if schema and table else None
+        label = table_fqn or row.get("table_raw") or "—"
+        top_tables.append(
+            {
+                "label": label,
+                "table_fqn": table_fqn,
+                "count": row["incidents_count"],
+                "last_incident": serialize_datetime(row.get("last_incident")),
+                "has_table": bool(table_fqn),
+            }
+        )
+
+    top_entities = [
+        {
+            "label": row["entity_key"],
+            "count": row["incidents_count"],
+            "last_incident": serialize_datetime(row.get("last_incident")),
+        }
+        for row in top_entities_rows
+    ]
+
+    return {
+        "stats": stats,
+        "timeline": timeline,
+        "top_tables": top_tables,
+        "top_entities": top_entities,
+        "incidents": incidents,
+    }
+
+
+def serialize_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, str):
+        return value
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+@router.get("/api/ytrek/incidents")
+def get_ytrek_incidents(top_limit: int = Query(5, ge=1, le=50)):
+    return build_ytrek_dashboard(top_limit)
 
 def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
     all_meta, reverse_index = get_cached_meta_and_index()
@@ -221,12 +801,12 @@ def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
             ))
     return out
 
-@app.get("/api/routes")
+@router.get("/api/routes")
 def list_routes():
     return [route.path for route in app.routes]
 
 
-@app.get("/ping")
+@router.get("/ping")
 def ping():
     return {"pong": True}
 
@@ -317,7 +897,7 @@ def recursive_reverse_search(
     return result
 
 
-@app.get("/api/dependencies", response_model=List[DependencyItem])
+@router.get("/api/dependencies", response_model=List[DependencyItem])
 def get_dependencies(table: str = Query(...)):
     try:
         schema, table = table.split(".")
@@ -326,7 +906,7 @@ def get_dependencies(table: str = Query(...)):
     return resolve_dependencies(schema, table)
 
 
-@app.get("/api/failures")
+@router.get("/api/failures")
 def get_failed_tables():
     query = f"""
      SELECT
@@ -369,7 +949,7 @@ def get_failed_tables():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/entities")
+@router.get("/api/entities")
 def get_entities():
     query = f"""
      SELECT
@@ -401,7 +981,7 @@ def get_entities():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/timeline")
+@router.get("/api/timeline")
 def get_table_timeline(table_name: str):
     query = f"""
     SELECT
@@ -421,7 +1001,7 @@ def get_table_timeline(table_name: str):
         return [dict(zip(columns, row)) for row in result]
 
 
-@app.get("/api/metrics")
+@router.get("/api/metrics")
 def get_metrics():
     try:
         with engine.connect() as conn:
@@ -474,7 +1054,7 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
     return None
 
 
-@app.get("/api/card/{schema}/{table}")
+@router.get("/api/card/{schema}/{table}")
 def get_table_card_info_by_path(schema: str, table: str):
     for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)
@@ -569,7 +1149,7 @@ def get_table_card_info_by_path(schema: str, table: str):
     return JSONResponse(status_code=404, content={"error": "Table not found in any folder"})
 
 
-@app.get("/api/tables")
+@router.get("/api/tables")
 def list_all_tables():
     all_tables = []
     for top_path in iter_meta_dirs():
@@ -593,7 +1173,7 @@ def list_all_tables():
     return JSONResponse(content=sorted(all_tables))
 
 
-@app.get("/api/inconsistencies")
+@router.get("/api/inconsistencies")
 def get_dependency_violations():
     all_meta, _ = get_cached_meta_and_index()
     dependency_pairs = []
@@ -647,7 +1227,7 @@ def get_dependency_violations():
     return JSONResponse(content=problems, media_type="application/json; charset=utf-8")
 
 
-@app.get("/api/sla")
+@router.get("/api/sla")
 def get_sla_monitoring():
     query = f"""
         WITH exploded AS (
@@ -756,7 +1336,7 @@ def get_sla_monitoring():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/slowest-tables")
+@router.get("/api/slowest-tables")
 def get_slowest_tables():
     query = f"""
         SELECT 
@@ -849,7 +1429,7 @@ def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str
     return edges
 
 
-@app.get("/api/dependencies-down/{schema}/{table}")
+@router.get("/api/dependencies-down/{schema}/{table}")
 def get_dependencies_down(schema: str, table: str):
     key = f"{schema}.{table}"
     try:
@@ -864,7 +1444,7 @@ def get_dependencies_down(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@app.get("/api/dependencies-graph/{schema}/{table}")
+@router.get("/api/dependencies-graph/{schema}/{table}")
 def get_dependency_graph(schema: str, table: str):
     try:
         all_meta = load_all_meta()
@@ -896,12 +1476,7 @@ def get_dependency_graph(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-from fastapi import APIRouter, HTTPException
 
-router = APIRouter()
-app.include_router(router)
-
-from sqlalchemy import bindparam
 
 
 @router.get("/api/gantt/{schema}/{table:path}")
@@ -1087,7 +1662,7 @@ def build_impact(table_fqn: str, deps: list, sla_resp):
         "sla_violations": sla_violations,
     }
 
-@app.get("/api/incident")
+@router.get("/api/incident")
 def get_incident(table_fqn: str = Query(...)):
     try:
         schema, table = table_fqn.split(".")
@@ -1220,7 +1795,7 @@ def group_failures(failures: list):
 from collections import defaultdict
 
 
-@app.get("/api/incidents/active")
+@router.get("/api/incidents/active")
 def get_active_incidents():
     failures_resp = get_failed_tables()
     failures = json.loads(failures_resp.body.decode("utf-8"))
@@ -1268,7 +1843,7 @@ def get_active_incidents():
     return incidents
 
 
-@app.get("/api/incidents/history")
+@router.get("/api/incidents/history")
 def get_incident_history():
     query = f"""
         SELECT
@@ -1296,62 +1871,11 @@ def get_incident_history():
         }
         for r in rows
     ]
-
-@app.get("/api/order-breaches")
+print("Reg")
+@router.get("/api/orderbreaches")
 def get_order_breaches():
-    rows = get_dependency_violations()  # ← твой /api/inconsistencies
-    rows = json.loads(rows.body)
+    return get_cached_order_breaches()
 
-    grouped = {}
-
-    for r in rows:
-        target = f"{r['dependent_schema']}.{r['dependent_table']}"
-        source = f"{r['source_schema']}.{r['source_table']}"
-
-        src_time = datetime.fromisoformat(r["source_last_load"])
-        tgt_time = datetime.fromisoformat(r["dependent_last_load"])
-        gap_sec = (src_time - tgt_time).total_seconds()
-
-        g = grouped.setdefault(target, {
-            "target_fqn": target,
-            "target_last_load": r["dependent_last_load"],
-            "worst_upstream": None,
-            "worst_upstream_time": None,
-            "worst_gap_sec": 0,
-            "violations": []
-        })
-
-        g["violations"].append({
-            "source_fqn": source,
-            "gap_sec": gap_sec,
-            "source_last_load": r["source_last_load"],
-            "dependent_last_load": r["dependent_last_load"],
-        })
-
-        if gap_sec > g["worst_gap_sec"]:
-            g["worst_gap_sec"] = gap_sec
-            g["worst_upstream"] = source
-            g["worst_upstream_time"] = r["source_last_load"]
-
-    # severity
-    result = []
-    for g in grouped.values():
-        gap_min = g["worst_gap_sec"] / 60
-        if gap_min > 30:
-            sev = "CRITICAL"
-        elif gap_min > 5:
-            sev = "MAJOR"
-        else:
-            sev = "WARNING"
-
-        g["severity"] = sev
-        g["gap_minutes"] = round(gap_min, 1)
-        g["violations_count"] = len(g["violations"])
-        result.append(g)
-
-    result.sort(key=lambda x: x["worst_gap_sec"], reverse=True)
-    return result
 
 app.include_router(router)
 
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload

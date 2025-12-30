@@ -1,1 +1,3 @@
-["/openapi.json","/docs","/docs/oauth2-redirect","/redoc","/api/routes","/ping","/api/dependencies","/api/failures","/api/entities","/api/timeline","/api/metrics","/api/card/{schema}/{table}","/api/tables","/api/inconsistencies","/api/sla","/api/slowest-tables","/api/dependencies-down/{schema}/{table}","/api/dependencies-graph/{schema}/{table}","/api/incident","/api/incidents/active","/api/incidents/history","/api/gantt/{schema}/{table:path}","/api/entities/{entity_id}/table-info"]
+print("ROUTER ID AT DECORATOR:", id(router))
+
+print("BOOT FILE:", __file__)

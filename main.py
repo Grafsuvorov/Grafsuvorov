@@ -1316,18 +1316,22 @@ def get_order_breaches():
             "target_fqn": target,
             "target_last_load": r["dependent_last_load"],
             "worst_upstream": None,
+            "worst_upstream_time": None,
             "worst_gap_sec": 0,
             "violations": []
         })
 
         g["violations"].append({
             "source_fqn": source,
-            "gap_sec": gap_sec
+            "gap_sec": gap_sec,
+            "source_last_load": r["source_last_load"],
+            "dependent_last_load": r["dependent_last_load"],
         })
 
         if gap_sec > g["worst_gap_sec"]:
             g["worst_gap_sec"] = gap_sec
             g["worst_upstream"] = source
+            g["worst_upstream_time"] = r["source_last_load"]
 
     # severity
     result = []

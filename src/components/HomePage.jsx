@@ -188,44 +188,55 @@ export default function HomePage({ onSelectTable }) {
         <section className="cc-surface">
           <div className="section-title">
             Нарушения порядка загрузки
-            <span className="section-meta">
-              {orderBreaches.length}
-            </span>
+            <span className="section-meta">{orderBreaches.length}</span>
           </div>
-
-          <div className="entity-grid">
-            {orderBreaches.slice(0, 4).map((b, idx) => (
-              <div
-                key={idx}
-                className="entity-card warning clickable"
-                onClick={() =>
-                  onSelectTable(
-                    { view: "table_info", table: b.target_fqn },
-                    "home"
-                  )
-                }
-              >
-                <div className="entity-card-head">
-                  <div className="entity-name mono">
-                    {b.target_fqn}
+          <div className="order-list">
+            {orderBreaches.slice(0, 4).map((breach) => (
+              <article key={breach.target_fqn} className="order-row">
+                <header className="order-row-header">
+                  <div>
+                    <div className="order-row-target mono">{breach.target_fqn}</div>
+                    <div className="order-row-meta">
+                      Источник стартовал позже: {breach.worst_upstream}
+                    </div>
                   </div>
-                  <span className="pill pill-warning">
-                    ORDER · {b.severity}
-                  </span>
+                  <div className={`order-pill order-pill-${breach.severity?.toLowerCase() || "warning"}`}>
+                    {severityLabel(breach.severity)}
+                  </div>
+                </header>
+                <p className="order-row-text">
+                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn}
+                  стартовала {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
+                </p>
+                <p className="order-row-text" style={{ color: "#9ca3af" }}>
+                  Нарушение влияет на {breach.violations_count} upstream‑табл. Чтобы увидеть цепочку и витрины,
+                  откройте карточку или граф зависимостей.
+                </p>
+                {breach.violations && breach.violations.length > 0 && (
+                  <div className="order-violations">
+                    {breach.violations.slice(0, 3).map((v) => (
+                      <div key={`${breach.target_fqn}-${v.source_fqn}`} className="order-violation">
+                        <span className="mono">{v.source_fqn}</span>
+                        <span className="order-violation-gap">+{Math.round(v.gap_sec / 60)} мин</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="order-row-actions">
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn }, "home")}
+                  >
+                    Открыть карточку
+                  </button>
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => onSelectTable({ view: "dependency_graph", table: breach.target_fqn }, "home")}
+                  >
+                    Цепочка зависимостей
+                  </button>
                 </div>
-
-                <div className="entity-meta">
-                  Источник: {b.worst_upstream}
-                </div>
-
-                <div className="entity-meta">
-                  Gap: +{b.gap_minutes} мин
-                </div>
-
-                <div className="incident-hint">
-                  Нарушен порядок загрузки →
-                </div>
-              </div>
+              </article>
             ))}
           </div>
         </section>
@@ -272,3 +283,25 @@ export default function HomePage({ onSelectTable }) {
     </div>
   );
 }
+  const formatTime = (value) => {
+    if (!value) return "—";
+    const dt = new Date(value.replace(" ", "T"));
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const severityLabel = (sev) => {
+    switch (sev) {
+      case "CRITICAL":
+        return "Критично";
+      case "MAJOR":
+        return "Важно";
+      default:
+        return "Предупреждение";
+    }
+  };

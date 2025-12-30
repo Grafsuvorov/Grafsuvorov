@@ -23,6 +23,8 @@ export default function TableCard({
   const [showGraph, setShowGraph] = useState(false);
   const [showList, setShowList] = useState(false);
   const [showGantt, setShowGantt] = useState(false);
+  const [activeSqlBlock, setActiveSqlBlock] = useState(null);
+  const [isSqlModalOpen, setSqlModalOpen] = useState(false);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -94,6 +96,42 @@ export default function TableCard({
       { title: "SQL: truncate", sql: meta.sql_query_truncate_sql },
     ];
   }, [meta]);
+
+  const copySql = (sql) => {
+    if (!sql) return;
+    navigator.clipboard.writeText(sql).catch(() => {});
+  };
+
+  const openSqlModal = (block) => {
+    if (!block.sql) return;
+    setActiveSqlBlock(block);
+    setSqlModalOpen(true);
+  };
+
+  const closeSqlModal = () => {
+    setSqlModalOpen(false);
+    setActiveSqlBlock(null);
+  };
+
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === "Escape") {
+        closeSqlModal();
+      }
+    };
+
+    if (isSqlModalOpen) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("keydown", handleKey);
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handleKey);
+      document.body.style.overflow = "";
+    };
+  }, [isSqlModalOpen]);
 
   const loadDependencies = () => {
     if (!schema || !tableName) return;
@@ -200,13 +238,20 @@ export default function TableCard({
         <div className="table-info-card table-actions">
           <div className="table-card-label">Действия</div>
           <div className="table-action-buttons">
-            <button className="btn btn-primary" onClick={loadDependencies}>
+            <button className="btn btn-secondary" onClick={loadDependencies}>
               Показать граф зависимостей
             </button>
-            <button className="btn" onClick={() => setShowGantt(!showGantt)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowGantt(!showGantt)}
+            >
               {showGantt ? "Скрыть диаграмму" : "Хронология загрузок"}
             </button>
-            <button className="btn" onClick={copyList} disabled={!tableList.length}>
+            <button
+              className="btn btn-secondary"
+              onClick={copyList}
+              disabled={!tableList.length}
+            >
               Скопировать список
             </button>
             <button className="btn" onClick={onBack}>
@@ -219,12 +264,31 @@ export default function TableCard({
       <div className="table-section">
         <div className="section-title">SQL-скрипты</div>
         <div className="table-sql-grid">
-          {sqlSections.map((block) => (
-            <div key={block.title} className="table-sql-card">
-              <div className="table-card-label">{block.title}</div>
-              <pre className="table-code">{block.sql || "—"}</pre>
-            </div>
-          ))}
+          {sqlSections.map((block) => {
+            const hasSql = Boolean(block.sql && block.sql.length);
+            const lines = block.sql ? block.sql.split("\n") : [];
+            return (
+              <div key={block.title} className="table-sql-card">
+                <div className="table-sql-row">
+                  <div className="table-sql-type-block">
+                    <div className="table-sql-type mono">{block.title}</div>
+                    <div className="table-sql-meta muted">
+                      {hasSql ? `${lines.length} строк · ${block.sql.length} символов` : "Скрипт отсутствует"}
+                    </div>
+                  </div>
+                  <div className="table-sql-actions">
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => openSqlModal(block)}
+                      disabled={!hasSql}
+                    >
+                      Показать
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -267,6 +331,43 @@ export default function TableCard({
           <div className="section-title">Хронология загрузок</div>
           <div className="card">
             <GanttChart schema={schema} table={tableName} />
+          </div>
+        </div>
+      )}
+
+      {isSqlModalOpen && activeSqlBlock && (
+        <div className="sql-modal-overlay" onClick={closeSqlModal}>
+          <div className="sql-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="sql-modal-header">
+              <div>
+                <div className="sql-modal-type">{activeSqlBlock.title}</div>
+                <div className="sql-modal-meta">
+                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} строк
+                </div>
+              </div>
+              <div className="sql-modal-actions">
+                <span className="sql-modal-hint">Используйте Ctrl+F для поиска</span>
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => copySql(activeSqlBlock.sql)}
+                >
+                  Копировать
+                </button>
+                <button className="btn btn-ghost" onClick={closeSqlModal}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="sql-modal-body">
+              <div className="sql-modal-code">
+                {(activeSqlBlock.sql || "").split("\n").map((line, idx) => (
+                  <div className="sql-line" key={idx}>
+                    <span className="sql-line-number">{idx + 1}</span>
+                    <span className="sql-line-text">{line || " "}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -504,6 +504,7 @@ def get_table_card_info_by_path(schema: str, table: str):
         meta["sql_query_truncate_sql"] = read_sql_file("sql_query_truncate.sql")
 
         # метрики
+        # метрики
         table_id = meta.get("table_id")
         avg_duration = None
         last_success_time = None
@@ -517,7 +518,8 @@ def get_table_card_info_by_path(schema: str, table: str):
                             f"""
                         SELECT round(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                         FROM {TABLE_LOADING_HISTORY}
-                        WHERE loading_state = 'SUCCESS'  and object_type='table'
+                        WHERE loading_state = 'SUCCESS'
+                          AND object_type='table'
                           AND object_id = :object_id
                     """
                         ),
@@ -539,11 +541,21 @@ def get_table_card_info_by_path(schema: str, table: str):
                     if isinstance(dt_val, datetime):
                         last_success_time = dt_val.strftime("%Y-%m-%d %H:%M:%S")
 
-                    result = conn.execute(
-                        text("SELECT pg_total_relation_size(:full_table_name)::bigint / 1024 / 1024"),
+                    # ✅ ВОТ ТУТ — НОВЫЙ БЕЗОПАСНЫЙ КОД
+                    size_sql = text("""
+                        SELECT
+                          pg_total_relation_size(
+                            to_regclass(:full_table_name)
+                          )::bigint / 1024 / 1024
+                    """)
+
+                    size_result = conn.execute(
+                        size_sql,
                         {"full_table_name": f"{schema.lower()}.{table.lower()}"},
-                    )
-                    table_size_mb = int(result.scalar() or 0)
+                    ).scalar()
+
+                    table_size_mb = int(size_result) if size_result is not None else None
+
             except Exception as e:
                 print(f"Ошибка при получении метрик: {e}")
 
@@ -1284,5 +1296,56 @@ def get_incident_history():
         }
         for r in rows
     ]
+
+@app.get("/api/order-breaches")
+def get_order_breaches():
+    rows = get_dependency_violations()  # ← твой /api/inconsistencies
+    rows = json.loads(rows.body)
+
+    grouped = {}
+
+    for r in rows:
+        target = f"{r['dependent_schema']}.{r['dependent_table']}"
+        source = f"{r['source_schema']}.{r['source_table']}"
+
+        src_time = datetime.fromisoformat(r["source_last_load"])
+        tgt_time = datetime.fromisoformat(r["dependent_last_load"])
+        gap_sec = (src_time - tgt_time).total_seconds()
+
+        g = grouped.setdefault(target, {
+            "target_fqn": target,
+            "target_last_load": r["dependent_last_load"],
+            "worst_upstream": None,
+            "worst_gap_sec": 0,
+            "violations": []
+        })
+
+        g["violations"].append({
+            "source_fqn": source,
+            "gap_sec": gap_sec
+        })
+
+        if gap_sec > g["worst_gap_sec"]:
+            g["worst_gap_sec"] = gap_sec
+            g["worst_upstream"] = source
+
+    # severity
+    result = []
+    for g in grouped.values():
+        gap_min = g["worst_gap_sec"] / 60
+        if gap_min > 30:
+            sev = "CRITICAL"
+        elif gap_min > 5:
+            sev = "MAJOR"
+        else:
+            sev = "WARNING"
+
+        g["severity"] = sev
+        g["gap_minutes"] = round(gap_min, 1)
+        g["violations_count"] = len(g["violations"])
+        result.append(g)
+
+    result.sort(key=lambda x: x["worst_gap_sec"], reverse=True)
+    return result
 
 app.include_router(router)

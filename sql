@@ -1,1381 +1,213 @@
-from __future__ import annotations
-
-from fastapi import FastAPI, Query
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from typing import List, Dict, Tuple, Set
-from pydantic import BaseModel
-import os
-import yaml
-
-from datetime import datetime
-from sqlalchemy import create_engine, text
-from typing import Optional
-from pathlib import Path
-import traceback
-from datetime import datetime, date
-from decimal import Decimal
-import time
-from typing import List, Dict, Tuple
-from datetime import datetime
-from sqlalchemy import text
-import re
-import json
-
-from config import (
-    TABLE_LOADING_HISTORY,
-    TABLE_ENTITIES_META,
-    TABLE_TABLES_META,
-    TABLE_TABLE_COMPARE,
-    TABLE_YT_SLA,
-    TABLE_TABLES_META_CLICK,
-    DATABASE_URL,
-)
-
-app = FastAPI()
-# CORS для взаимодействия с фронтом
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Подключение
-engine = create_engine(DATABASE_URL)
-from fastapi import APIRouter, HTTPException
-
-router = APIRouter()
-print("BOOT FILE:", __file__)
-
-from sqlalchemy import bindparam
-
-# Модель для ответа зависимостей
-class DependencyItem(BaseModel):
-    step: int
-    schema: str
-    table_name: str
-    entity_id: int
-    entity_name: str = None
-    start_time: str = None
-    avg_duration_minutes: Optional[float] = None
-
-
-TOP_DIRS = [
-    "BI_FI",
-    "BI_INVESTMENT",
-    "BI_TAXES",
-    "CASE_4",
-    "DICT_LOADER",
-    "MISHKADEV_TABLES",
-    "FI_COUNTERPARTY",
-    "ISUIP_INVESTMENT",
-    "LOGISTICS",
-    "TRANSPORTATION",
-    "BI_SB_WUC",
-    "BI_FI_FACT_PAYMENTS",
-    "STG_LOADER",
-    "SD_STOCKS",
-    "SALES_SHIPMENT_FROM_PLANT",
-    "SALES_MM",
-    "SALES_MARGIN",
-    "MANAGEMENT_REPORTING_1",
-    "TEST_SAP_ODATA_DELTA",
-]
-
-_cached_meta_index = None
-_cache_timestamp = 0
-_CACHE_TTL = 86400  # 24 часа
-
-_order_breaches_cache = None
-_order_breaches_ts = 0
-_ORDER_BREACHES_TTL = 300  # 5 минут
-
-def compute_order_breaches():
-    """
-    ТЯЖЁЛАЯ логика расчёта order breaches.
-    НИЧЕГО НЕ ЗНАЕТ ПРО HTTP.
-    """
-    resp = get_dependency_violations()
-    rows = json.loads(resp.body)
-
-    grouped = {}
-
-    for r in rows:
-        target = f"{r['dependent_schema']}.{r['dependent_table']}"
-        source = f"{r['source_schema']}.{r['source_table']}"
-
-        src_time = datetime.fromisoformat(r["source_last_load"])
-        tgt_time = datetime.fromisoformat(r["dependent_last_load"])
-        gap_sec = (src_time - tgt_time).total_seconds()
-
-        g = grouped.setdefault(target, {
-            "target_fqn": target,
-            "target_last_load": r["dependent_last_load"],
-            "worst_upstream": None,
-            "worst_upstream_time": None,
-            "worst_gap_sec": 0,
-            "violations": []
-        })
-
-        g["violations"].append({
-            "source_fqn": source,
-            "gap_sec": gap_sec,
-            "source_last_load": r["source_last_load"],
-            "dependent_last_load": r["dependent_last_load"],
-        })
-
-        if gap_sec > g["worst_gap_sec"]:
-            g["worst_gap_sec"] = gap_sec
-            g["worst_upstream"] = source
-            g["worst_upstream_time"] = r["source_last_load"]
-
-    result = []
-    for g in grouped.values():
-        gap_min = g["worst_gap_sec"] / 60
-        if gap_min > 30:
-            sev = "CRITICAL"
-        elif gap_min > 5:
-            sev = "MAJOR"
-        else:
-            sev = "WARNING"
-
-        g["severity"] = sev
-        g["gap_minutes"] = round(gap_min, 1)
-        g["violations_count"] = len(g["violations"])
-        result.append(g)
-
-    result.sort(key=lambda x: x["worst_gap_sec"], reverse=True)
-    return result
-
-def get_cached_order_breaches():
-    global _order_breaches_cache, _order_breaches_ts
-
-    now = time.time()
-    if _order_breaches_cache and now - _order_breaches_ts < _ORDER_BREACHES_TTL:
-        return _order_breaches_cache
-
-    print("⚠️ rebuilding orderbreaches cache")
-    result = compute_order_breaches()
-
-    _order_breaches_cache = result
-    _order_breaches_ts = now
-    return result
-
-def get_cached_meta_and_index():
-    global _cached_meta_index, _cache_timestamp
-    now = time.time()
-    if _cached_meta_index and now - _cache_timestamp < _CACHE_TTL:
-        return _cached_meta_index
-
-    all_meta = []
-    for entity_root in iter_meta_dirs():
-        for root, _, files in os.walk(entity_root):
-            if "meta_data_file.yaml" not in files:
-                continue
-            path = Path(root) / "meta_data_file.yaml"
-            try:
-                meta = yaml.safe_load(path.read_text("utf-8")) or {}
-                all_meta.append({
-                    "table_schema": meta.get("table_schema"),
-                    "table_name": meta.get("table_name"),
-                    "entity_id": meta.get("entity_id"),
-                    "entity_name": meta.get("entity_name"),
-                    "depends_on": meta.get("depends_on") or {},
-                    "table_id": meta.get("table_id"),
-                })
-            except Exception as e:
-                print("META ERROR:", path, e)
-
-    reverse = {}
-    for m in all_meta:
-        consumer = (m["table_schema"], m["table_name"])
-        for src_schema, tables in m["depends_on"].items():
-            for src_table in tables:
-                reverse.setdefault((src_schema, src_table), []).append({
-                    "schema": consumer[0],
-                    "table_name": consumer[1],
-                    "entity_id": m["entity_id"],
-                    "entity_name": m["entity_name"],
-                    "table_id": m["table_id"],
-                })
-
-    _cached_meta_index = (all_meta, reverse)
-    _cache_timestamp = now
-    return _cached_meta_index
-
-def norm(s: str | None) -> str | None:
-    return s.lower() if isinstance(s, str) else s
-
-def normalize_fqn(table_fqn: str) -> tuple[str, str]:
-    """
-    Всегда возвращает (schema, table) в lowercase
-    """
-    s = table_fqn.strip().lower()
-
-    if "/" in s and "." in s:
-        schema, rest = s.split(".", 1)
-        rest = rest.replace("/", "").replace("-", "").replace(" ", "")
-        s = f"{schema}.{rest}"
-
-    if "." not in s:
-        raise ValueError("Expected schema.table")
-
-    return tuple(s.split(".", 1))
-
-@app.on_event("startup")
-def warm_up_cache():
-    try:
-        get_cached_meta_and_index()
-        get_cached_order_breaches()  # 🔥 прогрев orderbreaches
-    except Exception as e:
-        print("Ошибка при старте приложения:", e)
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-META_PARENT_DIRS = [BASE_DIR / "project", BASE_DIR]
-
-
-def iter_meta_dirs(targets: List[str] | None = None):
-    """Yield existing metadata directories, searching both root and project/* trees."""
-    seen = set()
-    names = targets or TOP_DIRS
-    for parent in META_PARENT_DIRS:
-        if not parent.exists():
-            continue
-        for name in names:
-            candidate = parent / name
-            if not candidate.exists():
-                continue
-            real = candidate.resolve()
-            if real in seen:
-                continue
-            seen.add(real)
-            yield candidate
-
-def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
-    all_meta, reverse_index = get_cached_meta_and_index()
-
-    visited = set()
-    result = []
-
-    def walk(s, t):
-        if (s, t) in visited:
-            return
-        visited.add((s, t))
-        for dep in reverse_index.get((s, t), []):
-            result.append(dep)
-            walk(dep["schema"], dep["table_name"])
-
-    walk(schema, table)
-
-    uniq = []
-    seen = set()
-    for r in result:
-        key = (r["schema"], r["table_name"])
-        if key not in seen:
-            seen.add(key)
-            uniq.append(r)
-
-    out = []
-    with engine.connect() as conn:
-        for i, r in enumerate(uniq, 1):
-            avg = None
-            if r.get("table_id"):
-                avg = conn.execute(
-                    text(f"""
-                        SELECT round((avg(extract(epoch from (loading_finish_dttm-loading_start_dttm))/60))::numeric,2)
-                        FROM {TABLE_LOADING_HISTORY}
-                        WHERE object_id=:id AND loading_state='SUCCESS'
-                    """),
-                    {"id": r["table_id"]}
-                ).scalar()
-
-            out.append(DependencyItem(
-                step=i,
-                schema=r["schema"],
-                table_name=r["table_name"],
-                entity_id=r["entity_id"],
-                entity_name=r.get("entity_name"),
-                avg_duration_minutes=avg,
-            ))
-    return out
-
-@router.get("/api/routes")
-def list_routes():
-    return [route.path for route in app.routes]
-
-
-@router.get("/ping")
-def ping():
-    return {"pong": True}
-
-
-
-
-
-def find_all_meta_files(top_dirs: list[str]) -> list[dict]:
-    all_meta = []
-
-    for entity_root in iter_meta_dirs(top_dirs):
-        for root, _, files in os.walk(entity_root):
-            if "meta_data_file.yaml" not in files:
-                continue
-
-            path = Path(root) / "meta_data_file.yaml"
-            try:
-                meta = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-
-                all_meta.append({
-                    "table_schema": norm(meta.get("table_schema")),
-                    "table_name": norm(meta.get("table_name")),
-                    "entity_id": meta.get("entity_id"),
-                    "entity_name": meta.get("entity_name"),
-                    "table_id": meta.get("table_id"),
-                    "depends_on": {
-                        norm(k): [norm(t) for t in v]
-                        for k, v in (meta.get("depends_on") or {}).items()
-                    },
-                })
-            except Exception as e:
-                print(f"[META ERROR] {path}: {e}")
-
-    return all_meta
-
-
-
-def build_reverse_index(all_meta: list[dict]) -> dict[tuple[str, str], list[dict]]:
-    reverse = {}
-
-    for m in all_meta:
-        consumer = (m["table_schema"], m["table_name"])
-
-        for src_schema, tables in (m.get("depends_on") or {}).items():
-            for src_table in tables:
-                key = (src_schema, src_table)
-
-                reverse.setdefault(key, []).append({
-                    "schema": consumer[0],
-                    "table_name": consumer[1],
-                    "entity_id": m.get("entity_id"),
-                    "entity_name": m.get("entity_name"),
-                    "table_id": m.get("table_id"),
-                })
-
-    return reverse
-
-
-
-
-def recursive_reverse_search(
-    schema: str,
-    table: str,
-    reverse_index: dict,
-    visited: set | None = None
-):
-    if visited is None:
-        visited = set()
-
-    key = (schema, table)
-    if key in visited:
-        return []
-
-    visited.add(key)
-
-    result = []
-    for dep in reverse_index.get(key, []):
-        result.append(dep)
-        result.extend(
-            recursive_reverse_search(
-                dep["schema"],
-                dep["table_name"],
-                reverse_index,
-                visited
-            )
-        )
-
-    return result
-
-
-@router.get("/api/dependencies", response_model=List[DependencyItem])
-def get_dependencies(table: str = Query(...)):
-    try:
-        schema, table = table.split(".")
-    except ValueError:
-        return []
-    return resolve_dependencies(schema, table)
-
-
-@router.get("/api/failures")
-def get_failed_tables():
-    query = f"""
-     SELECT
-        table_schema as object_schema,
-        object_name AS table_name,
-        l1.object_type,
-        message AS error_message,
-        loading_finish_dttm AS error_time,
-        (
-            SELECT MAX(loading_finish_dttm)
-            FROM {TABLE_LOADING_HISTORY} AS l2
-            WHERE l2.object_name = l1.object_name
-              AND l2.object_type = l1.object_type
-              AND l2.loading_state = 'SUCCESS'
-        ) AS last_success_time
-    FROM {TABLE_LOADING_HISTORY} l1
-    inner join {TABLE_TABLES_META} tm on l1.object_id = tm.table_id
-    WHERE loading_state = 'FAILED' and l1.object_type='table'
-    ORDER BY loading_finish_dttm DESC
-    LIMIT 10
-    """
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(query)).mappings().all()
-
-            cleaned = []
-            for r in rows:
-                row = dict(r)
-                row["schema"] = row["object_schema"]
-                row["error_time"] = row["error_time"].strftime("%Y-%m-%d %H:%M:%S") if row["error_time"] else None
-                row["last_success_time"] = (
-                    row["last_success_time"].strftime("%Y-%m-%d %H:%M:%S") if row["last_success_time"] else None
-                )
-                cleaned.append(row)
-
-            return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
-
-    except Exception as e:
-        print("❌ Ошибка при получении данных об ошибках:", str(e))
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@router.get("/api/entities")
-def get_entities():
-    query = f"""
-     SELECT
-        entity_id,entity_name,entity_last_load,entity_load_interval::varchar
-        ,entity_load_status
-            FROM {TABLE_ENTITIES_META} AS l2
-            where flag_active order by entity_last_load, entity_name
-    """
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(query)).mappings().all()
-
-            cleaned = []
-            for r in rows:
-                row = dict(r)
-                row["entity_id"] = row["entity_id"]
-                row["entity_last_load"] = (
-                    row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row["entity_last_load"] else None
-                )
-                row["entity_name"] = row["entity_name"]
-                row["entity_load_interval"] = row["entity_load_interval"]
-                row["entity_load_status"] = row["entity_load_status"]
-                cleaned.append(row)
-
-            return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
-
-    except Exception as e:
-        print("❌ Ошибка при получении данных об ошибках:", str(e))
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@router.get("/api/timeline")
-def get_table_timeline(table_name: str):
-    query = f"""
-    SELECT
-        loading_start_dttm,
-        loading_finish_dttm,
-        loading_state,
-        message,
-        EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) AS duration_seconds
-    FROM {TABLE_LOADING_HISTORY}
-    WHERE object_name = :table_name and object_type='table'
-    ORDER BY loading_finish_dttm DESC
-    LIMIT 5
-    """
-    with engine.connect() as conn:
-        result = conn.execute(text(query), {"table_name": table_name}).fetchall()
-        columns = result[0].keys() if result else []
-        return [dict(zip(columns, row)) for row in result]
-
-
-@router.get("/api/metrics")
-def get_metrics():
-    try:
-        with engine.connect() as conn:
-            total_tables = conn.execute(text(f"SELECT COUNT(*) FROM {TABLE_TABLES_META} WHERE flag_active = true")).scalar()
-
-            error_count = conn.execute(
-                text(
-                    f"""
-                SELECT COUNT(*)
-                FROM {TABLE_LOADING_HISTORY}
-                WHERE loading_state = 'FAILED' and object_type='table'
-                  AND loading_start_dttm >= date_trunc('day', now() - interval '10 day') + interval '21 hour'
-                  AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
-            """
-                )
-            ).scalar()
-
-            avg_duration = conn.execute(
-                text(
-                    f"""
-                SELECT ROUND(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
-                FROM {TABLE_LOADING_HISTORY}
-                WHERE loading_state = 'SUCCESS' and object_type='table'
-                  AND loading_start_dttm >= date_trunc('day', now() - interval '1 day') + interval '21 hour'
-                  AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
-            """
-                )
-            ).scalar()
-
-            active_entities = conn.execute(text(f"SELECT COUNT(*) FROM {TABLE_ENTITIES_META} WHERE flag_active = true")).scalar()
-
-            return JSONResponse(
-                content={
-                    "total_tables": total_tables,
-                    "error_count": error_count,
-                    "avg_duration_minutes": float(avg_duration) if avg_duration is not None else None,
-                    "active_entities": active_entities,
-                },
-                media_type="application/json; charset=utf-8",
-            )
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
-    for item in parent_path.iterdir():
-        if item.name.lower() == name.lower():
-            return item
-    return None
-
-
-@router.get("/api/card/{schema}/{table}")
-def get_table_card_info_by_path(schema: str, table: str):
-    for entity_folder in iter_meta_dirs():
-        schema_folder = find_path_case_insensitive(entity_folder, schema)
-        if not schema_folder:
-            continue
-
-        table_folder = find_path_case_insensitive(schema_folder, table)
-        if not table_folder:
-            continue
-
-        yaml_file = table_folder / "meta_data_file.yaml"
-        if not yaml_file.exists():
-            return JSONResponse(status_code=404, content={"error": "meta_data_file.yaml not found"})
-
-        try:
-            with open(yaml_file, encoding="utf-8") as f:
-                meta = yaml.safe_load(f)
-        except Exception as e:
-            return JSONResponse(status_code=500, content={"error": str(e)})
-
-        def read_sql_file(filename: str) -> str:
-            file_path = table_folder / filename
-            return file_path.read_text(encoding="utf-8") if file_path.exists() else f"-- {filename} not found"
-
-        meta["sql_query_insert_init_sql"] = read_sql_file("sql_query_insert_init.sql")
-        meta["sql_query_recreate_init_sql"] = read_sql_file("sql_query_recreate_init.sql")
-        meta["sql_query_truncate_sql"] = read_sql_file("sql_query_truncate.sql")
-
-        # метрики
-        # метрики
-        table_id = meta.get("table_id")
-        avg_duration = None
-        last_success_time = None
-        table_size_mb = None
-
-        if table_id:
-            try:
-                with engine.connect() as conn:
-                    duration_result = conn.execute(
-                        text(
-                            f"""
-                        SELECT round(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
-                        FROM {TABLE_LOADING_HISTORY}
-                        WHERE loading_state = 'SUCCESS'
-                          AND object_type='table'
-                          AND object_id = :object_id
-                    """
-                        ),
-                        {"object_id": table_id},
-                    )
-                    avg_duration = float(duration_result.scalar() or 0)
-
-                    time_result = conn.execute(
-                        text(
-                            f"""
-                        SELECT table_last_load
-                        FROM {TABLE_TABLES_META}
-                        WHERE table_id = :object_id
-                    """
-                        ),
-                        {"object_id": table_id},
-                    )
-                    dt_val = time_result.scalar()
-                    if isinstance(dt_val, datetime):
-                        last_success_time = dt_val.strftime("%Y-%m-%d %H:%M:%S")
-
-                    # ✅ ВОТ ТУТ — НОВЫЙ БЕЗОПАСНЫЙ КОД
-                    size_sql = text("""
-                        SELECT
-                          pg_total_relation_size(
-                            to_regclass(:full_table_name)
-                          )::bigint / 1024 / 1024
-                    """)
-
-                    size_result = conn.execute(
-                        size_sql,
-                        {"full_table_name": f"{schema.lower()}.{table.lower()}"},
-                    ).scalar()
-
-                    table_size_mb = int(size_result) if size_result is not None else None
-
-            except Exception as e:
-                print(f"Ошибка при получении метрик: {e}")
-
-        meta["avg_duration_minutes"] = avg_duration
-        meta["last_success_time"] = last_success_time
-        meta["table_size_mb"] = table_size_mb
-
-        return JSONResponse(content=meta, media_type="application/json; charset=utf-8")
-
-    print(f"[WARN] Table {schema}.{table} not found in any of TOP_DIRS")
-    return JSONResponse(status_code=404, content={"error": "Table not found in any folder"})
-
-
-@router.get("/api/tables")
-def list_all_tables():
-    all_tables = []
-    for top_path in iter_meta_dirs():
-        for schema_path in top_path.iterdir():
-            if not schema_path.is_dir():
-                continue
-            for table_path in schema_path.iterdir():
-                if not table_path.is_dir():
-                    continue
-                yaml_path = table_path / "meta_data_file.yaml"
-                if yaml_path.exists():
-                    try:
-                        with open(yaml_path, encoding="utf-8") as f:
-                            meta = yaml.safe_load(f)
-                            schema = meta.get("table_schema")
-                            table = meta.get("table_name")
-                            if schema and table:
-                                all_tables.append(f"{schema}.{table}")
-                    except:
-                        continue
-    return JSONResponse(content=sorted(all_tables))
-
-
-@router.get("/api/inconsistencies")
-def get_dependency_violations():
-    all_meta, _ = get_cached_meta_and_index()
-    dependency_pairs = []
-
-    for meta in all_meta:
-        dependent_schema = meta.get("table_schema")
-        dependent_table = meta.get("table_name")
-        depends_on = meta.get("depends_on", {})
-        for source_schema, source_tables in depends_on.items():
-            for source_table in source_tables:
-                dependency_pairs.append(((source_schema, source_table), (dependent_schema, dependent_table)))
-
-    all_tables = set()
-    for src, dep in dependency_pairs:
-        all_tables.add(src)
-        all_tables.add(dep)
-
-    last_loads = {}
-    with engine.connect() as conn:
-        for schema, table in all_tables:
-            result = conn.execute(
-                text(
-                    f"""
-                SELECT table_last_load
-                FROM {TABLE_TABLES_META}
-                WHERE  entity_id not in (50,49,48) and table_schema = :schema AND table_name = :table
-            """
-                ),
-                {"schema": schema, "table": table},
-            )
-            dt = result.scalar()
-            last_loads[(schema, table)] = dt
-
-    problems = []
-    for (src_schema, src_table), (dep_schema, dep_table) in dependency_pairs:
-        src_time = last_loads.get((src_schema, src_table))
-        dep_time = last_loads.get((dep_schema, dep_table))
-
-        if src_time and dep_time and dep_time < src_time:
-            problems.append(
-                {
-                    "source_schema": src_schema,
-                    "source_table": src_table,
-                    "source_last_load": src_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "dependent_schema": dep_schema,
-                    "dependent_table": dep_table,
-                    "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-            )
-
-    return JSONResponse(content=problems, media_type="application/json; charset=utf-8")
-
-
-@router.get("/api/sla")
-def get_sla_monitoring():
-    query = f"""
-        WITH exploded AS (
-            SELECT 
-                s.report,
-                s.source_table,
-                s.owner_report,
-                s.load_update_table,
-                s.load_update_report,
-                s.load_interval,
-                s.table_name,
-                regexp_split_to_table(s.table_name, E'\\n') AS split_table
-            FROM {TABLE_YT_SLA} s
-        ),
-        cleaned AS (
-            SELECT *,
-                   trim(split_table) AS clean_table,
-                   split_part(trim(split_table), '.', 1) AS schema_name,
-                   split_part(trim(split_table), '.', 2) AS table_name_only
-            FROM exploded
-        ),
-        click as (
-        select 
-        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[1] as schema_name_view,
-        	(REGEXP_MATCHES(ddl_clickhouse_view, 'DROP VIEW IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[2] as table_name_view,
-        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[1] as schema_name_table,
-        	(REGEXP_MATCHES(ddl_clickhouse_target, 'DROP TABLE IF EXISTS\\s+"([^"]+)"\\."([^"]+)"'))[2] as table_name_table,
-        	table_last_upload
-        from {TABLE_TABLES_META_CLICK} ),
-        joined AS (
-            SELECT 
-                c.report,
-                c.source_table,
-                c.owner_report,
-                c.load_update_table,
-                c.load_update_report,
-                c.load_interval,
-                c.table_name AS original_table_name,
-                c.clean_table,
-                coalesce(tm.table_last_load, cl.table_last_upload, clt.table_last_upload)  as table_last_load
-            FROM cleaned c
-            LEFT JOIN {TABLE_TABLES_META} tm
-              ON tm.table_schema = c.schema_name
-             AND tm.table_name = c.table_name_only and source_table='GP'
-            left join click cl 
-             ON cl.schema_name_view = c.schema_name
-             AND cl.table_name_view = c.table_name_only and source_table='Click'
-             left join click clt 
-             ON clt.schema_name_table = c.schema_name
-             AND clt.table_name_table = c.table_name_only and source_table='Click'
-        ),
-        with_flags AS (
-            SELECT *,
-                   (table_last_load IS NOT NULL AND
-                    (
-                        (position('сут' in lower(load_interval)) > 0 AND now() - table_last_load <= interval '24 hours')
-                     OR (position('час' in lower(load_interval)) > 0 AND now() - table_last_load <= interval '1 hour')
-                    )
-                   ) AS sla_ok
-            FROM joined
-        )
-        SELECT 
-            report,
-            source_table,
-            owner_report,
-            load_update_table,
-            load_update_report,
-            load_interval,
-            original_table_name,
-            json_agg(json_build_object(
-                'table_name', clean_table,
-                'table_last_load', CASE 
-                    WHEN table_last_load IS NOT NULL 
-                    THEN to_char(table_last_load, 'YYYY-MM-DD HH24:MI:SS') 
-                    ELSE NULL 
-                END,
-                'sla_ok', sla_ok
-            )) AS tables_info
-        FROM with_flags
-        GROUP BY report, source_table, owner_report, load_update_table, load_update_report, load_interval, original_table_name
-        ORDER BY report;
-    """
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text(query))
-            rows = [dict(row._mapping) for row in result]
-
-        for row in rows:
-            for table in row["tables_info"]:
-                try:
-                    if not table.get("table_last_load"):
-                        table["table_last_load"] = "Нет данных"
-                    table["sla_ok"] = bool(table["sla_ok"])
-                except Exception as inner_error:
-                    print("Ошибка при обработке таблицы:", table)
-                    print("Ошибка:", inner_error)
-                    table["sla_ok"] = False
-                    table["table_last_load"] = "Нет данных"
-            row["sla_ok"] = all(t["sla_ok"] for t in row["tables_info"])
-
-        return JSONResponse(content=rows)
-
-    except Exception as e:
-        print("🔥 Общая ошибка SLA-эндпоинта 🔥")
-        print(e)
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@router.get("/api/slowest-tables")
-def get_slowest_tables():
-    query = f"""
-        SELECT 
-            date_id, 
-            entity_name, 
-            table_schema, 
-            table_name,
-            ROUND(CAST(EXTRACT(EPOCH FROM (curr_finish_dttm - curr_start_dttm)) / 60 AS numeric), 1) AS duration
-        FROM {TABLE_TABLE_COMPARE}
-        ORDER BY (curr_finish_dttm - curr_start_dttm) DESC
-        LIMIT 20
-    """
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(query)).mappings().all()
-            cleaned_rows = []
-            for row in rows:
-                r = dict(row)
-
-                if isinstance(r.get("date_id"), (datetime, date)):
-                    r["date_id"] = r["date_id"].strftime("%Y-%m-%d")
-
-                if isinstance(r.get("duration"), Decimal):
-                    r["duration"] = float(r["duration"])
-                cleaned_rows.append(r)
-            return JSONResponse(content=cleaned_rows, media_type="application/json; charset=utf-8")
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-def load_all_meta():
-    all_meta = {}
-    for top_path in iter_meta_dirs():
-        for schema_dir in top_path.iterdir():
-            if not schema_dir.is_dir():
-                continue
-            for table_dir in schema_dir.iterdir():
-                yaml_path = table_dir / "meta_data_file.yaml"
-                if yaml_path.exists():
-                    try:
-                        with open(yaml_path, encoding="utf-8") as f:
-                            meta = yaml.safe_load(f)
-                            key = f"{meta['table_schema']}.{meta['table_name']}"
-                            all_meta[key] = meta
-                    except Exception:
-                        continue
-    return all_meta
-
-
-def get_downstream_dependencies(start_table: str, all_meta: dict):
-    result = set()
-    stack = [start_table]
-
-    while stack:
-        current = stack.pop()
-        if current in all_meta:
-            deps = all_meta[current].get("depends_on", {})
-            for schema, tables in deps.items():
-                for table in tables:
-                    full_name = f"{schema}.{table}"
-                    if full_name not in result:
-                        result.add(full_name)
-                        stack.append(full_name)
-
-    return sorted(result)
-
-
-def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str]]:
-    edges = []
-    visited = set()
-    stack = [start_table]
-
-    while stack:
-        current = stack.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-
-        meta = all_meta.get(current)
-        if not meta:
-            continue
-
-        depends_on = meta.get("depends_on", {})
-        for source_schema, tables in depends_on.items():
-            for source_table in tables:
-                source = f"{source_schema}.{source_table}"
-                edges.append({"source": source, "target": current})
-                stack.append(source)
-
-    return edges
-
-
-@router.get("/api/dependencies-down/{schema}/{table}")
-def get_dependencies_down(schema: str, table: str):
-    key = f"{schema}.{table}"
-    try:
-        all_meta = load_all_meta()
-        if key not in all_meta:
-            return JSONResponse(status_code=404, content={"error": "table not found"})
-
-        edges = get_dependency_edges(key, all_meta)
-        return {"central_node": key, "edges": edges}
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@router.get("/api/dependencies-graph/{schema}/{table}")
-def get_dependency_graph(schema: str, table: str):
-    try:
-        all_meta = load_all_meta()
-        visited = set()
-        edges = []
-
-        def walk(current_table: str):
-            if current_table in visited:
-                return
-            visited.add(current_table)
-
-            meta = all_meta.get(current_table)
-            if not meta:
-                return
-
-            depends_on = meta.get("depends_on", {})
-            for source_schema, source_tables in depends_on.items():
-                for source_table in source_tables:
-                    source = f"{source_schema}.{source_table}"
-                    edges.append({"source": source, "target": current_table})
-                    walk(source)
-
-        start = f"{schema}.{table}"
-        walk(start)
-        return {"centralNode": start, "edges": edges}
-
-    except Exception as e:
-        print("Ошибка при построении графа зависимостей:", e)
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-
-
-
-@router.get("/api/gantt/{schema}/{table:path}")
-def get_gantt_data(schema: str, table: str):
-    try:
-        raw_meta = get_cached_meta_and_index()
-        all_meta_list, _ = get_cached_meta_and_index()
-        all_meta = {f"{m['table_schema']}.{m['table_name']}": m for m in all_meta_list}
-
-        start_table = f"{schema}.{table}"
-        if start_table not in all_meta:
-            return JSONResponse(status_code=404, content={"error": f"'{start_table}' not found in meta"})
-
-        edges = get_dependency_edges(start_table, all_meta)
-        all_tables = {edge["source"] for edge in edges} | {edge["target"] for edge in edges}
-        all_tables.add(start_table)
-
-        table_to_id = {t: all_meta[t]["table_id"] for t in all_tables if t in all_meta and all_meta[t].get("table_id")}
-
-        if not table_to_id:
-            return JSONResponse(content=[], media_type="application/json")
-
-        id_list = list(table_to_id.values())
-
-        query = (
-            text(
-                f"""
-            WITH cte AS (
-                SELECT object_id, loading_start_dttm, loading_finish_dttm,
-                       row_number() OVER (PARTITION BY object_id ORDER BY loading_start_dttm DESC) rn
-                FROM {TABLE_LOADING_HISTORY}
-                WHERE loading_state = 'SUCCESS' AND object_type = 'table'
-                  AND object_id IN :id_list
-            )
-            SELECT object_id, loading_start_dttm, loading_finish_dttm
-            FROM cte
-            WHERE rn = 1
-            ORDER BY loading_start_dttm
-        """
-            )
-            .bindparams(bindparam("id_list", expanding=True))
-        )
-
-        with engine.connect() as conn:
-            rows = conn.execute(query, {"id_list": id_list}).mappings().all()
-
-        loading_times = {
-            row["object_id"]: {"start": row["loading_start_dttm"], "end": row["loading_finish_dttm"]} for row in rows
-        }
-
-        id_to_table = {v: k for k, v in table_to_id.items()}
-        bad_tables = set()
-
-        for edge in edges:
-            src = edge["source"]
-            tgt = edge["target"]
-            src_id = table_to_id.get(src)
-            tgt_id = table_to_id.get(tgt)
-            if src_id and tgt_id:
-                src_end = loading_times.get(src_id, {}).get("end")
-                tgt_start = loading_times.get(tgt_id, {}).get("start")
-                if src_end and tgt_start and src_end > tgt_start:
-                    bad_tables.add(tgt)
-
-        result = []
-        for row in rows:
-            table_name = id_to_table.get(row["object_id"], str(row["object_id"]))
-            result.append(
-                {
-                    "table_id": row["object_id"],
-                    "table_name": table_name,
-                    "start": row["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_start_dttm"] else None,
-                    "end": row["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S") if row["loading_finish_dttm"] else None,
-                    "is_bad": table_name in bad_tables,
-                }
-            )
-
-        return JSONResponse(content=result, media_type="application/json")
-
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-@router.get("/api/entities/{entity_id}/table-info")
-def get_entity_table_info(entity_id: int):
-    """
-    Возвращает информацию по таблице из tech_etl.tables_meta для конкретной сущности.
-    Поля: schema_name, tables_name, last_load, entity_name
-    """
-    sql = f"""
-        SELECT
-            table_schema,
-            table_name,
-            table_last_load,
-            entity_name
-        FROM {TABLE_TABLES_META}
-        WHERE entity_id = :entity_id order by table_last_load
-    """
-    try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(sql), {"entity_id": entity_id}).mappings().all()
-            cleaned = []
-            for r in rows:
-                row = dict(r)
-                row["table_schema"] = row["table_schema"]
-                row["table_last_load"] = (
-                    row["table_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row["table_last_load"] else None
-                )
-                row["table_name"] = row["table_name"]
-                row["entity_name"] = row["entity_name"]
-                cleaned.append(row)
-
-            return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
-
-    except Exception as e:
-        print("❌ Ошибка при получении данных об ошибках:", str(e))
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-
-
-
-def get_table_id_by_fqn(conn, schema: str, table: str):
-    q = text(
-        f"""
-        SELECT table_id
-        FROM {TABLE_TABLES_META}
-        WHERE table_schema = :schema
-          AND table_name   = :table
-        LIMIT 1
-    """
-    )
-    return conn.execute(q, {"schema": schema, "table": table}).scalar()
-
-
-def build_impact(table_fqn: str, deps: list, sla_resp):
-    """
-    Строит impact для инцидента:
-    - затронутые сущности
-    - количество downstream-таблиц
-    - отчёты под риском
-    - SLA-нарушения
-    """
-
-    affected_entities = set()
-    blocked_tables = set()
-    reports_at_risk = []
-    sla_violations = 0
-
-    # --- downstream tables ---
-    for d in deps or []:
-        schema = d.get("schema")
-        table = d.get("table_name") or d.get("table")
-        entity = d.get("entity_name")
-
-        if schema and table:
-            blocked_tables.add(f"{schema}.{table}")
-
-        if entity:
-            affected_entities.add(entity)
-
-    # --- SLA ---
-    try:
-        if hasattr(sla_resp, "body"):
-            sla_rows = json.loads(sla_resp.body.decode("utf-8"))
-        else:
-            sla_rows = sla_resp or []
-    except Exception:
-        sla_rows = []
-
-    for row in sla_rows:
-        tables = row.get("tables_info", [])
-        for t in tables:
-            if not t.get("sla_ok", True):
-                sla_violations += 1
-                reports_at_risk.append(row.get("report"))
-                break
-
-    return {
-        "affected_entities": sorted(affected_entities),
-        "blocked_tables_count": len(blocked_tables),
-        "reports_at_risk": sorted(set(reports_at_risk)),
-        "sla_violations": sla_violations,
-    }
-
-@router.get("/api/incident")
-def get_incident(table_fqn: str = Query(...)):
-    try:
-        schema, table = table_fqn.split(".")
-    except ValueError:
-        return JSONResponse(status_code=400, content={"error": "schema.table expected"})
-
-    with engine.connect() as conn:
-        table_id = conn.execute(
-            text(f"""
-                SELECT table_id FROM {TABLE_TABLES_META}
-                WHERE table_schema=:s AND table_name=:t
-            """),
-            {"s": schema, "t": table}
-        ).scalar()
-
-        if not table_id:
-            return JSONResponse(status_code=404, content={"error": "table not found"})
-
-        deps = [d.dict() for d in resolve_dependencies(schema, table)]
-
-        rows = conn.execute(
-            text(f"""
-                SELECT loading_start_dttm, loading_finish_dttm, loading_state, message,
-                       extract(epoch from (loading_finish_dttm-loading_start_dttm)) dur
-                FROM {TABLE_LOADING_HISTORY}
-                WHERE object_id=:id
-                ORDER BY loading_finish_dttm DESC
-                LIMIT 15
-            """),
-            {"id": table_id}
-        ).mappings().all()
-
-    timeline = [{
-        "start": r["loading_start_dttm"].strftime("%Y-%m-%d %H:%M:%S"),
-        "finish": r["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S"),
-        "state": r["loading_state"],
-        "duration_sec": float(r["dur"]) if r["dur"] else None,
-        "message": (r["message"] or "")[:180] or None
-    } for r in rows]
-
-    return {
-        "summary": {
-            "table_fqn": table_fqn,
-            "state": "FAILING" if timeline and timeline[0]["state"] == "FAILED" else "RECOVERED",
-        },
-        "timeline": timeline,
-        "dependencies": deps,
-        "impact": {
-            "blocked_tables_count": len(deps),
-            "affected_entities": sorted({d["entity_name"] for d in deps if d.get("entity_name")}),
-        }
-    }
-
-
-from collections import defaultdict
-from datetime import timedelta
-
-INCIDENT_WINDOW_MIN = 60  # минут
-
-
-def group_failures(failures: list):
-    incidents = []
-    failures_sorted = sorted(
-        [f for f in failures if f.get("error_time")],
-        key=lambda x: x["error_time"],
-        reverse=True
-    )
-
-    used = set()
-
-    for i, f in enumerate(failures_sorted):
-        if i in used:
-            continue
-
-        entity = f.get("entity_name")
-
-        if not entity:
-            all_meta, _ = get_cached_meta_and_index()
-            meta = next(
-                (m for m in all_meta if m["table_schema"] == f["schema"] and m["table_name"] == f["table_name"]),
-                None,
-            )
-            entity = meta.get("entity_name") if meta else None
-
-        entity = entity or f"{f['schema']}"
-        f["entity_name"] = entity  # 🔴 фикс
-
-        try:
-            t0 = datetime.strptime(f["error_time"], "%Y-%m-%d %H:%M:%S")
-        except Exception:
-            continue
-
-        group = [f]
-        used.add(i)
-
-        for j, other in enumerate(failures_sorted[i + 1 :], start=i + 1):
-            if j in used:
-                continue
-
-            other_entity = other.get("entity_name")
-
-            if not other_entity:
-                all_meta, _ = get_cached_meta_and_index()
-                meta = next(
-                    (
-                        m
-                        for m in all_meta
-                        if m["table_schema"] == other["schema"] and m["table_name"] == other["table_name"]
-                    ),
-                    None,
-                )
-                other_entity = meta.get("entity_name") if meta else None
-                other_entity = other_entity or f"{other['schema']}"
-                other["entity_name"] = other_entity
-
-            if other_entity != entity:
-                continue
-
-            t1 = datetime.strptime(other["error_time"], "%Y-%m-%d %H:%M:%S")
-
-            if abs((t0 - t1).total_seconds()) <= INCIDENT_WINDOW_MIN * 60:
-                group.append(other)
-                used.add(j)
-
-        incidents.append(group)
-
-    return incidents
-
-
-from collections import defaultdict
-
-
-@router.get("/api/incidents/active")
-def get_active_incidents():
-    failures_resp = get_failed_tables()
-    failures = json.loads(failures_resp.body.decode("utf-8"))
-
-    if not failures:
-        return []
-
-    grouped = group_failures(failures)
-
-    by_entity = defaultdict(list)
-
-    # 1️⃣ группируем все фейлы по сущности
-    for group in grouped:
-        if not group:
-            continue
-        entity = group[0].get("entity_name") or "UNKNOWN"
-        by_entity[entity].extend(group)
-
-    incidents = []
-
-    # 2️⃣ агрегируем КРАТКО — без downstream
-    for entity, rows in by_entity.items():
-        failed_tables = set()
-        last_failure = None
-
-        for r in rows:
-            table_fqn = f"{r['schema']}.{r['table_name']}"
-            failed_tables.add(table_fqn)
-
-            if not last_failure or r["error_time"] > last_failure:
-                last_failure = r["error_time"]
-
-        incidents.append(
-            {
-                "entity": entity,
-                "severity": "CRITICAL",
-                "failed_tables": len(failed_tables),
-                "root_tables": sorted(failed_tables)[:3],
-                "last_failure_time": last_failure,
-            }
-        )
-
-    incidents.sort(key=lambda x: x["last_failure_time"], reverse=True)
-
-    return incidents
-
-
-@router.get("/api/incidents/history")
-def get_incident_history():
-    query = f"""
-        SELECT
-            t.table_schema || '.' || l.object_name AS table_fqn,
-            COUNT(*) AS incidents_count,
-            MAX(l.loading_finish_dttm) AS last_incident
-     FROM {TABLE_LOADING_HISTORY} l
-      left join {TABLE_TABLES_META} t on t.table_id=l.object_id
-        WHERE l.loading_state = 'FAILED'
-          AND l.object_type = 'table'
-          AND l.loading_finish_dttm >= now() - interval '300 days'
-        GROUP BY t.table_schema, l.object_name
-        ORDER BY incidents_count DESC
-        LIMIT 10
-    """
-    with engine.connect() as conn:
-        rows = conn.execute(text(query)).mappings().all()
-
-    return [
-        {
-            "table": r["table_fqn"],
-            "count": r["incidents_count"],
-            "last_incident": r["last_incident"].strftime("%Y-%m-%d %H:%M:%S")
-            if r["last_incident"] else None
-        }
-        for r in rows
-    ]
-print("Reg")
-@router.get("/api/orderbreaches")
-def get_order_breaches():
-    return get_cached_order_breaches()
-
-
-app.include_router(router)
+create table ytrek_incidents
+(
+    issue_id          text not null
+        constraint ytrek_incidents_pkey
+            primary key,
+    title             text,
+    start_at          timestamp,
+    detected_at       timestamp,
+    resolved_at       timestamp,
+    link              text,
+    table_raw         text,
+    table_normalized  text,
+    table_schema      text,
+    table_name        text,
+    table_id          bigint,
+    entity_name_excel text,
+    entity_name       text,
+    inserted_at       timestamp default now()
+);
+
+
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6890', 'Пустая таблица dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', null, '2025-07-24 07:00:00.000000', null, 'https://yt.rusal.ru/issue/DWH-6890', 'dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', 'dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6674', 'Ошибка заливки таблицы dm.production_aluminium_finish_goods в clickhouse (clickhouse_scheduler)', null, null, null, 'https://yt.rusal.ru/issue/DWH-6674', 'dm.production_aluminium_finish_goods', 'dm.production_aluminium_finish_goods', 'dm', 'production_aluminium_finish_goods', 3616, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7854', 'Шаблон задач-инцидентов (не трогать)', null, null, null, 'https://yt.rusal.ru/issue/DWH-7854', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6662', 'Ошибка загрузки сущности 9 (SALES_MARGIN)', null, null, null, 'https://yt.rusal.ru/issue/DWH-6662', '-', null, null, null, null, 'SALES_MARGIN', 'SALES_MARGIN', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6900', 'Оптимизация времени отклика отчета', null, null, null, 'https://yt.rusal.ru/issue/DWH-6900', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6661', 'Пустая dm.invoice_to_act_of_completed_work в сущности 39 (SALES_MM)', null, null, null, 'https://yt.rusal.ru/issue/DWH-6661', 'dm.invoice_to_act_of_completed_work', 'dm.invoice_to_act_of_completed_work', 'dm', 'invoice_to_act_of_completed_work', 2901, 'SALES_MM', 'SALES_MM', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6660', 'Упал сервис odata ZBW1642M_SRV', null, null, null, 'https://yt.rusal.ru/issue/DWH-6660', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6659', 'Ошибка заливки всех таблиц в clickhouse (clickhouse_scheduler)', null, null, null, 'https://yt.rusal.ru/issue/DWH-6659', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6658', 'Ошибка обновления sb_wuc в clickhouse', null, null, null, 'https://yt.rusal.ru/issue/DWH-6658', 'sb_wuc', 'sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6655', 'Упала загрузка справочников на PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-6655', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3765', 'Не обновилась 44 и 18 сущности на prod', null, null, null, 'https://yt.rusal.ru/issue/DWH-3765', '-', null, null, null, null, '44, 18', '44, 18', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3764', 'Не обновилась 35 сущность на prod', null, null, null, 'https://yt.rusal.ru/issue/DWH-3764', '-', null, null, null, null, '35', '35', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3763', 'Упала 12 сущность на prod', null, null, null, 'https://yt.rusal.ru/issue/DWH-3763', '-', null, null, null, null, '12', '12', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2940', 'Не обновилась 12 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-2940', '-', null, null, null, null, '12', '12', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2930', 'Не обновилась 36 сущность на проде Greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-2930', '-', null, null, null, null, '36', '36', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2822', 'Зависла загрузка 25 сущности на проде Greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-2822', '-', null, null, null, null, '25', '25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3932', 'Зависания stg."ZMK_TRACK_EXP04_OFTEN_UPDATE" в dag_load_min', null, null, null, 'https://yt.rusal.ru/issue/DWH-3932', 'stg."ZMK_TRACK_EXP04_OFTEN_UPDATE"', 'stg.zmk_track_exp04_often_update', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3924', 'Зависла загрузка 34 сущности на PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-3924', '-', null, null, null, null, '34', '34', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4415', 'Зависла загрузка 35-й сущности на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-4415', '-', null, null, null, null, '35', '35', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4474', 'Ошибка в загрузке BI_FI_FACT_PAYMENTS', null, null, null, 'https://yt.rusal.ru/issue/DWH-4474', 'BI_FI_FACT_PAYMENTS', 'bi_fi_fact_payments', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4477', 'Ошибка в загрузке dag_load_api_kraz', null, null, null, 'https://yt.rusal.ru/issue/DWH-4477', 'dag_load_api_kraz', 'dag_load_api_kraz', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4804', 'Проблемы с дельтой sap ZBW1642M_SRV и ZBW1595M_ODATA_SRV', null, null, null, 'https://yt.rusal.ru/issue/DWH-4804', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4938', 'Ошибка в сущности RLS_LOADER на прод 21.03', null, null, null, 'https://yt.rusal.ru/issue/DWH-4938', '-', null, null, null, null, 'RLS_LOADER', 'RLS_LOADER', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-4937', 'Зависла сущность SALES_MM на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-4937', '-', null, null, null, null, 'SALES_MM', 'SALES_MM', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5056', 'Упала загрузка 25-й сущности на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-5056', '-', null, null, null, null, '25', '25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5058', 'Упала загрузка 47-й сущности на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-5058', '-', null, null, null, null, '47', '47', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5061', 'Нет вьюхи в суперсете Unknown table expression identifier ''dm.view_opportunity_display_superset_sales'' в clickhouse', null, null, null, 'https://yt.rusal.ru/issue/DWH-5061', 'dm.view_opportunity_display_superset_sales', 'dm.view_opportunity_display_superset_sales', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5260', 'Упала 18 и 44 сущность на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-5260', '-', null, null, null, null, '18, 44', '18, 44', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5259', 'Зависла 34 сущность', null, null, null, 'https://yt.rusal.ru/issue/DWH-5259', '-', null, null, null, null, '34', '34', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5262', 'Ошибка в дельте SAP ODATA', null, null, null, 'https://yt.rusal.ru/issue/DWH-5262', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5263', 'Зависла сущность 34 на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-5263', '-', null, null, null, null, '34', '34', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5289', 'Зависла сущность 38 на контуре PROD', null, null, null, 'https://yt.rusal.ru/issue/DWH-5289', '-', null, null, null, null, '38', '38', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6596', 'Ошибка загрузки 12 сущности на DEV', null, null, null, 'https://yt.rusal.ru/issue/DWH-6596', '-', null, null, null, null, '12', '12', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6156', 'Не отрабатывает truncate перед вставкой записей в ods.tax_accruals_and_payments_aggregated', null, null, null, 'https://yt.rusal.ru/issue/DWH-6156', 'ods.tax_accruals_and_payments_aggregated', 'ods.tax_accruals_and_payments_aggregated', 'ods', 'tax_accruals_and_payments_aggregated', 123132, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-5422', 'Вьюха на прод клике недоступна', null, null, null, 'https://yt.rusal.ru/issue/DWH-5422', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3505', 'Не обновилась 24 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-3505', '-', null, null, null, null, '24', '24', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3506', 'Не обновилась 36 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-3506', '-', null, null, null, null, '36', '36', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3503', 'Не обновилась 36 сущность на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-3503', '-', null, null, null, null, '36', '36', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3504', 'Не обновилась 24 сущность на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-3504', '-', null, null, null, null, '24', '24', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3508', 'Не обновилась 36 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-3508', '-', null, null, null, null, '36', '36', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3507', 'Не обновилась 24 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-3507', '-', null, null, null, null, '24', '24', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3518', 'Не выполнялись даги не проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-3518', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3665', 'Загрузка 37 сущности упала из-за ошибки в скрипте на ORACLE', null, null, null, 'https://yt.rusal.ru/issue/DWH-3665', '-', null, null, null, null, '37', '37', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2944', 'Сущность 24 загрузила неправильные таблицы gp прод', null, null, null, 'https://yt.rusal.ru/issue/DWH-2944', '-', null, null, null, null, '24', '24', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2941', 'Не обновилась 8 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-2941', '-', null, null, null, null, '8', '8', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3228', 'Не прогрузились таблицы', null, null, null, 'https://yt.rusal.ru/issue/DWH-3228', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3288', 'Упало обновление справочников на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-3288', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-3047', 'Упал эирфлоу на проде (20.10)', null, null, null, 'https://yt.rusal.ru/issue/DWH-3047', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2970', 'Не обновилась 39 сущность на проде гп', null, null, null, 'https://yt.rusal.ru/issue/DWH-2970', '-', null, null, null, null, '39', '39', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2100', 'Не обновилась 10 и 25 сущность на проде в greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-2100', '-', null, null, null, null, '10, 25', '10, 25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2473', 'Упала загрузка 36 сущности из-за ошибки памяти', null, null, null, 'https://yt.rusal.ru/issue/DWH-2473', '-', null, null, null, null, '36', '36', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2336', 'Упала загрузка 25 сущности из-за отсутствия доступа к SAPSR3.ZSD324K_KHD', null, null, null, 'https://yt.rusal.ru/issue/DWH-2336', '-', null, null, null, null, '25', '25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2101', 'Недоступность продуктивного greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-2101', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2086', 'Не обновилась 25 сущность на проде gp', null, null, null, 'https://yt.rusal.ru/issue/DWH-2086', '-', null, null, null, null, '25', '25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2030', 'Не обновилась 12 и 24 сущность в gp на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-2030', '-', null, null, null, null, '12, 24', '12, 24', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2013', 'Не обновилась 11 сущность в gp на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-2013', '-', null, null, null, null, '11', '11', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-1992', 'Исчерпан лимит подключений greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-1992', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2797', 'Не загружается дельта zbw1595m_odata_srv из SAP ERP', null, null, null, 'https://yt.rusal.ru/issue/DWH-2797', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2835', 'Не обновилась 16 и 35-я сущности в Greenplum продуктивного контура', null, null, null, 'https://yt.rusal.ru/issue/DWH-2835', '-', null, null, null, null, '16, 35', '16, 35', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2120', 'Не обновилась сущность case 4 на проде greenplum', null, null, null, 'https://yt.rusal.ru/issue/DWH-2120', '-', null, null, null, null, 'case 4', 'case 4', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2259', 'Не обновилась 12 сущность в gp на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-2259', '-', null, null, null, null, '12', '12', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2219', 'Таблица dm.sb_wuc отсутствует в ClickHouse', null, null, null, 'https://yt.rusal.ru/issue/DWH-2219', 'dm.sb_wuc', 'dm.sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2237', 'Не обновилась 25 сушность на проде', null, null, null, 'https://yt.rusal.ru/issue/DWH-2237', '-', null, null, null, null, '25', '25', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2236', 'Не обновилась витрина SB_WUC в кликхаусе', null, null, null, 'https://yt.rusal.ru/issue/DWH-2236', 'SB_WUC', 'sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-2172', 'Не обновилась витрина SB_WUC в кликхаусе', null, null, null, 'https://yt.rusal.ru/issue/DWH-2172', 'SB_WUC', 'sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-1990', 'Пустая таблица dm.sb_wuc в clickhouse', null, null, null, 'https://yt.rusal.ru/issue/DWH-1990', 'dm.sb_wuc', 'dm.sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-1943', 'Пустая таблица dm.sb_wuc в greenplum и clickhouse', null, null, null, 'https://yt.rusal.ru/issue/DWH-1943', '', null, null, null, null, null, null, '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9583', 'Ошибка загрузки таблицы ods.account_debt_for_working_capital_1c', '2025-12-26 04:47:00.000000', '2025-12-26 04:47:00.000000', '2025-12-26 05:17:00.000000', 'https://yt.rusal.ru/issue/DWH-9583', 'ods.account_debt_for_working_capital_1c', 'ods.account_debt_for_working_capital_1c', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('SDS-80', 'Инцидент, упала загрузка таблицы из Airtable', '2025-12-23 11:00:00.000000', '2025-12-23 11:00:00.000000', '2025-12-23 13:00:00.000000', 'https://yt.rusal.ru/issue/SDS-80', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9458', 'Не прогружен сервис ZBW1699M_SRV', '2025-12-19 07:00:00.000000', '2025-12-19 07:00:00.000000', '2025-12-19 10:40:00.000000', 'https://yt.rusal.ru/issue/DWH-9458', 'ZBW1699M_SRV', 'zbw1699m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9457', 'Ошибка загрузки таблицы ods.account_debt_for_working_capital_1c', '2025-12-19 04:55:00.000000', '2025-12-19 04:55:00.000000', '2025-12-19 05:06:00.000000', 'https://yt.rusal.ru/issue/DWH-9457', 'ods.account_debt_for_working_capital_1c', 'ods.account_debt_for_working_capital_1c', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9456', 'Ошибка загрузки таблицы stg."ZCS849M_KH"', '2025-12-19 04:05:00.000000', '2025-12-19 04:05:00.000000', '2025-12-19 04:25:00.000000', 'https://yt.rusal.ru/issue/DWH-9456', 'stg."ZCS849M_KH"', 'stg.zcs849m_kh', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9440', 'Зависла загрузка таблицы STG."/RUSAL/MV_MOV_GP"', '2025-12-18 02:25:00.000000', '2025-12-18 02:25:00.000000', '2025-12-18 02:33:00.000000', 'https://yt.rusal.ru/issue/DWH-9440', 'STG."/RUSAL/MV_MOV_GP"', 'stg./rusal/mv_mov_gp', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9438', 'Упала загрузка таблицы dm_calc.ms_precalc_often_update', '2025-12-17 12:57:00.000000', '2025-12-17 12:57:00.000000', '2025-12-17 16:00:00.000000', 'https://yt.rusal.ru/issue/DWH-9438', 'dm_calc.ms_precalc_often_update', 'dm_calc.ms_precalc_often_update', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9355', 'Упала загрузка таблицы dm.sb_wuc_backup', '2025-12-12 03:06:00.000000', '2025-12-12 03:06:00.000000', '2025-12-12 03:29:00.000000', 'https://yt.rusal.ru/issue/DWH-9355', 'dm.sb_wuc_backup', 'dm.sb_wuc_backup', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9270', 'Упала загрузка таблицы ods.credit_limits_paydox', '2025-12-07 01:32:00.000000', '2025-12-07 01:32:00.000000', '2025-12-07 12:29:00.000000', 'https://yt.rusal.ru/issue/DWH-9270', 'ods.credit_limits_paydox', 'ods.credit_limits_paydox', 'ods', 'credit_limits_paydox', 3018, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9220', 'Упала загрузка "payment_request_approvement_history_dob_dtil"', '2025-12-04 04:45:00.000000', '2025-12-04 04:45:00.000000', '2025-12-04 05:05:00.000000', 'https://yt.rusal.ru/issue/DWH-9220', 'payment_request_approvement_history_dob_dtil', 'payment_request_approvement_history_dob_dtil', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9219', 'Упала загрузка "kpi_indicators_actual_daily_report_ad_write_s3" в Clickhouse', '2025-12-04 03:25:00.000000', '2025-12-04 03:25:00.000000', '2025-12-04 03:45:00.000000', 'https://yt.rusal.ru/issue/DWH-9219', 'kpi_indicators_actual_daily_report_ad_write_s3', 'kpi_indicators_actual_daily_report_ad_write_s3', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9218', 'Упала загрузка BI_SB_WUC на слою stg', '2025-12-04 01:32:00.000000', '2025-12-04 01:32:00.000000', '2025-12-04 01:55:00.000000', 'https://yt.rusal.ru/issue/DWH-9218', 'BI_SB_WUC', 'bi_sb_wuc', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9195', 'Не прогружены таблицы в Clickhouse', '2025-12-03 07:00:00.000000', '2025-12-03 07:00:00.000000', '2025-12-03 07:20:00.000000', 'https://yt.rusal.ru/issue/DWH-9195', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('SDS-63', 'Упал ГП на запериметре', '2025-12-03 00:00:00.000000', '2025-12-03 00:00:00.000000', null, 'https://yt.rusal.ru/issue/SDS-63', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9134', 'Не прогружены таблицы в Clickhouse', '2025-12-01 07:00:00.000000', '2025-12-01 07:00:00.000000', '2025-12-01 07:40:00.000000', 'https://yt.rusal.ru/issue/DWH-9134', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9079', 'Не прогружены таблицы в Clickhouse', '2025-11-27 07:01:00.000000', '2025-11-27 07:01:00.000000', '2025-11-27 07:28:00.000000', 'https://yt.rusal.ru/issue/DWH-9079', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9077', 'Упала загрузка таблицы sales_alverse_mlc в Clickhouse', '2025-11-27 03:31:00.000000', '2025-11-27 03:31:00.000000', '2025-11-27 03:51:00.000000', 'https://yt.rusal.ru/issue/DWH-9077', 'sales_alverse_mlc', 'sales_alverse_mlc', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9006', 'Упала загрузка dm.purchase_documents_main_data в Clickhouse', '2025-11-24 07:15:00.000000', '2025-11-24 07:15:00.000000', '2025-11-24 09:20:00.000000', 'https://yt.rusal.ru/issue/DWH-9006', 'dm.purchase_documents_main_data', 'dm.purchase_documents_main_data', 'dm', 'purchase_documents_main_data', 2325, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9007', 'Упала загрузка dm.sales_stock_balance_with_forecast в Clickhouse', '2025-11-24 05:52:00.000000', '2025-11-24 05:52:00.000000', '2025-11-24 06:00:00.000000', 'https://yt.rusal.ru/issue/DWH-9007', 'dm.sales_stock_balance_with_forecast', 'dm.sales_stock_balance_with_forecast', 'dm', 'sales_stock_balance_with_forecast', 2912, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9489', 'Хотфикс ods.asugdc_arrived_cargo', '2025-11-12 00:00:00.000000', '2025-12-19 00:00:00.000000', '2025-12-22 00:00:00.000000', 'https://yt.rusal.ru/issue/DWH-9489', 'ods.asugdc_arrived_cargo', 'ods.asugdc_arrived_cargo', 'ods', 'asugdc_arrived_cargo', 756, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8610', 'Ошибка при загрузке dm_view.sales_material_turnover_detailed', '2025-11-01 03:10:00.000000', '2025-11-01 03:10:00.000000', '2025-11-07 10:00:00.000000', 'https://yt.rusal.ru/issue/DWH-8610', 'dm_view.sales_material_turnover_detailed', 'dm_view.sales_material_turnover_detailed', 'dm_view', 'sales_material_turnover_detailed', 2920, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8609', 'Зависла загрузка таблицы stg."RESB"', '2025-11-01 03:10:00.000000', '2025-11-01 03:10:00.000000', '2025-11-01 03:20:00.000000', 'https://yt.rusal.ru/issue/DWH-8609', 'stg."RESB"', 'stg.resb', 'stg', 'RESB', 1596, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8608', 'Зависла загрузка таблиц из сущности TRANSPORTATION на слою STG', '2025-11-01 01:03:00.000000', '2025-11-01 01:03:00.000000', '2025-11-01 01:15:00.000000', 'https://yt.rusal.ru/issue/DWH-8608', '-', null, null, null, null, 'TRANSPORTATION', 'TRANSPORTATION', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8581', 'Упала загрузка таблицы stg."ZSD6567M_BI_EXP2"', '2025-10-31 02:15:00.000000', '2025-10-31 02:15:00.000000', '2025-10-31 02:51:00.000000', 'https://yt.rusal.ru/issue/DWH-8581', 'stg."ZSD6567M_BI_EXP2"', 'stg.zsd6567m_bi_exp2', 'stg', 'ZSD6567M_BI_EXP2', 1145, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8582', 'Зависла загрузка таблицы из сущности BI_SB_WUC на слою STG', '2025-10-31 02:01:00.000000', '2025-10-31 02:01:00.000000', '2025-10-31 03:21:00.000000', 'https://yt.rusal.ru/issue/DWH-8582', '-', null, null, null, null, 'BI_SB_WUC', 'BI_SB_WUC', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8512', 'Упала загрузка dm.account_balance_by_contract в Clickhouse', '2025-10-28 06:43:00.000000', '2025-10-28 06:43:00.000000', '2025-10-29 09:01:00.000000', 'https://yt.rusal.ru/issue/DWH-8512', 'dm.account_balance_by_contract', 'dm.account_balance_by_contract', 'dm', 'account_balance_by_contract', 1414, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8471', 'Упала загрузка сервиса ZBW1642M_SRV', '2025-10-27 01:36:00.000000', '2025-10-27 01:36:00.000000', '2025-10-28 08:40:00.000000', 'https://yt.rusal.ru/issue/DWH-8471', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8470', 'Отсутствует сетевой доступ к Oracle 10.66.229.114', '2025-10-27 01:36:00.000000', '2025-10-27 01:36:00.000000', '2025-10-27 06:10:00.000000', 'https://yt.rusal.ru/issue/DWH-8470', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8420', 'Упала загрузка таблицы stg.asugdc_arrived_cargo', '2025-10-24 00:32:00.000000', '2025-10-24 00:32:00.000000', '2025-10-24 08:50:00.000000', 'https://yt.rusal.ru/issue/DWH-8420', 'stg.asugdc_arrived_cargo', 'stg.asugdc_arrived_cargo', 'stg', 'asugdc_arrived_cargo', 717, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8385', 'Упала загрузка таблицы account_debt_for_working_capital в Clickhouse', '2025-10-23 06:10:00.000000', '2025-10-23 06:10:00.000000', '2025-10-23 07:26:00.000000', 'https://yt.rusal.ru/issue/DWH-8385', 'account_debt_for_working_capital', 'account_debt_for_working_capital', 'dm', 'account_debt_for_working_capital', 3119, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8343', 'Зависла загрузка таблицы из сущности BI_SB_WUC на слою STG', '2025-10-22 02:05:00.000000', '2025-10-22 02:05:00.000000', '2025-10-22 02:20:00.000000', 'https://yt.rusal.ru/issue/DWH-8343', '-', null, null, null, null, 'BI_SB_WUC', 'BI_SB_WUC', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8342', 'Зависла загрузка таблицы STG."/RUSAL/LEMPS"', '2025-10-22 01:05:00.000000', '2025-10-22 01:05:00.000000', '2025-10-22 01:10:00.000000', 'https://yt.rusal.ru/issue/DWH-8342', 'STG."/RUSAL/LEMPS"', 'stg./rusal/lemps', 'stg', '/RUSAL/LEMPS', 2682, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8314', 'Зависла загрузка таблицы STG."VBRP"', '2025-10-21 01:05:00.000000', '2025-10-21 01:05:00.000000', '2025-10-21 01:15:00.000000', 'https://yt.rusal.ru/issue/DWH-8314', 'STG."VBRP"', 'stg.vbrp', 'stg', 'VBRP', 822, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8272', 'Упала загрузка stg."/RUSAL/OTMM_OST"', '2025-10-18 02:52:00.000000', '2025-10-18 04:00:00.000000', '2025-10-18 04:00:00.000000', 'https://yt.rusal.ru/issue/DWH-8272', 'stg."/RUSAL/OTMM_OST"', 'stg./rusal/otmm_ost', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8247', 'В dm.production_aluminium_casting_schedule не указаны тех. поля', '2025-10-17 07:00:00.000000', '2025-10-17 07:00:00.000000', '2025-10-17 11:42:00.000000', 'https://yt.rusal.ru/issue/DWH-8247', 'dm.production_aluminium_casting_schedule', 'dm.production_aluminium_casting_schedule', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8179', 'Упала загрузка таблиц слоя stg из сущности TORO_LOADER', '2025-10-13 22:31:00.000000', '2025-10-13 22:31:00.000000', '2025-10-14 09:00:00.000000', 'https://yt.rusal.ru/issue/DWH-8179', '-', null, null, null, null, 'TORO_LOADER', 'TORO_LOADER', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8126', 'Упала загрузка таблиц dm.account_debt_for_working_capital и dm.account_debt', '2025-10-09 06:45:00.000000', '2025-10-09 06:45:00.000000', '2025-10-09 07:08:00.000000', 'https://yt.rusal.ru/issue/DWH-8126', 'dm.account_debt_for_working_capital, dm.account_debt', 'dm.account_debt_for_working_capital,dm.account_debt', 'dm_calc', 'account_debt', 1408, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8087', 'Упал сервис odata ZBW1642M_SRV', '2025-10-07 01:20:00.000000', '2025-10-07 01:20:00.000000', '2025-10-07 02:08:00.000000', 'https://yt.rusal.ru/issue/DWH-8087', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8053', 'Упал сервис odata ZBW1642M_SRV', '2025-10-06 01:23:00.000000', '2025-10-06 01:23:00.000000', '2025-10-06 02:04:00.000000', 'https://yt.rusal.ru/issue/DWH-8053', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8052', 'Упал сервис odata ZBW1699M_SRV', '2025-10-05 21:35:00.000000', '2025-10-05 21:35:00.000000', '2025-10-06 00:52:00.000000', 'https://yt.rusal.ru/issue/DWH-8052', 'ZBW1699M_SRV', 'zbw1699m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-8003', 'Упала загрузка таблицы stg."ZCO3922M_KHD"', '2025-10-02 06:03:00.000000', '2025-10-02 06:03:00.000000', '2025-10-02 06:12:00.000000', 'https://yt.rusal.ru/issue/DWH-8003', 'stg."ZCO3922M_KHD"', 'stg.zco3922m_khd', 'stg', 'ZCO3922M_KHD', 1247, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7987', 'Ошибка PXF - server error', '2025-10-01 03:10:00.000000', '2025-10-01 03:10:00.000000', '2025-10-01 03:30:00.000000', 'https://yt.rusal.ru/issue/DWH-7987', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7986', 'Упала загрузка таблицы dm.paydox_credit_limits', '2025-10-01 01:35:00.000000', '2025-10-01 01:35:00.000000', '2025-10-01 02:41:00.000000', 'https://yt.rusal.ru/issue/DWH-7986', 'dm.paydox_credit_limits', 'dm.paydox_credit_limits', 'dm', 'paydox_credit_limits', 3020, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7972', 'Упал сервис odata ZBW1642M_SRV', '2025-09-30 01:31:00.000000', '2025-09-30 01:31:00.000000', '2025-09-30 02:04:00.000000', 'https://yt.rusal.ru/issue/DWH-7972', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7973', 'Упала загрузка таблицы stg."ZKNTRDATA_EXP3"', '2025-09-30 00:42:00.000000', '2025-10-30 00:42:00.000000', '2025-09-30 01:20:00.000000', 'https://yt.rusal.ru/issue/DWH-7973', 'stg."ZKNTRDATA_EXP3"', 'stg.zkntrdata_exp3', 'stg', 'ZKNTRDATA_EXP3', 1227, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7913', 'Упала загрузка таблицы stg."ZCO2091M_CO2FP"', '2025-09-25 01:36:00.000000', '2025-09-25 01:36:00.000000', '2025-09-25 03:06:00.000000', 'https://yt.rusal.ru/issue/DWH-7913', 'stg."ZCO2091M_CO2FP"', 'stg.zco2091m_co2fp', 'stg', 'ZCO2091M_CO2FP', 2085, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7892', 'Упал сервис odata ZBW1642M_SRV', '2025-09-23 01:14:00.000000', '2025-09-23 01:14:00.000000', '2025-09-23 02:00:00.000000', 'https://yt.rusal.ru/issue/DWH-7892', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7837', 'Упала загрузка таблицы dm.account_turnover_by_counterparty в Clickhouse', '2025-09-19 05:28:00.000000', '2025-09-19 05:28:00.000000', '2025-09-19 07:20:00.000000', 'https://yt.rusal.ru/issue/DWH-7837', 'dm.account_turnover_by_counterparty', 'dm.account_turnover_by_counterparty', 'dm', 'account_turnover_by_counterparty', 1417, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6881', 'Недоступность Superset PROD', '2025-07-23 21:11:00.000000', '2025-07-23 21:11:00.000000', '2025-07-23 21:22:00.000000', 'https://yt.rusal.ru/issue/DWH-6881', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7823', 'Упала загрузка таблицы dm_view.sd_sales_to_india_scm в Clickhouse', '2025-09-18 03:01:00.000000', '2025-09-18 03:01:00.000000', '2025-09-18 03:34:00.000000', 'https://yt.rusal.ru/issue/DWH-7823', 'dm_view.sd_sales_to_india_scm', 'dm_view.sd_sales_to_india_scm', 'dm_view', 'sd_sales_to_india_scm', 2598, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7786', 'Упал сервис odata ZBW1642M_SRV', '2025-09-16 01:20:00.000000', '2025-09-16 01:20:00.000000', '2025-09-16 02:17:00.000000', 'https://yt.rusal.ru/issue/DWH-7786', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7753', 'Зависла загрузка таблицы stg."CDPOS"', '2025-09-12 03:10:00.000000', '2025-09-12 03:10:00.000000', '2025-09-12 03:22:00.000000', 'https://yt.rusal.ru/issue/DWH-7753', 'stg."CDPOS"', 'stg.cdpos', 'stg', 'CDPOS', 1601, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7740', 'Упала загрузка stg."EKPO"', '2025-09-11 00:18:00.000000', '2025-09-11 00:18:00.000000', '2025-09-11 00:57:00.000000', 'https://yt.rusal.ru/issue/DWH-7740', 'stg."EKPO"', 'stg.ekpo', 'stg', 'EKPO', 843, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7756', 'Исправить ошибки после релиза 10.09', '2025-09-10 00:00:00.000000', '2025-09-12 00:00:00.000000', null, 'https://yt.rusal.ru/issue/DWH-7756', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7698', 'Упала загрузка dm_calc.accounting_exchange_rate_revaluation', '2025-09-09 04:15:00.000000', '2025-09-09 04:15:00.000000', '2025-09-09 10:34:00.000000', 'https://yt.rusal.ru/issue/DWH-7698', 'dm_calc.accounting_exchange_rate_revaluation', 'dm_calc.accounting_exchange_rate_revaluation', 'dm_calc', 'accounting_exchange_rate_revaluation', 1406, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7667', 'Упала загрузка dm.account_debt_for_working_capital в Clickhouse', '2025-09-08 06:38:00.000000', '2025-09-08 06:38:00.000000', '2025-09-08 06:49:00.000000', 'https://yt.rusal.ru/issue/DWH-7667', 'dm.account_debt_for_working_capital', 'dm.account_debt_for_working_capital', 'dm', 'account_debt_for_working_capital', 3119, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7668', 'Упала загрузка stg."V_MES_LP_REJECT_PRODUCT"', '2025-09-05 03:38:00.000000', '2025-09-05 03:38:00.000000', '2025-09-05 06:10:00.000000', 'https://yt.rusal.ru/issue/DWH-7668', 'stg."V_MES_LP_REJECT_PRODUCT"', 'stg.v_mes_lp_reject_product', 'stg', 'V_MES_LP_REJECT_PRODUCT', 2986, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7646', 'Упала загрузка dm.account_debt_for_working_capital в Clickhouse', '2025-09-04 05:55:00.000000', '2025-09-04 05:55:00.000000', '2025-09-04 06:06:00.000000', 'https://yt.rusal.ru/issue/DWH-7646', 'dm.account_debt_for_working_capital', 'dm.account_debt_for_working_capital', 'dm', 'account_debt_for_working_capital', 3119, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7621', 'Упал сервис odata ZBW1642M_SRV', '2025-09-03 01:04:00.000000', '2025-09-03 01:04:00.000000', '2025-09-03 02:01:00.000000', 'https://yt.rusal.ru/issue/DWH-7621', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7555', 'Упала загрузка таблицы dm_calc.production_aluminium_casting_schedule', '2025-09-01 03:25:00.000000', '2025-09-01 03:25:00.000000', '2025-09-01 03:40:00.000000', 'https://yt.rusal.ru/issue/DWH-7555', 'dm_calc.production_aluminium_casting_schedule', 'dm_calc.production_aluminium_casting_schedule', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7554', 'Упал сервис odata ZBW1699M_SRV', '2025-08-31 21:00:00.000000', '2025-08-31 21:00:00.000000', '2025-09-01 01:15:00.000000', 'https://yt.rusal.ru/issue/DWH-7554', 'ZBW1699M_SRV', 'zbw1699m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7508', 'Зависла загрузка таблицы STG."EKBE"', '2025-08-28 02:35:00.000000', '2025-08-28 02:35:00.000000', '2025-08-28 02:57:00.000000', 'https://yt.rusal.ru/issue/DWH-7508', 'STG."EKBE"', 'stg.ekbe', 'stg', 'EKBE', 1362, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7513', 'Пустая таблица stg.asuzdc_provision_conts', '2025-08-28 00:20:00.000000', '2025-08-28 07:00:00.000000', '2025-08-28 07:50:00.000000', 'https://yt.rusal.ru/issue/DWH-7513', 'stg.asuzdc_provision_conts', 'stg.asuzdc_provision_conts', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7487', 'Зависла загрузка таблицы STG."ZSD2973M_STOCK06"', '2025-08-27 02:00:00.000000', '2025-08-27 02:00:00.000000', '2025-08-27 02:11:00.000000', 'https://yt.rusal.ru/issue/DWH-7487', 'STG."ZSD2973M_STOCK06"', 'stg.zsd2973m_stock06', 'stg', 'ZSD2973M_STOCK06', 1295, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7436', 'Не прогружена таблица dm.sales_alverse_mlc в clickhouse', '2025-08-25 07:00:00.000000', '2025-08-25 07:00:00.000000', '2025-08-25 08:30:00.000000', 'https://yt.rusal.ru/issue/DWH-7436', 'dm.sales_alverse_mlc', 'dm.sales_alverse_mlc', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7435', 'Зависла загрузка таблиц stg."/RUSAL/ALMER_HIM" и stg."MKPF"', '2025-08-25 02:04:00.000000', '2025-08-25 02:04:00.000000', '2025-08-25 02:14:00.000000', 'https://yt.rusal.ru/issue/DWH-7435', 'stg."/RUSAL/ALMER_HIM", stg."MKPF"', 'stg./rusal/almer_him,stg.mkpf', 'stg', 'MKPF', 1901, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7415', 'Не прогружена таблица dm.sales_alverse_mlc в clickhouse', '2025-08-22 07:00:00.000000', '2025-08-22 07:00:00.000000', '2025-08-22 07:55:00.000000', 'https://yt.rusal.ru/issue/DWH-7415', 'dm.sales_alverse_mlc', 'dm.sales_alverse_mlc', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7413', 'Зависла загрузка таблиц из сущности SALES_MM', '2025-08-22 03:20:00.000000', '2025-08-22 03:20:00.000000', '2025-08-22 03:50:00.000000', 'https://yt.rusal.ru/issue/DWH-7413', '-', null, null, null, null, 'SALES_MM', 'SALES_MM', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7396', 'Не прогружены таблицы в clickhouse', '2025-08-21 07:00:00.000000', '2025-08-21 07:00:00.000000', '2025-08-20 07:08:00.000000', 'https://yt.rusal.ru/issue/DWH-7396', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7394', 'Зависла загрузка таблицы stg."/RUSAL/MK_TR_VES"', '2025-08-21 02:30:00.000000', '2025-08-21 02:30:00.000000', '2025-08-21 02:43:00.000000', 'https://yt.rusal.ru/issue/DWH-7394', 'stg."/RUSAL/MK_TR_VES"', 'stg./rusal/mk_tr_ves', 'stg', '/RUSAL/MK_TR_VES', 800, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7393', 'Упала загрузка таблицы stg."ZKNTRDATA_EXP3"', '2025-08-21 01:01:00.000000', '2025-08-21 01:01:00.000000', '2025-08-21 01:50:00.000000', 'https://yt.rusal.ru/issue/DWH-7393', 'stg."ZKNTRDATA_EXP3"', 'stg.zkntrdata_exp3', 'stg', 'ZKNTRDATA_EXP3', 1227, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7371', 'Не прогружены таблицы в clickhouse', '2025-08-20 07:00:00.000000', '2025-08-20 06:30:00.000000', '2025-08-20 07:08:00.000000', 'https://yt.rusal.ru/issue/DWH-7371', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7370', 'Зависла загрузка таблицы stg."ZSD6567M_BI_EXP2"', '2025-08-20 02:25:00.000000', '2025-08-20 02:25:00.000000', '2025-08-20 03:04:00.000000', 'https://yt.rusal.ru/issue/DWH-7370', 'stg."ZSD6567M_BI_EXP2"', 'stg.zsd6567m_bi_exp2', 'stg', 'ZSD6567M_BI_EXP2', 1145, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7275', 'Не прогружена сущность SALES_SHIPMENT_FROM_PLANT_3', '2025-08-14 07:00:00.000000', '2025-08-14 07:00:00.000000', null, 'https://yt.rusal.ru/issue/DWH-7275', '-', null, null, null, null, 'SALES_SHIPMENT_FROM_PLANT_3', 'SALES_SHIPMENT_FROM_PLANT_3', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7273', 'Упала загрузка таблицы dm.account_turnover_by_counterparty в clickhouse', '2025-08-14 05:09:00.000000', '2025-08-14 05:09:00.000000', '2025-08-14 05:48:00.000000', 'https://yt.rusal.ru/issue/DWH-7273', 'dm.account_turnover_by_counterparty', 'dm.account_turnover_by_counterparty', 'dm', 'account_turnover_by_counterparty', 1417, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7274', 'Пустая таблица stg."KBLP"', '2025-08-14 02:45:00.000000', '2025-08-14 02:45:00.000000', '2025-08-14 08:52:00.000000', 'https://yt.rusal.ru/issue/DWH-7274', 'stg."KBLP"', 'stg.kblp', 'stg', 'KBLP', 1526, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7272', 'Зависла загрузка таблицы STG."AUAS"', '2025-08-14 02:45:00.000000', '2025-08-14 02:45:00.000000', '2025-08-14 06:04:00.000000', 'https://yt.rusal.ru/issue/DWH-7272', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7271', 'Упал сервис odata ZBW1642M_SRV', '2025-08-14 02:11:00.000000', '2025-08-14 02:11:00.000000', '2025-08-14 03:38:00.000000', 'https://yt.rusal.ru/issue/DWH-7271', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7270', 'Упала загрузка таблицы stg."ZKNTRDATA_EXP3"', '2025-08-14 01:01:00.000000', '2025-08-14 01:01:00.000000', '2025-08-14 01:21:00.000000', 'https://yt.rusal.ru/issue/DWH-7270', 'stg."ZKNTRDATA_EXP3"', 'stg.zkntrdata_exp3', 'stg', 'ZKNTRDATA_EXP3', 1227, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7242', 'Подвис статус LOADING у таблиц stg."MESDW_V_SHARAY_SCOOP" и stg."MES_EP_RAW"', '2025-08-13 03:06:00.000000', '2025-08-13 03:06:00.000000', '2025-08-13 04:32:00.000000', 'https://yt.rusal.ru/issue/DWH-7242', 'stg."MESDW_V_SHARAY_SCOOP", stg."MES_EP_RAW"', 'stg.mesdw_v_sharay_scoop,stg.mes_ep_raw', 'stg', 'MES_EP_RAW', 2809, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7241', 'Упала загрузка таблицы dm.investment_expenses_and_payments_isuip', '2025-08-13 02:54:00.000000', '2025-08-13 02:54:00.000000', '2025-08-13 18:00:00.000000', 'https://yt.rusal.ru/issue/DWH-7241', 'dm.investment_expenses_and_payments_isuip', 'dm.investment_expenses_and_payments_isuip', 'dm', 'investment_expenses_and_payments_isuip', 3041, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7240', 'Зависла загрузка таблицы stg."/RUSAL/MK_TR_VES"', '2025-08-13 02:20:00.000000', '2025-08-13 02:20:00.000000', '2025-08-13 03:17:00.000000', 'https://yt.rusal.ru/issue/DWH-7240', 'stg."/RUSAL/MK_TR_VES"', 'stg./rusal/mk_tr_ves', 'stg', '/RUSAL/MK_TR_VES', 800, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7222', 'Зависла загрузка таблицы STG."REGUH" и STG."REGUP"', '2025-08-12 05:50:00.000000', '2025-08-12 05:50:00.000000', '2025-08-12 05:58:00.000000', 'https://yt.rusal.ru/issue/DWH-7222', 'STG."REGUH", STG."REGUP"', 'stg.reguh,stg.regup', 'stg', 'REGUP', 1524, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7221', 'Ошибка при загрузке таблицы stg."MES_EP_HIGHEST_RAW"', '2025-08-12 03:07:00.000000', '2025-08-12 03:07:00.000000', '2025-08-12 03:28:00.000000', 'https://yt.rusal.ru/issue/DWH-7221', 'stg."MES_EP_HIGHEST_RAW"', 'stg.mes_ep_highest_raw', 'stg', 'MES_EP_HIGHEST_RAW', 1954, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7220', 'Зависла загрузка таблицы STG."ZSD2973M_STOCK06"', '2025-08-12 02:03:00.000000', '2025-08-12 02:03:00.000000', '2025-08-12 02:10:00.000000', 'https://yt.rusal.ru/issue/DWH-7220', 'STG."ZSD2973M_STOCK06"', 'stg.zsd2973m_stock06', 'stg', 'ZSD2973M_STOCK06', 1295, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7219', 'Зависла загрузка таблицы stg."/RUSAL/LEMPS"', '2025-08-12 01:06:00.000000', '2025-08-12 01:06:00.000000', '2025-08-12 01:11:00.000000', 'https://yt.rusal.ru/issue/DWH-7219', 'stg."/RUSAL/LEMPS"', 'stg./rusal/lemps', 'stg', '/RUSAL/LEMPS', 2682, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7194', 'Зависла загрузка таблицы STG."AUAS"', '2025-08-11 06:05:00.000000', '2025-08-11 06:05:00.000000', '2025-07-25 07:15:00.000000', 'https://yt.rusal.ru/issue/DWH-7194', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7193', 'Ошибка при загрузке таблицы dds.accounting_documents', '2025-08-11 04:06:00.000000', '2025-08-11 04:06:00.000000', '2025-08-11 20:15:00.000000', 'https://yt.rusal.ru/issue/DWH-7193', 'dds.accounting_documents', 'dds.accounting_documents', 'dds', 'accounting_documents', 123124, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7151', 'Пустая таблица dm.sales_scanned_documents_analysis в clickhouse', '2025-08-07 07:00:00.000000', '2025-08-07 07:00:00.000000', '2025-08-07 08:10:00.000000', 'https://yt.rusal.ru/issue/DWH-7151', 'dm.sales_scanned_documents_analysis', 'dm.sales_scanned_documents_analysis', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7152', 'Пустая таблица dict_dds.fixed_asset_td', '2025-08-07 07:00:00.000000', '2025-08-07 07:00:00.000000', '2025-08-07 07:20:00.000000', 'https://yt.rusal.ru/issue/DWH-7152', 'dict_dds.fixed_asset_td', 'dict_dds.fixed_asset_td', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7150', 'Зависла загрузка таблицы STG."REGUP"', '2025-08-07 05:50:00.000000', '2025-08-07 05:50:00.000000', '2025-08-07 06:00:00.000000', 'https://yt.rusal.ru/issue/DWH-7150', 'STG."REGUP"', 'stg.regup', 'stg', 'REGUP', 1524, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7149', 'Упала загрузка таблицы rmp_stg."EKPO"', '2025-08-07 04:00:00.000000', '2025-08-07 04:00:00.000000', '2025-08-07 04:35:00.000000', 'https://yt.rusal.ru/issue/DWH-7149', 'rmp_stg."EKPO"', 'rmp_stg.ekpo', 'rmp_stg', 'EKPO', 999, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7147', 'Зависла загрузка таблицы stg."RESB"', '2025-08-07 03:15:00.000000', '2025-08-07 03:15:00.000000', '2025-08-07 03:29:00.000000', 'https://yt.rusal.ru/issue/DWH-7147', 'stg."RESB"', 'stg.resb', 'stg', 'RESB', 1596, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7148', 'Упала загрузка таблицы ods.KPI_INDICATORS_ACTUAL_REPORT_AD', '2025-08-07 03:11:00.000000', '2025-08-07 03:11:00.000000', '2025-08-07 03:41:00.000000', 'https://yt.rusal.ru/issue/DWH-7148', 'ods.KPI_INDICATORS_ACTUAL_REPORT_AD', 'ods.kpi_indicators_actual_report_ad', 'ods', 'KPI_INDICATORS_ACTUAL_REPORT_AD', 2896, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7133', 'не пускает в продуктив', '2025-08-06 09:11:00.000000', '2025-08-06 10:27:00.000000', '2025-08-06 11:03:00.000000', 'https://yt.rusal.ru/issue/DWH-7133', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7126', 'Зависла загрузка таблицы STG."REGUP"', '2025-08-06 05:50:00.000000', '2025-08-06 05:50:00.000000', '2025-08-06 06:08:00.000000', 'https://yt.rusal.ru/issue/DWH-7126', 'STG."REGUP"', 'stg.regup', 'stg', 'REGUP', 1524, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7097', 'Упала загрузка таблицы ods.map_transportation_raw_container_import_tracking_keys', '2025-08-05 01:46:00.000000', '2025-08-05 01:46:00.000000', '2025-08-05 02:08:00.000000', 'https://yt.rusal.ru/issue/DWH-7097', 'ods.map_transportation_raw_container_import_tracking_keys', 'ods.map_transportation_raw_container_import_tracking_keys', 'ods', 'map_transportation_raw_container_import_tracking_keys', 3132, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7096', 'Зависла загрузка таблицы stg."VBAP"', '2025-08-05 01:20:00.000000', '2025-08-05 01:20:00.000000', '2025-08-05 01:37:00.000000', 'https://yt.rusal.ru/issue/DWH-7096', 'stg."VBAP"', 'stg.vbap', 'stg', 'VBAP', 728, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7055', 'Ошибка при загрузке таблицы dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', '2025-08-02 01:24:00.000000', '2025-08-02 08:30:00.000000', '2025-08-02 12:25:00.000000', 'https://yt.rusal.ru/issue/DWH-7055', 'dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', 'dm.sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7038', 'Зависла загрузка таблицы stg."CDPOS"', '2025-08-01 03:40:00.000000', '2025-08-01 03:40:00.000000', '2025-08-01 04:15:00.000000', 'https://yt.rusal.ru/issue/DWH-7038', 'stg."CDPOS"', 'stg.cdpos', 'stg', 'CDPOS', 1601, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-7023', 'Упала загрузка таблицы dict_stg.currency_rates_source_cbr', '2025-07-30 21:07:00.000000', '2025-07-30 21:37:00.000000', '2025-07-30 22:48:00.000000', 'https://yt.rusal.ru/issue/DWH-7023', 'dict_stg.currency_rates_source_cbr', 'dict_stg.currency_rates_source_cbr', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6985', 'Упала загрузка таблицы dm.transportation_aluminium_shipment_from_plant в clickhouse', '2025-07-30 01:30:00.000000', '2025-07-30 01:30:00.000000', '2025-07-30 02:12:00.000000', 'https://yt.rusal.ru/issue/DWH-6985', 'dm.transportation_aluminium_shipment_from_plant', 'dm.transportation_aluminium_shipment_from_plant', 'dm', 'transportation_aluminium_shipment_from_plant', 1729, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6984', 'Упала загрузка таблицы ods.map_zmk_track_exp_keys', '2025-07-30 00:43:00.000000', '2025-07-30 00:43:00.000000', '2025-07-30 01:30:00.000000', 'https://yt.rusal.ru/issue/DWH-6984', 'ods.map_zmk_track_exp_keys', 'ods.map_zmk_track_exp_keys', 'ods', 'map_zmk_track_exp_keys', 1310, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6959', 'Зависла загрузка таблицы STG."REGUH" и STG."REGUP"', '2025-07-29 05:50:00.000000', '2025-07-29 05:50:00.000000', '2025-07-29 07:20:00.000000', 'https://yt.rusal.ru/issue/DWH-6959', 'STG."REGUH", STG."REGUP"', 'stg.reguh,stg.regup', 'stg', 'REGUP', 1524, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6958', 'Упала загрузка таблицы dm.account_turnover_by_counterparty в clickhouse', '2025-07-29 05:13:00.000000', '2025-07-29 05:13:00.000000', '2025-07-29 05:42:00.000000', 'https://yt.rusal.ru/issue/DWH-6958', 'dm.account_turnover_by_counterparty', 'dm.account_turnover_by_counterparty', 'dm', 'account_turnover_by_counterparty', 1417, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6957', 'Упала загрузка таблицы ods.map_zmk_track_exp_keys', '2025-07-29 00:57:00.000000', '2025-07-29 00:57:00.000000', '2025-07-29 01:45:00.000000', 'https://yt.rusal.ru/issue/DWH-6957', 'ods.map_zmk_track_exp_keys', 'ods.map_zmk_track_exp_keys', 'ods', 'map_zmk_track_exp_keys', 1310, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6938', 'Упала загрузка таблицы dm.account_turnover_by_counterparty в clickhouse', '2025-07-28 05:21:00.000000', '2025-07-28 05:21:00.000000', '2025-07-28 05:40:00.000000', 'https://yt.rusal.ru/issue/DWH-6938', 'dm.account_turnover_by_counterparty', 'dm.account_turnover_by_counterparty', 'dm', 'account_turnover_by_counterparty', 1417, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6909', 'Зависла загрузка таблицы STG."AUAS"', '2025-07-25 06:05:00.000000', '2025-07-25 06:05:00.000000', '2025-07-25 07:15:00.000000', 'https://yt.rusal.ru/issue/DWH-6909', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6908', 'Упал сервис odata ZBW1642M_SRV', '2025-07-25 01:10:00.000000', '2025-07-25 01:17:00.000000', '2025-07-25 02:17:00.000000', 'https://yt.rusal.ru/issue/DWH-6908', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6907', 'Упала загрузка таблицы stg."ZMK_TRACK_EXP04"', '2025-07-25 00:37:00.000000', '2025-07-25 00:37:00.000000', '2025-07-25 01:17:00.000000', 'https://yt.rusal.ru/issue/DWH-6907', 'stg."ZMK_TRACK_EXP04"', 'stg.zmk_track_exp04', 'stg', 'ZMK_TRACK_EXP04', 1298, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6883', 'Упала загрузка таблицы stg."ZMK_TRACK_EXP04"', '2025-07-24 01:09:00.000000', '2025-07-24 01:09:00.000000', '2025-07-24 01:30:00.000000', 'https://yt.rusal.ru/issue/DWH-6883', 'stg."ZMK_TRACK_EXP04"', 'stg.zmk_track_exp04', 'stg', 'ZMK_TRACK_EXP04', 1298, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6882', 'Упала загрузка справочника dict_dds.unit_balance в кликхаус', '2025-07-23 21:15:00.000000', '2025-07-23 21:15:00.000000', '2025-07-23 22:22:00.000000', 'https://yt.rusal.ru/issue/DWH-6882', 'dict_dds.unit_balance', 'dict_dds.unit_balance', 'dict_dds', 'unit_balance', 306, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6888', 'Пустая таблица currency_rate', '2025-07-23 21:15:00.000000', '2025-07-24 07:00:00.000000', '2025-07-24 09:30:00.000000', 'https://yt.rusal.ru/issue/DWH-6888', 'currency_rate', 'currency_rate', 'dict_dds', 'currency_rate', 1197, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6817', 'Зависла загрузка таблицы STG."AUAS"', '2025-07-22 06:07:00.000000', '2025-07-22 06:07:00.000000', '2025-07-22 07:15:00.000000', 'https://yt.rusal.ru/issue/DWH-6817', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6816', 'Упала загрузка таблицы stg."MES_LP_ALSGP_AR"', '2025-07-22 03:05:00.000000', '2025-07-22 03:05:00.000000', '2025-07-22 03:44:00.000000', 'https://yt.rusal.ru/issue/DWH-6816', 'stg."MES_LP_ALSGP_AR"', 'stg.mes_lp_alsgp_ar', 'stg', 'MES_LP_ALSGP_AR', 2745, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6794', 'Зависла загрузка таблицы STG."REGUH"', '2025-07-21 06:00:00.000000', '2025-07-21 06:00:00.000000', '2025-07-21 07:30:00.000000', 'https://yt.rusal.ru/issue/DWH-6794', 'STG."REGUH"', 'stg.reguh', 'stg', 'REGUH', 1525, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6792', 'Упал сервис odata ZBW1642M_SRV', '2025-07-21 01:10:00.000000', '2025-07-21 01:30:00.000000', '2025-07-21 02:22:00.000000', 'https://yt.rusal.ru/issue/DWH-6792', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6893', 'Недоступность Greenplum PROD', '2025-07-19 11:05:00.000000', '2025-07-19 11:05:00.000000', '2025-07-19 13:04:00.000000', 'https://yt.rusal.ru/issue/DWH-6893', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6767', 'Зависла загрузка таблицы STG."AUAS"', '2025-07-18 06:15:00.000000', '2025-07-18 06:15:00.000000', '2025-07-18 06:35:00.000000', 'https://yt.rusal.ru/issue/DWH-6767', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6766', 'Упал сервис odata ZBW1642M_SRV', '2025-07-18 01:14:00.000000', '2025-07-18 01:33:00.000000', '2025-07-18 02:20:00.000000', 'https://yt.rusal.ru/issue/DWH-6766', 'ZBW1642M_SRV', 'zbw1642m_srv', null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6749', 'Высокая нагрузка на Orace MESDW', '2025-07-17 06:25:00.000000', '2025-07-17 06:25:00.000000', '2025-07-17 10:15:00.000000', 'https://yt.rusal.ru/issue/DWH-6749', '-', null, null, null, null, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6745', 'Ошибка загрузки таблицы dm.general_ledger_balance_sheet_structure в Clickhouse', '2025-07-17 05:30:00.000000', '2025-07-17 05:30:00.000000', '2025-07-17 06:10:00.000000', 'https://yt.rusal.ru/issue/DWH-6745', 'dm.general_ledger_balance_sheet_structure', 'dm.general_ledger_balance_sheet_structure', 'dm', 'general_ledger_balance_sheet_structure', 3801, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6725', 'Ошибка загрузки таблицы sb_wuc в Clickhouse', '2025-07-16 03:04:00.000000', '2025-07-16 03:04:00.000000', '2025-07-16 06:51:00.000000', 'https://yt.rusal.ru/issue/DWH-6725', 'sb_wuc', 'sb_wuc', 'dm', 'sb_wuc', 1334, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-6690', 'Зависла загрузка таблицы STG."AUAS"', '2025-07-14 06:10:00.000000', '2025-07-14 06:10:00.000000', '2025-07-14 09:22:00.000000', 'https://yt.rusal.ru/issue/DWH-6690', 'STG."AUAS"', 'stg.auas', 'stg', 'AUAS', 1921, '-', '-', '2025-12-30 16:13:14.325574');
+INSERT INTO public.ytrek_incidents (issue_id, title, start_at, detected_at, resolved_at, link, table_raw, table_normalized, table_schema, table_name, table_id, entity_name_excel, entity_name, inserted_at) VALUES ('DWH-9028', 'Исправить сбой при выгрузке dm.account_turnover в Click(Prod)', null, '2025-11-24 16:00:00.000000', null, 'https://yt.rusal.ru/issue/DWH-9028', 'dm.account_turnover', 'stg./RUSAL/PERH', 'stg', '/RUSAL/PERH', 2330, '-', '-', '2025-12-30 16:13:14.325574');

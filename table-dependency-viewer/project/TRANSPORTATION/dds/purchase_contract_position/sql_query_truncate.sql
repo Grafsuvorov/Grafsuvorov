@@ -1,0 +1,1 @@
+truncate dds."purchase_contract_position";

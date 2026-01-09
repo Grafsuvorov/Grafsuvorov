@@ -1,0 +1,1 @@
+truncate table dds.delivery_document_position;

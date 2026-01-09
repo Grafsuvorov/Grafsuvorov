@@ -1,0 +1,1 @@
+truncate table dm.raw_materials_shipment_and_arrival;

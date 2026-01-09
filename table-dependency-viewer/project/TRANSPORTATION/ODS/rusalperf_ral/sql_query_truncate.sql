@@ -1,0 +1,1 @@
+truncate table ods."/rusal/perf_ral";

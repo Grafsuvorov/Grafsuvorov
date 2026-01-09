@@ -1,0 +1,1 @@
+truncate table dds.transportation_service_and_accounting_relation;

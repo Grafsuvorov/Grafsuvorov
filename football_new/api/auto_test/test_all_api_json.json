@@ -1,0 +1,37 @@
+{
+  "base_url": "http://127.0.0.1:8001",
+  "headers": {
+    "X-API-Key": "TEST_LOCAL_API_KEY_123456"
+  },
+  "endpoints": [
+    { "method": "GET", "path": "/health" },
+    { "method": "GET", "path": "/_debug/routes" },
+
+    { "method": "GET", "path": "/api/matches_v3", "params": { "from_date": "2025-07-01", "to_date": "2026-06-30", "league": "Premier League", "season": "2025" } },
+    { "method": "GET", "path": "/api/league-table", "params": { "league": "Premier League", "season": "2025", "view": "total" } },
+    { "method": "GET", "path": "/api/matchday/elo", "params": { "league": "Premier League", "top": 3, "seasons_back": 2, "min_cnt": 3 } },
+
+    { "method": "GET", "path": "/api/players/search", "params": { "q": "Saka", "league": "Premier League", "season": "2024", "limit": 12 } },
+    { "method": "GET", "path": "/api/player/overview", "params": { "player_id": 306 } },
+    { "method": "GET", "path": "/api/player/recent", "params": { "player_id": 306, "limit": 10 } },
+    { "method": "GET", "path": "/api/player/career", "params": { "player_id": 306 } },
+
+    { "method": "GET", "path": "/api/top-scorers", "params": { "league": "Premier League", "season": "2024" } },
+    { "method": "GET", "path": "/api/top-assists", "params": { "league": "Premier League", "season": "2024" } },
+    { "method": "GET", "path": "/api/top-rated", "params": { "league": "Premier League", "limit": 3 } },
+
+    { "method": "GET", "path": "/api/ucl/qualifiers", "params": { "season": 2024 } },
+    { "method": "GET", "path": "/api/ucl/playoffs", "params": { "season": 2024 } },
+    { "method": "GET", "path": "/api/ucl/bracket", "params": { "season": 2024 } },
+
+    { "method": "GET", "path": "/api/best-picks", "params": { "from_date": "2024-08-01", "to_date": "2024-09-01", "league": "Premier League", "season": "2024", "pre_match_only": true, "min_books": 3, "ev_min_1x2": 0.04, "ev_min_ou": 0.05, "top_n": 10, "return_fixtures": false } },
+
+    { "method": "GET", "path": "/api/subscriptions/plans" },
+    { "method": "GET", "path": "/api/subscriptions/me" },
+
+    { "method": "POST", "path": "/auth-dwh/register", "json": { "email": "test_user_001@example.com", "username": "tester_001", "password": "TestPassw0rd!" } },
+    { "method": "POST", "path": "/auth-dwh/login", "json": { "email": "test_user_001@example.com", "password": "TestPassw0rd!" } }
+  ]
+}
+
+

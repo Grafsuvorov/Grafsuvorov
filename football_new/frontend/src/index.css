@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================
+   THEME: PINK (default)
+   =========================== */
+[data-theme="pink"] {
+  --bg-main: #ffffff;
+  --bg-secondary: #fff5f7;
+
+  --text-main: #1c1c1e;
+  --text-soft: #4b5563;
+
+  --accent: #e11d48;
+  --accent-light: #f43f5e;
+  --accent-dark: #be123c;
+
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px rgb(0 0 0 / 0.07);
+}
+
+/* ===========================
+   THEME: PREMIUM (sapphire-dark)
+   =========================== */
+[data-theme="premium"] {
+  --bg-main: radial-gradient(circle at top, #0b0f19 0%, #030712 70%);
+  --bg-secondary: rgba(255, 255, 255, 0.04);
+
+  --text-main: #f5f5f7;
+  --text-soft: #cbd5e1;
+
+  --accent: #6d6dff;
+  --accent-light: #8e8eff;
+  --accent-dark: #4a4aff;
+
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.10);
+
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 6px 12px rgb(0 0 0 / 0.5);
+}
+
+/* ===========================
+   Scrollbar utilities
+   =========================== */
+
+/* Скрыть горизонтальные скроллбары, сохранить прокрутку */
+.no-scrollbar {
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/* Тонкий скроллбар */
+.thin-scrollbar {
+  scrollbar-width: thin;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,.15);
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,1 @@
+truncate table dds.settlement_documents_from_project_to_receiver;

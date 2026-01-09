@@ -1,0 +1,1 @@
+truncate ods."payment_document_header";

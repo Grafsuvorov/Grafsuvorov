@@ -1,0 +1,1 @@
+truncate table dds.transportation_aluminium_business_plan_position;

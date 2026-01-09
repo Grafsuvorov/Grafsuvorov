@@ -1,0 +1,1 @@
+truncate table dds.raw_materials_allocation_list_for_production;

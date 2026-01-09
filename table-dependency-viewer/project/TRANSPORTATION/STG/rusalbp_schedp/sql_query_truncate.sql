@@ -1,0 +1,1 @@
+TRUNCATE stg."/RUSAL/BP_SCHEDP";

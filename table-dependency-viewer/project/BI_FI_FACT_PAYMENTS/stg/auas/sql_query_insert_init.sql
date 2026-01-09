@@ -1,0 +1,31 @@
+ INSERT INTO STG."AUAS"(
+"MANDT",
+"BELNR",
+"LFDNR",
+"PLFNR",
+"TWAER",
+"WTGBTR",
+"WKGBTR",
+"KEY01",
+"RN",
+"DTTM_INSERTED",
+"DTTM_UPDATED",
+"JOB_NAME",
+"DELETED_FLAG",
+"IS_ACTUAL")
+ SELECT 
+"MANDT",
+"BELNR",
+"LFDNR",
+"PLFNR",
+"TWAER",
+"WTGBTR",
+"WKGBTR",
+"KEY01",
+"RN",
+now(),
+now(),
+'airflow',
+false,
+true
+ FROM  RAW_EXT."AUAS_READ";

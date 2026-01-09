@@ -1,0 +1,1 @@
+truncate table ods.a016_ral;

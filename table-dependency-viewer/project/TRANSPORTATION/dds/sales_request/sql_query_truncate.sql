@@ -1,0 +1,1 @@
+truncate table dds.sales_request;

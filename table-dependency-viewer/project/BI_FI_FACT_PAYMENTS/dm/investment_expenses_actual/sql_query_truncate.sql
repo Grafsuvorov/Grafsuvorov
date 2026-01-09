@@ -1,0 +1,1 @@
+truncate table dm.investment_expenses_actual;

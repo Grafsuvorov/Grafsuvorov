@@ -1,0 +1,1 @@
+truncate table ods.zle2464m_bp_rawp_ral;

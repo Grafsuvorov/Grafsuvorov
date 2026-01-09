@@ -1,0 +1,1 @@
+truncate table dds.purchase_contract_price_conditions;

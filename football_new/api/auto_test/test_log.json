@@ -1,0 +1,191 @@
+{
+  "executed_at": "2025-09-25T08:14:25.243636Z",
+  "results": [
+    {
+      "method": "GET",
+      "path": "/api/subscriptions/me",
+      "status_code": 500,
+      "ok": false
+    },
+    {
+      "method": "POST",
+      "path": "/auth-dwh/register",
+      "status_code": 400,
+      "ok": false
+    },
+    {
+      "method": "POST",
+      "path": "/auth-dwh/login",
+      "status_code": 401,
+      "ok": false
+    },
+    {
+      "method": "GET",
+      "path": "/auth-dwh/me",
+      "status_code": 403,
+      "ok": false
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/_debug/routes",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/matches_v3",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/match-schedule-v3",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/league-table",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/matchday/elo",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/players/search",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/player/overview",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/player/recent",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/player/career",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/top-scorers",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/top-assists",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/top-rated",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/ucl/qualifiers",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/ucl/playoffs",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/ucl/bracket",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/best-picks",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscriptions/plans",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/openapi.json",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/docs",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/docs/oauth2-redirect",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/redoc",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscriptions/ping",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/test",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/test/health",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/verify",
+      "status_code": 200,
+      "ok": true
+    },
+    {
+      "method": "GET",
+      "path": "/",
+      "status_code": 200,
+      "ok": true
+    }
+  ]
+}

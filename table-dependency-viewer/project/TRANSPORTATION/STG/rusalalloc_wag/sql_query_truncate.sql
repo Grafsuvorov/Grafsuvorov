@@ -1,0 +1,1 @@
+truncate stg."/RUSAL/ALLOC_WAG";

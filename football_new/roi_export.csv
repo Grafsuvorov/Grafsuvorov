@@ -1,0 +1,97 @@
+date,league,fixture_id,home_team,away_team,score,best_bet_type,best_bet_outcome,bet_rating,best_bet_odds,best_bet_ev,result_note,result,profit,bet_decision_notes,close_bucket,decision_profile
+2025-08-15 18:45,Ligue 1,1387706,Rennes,Marseille,1-0,1X2,Away,Medium,1.966,0.056195199205704816,Home,Loss,-1.0,,Not close,Baseline
+2025-08-16 11:30,Premier League,1378970,Aston Villa,Newcastle,0-0,UNDER25,Under2.5,Medium,2.2760000000000002,0.1640304612915353,0.0 goals,Win,1.2760000000000002,,Close,Baseline
+2025-08-16 14:00,Premier League,1378973,Sunderland,West Ham,3-0,1X2,Home,Medium,3.166,0.11509954710653614,Home,Win,2.166,,Close,Baseline
+2025-08-16 15:00,Ligue 1,1387701,Lens,Lyon,0-1,UNDER25,Under2.5,Strong,2.1740000000000004,0.20953883186522027,1.0 goals,Win,1.1740000000000004,,Not close,Baseline
+2025-08-16 19:05,Ligue 1,1387705,Nice,Toulouse,0-1,1X2,Home,Strong,2.0519999999999996,0.12418611512957711,Away,Loss,-1.0,,Not close,Baseline
+2025-08-16 19:30,La Liga,1390827,Valencia,Real Sociedad,1-1,1X2,Home,Medium,2.71,0.08796636718567452,Draw,Loss,-1.0,,Close,Baseline
+2025-08-17 13:00,Ligue 1,1387700,Stade Brestois 29,Lille,3-3,UNDER25,Under2.5,Strong,1.9460000000000002,0.12485160148938501,6.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-17 15:15,Ligue 1,1387698,Angers,Paris FC,1-0,1X2,Away,Strong,2.444,0.22446270738212504,Home,Loss,-1.0,,Not close,Baseline
+2025-08-17 15:15,Ligue 1,1387702,Metz,Strasbourg,0-1,1X2,Away,Strong,2.298,0.20464040917299586,Away,Win,1.298,,Not close,Baseline
+2025-08-17 15:30,Premier League,1378977,Manchester United,Arsenal,0-1,1X2,Away,Strong,2.0799999999999996,0.11589800960420593,Away,Win,1.0799999999999996,,Not close,Baseline
+2025-08-18 19:00,La Liga,1390822,Elche,Real Betis,1-1,1X2,Away,Strong,2.346,0.1556307829905661,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-22 19:00,Premier League,1378988,West Ham,Chelsea,1-5,UNDER25,Under2.5,Strong,2.154,0.13280730799644713,6.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-23 13:30,Bundesliga,1388316,Union Berlin,VfB Stuttgart,2-1,OVER25,Over2.5,Strong,1.6960000000000002,0.1452150329589843,3.0 goals,Win,0.6960000000000002,,Not close,Baseline
+2025-08-23 13:30,Bundesliga,1388313,1. FC Heidenheim,VfL Wolfsburg,1-3,UNDER25,Under2.5,Weak,2.166,0.016923669248403383,4.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-23 14:00,Premier League,1378981,Brentford,Aston Villa,1-0,1X2,Home,Medium,3.2019999999999995,0.0960275768682215,Home,Win,2.2019999999999995,,Not close,Baseline
+2025-08-23 15:00,La Liga,1390833,Mallorca,Celta Vigo,1-1,1X2,Away,Medium,2.376,0.11500647340883341,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-23 16:30,Bundesliga,1388315,FC St. Pauli,Borussia Dortmund,3-3,OVER25,Over2.5,Weak,1.7879999999999998,0.037958339023590026,6.0 goals,Win,0.7879999999999998,,Not close,Baseline
+2025-08-24 13:00,Premier League,1378984,Everton,Brighton,2-0,1X2,Away,Medium,2.5140000000000002,0.1462249056458358,Home,Loss,-1.0,,Not close,Baseline
+2025-08-24 13:00,Ligue 1,1387709,Lorient,Rennes,4-0,1X2,Home,Strong,2.582,0.12844311568405908,Home,Win,1.5819999999999999,,Not close,Baseline
+2025-08-24 13:00,Premier League,1378983,Crystal Palace,Nottingham Forest,1-1,1X2,Home,Weak,2.184,0.02783557292476324,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-24 15:00,La Liga,1390834,Osasuna,Valencia,1-0,UNDER25,Under2.5,Strong,1.6800000000000002,0.2683499892332659,1.0 goals,Win,0.6800000000000002,,Not close,Baseline
+2025-08-24 15:15,Ligue 1,1387707,Le Havre,Lens,1-2,1X2,Away,Strong,2.0,0.10859024665917572,Away,Win,1.0,,Not close,Baseline
+2025-08-24 15:30,Premier League,1378985,Fulham,Manchester United,1-1,UNDER25,Under2.5,Strong,2.028,0.09834442672540278,2.0 goals,Win,1.028,,Not close,Baseline
+2025-08-24 16:30,Serie A,1377865,Cagliari,Fiorentina,1-1,1X2,Away,Strong,2.358,0.14921839556401206,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-24 18:45,Ligue 1,1387708,Lille,Monaco,1-0,1X2,Home,Medium,2.836,0.1606734588694132,Home,Win,1.8359999999999999,,Close,Baseline
+2025-08-29 16:30,Serie A,1377875,Cremonese,Sassuolo,3-2,UNDER25,Under2.5,Strong,2.104,0.1839105338051208,5.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-30 13:30,Bundesliga,1388321,1899 Hoffenheim,Eintracht Frankfurt,1-3,1X2,Away,Strong,2.332,0.12113491565798884,Away,Win,1.3319999999999999,,Not close,Baseline
+2025-08-30 14:00,Premier League,1378998,Wolves,Everton,2-3,1X2,Away,Medium,2.6100000000000003,0.17912052256075706,Away,Win,1.6100000000000003,,Not close,Baseline
+2025-08-30 15:00,Ligue 1,1387719,Lorient,Lille,1-7,1X2,Home,Medium,3.3128571428571427,0.1834291033631088,Away,Loss,-1.0,,Not close,Baseline
+2025-08-30 15:00,La Liga,1390839,Alaves,Atletico Madrid,1-1,OVER25,Over2.5,Medium,2.138,0.0667992894138354,2.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-30 16:30,Premier League,1378992,Leeds,Newcastle,0-0,1X2,Away,Strong,2.1119999999999997,0.12893929765834522,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-30 16:30,Serie A,1377881,Parma,Atalanta,1-1,OVER25,Over2.5,Weak,1.7260000000000002,0.013912973133723083,2.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-30 18:45,Serie A,1377882,Pisa,AS Roma,0-1,UNDER25,Under2.5,Strong,1.8800000000000001,0.09983196092787261,1.0 goals,Win,0.8800000000000001,,Not close,Baseline
+2025-08-31 13:00,Ligue 1,1387716,Angers,Rennes,1-1,1X2,Home,Medium,3.3857142857142857,0.1884658411104374,Draw,Loss,-1.0,,Not close,Baseline
+2025-08-31 13:30,Bundesliga,1388325,VfL Wolfsburg,FSV Mainz 05,1-1,UNDER25,Under2.5,Medium,2.104,0.18271654767535983,2.0 goals,Win,1.104,,Close,Baseline
+2025-08-31 15:00,La Liga,1390841,Celta Vigo,Villarreal,1-1,UNDER25,Under2.5,Strong,2.1220000000000003,0.19056086752301193,2.0 goals,Win,1.1220000000000003,,Not close,Baseline
+2025-08-31 15:15,Ligue 1,1387717,Le Havre,Nice,3-1,1X2,Away,Strong,2.0385714285714287,0.1426768381294461,Home,Loss,-1.0,,Not close,Baseline
+2025-08-31 16:30,Serie A,1377883,Torino,Fiorentina,0-0,OVER25,Over2.5,Strong,2.222,0.19662533262570703,0.0 goals,Loss,-1.0,,Not close,Baseline
+2025-08-31 16:30,Serie A,1377876,Genoa,Juventus,0-1,1X2,Away,Medium,1.9280000000000002,0.07596971688797227,Away,Win,0.9280000000000002,,Not close,Baseline
+2025-08-31 17:00,La Liga,1390840,Real Betis,Athletic Club,1-2,1X2,Home,Medium,2.6420000000000003,0.09499586530339088,Away,Loss,-1.0,,Not close,Baseline
+2025-08-31 19:30,La Liga,1390845,Rayo Vallecano,Barcelona,1-1,UNDER25,Under2.5,Strong,2.888,0.23667984407226395,2.0 goals,Win,1.888,,Not close,Baseline
+2025-09-13 13:30,Bundesliga,1388329,SC Freiburg,VfB Stuttgart,3-1,1X2,Away,Medium,2.268,0.11618131339911897,Home,Loss,-1.0,,Not close,Baseline
+2025-09-13 18:45,Serie A,1377887,Fiorentina,Napoli,1-3,UNDER25,Under2.5,Medium,1.7719999999999998,0.057954113235927585,4.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-14 13:00,Ligue 1,1387727,Lille,Toulouse,2-1,1X2,Home,Strong,1.934,0.1613625187666261,Home,Win,0.9339999999999999,,Not close,Baseline
+2025-09-14 14:15,La Liga,1390855,Levante,Real Betis,2-2,OVER25,Over2.5,Strong,2.008,0.11924113556543992,4.0 goals,Win,1.008,,Not close,Baseline
+2025-09-14 16:00,Serie A,1377892,Sassuolo,Lazio,1-0,UNDER25,Under2.5,Strong,2.0159999999999996,0.14926862487792958,1.0 goals,Win,1.0159999999999996,,Not close,Baseline
+2025-09-14 18:45,Ligue 1,1387732,Rennes,Lyon,3-1,1X2,Away,Strong,2.3979999999999997,0.19227239545804897,Home,Loss,-1.0,,Not close,Baseline
+2025-09-15 19:00,La Liga,1390853,Espanyol,Mallorca,3-2,UNDER25,Under2.5,Weak,1.6960000000000002,0.02811029127211806,5.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-20 14:00,Premier League,1379011,Brighton,Tottenham,2-2,1X2,Home,Weak,2.232,0.023223244691494616,Draw,Loss,-1.0,,Not close,Baseline
+2025-09-20 14:00,Premier League,1379012,Burnley,Nottingham Forest,1-1,1X2,Away,Medium,2.194,0.06585979046617196,Draw,Loss,-1.0,,Not close,Baseline
+2025-09-20 14:00,Premier League,1379017,West Ham,Crystal Palace,1-2,1X2,Away,Medium,2.4539999999999997,0.13961105867766355,Away,Win,1.4539999999999997,,Not close,Baseline
+2025-09-20 14:00,Premier League,1379018,Wolves,Leeds,1-3,1X2,Home,Medium,2.566,0.06577722180091361,Away,Loss,-1.0,,Not close,Baseline
+2025-09-20 15:00,Ligue 1,1387741,Nantes,Rennes,2-2,1X2,Away,Strong,2.318,0.1863464117941922,Draw,Loss,-1.0,,Not close,Baseline
+2025-09-20 16:30,Premier League,1379015,Manchester United,Chelsea,2-1,1X2,Away,Medium,2.44,0.11512527115845606,Home,Loss,-1.0,,Not close,Baseline
+2025-09-20 16:30,La Liga,1390859,Alaves,Sevilla,1-2,1X2,Home,Weak,2.468,0.0379936403649519,Away,Loss,-1.0,,Not close,Baseline
+2025-09-20 18:45,Serie A,1377902,Udinese,AC Milan,0-3,UNDER25,Under2.5,Strong,1.8960000000000001,0.1081659176281522,3.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-20 19:00,La Liga,1390867,Valencia,Athletic Club,2-0,1X2,Away,Medium,2.536,0.1947954773916547,Home,Loss,-1.0,,Not close,Baseline
+2025-09-21 10:30,Serie A,1377898,Lazio,AS Roma,0-1,OVER25,Over2.5,Strong,2.126,0.16130958524545025,1.0 goals,Loss,-1.0,,Close,Baseline
+2025-09-21 13:00,Serie A,1377895,Cremonese,Parma,0-0,OVER25,Over2.5,Strong,2.286,0.21908330109119412,0.0 goals,Loss,-1.0,,Close,Baseline
+2025-09-21 13:00,Serie A,1377901,Torino,Atalanta,0-3,1X2,Away,Strong,2.062,0.09832402147926822,Away,Win,1.0619999999999998,,Not close,Baseline
+2025-09-21 13:00,Premier League,1379016,Sunderland,Aston Villa,1-1,UNDER25,Under2.5,Weak,1.796,0.03487479362910384,2.0 goals,Win,0.796,,Not close,Baseline
+2025-09-21 13:00,Premier League,1379010,Bournemouth,Newcastle,0-0,UNDER25,Under2.5,Strong,1.9899999999999998,0.0892642859327728,0.0 goals,Win,0.9899999999999998,,Not close,Baseline
+2025-09-21 13:00,Ligue 1,1387742,Paris FC,Strasbourg,2-3,1X2,Home,Strong,2.554,0.12236899277917157,Away,Loss,-1.0,,Not close,Baseline
+2025-09-21 15:15,Ligue 1,1387734,Auxerre,Toulouse,1-0,1X2,Away,Medium,2.646,0.23025703090014282,Home,Loss,-1.0,,Not close,Baseline
+2025-09-21 15:15,Ligue 1,1387736,Le Havre,Lorient,1-1,OVER25,Over2.5,Strong,2.0,0.11644953091939292,2.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-21 16:00,Serie A,1377896,Fiorentina,Como,1-2,1X2,Home,Medium,2.664,0.11570564781464987,Away,Loss,-1.0,,Not close,Baseline
+2025-09-23 19:30,La Liga,1390878,Sevilla,Villarreal,1-2,1X2,Away,Strong,2.25,0.1458384319516104,Away,Win,1.25,,Not close,Baseline
+2025-09-26 18:45,Ligue 1,1387750,Strasbourg,Marseille,1-2,1X2,Home,Medium,3.7019999999999995,0.171864644362,Away,Loss,-1.0,,Not close,Baseline
+2025-09-27 13:30,Bundesliga,1388349,FSV Mainz 05,Borussia Dortmund,0-2,1X2,Away,Medium,2.1039999999999996,0.07140140290306762,Away,Win,1.1039999999999996,,Not close,Baseline
+2025-09-27 13:30,Bundesliga,1388350,FC St. Pauli,Bayer Leverkusen,1-2,1X2,Away,Strong,2.1079999999999997,0.11754843455153541,Away,Win,1.1079999999999997,,Not close,Baseline
+2025-09-27 14:00,Premier League,1379024,Leeds,Bournemouth,2-2,1X2,Away,Medium,2.478,0.15250288186335315,Draw,Loss,-1.0,,Not close,Baseline
+2025-09-27 14:15,La Liga,1390879,Atletico Madrid,Real Madrid,5-2,OVER25,Over2.5,Strong,2.026666666666667,0.12368587154812305,7.0 goals,Win,1.0266666666666668,,Not close,Baseline
+2025-09-27 16:30,Bundesliga,1388345,Borussia Mönchengladbach,Eintracht Frankfurt,4-6,UNDER25,Under2.5,Strong,2.7380000000000004,0.19784216465950033,10.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-27 16:30,La Liga,1390885,Mallorca,Alaves,1-0,1X2,Home,Strong,2.5833333333333335,0.14544492019472077,Home,Win,1.5833333333333335,,Not close,Baseline
+2025-09-27 18:45,Serie A,1377904,Cagliari,Inter,0-2,UNDER25,Under2.5,Strong,2.036,0.15708997953051607,2.0 goals,Win,1.036,,Not close,Baseline
+2025-09-27 19:00,La Liga,1390888,Villarreal,Athletic Club,1-0,OVER25,Over2.5,Strong,2.0100000000000002,0.11758340644836429,1.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-28 13:00,Ligue 1,1387747,Nice,Paris FC,1-1,OVER25,Over2.5,Strong,1.8,0.19626607894897474,2.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-28 13:00,Serie A,1377911,Pisa,Fiorentina,0-0,OVER25,Over2.5,Strong,2.2733333333333334,0.2191006079249913,0.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-28 13:30,Bundesliga,1388347,SC Freiburg,1899 Hoffenheim,1-1,UNDER25,Under2.5,Medium,2.356666666666667,0.08961176999409992,2.0 goals,Win,1.356666666666667,,Not close,Baseline
+2025-09-28 15:15,Ligue 1,1387744,Lille,Lyon,0-1,OVER25,Over2.5,Strong,1.82,0.2055154652595521,1.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-28 15:15,Ligue 1,1387743,Angers,Stade Brestois 29,0-2,1X2,Away,Strong,2.2939999999999996,0.22674074199743566,Away,Win,1.2939999999999996,,Not close,Baseline
+2025-09-28 15:30,Bundesliga,1388346,1.FC Köln,VfB Stuttgart,1-2,UNDER25,Under2.5,Strong,2.4033333333333333,0.30120673033926226,3.0 goals,Loss,-1.0,,Not close,Baseline
+2025-09-28 15:30,Premier League,1379026,Newcastle,Arsenal,1-2,1X2,Away,Medium,2.222,0.07702424695647392,Away,Win,1.222,,Not close,Baseline
+2025-09-28 16:00,Serie A,1377908,Lecce,Bologna,2-2,1X2,Away,Strong,2.096,0.08927749929411744,Draw,Loss,-1.0,,Not close,Baseline
+2025-09-29 18:45,Serie A,1377906,Genoa,Lazio,0-3,1X2,Away,Strong,2.406,0.16178305341998223,Away,Win,1.4060000000000001,,Not close,Baseline
+2025-10-03 18:45,Serie A,1377923,Verona,Sassuolo,0-1,1X2,Home,Medium,2.558,0.1010412734446553,Away,Loss,-1.0,,Not close,Baseline
+2025-10-03 19:00,La Liga,1390894,Osasuna,Getafe,2-1,OVER25,Over2.5,Strong,2.98,0.288948797564174,3.0 goals,Win,1.98,,Not close,Baseline
+2025-10-04 11:30,Premier League,1379035,Leeds,Tottenham,1-2,1X2,Away,Medium,2.348,0.0869193507300896,Away,Win,1.3479999999999999,,Not close,Baseline
+2025-10-04 12:00,La Liga,1390897,Oviedo,Levante,0-2,UNDER25,Under2.5,Weak,1.7149999999999999,0.03786247893174499,2.0 goals,Win,0.7149999999999999,,Not close,Baseline
+2025-10-04 13:30,Bundesliga,1388353,FC Augsburg,VfL Wolfsburg,3-1,UNDER25,Under2.5,Strong,2.1075,0.18707794891936436,4.0 goals,Loss,-1.0,,Not close,Baseline
+2025-10-04 16:30,Premier League,1379033,Chelsea,Liverpool,2-1,1X2,Away,Medium,2.4,0.14409337821240276,Home,Loss,-1.0,,Not close,Baseline
+2025-10-05 13:00,Premier League,1379038,Wolves,Brighton,1-1,OVER25,Over2.5,Medium,1.8800000000000001,0.044049163491637566,2.0 goals,Loss,-1.0,,Not close,Baseline
+2025-10-05 13:00,Serie A,1377916,Fiorentina,AS Roma,1-2,1X2,Away,Medium,2.242,0.059865050152367205,Away,Win,1.242,,Not close,Baseline
+2025-10-05 15:15,Ligue 1,1387754,Le Havre,Rennes,2-2,OVER25,Over2.5,Strong,1.9120000000000001,0.0862462961832684,4.0 goals,Win,0.9120000000000001,,Not close,Baseline
+2025-10-05 15:30,Bundesliga,1388358,Hamburger SV,FSV Mainz 05,4-0,UNDER25,Under2.5,Strong,2.196,0.21755876654216233,4.0 goals,Loss,-1.0,,Not close,Baseline
+2025-10-05 19:00,La Liga,1390891,Celta Vigo,Atletico Madrid,1-1,UNDER25,Under2.5,Strong,1.9300000000000002,0.1200343484424411,2.0 goals,Win,0.9300000000000002,,Not close,Baseline

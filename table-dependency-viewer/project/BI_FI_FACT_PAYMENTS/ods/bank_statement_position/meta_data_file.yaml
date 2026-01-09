@@ -1,0 +1,26 @@
+table_name: bank_statement_position
+table_schema: ods
+table_id: 1559
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: ODS_VIEW_ZSD324K
+table_loading_index: 1
+entity_id: 38
+entity_name: BI_FI_FACT_PAYMENTS
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 00:01:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/ods/bank_statement_position/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/ods/bank_statement_position/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/ods/bank_statement_position/sql_query_truncate.sql
+depends_on:
+  stg:
+    - FEBEP

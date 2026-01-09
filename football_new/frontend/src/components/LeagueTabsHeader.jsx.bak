@@ -1,0 +1,223 @@
+﻿// src/components/LeagueTabsHeader.jsx
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
+import clsx from "clsx";
+import AuthIndicator from "./auth/AuthIndicator";
+
+/* ===== constants & helpers ===== */
+const LEAGUES = [
+  "Premier League","La Liga","Bundesliga","Serie A","Ligue 1",
+  "UEFA Champions League","Jupiler Pro League","Süper Lig","Eredivisie","Primeira Liga",
+];
+const SEASONS = ["2025","2024","2023","2022"];
+const THEME = "#E11D48";
+
+function tint(hex, amt){
+  if(hex===undefined) hex="#111827";
+  if(amt===undefined) amt=0.55;
+  var c=hex.replace("#","");
+  var n=parseInt(c.length===3 ? c.split("").map((x)=>x+x).join("") : c,16);
+  var r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  function mix(v){ return Math.round(v+(255-v)*amt); }
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}
+
+function getLeagueLogo(name){
+  return "/icons/"+String(name).replace(/\s/g,"_")+".png";
+}
+
+function safeGet(k, def){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):def; }catch(e){ return def; } }
+function safeSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+/* ===== main header (premium dark version, no tabs!) ===== */
+export default function LeagueTabsHeader(props){
+  var league = props.league;
+  var season = props.season;
+  var onLeagueChange = props.onLeagueChange;
+  var onSeasonChange = props.onSeasonChange;
+  var chipsMode = props.chipsMode || "full";
+  var forceHideSeason = !!props.forceHideSeason;
+
+  var location = useLocation();
+
+  // Auto-hide season dropdown on some pages
+  var hideSeasonAuto = /\/top-(scorers|assists)/i.test(location.pathname);
+  var hideSeason = forceHideSeason || hideSeasonAuto;
+
+  var bg = `linear-gradient(90deg, ${THEME} 0%, ${tint(THEME,0.7)} 60%, ${tint(THEME,0.85)} 100%)`;
+
+  /* ====== Horizontal chips scroll ====== */
+  var railRef = useRef(null);
+  var [canRight, setCanRight] = useState(false);
+  var [canLeft, setCanLeft] = useState(false);
+
+  useEffect(() => {
+    var el = railRef.current; if(!el) return;
+    function onScroll(){
+      setCanLeft(el.scrollLeft > 2);
+      setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 2);
+    }
+    onScroll();
+    el.addEventListener("scroll", onScroll);
+    const ro = new ResizeObserver(onScroll); ro.observe(el);
+    return () => { el.removeEventListener("scroll", onScroll); ro.disconnect(); };
+  }, []);
+
+  function scrollRight(){
+    var el = railRef.current; if(el) el.scrollBy({ left:240, behavior:"smooth" });
+  }
+
+  /* ===== Seasons ====== */
+  var [openSeason, setOpenSeason] = useState(false);
+
+  useEffect(() => {
+    function onKey(e){ if(e.key === "Escape") setOpenSeason(false); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  function emitLeagueChange(n){ if(onLeagueChange) onLeagueChange(n); }
+  function emitSeasonChange(s){ if(onSeasonChange) onSeasonChange(s); }
+
+  /* ====== Recent leagues logic ===== */
+  useEffect(() => {
+    var recent = safeGet("recent_leagues", []);
+    var next = [league].concat(recent.filter((x)=>x!==league)).slice(0,8);
+    safeSet("recent_leagues", next);
+  }, [league]);
+
+
+  return (
+    <div className="w-full">
+
+      {/* === Premium league header (main bar) === */}
+      <div
+        style={{ background: bg }}
+        className="shadow-sm rounded-2xl px-4 py-4 text-white"
+      >
+        <div className="flex items-center justify-between gap-6 max-w-[1600px] mx-auto">
+
+          {/* League icon + name */}
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-white/90 p-1 grid place-items-center shadow">
+              <img
+                src={getLeagueLogo(league)}
+                alt={league}
+                className="h-10 w-10 object-contain"
+                onError={(e)=>{ e.currentTarget.onerror=null; e.currentTarget.src="/icons/default_league.png"; }}
+              />
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase opacity-80 tracking-wide">Текущая лига</div>
+              <h1 className="truncate text-xl font-bold tracking-tight">{league}</h1>
+            </div>
+          </div>
+
+          <AuthIndicator />
+        </div>
+
+        {/* === Chips (league scroll) === */}
+        {chipsMode !== "none" && (
+          <div className="relative mt-4">
+            {canLeft && (
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-black/30 to-transparent rounded-l-xl" />
+            )}
+            {canRight && (
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/30 to-transparent rounded-r-xl" />
+            )}
+
+            <div className="rounded-xl bg-black/20 backdrop-blur px-3 py-2 shadow-inner border border-white/10">
+              <div
+                ref={railRef}
+                className="no-scrollbar flex items-center gap-2 overflow-x-auto scroll-smooth"
+              >
+                {LEAGUES.map((name) => {
+                  var activeChip = name === league;
+                  return (
+                    <button
+                      key={name}
+                      onClick={() => emitLeagueChange(name)}
+                      className={clsx(
+                        "flex-shrink-0 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm border transition-all",
+                        activeChip
+                          ? "bg-white text-black border-white shadow"
+                          : "bg-black/30 text-white/80 border-white/20 hover:bg-black/40"
+                      )}
+                    >
+                      <span className="h-5 w-5 rounded-full bg-black/20 border border-white/20 grid place-items-center overflow-hidden">
+                        <img
+                          src={getLeagueLogo(name)}
+                          alt={name}
+                          className="h-4 w-4 object-contain"
+                          onError={(e)=>{ e.currentTarget.onerror=null; e.currentTarget.src="/icons/default_league.png"; }}
+                        />
+                      </span>
+
+                      <span className="whitespace-nowrap hidden sm:inline">{name}</span>
+                      <span className="whitespace-nowrap sm:hidden">{name.split(" ")[0]}</span>
+                    </button>
+                  );
+                })}
+
+                {/* All leagues */}
+                <button
+                  onClick={() => setOpenSeason(false)}
+                  title="Все лиги"
+                  className="flex-shrink-0 inline-flex items-center gap-2 rounded-full border border-white/20 px-3 py-1.5 text-sm bg-black/30 text-white/80 hover:bg-black/40"
+                >
+                  <span className="h-5 w-5 rounded-full bg-black text-white grid place-items-center text-[10px]">≡</span>
+                  <span className="whitespace-nowrap">Все лиги</span>
+                </button>
+              </div>
+
+              {canRight && (
+                <button
+                  onClick={scrollRight}
+                  className="absolute -right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-full border border-white/20 bg-black/40 text-white shadow grid place-items-center backdrop-blur hover:bg-black/60"
+                >
+                  ›
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* === Season selector (premium dark) === */}
+        {!hideSeason && (
+          <div className="max-w-[1600px] mx-auto mt-4">
+            <div className="relative inline-block">
+              <button
+                onClick={() => setOpenSeason(!openSeason)}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-lg border border-white/30 text-sm bg-black/30 text-white hover:bg-black/40 backdrop-blur"
+              >
+                <span>{season}</span>
+                <span className="opacity-70">▾</span>
+              </button>
+
+              {openSeason && (
+                <div className="absolute z-20 mt-2 w-36 rounded-lg border border-white/20 bg-black/80 backdrop-blur shadow-xl">
+                  {SEASONS.map((s) => {
+                    var isCur = season === s;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => { emitSeasonChange(s); setOpenSeason(false); }}
+                        className={clsx(
+                          "w-full text-left px-4 py-2 text-sm text-white/80 hover:bg-white/5",
+                          isCur && "text-white font-semibold bg-white/10"
+                        )}
+                      >
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

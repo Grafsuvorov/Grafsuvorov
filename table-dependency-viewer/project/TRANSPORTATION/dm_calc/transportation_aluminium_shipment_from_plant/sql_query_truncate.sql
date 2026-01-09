@@ -1,0 +1,1 @@
+truncate table dm_calc.transportation_aluminium_shipment_from_plant;

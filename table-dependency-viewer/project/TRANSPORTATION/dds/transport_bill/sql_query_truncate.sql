@@ -1,0 +1,1 @@
+truncate table dds.transport_bill;

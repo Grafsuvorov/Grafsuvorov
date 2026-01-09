@@ -1,0 +1,15 @@
+DATABASE_URL=postgresql+psycopg2://postgres:0506@127.0.0.1:5432/dwh?options=-csearch_path%3Dfootball,public
+
+
+API_KEY=your_api_football_key_here
+
+SECRET_KEY=your-super-secret-key-change-this-in-production-12345
+
+BREVO_API_KEY=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
+SENDER_EMAIL=utac4ka@yandex.com
+
+SMTP_LOGIN=v6912669@gmail.com
+SMTP_PASS=yfgljbbodrjmvkqn
+
+APP_NAME=Football
+FRONTEND_URL=http://localhost:3000

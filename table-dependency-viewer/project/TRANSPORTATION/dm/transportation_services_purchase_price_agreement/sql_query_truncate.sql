@@ -1,0 +1,1 @@
+truncate table dm.transportation_services_purchase_price_agreement;

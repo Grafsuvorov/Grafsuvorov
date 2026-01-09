@@ -1,0 +1,1 @@
+select tech_etl.controlling_documents_to_cost_centers_incr();

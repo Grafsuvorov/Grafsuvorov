@@ -1,0 +1,1 @@
+ truncate table dm_calc.investment_payments_accounting_document_header;

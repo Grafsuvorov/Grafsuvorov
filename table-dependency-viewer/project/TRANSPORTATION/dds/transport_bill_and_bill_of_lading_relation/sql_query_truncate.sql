@@ -1,0 +1,1 @@
+truncate table dds.transport_bill_and_bill_of_lading_relation;

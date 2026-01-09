@@ -1,0 +1,1 @@
+TRUNCATE stg."/RUSAL/DTL_PDX_H";

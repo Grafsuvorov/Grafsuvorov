@@ -1,0 +1,1 @@
+truncate table dm_calc.investment_expenses_invoice_purchase_documents;

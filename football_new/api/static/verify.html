@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Верификация Email</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 600px;
+            width: 90%;
+        }
+        .logo {
+            font-size: 2em;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        .status {
+            font-size: 1.2em;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .debug {
+            background-color: #f8f9fa;
+            color: #495057;
+            border: 1px solid #dee2e6;
+            font-family: monospace;
+            font-size: 0.9em;
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+            font-size: 1em;
+        }
+        .btn:hover {
+            background: #5a6fd8;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">⚽ Football App</div>
+        <h2>Верификация Email</h2>
+        
+        <div id="status" class="status loading">
+            <div class="spinner"></div>
+            <p>Проверяем токен верификации...</p>
+        </div>
+        
+        <div id="debug" class="debug" style="display: none;">
+            <h4>🔍 Отладочная информация:</h4>
+            <div id="debug-content"></div>
+        </div>
+        
+        <div id="actions" style="display: none;">
+            <a href="/" class="btn">Перейти на главную</a>
+            <a href="/login" class="btn">Войти в систему</a>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="showDebug()" class="btn" style="background: #6c757d;">Показать отладку</button>
+        </div>
+    </div>
+
+    <script>
+        // Отладочная информация
+        let debugInfo = [];
+        
+        function addDebug(message) {
+            debugInfo.push(message);
+            console.log(message);
+        }
+        
+        function showDebug() {
+            const debugDiv = document.getElementById('debug');
+            const debugContent = document.getElementById('debug-content');
+            
+            debugContent.innerHTML = debugInfo.map(msg => `<div>${msg}</div>`).join('');
+            debugDiv.style.display = 'block';
+        }
+        
+        // Получаем токен из URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+        
+        addDebug(`🔑 Токен из URL: ${token}`);
+        addDebug(`🌐 Текущий URL: ${window.location.href}`);
+        addDebug(`🏠 Origin: ${window.location.origin}`);
+        
+        if (!token) {
+            showError('Токен верификации не найден в ссылке.');
+            return;
+        }
+        
+        // Отправляем запрос на верификацию
+        addDebug('🚀 Начинаем верификацию...');
+        verifyEmail(token);
+        
+        async function verifyEmail(token) {
+            try {
+                addDebug(`📡 Отправляем POST запрос на /auth-dwh/verify`);
+                addDebug(`📝 Тело запроса: {"token": "${token}"}`);
+                
+                const response = await fetch('/auth-dwh/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: token })
+                });
+                
+                addDebug(`📊 Получен ответ: ${response.status} ${response.statusText}`);
+                addDebug(`🔗 URL ответа: ${response.url}`);
+                
+                const data = await response.json();
+                addDebug(`📝 Данные ответа: ${JSON.stringify(data)}`);
+                
+                if (response.ok) {
+                    showSuccess(data.message || 'Email успешно верифицирован!');
+                } else {
+                    showError(data.detail || 'Ошибка верификации email.');
+                }
+            } catch (error) {
+                addDebug(`❌ Ошибка: ${error.message}`);
+                console.error('Ошибка:', error);
+                showError('Произошла ошибка при верификации. Попробуйте позже.');
+            }
+        }
+        
+        function showSuccess(message) {
+            addDebug(`✅ Показываем успех: ${message}`);
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status success';
+            statusDiv.innerHTML = `
+                <h3>✅ Успешно!</h3>
+                <p>${message}</p>
+                <p>Теперь вы можете войти в систему.</p>
+            `;
+            document.getElementById('actions').style.display = 'block';
+        }
+        
+        function showError(message) {
+            addDebug(`❌ Показываем ошибку: ${message}`);
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = 'status error';
+            statusDiv.innerHTML = `
+                <h3>❌ Ошибка</h3>
+                <p>${message}</p>
+                <p>Попробуйте зарегистрироваться заново или обратитесь в поддержку.</p>
+            `;
+            document.getElementById('actions').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

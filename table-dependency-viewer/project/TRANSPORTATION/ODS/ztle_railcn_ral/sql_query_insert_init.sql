@@ -1,0 +1,43 @@
+insert into ods.ztle_railcn_ral (
+	id,
+	pos,
+	type_load,
+	container,
+	numnakl,
+	car_num,
+	dateot,
+	zdkodstfr,
+	zdkodstto,
+	werks,
+	vbeln,
+	weight,
+	weight_br,
+	erdat,
+	erzet,
+	ernam,
+	aedat,
+	aezet,
+	aenam
+)
+select
+	"ID" as id,
+	"POS" as pos,
+	"TYPE_LOAD" as type_load,
+	tech_etl.util_text_to_null_validation("CONTAINER") as container,
+	tech_etl.util_text_to_null_validation("NUMNAKL") as numnakl,
+	tech_etl.util_text_to_null_validation("CAR_NUM") as car_num,
+	tech_etl.util_text_to_date_validation("DATEOT") as dateot,
+	tech_etl.util_text_to_null_validation("ZDKODSTFR") as zdkodstfr,
+	tech_etl.util_text_to_null_validation("ZDKODSTTO") as zdkodstto,
+	tech_etl.util_text_to_null_validation("WERKS") as werks,
+	tech_etl.util_text_to_null_validation("VBELN") as vbeln,
+	"WEIGHT" as weight,
+	"WEIGHT_BR" as weight_br,
+	tech_etl.util_text_to_date_validation("ERDAT") as erdat,
+	tech_etl.util_text_to_time_validation("ERZET") as erzet,
+	tech_etl.util_text_to_null_validation("ERNAM") as ernam,
+	tech_etl.util_text_to_date_validation("AEDAT") as aedat,
+	tech_etl.util_text_to_time_validation("AEZET") as aezet,
+	tech_etl.util_text_to_null_validation("AENAM") as aenam
+from stg."ZTLE_RAILCN"
+where "MANDT" = '400';

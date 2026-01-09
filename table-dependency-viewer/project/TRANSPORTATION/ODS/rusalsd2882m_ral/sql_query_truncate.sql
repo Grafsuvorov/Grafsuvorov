@@ -1,0 +1,1 @@
+truncate table ods."/rusal/sd2882m_ral";

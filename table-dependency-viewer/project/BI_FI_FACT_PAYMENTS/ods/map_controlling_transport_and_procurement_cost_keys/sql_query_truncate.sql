@@ -1,0 +1,1 @@
+truncate table ods.map_controlling_transport_and_procurement_cost_keys;

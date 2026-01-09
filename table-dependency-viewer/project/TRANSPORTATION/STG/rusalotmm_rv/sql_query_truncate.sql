@@ -1,0 +1,1 @@
+TRUNCATE stg."/RUSAL/OTMM_RV";

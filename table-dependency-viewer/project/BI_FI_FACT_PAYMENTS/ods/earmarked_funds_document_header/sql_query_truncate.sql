@@ -1,0 +1,1 @@
+truncate ods."earmarked_funds_document_header";

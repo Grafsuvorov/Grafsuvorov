@@ -1,0 +1,1 @@
+truncate table ods."/rusal/ekkont_ral";

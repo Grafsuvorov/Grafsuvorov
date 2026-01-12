@@ -1,228 +1,160 @@
-Доработка DAG релиза и логирование
-1. Доработка DAG раскатки
-1.1. Вывод плана релиза в лог (обязательно)
+Распределение и оценка задач аналитиков
 
-Требование
+(роль: тимлид / координатор)
 
-В начале выполнения DAG (до применения изменений) необходимо:
+Название задачи
 
-Сформировать список всех объектов, которые будут изменены
+Управление входящими задачами аналитиков
 
-Разделить объекты по системам:
+Описание
 
-Greenplum
+Приём задач от аналитиков
 
-ClickHouse
+Анализ требований
 
-Вывести список в лог в читаемом текстовом виде, пригодном для копирования и отправки письмом
+Оценка трудозатрат
 
-Пример формата
+Декомпозиция
 
-========== RELEASE PLAN ==========
-Release ID: 2026-01-15_manual_001
-Task: YT-1234
-Initiated by: ivan.petrov
+Назначение задач инженерам
 
-Greenplum:
-- ods.sales_orders (DDL)
-- dm_calc.storage_costs (RECREATE)
+Контроль очереди
 
-ClickHouse:
-- dm.sales_orders (INSERT)
-- dm.storage_costs (TRUNCATE + INSERT)
-=================================
+Что списывается
 
+чтение и разбор требований
 
-📌 Список должен формироваться на основании сравнения Git ↔ мета-таблиц, до выполнения SQL.
+созвоны с аналитиками
 
-2. Логирование релизного процесса
+оценка сроков
 
-Все таблицы создаются в схеме tech_etl.
+подготовка технических комментариев
 
-2.1. Таблица tech_etl.release_log
-Назначение
+Пример тегов
+management, planning, estimation
 
-1 строка = 1 запуск релиза целиком
+2️⃣ Разработка внутреннего приложения (инциденты, мониторинг, релизы)
 
-CREATE TABLE tech_etl.release_log (
-    release_id        text        NOT NULL,
-    release_type      text        NOT NULL,  -- release / vnerelease / hotfix
-    task_id           text        NOT NULL,  -- YouTrack
-    initiated_by      text        NOT NULL,  -- пользователь, запустивший DAG
+Название задачи
 
-    started_at        timestamp   NOT NULL,
-    finished_at       timestamp,
+Разработка платформы мониторинга и инцидентов DWH
 
-    status            text        NOT NULL,  -- RUNNING / SUCCESS / FAILED / PARTIAL
+Описание
 
-    total_objects     int         NOT NULL,
-    failed_objects    int         DEFAULT 0,
+Разработка backend (FastAPI)
 
-    error_summary     text,
-    created_at        timestamp   DEFAULT now()
-)
-DISTRIBUTED BY (release_id);
+Разработка frontend (React)
 
-Комментарии
-COMMENT ON TABLE tech_etl.release_log IS
-'Журнал релизов. Одна запись соответствует одному запуску релизного DAG.';
+Инциденты
 
-COMMENT ON COLUMN tech_etl.release_log.release_id IS
-'Уникальный идентификатор релиза (генерируется DAG)';
+Логирование релизов
 
-COMMENT ON COLUMN tech_etl.release_log.release_type IS
-'Тип релиза: release / vnerelease / hotfix';
+SLA / метрики / карточки таблиц
 
-COMMENT ON COLUMN tech_etl.release_log.task_id IS
-'Номер задачи в YouTrack';
+API / UI / UX
 
-COMMENT ON COLUMN tech_etl.release_log.initiated_by IS
-'Пользователь или сервис, запустивший DAG';
+Что списывается
 
-COMMENT ON COLUMN tech_etl.release_log.started_at IS
-'Дата и время начала релиза';
+код
 
-COMMENT ON COLUMN tech_etl.release_log.finished_at IS
-'Дата и время завершения релиза';
+архитектура
 
-COMMENT ON COLUMN tech_etl.release_log.status IS
-'Финальный статус релиза';
+рефакторинг
 
-COMMENT ON COLUMN tech_etl.release_log.total_objects IS
-'Общее количество объектов, вошедших в релиз';
+багфиксы
 
-COMMENT ON COLUMN tech_etl.release_log.failed_objects IS
-'Количество объектов, завершившихся с ошибкой';
+тестирование
 
-COMMENT ON COLUMN tech_etl.release_log.error_summary IS
-'Краткое описание причины падения релиза (если есть)';
+дизайн интерфейсов
 
-2.2. Таблица tech_etl.release_objects
-Назначение
+Пример тегов
+development, internal_product, dwh_tools
 
-1 строка = 1 объект (таблица), включённый в релиз
+3️⃣ Разработка и улучшение процессов в DWH
 
-CREATE TABLE tech_etl.release_objects (
-    release_id       text      NOT NULL,
-    object_id        serial    NOT NULL,
+Название задачи
 
-    target_system    text      NOT NULL,   -- greenplum / clickhouse
-    schema_name      text      NOT NULL,
-    table_name       text      NOT NULL,
+Разработка и оптимизация DWH-процессов
 
-    entity_id        int       NOT NULL,
-    entity_name      text      NOT NULL,
+Описание
 
-    change_type      text      NOT NULL,   -- ddl / insert / truncate / recreate
-    final_status     text      NOT NULL,   -- SUCCESS / FAILED
-    attempts_count   int       NOT NULL,
+Новые DAG’и
 
-    created_at       timestamp DEFAULT now(),
+Оптимизация существующих пайплайнов
 
-    PRIMARY KEY (object_id)
-)
-DISTRIBUTED BY (release_id);
+Изменения архитектуры слоёв
 
-Комментарии
-COMMENT ON TABLE tech_etl.release_objects IS
-'Список объектов, входящих в релиз. Одна запись — одна таблица.';
+Производительность
 
-COMMENT ON COLUMN tech_etl.release_objects.release_id IS
-'Идентификатор релиза';
+Надёжность и отказоустойчивость
 
-COMMENT ON COLUMN tech_etl.release_objects.object_id IS
-'Уникальный идентификатор объекта в рамках релиза';
+Что списывается
 
-COMMENT ON COLUMN tech_etl.release_objects.target_system IS
-'Целевая система: greenplum или clickhouse';
+разработка ETL
 
-COMMENT ON COLUMN tech_etl.release_objects.schema_name IS
-'Схема объекта';
+оптимизация SQL
 
-COMMENT ON COLUMN tech_etl.release_objects.table_name IS
-'Имя таблицы';
+переработка архитектуры
 
-COMMENT ON COLUMN tech_etl.release_objects.entity_id IS
-'Идентификатор бизнес-сущности';
+внедрение новых практик
 
-COMMENT ON COLUMN tech_etl.release_objects.entity_name IS
-'Название бизнес-сущности';
+Пример тегов
+etl, architecture, optimization
 
-COMMENT ON COLUMN tech_etl.release_objects.change_type IS
-'Тип изменения объекта';
+4️⃣ Актуализация и ведение бэклога
 
-COMMENT ON COLUMN tech_etl.release_objects.final_status IS
-'Финальный статус применения объекта';
+Название задачи
 
-COMMENT ON COLUMN tech_etl.release_objects.attempts_count IS
-'Количество попыток выполнения объекта';
+Ведение и актуализация бэклога DWH
 
-2.3. Таблица tech_etl.release_object_attempts
-Назначение
+Описание
 
-1 строка = 1 попытка выполнения объекта
-Фиксирует ретраи, clear task и повторные ошибки.
+Разбор накопленных задач
 
-CREATE TABLE tech_etl.release_object_attempts (
-    release_id        text      NOT NULL,
-    object_id         bigint    NOT NULL,
+Уточнение требований
 
-    attempt_no        int       NOT NULL,  -- номер попытки
-    airflow_task_id   text      NOT NULL,  -- task_id Airflow
+Закрытие неактуальных задач
 
-    started_at        timestamp NOT NULL,
-    finished_at       timestamp,
+Приоритизация
 
-    status            text      NOT NULL,  -- SUCCESS / FAILED
+Подготовка задач к разработке
 
-    error_message     text,
-    error_stacktrace  text,
+Что списывается
 
-    created_at        timestamp DEFAULT now()
-)
-DISTRIBUTED BY (release_id);
+анализ старых задач
 
-Комментарии
-COMMENT ON TABLE tech_etl.release_object_attempts IS
-'История попыток выполнения объектов релиза (ретраи, clear task).';
+общение с аналитиками
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.release_id IS
-'Идентификатор релиза';
+приведение задач в рабочий вид
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.object_id IS
-'Ссылка на объект из release_objects';
+Пример тегов
+backlog, analysis, prioritization
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.attempt_no IS
-'Номер попытки выполнения (Airflow try_number)';
+5️⃣ Созвоны, встречи и помощь коллегам
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.airflow_task_id IS
-'Идентификатор task_id в Airflow';
+Название задачи
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.started_at IS
-'Время начала попытки';
+Созвоны, встречи и консультации
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.finished_at IS
-'Время завершения попытки';
+Описание
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.status IS
-'Результат попытки выполнения';
+Регулярные созвоны
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.error_message IS
-'Текст ошибки';
+Обсуждение архитектуры
 
-COMMENT ON COLUMN tech_etl.release_object_attempts.error_stacktrace IS
-'Полный stacktrace ошибки (если есть)';
+Помощь в SQL / запросах
 
-3. Итог
+Консультации инженеров и аналитиков
 
-Решение позволяет:
+Что списывается
 
-видеть кто / когда / что релизил
+митинги
 
-видеть все объекты релиза
+ad-hoc помощь
 
-хранить полную историю ошибок и ретраев
+разбор чужих запросов
 
-анализировать проблемные таблицы и релизы
+консультации
 
-использовать данные для UI, BI и SLA-контроля
+Пример тегов
+meetings, support, communication

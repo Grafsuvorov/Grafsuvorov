@@ -1,16 +1,18 @@
-WITH params AS (
+WITH RECURSIVE
+params AS (
     SELECT
-        DATE '2024-01-01' AS start_date,
-        current_date     AS calc_date,
-        current_date + 365 AS end_date
+        DATE '2024-01-01'        AS start_date,
+        current_date             AS calc_date,
+        current_date + 365       AS end_date
 ),
 
 calendar AS (
-    SELECT generate_series(
-        (SELECT start_date FROM params),
-        (SELECT end_date   FROM params),
-        interval '1 day'
-    )::date AS dt
+    SELECT
+        generate_series(
+            (SELECT start_date FROM params),
+            (SELECT end_date   FROM params),
+            interval '1 day'
+        )::date AS dt
 ),
 
 base_actual AS (
@@ -22,54 +24,66 @@ base_actual AS (
     WHERE account_code = 'KPI_ALUM_TEC_08a'
 ),
 
+-- база до текущей даты
 seed AS (
-    -- база: все даты до calc_date
     SELECT
         c.dt,
         a.entity_code,
         a.actual,
-        a.actual AS plan_value
+        a.actual AS plan_day
     FROM calendar c
-    JOIN base_actual a ON a.dt = c.dt
+    JOIN base_actual a
+      ON a.dt = c.dt
     WHERE c.dt <= (SELECT calc_date FROM params)
 ),
 
-recursive_plan AS (
-    -- первая будущая дата
+-- рекурсивное продолжение
+plan_recursive AS (
+    -- якорь
     SELECT
-        s.dt,
-        s.entity_code,
-        s.actual,
-        s.plan_value
-    FROM seed s
+        dt,
+        entity_code,
+        actual,
+        plan_day
+    FROM seed
 
     UNION ALL
 
+    -- шаг +1 день
     SELECT
         c.dt,
-        rp.entity_code,
+        pr.entity_code,
         NULL::numeric AS actual,
-        (
-            SELECT avg(val)
-            FROM (
-                SELECT actual AS val
-                FROM base_actual b
-                WHERE b.entity_code = rp.entity_code
-                  AND b.dt < c.dt
-                  AND b.dt >= c.dt - 365
-                UNION ALL
-                SELECT plan_value
-                FROM recursive_plan p
-                WHERE p.entity_code = rp.entity_code
-                  AND p.dt < c.dt
-                  AND p.dt >= c.dt - 365
-            ) x
-        ) AS plan_value
-    FROM recursive_plan rp
+        avg_window.avg_val AS plan_day
+    FROM plan_recursive pr
     JOIN calendar c
-      ON c.dt = rp.dt + 1
+      ON c.dt = pr.dt + 1
+    JOIN LATERAL (
+        SELECT AVG(val) AS avg_val
+        FROM (
+            -- факт
+            SELECT b.actual AS val
+            FROM base_actual b
+            WHERE b.entity_code = pr.entity_code
+              AND b.dt < c.dt
+              AND b.dt >= c.dt - 365
+
+            UNION ALL
+
+            -- ранее рассчитанный план
+            SELECT p.plan_day AS val
+            FROM plan_recursive p
+            WHERE p.entity_code = pr.entity_code
+              AND p.dt < c.dt
+              AND p.dt >= c.dt - 365
+        ) x
+    ) avg_window ON TRUE
     WHERE c.dt <= (SELECT end_date FROM params)
 )
 
-SELECT *
-FROM recursive_plan;
+SELECT
+    dt,
+    entity_code,
+    actual,
+    plan_day
+FROM plan_recursive;

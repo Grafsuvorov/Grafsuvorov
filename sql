@@ -1,80 +1,305 @@
-WITH base AS (
-    SELECT
-        date_trunc('day', dl.dttm_inserted) AS report_date,
-        tm.entity_name,
-        tm.table_schema,
-        lm.layer_weight,
-        dl.object_id,
-        dl.log_message,
-        dl.dttm_inserted
-    FROM tech_etl.detailed_log dl
-    JOIN tech_etl.tables_meta tm
-      ON tm.table_id = dl.object_id
-    JOIN tech_etl.layers_meta lm
-      ON lm.layer_name = tm.table_schema
-    WHERE dl.log_status = 'ok'
-      AND dl.dttm_inserted IS NOT NULL
-      AND tm.table_schema <> 'dm_view'
-      AND tm.entity_id = 42
-      AND dl.dttm_inserted::date BETWEEN DATE '2026-01-01' AND DATE '2026-01-31'
-),
+MR-0112. Добавить прогноз по внеплановым простоям на 365 дней.
 
--- старт/финиш по каждой таблице
-per_table AS (
-    SELECT
-        report_date,
-        entity_name,
-        table_schema,
-        layer_weight,
-        object_id,
-        MIN(CASE WHEN log_message = 'Loading process started'
-                 THEN dttm_inserted END) AS started_at,
-        MAX(CASE WHEN log_message = 'Loading process finished'
-                 THEN dttm_inserted END) AS finished_at
-    FROM base
-    GROUP BY report_date, entity_name, table_schema, layer_weight, object_id
-),
 
--- валидные интервалы
-valid AS (
-    SELECT *
-    FROM per_table
-    WHERE started_at IS NOT NULL
-      AND finished_at IS NOT NULL
-      AND finished_at >= started_at
-),
+MR-0112 Алюминиевый дивизион - Ежедневные показатели эффективности
 
--- окно по слоям
-per_layer AS (
-    SELECT
-        report_date,
-        entity_name,
-        table_schema,
-        layer_weight,
-        MIN(started_at)  AS layer_started,
-        MAX(finished_at) AS layer_finished
-    FROM valid
-    GROUP BY report_date, entity_name, table_schema, layer_weight
+Вкладка "Оборудование"
 
-    UNION ALL
+Параметр "Прогноз простоев на 365 суток"
 
-    -- общий слой "all"
-    SELECT
-        report_date,
-        entity_name,
-        'all'::text AS table_schema,
-        1000 AS layer_weight,
-        MIN(started_at)  AS layer_started,
-        MAX(finished_at) AS layer_finished
-    FROM valid
-    GROUP BY report_date, entity_name
-)
+Необходимо добавить новый параметр, логика расчета следующая:
+на сутки (Actual), следующие за текущими, прогноз рассчитывается как среднее фактическое значение за 365 предыдущих дней;
 
-SELECT
-    report_date,
-    entity_name,
-    table_schema,
-    layer_weight,
-    EXTRACT(EPOCH FROM (layer_finished - layer_started)) AS duration_seconds
-FROM per_layer
-ORDER BY report_date, layer_weight;
+далее на эту дату рассчитывается годовой прогноз (Actual_YTD) за 365 дней, как факт за 364 дня + полученное по предыдущему пункту расчетное значение прогноза на сутки;
+
+на последующие сутки прогноз рассчитывается как среднее значение за -365 дней.
+
+Пример:
+
+Текущая дата(выставляемая в календаре ДБ)-31.12.2024
+
+Считаем прогноз на 1.01.2025= факт сумма простоев за (31.12.2025-365 дней)/365, далее производим расчет годового прогноза на дату = факт сумма простоев за (31.12.2025-364 дня )+ полученный прогноз на 1.1.2025.
+
+Для расчета прогноза на 2.01.2025 берем ((31.12.2025-364 дня )+ полученный прогноз на 1.1.2025)/365, далее производим расчет годового прогноза на дату=факт сумма простоев за (31.12.2025-363 дня )+полученный прогноз на 1.1.2025+полученный прогноз на 2.1.2025.
+
+Далее повторяем расчет на 365 дней. Пример расчета во вложении.
+
+По прогнозам простоев +365 дней.xlsx
+
+
+связана с
+1
+обязательна для
+1
+зависит от
+2
+Обратные упоминания
+1
+ Добавить ссылки
+
+связана с
+
+О
+KPID-785
+Проработать возможность расширения диапазона данных на 365 дней вперёд
+обязательна для
+
+О
+KPID-786
+PR-0050. VIZ прогноз по внеплановым простоям на 365 дней.
+зависит от
+
+О
+KPID-728
+Переход на новую структуру для оптимизации скрипта (источник по оборудованию)
+
+N
+DWH-8288
+Реализация рекурсивных вычислений в GreenPlum
+Обратные упоминания
+
+N
+DWH-8875
+Добавить новые поля и обновить скрипт в таблицах ods."KPI_INDICATORS_ACTUAL_REPORT_AD", dds.production_aluminium_electrolysis, dm_calc.pr_equipment_indicators_prdept_plant...
+
+Вложения2
+Прикрепить файлы
+Файлы, прикрепленные к комментариям
+
+
+
+Настройка событий 
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Роман, привет. Вчера общался с Иванов Пшенниковым по этой методике, она тоже ему не нравится. Завтра будет на КрАЗе пообщается с Жалнерчиком и Соколовым, надеюсь эту тему в том числе затронет
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail 3.10.2025 пообщался с Соколовым А.Б. Он не против медианных значений на просит сформированную выгрузку. Прошу взять в работу данную задачу.
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Роман, привет. Не до конца понято, что ты просишь взять в работу?
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail Расчет прогноза на 365 дней.
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Так а обновлённый расчёт будет?
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail Скорректировать в постановке?
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Да, спасибо!
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail Совместно с Соколовым А.Б смоделировали прогноз с применением медианных значений на примере заводов- такой способ не применим, поскольку медиана слишком "радикально" отсекает выпады. Принято решение оставить постановку задачи без изменения- на основании средних значений. Прошу принять в работу.
+
+User avatar
+Matyash Aleksey
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman
+
+Это будет дополнительный показатель, никак не связанный с тем прогнозом, который считается сейчас?
+Не понятно, на сколько глубоко делать прогноз? на 365 дней вперёд от текущей даты?
+@Glovatskiy Mikhail Если на 365 дней, может возникнуть проблема с визом, как это было с текущим прогнозом
+Правильно я понял логику?
+Мы сначала считаем прогноз вперёд (после 09.10.2025) просто по среднему за 365 дней
+На сегодня мы считаем прогноз как сумму факта (НЕ СРЕДНЕЕ) за 364 дня, включая текущий день + прогноз на день, следующий за текущим
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Matyash Aleksey @Glovatskiy Mikhail
+
+1.Да
+
+2.На 365 дней вперед от текущей даты
+
+3. Не понял вопрос
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад (изменено)
+@Artemiev Konstantin Костя, привет. Мы сможем график строить в будущее на 1 год вперёд? Условно к мы рисуем на год назад и на год вперёд. Суммарно 2 года. Нет ли технических ограничений?
+
+User avatar
+Matyash Aleksey
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman
+В п.3 вопрос именно по прогнозу на текущий день
+Там нужно указывать не среднее за 364 дня, а сумму?
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Мы текущий прогноз оставляем? Их нужно будет сравнивать с новым прогнозом? Или мы корректируем логику для прогноза, который уже реализован?
+
+Glovatskiy Mikhail
+Обновлено 3 месяца назад
+Изменено описание:Подробнее
+User avatar
+Artemiev Konstantin
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail В теории можно, по ограничениям, график может немного грузится дольше. Ну и получается надо будет на год вперед заполнять значения, чтобы динамика отобразилась, если будет NULL, то не отрисуется
+
+Glovatskiy Mikhail
+Обновлено 3 месяца назад
+Зависит от:KPID-728Переход на новую структуру для оптимизации скрипта (источник по оборудованию)
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Matyash Aleksey Давай созвонимся на примере EXEL посмотрим.
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Glovatskiy Mikhail Текущий прогноз оставляем
+
+User avatar
+Matyash Aleksey
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman @Glovatskiy Mikhail
+Посчитал новый прогноз без учета старого для примера
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Matyash Aleksey @Glovatskiy Mikhail Коллеги, привет! Нужно что бы начиная с текущей даты и на + 365 дн "факт" равнялся(подменялся в столбце) "среднему прогнозу за 365 дней" на эти сутки. В таком случае "Прогноз YTD" будет считается как сумма значений из столбца "факт" за 365 дней. Например:
+
+на 13.10.2025 "факт" должен быть равен среднему значению за 365 предыдущих дней, прогноз YTD на 13.10.2025 равен сумме значений в столбце "факт" с 14.10.2024 по 13.10.2025
+
+Matyash Aleksey
+Обновлено 3 месяца назад
+Зависит от:DWH-8288Реализация рекурсивных вычислений в GreenPlum
+User avatar
+Matyash Aleksey
+Прокомментировал(а) 3 месяца назад (изменено)
+@Vibe Roman Подскажи, нужен ли будет старый прогноз или мы будем выводить только один?
+Архитектурно сильно проще будет просто подменить старый прогноз на новый
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Matyash Aleksey @Glovatskiy Mikhail Приветствую!
+
+Прогноз по суткам считается одинаково,
+
+Прогноз на конец текущего года считается как отработанный факт+ сумма прогнозов по суткам до конца года
+
+Прогноз на год вперед- как сумма прогнозов по суткам на год вперед
+
+Соответственно, основной проблемой вижу фиксацию текущего прогноза по периодам, т.е то что есть сейчас, если это условие будет соблюдено, то можно делать один параметр.
+
+User avatar
+Vibe Roman
+Прокомментировал(а) 3 месяца назад
+@Matyash Aleksey @Glovatskiy Mikhail Проговорили голосом. Итог: существующие прогнозы остаются как в БД, так и на визе. Создаваемый прогноз - новая сущность с отдельной визуализацией.
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 3 месяца назад
+@Vibe Roman Надо тогда думать, как эту сущность назвать. С точки зрения здравого смысла наличие двух прогнозов с разной методикой расчёта - это чистейший сюрреализм)
+
+User avatar
+Glovatskiy Mikhail
+Прокомментировал(а) 2 месяца назад
+
+Forecast_day - по новой методике; Forecast_month - старая методика; Forecast_yaer - по новой методике если сможем выводить значение на последнее число года; Forecast_=365day - новая методика;
+
+По задаче MR-0112. Добавить прогноз по внеплановым простоям на 365 дней. : KPID-711 необходимо рекурсивно вычислять прогноз простоев оборудования.
+Необходимо исследовать возможность вычисления рекурсии в скрипте. Если такой возможности нет, реализовать функцию для вычислений.
+
+Описание логики:
+
+Прогноз должен вычисляться с начала 2024 года до текущей даты +365 дней вперёд
+
+Для записей, у которых дата < now(), прогноз вычисляется как среднее значение факта (actual) за 365 дней
+
+Для записей, у которых дата >= now(), прогноз вычисляется как среднее значение имеющегося факта (actual) за 365 дней, а если факт = 0, то берётся среднее за предыдущий день как факт
+
+Для понимания приложил расчет в экселе (Прогноз.xlsx)
+
+В основном скрипте на слое ods не удалось реализовать такую логику, т.к. GreenPlum не позволяет использовать оконные функции и вложенные запросы внутри рекурсии
+
+
+-- DROP FUNCTION tech_etl.downtime_forecast_calc();
+
+CREATE OR REPLACE FUNCTION tech_etl.downtime_forecast_calc()
+	RETURNS int4
+	LANGUAGE plpgsql
+	VOLATILE
+AS $$
+	
+
+
+
+
+
+
+
+declare
+	result int4 := 0;
+	forecast RECORD;
+	forecasted_raws CURSOR FOR
+		select dt_report, entity_code from ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+		where account_code = 'KPI_ALUM_TEC_08a'
+		and dt_report >= now()::date
+		order by dt_report, entity_code asc;
+
+begin
+	FOR forecast IN forecasted_raws LOOP
+		UPDATE ods."KPI_INDICATORS_ACTUAL_REPORT_AD" a
+        SET
+           downtime_duration_in_minutes_forecast_quantity = (select avg(case when b.dt_report < now()::date 
+																			then actual
+																			else downtime_duration_in_minutes_forecast_quantity end)
+																from ods."KPI_INDICATORS_ACTUAL_REPORT_AD" b
+															  where b.dt_report between a.dt_report - interval '365 days' and a.dt_report - interval '1 day'
+																and a.entity_code = b.entity_code
+																and account_code = 'KPI_ALUM_TEC_08a'),
+		downtime_duration_in_minutes_forecast_ytd_quantity =  (select avg(case when dt_report < now()::date 
+																			then actual
+																			else downtime_duration_in_minutes_forecast_quantity end) 
+																		+ sum(case when b.dt_report < now()::date
+																			then actual
+																			else downtime_duration_in_minutes_forecast_quantity end)
+															   from ods."KPI_INDICATORS_ACTUAL_REPORT_AD" b
+															  where b.dt_report between a.dt_report - interval '365 days' and a.dt_report - interval '1 day'
+																and a.entity_code = b.entity_code
+																and account_code = 'KPI_ALUM_TEC_08a')
+		where forecast.dt_report = a.dt_report 
+		  and forecast.entity_code = a.entity_code
+		  and a.account_code = 'KPI_ALUM_TEC_08a'
+		   ;
+
+	END LOOP;
+	RETURN result;
+EXCEPTION
+	WHEN others THEN
+		RAISE notice 'Error: %', sqlerrm;
+		RAISE;
+END;
+
+
+
+
+
+
+
+
+$$
+EXECUTE ON ANY;

@@ -1,12 +1,11 @@
 WITH
 /* ============================================================
-   1. ПАРАМЕТРЫ РАСЧЁТА
+   1. ПАРАМЕТРЫ
    ============================================================ */
 params AS (
     SELECT
-        DATE '2024-01-01'        AS start_date,
-        current_date             AS calc_date,
-        current_date + 365       AS end_date
+        DATE '2024-01-01'  AS start_date,
+        current_date + 365 AS end_date
 ),
 
 /* ============================================================
@@ -34,40 +33,27 @@ base_actual AS (
 ),
 
 /* ============================================================
-   4. СРЕДНЕЕ ЗА 365 ДНЕЙ (ОДИН РАЗ)
-   ============================================================ */
-avg_365 AS (
-    SELECT
-        entity_code,
-        AVG(actual) AS avg_365_val
-    FROM base_actual
-    WHERE dt < (SELECT calc_date FROM params)
-      AND dt >= (SELECT calc_date FROM params) - INTERVAL '365 days'
-    GROUP BY entity_code
-),
-
-/* ============================================================
-   5. PLAN_DAY
+   4. PLAN_DAY = скользящее среднее от ДАТЫ
    ============================================================ */
 plan_day AS (
     SELECT
         c.dt,
         a.entity_code,
-        a.actual,
-        CASE
-            WHEN c.dt < (SELECT calc_date FROM params)
-                THEN a.actual
-            ELSE avg.avg_365_val
-        END AS plan_day
+        AVG(b.actual) AS plan_day
     FROM calendar c
-    LEFT JOIN base_actual a
+    JOIN base_actual a
         ON a.dt = c.dt
-    JOIN avg_365 avg
-        ON avg.entity_code = a.entity_code
+    JOIN base_actual b
+        ON b.entity_code = a.entity_code
+       AND b.dt <  c.dt
+       AND b.dt >= c.dt - INTERVAL '365 days'
+    GROUP BY
+        c.dt,
+        a.entity_code
 )
 
 /* ============================================================
-   6. PLAN_YTD
+   5. PLAN_YTD
    ============================================================ */
 SELECT
     dt,

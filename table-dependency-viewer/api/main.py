@@ -23,7 +23,7 @@ from sqlalchemy import text
 import re
 import json
 
-from config import (
+from .config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
     TABLE_TABLES_META,
@@ -1337,33 +1337,172 @@ def get_sla_monitoring():
 
 
 @router.get("/api/slowest-tables")
-def get_slowest_tables():
-    query = f"""
-        SELECT 
-            date_id, 
-            entity_name, 
-            table_schema, 
-            table_name,
-            ROUND(CAST(EXTRACT(EPOCH FROM (curr_finish_dttm - curr_start_dttm)) / 60 AS numeric), 1) AS duration
-        FROM {TABLE_TABLE_COMPARE}
-        ORDER BY (curr_finish_dttm - curr_start_dttm) DESC
-        LIMIT 20
-    """
+def get_slowest_tables(
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(20, ge=1, le=200),
+):
     try:
+        query = f"""
+            WITH base AS (
+                SELECT
+                    COALESCE(t.table_schema, '') AS table_schema,
+                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    e.entity_name,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+            )
+            SELECT
+                table_schema,
+                table_name,
+                entity_name,
+                COUNT(*) AS runs_count,
+                AVG(duration) AS avg_duration,
+                percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) AS p95_duration,
+                MAX(duration) AS max_duration,
+                STDDEV_SAMP(duration) AS stddev_duration
+            FROM base
+            GROUP BY table_schema, table_name, entity_name
+        """
         with engine.connect() as conn:
-            rows = conn.execute(text(query)).mappings().all()
-            cleaned_rows = []
-            for row in rows:
-                r = dict(row)
+            rows = conn.execute(text(query), {"days": days}).mappings().all()
 
-                if isinstance(r.get("date_id"), (datetime, date)):
-                    r["date_id"] = r["date_id"].strftime("%Y-%m-%d")
+        threshold_minutes = 10.0
+        data = []
+        for row in rows:
+            r = dict(row)
+            runs = int(r.get("runs_count") or 0)
+            avg = float(r["avg_duration"]) if r.get("avg_duration") is not None else None
+            p95 = float(r["p95_duration"]) if r.get("p95_duration") is not None else None
+            max_d = float(r["max_duration"]) if r.get("max_duration") is not None else None
+            std = float(r["stddev_duration"]) if r.get("stddev_duration") is not None else None
 
-                if isinstance(r.get("duration"), Decimal):
-                    r["duration"] = float(r["duration"])
-                cleaned_rows.append(r)
-            return JSONResponse(content=cleaned_rows, media_type="application/json; charset=utf-8")
+            cv = (std / avg) if (std is not None and avg) else None
+            p95_ratio = (p95 / avg) if (p95 is not None and avg) else None
+
+            slow = bool(p95 is not None and p95 > threshold_minutes)
+            unstable = bool(cv is not None and cv >= 0.3)
+            critical_unstable = bool(cv is not None and cv >= 0.6) or bool(
+                p95_ratio is not None and p95_ratio > 2
+            )
+            low_sample = runs < 5
+
+            if low_sample:
+                status = "low_sample"
+            elif slow and unstable:
+                status = "slow_unstable"
+            elif slow and not unstable:
+                status = "slow"
+            elif unstable:
+                status = "unstable"
+            else:
+                status = "ok"
+
+            if not (slow or unstable):
+                continue
+
+            data.append(
+                {
+                    "table_schema": r.get("table_schema") or "",
+                    "table_name": r.get("table_name") or "",
+                    "entity_name": r.get("entity_name"),
+                    "runs_count": runs,
+                    "avg_duration": round(avg, 2) if avg is not None else None,
+                    "p95_duration": round(p95, 2) if p95 is not None else None,
+                    "max_duration": round(max_d, 2) if max_d is not None else None,
+                    "stddev_duration": round(std, 2) if std is not None else None,
+                    "cv": round(cv, 4) if cv is not None else None,
+                    "p95_avg_ratio": round(p95_ratio, 3) if p95_ratio is not None else None,
+                    "slow": slow,
+                    "unstable": unstable,
+                    "critical_unstable": critical_unstable,
+                    "low_sample": low_sample,
+                    "status": status,
+                }
+            )
+
+        status_order = {
+            "slow_unstable": 0,
+            "slow": 1,
+            "unstable": 2,
+            "low_sample": 3,
+            "ok": 4,
+        }
+        data.sort(
+            key=lambda x: (
+                status_order.get(x["status"], 9),
+                -(x.get("p95_duration") or 0),
+            )
+        )
+        limited = data[:limit]
+
+        now_dt = datetime.utcnow().date()
+        period_from = now_dt - timedelta(days=days)
+        payload = {
+            "meta": {
+                "window_days": days,
+                "period_from": period_from.strftime("%Y-%m-%d"),
+                "period_to": now_dt.strftime("%Y-%m-%d"),
+                "total_tables": len(rows),
+                "candidates": len(data),
+                "limit": limit,
+            },
+            "rows": limited,
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
     except Exception as e:
+        print("❌ /api/slowest-tables error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/load-profile")
+def get_load_profile(days: int = Query(30, ge=1, le=120)):
+    try:
+        query = f"""
+            SELECT
+                EXTRACT(HOUR FROM l.loading_start_dttm) AS hour,
+                COUNT(*) AS runs_count,
+                SUM(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0) AS total_duration_minutes
+            FROM {TABLE_LOADING_HISTORY} l
+            WHERE l.object_type = 'table'
+              AND l.loading_state = 'SUCCESS'
+              AND l.loading_start_dttm IS NOT NULL
+              AND l.loading_finish_dttm IS NOT NULL
+              AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+            GROUP BY EXTRACT(HOUR FROM l.loading_start_dttm)
+            ORDER BY hour
+        """
+        with engine.connect() as conn:
+            rows = conn.execute(text(query), {"days": days}).mappings().all()
+
+        profile_map = {int(r["hour"]): r for r in rows}
+        profile = []
+        for h in range(24):
+            row = profile_map.get(h, {})
+            runs = int(row.get("runs_count") or 0)
+            total = float(row.get("total_duration_minutes") or 0.0)
+            profile.append(
+                {
+                    "hour": h,
+                    "runs_count": runs,
+                    "total_duration_minutes": round(total, 2),
+                }
+            )
+
+        return JSONResponse(
+            content={"days": days, "profile": profile},
+            media_type="application/json; charset=utf-8",
+        )
+    except Exception as e:
+        print("❌ /api/load-profile error:", e)
+        print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
@@ -1878,4 +2017,3 @@ def get_order_breaches():
 
 
 app.include_router(router)
-

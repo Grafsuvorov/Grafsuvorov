@@ -1,98 +1,112 @@
-SQL Error [42P19]: ERROR: recursive reference to query "forecast_recursive" must not appear within a subquery
-  Позиция: 1531
+CREATE OR REPLACE FUNCTION dm_calc.calc_downtime_forecast_365_fast()
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    r_entity RECORD;
+    r_day RECORD;
 
-WITH RECURSIVE calendar AS (
-    -- календарь: от min даты до today + 365
-    SELECT
-        generate_series(
-            (SELECT min(dt_report)
-             FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
-             WHERE account_code = 'KPI_ALUM_TEC_08a'),
-            now()::date + interval '365 day',
-            interval '1 day'
-        )::date AS dt_report
-),
+    window_sum     numeric;
+    forecast_day   numeric;
+    forecast_ytd   numeric;
+    prev_value     numeric;
 
-base_data AS (
-    -- исходные данные (факт)
-    SELECT
-        c.dt_report,
-        o.entity_code,
-        o.actual
-    FROM calendar c
-    JOIN ods."KPI_INDICATORS_ACTUAL_REPORT_AD" o
-      ON o.dt_report = c.dt_report
-     AND o.account_code = 'KPI_ALUM_TEC_08a'
-),
+    values_365     numeric[];  -- скользящее окно
+    idx            int := 1;
+BEGIN
+    -- очищаем текущий расчёт (по желанию)
+    DELETE FROM dm_calc.pr_equipment_downtime_forecast_365
+    WHERE calc_dttm::date = now()::date;
 
-seed AS (
-    -- стартовая точка: все даты < today считаем "известными"
-    SELECT
-        dt_report,
-        entity_code,
-        actual                             AS value,
-        actual                             AS forecast_day
-    FROM base_data
-    WHERE dt_report < now()::date
-),
+    -- цикл по entity
+    FOR r_entity IN
+        SELECT DISTINCT entity_code
+        FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+        WHERE account_code = 'KPI_ALUM_TEC_08a'
+    LOOP
+        values_365 := ARRAY[]::numeric[];
 
-forecast_recursive AS (
-    -- === базовый слой ===
-    SELECT
-        s.dt_report,
-        s.entity_code,
-        s.value,
-        s.forecast_day
-    FROM seed s
+        -- 1️⃣ берём последние 365 фактических значений
+        FOR r_day IN
+            SELECT actual
+            FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+            WHERE account_code = 'KPI_ALUM_TEC_08a'
+              AND entity_code = r_entity.entity_code
+              AND dt_report < now()::date
+            ORDER BY dt_report DESC
+            LIMIT 365
+        LOOP
+            values_365 := array_prepend(r_day.actual, values_365);
+        END LOOP;
 
-    UNION ALL
+        -- если данных меньше 365 — пропускаем entity
+        IF array_length(values_365, 1) < 365 THEN
+            CONTINUE;
+        END IF;
 
-    -- === рекурсивный шаг ===
-    SELECT
-        next_day.dt_report,
-        next_day.entity_code,
+        -- начальная сумма окна
+        SELECT sum(v) INTO window_sum
+        FROM unnest(values_365) v;
 
-        -- value: либо факт, либо прогноз предыдущего дня
-        COALESCE(
-            next_day.actual,
-            prev.forecast_day
-        ) AS value,
+        forecast_ytd := window_sum;
 
-        -- forecast_day = среднее за 365 дней
-        (
-            SELECT avg(hist.value)
-            FROM forecast_recursive hist
-            WHERE hist.entity_code = prev.entity_code
-              AND hist.dt_report BETWEEN next_day.dt_report - interval '365 day'
-                                      AND next_day.dt_report - interval '1 day'
-        ) AS forecast_day
+        -- 2️⃣ идём по дням вперёд
+        FOR r_day IN
+            SELECT
+                dt_report,
+                actual
+            FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+            WHERE account_code = 'KPI_ALUM_TEC_08a'
+              AND entity_code = r_entity.entity_code
+              AND dt_report >= now()::date
+              AND dt_report <= now()::date + interval '365 day'
+            ORDER BY dt_report
+        LOOP
+            -- прогноз дня
+            forecast_day := window_sum / 365;
 
-    FROM forecast_recursive prev
-    JOIN base_data next_day
-      ON next_day.entity_code = prev.entity_code
-     AND next_day.dt_report = prev.dt_report + interval '1 day'
+            -- если факт есть — он подменит прогноз
+            IF r_day.actual IS NOT NULL THEN
+                prev_value := r_day.actual;
+            ELSE
+                prev_value := forecast_day;
+            END IF;
+
+            -- сдвигаем окно
+            window_sum :=
+                window_sum
+                - values_365[1]
+                + prev_value;
+
+            values_365[1:364] := values_365[2:365];
+            values_365[365] := prev_value;
+
+            forecast_ytd := forecast_ytd + prev_value;
+
+            -- insert
+            INSERT INTO dm_calc.pr_equipment_downtime_forecast_365 (
+                dt_report,
+                entity_code,
+                forecast_day,
+                forecast_ytd,
+                calc_dttm
+            )
+            VALUES (
+                r_day.dt_report,
+                r_entity.entity_code,
+                forecast_day,
+                forecast_ytd,
+                now()
+            );
+        END LOOP;
+    END LOOP;
+END;
+$$;
+CREATE TABLE IF NOT EXISTS dm_calc.pr_equipment_downtime_forecast_365 (
+    dt_report       date,
+    entity_code     text,
+    forecast_day    numeric,
+    forecast_ytd    numeric,
+    calc_dttm       timestamp
 )
-
--- ============================================================
--- Финальный INSERT в dm_calc
--- ============================================================
-
-
-SELECT
-    f.dt_report,
-    f.entity_code,
-    f.forecast_day,
-
-    -- forecast_ytd = сумма значений за 365 дней
-    (
-        SELECT sum(hist.value)
-        FROM forecast_recursive hist
-        WHERE hist.entity_code = f.entity_code
-          AND hist.dt_report BETWEEN f.dt_report - interval '364 day'
-                                  AND f.dt_report
-    ) AS forecast_ytd,
-
-    now() AS calc_dttm
-FROM forecast_recursive f
-WHERE f.dt_report >= now()::date
-ORDER BY f.entity_code, f.dt_report;
+DISTRIBUTED BY (entity_code);

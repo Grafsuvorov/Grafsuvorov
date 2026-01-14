@@ -1,87 +1,105 @@
-INSERT INTO dm_calc.expected_downtime_365
-(
-    dt,
-    entity_code,
-    expected_day,
-    expected_ytd,
-    calc_dttm
-)
-WITH
-/* ============================================================
-   1. ПАРАМЕТРЫ РАСЧЁТА
-   ============================================================ */
-params AS (
-    SELECT
-        DATE '2024-01-01'  AS start_date,
-        current_date + 365 AS end_date
-),
+-- ============================================================
+-- Рекурсивный rolling forecast простоев на 365 дней
+-- ============================================================
 
-/* ============================================================
-   2. КАЛЕНДАРЬ
-   ============================================================ */
-calendar AS (
+WITH RECURSIVE calendar AS (
+    -- календарь: от min даты до today + 365
     SELECT
         generate_series(
-            (SELECT start_date FROM params),
-            (SELECT end_date   FROM params),
+            (SELECT min(dt_report)
+             FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+             WHERE account_code = 'KPI_ALUM_TEC_08a'),
+            now()::date + interval '365 day',
             interval '1 day'
-        )::date AS dt
+        )::date AS dt_report
 ),
 
-/* ============================================================
-   3. ИСТОЧНИК ПРОГНОЗНЫХ ДАННЫХ
-   (ВАЖНО: не факт, а прогнозная серия)
-   ============================================================ */
-base_forecast AS (
+base_data AS (
+    -- исходные данные (факт)
     SELECT
-        dt_report::date AS dt,
-        entity_code,
-        downtime_duration_in_minutes_forecast_quantity AS forecast_value
-    FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
-    WHERE account_code = 'KPI_ALUM_TEC_08a'
-),
-
-/* ============================================================
-   4. EXPECTED_DAY = среднее от даты
-   ============================================================ */
-expected_day AS (
-    SELECT
-        c.dt,
-        f.entity_code,
-        AVG(b.forecast_value) AS expected_day
+        c.dt_report,
+        o.entity_code,
+        o.actual
     FROM calendar c
-    JOIN base_forecast f
-        ON f.dt = c.dt
-    JOIN base_forecast b
-        ON b.entity_code = f.entity_code
-       AND b.dt <  c.dt
-       AND b.dt >= c.dt - INTERVAL '365 days'
-    GROUP BY
-        c.dt,
-        f.entity_code
+    JOIN ods."KPI_INDICATORS_ACTUAL_REPORT_AD" o
+      ON o.dt_report = c.dt_report
+     AND o.account_code = 'KPI_ALUM_TEC_08a'
 ),
 
-/* ============================================================
-   5. EXPECTED_YTD
-   ============================================================ */
-expected_ytd AS (
+seed AS (
+    -- стартовая точка: все даты < today считаем "известными"
     SELECT
-        dt,
+        dt_report,
         entity_code,
-        expected_day,
-        SUM(expected_day) OVER (
-            PARTITION BY entity_code,
-                         date_trunc('year', dt)
-            ORDER BY dt
-            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-        ) AS expected_ytd
-    FROM expected_day
+        actual                             AS value,
+        actual                             AS forecast_day
+    FROM base_data
+    WHERE dt_report < now()::date
+),
+
+forecast_recursive AS (
+    -- === базовый слой ===
+    SELECT
+        s.dt_report,
+        s.entity_code,
+        s.value,
+        s.forecast_day
+    FROM seed s
+
+    UNION ALL
+
+    -- === рекурсивный шаг ===
+    SELECT
+        next_day.dt_report,
+        next_day.entity_code,
+
+        -- value: либо факт, либо прогноз предыдущего дня
+        COALESCE(
+            next_day.actual,
+            prev.forecast_day
+        ) AS value,
+
+        -- forecast_day = среднее за 365 дней
+        (
+            SELECT avg(hist.value)
+            FROM forecast_recursive hist
+            WHERE hist.entity_code = prev.entity_code
+              AND hist.dt_report BETWEEN next_day.dt_report - interval '365 day'
+                                      AND next_day.dt_report - interval '1 day'
+        ) AS forecast_day
+
+    FROM forecast_recursive prev
+    JOIN base_data next_day
+      ON next_day.entity_code = prev.entity_code
+     AND next_day.dt_report = prev.dt_report + interval '1 day'
 )
 
-SELECT
-    dt,
+-- ============================================================
+-- Финальный INSERT в dm_calc
+-- ============================================================
+
+INSERT INTO dm_calc.pr_equipment_downtime_forecast_365 (
+    dt_report,
     entity_code,
-    expected_day,
-    expected_ytd,
+    forecast_day,
+    forecast_ytd,
+    calc_dttm
+)
+SELECT
+    f.dt_report,
+    f.entity_code,
+    f.forecast_day,
+
+    -- forecast_ytd = сумма значений за 365 дней
+    (
+        SELECT sum(hist.value)
+        FROM forecast_recursive hist
+        WHERE hist.entity_code = f.entity_code
+          AND hist.dt_report BETWEEN f.dt_report - interval '364 day'
+                                  AND f.dt_report
+    ) AS forecast_ytd,
+
     now() AS calc_dttm
-FROM expected_ytd;
+FROM forecast_recursive f
+WHERE f.dt_report >= now()::date
+ORDER BY f.entity_code, f.dt_report;

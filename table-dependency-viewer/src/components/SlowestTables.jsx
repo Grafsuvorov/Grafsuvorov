@@ -40,7 +40,12 @@ export default function SlowestTables({ onSelectTable }) {
   useEffect(() => {
     setLoadingProfile(true);
     fetch(`${API_BASE}/api/load-profile?days=${windowDays}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((res) => {
+        if (res.status === 404) {
+          return { profile: [] };
+        }
+        return res.ok ? res.json() : Promise.reject(res.status);
+      })
       .then((data) => {
         setLoadProfile(Array.isArray(data?.profile) ? data.profile : []);
       })
@@ -261,9 +266,9 @@ export default function SlowestTables({ onSelectTable }) {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((row) => (
+                {sorted.map((row, index) => (
                   <tr
-                    key={`${row.table_schema}.${row.table_name}`}
+                    key={`${row.table_schema}.${row.table_name}.${row.entity_name || "no-entity"}.${row.runs_count || 0}.${index}`}
                     className="slow-row-click"
                     onClick={() =>
                       openTable(row.table_schema, row.table_name, {

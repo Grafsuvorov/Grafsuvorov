@@ -11,6 +11,8 @@ export default function IncidentsPage({ onSelectTable }) {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [showMappedOnly, setShowMappedOnly] = useState(false);
+  const [showDbOnly, setShowDbOnly] = useState(false);
+  const [showMissingTable, setShowMissingTable] = useState(false);
   const [topSize, setTopSize] = useState(5);
 
   useEffect(() => {
@@ -51,10 +53,25 @@ export default function IncidentsPage({ onSelectTable }) {
   const topTables = (data?.top_tables || []).slice(0, topSize);
   const topEntities = (data?.top_entities || []).slice(0, topSize);
 
+  const periodLabel = useMemo(() => {
+    if (!timeline.length) return null;
+    const dates = timeline
+      .map((row) => new Date(row.day))
+      .filter((dt) => !Number.isNaN(dt.getTime()));
+    if (!dates.length) return null;
+    const min = new Date(Math.min(...dates));
+    const max = new Date(Math.max(...dates));
+    const fmt = (dt) =>
+      dt.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+    return `${fmt(min)} — ${fmt(max)}`;
+  }, [timeline]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     return incidents.filter((incident) => {
       if (showMappedOnly && !incident.has_table) return false;
+      if (showDbOnly && !incident.has_db_failures) return false;
+      if (showMissingTable && incident.has_table) return false;
       if (!term) return true;
       return [
         incident.issue_id,
@@ -130,7 +147,7 @@ export default function IncidentsPage({ onSelectTable }) {
             <div className="value">{stats.total}</div>
           </div>
           <div className="incidents-overview-card">
-            <div className="label">С привязкой к БД</div>
+            <div className="label">Сопоставлено с таблицами</div>
             <div className="value">{stats.with_table}</div>
             <div className="hint">{stats.unique_tables} уникальных таблиц</div>
           </div>
@@ -139,11 +156,18 @@ export default function IncidentsPage({ onSelectTable }) {
             <div className="value">{stats.unique_entities}</div>
           </div>
           <div className="incidents-overview-card danger">
-            <div className="label">С совпадением по БД</div>
+            <div className="label">Ошибки в DWH</div>
             <div className="value">{stats.with_db_failures}</div>
-            <div className="hint">найдены ошибки в log history</div>
+            <div className="hint">по log history</div>
           </div>
         </section>
+      )}
+
+      {periodLabel && (
+        <div className="cc-header-meta">
+          <span className="period-pill">Период: {periodLabel}</span>
+          <span className="period-note">по выборке YouTrack</span>
+        </div>
       )}
 
       {timeline.length > 0 && (
@@ -228,11 +252,37 @@ export default function IncidentsPage({ onSelectTable }) {
             <input
               type="checkbox"
               checked={showMappedOnly}
-              onChange={(e) => setShowMappedOnly(e.target.checked)}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setShowMappedOnly(next);
+                if (next) setShowMissingTable(false);
+              }}
             />
             Только с найденной таблицей
           </label>
 
+          <label className="incidents-toggle">
+            <input
+              type="checkbox"
+              checked={showDbOnly}
+              onChange={(e) => setShowDbOnly(e.target.checked)}
+            />
+            Только с ошибками в DWH
+          </label>
+
+          <label className="incidents-toggle">
+            <input
+              type="checkbox"
+              checked={showMissingTable}
+              disabled={showMappedOnly}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setShowMissingTable(next);
+                if (next) setShowMappedOnly(false);
+              }}
+            />
+            Без таблицы
+          </label>
         </div>
       </section>
 
@@ -265,7 +315,7 @@ export default function IncidentsPage({ onSelectTable }) {
                             <div className="incident-actions">
                               {incident.link && (
                                 <a
-                                  className="yt-link"
+                                  className="incident-action-link"
                                   href={incident.link}
                                   target="_blank"
                                   rel="noreferrer"
@@ -274,7 +324,7 @@ export default function IncidentsPage({ onSelectTable }) {
                                 </a>
                               )}
                               <button
-                                className="btn btn-secondary"
+                                className="incident-action-button"
                                 disabled={!incident.has_table}
                                 onClick={() => openTable(incident.table_fqn)}
                               >

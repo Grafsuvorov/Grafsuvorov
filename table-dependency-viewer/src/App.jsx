@@ -25,6 +25,8 @@ export default function App() {
   const [schema, setSchema] = useState(null);
   const [tableName, setTableName] = useState(null);
   const [selectedTable, setSelectedTable] = useState(null);
+  const [autoShowGraph, setAutoShowGraph] = useState(false);
+  const [tableContext, setTableContext] = useState(null);
 
   // NEW: куда возвращаться
   const [returnView, setReturnView] = useState("home");
@@ -64,18 +66,24 @@ export default function App() {
     if (target === "sla") {
       setReturnView(view);
       setView("sla");
+      setAutoShowGraph(false);
+      setTableContext(null);
       return;
     }
 
     if (target === "search") {
       setReturnView(view);
       setView("search");
+      setAutoShowGraph(false);
+      setTableContext(null);
       return;
     }
 
     if (target === "table_search") {
       setReturnView(view);
       setView("table_search");
+      setAutoShowGraph(false);
+      setTableContext(null);
       return;
     }
 
@@ -85,6 +93,8 @@ export default function App() {
         setReturnView(source || view || "home");
         setSelectedTable(target.table);
         setView("incident");
+        setAutoShowGraph(false);
+        setTableContext(null);
         return;
       }
 
@@ -101,6 +111,8 @@ export default function App() {
         }
 
         setView("table_info");
+        setAutoShowGraph(Boolean(target.openGraph));
+        setTableContext(target.context || null);
         return;
       }
 
@@ -119,6 +131,8 @@ export default function App() {
         }
 
         setView("dependencies");
+        setAutoShowGraph(false);
+        setTableContext(null);
         return;
       }
     }
@@ -135,6 +149,8 @@ export default function App() {
       setSelectedTable(target.trim());
 
       setView("dependencies");
+      setAutoShowGraph(false);
+      setTableContext(null);
       return;
     }
   };
@@ -175,7 +191,7 @@ export default function App() {
         return <InconsistencyPage onBack={() => setView("home")} />;
 
       case "slowest_tables":
-        return <SlowestTables />;
+        return <SlowestTables onSelectTable={openView} />;
 
       case "entity_schedule":
         return <EntityShedule />;
@@ -193,6 +209,8 @@ export default function App() {
             tableName={tableName}
             setSchema={setSchema}
             setTableName={setTableName}
+            autoShowGraph={autoShowGraph}
+            tableContext={tableContext}
             onBack={() => setView(returnView || "table_search")}
           />
         );

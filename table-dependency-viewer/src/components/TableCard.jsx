@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
@@ -11,6 +11,8 @@ export default function TableCard({
   onBack,
   setSchema,
   setTableName,
+  autoShowGraph = false,
+  tableContext = null,
 }) {
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
@@ -49,6 +51,24 @@ export default function TableCard({
     }
     return "ok";
   }, [meta]);
+
+  const healthBadge = useMemo(() => {
+    if (!tableContext?.status) return null;
+    switch (tableContext.status) {
+      case "slow_unstable":
+        return { label: "Slow & Unstable", tone: "danger" };
+      case "slow":
+        return { label: "Slow", tone: "danger" };
+      case "unstable":
+        return { label: "Unstable", tone: "warn" };
+      case "low_sample":
+        return { label: "Low Sample", tone: "muted" };
+      default:
+        return { label: "OK", tone: "ok" };
+    }
+  }, [tableContext]);
+
+  const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
 
   const tableFqn = meta
     ? `${meta.table_schema}.${meta.table_name}`
@@ -156,6 +176,19 @@ export default function TableCard({
       .finally(() => setLoadingDeps(false));
   };
 
+  const autoGraphRef = useRef({ key: "", fired: false });
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    const key = `${schema}.${tableName}`;
+    if (autoGraphRef.current.key !== key) {
+      autoGraphRef.current = { key, fired: false };
+    }
+    if (autoShowGraph && !autoGraphRef.current.fired) {
+      autoGraphRef.current.fired = true;
+      loadDependencies();
+    }
+  }, [schema, tableName, autoShowGraph]);
+
   const tableList = useMemo(() => {
     const all = new Set();
     if (centralNode) {
@@ -225,6 +258,47 @@ export default function TableCard({
           {status === "risk" ? "RISK" : "OK"}
         </div>
       </div>
+
+      {tableContext && (
+        <div className="table-health-card">
+          <div className="table-health-header">
+            <div>
+              <div className="table-health-title">Состояние загрузки</div>
+              <div className="table-health-subtitle muted">
+                По анализу успешных запусков в Slow/Unstable.
+              </div>
+            </div>
+            {healthBadge && (
+              <span className={`table-health-pill ${healthBadge.tone}`}>
+                {healthBadge.label}
+              </span>
+            )}
+          </div>
+          <div className="table-health-metrics">
+            <div>
+              <div className="table-health-label">Runs</div>
+              <div className="table-health-value">{tableContext.runs_count ?? "—"}</div>
+            </div>
+            <div>
+              <div className="table-health-label">P95</div>
+              <div className="table-health-value">{fmt(tableContext.p95_duration)}</div>
+            </div>
+            <div>
+              <div className="table-health-label">CV</div>
+              <div className="table-health-value">{fmt(tableContext.cv)}</div>
+            </div>
+            <div>
+              <div className="table-health-label">P95/AVG</div>
+              <div className="table-health-value">{fmt(tableContext.p95_avg_ratio)}</div>
+            </div>
+          </div>
+          {tableContext.low_sample && (
+            <div className="table-health-note">
+              Мало запусков для стабильной оценки — используйте с осторожностью.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="table-grid">
         {metrics.map((metric) => (

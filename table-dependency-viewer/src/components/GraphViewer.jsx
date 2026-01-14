@@ -84,6 +84,15 @@ const CENTRAL_STYLE = {
   textTransform: "uppercase",
 };
 
+const LEGEND_ITEMS = [
+  { label: "Landing/Raw", color: NODE_STYLE_BY_LAYER.raw_ext.background },
+  { label: "STG", color: NODE_STYLE_BY_LAYER.stg.background },
+  { label: "ODS", color: NODE_STYLE_BY_LAYER.ods.background },
+  { label: "DDS", color: NODE_STYLE_BY_LAYER.dds.background },
+  { label: "DM", color: NODE_STYLE_BY_LAYER.dm.background },
+  { label: "Dict", color: NODE_STYLE_BY_LAYER.dict_stg.background, dashed: true },
+];
+
 function buildGraph(centralNode, edges = [], entities = {}) {
   if (!centralNode) {
     return { nodes: [], rfEdges: [], hasUpstream: false, hasDownstream: false };
@@ -223,6 +232,20 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
         <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Источники</span>
         <span>Текущая таблица</span>
         <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>Потребители</span>
+      </div>
+      <div className="dep-graph-legend">
+        <div className="dep-graph-legend-items">
+          {LEGEND_ITEMS.map((item) => (
+            <span key={item.label} className="dep-legend-item">
+              <span
+                className={`dep-legend-dot ${item.dashed ? "dashed" : ""}`}
+                style={{ background: item.color }}
+              />
+              {item.label}
+            </span>
+          ))}
+        </div>
+        <div className="dep-graph-hint">Клик по узлу открывает карточку</div>
       </div>
       <div className="dep-graph-canvas">
         <ReactFlow

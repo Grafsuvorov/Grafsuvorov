@@ -133,13 +133,17 @@ export default function HomePage({ onSelectTable }) {
       {loading && <div className="muted">Загрузка…</div>}
 
       {!loading && activeIncidents.length === 0 && (
-        <div className="system-ok">
-          <div className="system-ok-icon">✓</div>
-          <div className="system-ok-title">Активных инцидентов нет</div>
-          <div className="system-ok-sub">
-            За последние 24 часа система отработала без ошибок
+        <section className="cc-surface">
+          <div className="system-ok system-ok-compact">
+            <div className="system-ok-icon">✓</div>
+            <div>
+              <div className="system-ok-title">Активных инцидентов нет</div>
+              <div className="system-ok-sub">
+                За последние 24 часа система отработала без ошибок
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
       )}
 
       {!loading && activeIncidents.length > 0 && (
@@ -239,7 +243,7 @@ export default function HomePage({ onSelectTable }) {
                   </button>
                   <button
                     className="btn btn-ghost"
-                    onClick={() => onSelectTable({ view: "dependency_graph", table: breach.target_fqn }, "home")}
+                    onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn, openGraph: true }, "home")}
                   >
                     Граф зависимостей
                   </button>
@@ -256,6 +260,9 @@ export default function HomePage({ onSelectTable }) {
           <div className="section-title">
             История инцидентов (300 дней)
             <span className="section-meta">топ проблемных таблиц</span>
+          </div>
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Клик по строке откроет карточку инцидента.
           </div>
           <div className="history-board">
             <div className="history-board-head">

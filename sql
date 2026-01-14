@@ -1,70 +1,87 @@
-@Suvorov Nikita Никита, это не план, как можно спланировать простой оборудования? :) У завода есть 2000 единиц оборудования, которые по факту текущего года ломаются или перестают работать по какой то причине, по ним каждый месяц считается средняя на следующий год, но это не план сколько надо сломать оборудования, это прогноз сколько может сломаться, а факт как карта ляжет когда тот день наступит. :) Более того у самого простоя есть цель, но она из хайпериона и нужна я сравнения с фактическими простоями в отчётном периоде. Надеюсь погрузил в этот процесс.
+INSERT INTO dm_calc.expected_downtime_365
+(
+    dt,
+    entity_code,
+    expected_day,
+    expected_ytd,
+    calc_dttm
+)
+WITH
+/* ============================================================
+   1. ПАРАМЕТРЫ РАСЧЁТА
+   ============================================================ */
+params AS (
+    SELECT
+        DATE '2024-01-01'  AS start_date,
+        current_date + 365 AS end_date
+),
 
+/* ============================================================
+   2. КАЛЕНДАРЬ
+   ============================================================ */
+calendar AS (
+    SELECT
+        generate_series(
+            (SELECT start_date FROM params),
+            (SELECT end_date   FROM params),
+            interval '1 day'
+        )::date AS dt
+),
 
--- DROP FUNCTION tech_etl.downtime_forecast_calc();
+/* ============================================================
+   3. ИСТОЧНИК ПРОГНОЗНЫХ ДАННЫХ
+   (ВАЖНО: не факт, а прогнозная серия)
+   ============================================================ */
+base_forecast AS (
+    SELECT
+        dt_report::date AS dt,
+        entity_code,
+        downtime_duration_in_minutes_forecast_quantity AS forecast_value
+    FROM ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
+    WHERE account_code = 'KPI_ALUM_TEC_08a'
+),
 
-CREATE OR REPLACE FUNCTION tech_etl.downtime_forecast_calc()
-	RETURNS int4
-	LANGUAGE plpgsql
-	VOLATILE
-AS $$
-	
+/* ============================================================
+   4. EXPECTED_DAY = среднее от даты
+   ============================================================ */
+expected_day AS (
+    SELECT
+        c.dt,
+        f.entity_code,
+        AVG(b.forecast_value) AS expected_day
+    FROM calendar c
+    JOIN base_forecast f
+        ON f.dt = c.dt
+    JOIN base_forecast b
+        ON b.entity_code = f.entity_code
+       AND b.dt <  c.dt
+       AND b.dt >= c.dt - INTERVAL '365 days'
+    GROUP BY
+        c.dt,
+        f.entity_code
+),
 
+/* ============================================================
+   5. EXPECTED_YTD
+   ============================================================ */
+expected_ytd AS (
+    SELECT
+        dt,
+        entity_code,
+        expected_day,
+        SUM(expected_day) OVER (
+            PARTITION BY entity_code,
+                         date_trunc('year', dt)
+            ORDER BY dt
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS expected_ytd
+    FROM expected_day
+)
 
-
-
-
-
-
-declare
-	result int4 := 0;
-	forecast RECORD;
-	forecasted_raws CURSOR FOR
-		select dt_report, entity_code from ods."KPI_INDICATORS_ACTUAL_REPORT_AD"
-		where account_code = 'KPI_ALUM_TEC_08a'
-		and dt_report >= now()::date
-		order by dt_report, entity_code asc;
-
-begin
-	FOR forecast IN forecasted_raws LOOP
-		UPDATE ods."KPI_INDICATORS_ACTUAL_REPORT_AD" a
-        SET
-           downtime_duration_in_minutes_forecast_quantity = (select avg(case when b.dt_report < now()::date 
-																			then actual
-																			else downtime_duration_in_minutes_forecast_quantity end)
-																from ods."KPI_INDICATORS_ACTUAL_REPORT_AD" b
-															  where b.dt_report between a.dt_report - interval '365 days' and a.dt_report - interval '1 day'
-																and a.entity_code = b.entity_code
-																and account_code = 'KPI_ALUM_TEC_08a'),
-		downtime_duration_in_minutes_forecast_ytd_quantity =  (select avg(case when dt_report < now()::date 
-																			then actual
-																			else downtime_duration_in_minutes_forecast_quantity end) 
-																		+ sum(case when b.dt_report < now()::date
-																			then actual
-																			else downtime_duration_in_minutes_forecast_quantity end)
-															   from ods."KPI_INDICATORS_ACTUAL_REPORT_AD" b
-															  where b.dt_report between a.dt_report - interval '365 days' and a.dt_report - interval '1 day'
-																and a.entity_code = b.entity_code
-																and account_code = 'KPI_ALUM_TEC_08a')
-		where forecast.dt_report = a.dt_report 
-		  and forecast.entity_code = a.entity_code
-		  and a.account_code = 'KPI_ALUM_TEC_08a'
-		   ;
-
-	END LOOP;
-	RETURN result;
-EXCEPTION
-	WHEN others THEN
-		RAISE notice 'Error: %', sqlerrm;
-		RAISE;
-END;
-
-
-
-
-
-
-
-
-$$
-EXECUTE ON ANY;
+SELECT
+    dt,
+    entity_code,
+    expected_day,
+    expected_ytd,
+    now() AS calc_dttm
+FROM expected_ytd;

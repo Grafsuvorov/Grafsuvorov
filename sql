@@ -1,6 +1,5 @@
--- ============================================================
--- Рекурсивный rolling forecast простоев на 365 дней
--- ============================================================
+SQL Error [42P19]: ERROR: recursive reference to query "forecast_recursive" must not appear within a subquery
+  Позиция: 1531
 
 WITH RECURSIVE calendar AS (
     -- календарь: от min даты до today + 365
@@ -78,13 +77,7 @@ forecast_recursive AS (
 -- Финальный INSERT в dm_calc
 -- ============================================================
 
-INSERT INTO dm_calc.pr_equipment_downtime_forecast_365 (
-    dt_report,
-    entity_code,
-    forecast_day,
-    forecast_ytd,
-    calc_dttm
-)
+
 SELECT
     f.dt_report,
     f.entity_code,

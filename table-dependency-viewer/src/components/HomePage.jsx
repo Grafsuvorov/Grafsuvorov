@@ -290,27 +290,16 @@ export default function HomePage({ onSelectTable }) {
                   <span className="order-node mono" title={breach.worst_upstream}>{breach.worst_upstream}</span>
                   <span className="order-arrow">→</span>
                   <span className="order-node mono" title={breach.target_fqn}>{breach.target_fqn}</span>
-                  <span className="order-arrow">→</span>
-                  <span className="order-node">витрины и отчёты</span>
+
+
                 </div>
                 <p className="order-row-text">
                   {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} стартовала
                   {" "}
                   {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
                 </p>
-                <p className="order-row-text" style={{ color: "#9ca3af" }}>
-                  Нарушение зацепило {breach.violations_count} источников. Полный список затронутых таблиц доступен ниже.
-                </p>
-                {breach.violations && breach.violations.length > 0 && (
-                  <div className="order-violations">
-                    {breach.violations.slice(0, 3).map((v) => (
-                      <div key={`${breach.target_fqn}-${v.source_fqn}`} className="order-violation">
-                        <span className="mono" title={v.source_fqn}>{v.source_fqn}</span>
-                        <span className="order-violation-gap">+{Math.round(v.gap_sec / 60)} мин</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+
+
                 <div className="order-row-actions">
                   <button
                     className="btn btn-secondary"

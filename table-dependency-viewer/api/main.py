@@ -1,9 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Tuple, Set
+from collections import deque
 from pydantic import BaseModel
 import os
 import yaml
@@ -60,6 +61,8 @@ class DependencyItem(BaseModel):
     entity_name: str = None
     start_time: str = None
     avg_duration_minutes: Optional[float] = None
+    depth: int = 0
+    path: Optional[List[str]] = None
 
 
 TOP_DIRS = [
@@ -756,30 +759,31 @@ def get_ytrek_incidents(top_limit: int = Query(5, ge=1, le=50)):
 def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
     all_meta, reverse_index = get_cached_meta_and_index()
 
-    visited = set()
-    result = []
+    start = (schema, table)
+    visited = {start}
+    parent = {}
+    depth = {start: 0}
+    meta_by_node = {}
+    order = []
 
-    def walk(s, t):
-        if (s, t) in visited:
-            return
-        visited.add((s, t))
-        for dep in reverse_index.get((s, t), []):
-            result.append(dep)
-            walk(dep["schema"], dep["table_name"])
-
-    walk(schema, table)
-
-    uniq = []
-    seen = set()
-    for r in result:
-        key = (r["schema"], r["table_name"])
-        if key not in seen:
-            seen.add(key)
-            uniq.append(r)
+    queue = deque([start])
+    while queue:
+        node = queue.popleft()
+        for dep in reverse_index.get(node, []):
+            child = (dep["schema"], dep["table_name"])
+            if child in visited:
+                continue
+            visited.add(child)
+            parent[child] = node
+            depth[child] = depth[node] + 1
+            meta_by_node[child] = dep
+            order.append(child)
+            queue.append(child)
 
     out = []
     with engine.connect() as conn:
-        for i, r in enumerate(uniq, 1):
+        for i, node in enumerate(order, 1):
+            r = meta_by_node[node]
             avg = None
             if r.get("table_id"):
                 avg = conn.execute(
@@ -791,6 +795,14 @@ def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
                     {"id": r["table_id"]}
                 ).scalar()
 
+            path = []
+            current = node
+            while current != start:
+                path.append(f"{current[0]}.{current[1]}")
+                current = parent[current]
+            path.append(f"{start[0]}.{start[1]}")
+            path.reverse()
+
             out.append(DependencyItem(
                 step=i,
                 schema=r["schema"],
@@ -798,6 +810,8 @@ def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
                 entity_id=r["entity_id"],
                 entity_name=r.get("entity_name"),
                 avg_duration_minutes=avg,
+                depth=depth.get(node, 0),
+                path=path,
             ))
     return out
 

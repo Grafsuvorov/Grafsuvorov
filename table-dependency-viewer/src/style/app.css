@@ -1574,14 +1574,14 @@ main.content {
 
 .order-runbook-list {
   margin: 10px 0 0 0;
-  padding-left: 18px;
+  padding-left: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  list-style: none;
 }
 
 .order-runbook-item {
-  list-style: decimal;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.12);

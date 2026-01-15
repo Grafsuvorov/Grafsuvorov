@@ -9,6 +9,8 @@ export default function HomePage({ onSelectTable }) {
   const [history, setHistory] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [impactMap, setImpactMap] = useState({});
+  const [impactOpen, setImpactOpen] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +54,66 @@ export default function HomePage({ onSelectTable }) {
       cancelled = true;
     };
   }, []);
+
+  const layerLabel = (fqn) => {
+    const schema = (fqn || "").split(".")[0] || "";
+    if (!schema) return "OTHER";
+    if (schema === "ods") return "ODS";
+    if (schema === "dds") return "DDS";
+    if (schema.startsWith("dm")) return "DM";
+    return schema.toUpperCase();
+  };
+
+  const layerOrder = ["ODS", "DDS", "DM"];
+
+  const sortLayers = (a, b) => {
+    const aIndex = layerOrder.indexOf(a);
+    const bIndex = layerOrder.indexOf(b);
+    if (aIndex !== -1 || bIndex !== -1) {
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    }
+    return a.localeCompare(b);
+  };
+
+  const loadImpact = async (target) => {
+    if (!target || impactMap[target]?.state === "loading" || impactMap[target]?.state === "ready") {
+      return;
+    }
+
+    setImpactMap((prev) => ({
+      ...prev,
+      [target]: { state: "loading", rows: [], error: null },
+    }));
+
+    try {
+      const resp = await fetch(`${API_BASE}/api/dependencies?table=${encodeURIComponent(target)}`);
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+      const json = await resp.json();
+      const rows = Array.isArray(json) ? json : [];
+      setImpactMap((prev) => ({
+        ...prev,
+        [target]: { state: "ready", rows, error: null },
+      }));
+    } catch (err) {
+      console.error("Impact load error:", err);
+      setImpactMap((prev) => ({
+        ...prev,
+        [target]: { state: "error", rows: [], error: "Не удалось загрузить список влияния." },
+      }));
+    }
+  };
+
+  const toggleImpact = (target) => {
+    setImpactOpen((prev) => {
+      const next = !prev[target];
+      if (next) {
+        loadImpact(target);
+      }
+      return { ...prev, [target]: next };
+    });
+  };
 
   /* =============================
      INCIDENT TREND (simple)
@@ -221,8 +283,7 @@ export default function HomePage({ onSelectTable }) {
                   {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
                 </p>
                 <p className="order-row-text" style={{ color: "#9ca3af" }}>
-                  Нарушение зацепило {breach.violations_count} источников. Чтобы увидеть полную цепочку и витрины,
-                  откройте карточку или граф зависимостей.
+                  Нарушение зацепило {breach.violations_count} источников. Полный список затронутых таблиц доступен ниже.
                 </p>
                 {breach.violations && breach.violations.length > 0 && (
                   <div className="order-violations">
@@ -243,11 +304,68 @@ export default function HomePage({ onSelectTable }) {
                   </button>
                   <button
                     className="btn btn-ghost"
-                    onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn, openGraph: true }, "home")}
+                    onClick={() => toggleImpact(breach.target_fqn)}
                   >
-                    Граф зависимостей
+                    {impactOpen[breach.target_fqn] ? "Скрыть влияние" : "Показать влияние"}
                   </button>
                 </div>
+                {impactOpen[breach.target_fqn] && (
+                  <div className="order-impact">
+                    <div className="order-impact-header">
+                      <div>
+                        <div className="order-impact-title">Затронутые таблицы</div>
+                        <div className="muted">
+                          Построено по зависимостям от {breach.target_fqn}
+                        </div>
+                      </div>
+                      <div className="order-impact-count">
+                        {impactMap[breach.target_fqn]?.rows?.length || 0}
+                      </div>
+                    </div>
+                    {impactMap[breach.target_fqn]?.state === "loading" && (
+                      <div className="muted">Загружаем влияние…</div>
+                    )}
+                    {impactMap[breach.target_fqn]?.state === "error" && (
+                      <div className="card dep-error">
+                        <div className="dep-error-title">Ошибка загрузки</div>
+                        <div className="muted">{impactMap[breach.target_fqn]?.error}</div>
+                      </div>
+                    )}
+                    {impactMap[breach.target_fqn]?.state === "ready" &&
+                      impactMap[breach.target_fqn]?.rows?.length === 0 && (
+                        <div className="card muted">Нет зависимых таблиц.</div>
+                      )}
+                    {impactMap[breach.target_fqn]?.state === "ready" &&
+                      impactMap[breach.target_fqn]?.rows?.length > 0 && (() => {
+                        const grouped = impactMap[breach.target_fqn].rows.reduce((acc, row) => {
+                          const fqn = `${row.schema}.${row.table_name}`;
+                          const label = layerLabel(fqn);
+                          (acc[label] ??= []).push({ fqn, entity: row.entity_name });
+                          return acc;
+                        }, {});
+                        return (
+                          <div className="order-impact-grid">
+                            {Object.keys(grouped).sort(sortLayers).map((label) => (
+                              <div key={label} className="order-impact-group">
+                                <div className="order-impact-group-title">
+                                  <span>{label}</span>
+                                  <span className="order-impact-badge">{grouped[label].length}</span>
+                                </div>
+                                <div className="order-impact-list">
+                                  {grouped[label].map((item) => (
+                                    <div key={item.fqn} className="order-impact-item">
+                                      <span className="mono" title={item.fqn}>{item.fqn}</span>
+                                      <span className="muted">{item.entity || "—"}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                  </div>
+                )}
               </article>
             ))}
           </div>

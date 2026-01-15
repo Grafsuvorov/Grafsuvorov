@@ -119,8 +119,14 @@ def compute_order_breaches():
             "worst_upstream": None,
             "worst_upstream_time": None,
             "worst_gap_sec": 0,
-            "violations": []
+            "violations": [],
+            "_seen": set(),
         })
+
+        dedupe_key = (source, r["source_last_load"], r["dependent_last_load"])
+        if dedupe_key in g["_seen"]:
+            continue
+        g["_seen"].add(dedupe_key)
 
         g["violations"].append({
             "source_fqn": source,
@@ -147,6 +153,7 @@ def compute_order_breaches():
         g["severity"] = sev
         g["gap_minutes"] = round(gap_min, 1)
         g["violations_count"] = len(g["violations"])
+        g.pop("_seen", None)
         result.append(g)
 
     result.sort(key=lambda x: x["worst_gap_sec"], reverse=True)

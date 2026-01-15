@@ -11,6 +11,7 @@ export default function HomePage({ onSelectTable }) {
   const [loading, setLoading] = useState(true);
   const [impactMap, setImpactMap] = useState({});
   const [impactOpen, setImpactOpen] = useState({});
+  const [impactGroupOpen, setImpactGroupOpen] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +66,7 @@ export default function HomePage({ onSelectTable }) {
   };
 
   const layerOrder = ["ODS", "DDS", "DM"];
+  const impactLimit = 8;
 
   const sortLayers = (a, b) => {
     const aIndex = layerOrder.indexOf(a);
@@ -113,6 +115,11 @@ export default function HomePage({ onSelectTable }) {
       }
       return { ...prev, [target]: next };
     });
+  };
+
+  const toggleImpactGroup = (target, label) => {
+    const key = `${target}::${label}`;
+    setImpactGroupOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   /* =============================
@@ -337,31 +344,72 @@ export default function HomePage({ onSelectTable }) {
                       )}
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length > 0 && (() => {
-                        const grouped = impactMap[breach.target_fqn].rows.reduce((acc, row) => {
+                        const rows = impactMap[breach.target_fqn].rows;
+                        const grouped = rows.reduce((acc, row) => {
                           const fqn = `${row.schema}.${row.table_name}`;
                           const label = layerLabel(fqn);
-                          (acc[label] ??= []).push({ fqn, entity: row.entity_name });
+                          (acc[label] ??= []).push({
+                            fqn,
+                            entity: row.entity_name,
+                            path: row.path || [],
+                            depth: row.depth ?? null,
+                          });
                           return acc;
                         }, {});
-                        return (
-                          <div className="order-impact-grid">
-                            {Object.keys(grouped).sort(sortLayers).map((label) => (
+                        const groups = Object.keys(grouped)
+                          .sort(sortLayers)
+                          .map((label) => {
+                            const key = `${breach.target_fqn}::${label}`;
+                            const items = grouped[label];
+                            const filteredItems = items;
+                            const isOpen = impactGroupOpen[key];
+                            const visibleItems = isOpen
+                              ? filteredItems
+                              : filteredItems.slice(0, impactLimit);
+                            const hasMore = filteredItems.length > impactLimit;
+                            return (
                               <div key={label} className="order-impact-group">
                                 <div className="order-impact-group-title">
                                   <span>{label}</span>
-                                  <span className="order-impact-badge">{grouped[label].length}</span>
+                                  <span className="order-impact-badge">
+                                    {items.length}
+                                  </span>
                                 </div>
                                 <div className="order-impact-list">
-                                  {grouped[label].map((item) => (
+                                  {visibleItems.map((item) => (
                                     <div key={item.fqn} className="order-impact-item">
                                       <span className="mono" title={item.fqn}>{item.fqn}</span>
                                       <span className="muted">{item.entity || "—"}</span>
+                                      <span className="order-impact-path">
+                                        {item.path && item.path.length > 2
+                                          ? `через ${item.path.slice(1, -1).join(" → ")}`
+                                          : item.path
+                                            ? "прямая зависимость"
+                                            : "—"}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
+                                {hasMore && (
+                                  <button
+                                    className="order-impact-more"
+                                    onClick={() => toggleImpactGroup(breach.target_fqn, label)}
+                                  >
+                                    {isOpen ? "Свернуть список" : `Показать все (${filteredItems.length})`}
+                                  </button>
+                                )}
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })
+                        return (
+                          <>
+                            <div className="order-impact-note muted">
+                              Список включает косвенные зависимости. Для каждой таблицы показан путь от источника.
+                            </div>
+                            <div className="order-impact-grid">
+                              {groups}
+                            </div>
+                          </>
                         );
                       })()}
                   </div>

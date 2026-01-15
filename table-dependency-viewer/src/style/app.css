@@ -1549,6 +1549,11 @@ main.content {
   font-weight: 600;
 }
 
+.order-impact-note {
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
 .order-impact-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -1592,6 +1597,39 @@ main.content {
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(15, 23, 42, 0.35);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.order-impact-item .mono,
+.order-impact-item .muted,
+.order-impact-path {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-impact-path {
+  font-size: 11.5px;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.order-impact-more {
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.order-impact-more:hover {
+  border-color: rgba(148, 163, 184, 0.7);
 }
 
 

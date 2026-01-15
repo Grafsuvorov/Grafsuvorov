@@ -1,9 +1,56 @@
-SlowestTables.jsx:42 
- 
- GET http://localhost:8000/api/load-profile?days=30 404 (Not Found)
-(anonymous)	@	SlowestTables.jsx:42
-<SlowestTables>		
-renderContent	@	App.jsx:194
-App	@	App.jsx:240
-<App>		
-(anonymous)	@	main.jsx:8
+INFO:     127.0.0.1:58134 - "GET /api/dependencies?table=dm.production_cost_plan HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 75, in app
+    response = await f(request)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 302, in app
+    raw_response = await run_endpoint_function(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
+    return await future
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
+    result = context.run(func, *args)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 918, in get_dependencies
+    return resolve_dependencies(schema, table)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 767, in resolve_dependencies
+    queue = deque([start])
+NameError: name 'deque' is not defined

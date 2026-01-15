@@ -12,6 +12,7 @@ export default function HomePage({ onSelectTable }) {
   const [impactMap, setImpactMap] = useState({});
   const [impactOpen, setImpactOpen] = useState({});
   const [impactGroupOpen, setImpactGroupOpen] = useState({});
+  const [impactEntityOpen, setImpactEntityOpen] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -59,14 +60,18 @@ export default function HomePage({ onSelectTable }) {
   const layerLabel = (fqn) => {
     const schema = (fqn || "").split(".")[0] || "";
     if (!schema) return "OTHER";
+    if (schema.startsWith("dict_")) return "DICT";
+    if (schema === "stg") return "STG";
     if (schema === "ods") return "ODS";
     if (schema === "dds") return "DDS";
+    if (schema === "dm_calc") return "DM_CALC";
     if (schema.startsWith("dm")) return "DM";
     return schema.toUpperCase();
   };
 
-  const layerOrder = ["ODS", "DDS", "DM"];
+  const layerOrder = ["DICT", "STG", "ODS", "DDS", "DM_CALC", "DM"];
   const impactLimit = 8;
+  const entityLimit = 6;
 
   const sortLayers = (a, b) => {
     const aIndex = layerOrder.indexOf(a);
@@ -120,6 +125,10 @@ export default function HomePage({ onSelectTable }) {
   const toggleImpactGroup = (target, label) => {
     const key = `${target}::${label}`;
     setImpactGroupOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleImpactEntities = (target) => {
+    setImpactEntityOpen((prev) => ({ ...prev, [target]: !prev[target] }));
   };
 
   /* =============================
@@ -345,6 +354,46 @@ export default function HomePage({ onSelectTable }) {
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length > 0 && (() => {
                         const rows = impactMap[breach.target_fqn].rows;
+                        const entityMap = rows.reduce((acc, row) => {
+                          const fqn = `${row.schema}.${row.table_name}`;
+                          const label = layerLabel(fqn);
+                          const entityKey = row.entity_id ? `id:${row.entity_id}` : `name:${row.entity_name || fqn}`;
+                          const entityName = row.entity_name || (row.entity_id ? `Entity ${row.entity_id}` : fqn);
+                          const entry = acc[entityKey] ??= {
+                            key: entityKey,
+                            name: entityName,
+                            layers: new Set(),
+                            tables: [],
+                            minDepth: row.depth ?? 0,
+                          };
+                          entry.layers.add(label);
+                          entry.tables.push({ fqn, layer: label, depth: row.depth ?? 0 });
+                          entry.minDepth = Math.min(entry.minDepth, row.depth ?? 0);
+                          return acc;
+                        }, {});
+                        const entityList = Object.values(entityMap)
+                          .map((entry) => ({
+                            ...entry,
+                            layers: Array.from(entry.layers),
+                            tables: entry.tables.sort((a, b) => a.depth - b.depth),
+                          }))
+                          .sort((a, b) => {
+                            if (a.minDepth !== b.minDepth) return a.minDepth - b.minDepth;
+                            const aLayerIndex = Math.min(...a.layers.map((l) => {
+                              const idx = layerOrder.indexOf(l);
+                              return idx === -1 ? 999 : idx;
+                            }));
+                            const bLayerIndex = Math.min(...b.layers.map((l) => {
+                              const idx = layerOrder.indexOf(l);
+                              return idx === -1 ? 999 : idx;
+                            }));
+                            if (aLayerIndex !== bLayerIndex) return aLayerIndex - bLayerIndex;
+                            return a.name.localeCompare(b.name);
+                          });
+                        const showAllEntities = !!impactEntityOpen[breach.target_fqn];
+                        const visibleEntities = showAllEntities
+                          ? entityList
+                          : entityList.slice(0, entityLimit);
                         const grouped = rows.reduce((acc, row) => {
                           const fqn = `${row.schema}.${row.table_name}`;
                           const label = layerLabel(fqn);
@@ -405,6 +454,56 @@ export default function HomePage({ onSelectTable }) {
                           <>
                             <div className="order-impact-note muted">
                               Список включает косвенные зависимости. Для каждой таблицы показан путь от источника.
+                            </div>
+                            <div className="order-runbook">
+                              <div className="order-runbook-title">Перезапуск сущностей</div>
+                              <div className="muted order-runbook-sub">
+                                Рекомендуемый порядок для пересчёта после {breach.target_fqn}
+                              </div>
+                              <ol className="order-runbook-list">
+                                {visibleEntities.map((entity, idx) => (
+                                  <li key={entity.key} className="order-runbook-item">
+                                    <div className="order-runbook-head">
+                                      <span className="order-runbook-step">{idx + 1}</span>
+                                      <span className="order-runbook-name" title={entity.name}>
+                                        {entity.name}
+                                      </span>
+                                      <span className="order-runbook-layers">
+                                        {entity.layers.map((layer) => (
+                                          <span key={layer} className="order-runbook-layer">
+                                            {layer}
+                                          </span>
+                                        ))}
+                                      </span>
+                                    </div>
+                                    <div className="order-runbook-meta">
+                                      Таблиц: {entity.tables.length} · ближайшая зависимость: {entity.minDepth} шаг
+                                    </div>
+                                    <div className="order-runbook-tables">
+                                      {entity.tables.slice(0, 3).map((table) => (
+                                        <span key={table.fqn} className="order-runbook-table" title={table.fqn}>
+                                          {table.fqn}
+                                        </span>
+                                      ))}
+                                      {entity.tables.length > 3 && (
+                                        <span className="order-runbook-more">
+                                          +{entity.tables.length - 3}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ol>
+                              {entityList.length > entityLimit && (
+                                <button
+                                  className="order-impact-more"
+                                  onClick={() => toggleImpactEntities(breach.target_fqn)}
+                                >
+                                  {showAllEntities
+                                    ? "Свернуть список"
+                                    : `Показать все сущности (${entityList.length})`}
+                                </button>
+                              )}
                             </div>
                             <div className="order-impact-grid">
                               {groups}

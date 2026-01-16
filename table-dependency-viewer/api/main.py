@@ -1804,9 +1804,11 @@ def get_night_summary(
 def get_entity_loads(
     entity_id: int = Query(..., ge=1),
     days: int = Query(30, ge=1, le=120),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(30, ge=1, le=200),
+    schema: str | None = Query(None),
 ):
     try:
+        schema = schema.strip() if isinstance(schema, str) else None
         query = f"""
             WITH base AS (
                 SELECT
@@ -1824,6 +1826,7 @@ def get_entity_loads(
                   AND l.loading_finish_dttm IS NOT NULL
                   AND e.entity_id = :entity_id
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+                  AND (:schema IS NULL OR t.table_schema = :schema)
             )
             SELECT
                 table_schema,
@@ -1842,7 +1845,7 @@ def get_entity_loads(
         with engine.connect() as conn:
             rows = conn.execute(
                 text(query),
-                {"entity_id": entity_id, "days": days, "limit": limit},
+                {"entity_id": entity_id, "days": days, "limit": limit, "schema": schema},
             ).mappings().all()
 
         payload = [

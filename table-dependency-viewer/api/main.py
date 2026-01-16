@@ -1197,26 +1197,14 @@ def get_table_card_info_by_path(schema: str, table: str):
 
 @router.get("/api/tables")
 def list_all_tables():
+    all_meta, _ = get_cached_meta_and_index()
     all_tables = {}
-    for top_path in iter_meta_dirs():
-        for schema_path in top_path.iterdir():
-            if not schema_path.is_dir():
-                continue
-            for table_path in schema_path.iterdir():
-                if not table_path.is_dir():
-                    continue
-                yaml_path = table_path / "meta_data_file.yaml"
-                if yaml_path.exists():
-                    try:
-                        with open(yaml_path, encoding="utf-8") as f:
-                            meta = yaml.safe_load(f)
-                            schema = meta.get("table_schema")
-                            table = meta.get("table_name")
-                            if schema and table:
-                                key = f"{schema}.{table}"
-                                all_tables.setdefault(key.lower(), key)
-                    except:
-                        continue
+    for meta in all_meta:
+        schema = meta.get("table_schema")
+        table = meta.get("table_name")
+        if schema and table:
+            key = f"{schema}.{table}"
+            all_tables.setdefault(key.lower(), key)
     return JSONResponse(content=sorted(all_tables.values(), key=lambda v: v.lower()))
 
 

@@ -1826,7 +1826,7 @@ def get_entity_loads(
                   AND l.loading_finish_dttm IS NOT NULL
                   AND e.entity_id = :entity_id
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
-                  AND (:schema IS NULL OR t.table_schema = :schema)
+                  AND (:schema IS NULL OR LOWER(t.table_schema) = LOWER(:schema))
             )
             SELECT
                 table_schema,

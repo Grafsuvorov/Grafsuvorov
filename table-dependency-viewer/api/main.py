@@ -10,7 +10,7 @@ import os
 import yaml
 
 from datetime import datetime
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, bindparam
 from typing import Optional
 from pathlib import Path
 from openpyxl import load_workbook
@@ -417,7 +417,6 @@ def ensure_ytrek_table_exists(conn) -> None:
                 table_schema TEXT,
                 table_name TEXT,
                 table_id BIGINT,
-                entity_name_excel TEXT,
                 entity_name TEXT,
                 inserted_at TIMESTAMP DEFAULT NOW()
             )
@@ -492,7 +491,6 @@ def import_ytrek_from_excel(file_path: str | Path) -> int:
                 "table_schema": matched_schema,
                 "table_name": matched_table,
                 "table_id": match.get("table_id") if match else None,
-                "entity_name_excel": entity_hint or None,
                 "entity_name": consolidated_entity,
             }
         )
@@ -507,11 +505,11 @@ def import_ytrek_from_excel(file_path: str | Path) -> int:
                     INSERT INTO {TABLE_YTREK_INCIDENTS} (
                         issue_id, title, start_at, detected_at, resolved_at,
                         link, table_raw, table_normalized, table_schema, table_name,
-                        table_id, entity_name_excel, entity_name
+                        table_id, entity_name
                     ) VALUES (
                         :issue_id, :title, :start_at, :detected_at, :resolved_at,
                         :link, :table_raw, :table_normalized, :table_schema, :table_name,
-                        :table_id, :entity_name_excel, :entity_name
+                        :table_id, :entity_name
                     )
                     """
                 ),
@@ -590,7 +588,7 @@ def build_ytrek_dashboard(top_limit: int):
                 f"""
                 SELECT issue_id, title, start_at, detected_at, resolved_at, link,
                        table_raw, table_normalized, table_schema, table_name,
-                       table_id, entity_name_excel, entity_name
+                       table_id, entity_name
                 FROM {TABLE_YTREK_INCIDENTS}
                 ORDER BY COALESCE(start_at, detected_at, resolved_at) DESC NULLS LAST,
                          issue_id DESC
@@ -634,7 +632,7 @@ def build_ytrek_dashboard(top_limit: int):
             text(
                 f"""
                 SELECT
-                    COALESCE(NULLIF(entity_name, ''), NULLIF(entity_name_excel, ''), 'Не указано') AS entity_key,
+                    COALESCE(NULLIF(entity_name, ''), 'Не указано') AS entity_key,
                     COUNT(*) AS incidents_count,
                     MAX(COALESCE(start_at, detected_at, resolved_at)) AS last_incident
                 FROM {TABLE_YTREK_INCIDENTS}
@@ -663,7 +661,7 @@ def build_ytrek_dashboard(top_limit: int):
             tables_set.add(table_fqn)
             mapped_count += 1
 
-        entity_value = row.get("entity_name") or row.get("entity_name_excel")
+        entity_value = row.get("entity_name")
         if isinstance(entity_value, str):
             entity_value = entity_value.strip()
         if entity_value:
@@ -691,8 +689,7 @@ def build_ytrek_dashboard(top_limit: int):
                 "table_name": table_name,
                 "table_fqn": table_fqn,
                 "table_id": row.get("table_id"),
-                "entity_name": row.get("entity_name") or row.get("entity_name_excel"),
-                "entity_name_excel": row.get("entity_name_excel"),
+                "entity_name": row.get("entity_name"),
                 "has_table": bool(table_fqn),
                 "incident_day": day_key,
                 "has_db_failures": failures > 0,
@@ -1717,6 +1714,8 @@ def get_gantt_data(schema: str, table: str):
         return JSONResponse(content=result, media_type="application/json")
 
     except Exception as e:
+        print("❌ Ошибка при построении Gantt:", str(e))
+        print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

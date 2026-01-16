@@ -1812,8 +1812,8 @@ def get_entity_loads(
         query = f"""
             WITH base AS (
                 SELECT
-                    COALESCE(t.table_schema, '') AS table_schema,
-                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                     e.entity_name,
                     EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration,
                     l.loading_finish_dttm
@@ -1826,7 +1826,10 @@ def get_entity_loads(
                   AND l.loading_finish_dttm IS NOT NULL
                   AND e.entity_id = :entity_id
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
-                  AND (:schema IS NULL OR LOWER(t.table_schema) = LOWER(:schema))
+                  AND (
+                    :schema IS NULL OR
+                    LOWER(COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), ''))) = LOWER(:schema)
+                  )
             )
             SELECT
                 table_schema,

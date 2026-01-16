@@ -98,6 +98,7 @@ _ORDER_BREACHES_TTL = 300  # 5 минут
 _graph_cache = {}
 _graph_cache_ts = 0
 _GRAPH_CACHE_TTL = 86400  # 24 часа
+_graph_cache_meta_ts = 0
 
 def compute_order_breaches():
     """
@@ -1954,36 +1955,57 @@ def get_dependencies_down(schema: str, table: str):
 @router.get("/api/dependencies-graph/{schema}/{table}")
 def get_dependency_graph(schema: str, table: str):
     try:
-        key = f"{schema}.{table}"
+        schema_norm = norm(schema)
+        table_norm = norm(table)
+        key = f"{schema_norm}.{table_norm}"
         now = time.time()
+
+        all_meta_list, _ = get_cached_meta_and_index()
+        if _graph_cache_meta_ts != _cache_timestamp:
+            _graph_cache.clear()
+            globals()["_graph_cache_meta_ts"] = _cache_timestamp
+            globals()["_graph_cache_ts"] = now
+
         if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
             cached = _graph_cache.get(key)
             if cached is not None:
                 return cached
 
-        all_meta = load_all_meta()
+        all_meta = {
+            f"{m.get('table_schema')}.{m.get('table_name')}": m
+            for m in all_meta_list
+            if m.get("table_schema") and m.get("table_name")
+        }
         visited = set()
-        edges = []
+        edges_set = set()
 
-        def walk(current_table: str):
-            if current_table in visited:
-                return
-            visited.add(current_table)
+        stack = [key]
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
 
-            meta = all_meta.get(current_table)
+            meta = all_meta.get(current)
             if not meta:
-                return
+                continue
 
-            depends_on = meta.get("depends_on", {})
+            depends_on = meta.get("depends_on") or {}
             for source_schema, source_tables in depends_on.items():
-                for source_table in source_tables:
+                if not source_schema:
+                    continue
+                for source_table in source_tables or []:
+                    if not source_table:
+                        continue
                     source = f"{source_schema}.{source_table}"
-                    edges.append({"source": source, "target": current_table})
-                    walk(source)
+                    edge_key = (source, current)
+                    if edge_key in edges_set:
+                        continue
+                    edges_set.add(edge_key)
+                    stack.append(source)
 
-        start = key
-        walk(start)
-        payload = {"centralNode": start, "edges": edges}
+        edges = [{"source": s, "target": t} for s, t in edges_set]
+        payload = {"centralNode": key, "edges": edges}
 
         if now - _graph_cache_ts >= _GRAPH_CACHE_TTL:
             _graph_cache.clear()

@@ -337,7 +337,7 @@ export default function IncidentsPage({ onSelectTable }) {
                             <div className="incident-card-main">
                               <div className="incident-title">{incident.title}</div>
                               <div className="incident-entity muted">
-                                {incident.entity_name || incident.entity_name_excel || "—"}
+                                {incident.entity_name || "—"}
                               </div>
                               {incident.has_db_failures && (
                                 <div className="db-badge">Ошибки в DWH ({incident.db_failures_count})</div>

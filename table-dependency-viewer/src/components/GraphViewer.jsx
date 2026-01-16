@@ -217,6 +217,7 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
     () => buildGraph(centralNode, edges, entities),
     [centralNode, edges, entities]
   );
+  const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
 
   const handleNodeClick = (_, node) => {
     if (!onNodeClick) return;
@@ -254,6 +255,9 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
           onNodeClick={handleNodeClick}
           nodesDraggable={false}
           zoomOnDoubleClick={false}
+          onlyRenderVisibleElements
+          nodesFocusable={false}
+          edgesFocusable={false}
           zoomOnScroll
           panOnScroll
           panOnDrag
@@ -262,9 +266,9 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
           fitView
           fitViewOptions={{ padding: 0.35 }}
         >
-          <MiniMap />
-          <Controls showInteractive={false} />
-          <Background gap={32} color="#0f172a" />
+          {!isLargeGraph && <MiniMap />}
+          {!isLargeGraph && <Controls showInteractive={false} />}
+          {!isLargeGraph && <Background gap={32} color="#0f172a" />}
         </ReactFlow>
       </div>
     </div>

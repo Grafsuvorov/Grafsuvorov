@@ -95,6 +95,10 @@ _order_breaches_cache = None
 _order_breaches_ts = 0
 _ORDER_BREACHES_TTL = 300  # 5 минут
 
+_graph_cache = {}
+_graph_cache_ts = 0
+_GRAPH_CACHE_TTL = 86400  # 24 часа
+
 def compute_order_breaches():
     """
     ТЯЖЁЛАЯ логика расчёта order breaches.
@@ -1950,6 +1954,13 @@ def get_dependencies_down(schema: str, table: str):
 @router.get("/api/dependencies-graph/{schema}/{table}")
 def get_dependency_graph(schema: str, table: str):
     try:
+        key = f"{schema}.{table}"
+        now = time.time()
+        if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
+            cached = _graph_cache.get(key)
+            if cached is not None:
+                return cached
+
         all_meta = load_all_meta()
         visited = set()
         edges = []
@@ -1970,9 +1981,15 @@ def get_dependency_graph(schema: str, table: str):
                     edges.append({"source": source, "target": current_table})
                     walk(source)
 
-        start = f"{schema}.{table}"
+        start = key
         walk(start)
-        return {"centralNode": start, "edges": edges}
+        payload = {"centralNode": start, "edges": edges}
+
+        if now - _graph_cache_ts >= _GRAPH_CACHE_TTL:
+            _graph_cache.clear()
+            globals()["_graph_cache_ts"] = now
+        _graph_cache[key] = payload
+        return payload
 
     except Exception as e:
         print("Ошибка при построении графа зависимостей:", e)

@@ -1877,6 +1877,21 @@ main.content {
   flex-wrap: wrap;
 }
 
+.dep-graph-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 12px 0;
+  flex-wrap: wrap;
+}
+
+.dep-graph-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .dep-graph-legend-items {
   display: flex;
   gap: 12px;

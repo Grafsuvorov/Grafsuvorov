@@ -1153,7 +1153,8 @@ def get_table_card_info_by_path(schema: str, table: str):
                     table_name = str(table_name or "")
 
                     def quote_ident(value: str) -> str:
-                        return f"\"{value.replace('\"', '\"\"')}\""
+                        escaped = value.replace('"', '""')
+                        return f"\"{escaped}\""
 
                     def build_regclass(schema_val: str, table_val: str) -> str:
                         if not schema_val or not table_val:

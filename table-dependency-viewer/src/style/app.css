@@ -2246,11 +2246,13 @@ main.content {
 }
 
 .slow-entity {
-  margin-top: 32px;
+  margin-top: 40px;
 }
 
 .slow-entity-controls {
-  margin-top: 10px;
+  margin-top: 14px;
+  margin-bottom: 10px;
+  gap: 20px;
 }
 
 .slow-entity-select {

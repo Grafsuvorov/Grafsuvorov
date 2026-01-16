@@ -19,6 +19,13 @@ export default function SlowestTables({ onSelectTable }) {
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [nightSummary, setNightSummary] = useState(null);
+  const [nightLoading, setNightLoading] = useState(true);
+  const [nightError, setNightError] = useState(null);
+  const [entities, setEntities] = useState([]);
+  const [entityId, setEntityId] = useState("");
+  const [entityLoads, setEntityLoads] = useState([]);
+  const [entityLoading, setEntityLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -53,6 +60,52 @@ export default function SlowestTables({ onSelectTable }) {
       .finally(() => setLoadingProfile(false));
   }, [windowDays]);
 
+  useEffect(() => {
+    setNightLoading(true);
+    setNightError(null);
+    fetch(`${API_BASE}/api/night-summary?days=${windowDays}&limit=50`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setNightSummary(data))
+      .catch(() => setNightError("Не удалось загрузить ночную сводку"))
+      .finally(() => setNightLoading(false));
+  }, [windowDays]);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/entities`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        const seen = new Set();
+        const uniq = list.filter((item) => {
+          const key = String(item?.entity_id ?? "");
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        uniq.sort((a, b) =>
+          String(a.entity_name || "").localeCompare(String(b.entity_name || ""), "ru")
+        );
+        setEntities(uniq);
+        if (!entityId && uniq.length > 0) {
+          setEntityId(String(uniq[0].entity_id));
+        }
+      })
+      .catch(() => setEntities([]));
+  }, []);
+
+  useEffect(() => {
+    if (!entityId) {
+      setEntityLoads([]);
+      return;
+    }
+    setEntityLoading(true);
+    fetch(`${API_BASE}/api/entity-loads?entity_id=${encodeURIComponent(entityId)}&days=${windowDays}&limit=50`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+      .then((data) => setEntityLoads(Array.isArray(data) ? data : []))
+      .catch(() => setEntityLoads([]))
+      .finally(() => setEntityLoading(false));
+  }, [entityId, windowDays]);
+
   const sorted = useMemo(() => tables, [tables]);
 
   const periodLabel = useMemo(() => {
@@ -84,6 +137,19 @@ export default function SlowestTables({ onSelectTable }) {
     if (!loadProfile.length) return 0;
     return Math.max(...loadProfile.map((p) => p.total_duration_minutes || 0));
   }, [loadProfile]);
+
+  const nightHours = useMemo(() => [21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7, 8], []);
+  const nightProfileMap = useMemo(() => {
+    const map = new Map();
+    (nightSummary?.hourly || []).forEach((slot) => {
+      map.set(Number(slot.hour), slot);
+    });
+    return map;
+  }, [nightSummary]);
+  const nightMaxDuration = useMemo(() => {
+    const values = (nightSummary?.hourly || []).map((slot) => slot.total_duration_minutes || 0);
+    return values.length ? Math.max(...values) : 0;
+  }, [nightSummary]);
 
   const openTable = (schema, table, context) => {
     if (!schema || !table) return;
@@ -233,6 +299,187 @@ export default function SlowestTables({ onSelectTable }) {
               <span>20</span>
               <span>23</span>
             </div>
+          </div>
+        )}
+      </section>
+
+      <section className="slow-night">
+        <div className="section-title">Ночная загрузка (21:00–08:00)</div>
+        {nightLoading && <div className="muted">Загружаем ночную сводку…</div>}
+        {nightError && <div className="card muted">{nightError}</div>}
+        {!nightLoading && !nightError && (
+          <>
+            <div className="slow-summary slow-night-summary">
+              <div className="slow-summary-card">
+                <div className="label">Запусков</div>
+                <div className="value">{nightSummary?.summary?.runs_count ?? 0}</div>
+              </div>
+              <div className="slow-summary-card">
+                <div className="label">Таблиц</div>
+                <div className="value">{nightSummary?.summary?.tables_count ?? 0}</div>
+              </div>
+              <div className="slow-summary-card">
+                <div className="label">Сущностей</div>
+                <div className="value">{nightSummary?.summary?.entities_count ?? 0}</div>
+              </div>
+              <div className="slow-summary-card">
+                <div className="label">Суммарно</div>
+                <div className="value">{formatMinutes(nightSummary?.summary?.total_duration_minutes)}</div>
+                <div className="hint muted">минут загрузки</div>
+              </div>
+              <div className="slow-summary-card danger">
+                <div className="label">Максимум</div>
+                <div className="value">{formatMinutes(nightSummary?.summary?.max_duration_minutes)}</div>
+              </div>
+            </div>
+
+            <div className="slow-night-grid">
+              <div className="slow-night-panel">
+                <div className="slow-night-title">Пики по часам</div>
+                <div className="slow-night-sub muted">
+                  Наведите на час, чтобы увидеть до 50 таблиц.
+                </div>
+                <div className="load-heatmap">
+                  <div className="load-heatmap-grid load-heatmap-night">
+                    {nightHours.map((hour) => {
+                      const slot = nightProfileMap.get(hour);
+                      const ratio = nightMaxDuration
+                        ? (slot?.total_duration_minutes || 0) / nightMaxDuration
+                        : 0;
+                      const alpha = Math.min(0.75, 0.12 + ratio * 0.63);
+                      const bg = `rgba(56, 189, 248, ${alpha.toFixed(3)})`;
+                      const totalMinutes = slot?.total_duration_minutes || 0;
+                      const hours = Math.floor(totalMinutes / 60);
+                      const minutes = Math.round(totalMinutes % 60);
+                      const durationLabel = hours > 0 ? `${hours} ч ${minutes} мин` : `${minutes} мин`;
+                      const tables = (slot?.top_tables || []).map((t) => `${t.table_fqn} (${formatMinutes(t.duration_minutes)} мин)`);
+                      const title = [
+                        `Час: ${String(hour).padStart(2, "0")}:00`,
+                        `Запусков: ${slot?.runs_count || 0}`,
+                        `Суммарно: ${durationLabel}`,
+                        tables.length ? "Топ таблиц:" : "Топ таблиц: нет",
+                        ...tables,
+                      ].join("\n");
+                      return (
+                        <div
+                          key={hour}
+                          className="load-heatmap-cell"
+                          style={{ background: bg }}
+                          title={title}
+                        >
+                          <span>{String(hour).padStart(2, "0")}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="load-heatmap-axis">
+                    <span>21</span>
+                    <span>00</span>
+                    <span>03</span>
+                    <span>06</span>
+                    <span>08</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="slow-night-panel">
+                <div className="slow-night-title">Самые долгие этой ночи</div>
+                {nightSummary?.top_runs?.length ? (
+                  <div className="slow-night-list">
+                    {nightSummary.top_runs.map((row, idx) => (
+                      <div key={`${row.table_fqn}-${idx}`} className="slow-night-item">
+                        <div className="mono slow-night-table" title={row.table_fqn}>{row.table_fqn}</div>
+                        <div className="slow-night-meta">
+                          <span>{row.entity_name || "—"}</span>
+                          <span>{formatMinutes(row.duration_minutes)} мин</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="card muted">Нет данных по ночной загрузке.</div>
+                )}
+              </div>
+
+              <div className="slow-night-panel">
+                <div className="slow-night-title">Аномалии vs p95</div>
+                <div className="slow-night-sub muted">
+                  Показаны загрузки, превышающие p95 более чем в 1.5 раза.
+                </div>
+                {nightSummary?.anomalies?.length ? (
+                  <div className="slow-night-list">
+                    {nightSummary.anomalies.map((row, idx) => (
+                      <div key={`${row.table_fqn}-${idx}`} className="slow-night-item">
+                        <div className="mono slow-night-table" title={row.table_fqn}>{row.table_fqn}</div>
+                        <div className="slow-night-meta">
+                          <span>{row.entity_name || "—"}</span>
+                          <span>
+                            {formatMinutes(row.duration_minutes)} мин / p95 {formatMinutes(row.p95_minutes)} ({row.ratio ?? "—"}x)
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="card muted">Аномалий нет.</div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="slow-entity">
+        <div className="section-title">Анализ по сущности</div>
+        <div className="slow-controls-row slow-entity-controls">
+          <div className="slow-select-group">
+            <span className="slow-select-label">Сущность</span>
+            <select
+              className="slow-entity-select"
+              value={entityId}
+              onChange={(event) => setEntityId(event.target.value)}
+            >
+              {!entities.length && <option value="">Нет сущностей</option>}
+              {entities.map((e) => (
+                <option key={e.entity_id} value={e.entity_id}>
+                  {e.entity_name || `Entity ${e.entity_id}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {entityLoading && <div className="muted">Загружаем данные по сущности…</div>}
+        {!entityLoading && entityLoads.length === 0 && (
+          <div className="card muted">Нет данных по выбранной сущности.</div>
+        )}
+        {!entityLoading && entityLoads.length > 0 && (
+          <div className="table-wrapper">
+            <table className="incidents-table slow-table">
+              <thead>
+                <tr>
+                  <th>Таблица</th>
+                  <th>AVG</th>
+                  <th>P95</th>
+                  <th>MAX</th>
+                  <th>RUNS</th>
+                  <th>Последний</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entityLoads.map((row, idx) => (
+                  <tr key={`${row.table_fqn}-${idx}`} className="slow-row-click">
+                    <td className="mono slow-table-name" title={row.table_fqn}>
+                      {row.table_fqn}
+                    </td>
+                    <td>{formatMinutes(row.avg_duration)}</td>
+                    <td>{formatMinutes(row.p95_duration)}</td>
+                    <td>{formatMinutes(row.max_duration)}</td>
+                    <td>{row.runs_count ?? "—"}</td>
+                    <td>{row.last_finish || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

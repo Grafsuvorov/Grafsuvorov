@@ -1,110 +1,35 @@
-ЗАДАЧА 1
-Техническое сопровождение и экспертная поддержка аналитических процессов
-
-Тип: Service / Support / Tech
-Исполнитель: ты
-Статус: Постоянная (long-living)
-Приоритет: Средний–Высокий
-
-📌 Описание
-
-Задача включает работы по техническому сопровождению аналитических и ETL-процессов, экспертные консультации и участие в разборе проблемных ситуаций.
-
-В рамках задачи выполняются:
-
-консультации аналитиков и инженеров по устройству ETL-пайплайнов;
-
-объяснение логики загрузок, расчётов и зависимостей;
-
-анализ SQL / Python / DAG-скриптов;
-
-поиск узких мест, логических и производственных ошибок;
-
-участие в разборе инцидентов и нестабильностей;
-
-предложения по улучшению архитектуры и процессов;
-
-помощь в подготовке решений и рекомендаций для команды.
-
-Задача используется для учёта времени на экспертную поддержку и операционную инженерную деятельность, не оформляемую в виде отдельных тикетов.
-
-⏱️ Что списывать в эту задачу
-
-звонки и переписку по ETL / витринам / загрузкам;
-
-разбор чужих скриптов и логики расчётов;
-
-поиск причин ошибок и деградаций;
-
-консультации по архитектуре данных;
-
-помощь аналитикам в формировании ТЗ;
-
-участие в обсуждениях и митингах по техническим вопросам.
-
-🚀 ЗАДАЧА 2
-Разработка и развитие внутренних инструментов и приложений
-
-Тип: Development
-Исполнитель: ты
-Статус: Постоянная (Epic / Long-term)
-Приоритет: Средний
-
-📌 Описание
-
-Задача предназначена для учёта времени на проектирование, разработку и развитие внутренних инструментов и приложений.
-
-В рамках задачи выполняются:
-
-разработка backend и frontend компонентов приложений;
-
-проектирование архитектуры и логики сервисов;
-
-реализация новых функций и улучшений;
-
-рефакторинг и оптимизация существующего кода;
-
-разработка прототипов и MVP;
-
-интеграция с внешними и внутренними системами;
-
-улучшение UX/UI и пользовательских сценариев;
-
-подготовка решений к продакшену.
-
-Задача используется как контейнер для продуктовой и инженерной разработки, когда работа не относится к конкретному бизнес-тикету.
-
-⏱️ Что списывать в эту задачу
-
-
-ЗАДАЧА 3
-Техническое лидерство, ревью и координация инженерной команды
-
-Тип: Management / Tech Lead
-Исполнитель: ты
-Статус: Постоянная (long-living)
-Приоритет: Высокий
-
-📌 Описание
-
-Задача охватывает деятельность по техническому лидерству, ревью решений и координации работы команды инженеров и аналитиков.
-
-В рамках задачи выполняются:
-
-ревью аналитических и технических задач;
-
-оценка и уточнение ТЗ перед передачей инженерам;
-
-перераспределение задач между инженерами;
-
-контроль технического качества решений;
-
-архитектурные обсуждения и принятие ключевых решений;
-
-сопровождение реализации сложных задач;
-
-участие в синхронизациях, статусах и планировании;
-
-принятие решений по приоритетам и срокам выполнения.
-
-Задача используется для учёта времени на lead-функции, когда работа не сводится к написанию кода или разбору конкретного инцидента.
+Traceback (most recent call last):
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 315, in _bootstrap
+    self.run()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 67, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\base_events.py", line 642, in run_until_complete
+    return future.result()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 71, in serve
+    await self._serve(sockets)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 78, in _serve
+    config.load()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\config.py", line 436, in load
+    self.loaded_app = import_from_string(self.app)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\importlib\__init__.py", line 127, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 986, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 786, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 923, in get_code
+  File "<frozen importlib._bootstrap_external>", line 853, in source_to_code
+  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1156
+    return f"\"{value.replace('\"', '\"\"')}\""
+                                               ^
+SyntaxError: f-string expression part cannot include a backslash

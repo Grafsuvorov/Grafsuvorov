@@ -28,6 +28,7 @@ export default function SlowestTables({ onSelectTable }) {
   const [entitySchema, setEntitySchema] = useState("all");
   const [entityLimit, setEntityLimit] = useState(30);
   const [entityLoading, setEntityLoading] = useState(false);
+  const [entitySchemaOptions, setEntitySchemaOptions] = useState(["all"]);
 
   useEffect(() => {
     setLoading(true);
@@ -104,7 +105,18 @@ export default function SlowestTables({ onSelectTable }) {
     const schemaParam = entitySchema !== "all" ? `&schema=${encodeURIComponent(entitySchema)}` : "";
     fetch(`${API_BASE}/api/entity-loads?entity_id=${encodeURIComponent(entityId)}&days=${windowDays}&limit=${entityLimit}${schemaParam}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data) => setEntityLoads(Array.isArray(data) ? data : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setEntityLoads(list);
+        if (entitySchema === "all") {
+          const set = new Set();
+          list.forEach((row) => {
+            const schema = String(row.table_fqn || "").split(".")[0];
+            if (schema) set.add(schema);
+          });
+          setEntitySchemaOptions(["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "ru"))]);
+        }
+      })
       .catch(() => setEntityLoads([]))
       .finally(() => setEntityLoading(false));
   }, [entityId, windowDays, entityLimit, entitySchema]);
@@ -154,14 +166,12 @@ export default function SlowestTables({ onSelectTable }) {
     return values.length ? Math.max(...values) : 0;
   }, [nightSummary]);
 
-  const entitySchemas = useMemo(() => {
-    const set = new Set();
-    (entityLoads || []).forEach((row) => {
-      const schema = String(row.table_fqn || "").split(".")[0];
-      if (schema) set.add(schema);
-    });
-    return ["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "ru"))];
-  }, [entityLoads]);
+  const entitySchemas = useMemo(() => entitySchemaOptions, [entitySchemaOptions]);
+
+  const filteredEntityLoads = useMemo(() => {
+    if (entitySchema === "all") return entityLoads;
+    return entityLoads.filter((row) => row.table_fqn?.startsWith(`${entitySchema}.`));
+  }, [entityLoads, entitySchema]);
 
   const openTable = (schema, table, context) => {
     if (!schema || !table) return;
@@ -487,10 +497,10 @@ export default function SlowestTables({ onSelectTable }) {
           </div>
         </div>
         {entityLoading && <div className="muted">Загружаем данные по сущности…</div>}
-        {!entityLoading && entityLoads.length === 0 && (
+        {!entityLoading && filteredEntityLoads.length === 0 && (
           <div className="card muted">Нет данных по выбранной сущности.</div>
         )}
-        {!entityLoading && entityLoads.length > 0 && (
+        {!entityLoading && filteredEntityLoads.length > 0 && (
           <div className="table-wrapper">
             <table className="incidents-table slow-table">
               <thead>
@@ -504,7 +514,7 @@ export default function SlowestTables({ onSelectTable }) {
                 </tr>
               </thead>
               <tbody>
-                {entityLoads.map((row, idx) => (
+                {filteredEntityLoads.map((row, idx) => (
                   <tr key={`${row.table_fqn}-${idx}`} className="slow-row-click">
                     <td className="mono slow-table-name" title={row.table_fqn}>
                       {row.table_fqn}

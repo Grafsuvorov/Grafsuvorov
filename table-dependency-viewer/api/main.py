@@ -1147,9 +1147,31 @@ def get_table_card_info_by_path(schema: str, table: str):
                           )::bigint / 1024 / 1024
                     """)
 
+                    schema_name = meta.get("table_schema") or schema
+                    table_name = meta.get("table_name") or table
+                    schema_name = str(schema_name or "")
+                    table_name = str(table_name or "")
+
+                    def quote_ident(value: str) -> str:
+                        return f"\"{value.replace('\"', '\"\"')}\""
+
+                    def build_regclass(schema_val: str, table_val: str) -> str:
+                        if not schema_val or not table_val:
+                            return ""
+                        needs_quote = (
+                            schema_val.lower() in {"stg", "dict_stg"}
+                            or schema_val != schema_val.lower()
+                            or table_val != table_val.lower()
+                        )
+                        if needs_quote:
+                            return f"{quote_ident(schema_val)}.{quote_ident(table_val)}"
+                        return f"{schema_val.lower()}.{table_val.lower()}"
+
+                    regclass_name = build_regclass(schema_name, table_name)
+
                     size_result = conn.execute(
                         size_sql,
-                        {"full_table_name": f"{schema.lower()}.{table.lower()}"},
+                        {"full_table_name": regclass_name},
                     ).scalar()
 
                     table_size_mb = int(size_result) if size_result is not None else None
@@ -1169,7 +1191,7 @@ def get_table_card_info_by_path(schema: str, table: str):
 
 @router.get("/api/tables")
 def list_all_tables():
-    all_tables = []
+    all_tables = {}
     for top_path in iter_meta_dirs():
         for schema_path in top_path.iterdir():
             if not schema_path.is_dir():
@@ -1185,10 +1207,11 @@ def list_all_tables():
                             schema = meta.get("table_schema")
                             table = meta.get("table_name")
                             if schema and table:
-                                all_tables.append(f"{schema}.{table}")
+                                key = f"{schema}.{table}"
+                                all_tables.setdefault(key.lower(), key)
                     except:
                         continue
-    return JSONResponse(content=sorted(all_tables))
+    return JSONResponse(content=sorted(all_tables.values(), key=lambda v: v.lower()))
 
 
 @router.get("/api/inconsistencies")

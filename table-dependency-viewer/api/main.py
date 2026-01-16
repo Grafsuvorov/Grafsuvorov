@@ -1524,6 +1524,322 @@ def get_load_profile(days: int = Query(30, ge=1, le=120)):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/api/night-summary")
+def get_night_summary(
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(50, ge=1, le=200),
+    start_hour: int = Query(21, ge=0, le=23),
+    end_hour: int = Query(8, ge=0, le=23),
+):
+    try:
+        with engine.connect() as conn:
+            window_row = conn.execute(
+                text(
+                    """
+                    SELECT
+                        (date_trunc('day', now()) - interval '1 day' + (:start_hour || ' hours')::interval) AS start_ts,
+                        (date_trunc('day', now()) + (:end_hour || ' hours')::interval) AS end_ts
+                    """
+                ),
+                {"start_hour": start_hour, "end_hour": end_hour},
+            ).mappings().first()
+
+        start_ts = window_row["start_ts"]
+        end_ts = window_row["end_ts"]
+
+        base_cte = f"""
+            WITH night_runs AS (
+                SELECT
+                    l.object_id,
+                    COALESCE(t.table_schema, '') AS table_schema,
+                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    e.entity_name,
+                    l.loading_start_dttm,
+                    l.loading_finish_dttm,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration,
+                    EXTRACT(HOUR FROM l.loading_start_dttm) AS hour
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND l.loading_start_dttm >= :start_ts
+                  AND l.loading_start_dttm < :end_ts
+            )
+        """
+
+        with engine.connect() as conn:
+            summary = conn.execute(
+                text(
+                    base_cte
+                    + """
+                    SELECT
+                        COUNT(*) AS runs_count,
+                        COUNT(DISTINCT object_id) AS tables_count,
+                        COUNT(DISTINCT entity_name) AS entities_count,
+                        SUM(duration) AS total_duration_minutes,
+                        MAX(duration) AS max_duration_minutes
+                    FROM night_runs
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts},
+            ).mappings().first()
+
+            hourly = conn.execute(
+                text(
+                    base_cte
+                    + """
+                    SELECT
+                        hour,
+                        COUNT(*) AS runs_count,
+                        SUM(duration) AS total_duration_minutes
+                    FROM night_runs
+                    GROUP BY hour
+                    ORDER BY hour
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts},
+            ).mappings().all()
+
+            hourly_top = conn.execute(
+                text(
+                    base_cte
+                    + """
+                    SELECT hour, table_schema, table_name, entity_name, duration
+                    FROM (
+                        SELECT
+                            hour,
+                            table_schema,
+                            table_name,
+                            entity_name,
+                            duration,
+                            ROW_NUMBER() OVER (PARTITION BY hour ORDER BY duration DESC) AS rn
+                        FROM night_runs
+                    ) ranked
+                    WHERE rn <= :limit
+                    ORDER BY hour, duration DESC
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts, "limit": limit},
+            ).mappings().all()
+
+            top_runs = conn.execute(
+                text(
+                    base_cte
+                    + """
+                    SELECT
+                        table_schema,
+                        table_name,
+                        entity_name,
+                        duration,
+                        loading_start_dttm,
+                        loading_finish_dttm
+                    FROM night_runs
+                    ORDER BY duration DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts, "limit": limit},
+            ).mappings().all()
+
+            anomalies = conn.execute(
+                text(
+                    f"""
+                    WITH history AS (
+                        SELECT
+                            l.object_id,
+                            percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0) AS p95_duration
+                        FROM {TABLE_LOADING_HISTORY} l
+                        WHERE l.object_type = 'table'
+                          AND l.loading_state = 'SUCCESS'
+                          AND l.loading_start_dttm IS NOT NULL
+                          AND l.loading_finish_dttm IS NOT NULL
+                          AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+                        GROUP BY l.object_id
+                    ),
+                    night_runs AS (
+                        SELECT
+                            l.object_id,
+                            COALESCE(t.table_schema, '') AS table_schema,
+                            COALESCE(t.table_name, l.object_name) AS table_name,
+                            e.entity_name,
+                            l.loading_start_dttm,
+                            l.loading_finish_dttm,
+                            EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration
+                        FROM {TABLE_LOADING_HISTORY} l
+                        LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                        LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                        WHERE l.object_type = 'table'
+                          AND l.loading_state = 'SUCCESS'
+                          AND l.loading_start_dttm IS NOT NULL
+                          AND l.loading_finish_dttm IS NOT NULL
+                          AND l.loading_start_dttm >= :start_ts
+                          AND l.loading_start_dttm < :end_ts
+                    )
+                    SELECT
+                        n.table_schema,
+                        n.table_name,
+                        n.entity_name,
+                        n.duration,
+                        n.loading_start_dttm,
+                        n.loading_finish_dttm,
+                        h.p95_duration,
+                        CASE
+                            WHEN h.p95_duration > 0 THEN n.duration / h.p95_duration
+                            ELSE NULL
+                        END AS ratio
+                    FROM night_runs n
+                    JOIN history h ON h.object_id = n.object_id
+                    WHERE n.duration > h.p95_duration * 1.5
+                    ORDER BY n.duration DESC
+                    LIMIT :limit
+                    """
+                ),
+                {
+                    "days": days,
+                    "start_ts": start_ts,
+                    "end_ts": end_ts,
+                    "limit": limit,
+                },
+            ).mappings().all()
+
+        hourly_top_map = {}
+        for row in hourly_top:
+            hour = int(row["hour"])
+            hourly_top_map.setdefault(hour, []).append(
+                {
+                    "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
+                    "entity_name": row.get("entity_name"),
+                    "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
+                }
+            )
+
+        hourly_payload = []
+        for row in hourly:
+            hour = int(row["hour"])
+            total = float(row.get("total_duration_minutes") or 0.0)
+            hourly_payload.append(
+                {
+                    "hour": hour,
+                    "runs_count": int(row.get("runs_count") or 0),
+                    "total_duration_minutes": round(total, 2),
+                    "top_tables": hourly_top_map.get(hour, []),
+                }
+            )
+
+        payload = {
+            "window": {
+                "start": serialize_datetime(start_ts),
+                "end": serialize_datetime(end_ts),
+                "start_hour": start_hour,
+                "end_hour": end_hour,
+            },
+            "summary": {
+                "runs_count": int(summary.get("runs_count") or 0),
+                "tables_count": int(summary.get("tables_count") or 0),
+                "entities_count": int(summary.get("entities_count") or 0),
+                "total_duration_minutes": round(float(summary.get("total_duration_minutes") or 0.0), 2),
+                "max_duration_minutes": round(float(summary.get("max_duration_minutes") or 0.0), 2)
+                if summary.get("max_duration_minutes") is not None
+                else None,
+            },
+            "hourly": hourly_payload,
+            "top_runs": [
+                {
+                    "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
+                    "entity_name": row.get("entity_name"),
+                    "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
+                    "start": serialize_datetime(row.get("loading_start_dttm")),
+                    "end": serialize_datetime(row.get("loading_finish_dttm")),
+                }
+                for row in top_runs
+            ],
+            "anomalies": [
+                {
+                    "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
+                    "entity_name": row.get("entity_name"),
+                    "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
+                    "p95_minutes": round(float(row["p95_duration"]), 2) if row["p95_duration"] is not None else None,
+                    "ratio": round(float(row["ratio"]), 2) if row["ratio"] is not None else None,
+                    "start": serialize_datetime(row.get("loading_start_dttm")),
+                    "end": serialize_datetime(row.get("loading_finish_dttm")),
+                }
+                for row in anomalies
+            ],
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ /api/night-summary error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/entity-loads")
+def get_entity_loads(
+    entity_id: int = Query(..., ge=1),
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(50, ge=1, le=200),
+):
+    try:
+        query = f"""
+            WITH base AS (
+                SELECT
+                    COALESCE(t.table_schema, '') AS table_schema,
+                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    e.entity_name,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration,
+                    l.loading_finish_dttm
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND e.entity_id = :entity_id
+                  AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+            )
+            SELECT
+                table_schema,
+                table_name,
+                entity_name,
+                COUNT(*) AS runs_count,
+                AVG(duration) AS avg_duration,
+                percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) AS p95_duration,
+                MAX(duration) AS max_duration,
+                MAX(loading_finish_dttm) AS last_finish
+            FROM base
+            GROUP BY table_schema, table_name, entity_name
+            ORDER BY MAX(duration) DESC NULLS LAST
+            LIMIT :limit
+        """
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(query),
+                {"entity_id": entity_id, "days": days, "limit": limit},
+            ).mappings().all()
+
+        payload = [
+            {
+                "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
+                "entity_name": row.get("entity_name"),
+                "runs_count": int(row.get("runs_count") or 0),
+                "avg_duration": round(float(row["avg_duration"]), 2) if row.get("avg_duration") is not None else None,
+                "p95_duration": round(float(row["p95_duration"]), 2) if row.get("p95_duration") is not None else None,
+                "max_duration": round(float(row["max_duration"]), 2) if row.get("max_duration") is not None else None,
+                "last_finish": serialize_datetime(row.get("last_finish")),
+            }
+            for row in rows
+        ]
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ /api/entity-loads error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 def load_all_meta():
     all_meta = {}
     for top_path in iter_meta_dirs():

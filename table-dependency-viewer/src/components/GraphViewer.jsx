@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -11,6 +11,7 @@ import "../style/app.css";
 const X_GAP = 320;
 const EXTRA_GAP = 220;
 const Y_GAP = 110;
+const DEFAULT_DEPTH = 2;
 
 const NODE_WIDTH_BY_LAYER = {
   landing: 220,
@@ -93,9 +94,18 @@ const LEGEND_ITEMS = [
   { label: "Dict", color: NODE_STYLE_BY_LAYER.dict_stg.background, dashed: true },
 ];
 
-function buildGraph(centralNode, edges = [], entities = {}) {
+function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
   if (!centralNode) {
-    return { nodes: [], rfEdges: [], hasUpstream: false, hasDownstream: false };
+    return {
+      nodes: [],
+      rfEdges: [],
+      hasUpstream: false,
+      hasDownstream: false,
+      totalNodes: 0,
+      totalEdges: 0,
+      visibleNodes: 0,
+      visibleEdges: 0,
+    };
   }
 
   const adj = {};
@@ -131,7 +141,13 @@ function buildGraph(centralNode, edges = [], entities = {}) {
     });
   }
 
-  const uniqueLevels = [...new Set(Object.values(levelMap))].sort((a, b) => a - b);
+  const totalNodes = Object.keys(levelMap).length;
+  const totalEdges = edges.length;
+  const inRange = (lvl) => depthLimit === null || Math.abs(lvl) <= depthLimit;
+  const visibleLevelMap = Object.fromEntries(
+    Object.entries(levelMap).filter(([, lvl]) => inRange(lvl))
+  );
+  const uniqueLevels = [...new Set(Object.values(visibleLevelMap))].sort((a, b) => a - b);
   if (!uniqueLevels.includes(0)) uniqueLevels.push(0);
   uniqueLevels.sort((a, b) => a - b);
   const zeroIndex = uniqueLevels.indexOf(0);
@@ -143,7 +159,7 @@ function buildGraph(centralNode, edges = [], entities = {}) {
   });
 
   const columns = {};
-  Object.entries(levelMap).forEach(([fqn, lvl]) => {
+  Object.entries(visibleLevelMap).forEach(([fqn, lvl]) => {
     (columns[lvl] ??= []).push(fqn);
   });
 
@@ -209,13 +225,24 @@ function buildGraph(centralNode, edges = [], entities = {}) {
   const hasUpstream = uniqueLevels.some((lvl) => lvl < 0);
   const hasDownstream = uniqueLevels.some((lvl) => lvl > 0);
 
-  return { nodes, rfEdges, hasUpstream, hasDownstream };
+  return {
+    nodes,
+    rfEdges,
+    hasUpstream,
+    hasDownstream,
+    totalNodes,
+    totalEdges,
+    visibleNodes: nodes.length,
+    visibleEdges: rfEdges.length,
+  };
 }
 
 export default function GraphViewer({ centralNode, edges = [], entities = {}, onNodeClick }) {
+  const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
+  const [showAll, setShowAll] = useState(false);
   const graph = useMemo(
-    () => buildGraph(centralNode, edges, entities),
-    [centralNode, edges, entities]
+    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit),
+    [centralNode, edges, entities, depthLimit, showAll]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
 
@@ -233,6 +260,34 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
         <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Источники</span>
         <span>Текущая таблица</span>
         <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>Потребители</span>
+      </div>
+      <div className="dep-graph-controls">
+        <div className="dep-graph-count muted">
+          Показано {graph.visibleNodes}/{graph.totalNodes} узлов · {graph.visibleEdges}/{graph.totalEdges} связей
+        </div>
+        <div className="dep-graph-actions">
+          {!showAll && (
+            <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
+              +1 уровень
+            </button>
+          )}
+          {!showAll && (
+            <button className="btn btn-secondary" onClick={() => setShowAll(true)}>
+              Показать все
+            </button>
+          )}
+          {showAll && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setShowAll(false);
+                setDepthLimit(DEFAULT_DEPTH);
+              }}
+            >
+              Свернуть
+            </button>
+          )}
+        </div>
       </div>
       <div className="dep-graph-legend">
         <div className="dep-graph-legend-items">

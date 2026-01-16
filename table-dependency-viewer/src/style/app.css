@@ -2178,6 +2178,90 @@ main.content {
   margin-bottom: 10px;
 }
 
+.slow-night {
+  margin-top: 32px;
+}
+
+.slow-night-summary {
+  margin-top: 12px;
+}
+
+.slow-night-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.slow-night-panel {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.3);
+}
+
+.slow-night-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.slow-night-sub {
+  margin-top: 4px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.slow-night-list {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.slow-night-panel .card {
+  margin-top: 12px;
+}
+
+.slow-night-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.slow-night-table {
+  font-size: 12.5px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slow-night-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.slow-entity {
+  margin-top: 32px;
+}
+
+.slow-entity-controls {
+  margin-top: 10px;
+}
+
+.slow-entity-select {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+}
+
 .load-info {
   margin-left: 8px;
   font-size: 12px;
@@ -2196,6 +2280,10 @@ main.content {
   display: grid;
   grid-template-columns: repeat(24, minmax(18px, 1fr));
   gap: 6px;
+}
+
+.load-heatmap-grid.load-heatmap-night {
+  grid-template-columns: repeat(12, minmax(18px, 1fr));
 }
 
 .load-heatmap-cell {

@@ -1,0 +1,1 @@
+TRUNCATE ods."/rusal/filedoc_ral"

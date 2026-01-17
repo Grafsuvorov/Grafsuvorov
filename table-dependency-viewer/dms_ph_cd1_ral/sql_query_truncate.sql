@@ -1,0 +1,1 @@
+truncate table ods.dms_ph_cd1_ral;

@@ -1,0 +1,1 @@
+truncate table ods.dms_phio2file_ral;

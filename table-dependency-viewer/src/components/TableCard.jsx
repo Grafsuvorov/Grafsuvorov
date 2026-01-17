@@ -1,9 +1,11 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const DEFAULT_GRAPH_DEPTH = 3;
+const DEFAULT_GRAPH_MAX_EDGES = 1200;
 
 export default function TableCard({
   schema,
@@ -24,6 +26,9 @@ export default function TableCard({
   const [depsError, setDepsError] = useState(null);
   const [showGraph, setShowGraph] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [graphTooLarge, setGraphTooLarge] = useState(false);
+  const [graphStats, setGraphStats] = useState({ nodes: 0, edges: 0 });
+  const [graphTruncated, setGraphTruncated] = useState(false);
   const [showGantt, setShowGantt] = useState(false);
   const [activeSqlBlock, setActiveSqlBlock] = useState(null);
   const [isSqlModalOpen, setSqlModalOpen] = useState(false);
@@ -153,21 +158,44 @@ export default function TableCard({
     };
   }, [isSqlModalOpen]);
 
-  const loadDependencies = () => {
+  const loadDependencies = ({ full = false } = {}) => {
     if (!schema || !tableName) return;
     setLoadingDeps(true);
     setDepsError(null);
     setShowGraph(false);
     setShowList(false);
+    setGraphTooLarge(false);
+    setGraphTruncated(false);
 
-    fetch(`${API_BASE}/api/dependencies-graph/${schema}/${tableName}`)
+    const params = new URLSearchParams();
+    if (!full) {
+      params.set("max_depth", String(DEFAULT_GRAPH_DEPTH));
+      params.set("max_edges", String(DEFAULT_GRAPH_MAX_EDGES));
+    }
+    const query = params.toString();
+    const url = `${API_BASE}/api/dependencies-graph/${schema}/${tableName}${query ? `?${query}` : ""}`;
+
+    fetch(url)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
       .then((data) => {
-        setEdges(data.edges || []);
-        setCentralNode(data.central_node || `${schema}.${tableName}`);
-        setShowGraph(true);
+        const incomingEdges = Array.isArray(data.edges) ? data.edges : [];
+        const resolvedCentral =
+          data.centralNode || data.central_node || `${schema}.${tableName}`;
+        const nodeSet = new Set([resolvedCentral]);
+        incomingEdges.forEach((edge) => {
+          if (edge?.source) nodeSet.add(edge.source);
+          if (edge?.target) nodeSet.add(edge.target);
+        });
+        const stats = { nodes: nodeSet.size, edges: incomingEdges.length };
+        setGraphStats(stats);
+        setEdges(incomingEdges);
+        setCentralNode(resolvedCentral);
+        const isTooLarge = stats.nodes > 350 || stats.edges > 800;
+        setGraphTooLarge(isTooLarge);
+        setGraphTruncated(Boolean(data.truncated));
+        setShowGraph(!isTooLarge);
       })
       .catch((err) => {
         console.error(err);
@@ -211,6 +239,8 @@ export default function TableCard({
     setShowGraph(false);
     setEdges([]);
     setCentralNode("");
+    setGraphTooLarge(false);
+    setGraphStats({ nodes: 0, edges: 0 });
     setSchema(newSchema);
     setTableName(newTable);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -375,6 +405,35 @@ export default function TableCard({
           )}
           {!loadingDeps && !depsError && !showGraph && (
             <div className="muted">Нажмите «Показать граф зависимостей», чтобы отрисовать схему.</div>
+          )}
+          {!loadingDeps && !depsError && graphTruncated && (
+            <div className="card dep-error" style={{ marginTop: 12 }}>
+              <div className="dep-error-title">Показан укороченный граф</div>
+              <div className="muted">
+                Ограничение: глубина {DEFAULT_GRAPH_DEPTH}, связей до {DEFAULT_GRAPH_MAX_EDGES}.
+              </div>
+              <div className="table-graph-actions" style={{ marginTop: 10 }}>
+                <button className="btn btn-secondary" onClick={() => loadDependencies({ full: true })}>
+                  Загрузить полный граф
+                </button>
+              </div>
+            </div>
+          )}
+          {!loadingDeps && !depsError && graphTooLarge && (
+            <div className="card dep-error" style={{ marginTop: 12 }}>
+              <div className="dep-error-title">Граф слишком большой</div>
+              <div className="muted">
+                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. В проде это может зависать.
+              </div>
+              <div className="table-graph-actions" style={{ marginTop: 10 }}>
+                <button className="btn btn-secondary" onClick={() => setShowGraph(true)}>
+                  Показать граф всё равно
+                </button>
+                <button className="btn" onClick={() => setShowList(true)}>
+                  Показать список
+                </button>
+              </div>
+            </div>
           )}
 
           {showGraph && edges.length > 0 && (

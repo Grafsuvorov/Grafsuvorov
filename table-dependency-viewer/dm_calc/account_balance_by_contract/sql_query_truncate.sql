@@ -1,0 +1,1 @@
+truncate table dm_calc.account_balance_by_contract;

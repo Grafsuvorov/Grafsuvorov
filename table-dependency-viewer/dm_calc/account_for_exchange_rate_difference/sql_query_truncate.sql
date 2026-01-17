@@ -1,0 +1,1 @@
+truncate table dm_calc.account_for_exchange_rate_difference;

@@ -1,0 +1,1 @@
+truncate table dds.accounting_document_clearing_relations;

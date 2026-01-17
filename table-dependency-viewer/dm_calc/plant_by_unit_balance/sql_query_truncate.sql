@@ -1,0 +1,1 @@
+truncate table dm_calc.plant_by_unit_balance;

@@ -193,6 +193,7 @@ def get_cached_meta_and_index():
         return _cached_meta_index
 
     all_meta = []
+    seen = set()
     for entity_root in iter_meta_dirs():
         for root, _, files in os.walk(entity_root):
             if "meta_data_file.yaml" not in files:
@@ -200,6 +201,8 @@ def get_cached_meta_and_index():
             path = Path(root) / "meta_data_file.yaml"
             try:
                 meta = yaml.safe_load(path.read_text("utf-8")) or {}
+                key = f"{meta.get('table_schema')}.{meta.get('table_name')}"
+                seen.add(key)
                 all_meta.append({
                     "table_schema": meta.get("table_schema"),
                     "table_name": meta.get("table_name"),
@@ -211,11 +214,27 @@ def get_cached_meta_and_index():
             except Exception as e:
                 print("META ERROR:", path, e)
 
+    print("META COUNT:", len(seen))
+    print("META SAMPLE:", sorted(list(seen))[:30])
+
+    meta_lookup = {
+        (m.get("table_schema"), m.get("table_name"))
+        for m in all_meta
+        if m.get("table_schema") and m.get("table_name")
+    }
     reverse = {}
     for m in all_meta:
         consumer = (m["table_schema"], m["table_name"])
         for src_schema, tables in m["depends_on"].items():
             for src_table in tables:
+                if (src_schema, src_table) not in meta_lookup:
+                    print(
+                        "❌ BROKEN DEP:",
+                        f"{consumer[0]}.{consumer[1]}",
+                        "depends on",
+                        f"{src_schema}.{src_table}",
+                        "BUT META NOT FOUND",
+                    )
                 reverse.setdefault((src_schema, src_table), []).append({
                     "schema": consumer[0],
                     "table_name": consumer[1],
@@ -1081,6 +1100,8 @@ def get_ytrek_incidents(top_limit: int = Query(5, ge=1, le=50)):
     return build_ytrek_dashboard(top_limit)
 
 def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
+    schema = (schema or "").strip().lower()
+    table = (table or "").strip().lower()
     all_meta, reverse_index = get_cached_meta_and_index()
 
     start = (schema, table)

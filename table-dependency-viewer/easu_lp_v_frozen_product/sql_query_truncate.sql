@@ -1,0 +1,1 @@
+TRUNCATE TABLE ods.easu_lp_v_frozen_product;

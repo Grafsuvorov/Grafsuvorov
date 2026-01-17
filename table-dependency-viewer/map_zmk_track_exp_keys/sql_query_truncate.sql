@@ -1,0 +1,1 @@
+truncate table ods.map_zmk_track_exp_keys;

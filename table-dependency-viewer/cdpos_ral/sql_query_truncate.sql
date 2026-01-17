@@ -1,0 +1,1 @@
+truncate ods.cdpos_ral;

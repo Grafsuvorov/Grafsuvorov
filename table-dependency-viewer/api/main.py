@@ -1941,7 +1941,12 @@ def get_dependencies_down(schema: str, table: str):
 
 
 @router.get("/api/dependencies-graph/{schema}/{table}")
-def get_dependency_graph(schema: str, table: str):
+def get_dependency_graph(
+    schema: str,
+    table: str,
+    max_depth: Optional[int] = Query(None, ge=1),
+    max_edges: Optional[int] = Query(None, ge=1),
+):
     try:
         schema_norm = norm(schema)
         table_norm = norm(table)
@@ -1954,8 +1959,9 @@ def get_dependency_graph(schema: str, table: str):
             globals()["_graph_cache_meta_ts"] = _cache_timestamp
             globals()["_graph_cache_ts"] = now
 
+        cache_key = (key, max_depth, max_edges)
         if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
-            cached = _graph_cache.get(key)
+            cached = _graph_cache.get(cache_key)
             if cached is not None:
                 return cached
 
@@ -1966,16 +1972,21 @@ def get_dependency_graph(schema: str, table: str):
         }
         visited = set()
         edges_set = set()
+        truncated = False
 
-        stack = [key]
+        stack = [(key, 0)]
         while stack:
-            current = stack.pop()
+            current, depth = stack.pop()
             if current in visited:
                 continue
             visited.add(current)
 
             meta = all_meta.get(current)
             if not meta:
+                continue
+            if max_depth is not None and depth >= max_depth:
+                if meta.get("depends_on"):
+                    truncated = True
                 continue
 
             depends_on = meta.get("depends_on") or {}
@@ -1990,15 +2001,23 @@ def get_dependency_graph(schema: str, table: str):
                     if edge_key in edges_set:
                         continue
                     edges_set.add(edge_key)
-                    stack.append(source)
+                    if max_edges is not None and len(edges_set) >= max_edges:
+                        truncated = True
+                        stack = []
+                        break
+                    stack.append((source, depth + 1))
+                if truncated:
+                    break
+            if truncated:
+                break
 
         edges = [{"source": s, "target": t} for s, t in edges_set]
-        payload = {"centralNode": key, "edges": edges}
+        payload = {"centralNode": key, "edges": edges, "truncated": truncated}
 
         if now - _graph_cache_ts >= _GRAPH_CACHE_TTL:
             _graph_cache.clear()
             globals()["_graph_cache_ts"] = now
-        _graph_cache[key] = payload
+        _graph_cache[cache_key] = payload
         return payload
 
     except Exception as e:

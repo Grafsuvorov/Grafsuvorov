@@ -94,7 +94,14 @@ const LEGEND_ITEMS = [
   { label: "Dict", color: NODE_STYLE_BY_LAYER.dict_stg.background, dashed: true },
 ];
 
-function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
+function buildGraph(
+  centralNode,
+  edges = [],
+  entities = {},
+  depthLimit = null,
+  presetNodes = null,
+  presetLayout = null
+) {
   if (!centralNode) {
     return {
       nodes: [],
@@ -105,6 +112,74 @@ function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
       totalEdges: 0,
       visibleNodes: 0,
       visibleEdges: 0,
+    };
+  }
+
+  if (Array.isArray(presetNodes) && presetNodes.length && presetLayout) {
+    const nodes = presetNodes.map((node) => {
+      const fqn = node.id;
+      const isCentral = fqn === centralNode;
+      const layer = layerOf(fqn);
+      const width = node.width || (isCentral ? CENTRAL_STYLE.width : NODE_WIDTH_BY_LAYER[layer]);
+      const height = node.height || 56;
+      const style = isCentral
+        ? CENTRAL_STYLE
+        : {
+            width,
+            border: "1px solid rgba(255,255,255,.18)",
+            ...NODE_STYLE_BY_LAYER[layer],
+          };
+      const pos = presetLayout?.[fqn] || { x: 0, y: 0 };
+      const entityName = node.entity || entities?.[fqn];
+
+      return {
+        id: fqn,
+        position: {
+          x: pos.x - width / 2,
+          y: pos.y - height / 2,
+        },
+        draggable: false,
+        selectable: false,
+        sourcePosition: "right",
+        targetPosition: "left",
+        data: {
+          label: (
+            <div title={fqn}>
+              <div style={{ fontWeight: 700 }}>{formatFqn(fqn)}</div>
+              {entityName && (
+                <div style={{ marginTop: 6, fontSize: 11, opacity: 0.75 }}>{entityName}</div>
+              )}
+            </div>
+          ),
+        },
+        style: { ...baseNodeStyle, ...style },
+      };
+    });
+
+    const validIds = new Set(nodes.map((n) => n.id));
+    const rfEdges = edges
+      .filter((e) => validIds.has(e.source) && validIds.has(e.target))
+      .map((e) => ({
+        id: `${e.source}->${e.target}`,
+        source: e.source,
+        target: e.target,
+        type: "smoothstep",
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: {
+          stroke: isDict(e.source) ? "#64748b" : "#6b7280",
+          strokeWidth: e.target === centralNode ? 2.6 : 1.4,
+        },
+      }));
+
+    return {
+      nodes,
+      rfEdges,
+      hasUpstream: true,
+      hasDownstream: true,
+      totalNodes: nodes.length,
+      totalEdges: rfEdges.length,
+      visibleNodes: nodes.length,
+      visibleEdges: rfEdges.length,
     };
   }
 
@@ -243,12 +318,15 @@ export default function GraphViewer({
   entities = {},
   onNodeClick,
   onRequestFull,
+  nodes = null,
+  layout = null,
 }) {
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
+  const usePreset = Array.isArray(nodes) && nodes.length > 0 && layout;
   const graph = useMemo(
-    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit),
-    [centralNode, edges, entities, depthLimit, showAll]
+    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout),
+    [centralNode, edges, entities, depthLimit, showAll, nodes, layout]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
 
@@ -272,12 +350,12 @@ export default function GraphViewer({
           Показано {graph.visibleNodes}/{graph.totalNodes} узлов · {graph.visibleEdges}/{graph.totalEdges} связей
         </div>
         <div className="dep-graph-actions">
-          {!showAll && (
+          {!usePreset && !showAll && (
             <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
               +1 уровень
             </button>
           )}
-          {!showAll && (
+          {!usePreset && !showAll && onRequestFull && (
             <button
               className="btn btn-secondary"
               onClick={() => {
@@ -288,7 +366,7 @@ export default function GraphViewer({
               Показать все
             </button>
           )}
-          {showAll && (
+          {!usePreset && showAll && (
             <button
               className="btn btn-ghost"
               onClick={() => {

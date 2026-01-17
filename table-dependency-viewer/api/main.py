@@ -201,14 +201,25 @@ def get_cached_meta_and_index():
             path = Path(root) / "meta_data_file.yaml"
             try:
                 meta = yaml.safe_load(path.read_text("utf-8")) or {}
-                key = f"{meta.get('table_schema')}.{meta.get('table_name')}"
+                schema = norm(meta.get("table_schema"))
+                table = norm(meta.get("table_name"))
+                if not schema or not table:
+                    continue
+                key = f"{schema}.{table}"
                 seen.add(key)
+                depends_on = {}
+                for src_schema, tables in (meta.get("depends_on") or {}).items():
+                    src_schema_norm = norm(src_schema)
+                    if not src_schema_norm:
+                        continue
+                    cleaned = [norm(t) for t in (tables or []) if t]
+                    depends_on[src_schema_norm] = [t for t in cleaned if t]
                 all_meta.append({
-                    "table_schema": meta.get("table_schema"),
-                    "table_name": meta.get("table_name"),
+                    "table_schema": schema,
+                    "table_name": table,
                     "entity_id": meta.get("entity_id"),
                     "entity_name": meta.get("entity_name"),
-                    "depends_on": meta.get("depends_on") or {},
+                    "depends_on": depends_on,
                     "table_id": meta.get("table_id"),
                 })
             except Exception as e:

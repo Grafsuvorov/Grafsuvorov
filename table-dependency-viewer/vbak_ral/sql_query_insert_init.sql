@@ -1,0 +1,51 @@
+INSERT INTO ods.vbak_ral (
+    vbeln,
+    auart,
+    vbtyp,
+    abrvw,
+    aedat,
+    audat,
+    bsark,
+    bstnk,
+    erdat,
+    ernam,
+    erzet,
+    ihrez,
+    vkgrp,
+    zuonr,
+    zzresp,
+    kunnr,
+    ps_psp_pnr,
+    zznoi,
+    ktext,
+    zzspp,
+    guebg,
+    gueen
+)
+SELECT
+    tech_etl.util_text_to_null_validation_opt("VBELN") as vbeln,
+    tech_etl.util_text_to_null_validation_opt("AUART") as auart,
+    tech_etl.util_text_to_null_validation_opt("VBTYP") as vbtyp,
+    tech_etl.util_text_to_null_validation_opt("ABRVW") as abrvw,
+    tech_etl.util_text_to_date_validation("AEDAT") as aedat,
+    tech_etl.util_text_to_date_validation("AUDAT") as audat,
+    tech_etl.util_text_to_null_validation_opt("BSARK") as bsark,
+    tech_etl.util_text_to_null_validation_opt("BSTNK") as bstnk,
+    tech_etl.util_text_to_date_validation("ERDAT") as erdat,
+    tech_etl.util_text_to_null_validation_opt("ERNAM") as ernam,
+    tech_etl.util_text_to_null_validation_opt("ERZET") as erzet,
+    tech_etl.util_text_to_null_validation_opt("IHREZ") as ihrez,
+    tech_etl.util_text_to_null_validation_opt("VKGRP") as vkgrp,
+    tech_etl.util_text_to_null_validation_opt("ZUONR") as zuonr,
+    tech_etl.util_text_to_null_validation_opt("ZZRESP") as zzresp,
+    tech_etl.util_text_to_null_validation_opt("KUNNR") as kunnr,
+    tech_etl.util_text_to_null_validation_opt("PS_PSP_PNR") as ps_psp_pnr,
+    tech_etl.util_text_to_null_validation_opt("ZZNOI") as zznoi,
+    tech_etl.util_text_to_null_validation("KTEXT") as ktext,
+    tech_etl.util_text_to_null_validation("ZZSPP") as zzspp,
+    tech_etl.util_text_to_date_validation("GUEBG") as guebg,
+    tech_etl.util_text_to_null_validation("GUEEN") as gueen
+FROM stg."VBAK"
+WHERE "MANDT" = '400'
+    AND "DELETED_FLAG" = false
+;

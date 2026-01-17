@@ -1,0 +1,1 @@
+truncate table ods.ztle_contcn_ral;

@@ -1,0 +1,1 @@
+truncate ods.vbpa_ral;

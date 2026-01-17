@@ -1,0 +1,1 @@
+truncate ods.vbak_ral;

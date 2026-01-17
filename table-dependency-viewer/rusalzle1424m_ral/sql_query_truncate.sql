@@ -1,0 +1,1 @@
+TRUNCATE ods."/rusal/zle1424m_ral"

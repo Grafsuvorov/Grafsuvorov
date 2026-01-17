@@ -1,0 +1,1 @@
+truncate ods.zle_dislcont_ral;

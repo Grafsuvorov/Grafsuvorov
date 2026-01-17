@@ -1,8 +1,54 @@
-META COUNT: 2260
-META SAMPLE: ['None.None', 'dds.accounting_balance', 'dds.accounting_document_clearing_relations', 'dds.accounting_document_partner_mirror_relation', 'dds.accounting_document_position_correspondence', 'dds.accounting_documents',
- 'dds.accounting_documents_texts', 'dds.accounting_turnover_counterparty', 'dds.adjustment_request_position', 'dds.advance_payment_requirements_by_purchase_orders', 'dds.aldor_edm_document', 'dds.aldor_scan_copy_link_to_multiple
-_sap_document', 'dds.aldor_scan_copy_link_to_single_sap_document', 'dds.bank_statement_documents', 'dds.bank_statement_position_clearing_record', 'dds.bill_of_lading', 'dds.controlling_documents_to_cost_centers', 'dds.controllin
-g_documents_to_orders', 'dds.controlling_documents_to_wbs_elements', 'dds.controlling_object_distribution_settlement_rules', 'dds.customs_declaration_header', 'dds.customs_declaration_position', 'dds.delivery_document_header', 'dds.delivery_document_position', 'dds.delivery_initial', 'dds.delivery_number_deleted', 'dds.delivery_plant', 'dds.earmarked_funds_documents', 'dds.financial_loan_terms', 'dds.forwarder_instruction']
-❌ BROKEN DEP: dds.accounting_documents depends on stg.ral_zbw1595m_odata_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.BSE_CLR depends on raw_ext.BSE_CLR_READ BUT META NOT FOUND
-❌ BROKEN DEP: stg.GLT0 depends on raw_ext.GLT0_READ BUT META NOT FOUND
+table_name: fixed_asset_depreciation_parameters_td
+table_schema: dict_dds
+table_id: 3225
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: DICT_LOADER_JOB
+table_loading_index: 1
+entity_id: 12
+entity_name: DICT_LOADER
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 21:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_dds/fixed_asset_depreciation_parameters_td/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_dds/fixed_asset_depreciation_parameters_td/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_dds/fixed_asset_depreciation_parameters_td/sql_query_truncate.sql
+depends_on:
+  dict_stg:
+    - ANLB
+    - ANLBZA
+
+table_name: ANLB
+table_schema: dict_stg
+table_id: 3057
+source_id: 1
+source_type: ORACLE_ERP_PROD
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: DICT_LOADER_JOB
+table_loading_index: 1
+entity_id: 12
+entity_name: DICT_LOADER
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 21:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_stg/anlb/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_stg/anlb/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_stg/anlb/sql_query_truncate.sql
+depends_on:
+  dict_raw_ext:
+    - ANLB_READ

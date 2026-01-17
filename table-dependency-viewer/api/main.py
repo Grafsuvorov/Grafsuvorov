@@ -1994,7 +1994,8 @@ def get_dependency_graph(
             if not meta:
                 continue
             if max_depth is not None and depth >= max_depth:
-                if meta.get("depends_on"):
+                schema_val, table_val = current.split(".", 1)
+                if meta.get("depends_on") or reverse_index.get((schema_val, table_val)):
                     truncated = True
                 continue
 
@@ -2094,7 +2095,8 @@ def get_dependency_nodes(
             if not meta:
                 continue
             if max_depth is not None and depth >= max_depth:
-                if meta.get("depends_on"):
+                schema_val, table_val = current.split(".", 1)
+                if meta.get("depends_on") or reverse_index.get((schema_val, table_val)):
                     truncated = True
                 continue
 

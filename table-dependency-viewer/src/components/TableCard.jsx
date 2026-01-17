@@ -4,8 +4,6 @@ import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-const DEFAULT_GRAPH_DEPTH = 3;
-const DEFAULT_GRAPH_MAX_EDGES = 1200;
 
 export default function TableCard({
   schema,
@@ -21,6 +19,8 @@ export default function TableCard({
   const [error, setError] = useState(null);
 
   const [edges, setEdges] = useState([]);
+  const [graphNodes, setGraphNodes] = useState([]);
+  const [graphLayout, setGraphLayout] = useState({});
   const [centralNode, setCentralNode] = useState("");
   const [loadingDeps, setLoadingDeps] = useState(false);
   const [depsError, setDepsError] = useState(null);
@@ -29,10 +29,6 @@ export default function TableCard({
   const [graphTooLarge, setGraphTooLarge] = useState(false);
   const [graphStats, setGraphStats] = useState({ nodes: 0, edges: 0 });
   const [graphTruncated, setGraphTruncated] = useState(false);
-  const [fullList, setFullList] = useState(null);
-  const [listLoading, setListLoading] = useState(false);
-  const [listError, setListError] = useState(null);
-  const [listTruncated, setListTruncated] = useState(false);
   const [showGantt, setShowGantt] = useState(false);
   const [activeSqlBlock, setActiveSqlBlock] = useState(null);
   const [isSqlModalOpen, setSqlModalOpen] = useState(false);
@@ -162,7 +158,7 @@ export default function TableCard({
     };
   }, [isSqlModalOpen]);
 
-  const loadDependencies = ({ full = false } = {}) => {
+  const loadDependencies = () => {
     if (!schema || !tableName) return;
     setLoadingDeps(true);
     setDepsError(null);
@@ -170,35 +166,22 @@ export default function TableCard({
     setShowList(false);
     setGraphTooLarge(false);
     setGraphTruncated(false);
-    setFullList(null);
-    setListLoading(false);
-    setListError(null);
-    setListTruncated(false);
+    setGraphNodes([]);
+    setGraphLayout({});
 
-    const params = new URLSearchParams();
-    if (!full) {
-      params.set("max_depth", String(DEFAULT_GRAPH_DEPTH));
-      params.set("max_edges", String(DEFAULT_GRAPH_MAX_EDGES));
-    }
-    const query = params.toString();
-    const url = `${API_BASE}/api/dependencies-graph/${schema}/${tableName}${query ? `?${query}` : ""}`;
-
-    fetch(url)
+    fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}`)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
       .then((data) => {
+        const nodes = Array.isArray(data.nodes) ? data.nodes : [];
         const incomingEdges = Array.isArray(data.edges) ? data.edges : [];
-        const resolvedCentral =
-          data.centralNode || data.central_node || `${schema}.${tableName}`;
-        const nodeSet = new Set([resolvedCentral]);
-        incomingEdges.forEach((edge) => {
-          if (edge?.source) nodeSet.add(edge.source);
-          if (edge?.target) nodeSet.add(edge.target);
-        });
-        const stats = { nodes: nodeSet.size, edges: incomingEdges.length };
+        const resolvedCentral = data?.table?.id || `${schema}.${tableName}`;
+        const stats = { nodes: nodes.length, edges: incomingEdges.length };
         setGraphStats(stats);
         setEdges(incomingEdges);
+        setGraphNodes(nodes);
+        setGraphLayout(data.layout || {});
         setCentralNode(resolvedCentral);
         const isTooLarge = stats.nodes > 350 || stats.edges > 800;
         setGraphTooLarge(isTooLarge);
@@ -225,56 +208,25 @@ export default function TableCard({
     }
   }, [schema, tableName, autoShowGraph]);
 
-  useEffect(() => {
-    if (!showList || !schema || !tableName || fullList) return;
-    if (!graphTruncated && !graphTooLarge) return;
-    setListLoading(true);
-    setListError(null);
-
-    fetch(`${API_BASE}/api/dependencies-nodes/${schema}/${tableName}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить список таблиц")))
-      .then((data) => {
-        const nodes = Array.isArray(data.nodes) ? data.nodes : [];
-        setFullList(nodes.slice().sort((a, b) => a.localeCompare(b)));
-        setListTruncated(Boolean(data.truncated));
-      })
-      .catch((err) => {
-        setListError(typeof err === "string" ? err : "Ошибка загрузки списка");
-      })
-      .finally(() => setListLoading(false));
-  }, [showList, graphTruncated, schema, tableName, fullList]);
-
-  const tableListFromEdges = useMemo(() => {
-    const all = new Set();
-    if (centralNode) {
-      all.add(centralNode);
-    }
-    edges.forEach((e) => {
-      all.add(e.source);
-      all.add(e.target);
-    });
-    return Array.from(all).sort();
-  }, [edges, centralNode]);
-
-  const listToShow = fullList || tableListFromEdges;
+  const tableList = useMemo(() => {
+    return graphNodes.map((n) => n.id).filter(Boolean).sort();
+  }, [graphNodes]);
 
   const copyList = () => {
-    if (!listToShow.length) return;
-    navigator.clipboard.writeText(listToShow.join("\n"));
+    if (!tableList.length) return;
+    navigator.clipboard.writeText(tableList.join("\n"));
     alert("Список таблиц скопирован");
   };
 
   const handleNodeClick = (newSchema, newTable) => {
     setShowGraph(false);
     setEdges([]);
+    setGraphNodes([]);
+    setGraphLayout({});
     setCentralNode("");
     setGraphTooLarge(false);
     setGraphStats({ nodes: 0, edges: 0 });
     setGraphTruncated(false);
-    setFullList(null);
-    setListLoading(false);
-    setListError(null);
-    setListTruncated(false);
     setSchema(newSchema);
     setTableName(newTable);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -388,7 +340,7 @@ export default function TableCard({
             <button
               className="btn btn-secondary"
               onClick={copyList}
-              disabled={!listToShow.length}
+              disabled={!tableList.length}
             >
               Скопировать список
             </button>
@@ -444,12 +396,7 @@ export default function TableCard({
             <div className="card dep-error" style={{ marginTop: 12 }}>
               <div className="dep-error-title">Показан укороченный граф</div>
               <div className="muted">
-                Ограничение: глубина {DEFAULT_GRAPH_DEPTH}, связей до {DEFAULT_GRAPH_MAX_EDGES}.
-              </div>
-              <div className="table-graph-actions" style={{ marginTop: 10 }}>
-                <button className="btn btn-secondary" onClick={() => loadDependencies({ full: true })}>
-                  Загрузить полный граф
-                </button>
+                Ограничение по глубине зависимостей. Для полного охвата используйте entity-граф.
               </div>
             </div>
           )}
@@ -470,12 +417,13 @@ export default function TableCard({
             </div>
           )}
 
-          {showGraph && edges.length > 0 && (
+          {showGraph && graphNodes.length > 0 && (
             <GraphViewer
               centralNode={centralNode}
               edges={edges}
               onNodeClick={handleNodeClick}
-              onRequestFull={() => loadDependencies({ full: true })}
+              nodes={graphNodes}
+              layout={graphLayout}
             />
           )}
 
@@ -486,20 +434,14 @@ export default function TableCard({
               </button>
               {showList && (
                 <div style={{ width: "100%" }}>
-                  {listLoading && <div className="muted" style={{ marginTop: 10 }}>Готовим полный список…</div>}
-                  {!listLoading && listError && (
-                    <div className="dep-error-title" style={{ marginTop: 10 }}>{listError}</div>
-                  )}
-                  {!listLoading && !listError && listTruncated && (
+                  {graphTruncated && (
                     <div className="muted" style={{ marginTop: 10 }}>
-                      Список может быть неполным — достигнут лимит.
+                      Граф ограничен по глубине, список отражает только текущий уровень.
                     </div>
                   )}
-                  {!listLoading && !listError && (
-                    <pre className="table-code" style={{ marginTop: 12 }}>
-                      {listToShow.length ? listToShow.join("\n") : "—"}
-                    </pre>
-                  )}
+                  <pre className="table-code" style={{ marginTop: 12 }}>
+                    {tableList.length ? tableList.join("\n") : "—"}
+                  </pre>
                 </div>
               )}
             </div>

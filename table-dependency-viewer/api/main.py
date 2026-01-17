@@ -289,6 +289,11 @@ def _grid_layout_table(table_nodes: dict) -> dict:
     return layout
 
 
+def _grid_layout_subset(table_nodes: dict, node_ids: set) -> dict:
+    subset = {nid: table_nodes[nid] for nid in node_ids if nid in table_nodes}
+    return _grid_layout_table(subset)
+
+
 def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> dict:
     if not nodes:
         return {}
@@ -1538,7 +1543,6 @@ def get_graph_entity(entity_name: str):
     snapshot = get_graph_snapshot()
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
-    layout = snapshot["layouts"]["table"]
     table_entity_map = snapshot["table_entity_map"]
 
     target = (entity_name or "").strip().lower()
@@ -1578,7 +1582,7 @@ def get_graph_entity(entity_name: str):
         truncated = True
 
     nodes_payload = [table_nodes[n] for n in nodes_set if n in table_nodes]
-    layout_payload = {n: layout.get(n) for n in nodes_set if n in layout}
+    layout_payload = _grid_layout_subset(table_nodes, nodes_set)
 
     return {
         "entity": {
@@ -1598,7 +1602,6 @@ def get_graph_table(schema: str, table: str, depth: int = Query(2, ge=1, le=4)):
     snapshot = get_graph_snapshot()
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
-    layout = snapshot["layouts"]["table"]
 
     schema_norm = norm(schema)
     table_norm = norm(table)
@@ -1639,7 +1642,7 @@ def get_graph_table(schema: str, table: str, depth: int = Query(2, ge=1, le=4)):
         truncated = True
 
     nodes_payload = [table_nodes[n] for n in visited if n in table_nodes]
-    layout_payload = {n: layout.get(n) for n in visited if n in layout}
+    layout_payload = _grid_layout_subset(table_nodes, visited)
 
     return {
         "table": table_nodes[key],

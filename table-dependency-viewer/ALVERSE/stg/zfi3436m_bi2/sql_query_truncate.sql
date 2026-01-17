@@ -1,0 +1,1 @@
+truncate stg."ZFI3436M_BI2";

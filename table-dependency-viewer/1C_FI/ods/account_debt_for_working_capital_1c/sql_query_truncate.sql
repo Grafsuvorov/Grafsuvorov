@@ -1,0 +1,1 @@
+truncate ods.account_debt_for_working_capital_1c;

@@ -1,0 +1,1 @@
+truncate table ods.ral_map_alverse_sales_life_cycle;

@@ -169,7 +169,7 @@ export default function TableCard({
     setGraphNodes([]);
     setGraphLayout({});
 
-    fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}`)
+    fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )

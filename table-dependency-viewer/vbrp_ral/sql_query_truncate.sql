@@ -1,0 +1,1 @@
+TRUNCATE ods.vbrp_ral;

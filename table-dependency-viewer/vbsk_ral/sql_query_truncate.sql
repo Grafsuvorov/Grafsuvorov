@@ -1,0 +1,1 @@
+truncate table ods."vbsk_ral";

@@ -1970,6 +1970,15 @@ def get_dependency_graph(
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        reverse_index = {}
+        for m in all_meta_list:
+            consumer = (m.get("table_schema"), m.get("table_name"))
+            for src_schema, tables in (m.get("depends_on") or {}).items():
+                for src_table in tables or []:
+                    reverse_index.setdefault((src_schema, src_table), []).append({
+                        "schema": consumer[0],
+                        "table_name": consumer[1],
+                    })
         visited = set()
         edges_set = set()
         truncated = False
@@ -1998,16 +2007,31 @@ def get_dependency_graph(
                         continue
                     source = f"{source_schema}.{source_table}"
                     edge_key = (source, current)
-                    if edge_key in edges_set:
-                        continue
+                    if edge_key not in edges_set:
+                        edges_set.add(edge_key)
+                        if max_edges is not None and len(edges_set) >= max_edges:
+                            truncated = True
+                            stack = []
+                            break
+                    stack.append((source, depth + 1))
+                if truncated:
+                    break
+            if truncated:
+                break
+
+            schema_val, table_val = current.split(".", 1)
+            for consumer in reverse_index.get((schema_val, table_val), []):
+                if not consumer.get("schema") or not consumer.get("table_name"):
+                    continue
+                target = f"{consumer['schema']}.{consumer['table_name']}"
+                edge_key = (current, target)
+                if edge_key not in edges_set:
                     edges_set.add(edge_key)
                     if max_edges is not None and len(edges_set) >= max_edges:
                         truncated = True
                         stack = []
                         break
-                    stack.append((source, depth + 1))
-                if truncated:
-                    break
+                stack.append((target, depth + 1))
             if truncated:
                 break
 
@@ -2043,6 +2067,15 @@ def get_dependency_nodes(
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        reverse_index = {}
+        for m in all_meta_list:
+            consumer = (m.get("table_schema"), m.get("table_name"))
+            for src_schema, tables in (m.get("depends_on") or {}).items():
+                for src_table in tables or []:
+                    reverse_index.setdefault((src_schema, src_table), []).append({
+                        "schema": consumer[0],
+                        "table_name": consumer[1],
+                    })
 
         visited = set()
         truncated = False
@@ -2074,6 +2107,13 @@ def get_dependency_nodes(
                         continue
                     source = f"{source_schema}.{source_table}"
                     stack.append((source, depth + 1))
+
+            schema_val, table_val = current.split(".", 1)
+            for consumer in reverse_index.get((schema_val, table_val), []):
+                if not consumer.get("schema") or not consumer.get("table_name"):
+                    continue
+                target = f"{consumer['schema']}.{consumer['table_name']}"
+                stack.append((target, depth + 1))
 
         nodes = sorted(visited, key=lambda v: v.lower())
         return {"centralNode": key, "nodes": nodes, "truncated": truncated}

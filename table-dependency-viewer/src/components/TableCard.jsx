@@ -29,6 +29,10 @@ export default function TableCard({
   const [graphTooLarge, setGraphTooLarge] = useState(false);
   const [graphStats, setGraphStats] = useState({ nodes: 0, edges: 0 });
   const [graphTruncated, setGraphTruncated] = useState(false);
+  const [fullList, setFullList] = useState(null);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState(null);
+  const [listTruncated, setListTruncated] = useState(false);
   const [showGantt, setShowGantt] = useState(false);
   const [activeSqlBlock, setActiveSqlBlock] = useState(null);
   const [isSqlModalOpen, setSqlModalOpen] = useState(false);
@@ -166,6 +170,10 @@ export default function TableCard({
     setShowList(false);
     setGraphTooLarge(false);
     setGraphTruncated(false);
+    setFullList(null);
+    setListLoading(false);
+    setListError(null);
+    setListTruncated(false);
 
     const params = new URLSearchParams();
     if (!full) {
@@ -217,7 +225,25 @@ export default function TableCard({
     }
   }, [schema, tableName, autoShowGraph]);
 
-  const tableList = useMemo(() => {
+  useEffect(() => {
+    if (!showList || !graphTruncated || !schema || !tableName || fullList) return;
+    setListLoading(true);
+    setListError(null);
+
+    fetch(`${API_BASE}/api/dependencies-nodes/${schema}/${tableName}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить список таблиц")))
+      .then((data) => {
+        const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+        setFullList(nodes.slice().sort((a, b) => a.localeCompare(b)));
+        setListTruncated(Boolean(data.truncated));
+      })
+      .catch((err) => {
+        setListError(typeof err === "string" ? err : "Ошибка загрузки списка");
+      })
+      .finally(() => setListLoading(false));
+  }, [showList, graphTruncated, schema, tableName, fullList]);
+
+  const tableListFromEdges = useMemo(() => {
     const all = new Set();
     if (centralNode) {
       all.add(centralNode);
@@ -229,9 +255,11 @@ export default function TableCard({
     return Array.from(all).sort();
   }, [edges, centralNode]);
 
+  const listToShow = fullList || tableListFromEdges;
+
   const copyList = () => {
-    if (!tableList.length) return;
-    navigator.clipboard.writeText(tableList.join("\n"));
+    if (!listToShow.length) return;
+    navigator.clipboard.writeText(listToShow.join("\n"));
     alert("Список таблиц скопирован");
   };
 
@@ -241,6 +269,11 @@ export default function TableCard({
     setCentralNode("");
     setGraphTooLarge(false);
     setGraphStats({ nodes: 0, edges: 0 });
+    setGraphTruncated(false);
+    setFullList(null);
+    setListLoading(false);
+    setListError(null);
+    setListTruncated(false);
     setSchema(newSchema);
     setTableName(newTable);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -354,7 +387,7 @@ export default function TableCard({
             <button
               className="btn btn-secondary"
               onClick={copyList}
-              disabled={!tableList.length}
+              disabled={!listToShow.length}
             >
               Скопировать список
             </button>
@@ -444,15 +477,28 @@ export default function TableCard({
             />
           )}
 
-          {showGraph && (
+          {(showGraph || showList) && (
             <div className="table-graph-actions">
               <button className="btn" onClick={() => setShowList(!showList)}>
                 {showList ? "Скрыть список" : "Показать список"}
               </button>
               {showList && (
-                <pre className="table-code" style={{ marginTop: 12 }}>
-                  {tableList.length ? tableList.join("\n") : "—"}
-                </pre>
+                <div style={{ width: "100%" }}>
+                  {listLoading && <div className="muted" style={{ marginTop: 10 }}>Готовим полный список…</div>}
+                  {!listLoading && listError && (
+                    <div className="dep-error-title" style={{ marginTop: 10 }}>{listError}</div>
+                  )}
+                  {!listLoading && !listError && listTruncated && (
+                    <div className="muted" style={{ marginTop: 10 }}>
+                      Список может быть неполным — достигнут лимит.
+                    </div>
+                  )}
+                  {!listLoading && !listError && (
+                    <pre className="table-code" style={{ marginTop: 12 }}>
+                      {listToShow.length ? listToShow.join("\n") : "—"}
+                    </pre>
+                  )}
+                </div>
               )}
             </div>
           )}

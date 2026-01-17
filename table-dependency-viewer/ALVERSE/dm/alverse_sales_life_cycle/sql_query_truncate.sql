@@ -1,0 +1,1 @@
+truncate dm.alverse_sales_life_cycle;

@@ -1,0 +1,12 @@
+entity_id: 46
+entity_name: BI_INVESTMENT
+entity_type: TRANSACTION
+cron_interval: 0 3 * * *
+entity_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+entity_load_mode: RECREATE
+flag_active: true
+start_date: '2023-01-01 03:00:00'

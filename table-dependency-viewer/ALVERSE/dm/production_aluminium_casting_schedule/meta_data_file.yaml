@@ -1,0 +1,26 @@
+table_name: production_aluminium_casting_schedule
+table_schema: dm
+table_id: 3872
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: true
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: STG_LOADER
+table_loading_index: 1
+entity_id: 61
+entity_name: ALVERSE
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm/production_aluminium_casting_schedule/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm/production_aluminium_casting_schedule/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm/production_aluminium_casting_schedule/sql_query_truncate.sql
+depends_on:
+  dm_calc:
+    - production_aluminium_casting_schedule

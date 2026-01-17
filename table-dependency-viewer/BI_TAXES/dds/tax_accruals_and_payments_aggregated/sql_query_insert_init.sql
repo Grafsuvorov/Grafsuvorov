@@ -1,0 +1,54 @@
+insert
+	into
+	dds.tax_accruals_and_payments_aggregated(
+	tax_code,
+	tax_budget_fund_receiver_code,
+	accrual_type_code,
+	unit_budget_code,
+	local_currency_amount,
+	local_currency_code,
+	movement_type_code,
+	dt_report,
+	fiscal_year,
+	version_code,
+	dt_report_yyyyq,
+	tax_oktmo_code,
+	dttm_inserted,
+	dttm_updated,
+	job_name,
+	deleted_flag) 
+select
+	tax_code,
+	tax_budget_fund_receiver_code,
+	accrual_type_code,
+	unit_budget_code,
+	sum(local_currency_amount),
+	local_currency_code,
+	movement_type_code,
+	dt_report,
+	fiscal_year,
+	version_code,
+	dt_report_yyyyq,
+	tax_oktmo_code,
+	now() as dttm_inserted,
+	now() as dttm_updated,
+	job_name,
+	deleted_flag
+from
+	ods.tax_accruals_and_payments_aggregated
+where
+	1 = 1 
+group by 
+	tax_code,
+	tax_budget_fund_receiver_code,
+	accrual_type_code,
+	unit_budget_code,
+	local_currency_code,
+	movement_type_code,
+	dt_report,
+	fiscal_year,
+	version_code,
+	dt_report_yyyyq,
+	tax_oktmo_code,
+	job_name,
+	deleted_flag;

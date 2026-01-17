@@ -1,0 +1,26 @@
+table_name: ZFI3436M_BI3
+table_schema: stg
+table_id: 3445
+source_id: 1
+source_type: ORACLE_ERP_PROD
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 61
+entity_name: ALVERSE
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2025-10-20 23:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/stg/zfi3436m_bi3/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/stg/zfi3436m_bi3/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/stg/zfi3436m_bi3/sql_query_truncate.sql
+depends_on:
+  raw_ext:
+    - ZFI3436M_BI3_READ

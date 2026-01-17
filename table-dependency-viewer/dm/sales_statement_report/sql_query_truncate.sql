@@ -1,0 +1,1 @@
+truncate table dm.sales_statement_report;

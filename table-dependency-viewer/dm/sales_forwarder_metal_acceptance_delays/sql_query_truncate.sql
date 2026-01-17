@@ -1,0 +1,1 @@
+truncate table dm.sales_forwarder_metal_acceptance_delays;

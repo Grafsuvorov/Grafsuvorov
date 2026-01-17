@@ -1,0 +1,26 @@
+table_name: sales_alverse_mlc
+table_schema: dm
+table_id: 3339
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: true
+table_load_mode: TRUNCATE_INIT
+job_id: 1
+job_name: DM_SB_WUC
+table_loading_index: 1
+entity_id: 35
+entity_name: BI_SB_WUC
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2025-08-18 00:30:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sales_alverse_mlc/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sales_alverse_mlc/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sales_alverse_mlc/sql_query_truncate.sql
+depends_on:
+  dm_calc:
+    - sd_sales_main_scm

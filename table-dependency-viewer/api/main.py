@@ -286,8 +286,8 @@ def _layer_of_table(fqn: str) -> str:
     return "other"
 
 
-def _grid_layout_table(table_nodes: dict) -> dict:
-    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
+def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
+    order = ["raw_ext", "landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
         layer = _layer_of_table(node_id)
@@ -297,11 +297,19 @@ def _grid_layout_table(table_nodes: dict) -> dict:
     row_gap = 110
     layout = {}
     cursor_x = 0
+    layer_index = {layer: idx for idx, layer in enumerate(order)}
+    neighbors = {node_id: [] for node_id in table_nodes}
+    for edge in edges or []:
+        src = edge.get("source")
+        tgt = edge.get("target")
+        if src in table_nodes and tgt in table_nodes:
+            neighbors[src].append(layer_index.get(_layer_of_table(tgt), 0))
+            neighbors[tgt].append(layer_index.get(_layer_of_table(src), 0))
     for layer in order:
         items = columns.get(layer) or []
         if not items:
             continue
-        items.sort()
+        items.sort(key=lambda n: (sum(neighbors.get(n) or [0]) / max(len(neighbors.get(n) or [1]), 1), n))
         max_width = max(table_nodes[n].get("width") or 0 for n in items)
         column_center = cursor_x + (max_width / 2)
         for row_idx, node_id in enumerate(items):
@@ -311,9 +319,33 @@ def _grid_layout_table(table_nodes: dict) -> dict:
     return layout
 
 
-def _grid_layout_subset(table_nodes: dict, node_ids: set) -> dict:
+def _grid_layout_subset(table_nodes: dict, edges: list[dict], node_ids: set) -> dict:
     subset = {nid: table_nodes[nid] for nid in node_ids if nid in table_nodes}
-    return _grid_layout_table(subset)
+    subset_edges = [e for e in edges if e.get("source") in subset and e.get("target") in subset]
+    return _grid_layout_table(subset, subset_edges)
+
+
+def _normalize_layer_widths(nodes: list[dict]) -> list[dict]:
+    if not nodes:
+        return []
+    layers = {}
+    for node in nodes:
+        layer = _layer_of_table(node.get("id") or "")
+        layers.setdefault(layer, []).append(node)
+
+    max_widths = {
+        layer: max(n.get("width") or 0 for n in items)
+        for layer, items in layers.items()
+    }
+    out = []
+    for node in nodes:
+        layer = _layer_of_table(node.get("id") or "")
+        width = max_widths.get(layer) or node.get("width") or 200
+        updated = dict(node)
+        updated["width"] = width
+        updated["height"] = 64
+        out.append(updated)
+    return out
 
 
 def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> dict:
@@ -429,8 +461,6 @@ def build_graph_snapshot():
         for src_schema, tables in (m.get("depends_on") or {}).items():
             for src_table in tables:
                 source = f"{src_schema}.{src_table}"
-                if source.split(".", 1)[0] == "raw_ext":
-                    continue
                 edges_set.add((source, target))
                 if source not in table_info:
                     schema_val, table_val = source.split(".", 1)
@@ -511,7 +541,7 @@ def build_graph_snapshot():
         })
 
     entity_layout = _dagre_layout(entity_layout_nodes, entity_edges, rankdir="LR")
-    table_layout = _grid_layout_table(table_nodes)
+    table_layout = _grid_layout_table(table_nodes, table_edges)
 
     return {
         "meta_hash": meta_hash,
@@ -1605,8 +1635,8 @@ def get_graph_entity(entity_name: str):
         edges_filtered = edges_filtered[:500]
         truncated = True
 
-    nodes_payload = [table_nodes[n] for n in nodes_set if n in table_nodes]
-    layout_payload = _grid_layout_subset(table_nodes, nodes_set)
+    nodes_payload = _normalize_layer_widths([table_nodes[n] for n in nodes_set if n in table_nodes])
+    layout_payload = _grid_layout_subset(table_nodes, edges_filtered, nodes_set)
 
     return {
         "entity": {
@@ -1665,8 +1695,8 @@ def get_graph_table(schema: str, table: str, depth: int = Query(2, ge=1, le=4)):
         edges_filtered = edges_filtered[:500]
         truncated = True
 
-    nodes_payload = [table_nodes[n] for n in visited if n in table_nodes]
-    layout_payload = _grid_layout_subset(table_nodes, visited)
+    nodes_payload = _normalize_layer_widths([table_nodes[n] for n in visited if n in table_nodes])
+    layout_payload = _grid_layout_subset(table_nodes, edges_filtered, visited)
 
     return {
         "table": table_nodes[key],

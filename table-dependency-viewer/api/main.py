@@ -253,40 +253,6 @@ def _estimate_node_width(label: str, min_width: int = 160, max_width: int = 420)
     return max(min_width, min(max_width, width))
 
 
-def _layer_of_table(fqn: str) -> str:
-    if not fqn or "." not in fqn:
-        return "other"
-    schema = fqn.split(".", 1)[0]
-    if schema == "dict":
-        return "dict_dds" if "dict_dds" in fqn else "dict_stg"
-    if schema in ("stg", "ods", "dds", "dm", "dm_calc", "dm_view", "landing", "raw_ext"):
-        return schema
-    return "other"
-
-
-def _grid_layout_table(table_nodes: dict) -> dict:
-    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm", "dm_view", "other"]
-    columns = {key: [] for key in order}
-    for node_id in table_nodes:
-        layer = _layer_of_table(node_id)
-        columns.setdefault(layer, []).append(node_id)
-
-    col_gap = 380
-    row_gap = 90
-    layout = {}
-    col_index = 0
-    for layer in order:
-        items = columns.get(layer) or []
-        if not items:
-            continue
-        items.sort()
-        for row_idx, node_id in enumerate(items):
-            layout[node_id] = {"x": col_index * col_gap, "y": row_idx * row_gap}
-        col_index += 1
-
-    return layout
-
-
 def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> dict:
     if not nodes:
         return {}
@@ -410,7 +376,7 @@ def build_graph_snapshot():
     table_nodes = {}
     for fqn, info in table_info.items():
         entities = sorted(table_entities.get(fqn) or [])
-        width = _estimate_node_width(fqn, min_width=200, max_width=520)
+        width = _estimate_node_width(fqn, min_width=170, max_width=460)
         table_nodes[fqn] = {
             "id": fqn,
             "schema": info["schema"],
@@ -420,7 +386,7 @@ def build_graph_snapshot():
             "table_id": info.get("table_id"),
             "shared": len(entities) > 1,
             "width": width,
-            "height": 64,
+            "height": 56,
         }
 
     table_edges = [{"source": s, "target": t} for s, t in sorted(edges_set)]
@@ -482,7 +448,7 @@ def build_graph_snapshot():
         })
 
     entity_layout = _dagre_layout(entity_layout_nodes, entity_edges, rankdir="LR")
-    table_layout = _grid_layout_table(table_nodes)
+    table_layout = _dagre_layout(table_layout_nodes, table_edges, rankdir="LR")
 
     return {
         "meta_hash": meta_hash,

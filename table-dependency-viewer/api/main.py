@@ -238,7 +238,7 @@ def get_cached_meta_and_index():
         consumer = (m["table_schema"], m["table_name"])
         for src_schema, tables in m["depends_on"].items():
             for src_table in tables:
-                if (src_schema or "").lower() == "raw_ext":
+                if (src_schema or "").lower() in ("raw_ext", "dict_raw_ext"):
                     continue
                 if (src_schema, src_table) not in meta_lookup:
                     print(
@@ -294,6 +294,8 @@ def _layer_of_table(fqn: str) -> str:
         if "dict_dds" in fqn or schema_norm == "dict_dds":
             return "dict_dds"
         return "dict_stg"
+    if schema_norm in ("raw_ext", "dict_raw_ext"):
+        return "raw_ext"
     if schema_norm in ("stg", "ods", "dds", "dm", "dm_calc", "dm_view", "landing", "raw_ext"):
         return schema_norm
     return "other"
@@ -430,7 +432,7 @@ def build_graph_snapshot():
         entity = m.get("entity_name")
         if not schema or not table:
             continue
-        if schema == "raw_ext":
+        if schema in ("raw_ext", "dict_raw_ext"):
             continue
         if isinstance(entity, str) and entity.lower() == "raw_ext":
             continue

@@ -257,15 +257,18 @@ def _layer_of_table(fqn: str) -> str:
     if not fqn or "." not in fqn:
         return "other"
     schema = fqn.split(".", 1)[0]
-    if schema == "dict":
-        return "dict_dds" if "dict_dds" in fqn else "dict_stg"
-    if schema in ("stg", "ods", "dds", "dm", "dm_calc", "dm_view", "landing", "raw_ext"):
-        return schema
+    schema_norm = schema.lower()
+    if schema_norm in ("dict", "dict_stg", "dict_dds"):
+        if "dict_dds" in fqn or schema_norm == "dict_dds":
+            return "dict_dds"
+        return "dict_stg"
+    if schema_norm in ("stg", "ods", "dds", "dm", "dm_calc", "dm_view", "landing", "raw_ext"):
+        return schema_norm
     return "other"
 
 
 def _grid_layout_table(table_nodes: dict) -> dict:
-    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "dm", "other"]
+    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
         layer = _layer_of_table(node_id)

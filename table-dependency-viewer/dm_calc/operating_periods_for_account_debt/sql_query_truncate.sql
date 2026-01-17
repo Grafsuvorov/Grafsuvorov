@@ -1,0 +1,1 @@
+ truncate table dm_calc.operating_periods_for_account_debt;

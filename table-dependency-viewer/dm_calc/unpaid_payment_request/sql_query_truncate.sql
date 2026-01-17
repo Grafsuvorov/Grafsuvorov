@@ -1,0 +1,1 @@
+truncate dm_calc.unpaid_payment_request;

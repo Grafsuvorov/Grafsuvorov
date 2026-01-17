@@ -1,0 +1,1 @@
+select tech_etl.accounting_documents_incr( );

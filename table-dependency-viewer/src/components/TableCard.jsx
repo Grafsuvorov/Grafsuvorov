@@ -226,7 +226,8 @@ export default function TableCard({
   }, [schema, tableName, autoShowGraph]);
 
   useEffect(() => {
-    if (!showList || !graphTruncated || !schema || !tableName || fullList) return;
+    if (!showList || !schema || !tableName || fullList) return;
+    if (!graphTruncated && !graphTooLarge) return;
     setListLoading(true);
     setListError(null);
 
@@ -474,6 +475,7 @@ export default function TableCard({
               centralNode={centralNode}
               edges={edges}
               onNodeClick={handleNodeClick}
+              onRequestFull={() => loadDependencies({ full: true })}
             />
           )}
 

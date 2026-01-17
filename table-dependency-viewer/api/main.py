@@ -227,6 +227,8 @@ def get_cached_meta_and_index():
         consumer = (m["table_schema"], m["table_name"])
         for src_schema, tables in m["depends_on"].items():
             for src_table in tables:
+                if (src_schema or "").lower() == "raw_ext":
+                    continue
                 if (src_schema, src_table) not in meta_lookup:
                     print(
                         "❌ BROKEN DEP:",
@@ -425,7 +427,7 @@ def build_graph_snapshot():
         depends = {}
         for src_schema, tables in (m.get("depends_on") or {}).items():
             src_schema_norm = norm(src_schema)
-            if not src_schema_norm or src_schema_norm == "raw_ext":
+            if not src_schema_norm:
                 continue
             cleaned = [norm(t) for t in (tables or []) if t]
             depends[src_schema_norm] = [t for t in cleaned if t]

@@ -2025,6 +2025,63 @@ def get_dependency_graph(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/api/dependencies-nodes/{schema}/{table}")
+def get_dependency_nodes(
+    schema: str,
+    table: str,
+    max_depth: Optional[int] = Query(None, ge=1),
+    max_nodes: Optional[int] = Query(None, ge=1),
+):
+    try:
+        schema_norm = norm(schema)
+        table_norm = norm(table)
+        key = f"{schema_norm}.{table_norm}"
+
+        all_meta_list, _ = get_cached_meta_and_index()
+        all_meta = {
+            f"{m.get('table_schema')}.{m.get('table_name')}": m
+            for m in all_meta_list
+            if m.get("table_schema") and m.get("table_name")
+        }
+
+        visited = set()
+        truncated = False
+        stack = [(key, 0)]
+
+        while stack:
+            current, depth = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            if max_nodes is not None and len(visited) >= max_nodes:
+                truncated = True
+                break
+
+            meta = all_meta.get(current)
+            if not meta:
+                continue
+            if max_depth is not None and depth >= max_depth:
+                if meta.get("depends_on"):
+                    truncated = True
+                continue
+
+            depends_on = meta.get("depends_on") or {}
+            for source_schema, source_tables in depends_on.items():
+                if not source_schema:
+                    continue
+                for source_table in source_tables or []:
+                    if not source_table:
+                        continue
+                    source = f"{source_schema}.{source_table}"
+                    stack.append((source, depth + 1))
+
+        nodes = sorted(visited, key=lambda v: v.lower())
+        return {"centralNode": key, "nodes": nodes, "truncated": truncated}
+    except Exception as e:
+        print("Ошибка при построении списка зависимостей:", e)
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 
 
 

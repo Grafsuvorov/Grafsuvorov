@@ -237,7 +237,13 @@ function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
   };
 }
 
-export default function GraphViewer({ centralNode, edges = [], entities = {}, onNodeClick }) {
+export default function GraphViewer({
+  centralNode,
+  edges = [],
+  entities = {},
+  onNodeClick,
+  onRequestFull,
+}) {
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
   const graph = useMemo(
@@ -272,7 +278,13 @@ export default function GraphViewer({ centralNode, edges = [], entities = {}, on
             </button>
           )}
           {!showAll && (
-            <button className="btn btn-secondary" onClick={() => setShowAll(true)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (onRequestFull) onRequestFull();
+                setShowAll(true);
+              }}
+            >
               Показать все
             </button>
           )}

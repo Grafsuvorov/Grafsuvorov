@@ -1667,7 +1667,7 @@ def get_graph_entity(entity_name: str):
 
 
 @router.get("/api/graph/table/{schema}/{table}")
-def get_graph_table(schema: str, table: str, depth: int = Query(2, ge=1, le=4)):
+def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     snapshot = get_graph_snapshot()
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]

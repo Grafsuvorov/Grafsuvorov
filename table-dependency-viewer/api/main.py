@@ -271,18 +271,20 @@ def _grid_layout_table(table_nodes: dict) -> dict:
         layer = _layer_of_table(node_id)
         columns.setdefault(layer, []).append(node_id)
 
-    col_gap = 380
-    row_gap = 90
+    col_gap = 60
+    row_gap = 70
     layout = {}
-    col_index = 0
+    cursor_x = 0
     for layer in order:
         items = columns.get(layer) or []
         if not items:
             continue
         items.sort()
+        max_width = max(table_nodes[n].get("width") or 0 for n in items)
+        column_center = cursor_x + (max_width / 2)
         for row_idx, node_id in enumerate(items):
-            layout[node_id] = {"x": col_index * col_gap, "y": row_idx * row_gap}
-        col_index += 1
+            layout[node_id] = {"x": column_center, "y": row_idx * row_gap}
+        cursor_x += max_width + col_gap
 
     return layout
 

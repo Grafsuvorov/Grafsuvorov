@@ -1,0 +1,1 @@
+truncate ods."/rusal/dtl_pdx_h_ral";

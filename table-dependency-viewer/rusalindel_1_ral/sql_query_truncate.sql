@@ -1,0 +1,1 @@
+truncate ods."/rusal/indel_1_ral";

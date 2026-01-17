@@ -265,14 +265,14 @@ def _layer_of_table(fqn: str) -> str:
 
 
 def _grid_layout_table(table_nodes: dict) -> dict:
-    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm", "dm_view", "other"]
+    order = ["landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "dm", "other"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
         layer = _layer_of_table(node_id)
         columns.setdefault(layer, []).append(node_id)
 
-    col_gap = 60
-    row_gap = 70
+    col_gap = 120
+    row_gap = 110
     layout = {}
     cursor_x = 0
     for layer in order:

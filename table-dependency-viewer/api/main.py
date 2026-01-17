@@ -258,7 +258,7 @@ def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> 
         return {}
 
     base_dir = Path(__file__).resolve().parent.parent
-    script_path = base_dir / "scripts" / "dagre_layout.js"
+    script_path = base_dir / "scripts" / "dagre_layout.cjs"
     if not script_path.exists():
         raise FileNotFoundError(script_path)
 
@@ -266,8 +266,8 @@ def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> 
         "nodes": nodes,
         "edges": edges,
         "rankdir": rankdir,
-        "nodesep": 70,
-        "ranksep": 160,
+        "nodesep": 32,
+        "ranksep": 90,
         "marginx": 20,
         "marginy": 20,
     }
@@ -287,7 +287,28 @@ def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> 
             raise RuntimeError(f"dagre layout failed: {result.stderr.strip()}")
 
         out = json.loads(output_path.read_text(encoding="utf-8"))
-        return out.get("nodes", {})
+        layout = out.get("nodes", {})
+
+        # Normalize ranks to a grid to avoid excessive vertical drift.
+        buckets = {}
+        for node_id, pos in layout.items():
+            if not pos:
+                continue
+            key = int(round(pos.get("x", 0)))
+            buckets.setdefault(key, []).append((node_id, pos.get("y", 0)))
+
+        if not buckets:
+            return layout
+
+        col_gap = 240
+        row_gap = 90
+        new_layout = {}
+        for col_idx, x_key in enumerate(sorted(buckets.keys())):
+            items = sorted(buckets[x_key], key=lambda item: item[1])
+            for row_idx, (node_id, _y) in enumerate(items):
+                new_layout[node_id] = {"x": col_idx * col_gap, "y": row_idx * row_gap}
+
+        return new_layout
 
 
 def build_graph_snapshot():

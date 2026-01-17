@@ -23,6 +23,9 @@ from datetime import datetime
 from sqlalchemy import text
 import re
 import json
+import hashlib
+import subprocess
+import tempfile
 
 from .config import (
     TABLE_LOADING_HISTORY,
@@ -89,6 +92,11 @@ TOP_DIRS = [
 
 _cached_meta_index = None
 _cache_timestamp = 0
+
+_graph_snapshot = None
+_graph_snapshot_ts = 0
+_graph_snapshot_hash = None
+_GRAPH_SNAPSHOT_TTL = 86400  # 24 часа
 _CACHE_TTL = 86400  # 24 часа
 
 _order_breaches_cache = None
@@ -223,6 +231,247 @@ def get_cached_meta_and_index():
 def norm(s: Optional[str]) -> Optional[str]:
     return s.lower() if isinstance(s, str) else s
 
+
+def _hash_meta(all_meta: list[dict]) -> str:
+    items = []
+    for m in all_meta:
+        items.append({
+            "table_schema": m.get("table_schema"),
+            "table_name": m.get("table_name"),
+            "entity_name": m.get("entity_name"),
+            "depends_on": m.get("depends_on") or {},
+            "table_id": m.get("table_id"),
+        })
+    payload = json.dumps(items, ensure_ascii=True, sort_keys=True)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def _estimate_node_width(label: str, min_width: int = 160, max_width: int = 420) -> int:
+    base = 120
+    per_char = 7
+    width = base + (len(label or "") * per_char)
+    return max(min_width, min(max_width, width))
+
+
+def _dagre_layout(nodes: list[dict], edges: list[dict], rankdir: str = "LR") -> dict:
+    if not nodes:
+        return {}
+
+    base_dir = Path(__file__).resolve().parent.parent
+    script_path = base_dir / "scripts" / "dagre_layout.js"
+    if not script_path.exists():
+        raise FileNotFoundError(script_path)
+
+    payload = {
+        "nodes": nodes,
+        "edges": edges,
+        "rankdir": rankdir,
+        "nodesep": 70,
+        "ranksep": 160,
+        "marginx": 20,
+        "marginy": 20,
+    }
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_path = Path(tmpdir) / "dagre_input.json"
+        output_path = Path(tmpdir) / "dagre_output.json"
+        input_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        result = subprocess.run(
+            ["node", str(script_path), str(input_path), str(output_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"dagre layout failed: {result.stderr.strip()}")
+
+        out = json.loads(output_path.read_text(encoding="utf-8"))
+        return out.get("nodes", {})
+
+
+def build_graph_snapshot():
+    all_meta, _ = get_cached_meta_and_index()
+    meta_hash = _hash_meta(all_meta)
+
+    entries = []
+    for m in all_meta:
+        schema = norm(m.get("table_schema"))
+        table = norm(m.get("table_name"))
+        entity = m.get("entity_name")
+        if not schema or not table:
+            continue
+        if schema == "raw_ext":
+            continue
+        if isinstance(entity, str) and entity.lower() == "raw_ext":
+            continue
+
+        depends = {}
+        for src_schema, tables in (m.get("depends_on") or {}).items():
+            src_schema_norm = norm(src_schema)
+            if not src_schema_norm or src_schema_norm == "raw_ext":
+                continue
+            cleaned = [norm(t) for t in (tables or []) if t]
+            depends[src_schema_norm] = [t for t in cleaned if t]
+
+        entries.append({
+            "table_schema": schema,
+            "table_name": table,
+            "entity_name": entity or "UNKNOWN",
+            "table_id": m.get("table_id"),
+            "depends_on": depends,
+        })
+
+    table_entities: dict[str, set[str]] = {}
+    table_info: dict[str, dict] = {}
+
+    def register_table(fqn: str, schema: str, table: str, entity: str, table_id):
+        if fqn not in table_info:
+            table_info[fqn] = {
+                "id": fqn,
+                "schema": schema,
+                "table": table,
+                "table_id": table_id,
+            }
+        table_entities.setdefault(fqn, set()).add(entity)
+
+    for m in entries:
+        fqn = f"{m['table_schema']}.{m['table_name']}"
+        register_table(fqn, m["table_schema"], m["table_name"], m["entity_name"], m.get("table_id"))
+
+    edges_set: set[tuple[str, str]] = set()
+    for m in entries:
+        target = f"{m['table_schema']}.{m['table_name']}"
+        for src_schema, tables in (m.get("depends_on") or {}).items():
+            for src_table in tables:
+                source = f"{src_schema}.{src_table}"
+                if source.split(".", 1)[0] == "raw_ext":
+                    continue
+                edges_set.add((source, target))
+                if source not in table_info:
+                    schema_val, table_val = source.split(".", 1)
+                    register_table(source, schema_val, table_val, "UNKNOWN", None)
+
+    table_nodes = {}
+    for fqn, info in table_info.items():
+        entities = sorted(table_entities.get(fqn) or [])
+        width = _estimate_node_width(fqn, min_width=170, max_width=460)
+        table_nodes[fqn] = {
+            "id": fqn,
+            "schema": info["schema"],
+            "table": info["table"],
+            "entity": entities[0] if entities else "UNKNOWN",
+            "entities": entities,
+            "table_id": info.get("table_id"),
+            "shared": len(entities) > 1,
+            "width": width,
+            "height": 56,
+        }
+
+    table_edges = [{"source": s, "target": t} for s, t in sorted(edges_set)]
+
+    entity_nodes = {}
+    entity_tables: dict[str, set[str]] = {}
+    for fqn, entities in table_entities.items():
+        for ent in entities:
+            if not ent or ent == "UNKNOWN":
+                continue
+            entity_tables.setdefault(ent, set()).add(fqn)
+
+    for ent, tables in entity_tables.items():
+        node_id = f"ENTITY::{ent}"
+        width = _estimate_node_width(ent, min_width=140, max_width=320)
+        entity_nodes[node_id] = {
+            "id": node_id,
+            "label": ent,
+            "tables_count": len(tables),
+            "width": width,
+            "height": 56,
+        }
+
+    entity_edges_set: set[tuple[str, str]] = set()
+    for edge in edges_set:
+        src, tgt = edge
+        src_entities = table_entities.get(src) or set()
+        tgt_entities = table_entities.get(tgt) or set()
+        for src_ent in src_entities:
+            for tgt_ent in tgt_entities:
+                if (
+                    not src_ent
+                    or not tgt_ent
+                    or src_ent == tgt_ent
+                    or src_ent == "UNKNOWN"
+                    or tgt_ent == "UNKNOWN"
+                ):
+                    continue
+                entity_edges_set.add((f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}"))
+
+    entity_edges = [{"source": s, "target": t} for s, t in sorted(entity_edges_set)]
+
+    entity_layout_nodes = []
+    for node_id, node in entity_nodes.items():
+        label = node["label"]
+        entity_layout_nodes.append({
+            "id": node_id,
+            "width": node.get("width") or _estimate_node_width(label, min_width=140, max_width=320),
+            "height": node.get("height") or 56,
+        })
+
+    table_layout_nodes = []
+    for fqn, node in table_nodes.items():
+        label = fqn
+        table_layout_nodes.append({
+            "id": fqn,
+            "width": node.get("width") or _estimate_node_width(label, min_width=170, max_width=460),
+            "height": node.get("height") or 56,
+        })
+
+    entity_layout = _dagre_layout(entity_layout_nodes, entity_edges, rankdir="LR")
+    table_layout = _dagre_layout(table_layout_nodes, table_edges, rankdir="LR")
+
+    return {
+        "meta_hash": meta_hash,
+        "meta_ts": _cache_timestamp,
+        "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+        "table_graph": {"nodes": table_nodes, "edges": table_edges},
+        "entity_graph": {"nodes": entity_nodes, "edges": entity_edges},
+        "layouts": {"entity": entity_layout, "table": table_layout},
+        "table_entity_map": {k: sorted(v) for k, v in table_entities.items()},
+    }
+
+
+def get_graph_snapshot():
+    global _graph_snapshot, _graph_snapshot_ts, _graph_snapshot_hash
+    now = time.time()
+
+    if _graph_snapshot and now - _graph_snapshot_ts < _GRAPH_SNAPSHOT_TTL:
+        if _graph_snapshot.get("meta_ts") == _cache_timestamp:
+            return _graph_snapshot
+
+    snapshot = build_graph_snapshot()
+    _graph_snapshot = snapshot
+    _graph_snapshot_ts = now
+    _graph_snapshot_hash = snapshot.get("meta_hash")
+    return snapshot
+
+
+def _cap_graph(nodes: dict, edges: list, layout: dict, max_nodes: int, max_edges: int, sort_key: str = None):
+    node_list = list(nodes.values())
+    if sort_key:
+        node_list.sort(key=lambda n: n.get(sort_key) or 0, reverse=True)
+    node_ids = {n["id"] for n in node_list[:max_nodes]}
+
+    truncated = len(nodes) > max_nodes
+    filtered_edges = [e for e in edges if e["source"] in node_ids and e["target"] in node_ids]
+
+    if len(filtered_edges) > max_edges:
+        filtered_edges = filtered_edges[:max_edges]
+        truncated = True
+
+    filtered_nodes = {nid: nodes[nid] for nid in node_ids if nid in nodes}
+    filtered_layout = {nid: layout.get(nid) for nid in node_ids if nid in layout}
+    return filtered_nodes, filtered_edges, filtered_layout, truncated
+
 def normalize_fqn(table_fqn: str) -> tuple[str, str]:
     """
     Всегда возвращает (schema, table) в lowercase
@@ -244,6 +493,7 @@ def warm_up_cache():
     try:
         get_cached_meta_and_index()
         get_cached_order_breaches()  # 🔥 прогрев orderbreaches
+        get_graph_snapshot()
     except Exception as e:
         print("Ошибка при старте приложения:", e)
 
@@ -1206,6 +1456,142 @@ def list_all_tables():
             key = f"{schema}.{table}"
             all_tables.setdefault(key.lower(), key)
     return JSONResponse(content=sorted(all_tables.values(), key=lambda v: v.lower()))
+
+
+@router.get("/api/graph/overview")
+def get_graph_overview():
+    snapshot = get_graph_snapshot()
+    nodes = snapshot["entity_graph"]["nodes"]
+    edges = snapshot["entity_graph"]["edges"]
+    layout = snapshot["layouts"]["entity"]
+
+    nodes, edges, layout, truncated = _cap_graph(
+        nodes, edges, layout, max_nodes=150, max_edges=300, sort_key="tables_count"
+    )
+    return {
+        "nodes": list(nodes.values()),
+        "edges": edges,
+        "layout": layout,
+        "truncated": truncated,
+    }
+
+
+@router.get("/api/graph/entity/{entity_name}")
+def get_graph_entity(entity_name: str):
+    snapshot = get_graph_snapshot()
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_edges = snapshot["table_graph"]["edges"]
+    layout = snapshot["layouts"]["table"]
+    table_entity_map = snapshot["table_entity_map"]
+
+    target = (entity_name or "").strip().lower()
+    all_entities = {e for ents in table_entity_map.values() for e in ents}
+    entity_key = next((e for e in all_entities if e.lower() == target), None)
+
+    if not entity_key:
+        return JSONResponse(status_code=404, content={"error": "entity not found"})
+
+    entity_tables = {t for t, ents in table_entity_map.items() if entity_key in ents}
+    if not entity_tables:
+        return JSONResponse(status_code=404, content={"error": "entity has no tables"})
+
+    nodes_set = set(entity_tables)
+    edges_filtered = []
+    for e in table_edges:
+        if e["source"] in entity_tables or e["target"] in entity_tables:
+            nodes_set.add(e["source"])
+            nodes_set.add(e["target"])
+            edges_filtered.append(e)
+
+    truncated = False
+    if len(nodes_set) > 300:
+        keep = set(entity_tables)
+        extra = [n for n in nodes_set if n not in keep]
+        extra.sort()
+        for n in extra:
+            if len(keep) >= 300:
+                truncated = True
+                break
+            keep.add(n)
+        nodes_set = keep
+
+    edges_filtered = [e for e in edges_filtered if e["source"] in nodes_set and e["target"] in nodes_set]
+    if len(edges_filtered) > 500:
+        edges_filtered = edges_filtered[:500]
+        truncated = True
+
+    nodes_payload = [table_nodes[n] for n in nodes_set if n in table_nodes]
+    layout_payload = {n: layout.get(n) for n in nodes_set if n in layout}
+
+    return {
+        "entity": {
+            "id": f"ENTITY::{entity_key}",
+            "label": entity_key,
+            "tables_count": len(entity_tables),
+        },
+        "nodes": nodes_payload,
+        "edges": edges_filtered,
+        "layout": layout_payload,
+        "truncated": truncated,
+    }
+
+
+@router.get("/api/graph/table/{schema}/{table}")
+def get_graph_table(schema: str, table: str, depth: int = Query(2, ge=1, le=4)):
+    snapshot = get_graph_snapshot()
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_edges = snapshot["table_graph"]["edges"]
+    layout = snapshot["layouts"]["table"]
+
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    key = f"{schema_norm}.{table_norm}"
+    if key not in table_nodes:
+        return JSONResponse(status_code=404, content={"error": "table not found"})
+
+    adj = {}
+    rev = {}
+    for e in table_edges:
+        adj.setdefault(e["source"], []).append(e["target"])
+        rev.setdefault(e["target"], []).append(e["source"])
+
+    visited = {key}
+    queue = deque([(key, 0)])
+    truncated = False
+    max_nodes = 300
+
+    while queue:
+        node, d = queue.popleft()
+        if d >= depth:
+            continue
+        for nxt in (adj.get(node, []) + rev.get(node, [])):
+            if nxt in visited:
+                continue
+            visited.add(nxt)
+            if len(visited) >= max_nodes:
+                truncated = True
+                queue.clear()
+                break
+            queue.append((nxt, d + 1))
+        if truncated:
+            break
+
+    edges_filtered = [e for e in table_edges if e["source"] in visited and e["target"] in visited]
+    if len(edges_filtered) > 500:
+        edges_filtered = edges_filtered[:500]
+        truncated = True
+
+    nodes_payload = [table_nodes[n] for n in visited if n in table_nodes]
+    layout_payload = {n: layout.get(n) for n in visited if n in layout}
+
+    return {
+        "table": table_nodes[key],
+        "nodes": nodes_payload,
+        "edges": edges_filtered,
+        "layout": layout_payload,
+        "depth": depth,
+        "truncated": truncated,
+    }
 
 
 @router.get("/api/inconsistencies")

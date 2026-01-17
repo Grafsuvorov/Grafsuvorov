@@ -8,9 +8,9 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import "../style/app.css";
 
-const X_GAP = 320;
-const EXTRA_GAP = 220;
-const Y_GAP = 140;
+const X_GAP = 520;
+const EXTRA_GAP = 320;
+const Y_GAP = 180;
 const DEFAULT_DEPTH = 2;
 
 const NODE_WIDTH_BY_LAYER = {

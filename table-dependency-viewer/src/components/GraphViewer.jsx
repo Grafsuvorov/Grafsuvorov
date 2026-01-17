@@ -118,8 +118,8 @@ function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
   const levelMap = { [centralNode]: 0 };
 
   const upQueue = [centralNode];
-  while (upQueue.length) {
-    const node = upQueue.shift();
+  for (let idx = 0; idx < upQueue.length; idx += 1) {
+    const node = upQueue[idx];
     (rev[node] || []).forEach((parent) => {
       const nextLevel = (levelMap[node] ?? 0) - 1;
       if (!(parent in levelMap) || levelMap[parent] > nextLevel) {
@@ -130,8 +130,8 @@ function buildGraph(centralNode, edges = [], entities = {}, depthLimit = null) {
   }
 
   const downQueue = [centralNode];
-  while (downQueue.length) {
-    const node = downQueue.shift();
+  for (let idx = 0; idx < downQueue.length; idx += 1) {
+    const node = downQueue[idx];
     (adj[node] || []).forEach((child) => {
       const nextLevel = (levelMap[node] ?? 0) + 1;
       if (!(child in levelMap) || levelMap[child] < nextLevel) {

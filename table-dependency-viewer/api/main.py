@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Union
 from collections import deque
 from pydantic import BaseModel
 import os
@@ -220,7 +220,7 @@ def get_cached_meta_and_index():
     _cache_timestamp = now
     return _cached_meta_index
 
-def norm(s: str | None) -> str | None:
+def norm(s: Optional[str]) -> Optional[str]:
     return s.lower() if isinstance(s, str) else s
 
 def normalize_fqn(table_fqn: str) -> tuple[str, str]:
@@ -252,7 +252,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 META_PARENT_DIRS = [BASE_DIR / "project", BASE_DIR]
 
 
-def iter_meta_dirs(targets: List[str] | None = None):
+def iter_meta_dirs(targets: Optional[List[str]] = None):
     """Yield existing metadata directories, searching both root and project/* trees."""
     seen = set()
     names = targets or TOP_DIRS
@@ -270,7 +270,7 @@ def iter_meta_dirs(targets: List[str] | None = None):
             yield candidate
 
 
-def normalize_excel_table_name(value: str | None) -> str | None:
+def normalize_excel_table_name(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
 
@@ -303,7 +303,7 @@ def normalize_excel_table_name(value: str | None) -> str | None:
     return cleaned or None
 
 
-def format_excel_datetime(value) -> str | None:
+def format_excel_datetime(value) -> Optional[str]:
     if not value:
         return None
     if isinstance(value, datetime):
@@ -441,7 +441,7 @@ def parse_timestamp_value(value):
         return None
 
 
-def pick_table_match(table_normalized: str | None, entity_hint: str | None, by_fqn: dict, by_name: dict):
+def pick_table_match(table_normalized: Optional[str], entity_hint: Optional[str], by_fqn: dict, by_name: dict):
     if not table_normalized:
         return None
 
@@ -465,7 +465,7 @@ def pick_table_match(table_normalized: str | None, entity_hint: str | None, by_f
     return candidates[0]
 
 
-def import_ytrek_from_excel(file_path: str | Path) -> int:
+def import_ytrek_from_excel(file_path: Union[str, Path]) -> int:
     """Load incidents from an Excel export into the database table."""
     path = Path(file_path)
     incidents = parse_ytrek_excel(path)
@@ -524,7 +524,7 @@ def import_ytrek_from_excel(file_path: str | Path) -> int:
     return len(rows)
 
 
-def extract_incident_day(row: dict) -> date | None:
+def extract_incident_day(row: dict) -> Optional[date]:
     for key in ("start_at", "detected_at", "resolved_at"):
         value = row.get(key)
         if not value:
@@ -894,7 +894,7 @@ def recursive_reverse_search(
     schema: str,
     table: str,
     reverse_index: dict,
-    visited: set | None = None
+    visited: Optional[set] = None
 ):
     if visited is None:
         visited = set()
@@ -1070,7 +1070,7 @@ def get_metrics():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-def find_path_case_insensitive(parent_path: Path, name: str) -> Path | None:
+def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
     for item in parent_path.iterdir():
         if item.name.lower() == name.lower():
             return item
@@ -1798,7 +1798,7 @@ def get_entity_loads(
     entity_id: int = Query(..., ge=1),
     days: int = Query(30, ge=1, le=120),
     limit: int = Query(30, ge=1, le=200),
-    schema: str | None = Query(None),
+    schema: Optional[str] = Query(None),
 ):
     try:
         schema = schema.strip() if isinstance(schema, str) else None

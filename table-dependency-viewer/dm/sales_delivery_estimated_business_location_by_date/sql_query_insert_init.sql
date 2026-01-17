@@ -1,0 +1,51 @@
+insert into dm.sales_delivery_estimated_business_location_by_date (
+    sales_delivery_code, 
+    batch,
+    shipment_market_code,
+    business_location_name, 
+    dt_business_location,
+    plan_or_actual_code,
+    tsw_location_name,
+    weight_net_with_wirerod,
+    port_of_discharge_name,
+    delivery_basis,
+    delivery_point_name,
+    uni,
+    material_code,
+    material_aggr_name,
+    delivery_region_name,
+    transportation_scenario_code,
+    customer_for_scm_report_name,
+    material_group_for_scm_report_name,
+    sales_team_name,
+    dt_shipment_actual,
+    customer_name,
+    contract_name
+)
+select 
+    sds.sales_delivery_code,
+    sds.batch,
+    sds.shipment_market_code,
+    sds.business_location_name,
+    sds.dt_business_location,
+    sds.plan_or_actual_code,
+    sd.tsw_location_name,
+    sd.weight_net_with_wirerod,
+    sd.port_of_discharge_name,
+    sd.delivery_basis,
+    sd.delivery_point_name,
+    sd.uni,
+    sd.material_code,
+    sd.material_aggr_name,
+    sd.delivery_region_name,
+    sd.transportation_scenario_code,
+    sd.customer_for_scm_report_name,
+    sd.material_group_for_scm_report_name,
+    sd.sales_team_name,
+    sd.dt_shipment_actual,
+    sd.customer_for_reporting_name as customer_name,
+    sd.contract_name
+from dm_calc.sales_delivery_estimated_business_location_by_date sds
+    join dm_calc.sd_sales_main_scm as sd
+        on sds.sales_delivery_code = sd.delivery_number_sales
+        and sds.batch = sd.batch;

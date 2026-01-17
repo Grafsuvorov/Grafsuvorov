@@ -1,0 +1,27 @@
+
+
+insert into dm.sales_carbon_footprint (sales_delivery_code,
+carbon_emission_weight,
+carbon_emission_equivalent_scope1_per_ton_total_weight,
+carbon_emission_equivalent_scope2_per_ton_total_weight,
+carbon_emission_equivalent_scope3_per_ton_total_weight,
+carbon_emission_equivalent_full_scope_per_ton_total_weight,
+dt_carbon_emisson_calculated)
+select sc.sales_delivery_code, 
+carbon_emission_weight, 
+carbon_emission_equivalent_scope1_per_ton_total_weight,
+carbon_emission_equivalent_scope2_per_ton_total_weight,
+carbon_emission_equivalent_scope3_per_ton_total_weight,
+carbon_emission_equivalent_scope1_per_ton_total_weight+carbon_emission_equivalent_scope2_per_ton_total_weight+carbon_emission_equivalent_scope3_per_ton_total_weight,
+current_date
+as carbon_emission_equivalent_full_scope_per_ton_total_weight
+from 
+(select sales_delivery_code,
+sum(carbon_emission_full_scope_weight) as carbon_emission_weight,
+((sum(carbon_emission_scope1_weight))/sum(sum_sales_bundle_net_weight/1000))::numeric(17,5) as carbon_emission_equivalent_scope1_per_ton_total_weight,
+((sum(carbon_emission_scope2_weight))/sum(sum_sales_bundle_net_weight/1000))::numeric(17,5) as carbon_emission_equivalent_scope2_per_ton_total_weight,
+((sum(carbon_emission_scope3_weight))/sum (sum_sales_bundle_net_weight/1000))::numeric(17,5) as carbon_emission_equivalent_scope3_per_ton_total_weight,
+current_date
+from dm_calc.carbon_footprint_by_melt_sd0015
+where carbon_emission_full_scope_weight is not null
+group by sales_delivery_code) sc;

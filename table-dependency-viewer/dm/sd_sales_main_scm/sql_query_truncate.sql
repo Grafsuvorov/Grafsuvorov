@@ -1,0 +1,1 @@
+TRUNCATE TABLE dm.sd_sales_main_scm;

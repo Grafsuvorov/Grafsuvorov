@@ -1,4 +1,30 @@
- File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\importlib\__init__.py", line 127, in import_module
+  File "<string>", line 1, in <module>
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 315, in _bootstrap
+    self.run()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\_subprocess.py", line 80, in subprocess_started
+    target(sockets=sockets)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 67, in run
+    return asyncio.run(self.serve(sockets=sockets))
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\base_events.py", line 642, in run_until_complete
+    return future.result()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 71, in serve
+    await self._serve(sockets)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 78, in _serve
+    config.load()
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\config.py", line 436, in load
+    self.loaded_app = import_from_string(self.app)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\importer.py", line 19, in import_from_string
+    module = importlib.import_module(module_str)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\importlib\__init__.py", line 127, in import_module
     return _bootstrap._gcd_import(name[level:], package, level)
   File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
   File "<frozen importlib._bootstrap>", line 1007, in _find_and_load

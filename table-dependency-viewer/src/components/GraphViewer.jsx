@@ -10,7 +10,7 @@ import "../style/app.css";
 
 const X_GAP = 320;
 const EXTRA_GAP = 220;
-const Y_GAP = 110;
+const Y_GAP = 140;
 const DEFAULT_DEPTH = 2;
 
 const NODE_WIDTH_BY_LAYER = {
@@ -71,7 +71,7 @@ const NODE_STYLE_BY_LAYER = {
   ods: { background: "#0d9488", color: "#ecfeff" },
   dds: { background: "#1d4ed8", color: "#e0f2fe" },
   dm_calc: { background: "#1f2937", color: "#e5e7eb" },
-  dm: { background: "#2563eb", color: "#ffffff" },
+  dm: { background: "#f97316", color: "#0f172a" },
   dm_view: { background: "#020617", color: "#e5e7eb" },
   other: { background: "#475569", color: "#f8fafc" },
 };

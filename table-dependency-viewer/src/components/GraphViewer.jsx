@@ -27,6 +27,26 @@ const NODE_WIDTH_BY_LAYER = {
   other: 240,
 };
 
+const LAYER_ORDER = [
+  "raw_ext",
+  "landing",
+  "dict_stg",
+  "dict_dds",
+  "stg",
+  "ods",
+  "dds",
+  "dm_calc",
+  "dm_view",
+  "other",
+  "dm",
+];
+
+const layerIndexOf = (fqn) => {
+  const layer = layerOf(fqn);
+  const idx = LAYER_ORDER.indexOf(layer);
+  return idx === -1 ? LAYER_ORDER.indexOf("other") : idx;
+};
+
 const layerOf = (fqn) => {
   if (!fqn) return "other";
   const clean = fqn.split(".")[0];
@@ -58,9 +78,9 @@ const NODE_STYLE_BY_LAYER = {
   landing: { background: "#0f766e", color: "#ecfeff" },
   raw_ext: { background: "#155e75", color: "#ecfeff" },
   dict_stg: {
-    background: "#020617",
-    color: "#9ca3af",
-    border: "1px dashed rgba(255,255,255,.35)",
+    background: "#0b3a44",
+    color: "#e0f2fe",
+    border: "1px dashed rgba(148,163,184,.5)",
   },
   dict_dds: {
     background: "#1e1b4b",
@@ -100,7 +120,8 @@ function buildGraph(
   entities = {},
   depthLimit = null,
   presetNodes = null,
-  presetLayout = null
+  presetLayout = null,
+  hoveredNodeId = null
 ) {
   if (!centralNode) {
     return {
@@ -167,7 +188,12 @@ function buildGraph(
         markerEnd: { type: MarkerType.ArrowClosed },
         style: {
           stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-          strokeWidth: e.target === centralNode ? 2.6 : 1.4,
+          strokeWidth: hoveredNodeId && (e.source === hoveredNodeId || e.target === hoveredNodeId) ? 2.6 : 1.4,
+          opacity: hoveredNodeId
+            ? (e.source === hoveredNodeId || e.target === hoveredNodeId ? 0.95 : 0.25)
+            : 0.6,
+          strokeDasharray:
+            Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
         },
       }));
 
@@ -293,7 +319,12 @@ function buildGraph(
       markerEnd: { type: MarkerType.ArrowClosed },
       style: {
         stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-        strokeWidth: e.target === centralNode ? 2.6 : 1.4,
+        strokeWidth: hoveredNodeId && (e.source === hoveredNodeId || e.target === hoveredNodeId) ? 2.6 : 1.4,
+        opacity: hoveredNodeId
+          ? (e.source === hoveredNodeId || e.target === hoveredNodeId ? 0.95 : 0.25)
+          : 0.6,
+        strokeDasharray:
+          Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
       },
     }));
 
@@ -323,10 +354,11 @@ export default function GraphViewer({
 }) {
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
+  const [hoveredNodeId, setHoveredNodeId] = useState(null);
   const usePreset = Array.isArray(nodes) && nodes.length > 0 && layout;
   const graph = useMemo(
-    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout),
-    [centralNode, edges, entities, depthLimit, showAll, nodes, layout]
+    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout, hoveredNodeId),
+    [centralNode, edges, entities, depthLimit, showAll, nodes, layout, hoveredNodeId]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
 
@@ -398,6 +430,8 @@ export default function GraphViewer({
           nodes={graph.nodes}
           edges={graph.rfEdges}
           onNodeClick={handleNodeClick}
+          onNodeMouseEnter={(_, node) => setHoveredNodeId(node?.id || null)}
+          onNodeMouseLeave={() => setHoveredNodeId(null)}
           nodesDraggable={false}
           zoomOnDoubleClick={false}
           onlyRenderVisibleElements
@@ -406,13 +440,13 @@ export default function GraphViewer({
           zoomOnScroll
           panOnScroll
           panOnDrag
-          minZoom={0.35}
-          maxZoom={1.6}
+          minZoom={0.2}
+          maxZoom={2.0}
           fitView
           fitViewOptions={{ padding: 0.35 }}
         >
           {!isLargeGraph && <MiniMap />}
-          {!isLargeGraph && <Controls showInteractive={false} />}
+          <Controls showInteractive={false} />
           {!isLargeGraph && <Background gap={32} color="#0f172a" />}
         </ReactFlow>
       </div>

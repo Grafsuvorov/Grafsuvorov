@@ -571,14 +571,21 @@ export default function HomePage({ onSelectTable }) {
                   <button className="btn btn-ghost" onClick={() => toggleEntityLink(key)}>
                     {entityLinkOpen[key] ? "Скрыть таблицы" : "Показать таблицы"}
                   </button>
-                  <div className="muted">{pair.edges_count || 0} связей</div>
+                  <div className="muted">
+                    {pair.edges_ab_count || 0} → {pair.edges_ba_count || 0}
+                  </div>
                 </div>
                 {entityLinkOpen[key] && (
                   <div className="order-impact">
                     <div className="order-impact-title">Связующие таблицы</div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
-                      {(pair.edges_sample || []).map((edge, edgeIdx) => (
-                        <span key={`${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
+                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
+                      <span className="order-arrow">→</span>
+                      <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
+                    </div>
+                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                      {(pair.edges_ab_sample || []).map((edge, edgeIdx) => (
+                        <span key={`ab-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
                           <button
                             className="btn btn-ghost"
                             onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}
@@ -594,12 +601,32 @@ export default function HomePage({ onSelectTable }) {
                           </button>
                         </span>
                       ))}
-                      {!pair.edges_sample?.length && <span className="muted">Нет примеров</span>}
+                      {!pair.edges_ab_sample?.length && <span className="muted">Нет примеров {pair.a} → {pair.b}</span>}
                     </div>
-                    <div className="order-row-chain" style={{ marginTop: 8 }}>
-                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
-                      <span className="order-arrow">источник → потребитель</span>
+                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                       <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
+                      <span className="order-arrow">→</span>
+                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
+                    </div>
+                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                      {(pair.edges_ba_sample || []).map((edge, edgeIdx) => (
+                        <span key={`ba-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}
+                          >
+                            {edge.source}
+                          </button>
+                          <span className="order-arrow">→</span>
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}
+                          >
+                            {edge.target}
+                          </button>
+                        </span>
+                      ))}
+                      {!pair.edges_ba_sample?.length && <span className="muted">Нет примеров {pair.b} → {pair.a}</span>}
                     </div>
                   </div>
                 )}

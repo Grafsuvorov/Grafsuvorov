@@ -595,17 +595,36 @@ def build_graph_snapshot():
 
     edge_set = {(e["source"], e["target"]) for e in entity_edges}
     entity_mutual = []
-    seen_pairs = set()
+    mutual_pairs = set()
     for src, tgt in edge_set:
         if (tgt, src) in edge_set:
             pair_key = tuple(sorted([src, tgt]))
-            if pair_key in seen_pairs:
-                continue
-            seen_pairs.add(pair_key)
-            entity_mutual.append({
-                "a": entity_nodes.get(src, {}).get("label", src),
-                "b": entity_nodes.get(tgt, {}).get("label", tgt),
-            })
+            mutual_pairs.add(pair_key)
+
+    table_pair_edges = {}
+    for edge in table_edges:
+        src = edge["source"]
+        tgt = edge["target"]
+        src_entities = table_entities.get(src) or set()
+        tgt_entities = table_entities.get(tgt) or set()
+        for src_ent in src_entities:
+            for tgt_ent in tgt_entities:
+                if not src_ent or not tgt_ent or src_ent == tgt_ent:
+                    continue
+                pair_key = tuple(sorted([f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}"]))
+                if pair_key not in mutual_pairs:
+                    continue
+                table_pair_edges.setdefault(pair_key, set()).add((src, tgt))
+
+    for pair_key in sorted(mutual_pairs):
+        left, right = pair_key
+        edges_for_pair = sorted(table_pair_edges.get(pair_key, set()))
+        entity_mutual.append({
+            "a": entity_nodes.get(left, {}).get("label", left),
+            "b": entity_nodes.get(right, {}).get("label", right),
+            "edges_count": len(edges_for_pair),
+            "edges_sample": [{"source": s, "target": t} for s, t in edges_for_pair[:10]],
+        })
 
     entity_layout_nodes = []
     for node_id, node in entity_nodes.items():

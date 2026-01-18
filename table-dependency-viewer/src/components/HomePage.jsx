@@ -9,6 +9,8 @@ export default function HomePage({ onSelectTable }) {
   const [history, setHistory] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [entityCycles, setEntityCycles] = useState([]);
+  const [entityMutual, setEntityMutual] = useState([]);
   const [impactMap, setImpactMap] = useState({});
   const [impactOpen, setImpactOpen] = useState({});
   const [impactGroupOpen, setImpactGroupOpen] = useState({});
@@ -25,24 +27,29 @@ export default function HomePage({ onSelectTable }) {
           activeResp,
           orderResp,
           historyResp,
-          metricsResp
+          metricsResp,
+          diagResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
           fetch(`${API_BASE}/api/incidents/history`),
-          fetch(`${API_BASE}/api/metrics`)
+          fetch(`${API_BASE}/api/metrics`),
+          fetch(`${API_BASE}/api/graph/diagnostics`)
         ]);
 
         const activeJson = await activeResp.json();
         const orderJson = await orderResp.json();
         const historyJson = await historyResp.json();
         const metricsJson = await metricsResp.json();
+        const diagJson = await diagResp.json();
 
         if (!cancelled) {
           setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
           setOrderBreaches(Array.isArray(orderJson) ? orderJson : []);
           setHistory(Array.isArray(historyJson) ? historyJson : []);
           setMetrics(metricsJson);
+          setEntityCycles(Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : []);
+          setEntityMutual(Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : []);
         }
       } catch (e) {
         console.error("HomePage load error:", e);
@@ -502,6 +509,57 @@ export default function HomePage({ onSelectTable }) {
                       })()}
                   </div>
                 )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ===== ENTITY CYCLES ===== */}
+      {!loading && (entityCycles.length > 0 || entityMutual.length > 0) && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Циклические зависимости сущностей
+            <span className="section-meta">
+              {entityCycles.length + entityMutual.length}
+            </span>
+          </div>
+          <div className="order-list">
+            {entityCycles.slice(0, 4).map((cycle, idx) => (
+              <article key={`cycle-${idx}`} className="order-row">
+                <header className="order-row-header">
+                  <div>
+                    <div className="order-row-target mono">Цикл</div>
+                    <div className="order-row-meta">
+                      Сущностей: {cycle.size}
+                    </div>
+                  </div>
+                  <div className="order-pill order-pill-warning">CYCLE</div>
+                </header>
+                <div className="order-row-chain">
+                  {cycle.nodes.slice(0, 6).map((node, i) => (
+                    <span key={`${node}-${i}`} className="order-node mono">{node}</span>
+                  ))}
+                  {cycle.nodes.length > 6 && <span className="order-node">…</span>}
+                </div>
+              </article>
+            ))}
+            {entityMutual.slice(0, 4).map((pair, idx) => (
+              <article key={`mutual-${idx}`} className="order-row">
+                <header className="order-row-header">
+                  <div>
+                    <div className="order-row-target mono">Взаимозависимость</div>
+                    <div className="order-row-meta">
+                      {pair.a} ↔ {pair.b}
+                    </div>
+                  </div>
+                  <div className="order-pill order-pill-warning">MUTUAL</div>
+                </header>
+                <div className="order-row-chain">
+                  <span className="order-node mono">{pair.a}</span>
+                  <span className="order-arrow">↔</span>
+                  <span className="order-node mono">{pair.b}</span>
+                </div>
               </article>
             ))}
           </div>

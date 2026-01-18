@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState, useEffect } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -355,12 +355,24 @@ export default function GraphViewer({
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
   const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const flowRef = useRef(null);
+  const fitKeyRef = useRef("");
   const usePreset = Array.isArray(nodes) && nodes.length > 0 && layout;
   const graph = useMemo(
     () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout, hoveredNodeId),
     [centralNode, edges, entities, depthLimit, showAll, nodes, layout, hoveredNodeId]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
+
+  useEffect(() => {
+    if (!graph.nodes.length) return;
+    const key = `${centralNode}:${graph.nodes.length}:${graph.rfEdges.length}`;
+    if (fitKeyRef.current === key) return;
+    fitKeyRef.current = key;
+    requestAnimationFrame(() => {
+      flowRef.current?.fitView({ padding: 0.35, duration: 300 });
+    });
+  }, [centralNode, graph.nodes.length, graph.rfEdges.length]);
 
   const handleNodeClick = (_, node) => {
     if (!onNodeClick) return;
@@ -432,6 +444,10 @@ export default function GraphViewer({
           onNodeClick={handleNodeClick}
           onNodeMouseEnter={(_, node) => setHoveredNodeId(node?.id || null)}
           onNodeMouseLeave={() => setHoveredNodeId(null)}
+          onInit={(instance) => {
+            flowRef.current = instance;
+            instance.fitView({ padding: 0.35, duration: 0 });
+          }}
           nodesDraggable={false}
           zoomOnDoubleClick={false}
           onlyRenderVisibleElements
@@ -442,8 +458,6 @@ export default function GraphViewer({
           panOnDrag
           minZoom={0.2}
           maxZoom={2.0}
-          fitView
-          fitViewOptions={{ padding: 0.35 }}
         >
           {!isLargeGraph && <MiniMap />}
           <Controls showInteractive={false} />

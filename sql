@@ -1,3 +1,84 @@
-http://<host>/api/graph/table/dm/sb_wuc
+BI_FI_FACT_PAYMENTS
+→
+BI_FI
+dds.advance_payment_requirements_by_purchase_orders→dm.payment_request_approvement_history
 
-  Если у тебя другой базовый URL, подставь его вместо <host> (например http://localhost:8000).
+table_name: advance_payment_requirements_by_purchase_orders
+table_schema: dds
+table_id: 1739
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 38
+entity_name: BI_FI
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 00:01:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/advance_payment_requirements_by_purchase_orders/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/advance_payment_requirements_by_purchase_orders/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/advance_payment_requirements_by_purchase_orders/sql_query_truncate.sql
+depends_on:
+  dict_dds:
+    - currency_decimal_place_ral
+    - currency
+  stg:
+    - /RUSAL/TAP_MM
+verification:
+  - duplicate_check
+key_attributes:
+  - unit_balance_code
+  - fiscal_year
+  - accounting_document_code
+  - accounting_document_position_line_item_code
+  - purchase_document_position_reference_line_item_code
+
+
+table_name: payment_request_approvement_history
+table_schema: dm
+table_id: 3441
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 36
+entity_name: BI_FI
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/payment_request_approvement_history/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/payment_request_approvement_history/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/payment_request_approvement_history/sql_query_truncate.sql
+depends_on:
+  dict_dds:
+    - payment_unblock_status_texts
+    - unit_balance
+    - general_ledger_account_chart
+    - plant_and_subsidiary
+    - counterparty
+    - person_main_data
+    - funds_center_and_department_link
+  ods: 
+    - accounting_documents
+  dds:
+    - payment_request_approval_history
+    - advance_payment_requirements_by_purchase_orders
+    - earmarked_funds_documents
+  dm_calc:
+    - plant_by_unit_balance

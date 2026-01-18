@@ -579,10 +579,27 @@ export default function HomePage({ onSelectTable }) {
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
                       {(pair.edges_sample || []).map((edge, edgeIdx) => (
                         <span key={`${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
-                          {edge.source} → {edge.target}
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}
+                          >
+                            {edge.source}
+                          </button>
+                          <span className="order-arrow">→</span>
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}
+                          >
+                            {edge.target}
+                          </button>
                         </span>
                       ))}
                       {!pair.edges_sample?.length && <span className="muted">Нет примеров</span>}
+                    </div>
+                    <div className="order-row-chain" style={{ marginTop: 8 }}>
+                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
+                      <span className="order-arrow">источник → потребитель</span>
+                      <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
                     </div>
                   </div>
                 )}

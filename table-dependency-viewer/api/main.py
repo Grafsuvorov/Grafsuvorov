@@ -603,6 +603,14 @@ def build_graph_snapshot():
 
     table_pair_edges = {}
     table_pair_edges_rev = {}
+    def is_exclusive_edge(src_ents: set, tgt_ents: set, left_ent: str, right_ent: str) -> bool:
+        return (
+            left_ent in src_ents
+            and right_ent in tgt_ents
+            and right_ent not in src_ents
+            and left_ent not in tgt_ents
+        )
+
     for edge in table_edges:
         src = edge["source"]
         tgt = edge["target"]
@@ -615,6 +623,8 @@ def build_graph_snapshot():
                 pair_key = (f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}")
                 sorted_pair = tuple(sorted(pair_key))
                 if sorted_pair not in mutual_pairs:
+                    continue
+                if not is_exclusive_edge(src_entities, tgt_entities, src_ent, tgt_ent):
                     continue
                 table_pair_edges.setdefault(pair_key, set()).add((src, tgt))
                 table_pair_edges_rev.setdefault(sorted_pair, {}).setdefault(pair_key, set()).add((src, tgt))
@@ -1742,9 +1752,19 @@ def get_graph_mutual_details(entity_a: str = Query(...), entity_b: str = Query(.
             for tgt_ent in tgt_ents:
                 if not src_ent or not tgt_ent or src_ent == tgt_ent:
                     continue
-                if norm_entity(src_ent) == a and norm_entity(tgt_ent) == b:
+                if (
+                    norm_entity(src_ent) == a
+                    and norm_entity(tgt_ent) == b
+                    and norm_entity(tgt_ent) not in {norm_entity(e) for e in src_ents}
+                    and norm_entity(src_ent) not in {norm_entity(e) for e in tgt_ents}
+                ):
                     edges_ab.append({"source": src, "target": tgt})
-                elif norm_entity(src_ent) == b and norm_entity(tgt_ent) == a:
+                elif (
+                    norm_entity(src_ent) == b
+                    and norm_entity(tgt_ent) == a
+                    and norm_entity(tgt_ent) not in {norm_entity(e) for e in src_ents}
+                    and norm_entity(src_ent) not in {norm_entity(e) for e in tgt_ents}
+                ):
                     edges_ba.append({"source": src, "target": tgt})
 
     return {

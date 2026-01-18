@@ -1715,6 +1715,46 @@ def get_graph_diagnostics():
     }
 
 
+@router.get("/api/graph/diagnostics/mutual")
+def get_graph_mutual_details(entity_a: str = Query(...), entity_b: str = Query(...)):
+    snapshot = get_graph_snapshot()
+    table_edges = snapshot["table_graph"]["edges"]
+    table_entities = {k: set(v) for k, v in snapshot["table_entity_map"].items()}
+
+    def norm_entity(value: str) -> str:
+        return (value or "").strip().lower()
+
+    a = norm_entity(entity_a)
+    b = norm_entity(entity_b)
+    if not a or not b:
+        return JSONResponse(status_code=400, content={"error": "invalid entities"})
+
+    edges_ab = []
+    edges_ba = []
+    for edge in table_edges:
+        src = edge.get("source")
+        tgt = edge.get("target")
+        if not src or not tgt:
+            continue
+        src_ents = table_entities.get(src) or set()
+        tgt_ents = table_entities.get(tgt) or set()
+        for src_ent in src_ents:
+            for tgt_ent in tgt_ents:
+                if not src_ent or not tgt_ent or src_ent == tgt_ent:
+                    continue
+                if norm_entity(src_ent) == a and norm_entity(tgt_ent) == b:
+                    edges_ab.append({"source": src, "target": tgt})
+                elif norm_entity(src_ent) == b and norm_entity(tgt_ent) == a:
+                    edges_ba.append({"source": src, "target": tgt})
+
+    return {
+        "entity_a": entity_a,
+        "entity_b": entity_b,
+        "edges_ab": edges_ab,
+        "edges_ba": edges_ba,
+    }
+
+
 @router.get("/api/graph/entity/{entity_name}")
 def get_graph_entity(entity_name: str):
     snapshot = get_graph_snapshot()

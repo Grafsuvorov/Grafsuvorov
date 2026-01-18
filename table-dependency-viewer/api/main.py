@@ -1678,10 +1678,8 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
-    adj = {}
     rev = {}
     for e in table_edges:
-        adj.setdefault(e["source"], []).append(e["target"])
         rev.setdefault(e["target"], []).append(e["source"])
 
     visited = {key}
@@ -1693,7 +1691,7 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
         node, d = queue.popleft()
         if d >= depth:
             continue
-        for nxt in (adj.get(node, []) + rev.get(node, [])):
+        for nxt in rev.get(node, []):
             if nxt in visited:
                 continue
             visited.add(nxt)

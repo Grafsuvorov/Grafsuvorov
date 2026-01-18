@@ -285,6 +285,53 @@ def _estimate_node_width(label: str, min_width: int = 160, max_width: int = 420)
     return max(min_width, min(max_width, width))
 
 
+def _find_sccs(nodes: list[str], edges: list[dict]) -> list[list[str]]:
+    adj = {n: [] for n in nodes}
+    for e in edges:
+        src = e.get("source")
+        tgt = e.get("target")
+        if src in adj and tgt:
+            adj[src].append(tgt)
+
+    index = 0
+    stack = []
+    on_stack = set()
+    indices = {}
+    lowlinks = {}
+    sccs = []
+
+    def strongconnect(v):
+        nonlocal index
+        indices[v] = index
+        lowlinks[v] = index
+        index += 1
+        stack.append(v)
+        on_stack.add(v)
+
+        for w in adj.get(v, []):
+            if w not in indices:
+                strongconnect(w)
+                lowlinks[v] = min(lowlinks[v], lowlinks[w])
+            elif w in on_stack:
+                lowlinks[v] = min(lowlinks[v], indices[w])
+
+        if lowlinks[v] == indices[v]:
+            scc = []
+            while stack:
+                w = stack.pop()
+                on_stack.remove(w)
+                scc.append(w)
+                if w == v:
+                    break
+            sccs.append(scc)
+
+    for n in nodes:
+        if n not in indices:
+            strongconnect(n)
+
+    return sccs
+
+
 def _layer_of_table(fqn: str) -> str:
     if not fqn or "." not in fqn:
         return "other"
@@ -537,6 +584,29 @@ def build_graph_snapshot():
 
     entity_edges = [{"source": s, "target": t} for s, t in sorted(entity_edges_set)]
 
+    entity_ids = list(entity_nodes.keys())
+    sccs = _find_sccs(entity_ids, entity_edges)
+    entity_cycles = []
+    for scc in sccs:
+        if len(scc) <= 1:
+            continue
+        labels = [entity_nodes.get(node_id, {}).get("label", node_id) for node_id in scc]
+        entity_cycles.append({"nodes": labels, "size": len(labels)})
+
+    edge_set = {(e["source"], e["target"]) for e in entity_edges}
+    entity_mutual = []
+    seen_pairs = set()
+    for src, tgt in edge_set:
+        if (tgt, src) in edge_set:
+            pair_key = tuple(sorted([src, tgt]))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            entity_mutual.append({
+                "a": entity_nodes.get(src, {}).get("label", src),
+                "b": entity_nodes.get(tgt, {}).get("label", tgt),
+            })
+
     entity_layout_nodes = []
     for node_id, node in entity_nodes.items():
         label = node["label"]
@@ -566,6 +636,8 @@ def build_graph_snapshot():
         "entity_graph": {"nodes": entity_nodes, "edges": entity_edges},
         "layouts": {"entity": entity_layout, "table": table_layout},
         "table_entity_map": {k: sorted(v) for k, v in table_entities.items()},
+        "entity_cycles": entity_cycles,
+        "entity_mutual": entity_mutual,
     }
 
 
@@ -1604,6 +1676,17 @@ def get_graph_overview():
         "edges": edges,
         "layout": layout,
         "truncated": truncated,
+        "entity_cycles": snapshot.get("entity_cycles", []),
+        "entity_mutual": snapshot.get("entity_mutual", []),
+    }
+
+
+@router.get("/api/graph/diagnostics")
+def get_graph_diagnostics():
+    snapshot = get_graph_snapshot()
+    return {
+        "entity_cycles": snapshot.get("entity_cycles", []),
+        "entity_mutual": snapshot.get("entity_mutual", []),
     }
 
 

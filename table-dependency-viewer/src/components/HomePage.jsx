@@ -15,6 +15,7 @@ export default function HomePage({ onSelectTable }) {
   const [impactOpen, setImpactOpen] = useState({});
   const [impactGroupOpen, setImpactGroupOpen] = useState({});
   const [impactEntityOpen, setImpactEntityOpen] = useState({});
+  const [entityLinkOpen, setEntityLinkOpen] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +137,10 @@ export default function HomePage({ onSelectTable }) {
 
   const toggleImpactEntities = (target) => {
     setImpactEntityOpen((prev) => ({ ...prev, [target]: !prev[target] }));
+  };
+
+  const toggleEntityLink = (key) => {
+    setEntityLinkOpen((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   /* =============================
@@ -544,7 +549,9 @@ export default function HomePage({ onSelectTable }) {
                 </div>
               </article>
             ))}
-            {entityMutual.slice(0, 4).map((pair, idx) => (
+            {entityMutual.slice(0, 4).map((pair, idx) => {
+              const key = `${pair.a}::${pair.b}`;
+              return (
               <article key={`mutual-${idx}`} className="order-row">
                 <header className="order-row-header">
                   <div>
@@ -560,8 +567,27 @@ export default function HomePage({ onSelectTable }) {
                   <span className="order-arrow">↔</span>
                   <span className="order-node mono">{pair.b}</span>
                 </div>
+                <div className="order-row-actions">
+                  <button className="btn btn-ghost" onClick={() => toggleEntityLink(key)}>
+                    {entityLinkOpen[key] ? "Скрыть таблицы" : "Показать таблицы"}
+                  </button>
+                  <div className="muted">{pair.edges_count || 0} связей</div>
+                </div>
+                {entityLinkOpen[key] && (
+                  <div className="order-impact">
+                    <div className="order-impact-title">Связующие таблицы</div>
+                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
+                      {(pair.edges_sample || []).map((edge, edgeIdx) => (
+                        <span key={`${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
+                          {edge.source} → {edge.target}
+                        </span>
+                      ))}
+                      {!pair.edges_sample?.length && <span className="muted">Нет примеров</span>}
+                    </div>
+                  </div>
+                )}
               </article>
-            ))}
+            )})}
           </div>
         </section>
       )}

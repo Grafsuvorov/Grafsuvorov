@@ -188,10 +188,8 @@ function buildGraph(
         markerEnd: { type: MarkerType.ArrowClosed },
         style: {
           stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-          strokeWidth: hoveredNodeId && (e.source === hoveredNodeId || e.target === hoveredNodeId) ? 2.6 : 1.4,
-          opacity: hoveredNodeId
-            ? (e.source === hoveredNodeId || e.target === hoveredNodeId ? 0.95 : 0.25)
-            : 0.6,
+          strokeWidth: 1.4,
+          opacity: 0.6,
           strokeDasharray:
             Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
         },
@@ -319,10 +317,8 @@ function buildGraph(
       markerEnd: { type: MarkerType.ArrowClosed },
       style: {
         stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-        strokeWidth: hoveredNodeId && (e.source === hoveredNodeId || e.target === hoveredNodeId) ? 2.6 : 1.4,
-        opacity: hoveredNodeId
-          ? (e.source === hoveredNodeId || e.target === hoveredNodeId ? 0.95 : 0.25)
-          : 0.6,
+        strokeWidth: 1.4,
+        opacity: 0.6,
         strokeDasharray:
           Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
       },
@@ -354,7 +350,7 @@ export default function GraphViewer({
 }) {
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
-  const [hoveredNodeId, setHoveredNodeId] = useState(null);
+  const hoveredNodeId = null;
   const flowRef = useRef(null);
   const fitKeyRef = useRef("");
   const usePreset = Array.isArray(nodes) && nodes.length > 0 && layout;
@@ -442,8 +438,6 @@ export default function GraphViewer({
           nodes={graph.nodes}
           edges={graph.rfEdges}
           onNodeClick={handleNodeClick}
-          onNodeMouseEnter={(_, node) => setHoveredNodeId(node?.id || null)}
-          onNodeMouseLeave={() => setHoveredNodeId(null)}
           onInit={(instance) => {
             flowRef.current = instance;
             instance.fitView({ padding: 0.35, duration: 0 });

@@ -2724,21 +2724,40 @@ def get_dependency_nodes(
 
 
 @router.get("/api/gantt/{schema}/{table:path}")
-def get_gantt_data(schema: str, table: str):
+def get_gantt_data(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     try:
-        raw_meta = get_cached_meta_and_index()
-        all_meta_list, _ = get_cached_meta_and_index()
-        all_meta = {f"{m['table_schema']}.{m['table_name']}": m for m in all_meta_list}
+        snapshot = get_graph_snapshot()
+        table_nodes = snapshot["table_graph"]["nodes"]
+        table_edges = snapshot["table_graph"]["edges"]
 
-        start_table = f"{schema}.{table}"
-        if start_table not in all_meta:
+        schema_norm = norm(schema)
+        table_norm = norm(table)
+        start_table = f"{schema_norm}.{table_norm}"
+        if start_table not in table_nodes:
             return JSONResponse(status_code=404, content={"error": f"'{start_table}' not found in meta"})
 
-        edges = get_dependency_edges(start_table, all_meta)
-        all_tables = {edge["source"] for edge in edges} | {edge["target"] for edge in edges}
-        all_tables.add(start_table)
+        reverse = {}
+        for edge in table_edges:
+            reverse.setdefault(edge["target"], []).append(edge["source"])
 
-        table_to_id = {t: all_meta[t]["table_id"] for t in all_tables if t in all_meta and all_meta[t].get("table_id")}
+        visited = {start_table}
+        queue = deque([(start_table, 0)])
+        while queue:
+            node, d = queue.popleft()
+            if d >= depth:
+                continue
+            for src in reverse.get(node, []):
+                if src in visited:
+                    continue
+                visited.add(src)
+                queue.append((src, d + 1))
+
+        edges = [e for e in table_edges if e["source"] in visited and e["target"] in visited]
+        table_to_id = {
+            t: table_nodes[t]["table_id"]
+            for t in visited
+            if t in table_nodes and table_nodes[t].get("table_id")
+        }
 
         if not table_to_id:
             return JSONResponse(content=[], media_type="application/json")

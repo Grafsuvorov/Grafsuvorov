@@ -16,6 +16,7 @@ export default function HomePage({ onSelectTable }) {
   const [impactGroupOpen, setImpactGroupOpen] = useState({});
   const [impactEntityOpen, setImpactEntityOpen] = useState({});
   const [entityLinkOpen, setEntityLinkOpen] = useState({});
+  const [entityLinkDetails, setEntityLinkDetails] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -551,6 +552,7 @@ export default function HomePage({ onSelectTable }) {
             ))}
             {entityMutual.slice(0, 4).map((pair, idx) => {
               const key = `${pair.a}::${pair.b}`;
+              const details = entityLinkDetails[key];
               return (
               <article key={`mutual-${idx}`} className="order-row">
                 <header className="order-row-header">
@@ -584,7 +586,7 @@ export default function HomePage({ onSelectTable }) {
                       <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
                     </div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                      {(pair.edges_ab_sample || []).map((edge, edgeIdx) => (
+                      {(details?.edges_ab || pair.edges_ab_sample || []).map((edge, edgeIdx) => (
                         <span key={`ab-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
                           <button
                             className="btn btn-ghost"
@@ -601,7 +603,9 @@ export default function HomePage({ onSelectTable }) {
                           </button>
                         </span>
                       ))}
-                      {!pair.edges_ab_sample?.length && <span className="muted">Нет примеров {pair.a} → {pair.b}</span>}
+                      {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
+                        <span className="muted">Нет примеров {pair.a} → {pair.b}</span>
+                      )}
                     </div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
                       <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
@@ -609,7 +613,7 @@ export default function HomePage({ onSelectTable }) {
                       <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
                     </div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                      {(pair.edges_ba_sample || []).map((edge, edgeIdx) => (
+                      {(details?.edges_ba || pair.edges_ba_sample || []).map((edge, edgeIdx) => (
                         <span key={`ba-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
                           <button
                             className="btn btn-ghost"
@@ -626,7 +630,45 @@ export default function HomePage({ onSelectTable }) {
                           </button>
                         </span>
                       ))}
-                      {!pair.edges_ba_sample?.length && <span className="muted">Нет примеров {pair.b} → {pair.a}</span>}
+                      {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (
+                        <span className="muted">Нет примеров {pair.b} → {pair.a}</span>
+                      )}
+                    </div>
+                    <div className="order-row-actions" style={{ marginTop: 8 }}>
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          if (entityLinkDetails[key]?.state === "loading") return;
+                          setEntityLinkDetails((prev) => ({
+                            ...prev,
+                            [key]: { state: "loading", edges_ab: [], edges_ba: [] },
+                          }));
+                          fetch(
+                            `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}`
+                          )
+                            .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
+                            .then((data) => {
+                              setEntityLinkDetails((prev) => ({
+                                ...prev,
+                                [key]: {
+                                  state: "ready",
+                                  edges_ab: Array.isArray(data.edges_ab) ? data.edges_ab : [],
+                                  edges_ba: Array.isArray(data.edges_ba) ? data.edges_ba : [],
+                                },
+                              }));
+                            })
+                            .catch(() => {
+                              setEntityLinkDetails((prev) => ({
+                                ...prev,
+                                [key]: { state: "error", edges_ab: [], edges_ba: [] },
+                              }));
+                            });
+                        }}
+                      >
+                        Показать все таблицы
+                      </button>
+                      {details?.state === "loading" && <span className="muted">Загрузка…</span>}
+                      {details?.state === "error" && <span className="muted">Ошибка загрузки</span>}
                     </div>
                   </div>
                 )}

@@ -1758,14 +1758,24 @@ def get_graph_mutual_details(entity_a: str = Query(...), entity_b: str = Query(.
                     and norm_entity(tgt_ent) not in {norm_entity(e) for e in src_ents}
                     and norm_entity(src_ent) not in {norm_entity(e) for e in tgt_ents}
                 ):
-                    edges_ab.append({"source": src, "target": tgt})
+                    edges_ab.append({
+                        "source": src,
+                        "target": tgt,
+                        "source_entities": sorted(src_ents),
+                        "target_entities": sorted(tgt_ents),
+                    })
                 elif (
                     norm_entity(src_ent) == b
                     and norm_entity(tgt_ent) == a
                     and norm_entity(tgt_ent) not in {norm_entity(e) for e in src_ents}
                     and norm_entity(src_ent) not in {norm_entity(e) for e in tgt_ents}
                 ):
-                    edges_ba.append({"source": src, "target": tgt})
+                    edges_ba.append({
+                        "source": src,
+                        "target": tgt,
+                        "source_entities": sorted(src_ents),
+                        "target_entities": sorted(tgt_ents),
+                    })
 
     return {
         "entity_a": entity_a,

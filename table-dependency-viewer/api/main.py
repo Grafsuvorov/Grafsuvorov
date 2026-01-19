@@ -595,20 +595,27 @@ def build_graph_snapshot():
 
     edge_set = {(e["source"], e["target"]) for e in entity_edges}
     entity_mutual = []
+    entity_mutual_any = []
     mutual_pairs = set()
+    mutual_pairs_any = set()
     for src, tgt in edge_set:
         if (tgt, src) in edge_set:
             pair_key = tuple(sorted([src, tgt]))
-            mutual_pairs.add(pair_key)
+            mutual_pairs_any.add(pair_key)
 
     table_pair_edges = {}
     table_pair_edges_rev = {}
+    table_pair_edges_any = {}
+    table_pair_edges_any_rev = {}
+    exclusive_pair_edges = set()
     def is_exclusive_edge(src_ents: set, tgt_ents: set, left_ent: str, right_ent: str) -> bool:
         return (
             left_ent in src_ents
             and right_ent in tgt_ents
             and right_ent not in src_ents
             and left_ent not in tgt_ents
+            and len(src_ents) == 1
+            and len(tgt_ents) == 1
         )
 
     for edge in table_edges:
@@ -621,13 +628,30 @@ def build_graph_snapshot():
                 if not src_ent or not tgt_ent or src_ent == tgt_ent:
                     continue
                 pair_key = (f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}")
-                sorted_pair = tuple(sorted(pair_key))
-                if sorted_pair not in mutual_pairs:
-                    continue
-                if not is_exclusive_edge(src_entities, tgt_entities, src_ent, tgt_ent):
-                    continue
-                table_pair_edges.setdefault(pair_key, set()).add((src, tgt))
-                table_pair_edges_rev.setdefault(sorted_pair, {}).setdefault(pair_key, set()).add((src, tgt))
+                if tuple(sorted(pair_key)) in mutual_pairs_any:
+                    table_pair_edges_any.setdefault(pair_key, set()).add((src, tgt))
+                    table_pair_edges_any_rev.setdefault(tuple(sorted(pair_key)), {}).setdefault(pair_key, set()).add((src, tgt))
+                if is_exclusive_edge(src_entities, tgt_entities, src_ent, tgt_ent):
+                    exclusive_pair_edges.add(pair_key)
+                    table_pair_edges.setdefault(pair_key, set()).add((src, tgt))
+                    table_pair_edges_rev.setdefault(tuple(sorted(pair_key)), {}).setdefault(pair_key, set()).add((src, tgt))
+
+    for src, tgt in exclusive_pair_edges:
+        if (tgt, src) in exclusive_pair_edges:
+            mutual_pairs.add(tuple(sorted([src, tgt])))
+
+    for pair_key in sorted(mutual_pairs_any):
+        left, right = pair_key
+        edges_forward = sorted(table_pair_edges_any_rev.get(pair_key, {}).get((left, right), set()))
+        edges_backward = sorted(table_pair_edges_any_rev.get(pair_key, {}).get((right, left), set()))
+        entity_mutual_any.append({
+            "a": entity_nodes.get(left, {}).get("label", left),
+            "b": entity_nodes.get(right, {}).get("label", right),
+            "edges_ab_count": len(edges_forward),
+            "edges_ba_count": len(edges_backward),
+            "edges_ab_sample": [{"source": s, "target": t} for s, t in edges_forward[:10]],
+            "edges_ba_sample": [{"source": s, "target": t} for s, t in edges_backward[:10]],
+        })
 
     for pair_key in sorted(mutual_pairs):
         left, right = pair_key
@@ -641,6 +665,17 @@ def build_graph_snapshot():
             "edges_ab_sample": [{"source": s, "target": t} for s, t in edges_forward[:10]],
             "edges_ba_sample": [{"source": s, "target": t} for s, t in edges_backward[:10]],
         })
+
+    table_ids = list(table_nodes.keys())
+    table_sccs = _find_sccs(table_ids, table_edges)
+    table_cycles = []
+    for scc in table_sccs:
+        if len(scc) <= 1:
+            continue
+        sample = sorted(scc)[:8]
+        table_cycles.append({"size": len(scc), "nodes": sample})
+    table_cycles.sort(key=lambda c: c["size"], reverse=True)
+    table_cycles = table_cycles[:10]
 
     entity_layout_nodes = []
     for node_id, node in entity_nodes.items():
@@ -673,6 +708,8 @@ def build_graph_snapshot():
         "table_entity_map": {k: sorted(v) for k, v in table_entities.items()},
         "entity_cycles": entity_cycles,
         "entity_mutual": entity_mutual,
+        "entity_mutual_any": entity_mutual_any,
+        "table_cycles": table_cycles,
     }
 
 
@@ -1712,21 +1749,27 @@ def get_graph_overview():
         "layout": layout,
         "truncated": truncated,
         "entity_cycles": snapshot.get("entity_cycles", []),
-        "entity_mutual": snapshot.get("entity_mutual", []),
+        "entity_mutual": snapshot.get("entity_mutual_any", []),
+        "table_cycles": snapshot.get("table_cycles", []),
     }
 
 
 @router.get("/api/graph/diagnostics")
-def get_graph_diagnostics():
+def get_graph_diagnostics(include_any: bool = Query(True)):
     snapshot = get_graph_snapshot()
     return {
         "entity_cycles": snapshot.get("entity_cycles", []),
-        "entity_mutual": snapshot.get("entity_mutual", []),
+        "entity_mutual": snapshot.get("entity_mutual_any", []) if include_any else snapshot.get("entity_mutual", []),
+        "table_cycles": snapshot.get("table_cycles", []),
     }
 
 
 @router.get("/api/graph/diagnostics/mutual")
-def get_graph_mutual_details(entity_a: str = Query(...), entity_b: str = Query(...)):
+def get_graph_mutual_details(
+    entity_a: str = Query(...),
+    entity_b: str = Query(...),
+    strict: bool = Query(False),
+):
     snapshot = get_graph_snapshot()
     table_edges = snapshot["table_graph"]["edges"]
     table_entities = {k: set(v) for k, v in snapshot["table_entity_map"].items()}
@@ -1751,6 +1794,8 @@ def get_graph_mutual_details(entity_a: str = Query(...), entity_b: str = Query(.
         for src_ent in src_ents:
             for tgt_ent in tgt_ents:
                 if not src_ent or not tgt_ent or src_ent == tgt_ent:
+                    continue
+                if strict and (len(src_ents) != 1 or len(tgt_ents) != 1):
                     continue
                 if (
                     norm_entity(src_ent) == a

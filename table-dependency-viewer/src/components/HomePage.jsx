@@ -180,7 +180,7 @@ export default function HomePage({ onSelectTable }) {
       [key]: { state: "loading", edges_ab: [], edges_ba: [] },
     }));
     fetch(
-      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=false`
+      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=true`
     )
       .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
       .then((data) => {

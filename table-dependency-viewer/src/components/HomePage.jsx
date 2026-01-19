@@ -594,6 +594,7 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.source}
                           </button>
+                          <span className="muted">[{pair.a}]</span>
                           <span className="order-arrow">→</span>
                           <button
                             className="btn btn-ghost"
@@ -601,6 +602,7 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.target}
                           </button>
+                          <span className="muted">[{pair.b}]</span>
                         </span>
                       ))}
                       {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
@@ -621,6 +623,7 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.source}
                           </button>
+                          <span className="muted">[{pair.b}]</span>
                           <span className="order-arrow">→</span>
                           <button
                             className="btn btn-ghost"
@@ -628,6 +631,7 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.target}
                           </button>
+                          <span className="muted">[{pair.a}]</span>
                         </span>
                       ))}
                       {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (

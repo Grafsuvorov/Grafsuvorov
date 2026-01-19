@@ -11,6 +11,7 @@ export default function HomePage({ onSelectTable }) {
   const [loading, setLoading] = useState(true);
   const [entityCycles, setEntityCycles] = useState([]);
   const [entityMutual, setEntityMutual] = useState([]);
+  const [tableCycles, setTableCycles] = useState([]);
   const [impactMap, setImpactMap] = useState({});
   const [impactOpen, setImpactOpen] = useState({});
   const [impactGroupOpen, setImpactGroupOpen] = useState({});
@@ -24,6 +25,21 @@ export default function HomePage({ onSelectTable }) {
     async function load() {
       try {
         setLoading(true);
+        const cachedRaw = sessionStorage.getItem("home:payload");
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached?.ts && Date.now() - cached.ts < 120000) {
+            setActiveIncidents(Array.isArray(cached.activeIncidents) ? cached.activeIncidents : []);
+            setOrderBreaches(Array.isArray(cached.orderBreaches) ? cached.orderBreaches : []);
+            setHistory(Array.isArray(cached.history) ? cached.history : []);
+            setMetrics(cached.metrics || null);
+            setEntityCycles(Array.isArray(cached.entityCycles) ? cached.entityCycles : []);
+            setEntityMutual(Array.isArray(cached.entityMutual) ? cached.entityMutual : []);
+            setTableCycles(Array.isArray(cached.tableCycles) ? cached.tableCycles : []);
+            setLoading(false);
+            return;
+          }
+        }
 
         const [
           activeResp,
@@ -36,7 +52,7 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/orderbreaches`),
           fetch(`${API_BASE}/api/incidents/history`),
           fetch(`${API_BASE}/api/metrics`),
-          fetch(`${API_BASE}/api/graph/diagnostics`)
+          fetch(`${API_BASE}/api/graph/diagnostics?include_any=true`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -52,6 +68,20 @@ export default function HomePage({ onSelectTable }) {
           setMetrics(metricsJson);
           setEntityCycles(Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : []);
           setEntityMutual(Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : []);
+          setTableCycles(Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : []);
+          sessionStorage.setItem(
+            "home:payload",
+            JSON.stringify({
+              ts: Date.now(),
+              activeIncidents: Array.isArray(activeJson) ? activeJson : [],
+              orderBreaches: Array.isArray(orderJson) ? orderJson : [],
+              history: Array.isArray(historyJson) ? historyJson : [],
+              metrics: metricsJson || null,
+              entityCycles: Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : [],
+              entityMutual: Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : [],
+              tableCycles: Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : [],
+            })
+          );
         }
       } catch (e) {
         console.error("HomePage load error:", e);
@@ -150,7 +180,7 @@ export default function HomePage({ onSelectTable }) {
       [key]: { state: "loading", edges_ab: [], edges_ba: [] },
     }));
     fetch(
-      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}`
+      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=false`
     )
       .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
       .then((data) => {
@@ -697,6 +727,35 @@ export default function HomePage({ onSelectTable }) {
                 )}
               </article>
             )})}
+          </div>
+        </section>
+      )}
+
+      {/* ===== TABLE CYCLES ===== */}
+      {!loading && tableCycles.length > 0 && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Циклы таблиц
+            <span className="section-meta">{tableCycles.length}</span>
+          </div>
+          <div className="order-list">
+            {tableCycles.slice(0, 4).map((cycle, idx) => (
+              <article key={`table-cycle-${idx}`} className="order-row">
+                <header className="order-row-header">
+                  <div>
+                    <div className="order-row-target mono">Table cycle</div>
+                    <div className="order-row-meta">Таблиц: {cycle.size}</div>
+                  </div>
+                  <div className="order-pill order-pill-warning">CYCLE</div>
+                </header>
+                <div className="order-row-chain">
+                  {cycle.nodes.map((node) => (
+                    <span key={node} className="order-node mono">{node}</span>
+                  ))}
+                  {cycle.size > cycle.nodes.length && <span className="order-node">…</span>}
+                </div>
+              </article>
+            ))}
           </div>
         </section>
       )}

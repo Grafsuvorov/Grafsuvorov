@@ -618,6 +618,21 @@ def build_graph_snapshot():
             and len(tgt_ents) == 1
         )
 
+    def is_pair_edge(src_ents: set, tgt_ents: set, left_ent: str, right_ent: str) -> bool:
+        src_norm = {e.lower() for e in src_ents if isinstance(e, str)}
+        tgt_norm = {e.lower() for e in tgt_ents if isinstance(e, str)}
+        left_norm = left_ent.lower()
+        right_norm = right_ent.lower()
+        allowed = {left_norm, right_norm}
+        return (
+            left_norm in src_norm
+            and right_norm in tgt_norm
+            and left_norm not in tgt_norm
+            and right_norm not in src_norm
+            and src_norm.issubset(allowed)
+            and tgt_norm.issubset(allowed)
+        )
+
     for edge in table_edges:
         src = edge["source"]
         tgt = edge["target"]
@@ -628,7 +643,7 @@ def build_graph_snapshot():
                 if not src_ent or not tgt_ent or src_ent == tgt_ent:
                     continue
                 pair_key = (f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}")
-                if tuple(sorted(pair_key)) in mutual_pairs_any:
+                if tuple(sorted(pair_key)) in mutual_pairs_any and is_pair_edge(src_entities, tgt_entities, src_ent, tgt_ent):
                     table_pair_edges_any.setdefault(pair_key, set()).add((src, tgt))
                     table_pair_edges_any_rev.setdefault(tuple(sorted(pair_key)), {}).setdefault(pair_key, set()).add((src, tgt))
                 if is_exclusive_edge(src_entities, tgt_entities, src_ent, tgt_ent):
@@ -1768,7 +1783,7 @@ def get_graph_diagnostics(include_any: bool = Query(True)):
 def get_graph_mutual_details(
     entity_a: str = Query(...),
     entity_b: str = Query(...),
-    strict: bool = Query(False),
+    strict: bool = Query(True),
 ):
     snapshot = get_graph_snapshot()
     table_edges = snapshot["table_graph"]["edges"]
@@ -1795,7 +1810,10 @@ def get_graph_mutual_details(
             for tgt_ent in tgt_ents:
                 if not src_ent or not tgt_ent or src_ent == tgt_ent:
                     continue
-                if strict and (len(src_ents) != 1 or len(tgt_ents) != 1):
+                src_norm = {norm_entity(e) for e in src_ents if isinstance(e, str)}
+                tgt_norm = {norm_entity(e) for e in tgt_ents if isinstance(e, str)}
+                allowed = {a, b}
+                if strict and (not src_norm.issubset(allowed) or not tgt_norm.issubset(allowed)):
                     continue
                 if (
                     norm_entity(src_ent) == a

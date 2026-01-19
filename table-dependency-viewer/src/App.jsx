@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import "./index.css";
 import "./style/app.css";
@@ -6,7 +7,7 @@ import "./style/app.css";
 import Sidebar from "./components/Sidebar.jsx";
 import HomePage from "./components/HomePage.jsx";
 import SearchPage from "./components/SearchPage.jsx";
-import IncidentsPage from "./components/IncidentsPage.jsx"; // список ошибок (как у тебя было)
+import IncidentsPage from "./components/IncidentsPage.jsx"; 
 import TableSearch from "./components/TableSearch.jsx";
 import InconsistencyPage from "./components/InconsistencyPage.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
@@ -20,6 +21,8 @@ import EntityTablesPage from "./components/EntityTablesPage.jsx";
 import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [view, setView] = useState("home");
 
   const [schema, setSchema] = useState(null);
@@ -30,6 +33,7 @@ export default function App() {
 
   // NEW: куда возвращаться
   const [returnView, setReturnView] = useState("home");
+  const lastRouteRef = useRef({ search: "", path: "" });
 
   const openView = (target, source = "home") => {
     if (!target) {
@@ -155,6 +159,32 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const search = location.search || "";
+    const path = location.pathname || "";
+    if (lastRouteRef.current.search === search && lastRouteRef.current.path === path) {
+      return;
+    }
+    lastRouteRef.current = { search, path };
+
+    if (path.startsWith("/entity/") && path.includes("/tables")) {
+      setView("entity_tables");
+      return;
+    }
+    if (path === "/entity_schedule") {
+      setView("entity_schedule");
+      return;
+    }
+
+    const params = new URLSearchParams(search);
+    const viewParam = params.get("view");
+    const tableParam = params.get("table");
+    if (viewParam === "table_info" && tableParam) {
+      openView({ view: "table_info", table: tableParam }, "home");
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
+
   const renderContent = () => {
     switch (view) {
       case "home":
@@ -170,7 +200,7 @@ export default function App() {
           />
         );
 
-      // NEW: новый экран инцидента (крутой)
+      // NEW: новый экран инцидента 
       case "incident":
         return (
           <IncidentDetailsPage

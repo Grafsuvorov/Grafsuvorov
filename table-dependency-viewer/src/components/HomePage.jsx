@@ -140,8 +140,45 @@ export default function HomePage({ onSelectTable }) {
     setImpactEntityOpen((prev) => ({ ...prev, [target]: !prev[target] }));
   };
 
-  const toggleEntityLink = (key) => {
-    setEntityLinkOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+  const loadEntityLinkDetails = (pair, key) => {
+    if (!pair || !pair.a || !pair.b) return;
+    if (entityLinkDetails[key]?.state === "loading" || entityLinkDetails[key]?.state === "ready") {
+      return;
+    }
+    setEntityLinkDetails((prev) => ({
+      ...prev,
+      [key]: { state: "loading", edges_ab: [], edges_ba: [] },
+    }));
+    fetch(
+      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}`
+    )
+      .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
+      .then((data) => {
+        setEntityLinkDetails((prev) => ({
+          ...prev,
+          [key]: {
+            state: "ready",
+            edges_ab: Array.isArray(data.edges_ab) ? data.edges_ab : [],
+            edges_ba: Array.isArray(data.edges_ba) ? data.edges_ba : [],
+          },
+        }));
+      })
+      .catch(() => {
+        setEntityLinkDetails((prev) => ({
+          ...prev,
+          [key]: { state: "error", edges_ab: [], edges_ba: [] },
+        }));
+      });
+  };
+
+  const toggleEntityLink = (pair, key) => {
+    setEntityLinkOpen((prev) => {
+      const next = !prev[key];
+      if (next) {
+        loadEntityLinkDetails(pair, key);
+      }
+      return { ...prev, [key]: next };
+    });
   };
 
   /* =============================
@@ -570,7 +607,7 @@ export default function HomePage({ onSelectTable }) {
                   <span className="order-node mono">{pair.b}</span>
                 </div>
                 <div className="order-row-actions">
-                  <button className="btn btn-ghost" onClick={() => toggleEntityLink(key)}>
+                  <button className="btn btn-ghost" onClick={() => toggleEntityLink(pair, key)}>
                     {entityLinkOpen[key] ? "Скрыть таблицы" : "Показать таблицы"}
                   </button>
                   <div className="muted">
@@ -594,7 +631,9 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.source}
                           </button>
-                          <span className="muted">[{pair.a}]</span>
+                          {edge.source_entities && edge.source_entities.length > 0 && (
+                            <span className="muted">[{edge.source_entities.join(", ")}]</span>
+                          )}
                           <span className="order-arrow">→</span>
                           <button
                             className="btn btn-ghost"
@@ -602,7 +641,9 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.target}
                           </button>
-                          <span className="muted">[{pair.b}]</span>
+                          {edge.target_entities && edge.target_entities.length > 0 && (
+                            <span className="muted">[{edge.target_entities.join(", ")}]</span>
+                          )}
                         </span>
                       ))}
                       {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
@@ -623,7 +664,9 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.source}
                           </button>
-                          <span className="muted">[{pair.b}]</span>
+                          {edge.source_entities && edge.source_entities.length > 0 && (
+                            <span className="muted">[{edge.source_entities.join(", ")}]</span>
+                          )}
                           <span className="order-arrow">→</span>
                           <button
                             className="btn btn-ghost"
@@ -631,7 +674,9 @@ export default function HomePage({ onSelectTable }) {
                           >
                             {edge.target}
                           </button>
-                          <span className="muted">[{pair.a}]</span>
+                          {edge.target_entities && edge.target_entities.length > 0 && (
+                            <span className="muted">[{edge.target_entities.join(", ")}]</span>
+                          )}
                         </span>
                       ))}
                       {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (
@@ -641,33 +686,7 @@ export default function HomePage({ onSelectTable }) {
                     <div className="order-row-actions" style={{ marginTop: 8 }}>
                       <button
                         className="btn btn-secondary"
-                        onClick={() => {
-                          if (entityLinkDetails[key]?.state === "loading") return;
-                          setEntityLinkDetails((prev) => ({
-                            ...prev,
-                            [key]: { state: "loading", edges_ab: [], edges_ba: [] },
-                          }));
-                          fetch(
-                            `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}`
-                          )
-                            .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
-                            .then((data) => {
-                              setEntityLinkDetails((prev) => ({
-                                ...prev,
-                                [key]: {
-                                  state: "ready",
-                                  edges_ab: Array.isArray(data.edges_ab) ? data.edges_ab : [],
-                                  edges_ba: Array.isArray(data.edges_ba) ? data.edges_ba : [],
-                                },
-                              }));
-                            })
-                            .catch(() => {
-                              setEntityLinkDetails((prev) => ({
-                                ...prev,
-                                [key]: { state: "error", edges_ab: [], edges_ba: [] },
-                              }));
-                            });
-                        }}
+                        onClick={() => loadEntityLinkDetails(pair, key)}
                       >
                         Показать все таблицы
                       </button>

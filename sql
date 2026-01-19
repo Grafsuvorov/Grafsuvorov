@@ -1,1 +1,21 @@
-{"entity_a":"BI_FI","entity_b":"SALES_MM","edges_ab":[{"source":"dds.accounting_documents","target":"dm.invoice_to_act_of_completed_work","source_entities":["BI_FI"],"target_entities":["SALES_MM"]},{"source":"dds.accounting_documents","target":"dm.invoice_to_act_of_material_acceptence","source_entities":["BI_FI"],"target_entities":["SALES_MM"]},{"source":"dds.accounting_documents","target":"dm_calc.accounting_document_header_for_purchase_documents","source_entities":["BI_FI"],"target_entities":["SALES_MM"]},{"source":"dds.accounting_documents","target":"dm_calc.accounting_document_tax_classification","source_entities":["BI_FI"],"target_entities":["SALES_MM"]}],"edges_ba":[{"source":"dds.purchase_agreement_header","target":"dm_calc.accounting_document_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_agreement_header","target":"dm_calc.accounting_document_header","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_agreement_header","target":"dm_calc.accounting_external_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_document_counterparty_role","target":"dm_calc.accounting_document_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_document_counterparty_role","target":"dm_calc.accounting_external_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_order_header","target":"dm_calc.accounting_document_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_order_header","target":"dm_calc.accounting_document_header","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"dds.purchase_order_header","target":"dm_calc.accounting_external_contracts","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"ods.cdhdr_ral","target":"dds.payment_request_approval_history","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]},{"source":"ods.cdpos_ral","target":"dds.payment_request_approval_history","source_entities":["SALES_MM","TRANSPORTATION"],"target_entities":["BI_FI"]}]}
+Связующие таблицы
+BI_FI
+→
+SALES_MM
+dds.accounting_documents[BI_FI]→dm.invoice_to_act_of_completed_work[SALES_MM]
+dds.accounting_documents[BI_FI]→dm.invoice_to_act_of_material_acceptence[SALES_MM]
+dds.accounting_documents[BI_FI]→dm_calc.accounting_document_header_for_purchase_documents[SALES_MM]
+dds.accounting_documents[BI_FI]→dm_calc.accounting_document_tax_classification[SALES_MM]
+SALES_MM
+→
+BI_FI
+dds.purchase_agreement_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_document_contracts[BI_FI]
+dds.purchase_agreement_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_document_header[BI_FI]
+dds.purchase_agreement_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_external_contracts[BI_FI]
+dds.purchase_document_counterparty_role[SALES_MM, TRANSPORTATION]→dm_calc.accounting_document_contracts[BI_FI]
+dds.purchase_document_counterparty_role[SALES_MM, TRANSPORTATION]→dm_calc.accounting_external_contracts[BI_FI]
+dds.purchase_order_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_document_contracts[BI_FI]
+dds.purchase_order_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_document_header[BI_FI]
+dds.purchase_order_header[SALES_MM, TRANSPORTATION]→dm_calc.accounting_external_contracts[BI_FI]
+ods.cdhdr_ral[SALES_MM, TRANSPORTATION]→dds.payment_request_approval_history[BI_FI]
+ods.cdpos_ral[SALES_MM, TRANSPORTATION]→dds.payment_request_approval_history[BI_FI]

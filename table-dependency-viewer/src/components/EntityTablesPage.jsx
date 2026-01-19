@@ -1,8 +1,9 @@
 // src/components/EntityTablesPage.jsx
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import "../style/app.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function EntityTablesPage() {
   const location = useLocation();
@@ -14,7 +15,7 @@ export default function EntityTablesPage() {
     return m ? m[1] : null;
   }, [location.pathname]);
 
-  const [entityName] = useState(new URLSearchParams(location.search).get('name') || '');
+  const [entityName] = useState(new URLSearchParams(location.search).get("name") || "");
 
   // Данные
   const [rows, setRows] = useState([]);
@@ -22,7 +23,9 @@ export default function EntityTablesPage() {
   const [err, setErr] = useState(null);
 
   // === Фильтр ТОЛЬКО по схеме ===
-  const [schemaQuery, setSchemaQuery] = useState('');
+  const [schemaQuery, setSchemaQuery] = useState("");
+  const [tableQuery, setTableQuery] = useState("");
+  const [staleOnly, setStaleOnly] = useState(false);
   const [showSug, setShowSug] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1); // для клавиатуры
   const boxRef = useRef(null);
@@ -48,7 +51,7 @@ export default function EntityTablesPage() {
 
   // Полный список схем
   const allSchemas = useMemo(() => {
-    const s = new Set(rows.map(r => r.schema_name ?? r.table_schema).filter(Boolean));
+    const s = new Set(rows.map((r) => r.schema_name ?? r.table_schema).filter(Boolean));
     return Array.from(s).sort((a,b) => a.localeCompare(b));
   }, [rows]);
 
@@ -68,9 +71,66 @@ export default function EntityTablesPage() {
   // Фильтрация строк
   const filtered = useMemo(() => {
     const q = schemaQuery.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(r => (r.schema_name ?? r.table_schema ?? '').toLowerCase().includes(q));
-  }, [rows, schemaQuery]);
+    const t = tableQuery.trim().toLowerCase();
+    return rows.filter((r) => {
+      const schema = (r.schema_name ?? r.table_schema ?? "").toLowerCase();
+      const table = (r.tables_name ?? r.table_name ?? "").toLowerCase();
+      if (q && !schema.includes(q)) return false;
+      if (t && !table.includes(t)) return false;
+      return true;
+    });
+  }, [rows, schemaQuery, tableQuery]);
+
+  const normalizedRows = useMemo(() => {
+    const now = Date.now();
+    const staleHours = 24;
+    return filtered.map((r) => {
+      const schema = r.schema_name ?? r.table_schema ?? "—";
+      const table = r.tables_name ?? r.table_name ?? "—";
+      const fqn = `${schema}.${table}`;
+      const lastRaw = r.last_load ?? r.table_last_load ?? null;
+      const lastDate = lastRaw ? new Date(lastRaw) : null;
+      const ageHours = lastDate ? Math.round((now - lastDate.getTime()) / 36e5) : null;
+      const stale = ageHours !== null && ageHours > staleHours;
+      return {
+        ...r,
+        schema,
+        table,
+        fqn,
+        lastRaw,
+        lastDate,
+        ageHours,
+        stale,
+      };
+    });
+  }, [filtered]);
+
+  const grouped = useMemo(() => {
+    const map = {};
+    normalizedRows.forEach((r) => {
+      if (staleOnly && !r.stale) return;
+      map[r.schema] ??= [];
+      map[r.schema].push(r);
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([schema, list]) => ({
+        schema,
+        rows: list.sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0)),
+      }));
+  }, [normalizedRows, staleOnly]);
+
+  const summary = useMemo(() => {
+    const total = normalizedRows.length;
+    const schemas = new Set(normalizedRows.map((r) => r.schema)).size;
+    const latest = normalizedRows.reduce((acc, r) => {
+      if (!r.lastDate) return acc;
+      if (!acc || r.lastDate > acc) return r.lastDate;
+      return acc;
+    }, null);
+    const staleCount = normalizedRows.filter((r) => r.stale).length;
+    return { total, schemas, latest, staleCount };
+  }, [normalizedRows]);
 
   // Клик вне блока — закрыть подсказки
   useEffect(() => {
@@ -115,36 +175,68 @@ export default function EntityTablesPage() {
   };
 
   const clearFilter = () => {
-    setSchemaQuery('');
+    setSchemaQuery("");
+    setTableQuery("");
     setShowSug(false);
     setActiveIdx(-1);
     inputRef.current?.focus();
   };
 
   return (
-    <div className="container p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">
-          Таблицы сущности {entityName ? <span className="text-blue-700">«{entityName}»</span> : (entityId ? `#${entityId}` : '')}
-        </h1>
-        <button
-          onClick={() => navigate('/entity_schedule')}
-          className="px-3 py-1 border rounded-md hover:bg-gray-50"
-        >
-          ← К сущностям
-        </button>
+    <div className="container entity-page">
+      <div className="entity-hero">
+        <div>
+          <div className="entity-title">
+            {entityName ? `Сущность ${entityName}` : "Таблицы сущности"}
+          </div>
+          <div className="entity-subtitle">
+            {entityId ? `ID: ${entityId}` : "Обзор таблиц и последних загрузок"}
+          </div>
+        </div>
+        <div className="entity-toolbar">
+          <button className="btn btn-ghost" onClick={() => navigate("/entity_schedule")}>
+            К сущностям →
+          </button>
+        </div>
       </div>
 
-      {/* Единый фильтр по схеме — красивый typeahead без стрелок и чекбоксов */}
-      <div className="mb-4">
-        <label className="block text-xs text-gray-600 mb-1">Фильтр по схеме</label>
-        <div ref={boxRef} className="relative">
-          <div className="relative">
+      <section className="cc-surface">
+        <div className="section-title">Сводка</div>
+        <div className="entity-kpis">
+          <div className="entity-kpi-card">
+            <div className="entity-kpi-label">Таблиц</div>
+            <div className="entity-kpi-value">{summary.total}</div>
+          </div>
+          <div className="entity-kpi-card">
+            <div className="entity-kpi-label">Просрочено</div>
+            <div className="entity-kpi-value">{summary.staleCount}</div>
+          </div>
+          <div className="entity-kpi-card">
+            <div className="entity-kpi-label">Схем</div>
+            <div className="entity-kpi-value">{summary.schemas}</div>
+          </div>
+          <div className="entity-kpi-card">
+            <div className="entity-kpi-label">Последняя загрузка</div>
+            <div className="entity-kpi-value">{summary.latest ? summary.latest.toISOString().slice(0, 19).replace("T", " ") : "—"}</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="cc-surface">
+        <div className="section-title">Поиск и фильтры</div>
+        <div className="entity-filter-grid">
+          <input
+            className="entity-search"
+            placeholder="Фильтр по таблице"
+            value={tableQuery}
+            onChange={(e) => setTableQuery(e.target.value)}
+          />
+          <div ref={boxRef} className="entity-filter-suggest">
             <input
               ref={inputRef}
               type="text"
-              className="w-full border rounded-lg px-3 py-2 pr-9 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder=""
+              className="entity-search"
+              placeholder="Фильтр по схеме"
               value={schemaQuery}
               onChange={(e) => { setSchemaQuery(e.target.value); setShowSug(true); setActiveIdx(-1); }}
               onFocus={() => setShowSug(true)}
@@ -154,57 +246,76 @@ export default function EntityTablesPage() {
               <button
                 type="button"
                 onClick={clearFilter}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="entity-filter-clear"
                 title="Сбросить"
               >
                 ×
               </button>
             )}
-          </div>
-
-
-
-        </div>
-      </div>
-
-      {loading && <div className="text-sm text-gray-500 mb-2">Загрузка…</div>}
-      {err && <div className="text-red-600 mb-2">{err}</div>}
-
-      {/* Таблица результатов */}
-      <div className="overflow-auto border rounded-lg">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 text-left">schema_name</th>
-              <th className="px-3 py-2 text-left">table_name</th>
-              <th className="px-3 py-2 text-left">last_load</th>
-              <th className="px-3 py-2 text-left">entity_name</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r, i) => {
-              const schema = r.schema_name ?? r.table_schema ?? '—';
-              const table  = r.tables_name ?? r.table_name ?? '—';
-              const last   = r.last_load ?? r.table_last_load ?? '—';
-              return (
-                <tr key={`${schema}.${table}.${i}`} className="border-t">
-                  <td className="px-3 py-2">{schema}</td>
-                  <td className="px-3 py-2">{table}</td>
-                  <td className="px-3 py-2">{last}</td>
-                  <td className="px-3 py-2">{r.entity_name ?? '—'}</td>
-                </tr>
-              );
-            })}
-            {filtered.length === 0 && !loading && (
-              <tr>
-                <td className="px-3 py-4 text-gray-500" colSpan={4}>
-                  Нет строк, подходящих под фильтр
-                </td>
-              </tr>
+            {showSug && suggestions.length > 0 && (
+              <div className="entity-filter-dropdown">
+                {suggestions.map((sug, idx) => (
+                  <button
+                    key={sug}
+                    className={`entity-filter-item ${idx === activeIdx ? "active" : ""}`}
+                    onMouseDown={(e) => { e.preventDefault(); applySuggestion(sug); }}
+                  >
+                    {sug}
+                  </button>
+                ))}
+              </div>
             )}
-          </tbody>
-        </table>
-      </div>
+          </div>
+          <div className="entity-filter-toggle">
+            <button
+              className={`pill ${staleOnly ? "pill-active" : ""}`}
+              onClick={() => setStaleOnly((prev) => !prev)}
+            >
+              Только просроченные
+            </button>
+          </div>
+        </div>
+
+        {loading && <div className="muted">Загрузка…</div>}
+        {err && <div className="dep-error-title">{err}</div>}
+
+        {grouped.length === 0 && !loading && (
+          <div className="muted">Нет строк, подходящих под фильтр</div>
+        )}
+
+        {grouped.map((group) => (
+          <div key={group.schema} className="entity-schema-block">
+            <div className="entity-schema-header">
+              <div className="entity-schema-title">{group.schema}</div>
+              <div className="entity-schema-count">{group.rows.length} таблиц</div>
+            </div>
+            <div className="entity-table-list">
+              {group.rows.map((r) => (
+                <div key={r.fqn} className={`entity-table-row ${r.stale ? "entity-table-row-stale" : ""}`}>
+                  <div className="entity-table-info">
+                    <div className="entity-table-name mono">{r.fqn}</div>
+                    <div className="muted">{r.lastRaw || "—"}</div>
+                  </div>
+                  <div className="entity-table-meta">
+                    {r.stale ? (
+                      <span className="stale-pill">Просрочено</span>
+                    ) : (
+                      <span className="ok-pill">OK</span>
+                    )}
+                    <span className="muted">{r.ageHours !== null ? `${r.ageHours} ч` : "нет данных"}</span>
+                  </div>
+                  <button
+                    className="btn btn-ghost entity-table-action"
+                    onClick={() => navigate(`/?view=table_info&table=${encodeURIComponent(r.fqn)}`)}
+                  >
+                    Карточка таблицы
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }

@@ -449,7 +449,9 @@ export default function HomePage({ onSelectTable }) {
                         onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
                       >
                         <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">{row.duration_minutes ?? "—"} min</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                        </span>
                       </button>
                     ))}
                     {!nightSummary?.top_runs?.length && (
@@ -469,7 +471,7 @@ export default function HomePage({ onSelectTable }) {
                       >
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
-                          {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
                         </span>
                       </button>
                     ))}
@@ -491,7 +493,9 @@ export default function HomePage({ onSelectTable }) {
                         onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
                       >
                         <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">{row.message || "FAILED"}</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.message || "FAILED"}
+                        </span>
                       </button>
                     ))}
                     {!nightSummary?.failed_runs?.length && (
@@ -499,11 +503,6 @@ export default function HomePage({ onSelectTable }) {
                     )}
                   </div>
                 </div>
-              </div>
-              <div className="order-row-actions" style={{ marginTop: 12 }}>
-                <button className="btn btn-secondary" onClick={() => onSelectTable("night_ops", "home")}>
-                  Open night details
-                </button>
               </div>
             </>
           )}

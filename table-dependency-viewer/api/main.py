@@ -2657,7 +2657,7 @@ def get_night_summary(
         base_cte = f"""
             WITH night_runs AS (
                 SELECT
-                    l.object_id,
+                    l.object_id AS table_id,
                     COALESCE(t.table_schema, '') AS table_schema,
                     COALESCE(t.table_name, l.object_name) AS table_name,
                     e.entity_name,
@@ -2679,7 +2679,7 @@ def get_night_summary(
         failed_cte = f"""
             WITH failed_runs AS (
                 SELECT
-                    l.object_id,
+                    l.object_id AS table_id,
                     COALESCE(t.table_schema, '') AS table_schema,
                     COALESCE(t.table_name, l.object_name) AS table_name,
                     e.entity_name,
@@ -2704,7 +2704,7 @@ def get_night_summary(
                     + """
                     SELECT
                         COUNT(*) AS runs_count,
-                        COUNT(DISTINCT object_id) AS tables_count,
+                        COUNT(DISTINCT table_id) AS tables_count,
                         COUNT(DISTINCT entity_name) AS entities_count,
                         SUM(duration) AS total_duration_minutes,
                         MAX(duration) AS max_duration_minutes
@@ -2734,10 +2734,11 @@ def get_night_summary(
                 text(
                     base_cte
                     + """
-                    SELECT hour, table_schema, table_name, entity_name, duration
+                    SELECT hour, table_id, table_schema, table_name, entity_name, duration
                     FROM (
                         SELECT
                             hour,
+                            table_id,
                             table_schema,
                             table_name,
                             entity_name,
@@ -2757,6 +2758,7 @@ def get_night_summary(
                     base_cte
                     + """
                     SELECT
+                        table_id,
                         table_schema,
                         table_name,
                         entity_name,
@@ -2788,7 +2790,7 @@ def get_night_summary(
                     ),
                     night_runs AS (
                         SELECT
-                            l.object_id,
+                            l.object_id AS table_id,
                             COALESCE(t.table_schema, '') AS table_schema,
                             COALESCE(t.table_name, l.object_name) AS table_name,
                             e.entity_name,
@@ -2806,6 +2808,7 @@ def get_night_summary(
                           AND l.loading_start_dttm < :end_ts
                     )
                     SELECT
+                        n.table_id,
                         n.table_schema,
                         n.table_name,
                         n.entity_name,
@@ -2838,7 +2841,7 @@ def get_night_summary(
                     + """
                     SELECT
                         COUNT(*) AS runs_count,
-                        COUNT(DISTINCT object_id) AS tables_count,
+                        COUNT(DISTINCT table_id) AS tables_count,
                         COUNT(DISTINCT entity_name) AS entities_count
                     FROM failed_runs
                     """
@@ -2851,6 +2854,7 @@ def get_night_summary(
                     failed_cte
                     + """
                     SELECT
+                        table_id,
                         table_schema,
                         table_name,
                         entity_name,
@@ -2870,6 +2874,7 @@ def get_night_summary(
             hour = int(row["hour"])
             hourly_top_map.setdefault(hour, []).append(
                 {
+                    "table_id": row.get("table_id"),
                     "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
                     "entity_name": row.get("entity_name"),
                     "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
@@ -2913,6 +2918,7 @@ def get_night_summary(
             "hourly": hourly_payload,
             "top_runs": [
                 {
+                    "table_id": row.get("table_id"),
                     "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
                     "entity_name": row.get("entity_name"),
                     "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
@@ -2923,6 +2929,7 @@ def get_night_summary(
             ],
             "anomalies": [
                 {
+                    "table_id": row.get("table_id"),
                     "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
                     "entity_name": row.get("entity_name"),
                     "duration_minutes": round(float(row["duration"]), 2) if row["duration"] is not None else None,
@@ -2935,6 +2942,7 @@ def get_night_summary(
             ],
             "failed_runs": [
                 {
+                    "table_id": row.get("table_id"),
                     "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
                     "entity_name": row.get("entity_name"),
                     "start": serialize_datetime(row.get("loading_start_dttm")),

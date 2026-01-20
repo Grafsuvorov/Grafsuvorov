@@ -145,7 +145,9 @@ export default function NightOpsPage() {
                         }}
                       >
                         <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">{row.duration_minutes ?? "—"} min</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -166,7 +168,9 @@ export default function NightOpsPage() {
                         }}
                       >
                         <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">{row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -176,19 +180,21 @@ export default function NightOpsPage() {
                 <div className="night-panel-title">Failed runs</div>
                 <div className="night-panel-sub muted">Last failures in the window</div>
                 <div className="night-list">
-                  {(data.failed_runs || []).slice(0, 10).map((row) => (
-                    <button
-                      key={`${row.table_fqn}-${row.start}`}
-                      className="night-row"
-                      onClick={() => {
-                        const path = toTablePath(row.table_fqn);
-                        if (path) navigate(path);
-                      }}
-                    >
-                      <span className="mono">{row.table_fqn}</span>
-                      <span className="muted">{row.message || "FAILED"}</span>
-                    </button>
-                  ))}
+                    {(data.failed_runs || []).slice(0, 10).map((row) => (
+                      <button
+                        key={`${row.table_fqn}-${row.start}`}
+                        className="night-row"
+                        onClick={() => {
+                          const path = toTablePath(row.table_fqn);
+                          if (path) navigate(path);
+                        }}
+                      >
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.message || "FAILED"}
+                        </span>
+                      </button>
+                    ))}
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -1576,8 +1576,7 @@ def get_metrics():
                 SELECT COUNT(*)
                 FROM {TABLE_LOADING_HISTORY}
                 WHERE loading_state = 'FAILED' and object_type='table'
-                  AND loading_start_dttm >= date_trunc('day', now() - interval '10 day') + interval '21 hour'
-                  AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
+                  AND loading_start_dttm >= now() - interval '24 hours'
             """
                 )
             ).scalar()
@@ -1588,8 +1587,7 @@ def get_metrics():
                 SELECT ROUND(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                 FROM {TABLE_LOADING_HISTORY}
                 WHERE loading_state = 'SUCCESS' and object_type='table'
-                  AND loading_start_dttm >= date_trunc('day', now() - interval '1 day') + interval '21 hour'
-                  AND loading_start_dttm < date_trunc('day', now()) + interval '21 hour'
+                  AND loading_start_dttm >= now() - interval '24 hours'
             """
                 )
             ).scalar()
@@ -1605,6 +1603,73 @@ def get_metrics():
                 },
                 media_type="application/json; charset=utf-8",
             )
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/table-history/{schema}/{table}")
+def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    table_id = None
+
+    try:
+        with engine.connect() as conn:
+            table_id = conn.execute(
+                text(
+                    f"""
+                    SELECT table_id
+                    FROM {TABLE_TABLES_META}
+                    WHERE lower(table_schema) = :schema
+                      AND lower(table_name) = :table
+                    LIMIT 1
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm},
+            ).scalar()
+
+            params = {"limit": limit}
+            if table_id:
+                where_clause = "object_id = :table_id"
+                params["table_id"] = table_id
+            else:
+                where_clause = "lower(object_name) = :table_fqn OR lower(object_name) = :table_name"
+                params["table_fqn"] = f"{schema_norm}.{table_norm}"
+                params["table_name"] = table_norm
+
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        loading_start_dttm,
+                        loading_finish_dttm,
+                        loading_state,
+                        message,
+                        EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60.0 AS duration_minutes
+                    FROM {TABLE_LOADING_HISTORY}
+                    WHERE object_type = 'table'
+                      AND {where_clause}
+                    ORDER BY loading_finish_dttm DESC NULLS LAST
+                    LIMIT :limit
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+        payload = [
+            {
+                "start": serialize_datetime(row.get("loading_start_dttm")),
+                "finish": serialize_datetime(row.get("loading_finish_dttm")),
+                "state": row.get("loading_state"),
+                "message": row.get("message"),
+                "duration_minutes": round(float(row["duration_minutes"]), 2)
+                if row.get("duration_minutes") is not None
+                else None,
+            }
+            for row in rows
+        ]
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
@@ -1957,6 +2022,219 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
         "nodes": nodes_payload,
         "edges": edges_filtered,
         "layout": layout_payload,
+        "depth": depth,
+        "truncated": truncated,
+    }
+
+
+def _layer_label_from_schema(schema: str) -> str:
+    if not schema:
+        return "OTHER"
+    schema = schema.lower()
+    if schema.startswith("dict_"):
+        return "DICT"
+    if schema == "stg":
+        return "STG"
+    if schema == "ods":
+        return "ODS"
+    if schema == "dds":
+        return "DDS"
+    if schema == "dm_calc":
+        return "DM_CALC"
+    if schema.startswith("dm"):
+        return "DM"
+    return schema.upper()
+
+
+def _traverse_forward(
+    start: str,
+    edges: list[dict],
+    depth: int,
+    max_nodes: int,
+) -> tuple[set[str], dict[str, int], bool]:
+    forward = {}
+    for edge in edges:
+        forward.setdefault(edge["source"], []).append(edge["target"])
+
+    visited = {start}
+    depth_map = {start: 0}
+    queue = deque([(start, 0)])
+    truncated = False
+
+    while queue:
+        node, d = queue.popleft()
+        if d >= depth:
+            continue
+        for nxt in forward.get(node, []):
+            if nxt in visited:
+                continue
+            visited.add(nxt)
+            depth_map[nxt] = d + 1
+            if len(visited) >= max_nodes:
+                truncated = True
+                queue.clear()
+                break
+            queue.append((nxt, d + 1))
+        if truncated:
+            break
+
+    return visited, depth_map, truncated
+
+
+@router.get("/api/graph/impact/{schema}/{table}")
+def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
+    snapshot = get_graph_snapshot()
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_edges = snapshot["table_graph"]["edges"]
+
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    key = f"{schema_norm}.{table_norm}"
+    if key not in table_nodes:
+        return JSONResponse(status_code=404, content={"error": "table not found"})
+
+    visited, _, truncated = _traverse_forward(key, table_edges, depth, max_nodes=300)
+
+    edges_filtered = [e for e in table_edges if e["source"] in visited and e["target"] in visited]
+    if len(edges_filtered) > 500:
+        edges_filtered = edges_filtered[:500]
+        truncated = True
+
+    nodes_payload = _normalize_layer_widths([table_nodes[n] for n in visited if n in table_nodes])
+    layout_payload = _grid_layout_subset(table_nodes, edges_filtered, visited)
+
+    return {
+        "table": table_nodes[key],
+        "nodes": nodes_payload,
+        "edges": edges_filtered,
+        "layout": layout_payload,
+        "depth": depth,
+        "truncated": truncated,
+    }
+
+
+@router.get("/api/impact/summary/{schema}/{table}")
+def get_impact_summary(
+    schema: str,
+    table: str,
+    depth: int = Query(3, ge=1, le=5),
+    max_nodes: int = Query(800, ge=50, le=5000),
+    limit: int = Query(120, ge=0, le=2000),
+):
+    snapshot = get_graph_snapshot()
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_edges = snapshot["table_graph"]["edges"]
+
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    key = f"{schema_norm}.{table_norm}"
+    if key not in table_nodes:
+        return JSONResponse(status_code=404, content={"error": "table not found"})
+
+    visited, depth_map, truncated = _traverse_forward(key, table_edges, depth, max_nodes=max_nodes)
+    visited.discard(key)
+
+    entity_counts = {}
+    layer_counts = {}
+    table_rows = []
+    for node_id in visited:
+        node = table_nodes.get(node_id)
+        if not node:
+            continue
+        schema_val = node.get("schema") or ""
+        layer = _layer_label_from_schema(schema_val)
+        layer_counts[layer] = layer_counts.get(layer, 0) + 1
+
+        entities = node.get("entities") or []
+        if not entities:
+            entities = [node.get("entity") or "UNKNOWN"]
+        for ent in entities:
+            if not ent:
+                continue
+            entity_counts[ent] = entity_counts.get(ent, 0) + 1
+
+        table_rows.append(
+            {
+                "id": node_id,
+                "schema": node.get("schema"),
+                "table": node.get("table"),
+                "entity": node.get("entity"),
+                "entities": entities,
+                "layer": layer,
+                "depth": depth_map.get(node_id, 0),
+            }
+        )
+
+    entities_list = [
+        {"entity": ent, "count": count}
+        for ent, count in sorted(entity_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
+    layers_list = [
+        {"layer": layer, "count": count}
+        for layer, count in sorted(layer_counts.items(), key=lambda x: (-x[1], x[0]))
+    ]
+
+    table_rows.sort(key=lambda r: (r.get("depth") or 0, r.get("id") or ""))
+    if limit:
+        table_rows = table_rows[:limit]
+
+    return {
+        "table": table_nodes[key],
+        "total_tables": len(visited),
+        "total_entities": len(entity_counts),
+        "entities": entities_list,
+        "layers": layers_list,
+        "tables": table_rows,
+        "depth": depth,
+        "truncated": truncated,
+    }
+
+
+@router.get("/api/impact/list/{schema}/{table}")
+def get_impact_list(
+    schema: str,
+    table: str,
+    depth: int = Query(4, ge=1, le=6),
+    max_nodes: int = Query(2500, ge=100, le=10000),
+):
+    snapshot = get_graph_snapshot()
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_edges = snapshot["table_graph"]["edges"]
+
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    key = f"{schema_norm}.{table_norm}"
+    if key not in table_nodes:
+        return JSONResponse(status_code=404, content={"error": "table not found"})
+
+    visited, depth_map, truncated = _traverse_forward(key, table_edges, depth, max_nodes=max_nodes)
+    visited.discard(key)
+
+    table_rows = []
+    for node_id in visited:
+        node = table_nodes.get(node_id)
+        if not node:
+            continue
+        schema_val = node.get("schema") or ""
+        layer = _layer_label_from_schema(schema_val)
+        entities = node.get("entities") or []
+        if not entities:
+            entities = [node.get("entity") or "UNKNOWN"]
+        table_rows.append(
+            {
+                "id": node_id,
+                "schema": node.get("schema"),
+                "table": node.get("table"),
+                "entities": entities,
+                "layer": layer,
+                "depth": depth_map.get(node_id, 0),
+            }
+        )
+
+    table_rows.sort(key=lambda r: (r.get("depth") or 0, r.get("id") or ""))
+    return {
+        "table": table_nodes[key],
+        "tables": table_rows,
         "depth": depth,
         "truncated": truncated,
     }

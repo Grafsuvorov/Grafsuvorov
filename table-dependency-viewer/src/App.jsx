@@ -1,275 +1,164 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useCallback } from "react";
+import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import "./index.css";
 import "./style/app.css";
 
 import Sidebar from "./components/Sidebar.jsx";
 import HomePage from "./components/HomePage.jsx";
-import SearchPage from "./components/SearchPage.jsx";
-import IncidentsPage from "./components/IncidentsPage.jsx"; 
+import IncidentsPage from "./components/IncidentsPage.jsx";
 import TableSearch from "./components/TableSearch.jsx";
-import InconsistencyPage from "./components/InconsistencyPage.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
 import SlaPage from "./components/SlaPage.jsx";
 import DependencyViewer from "./components/DependencyViewer.jsx";
 import TableCard from "./components/TableCard.jsx";
 import EntityShedule from "./components/EntityShedule.jsx";
 import EntityTablesPage from "./components/EntityTablesPage.jsx";
-
-// NEW
 import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
+import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [view, setView] = useState("home");
 
-  const [schema, setSchema] = useState(null);
-  const [tableName, setTableName] = useState(null);
-  const [selectedTable, setSelectedTable] = useState(null);
-  const [autoShowGraph, setAutoShowGraph] = useState(false);
-  const [tableContext, setTableContext] = useState(null);
+  const normalizeFqn = useCallback((value) => {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    if (!trimmed.includes(".")) return null;
+    const clean = trimmed.replaceAll("/", "").replaceAll("-", "");
+    const [schema, table] = clean.split(".", 2);
+    if (!schema || !table) return null;
+    return { schema, table, fqn: `${schema}.${table}` };
+  }, []);
 
-  // NEW: куда возвращаться
-  const [returnView, setReturnView] = useState("home");
-  const lastRouteRef = useRef({ search: "", path: "" });
-
-  const openView = (target, source = "home") => {
-    if (!target) {
-      setView("home");
-      setReturnView("home");
-      return;
-    }
-
-    // системные экраны
-    if (target === "__show_errors__") {
-      setReturnView(view);
-      setView("errors");
-      return;
-    }
-
-    if (target === "__check_inconsistencies__") {
-      setReturnView(view);
-      setView("__check_inconsistencies__");
-      return;
-    }
-
-    if (target === "__slowest_tables__") {
-      setReturnView(view);
-      setView("slowest_tables");
-      return;
-    }
-
-    if (target === "__entity_schedule__") {
-      setReturnView(view);
-      setView("entity_schedule");
-      return;
-    }
-
-    if (target === "sla") {
-      setReturnView(view);
-      setView("sla");
-      setAutoShowGraph(false);
-      setTableContext(null);
-      return;
-    }
-
-    if (target === "search") {
-      setReturnView(view);
-      setView("search");
-      setAutoShowGraph(false);
-      setTableContext(null);
-      return;
-    }
-
-    if (target === "table_search") {
-      setReturnView(view);
-      setView("table_search");
-      setAutoShowGraph(false);
-      setTableContext(null);
-      return;
-    }
-
-    // OBJECT navigation
-    if (typeof target === "object" && target.view) {
-      if (target.view === "incident") {
-        setReturnView(source || view || "home");
-        setSelectedTable(target.table);
-        setView("incident");
-        setAutoShowGraph(false);
-        setTableContext(null);
+  const openView = useCallback(
+    (target) => {
+      if (!target) {
+        navigate("/", { replace: true });
         return;
       }
 
-      if (target.view === "table_info") {
-        setReturnView(source || view || "home");
-        const table = typeof target.table === "string" ? target.table.trim() : null;
+      if (target === "__show_errors__") {
+        navigate("/errors");
+        return;
+      }
+      if (target === "__check_inconsistencies__") {
+        navigate("/");
+        return;
+      }
+      if (target === "__slowest_tables__") {
+        navigate("/slow-tables");
+        return;
+      }
+      if (target === "__entity_schedule__") {
+        navigate("/entities");
+        return;
+      }
+      if (target === "sla") {
+        navigate("/sla");
+        return;
+      }
+      if (target === "search") {
+        navigate("/");
+        return;
+      }
+      if (target === "table_search") {
+        navigate("/tables");
+        return;
+      }
 
-        if (table && table.includes(".")) {
-          const clean = table.replaceAll("/", "").replaceAll("-", "");
-          const [sch, tbl] = clean.split(".");
-          setSchema(sch);
-          setTableName(tbl);
-          setSelectedTable(`${sch}.${tbl}`);
+      if (typeof target === "object" && target.view) {
+        if (target.view === "incident") {
+          navigate(`/incident?table=${encodeURIComponent(target.table || "")}`);
+          return;
         }
-
-        setView("table_info");
-        setAutoShowGraph(Boolean(target.openGraph));
-        setTableContext(target.context || null);
-        return;
-      }
-
-      if (target.view === "dependency_graph") {
-        setReturnView(source || view || "home");
-        const table = typeof target.table === "string" ? target.table.trim() : target.table;
-
-        if (typeof table === "string" && table.includes(".")) {
-          const clean = table.replaceAll("/", "").replaceAll("-", "");
-          const [sch, tbl] = clean.split(".");
-          setSchema(sch);
-          setTableName(tbl);
-          setSelectedTable(table);
-        } else {
-          setSelectedTable(table);
+        if (target.view === "table_info") {
+          const parsed = normalizeFqn(target.table);
+          if (parsed) {
+            navigate(`/table/${parsed.schema}/${parsed.table}`, {
+              state: { from: location.pathname + location.search },
+            });
+          }
+          return;
         }
-
-        setView("dependencies");
-        setAutoShowGraph(false);
-        setTableContext(null);
-        return;
+        if (target.view === "dependency_graph") {
+          const parsed = normalizeFqn(target.table);
+          if (parsed) {
+            navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
+          }
+          return;
+        }
       }
-    }
 
-    // table string
-    if (typeof target === "string" && target.includes(".")) {
-      setReturnView(source || view || "home");
+      if (typeof target === "string") {
+        const parsed = normalizeFqn(target);
+        if (parsed) {
+          navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
+        }
+      }
+    },
+    [location.pathname, location.search, navigate, normalizeFqn]
+  );
 
-      const clean = target.replaceAll("/", "").replaceAll("-", "");
-      const [sch, tbl] = clean.split(".");
-
-      setSchema(sch);
-      setTableName(tbl);
-      setSelectedTable(target.trim());
-
-      setView("dependencies");
-      setAutoShowGraph(false);
-      setTableContext(null);
-      return;
-    }
+  const TableRoute = () => {
+    const params = useParams();
+    const handleBack = () => navigate(location.state?.from || "/tables");
+    const handleNavigateTable = (schema, table) => {
+      navigate(`/table/${schema}/${table}`, {
+        state: { from: location.pathname + location.search },
+      });
+    };
+    return (
+      <TableCard
+        schema={params.schema}
+        tableName={params.table}
+        onBack={handleBack}
+        onNavigateTable={handleNavigateTable}
+        onOpenImpact={(s, t) => navigate(`/impact/${s}/${t}`, { state: { from: location.pathname + location.search } })}
+      />
+    );
   };
 
-  useEffect(() => {
-    const search = location.search || "";
-    const path = location.pathname || "";
-    if (lastRouteRef.current.search === search && lastRouteRef.current.path === path) {
-      return;
-    }
-    lastRouteRef.current = { search, path };
+  const DependenciesRoute = () => {
+    const params = new URLSearchParams(location.search);
+    const table = params.get("table") || "";
+    const handleBack = () => navigate(location.state?.from || "/");
+    return <DependencyViewer table={table} onBack={handleBack} />;
+  };
 
-    if (path.startsWith("/entity/") && path.includes("/tables")) {
-      setView("entity_tables");
-      return;
-    }
-    if (path === "/entity_schedule") {
-      setView("entity_schedule");
-      return;
-    }
-
-    const params = new URLSearchParams(search);
-    const viewParam = params.get("view");
-    const tableParam = params.get("table");
-    if (viewParam === "table_info" && tableParam) {
-      openView({ view: "table_info", table: tableParam }, "home");
-      navigate("/", { replace: true });
-    }
-  }, [location.pathname, location.search, navigate]);
-
-  const renderContent = () => {
-    switch (view) {
-      case "home":
-        return <HomePage onSelectTable={openView} />;
-
-      case "search":
-        return <SearchPage onSelectTable={openView} />;
-
-      case "errors":
-        return (
-          <IncidentsPage
-            onSelectTable={(name, source) => openView(name, source)}
-          />
-        );
-
-      // NEW: новый экран инцидента 
-      case "incident":
-        return (
-          <IncidentDetailsPage
-            tableFqn={selectedTable}
-            onBack={() => setView(returnView || "home")}
-            onOpenTable={(table) => openView({ view: "table_info", table }, "incident")}
-          />
-        );
-
-      case "table_search":
-        return (
-          <TableSearch
-            onSelectTable={(name) => openView(name, "table_search")}
-          />
-        );
-
-      case "__check_inconsistencies__":
-        return <InconsistencyPage onBack={() => setView("home")} />;
-
-      case "slowest_tables":
-        return <SlowestTables onSelectTable={openView} />;
-
-      case "entity_schedule":
-        return <EntityShedule />;
-
-      case "sla":
-        return <SlaPage />;
-
-      case "entity_tables":
-        return <EntityTablesPage />;
-
-      case "table_info":
-        return (
-          <TableCard
-            schema={schema}
-            tableName={tableName}
-            setSchema={setSchema}
-            setTableName={setTableName}
-            autoShowGraph={autoShowGraph}
-            tableContext={tableContext}
-            onBack={() => setView(returnView || "table_search")}
-          />
-        );
-
-      case "dependencies":
-        return (
-          <DependencyViewer
-            table={selectedTable}
-            onBack={() => setView(returnView || "home")}
-          />
-        );
-
-      default:
-        return <div>Page not found</div>;
-    }
+  const IncidentRoute = () => {
+    const params = new URLSearchParams(location.search);
+    const table = params.get("table") || "";
+    const handleBack = () => navigate(location.state?.from || "/errors");
+    return (
+      <IncidentDetailsPage
+        tableFqn={table}
+        onBack={handleBack}
+        onOpenTable={(tbl) => openView({ view: "table_info", table: tbl })}
+      />
+    );
   };
 
   return (
-    <div className="app-container">
-      <Sidebar
-        currentView={view}
-        onChangeView={(target) => openView(target, view)}
-      />
-
-      <main className="content">
-        <div className="content-inner">
-          <div className="page">{renderContent()}</div>
-        </div>
-      </main>
+    <div className="app">
+      <Sidebar currentPath={location.pathname} onChangeView={openView} />
+      <Routes>
+        <Route path="/" element={<HomePage onSelectTable={openView} />} />
+        <Route path="/errors" element={<IncidentsPage onSelectTable={openView} />} />
+        <Route path="/dependency-search" element={<Navigate to="/" replace />} />
+        <Route path="/tables" element={<TableSearch onSelectTable={(name) => openView({ view: "table_info", table: name })} />} />
+        <Route path="/dependency-issues" element={<Navigate to="/" replace />} />
+        <Route path="/slow-tables" element={<SlowestTables onSelectTable={openView} />} />
+        <Route path="/entities" element={<EntityShedule />} />
+        <Route path="/entity/:id/tables" element={<EntityTablesPage />} />
+        <Route path="/sla" element={<SlaPage />} />
+        <Route path="/table/:schema/:table" element={<TableRoute />} />
+        <Route path="/impact/:schema/:table" element={<ImpactGraphPage />} />
+        <Route path="/dependencies" element={<DependenciesRoute />} />
+        <Route path="/incident" element={<IncidentRoute />} />
+        <Route path="/entity_schedule" element={<Navigate to="/entities" replace />} />
+        <Route path="*" element={<div className="page-error">Page not found</div>} />
+      </Routes>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import "../style/app.css";
 
-export default function Sidebar({ currentView, onChangeView }) {
+export default function Sidebar({ currentPath, onChangeView }) {
+  const isActive = (path) => currentPath === path;
   return (
     <header className="topnav">
       <div className="topnav-inner">
@@ -11,21 +12,21 @@ export default function Sidebar({ currentView, onChangeView }) {
           <nav className="topnav-nav">
             <div className="nav-primary">
               <button
-                className={currentView === "home" ? "active" : ""}
+                className={isActive("/") ? "active" : ""}
                 onClick={() => onChangeView(null)}
               >
                 Dashboard
               </button>
 
               <button
-                className={currentView === "errors" ? "active" : ""}
+                className={isActive("/errors") ? "active" : ""}
                 onClick={() => onChangeView("__show_errors__")}
               >
                 Errors
               </button>
 
               <button
-                className={currentView === "table_search" ? "active" : ""}
+                className={isActive("/tables") ? "active" : ""}
                 onClick={() => onChangeView("table_search")}
               >
                 Tables
@@ -33,14 +34,8 @@ export default function Sidebar({ currentView, onChangeView }) {
             </div>
 
             <div className="nav-secondary">
-              <button onClick={() => onChangeView("search")}>
-                Dependency graph
-              </button>
-              <button onClick={() => onChangeView("__check_inconsistencies__")}>
-                Dependency issues
-              </button>
               <button onClick={() => onChangeView("__slowest_tables__")}>
-                Slow tables
+                Slow Tables
               </button>
               <button onClick={() => onChangeView("__entity_schedule__")}>
                 Entities

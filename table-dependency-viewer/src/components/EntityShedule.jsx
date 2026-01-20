@@ -20,7 +20,7 @@ export default function EntityShedule() {
         return res.json();
       })
       .then((data) => setEntities(Array.isArray(data) ? data : []))
-      .catch(() => setError('Не удалось загрузить список сущностей'))
+      .catch(() => setError("Failed to load entities"))
       .finally(() => setLoadingEntities(false));
   }, []);
 
@@ -66,12 +66,12 @@ export default function EntityShedule() {
       <div className="entity-hero">
         <div>
           <div className="entity-title">Entities</div>
-          <div className="entity-subtitle">Список сущностей, расписание и быстрый доступ к таблицам</div>
+          <div className="entity-subtitle">Entity directory, load schedule, and quick access to tables</div>
         </div>
         <div className="entity-toolbar">
           <input
             className="entity-search"
-            placeholder="Поиск по имени или ID"
+            placeholder="Search by name or ID"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -82,7 +82,7 @@ export default function EntityShedule() {
                 className={`pill ${statusFilter === status ? "pill-active" : ""}`}
                 onClick={() => setStatusFilter(status)}
               >
-                {status === "all" ? "Все" : status}
+                {status === "all" ? "All" : status}
               </button>
             ))}
           </div>
@@ -91,12 +91,12 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Сводка
+          Summary
           <span className="section-meta">{stats.total}</span>
         </div>
         <div className="entity-kpis">
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Всего сущностей</div>
+            <div className="entity-kpi-label">Total entities</div>
             <div className="entity-kpi-value">{stats.total}</div>
           </div>
           {Object.entries(stats.statusCounts).map(([status, count]) => (
@@ -110,13 +110,13 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Сущности
+          Entities
           <span className="section-meta">{filtered.length}</span>
         </div>
-        {loadingEntities && <div className="muted">Загрузка…</div>}
+        {loadingEntities && <div className="muted">Loading…</div>}
         {error && <div className="dep-error-title">{error}</div>}
         {!loadingEntities && filtered.length === 0 && (
-          <div className="muted">Нет сущностей по заданным фильтрам</div>
+          <div className="muted">No entities match the filters</div>
         )}
         <div className="entity-grid entity-grid-schedule">
           {filtered.map((row) => (
@@ -132,17 +132,17 @@ export default function EntityShedule() {
               </div>
               <div className="entity-meta-grid">
                 <div>
-                  <div className="entity-meta-label">Последняя загрузка</div>
+                  <div className="entity-meta-label">Last load</div>
                   <div className="entity-meta-value">{row.entity_last_load || "—"}</div>
                 </div>
                 <div>
-                  <div className="entity-meta-label">Интервал</div>
+                  <div className="entity-meta-label">Interval</div>
                   <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
                 </div>
               </div>
               <div className="entity-actions">
                 <button className="btn btn-secondary" onClick={() => openEntityTables(row)}>
-                  Таблицы сущности
+                  Entity tables
                 </button>
               </div>
             </article>

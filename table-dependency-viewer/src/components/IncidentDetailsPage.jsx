@@ -7,10 +7,10 @@ function relTime(dtStr) {
   if (!dtStr) return "—";
   const dt = new Date(dtStr.replace(" ", "T"));
   const diff = Math.floor((Date.now() - dt.getTime()) / 1000);
-  if (diff < 60) return `${diff}s назад`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}м назад`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}ч назад`;
-  return `${Math.floor(diff / 86400)}д назад`;
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
 }
 
 export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
@@ -43,11 +43,11 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
   }, [tableFqn]);
 
   if (loading) {
-    return <div className="page-loading">Загрузка инцидента…</div>;
+    return <div className="page-loading">Loading incident...</div>;
   }
 
   if (error || !data) {
-    return <div className="page-error">Ошибка загрузки инцидента</div>;
+    return <div className="page-error">Failed to load incident</div>;
   }
 
   const { summary, timeline = [], impact = {}, dependencies = [] } = data;
@@ -57,13 +57,13 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
       {/* HEADER */}
       <div className="incident-header">
   <div className="incident-nav" onClick={onBack}>
-    ← Назад
+    ← Back
   </div>
 
   <div>
     <div className="incident-title">{summary.table_fqn}</div>
     <div className="incident-meta">
-      Последнее падение: {summary.last_failure_time || "—"} (
+      Last failure: {summary.last_failure_time || "—"} (
       {relTime(summary.last_failure_time)})
     </div>
   </div>
@@ -83,25 +83,25 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
       <div className="incident-impact">
         <div>
           <div className="impact-value">{impact.sla_violations || 0}</div>
-          <div className="impact-label">SLA нарушений</div>
+          <div className="impact-label">SLA breaches</div>
         </div>
         <div>
           <div className="impact-value">
             {impact.blocked_tables_count || 0}
           </div>
-          <div className="impact-label">Затронуто таблиц</div>
+          <div className="impact-label">Tables affected</div>
         </div>
         <div>
           <div className="impact-value">
             {impact.reports_at_risk?.length || 0}
           </div>
-          <div className="impact-label">Отчётов под риском</div>
+          <div className="impact-label">Reports at risk</div>
         </div>
       </div>
 
       {/* TIMELINE */}
       <div className="card">
-        <div className="card-title">История загрузок</div>
+        <div className="card-title">Load history</div>
         <div className="timeline">
           {timeline.map((t, i) => (
             <div
@@ -116,7 +116,7 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
                 {t.duration_sec
                   ? Math.round(t.duration_sec / 60)
                   : "—"}{" "}
-                мин
+                min
               </span>
               {t.message && (
                 <div className="timeline-msg">{t.message}</div>
@@ -130,7 +130,7 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
       {expanded && (
         <div className="card">
           <div className="card-title">
-            Что блокируется
+            What it blocks
             <span className="card-subtitle">
               downstream · {dependencies.length}
             </span>
@@ -155,7 +155,7 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
                   </div>
 
                   <div className="dep-metrics">
-                    {d.avg_duration_minutes ?? "—"} мин
+                    {d.avg_duration_minutes ?? "—"} min
                   </div>
                 </div>
               );

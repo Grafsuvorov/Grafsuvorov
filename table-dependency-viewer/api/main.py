@@ -760,6 +760,23 @@ def _cap_graph(nodes: dict, edges: list, layout: dict, max_nodes: int, max_edges
     filtered_layout = {nid: layout.get(nid) for nid in node_ids if nid in layout}
     return filtered_nodes, filtered_edges, filtered_layout, truncated
 
+
+@router.get("/api/entities/shared")
+def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
+    snapshot = get_graph_snapshot()
+    table_entity_map = snapshot.get("table_entity_map") or {}
+    shared_map = {}
+    for table_fqn, entities in table_entity_map.items():
+        if not entities or len(entities) < 2:
+            continue
+        for ent in entities:
+            entry = shared_map.setdefault(ent, {"count": 0, "tables": []})
+            entry["count"] += 1
+            if limit and len(entry["tables"]) < limit:
+                entry["tables"].append(table_fqn)
+
+    return JSONResponse(content=shared_map, media_type="application/json; charset=utf-8")
+
 def normalize_fqn(table_fqn: str) -> tuple[str, str]:
     """
     Всегда возвращает (schema, table) в lowercase
@@ -1675,6 +1692,46 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/api/table-variants/{schema}/{table}")
+def get_table_variants(schema: str, table: str):
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    query = f"""
+        SELECT
+            t.table_id,
+            t.table_schema,
+            t.table_name,
+            t.table_last_load,
+            t.entity_id,
+            e.entity_name
+        FROM {TABLE_TABLES_META} t
+        LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+        WHERE lower(t.table_schema) = :schema
+          AND lower(t.table_name) = :table
+        ORDER BY t.table_id
+    """
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(query), {"schema": schema_norm, "table": table_norm}).mappings().all()
+
+        payload = []
+        for row in rows:
+            payload.append(
+                {
+                    "table_id": row.get("table_id"),
+                    "table_schema": row.get("table_schema"),
+                    "table_name": row.get("table_name"),
+                    "entity_id": row.get("entity_id"),
+                    "entity_name": row.get("entity_name"),
+                    "table_last_load": serialize_datetime(row.get("table_last_load")),
+                }
+            )
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
     for item in parent_path.iterdir():
         if item.name.lower() == name.lower():
@@ -2579,6 +2636,7 @@ def get_night_summary(
     limit: int = Query(50, ge=1, le=200),
     start_hour: int = Query(21, ge=0, le=23),
     end_hour: int = Query(8, ge=0, le=23),
+    shift_days: int = Query(0, ge=0, le=14),
 ):
     try:
         with engine.connect() as conn:
@@ -2586,11 +2644,11 @@ def get_night_summary(
                 text(
                     """
                     SELECT
-                        (date_trunc('day', now()) - interval '1 day' + (:start_hour || ' hours')::interval) AS start_ts,
-                        (date_trunc('day', now()) + (:end_hour || ' hours')::interval) AS end_ts
+                        (date_trunc('day', now()) - interval '1 day' + (:start_hour || ' hours')::interval - (:shift_days || ' days')::interval) AS start_ts,
+                        (date_trunc('day', now()) + (:end_hour || ' hours')::interval - (:shift_days || ' days')::interval) AS end_ts
                     """
                 ),
-                {"start_hour": start_hour, "end_hour": end_hour},
+                {"start_hour": start_hour, "end_hour": end_hour, "shift_days": shift_days},
             ).mappings().first()
 
         start_ts = window_row["start_ts"]
@@ -2614,6 +2672,26 @@ def get_night_summary(
                   AND l.loading_state = 'SUCCESS'
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
+                  AND l.loading_start_dttm >= :start_ts
+                  AND l.loading_start_dttm < :end_ts
+            )
+        """
+        failed_cte = f"""
+            WITH failed_runs AS (
+                SELECT
+                    l.object_id,
+                    COALESCE(t.table_schema, '') AS table_schema,
+                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    e.entity_name,
+                    l.loading_start_dttm,
+                    l.loading_finish_dttm,
+                    l.message
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'FAILED'
+                  AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_start_dttm >= :start_ts
                   AND l.loading_start_dttm < :end_ts
             )
@@ -2754,6 +2832,39 @@ def get_night_summary(
                 },
             ).mappings().all()
 
+            failed_summary = conn.execute(
+                text(
+                    failed_cte
+                    + """
+                    SELECT
+                        COUNT(*) AS runs_count,
+                        COUNT(DISTINCT object_id) AS tables_count,
+                        COUNT(DISTINCT entity_name) AS entities_count
+                    FROM failed_runs
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts},
+            ).mappings().first()
+
+            failed_runs = conn.execute(
+                text(
+                    failed_cte
+                    + """
+                    SELECT
+                        table_schema,
+                        table_name,
+                        entity_name,
+                        loading_start_dttm,
+                        loading_finish_dttm,
+                        message
+                    FROM failed_runs
+                    ORDER BY loading_finish_dttm DESC NULLS LAST
+                    LIMIT :limit
+                    """
+                ),
+                {"start_ts": start_ts, "end_ts": end_ts, "limit": limit},
+            ).mappings().all()
+
         hourly_top_map = {}
         for row in hourly_top:
             hour = int(row["hour"])
@@ -2794,6 +2905,11 @@ def get_night_summary(
                 if summary.get("max_duration_minutes") is not None
                 else None,
             },
+            "failed_summary": {
+                "runs_count": int(failed_summary.get("runs_count") or 0),
+                "tables_count": int(failed_summary.get("tables_count") or 0),
+                "entities_count": int(failed_summary.get("entities_count") or 0),
+            },
             "hourly": hourly_payload,
             "top_runs": [
                 {
@@ -2816,6 +2932,16 @@ def get_night_summary(
                     "end": serialize_datetime(row.get("loading_finish_dttm")),
                 }
                 for row in anomalies
+            ],
+            "failed_runs": [
+                {
+                    "table_fqn": f"{row['table_schema']}.{row['table_name']}".strip("."),
+                    "entity_name": row.get("entity_name"),
+                    "start": serialize_datetime(row.get("loading_start_dttm")),
+                    "end": serialize_datetime(row.get("loading_finish_dttm")),
+                    "message": row.get("message"),
+                }
+                for row in failed_runs
             ],
         }
         return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
@@ -3580,7 +3706,10 @@ def get_active_incidents():
 
 
 @router.get("/api/incidents/history")
-def get_incident_history():
+def get_incident_history(
+    days: int = Query(300, ge=1, le=3650),
+    limit: int = Query(10, ge=1, le=100),
+):
     query = f"""
         SELECT
             t.table_schema || '.' || l.object_name AS table_fqn,
@@ -3590,13 +3719,13 @@ def get_incident_history():
       left join {TABLE_TABLES_META} t on t.table_id=l.object_id
         WHERE l.loading_state = 'FAILED'
           AND l.object_type = 'table'
-          AND l.loading_finish_dttm >= now() - interval '300 days'
+          AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
         GROUP BY t.table_schema, l.object_name
         ORDER BY incidents_count DESC
-        LIMIT 10
+        LIMIT :limit
     """
     with engine.connect() as conn:
-        rows = conn.execute(text(query)).mappings().all()
+        rows = conn.execute(text(query), {"days": days, "limit": limit}).mappings().all()
 
     return [
         {
@@ -3606,6 +3735,32 @@ def get_incident_history():
             if r["last_incident"] else None
         }
         for r in rows
+    ]
+
+
+@router.get("/api/incidents/timeline")
+def get_incident_timeline(days: int = Query(7, ge=1, le=365)):
+    query = f"""
+        SELECT
+            date_trunc('day', l.loading_finish_dttm) AS day,
+            COUNT(*) AS incidents_count
+        FROM {TABLE_LOADING_HISTORY} l
+        WHERE l.loading_state = 'FAILED'
+          AND l.object_type = 'table'
+          AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+        GROUP BY date_trunc('day', l.loading_finish_dttm)
+        ORDER BY day
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"days": days}).mappings().all()
+
+    return [
+        {
+            "day": row["day"].strftime("%Y-%m-%d"),
+            "count": int(row["incidents_count"] or 0),
+        }
+        for row in rows
+        if row.get("day")
     ]
 print("Reg")
 @router.get("/api/orderbreaches")

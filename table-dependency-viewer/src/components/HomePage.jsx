@@ -18,9 +18,16 @@ export default function HomePage({ onSelectTable }) {
   const [impactEntityOpen, setImpactEntityOpen] = useState({});
   const [entityLinkOpen, setEntityLinkOpen] = useState({});
   const [entityLinkDetails, setEntityLinkDetails] = useState({});
+  const [nightSummary, setNightSummary] = useState(null);
+  const [nightLoading, setNightLoading] = useState(false);
+  const [nightError, setNightError] = useState(null);
+  const [incidentTimeline, setIncidentTimeline] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
+
+    setNightLoading(true);
+    setNightError(null);
 
     async function load() {
       try {
@@ -36,6 +43,9 @@ export default function HomePage({ onSelectTable }) {
             setEntityCycles(Array.isArray(cached.entityCycles) ? cached.entityCycles : []);
             setEntityMutual(Array.isArray(cached.entityMutual) ? cached.entityMutual : []);
             setTableCycles(Array.isArray(cached.tableCycles) ? cached.tableCycles : []);
+            setNightSummary(cached.nightSummary || null);
+            setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
+            setNightLoading(false);
             setLoading(false);
             return;
           }
@@ -46,13 +56,17 @@ export default function HomePage({ onSelectTable }) {
           orderResp,
           historyResp,
           metricsResp,
-          diagResp
+          diagResp,
+          nightResp,
+          timelineResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
-          fetch(`${API_BASE}/api/incidents/history`),
+          fetch(`${API_BASE}/api/incidents/history?days=7&limit=10`),
           fetch(`${API_BASE}/api/metrics`),
-          fetch(`${API_BASE}/api/graph/diagnostics?include_any=true`)
+          fetch(`${API_BASE}/api/graph/diagnostics?include_any=true`),
+          fetch(`${API_BASE}/api/night-summary?days=30&limit=10`),
+          fetch(`${API_BASE}/api/incidents/timeline?days=7`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -60,6 +74,8 @@ export default function HomePage({ onSelectTable }) {
         const historyJson = await historyResp.json();
         const metricsJson = await metricsResp.json();
         const diagJson = await diagResp.json();
+        const nightJson = await nightResp.json();
+        const timelineJson = await timelineResp.json();
 
         if (!cancelled) {
           setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
@@ -69,6 +85,9 @@ export default function HomePage({ onSelectTable }) {
           setEntityCycles(Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : []);
           setEntityMutual(Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : []);
           setTableCycles(Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : []);
+          setNightSummary(nightJson || null);
+          setIncidentTimeline(Array.isArray(timelineJson) ? timelineJson : []);
+          setNightLoading(false);
           sessionStorage.setItem(
             "home:payload",
             JSON.stringify({
@@ -80,11 +99,15 @@ export default function HomePage({ onSelectTable }) {
               entityCycles: Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : [],
               entityMutual: Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : [],
               tableCycles: Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : [],
+              nightSummary: nightJson || null,
+              incidentTimeline: Array.isArray(timelineJson) ? timelineJson : [],
             })
           );
         }
       } catch (e) {
         console.error("HomePage load error:", e);
+        setNightError("Failed to load night summary.");
+        setNightLoading(false);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -226,6 +249,19 @@ export default function HomePage({ onSelectTable }) {
     return "stable";
   }, [history]);
 
+  const nightPeakHour = useMemo(() => {
+    if (!nightSummary?.hourly?.length) return null;
+    const sorted = [...nightSummary.hourly].sort(
+      (a, b) => (b.total_duration_minutes || 0) - (a.total_duration_minutes || 0)
+    );
+    return sorted[0];
+  }, [nightSummary]);
+
+  const timelineMax = useMemo(() => {
+    if (!incidentTimeline.length) return 0;
+    return Math.max(...incidentTimeline.map((d) => d.count || 0));
+  }, [incidentTimeline]);
+
   const healthScore = useMemo(() => {
     const base = 100;
     const incidentPenalty = Math.min(activeIncidents.length * 15, 45);
@@ -364,6 +400,116 @@ export default function HomePage({ onSelectTable }) {
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* ===== NIGHT SUMMARY ===== */}
+      {!loading && (
+        <section className="cc-surface">
+          <div className="section-title">Night summary (last window)</div>
+          {nightLoading && <div className="muted">Loading night summary...</div>}
+          {nightError && <div className="dep-error-title">{nightError}</div>}
+          {!nightLoading && !nightError && nightSummary && (
+            <>
+              <div className="night-kpis">
+                <div className="night-kpi-card">
+                  <div className="night-kpi-label">Runs</div>
+                  <div className="night-kpi-value">{nightSummary?.summary?.runs_count ?? 0}</div>
+                </div>
+                <div className="night-kpi-card">
+                  <div className="night-kpi-label">Tables</div>
+                  <div className="night-kpi-value">{nightSummary?.summary?.tables_count ?? 0}</div>
+                </div>
+                <div className="night-kpi-card">
+                  <div className="night-kpi-label">Entities</div>
+                  <div className="night-kpi-value">{nightSummary?.summary?.entities_count ?? 0}</div>
+                </div>
+                <div className="night-kpi-card">
+                  <div className="night-kpi-label">Total duration</div>
+                  <div className="night-kpi-value">
+                    {nightSummary?.summary?.total_duration_minutes ?? 0} min
+                  </div>
+                </div>
+                <div className="night-kpi-card">
+                  <div className="night-kpi-label">Peak hour</div>
+                  <div className="night-kpi-value">
+                    {nightPeakHour ? String(nightPeakHour.hour).padStart(2, "0") + ":00" : "—"}
+                  </div>
+                </div>
+              </div>
+              <div className="night-columns">
+                <div className="night-panel">
+                  <div className="night-panel-title">Longest runs</div>
+                  <div className="night-panel-sub muted">Top 5 by duration</div>
+                  <div className="night-list">
+                    {(nightSummary.top_runs || []).slice(0, 5).map((row) => (
+                      <button
+                        key={`${row.table_fqn}-${row.start}`}
+                        className="night-row"
+                        onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
+                      >
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">{row.duration_minutes ?? "—"} min</span>
+                      </button>
+                    ))}
+                    {!nightSummary?.top_runs?.length && (
+                      <div className="muted">No runs found.</div>
+                    )}
+                  </div>
+                </div>
+                <div className="night-panel">
+                  <div className="night-panel-title">Anomalies vs p95</div>
+                  <div className="night-panel-sub muted">Runs &gt; 1.5x p95</div>
+                  <div className="night-list">
+                    {(nightSummary.anomalies || []).slice(0, 5).map((row) => (
+                      <button
+                        key={`${row.table_fqn}-${row.start}`}
+                        className="night-row"
+                        onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
+                      >
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">
+                          {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
+                        </span>
+                      </button>
+                    ))}
+                    {!nightSummary?.anomalies?.length && (
+                      <div className="muted">No anomalies.</div>
+                    )}
+                  </div>
+                </div>
+                <div className="night-panel">
+                  <div className="night-panel-title">Failed runs</div>
+                  <div className="night-panel-sub muted">
+                    {nightSummary?.failed_summary?.runs_count ?? 0} failures
+                  </div>
+                  <div className="night-list">
+                    {(nightSummary.failed_runs || []).slice(0, 5).map((row) => (
+                      <button
+                        key={`${row.table_fqn}-${row.start}`}
+                        className="night-row"
+                        onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
+                      >
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">{row.message || "FAILED"}</span>
+                      </button>
+                    ))}
+                    {!nightSummary?.failed_runs?.length && (
+                      <div className="muted">No failed runs.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="order-row-actions" style={{ marginTop: 12 }}>
+                <button className="btn btn-secondary" onClick={() => onSelectTable("night_ops", "home")}>
+                  Open night details
+                </button>
+              </div>
+            </>
+          )}
+          {!nightLoading && !nightError && !nightSummary && (
+            <div className="muted">Night summary is unavailable.</div>
+          )}
         </section>
       )}
 
@@ -786,12 +932,25 @@ export default function HomePage({ onSelectTable }) {
       {!loading && history.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Incident history (300 days)
+            Incident highlights (7 days)
             <span className="section-meta">top problematic tables</span>
           </div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            Click a row to open the incident card.
+            Shows tables with the most failures in the last 7 days.
           </div>
+          {incidentTimeline.length > 0 && (
+            <div className="incident-mini">
+              {incidentTimeline.map((row) => {
+                const height = timelineMax ? Math.max(6, (row.count / timelineMax) * 48) : 6;
+                return (
+                  <div key={row.day} className="incident-mini-day" title={`${row.day}: ${row.count}`}>
+                    <span className="incident-mini-bar" style={{ height }} />
+                    <span className="incident-mini-label">{row.day.slice(5)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <div className="history-board">
             <div className="history-board-head">
               <span>#</span>
@@ -811,6 +970,11 @@ export default function HomePage({ onSelectTable }) {
                 <span className="history-last-date">{h.last_incident || "—"}</span>
               </button>
             ))}
+          </div>
+          <div className="order-row-actions" style={{ marginTop: 12 }}>
+            <button className="btn btn-secondary" onClick={() => onSelectTable("__show_errors__", "home")}>
+              Open full incident history
+            </button>
           </div>
         </section>
       )}

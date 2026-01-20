@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -355,8 +355,8 @@ def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
         layer = _layer_of_table(node_id)
         columns.setdefault(layer, []).append(node_id)
 
-    col_gap = 120
-    row_gap = 110
+    col_gap = 180
+    row_gap = 140
     layout = {}
     cursor_x = 0
     layer_index = {layer: idx for idx, layer in enumerate(order)}
@@ -3498,50 +3498,85 @@ from collections import defaultdict
 
 @router.get("/api/incidents/active")
 def get_active_incidents():
-    failures_resp = get_failed_tables()
-    failures = json.loads(failures_resp.body.decode("utf-8"))
-
-    if not failures:
-        return []
-
-    grouped = group_failures(failures)
-
-    by_entity = defaultdict(list)
-
-    # 1️⃣ группируем все фейлы по сущности
-    for group in grouped:
-        if not group:
-            continue
-        entity = group[0].get("entity_name") or "UNKNOWN"
-        by_entity[entity].extend(group)
-
-    incidents = []
-
-    # 2️⃣ агрегируем КРАТКО — без downstream
-    for entity, rows in by_entity.items():
-        failed_tables = set()
-        last_failure = None
-
-        for r in rows:
-            table_fqn = f"{r['schema']}.{r['table_name']}"
-            failed_tables.add(table_fqn)
-
-            if not last_failure or r["error_time"] > last_failure:
-                last_failure = r["error_time"]
-
-        incidents.append(
-            {
-                "entity": entity,
-                "severity": "CRITICAL",
-                "failed_tables": len(failed_tables),
-                "root_tables": sorted(failed_tables)[:3],
-                "last_failure_time": last_failure,
-            }
+    query = f"""
+        WITH latest AS (
+            SELECT
+                l.object_id,
+                MAX(l.loading_finish_dttm) AS last_event_time
+            FROM {TABLE_LOADING_HISTORY} l
+            WHERE l.object_type = 'table'
+            GROUP BY l.object_id
+        ),
+        last_state AS (
+            SELECT
+                l.object_id,
+                l.loading_state,
+                l.loading_finish_dttm
+            FROM {TABLE_LOADING_HISTORY} l
+            JOIN latest t
+              ON t.object_id = l.object_id
+             AND t.last_event_time = l.loading_finish_dttm
+            WHERE l.object_type = 'table'
         )
+        SELECT
+            t.table_schema AS schema,
+            t.table_name,
+            e.entity_name,
+            l.loading_finish_dttm AS error_time
+        FROM last_state l
+        JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+        LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+        WHERE l.loading_state = 'FAILED'
+        ORDER BY l.loading_finish_dttm DESC
+    """
 
-    incidents.sort(key=lambda x: x["last_failure_time"], reverse=True)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(query)).mappings().all()
 
-    return incidents
+        failures = []
+        for r in rows:
+            row = dict(r)
+            row["error_time"] = serialize_datetime(row.get("error_time"))
+            failures.append(row)
+
+        if not failures:
+            return []
+
+        grouped = group_failures(failures)
+        by_entity = defaultdict(list)
+
+        for group in grouped:
+            if not group:
+                continue
+            entity = group[0].get("entity_name") or "UNKNOWN"
+            by_entity[entity].extend(group)
+
+        incidents = []
+        for entity, group_rows in by_entity.items():
+            failed_tables = set()
+            last_failure = None
+            for r in group_rows:
+                table_fqn = f"{r['schema']}.{r['table_name']}"
+                failed_tables.add(table_fqn)
+                if not last_failure or r["error_time"] > last_failure:
+                    last_failure = r["error_time"]
+
+            incidents.append(
+                {
+                    "entity": entity,
+                    "severity": "CRITICAL",
+                    "failed_tables": len(failed_tables),
+                    "root_tables": sorted(failed_tables)[:3],
+                    "last_failure_time": last_failure,
+                }
+            )
+
+        incidents.sort(key=lambda x: x["last_failure_time"], reverse=True)
+        return incidents
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @router.get("/api/incidents/history")

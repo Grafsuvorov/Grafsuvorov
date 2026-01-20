@@ -35,9 +35,9 @@ const SCHEMA_PRIORITY = {
   default: 50,
 };
 
-const ROW_HEIGHT = 44;      // фиксированная высота строкиО
-const HEADER_OFFSET = 90;   // запас под оси/заголовок
-const DM_EXTRA_OFFSET = 20 * 60; // +20 минут вправо для dm
+const ROW_HEIGHT = 44;      // fixed row height
+const HEADER_OFFSET = 90;   // space for axes/header
+const DM_EXTRA_OFFSET = 20 * 60; // +20 minutes for dm offset
 
 /* =========================================================
    COMPONENT
@@ -56,7 +56,7 @@ export default function GanttChart({ schema, table }) {
 
     fetch(`http://localhost:8000/api/gantt/${schema}/${table}`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Ошибка загрузки данных")
+        res.ok ? res.json() : Promise.reject("Failed to load data")
       )
       .then((raw) => {
         const latestByTable = Object.values(
@@ -83,11 +83,11 @@ export default function GanttChart({ schema, table }) {
   }, [schema, table]);
 
   if (error) {
-    return <div className="card-error">Ошибка: {error}</div>;
+    return <div className="card-error">Error: {error}</div>;
   }
 
   if (!data.length) {
-    return <div className="card-muted">Нет данных</div>;
+    return <div className="card-muted">No data</div>;
   }
 
   /* ----------------------------------------------------- */
@@ -96,7 +96,7 @@ export default function GanttChart({ schema, table }) {
 
   const minStart = Math.min(...data.map((d) => d.offset));
 
-  // мягкое ограничение длительности (без логарифмов)
+  // soft duration cap (no logs)
   const normalizeDuration = (seconds) => {
     const min = 6;
     const max = 140;
@@ -149,7 +149,7 @@ export default function GanttChart({ schema, table }) {
           color: "#e5e7eb",
         }}
       >
-        Хронология загрузки зависимых таблиц
+        Dependency load timeline
       </div>
 
       {/* CHART */}
@@ -173,7 +173,7 @@ export default function GanttChart({ schema, table }) {
               type="number"
               domain={[0, maxX]}
               tickFormatter={(v) =>
-                new Date(minStart + v * 1000).toLocaleTimeString("ru-RU")
+                new Date(minStart + v * 1000).toLocaleTimeString("en-GB")
               }
               tick={{ fill: "#9ca3af", fontSize: 11 }}
               axisLine={{ stroke: "rgba(255,255,255,.1)" }}
@@ -223,8 +223,8 @@ export default function GanttChart({ schema, table }) {
                       {d.name}
                     </div>
                     <div>
-                      Длительность:{" "}
-                      {Math.round(d.duration / 60)} мин
+                      Duration:{" "}
+                      {Math.round(d.duration / 60)} min
                     </div>
                     {d.is_bad && (
                       <div
@@ -233,7 +233,7 @@ export default function GanttChart({ schema, table }) {
                           marginTop: 6,
                         }}
                       >
-                        ⚠ блокирует последующие витрины
+                        ⚠ blocks downstream marts
                       </div>
                     )}
                   </div>
@@ -251,7 +251,7 @@ export default function GanttChart({ schema, table }) {
               isAnimationActive={false}
               shape={({ x, y, width, height, payload, index }) => (
                 <>
-                  {/* фон строки для ровной сетки */}
+                  {/* row background for grid */}
                   <rect
                     x={0}
                     y={y - 6}

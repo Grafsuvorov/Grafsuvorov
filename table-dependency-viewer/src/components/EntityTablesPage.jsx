@@ -9,7 +9,7 @@ export default function EntityTablesPage() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Берём entityId из URL (regex, т.к. реального Route нет)
+  // Resolve entityId from the URL path.
   const entityId = useMemo(() => {
     const m = location.pathname.match(/^\/entity\/(\d+)\/tables$/);
     return m ? m[1] : null;
@@ -17,21 +17,21 @@ export default function EntityTablesPage() {
 
   const [entityName] = useState(new URLSearchParams(location.search).get("name") || "");
 
-  // Данные
+  // Data
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
 
-  // === Фильтр ТОЛЬКО по схеме ===
+  // Filters
   const [schemaQuery, setSchemaQuery] = useState("");
   const [tableQuery, setTableQuery] = useState("");
   const [staleOnly, setStaleOnly] = useState(false);
   const [showSug, setShowSug] = useState(false);
-  const [activeIdx, setActiveIdx] = useState(-1); // для клавиатуры
+  const [activeIdx, setActiveIdx] = useState(-1); // keyboard navigation
   const boxRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Загрузка таблиц по сущности
+  // Load tables for the entity
   useEffect(() => {
     if (!entityId) return;
     setLoading(true);
@@ -44,23 +44,23 @@ export default function EntityTablesPage() {
       .then((data) => setRows(Array.isArray(data) ? data : []))
       .catch((e) => {
         console.error(e);
-        setErr('Не удалось загрузить таблицы сущности');
+        setErr("Failed to load entity tables");
       })
       .finally(() => setLoading(false));
   }, [entityId]);
 
-  // Полный список схем
+  // Schema list
   const allSchemas = useMemo(() => {
     const s = new Set(rows.map((r) => r.schema_name ?? r.table_schema).filter(Boolean));
     return Array.from(s).sort((a,b) => a.localeCompare(b));
   }, [rows]);
 
-  // Подсказки (typeahead). Пустой поиск — показываем топ-12 схем
+  // Typeahead suggestions
   const suggestions = useMemo(() => {
     const q = schemaQuery.trim().toLowerCase();
     let arr = allSchemas;
     if (q) {
-      // ранжирование: сначала "начинается с", затем "содержит"
+      // rank: starts-with first, then contains
       const starts = arr.filter(s => s.toLowerCase().startsWith(q));
       const contains = arr.filter(s => !s.toLowerCase().startsWith(q) && s.toLowerCase().includes(q));
       arr = [...starts, ...contains];
@@ -68,7 +68,7 @@ export default function EntityTablesPage() {
     return arr.slice(0, 12);
   }, [allSchemas, schemaQuery]);
 
-  // Фильтрация строк
+  // Filter rows
   const filtered = useMemo(() => {
     const q = schemaQuery.trim().toLowerCase();
     const t = tableQuery.trim().toLowerCase();
@@ -132,7 +132,7 @@ export default function EntityTablesPage() {
     return { total, schemas, latest, staleCount };
   }, [normalizedRows]);
 
-  // Клик вне блока — закрыть подсказки
+  // Close suggestions on outside click
   useEffect(() => {
     const onClick = (e) => {
       if (boxRef.current && !boxRef.current.contains(e.target)) {
@@ -144,7 +144,7 @@ export default function EntityTablesPage() {
     return () => document.removeEventListener('mousedown', onClick);
   }, []);
 
-  // Навигация по подсказкам с клавиатуры
+  // Keyboard navigation for suggestions
   const onKeyDown = (e) => {
     if (!showSug || suggestions.length === 0) {
       if (e.key === 'Escape') setShowSug(false);
@@ -187,47 +187,47 @@ export default function EntityTablesPage() {
       <div className="entity-hero">
         <div>
           <div className="entity-title">
-            {entityName ? `Сущность ${entityName}` : "Таблицы сущности"}
+            {entityName ? `Entity ${entityName}` : "Entity tables"}
           </div>
           <div className="entity-subtitle">
-            {entityId ? `ID: ${entityId}` : "Обзор таблиц и последних загрузок"}
+            {entityId ? `ID: ${entityId}` : "Tables and recent loads"}
           </div>
         </div>
         <div className="entity-toolbar">
           <button className="btn btn-ghost" onClick={() => navigate("/entity_schedule")}>
-            К сущностям →
+            Back to entities →
           </button>
         </div>
       </div>
 
       <section className="cc-surface">
-        <div className="section-title">Сводка</div>
+        <div className="section-title">Summary</div>
         <div className="entity-kpis">
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Таблиц</div>
+            <div className="entity-kpi-label">Tables</div>
             <div className="entity-kpi-value">{summary.total}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Просрочено</div>
+            <div className="entity-kpi-label">Stale</div>
             <div className="entity-kpi-value">{summary.staleCount}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Схем</div>
+            <div className="entity-kpi-label">Schemas</div>
             <div className="entity-kpi-value">{summary.schemas}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Последняя загрузка</div>
+            <div className="entity-kpi-label">Latest load</div>
             <div className="entity-kpi-value">{summary.latest ? summary.latest.toISOString().slice(0, 19).replace("T", " ") : "—"}</div>
           </div>
         </div>
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Поиск и фильтры</div>
+        <div className="section-title">Search & filters</div>
         <div className="entity-filter-grid">
           <input
             className="entity-search"
-            placeholder="Фильтр по таблице"
+            placeholder="Filter by table"
             value={tableQuery}
             onChange={(e) => setTableQuery(e.target.value)}
           />
@@ -236,7 +236,7 @@ export default function EntityTablesPage() {
               ref={inputRef}
               type="text"
               className="entity-search"
-              placeholder="Фильтр по схеме"
+              placeholder="Filter by schema"
               value={schemaQuery}
               onChange={(e) => { setSchemaQuery(e.target.value); setShowSug(true); setActiveIdx(-1); }}
               onFocus={() => setShowSug(true)}
@@ -247,7 +247,7 @@ export default function EntityTablesPage() {
                 type="button"
                 onClick={clearFilter}
                 className="entity-filter-clear"
-                title="Сбросить"
+                title="Clear"
               >
                 ×
               </button>
@@ -271,23 +271,23 @@ export default function EntityTablesPage() {
               className={`pill ${staleOnly ? "pill-active" : ""}`}
               onClick={() => setStaleOnly((prev) => !prev)}
             >
-              Только просроченные
+              Stale only
             </button>
           </div>
         </div>
 
-        {loading && <div className="muted">Загрузка…</div>}
+        {loading && <div className="muted">Loading…</div>}
         {err && <div className="dep-error-title">{err}</div>}
 
         {grouped.length === 0 && !loading && (
-          <div className="muted">Нет строк, подходящих под фильтр</div>
+          <div className="muted">No tables match the filters</div>
         )}
 
         {grouped.map((group) => (
           <div key={group.schema} className="entity-schema-block">
             <div className="entity-schema-header">
               <div className="entity-schema-title">{group.schema}</div>
-              <div className="entity-schema-count">{group.rows.length} таблиц</div>
+              <div className="entity-schema-count">{group.rows.length} tables</div>
             </div>
             <div className="entity-table-list">
               {group.rows.map((r) => (
@@ -298,17 +298,17 @@ export default function EntityTablesPage() {
                   </div>
                   <div className="entity-table-meta">
                     {r.stale ? (
-                      <span className="stale-pill">Просрочено</span>
+                      <span className="stale-pill">Stale</span>
                     ) : (
                       <span className="ok-pill">OK</span>
                     )}
-                    <span className="muted">{r.ageHours !== null ? `${r.ageHours} ч` : "нет данных"}</span>
+                    <span className="muted">{r.ageHours !== null ? `${r.ageHours} h` : "no data"}</span>
                   </div>
                   <button
                     className="btn btn-ghost entity-table-action"
-                    onClick={() => navigate(`/?view=table_info&table=${encodeURIComponent(r.fqn)}`)}
+                    onClick={() => navigate(`/table/${r.schema}/${r.table}`)}
                   >
-                    Карточка таблицы
+                    Table Card
                   </button>
                 </div>
               ))}

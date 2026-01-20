@@ -8,7 +8,7 @@ export default function InconsistencyPage({ onBack }) {
   useEffect(() => {
     fetch('http://localhost:8000/api/inconsistencies')
       .then(res => {
-        if (!res.ok) throw new Error('Ошибка при загрузке данных');
+        if (!res.ok) throw new Error("Failed to load data");
         return res.json();
       })
       .then(data => setViolations(data))
@@ -18,24 +18,24 @@ export default function InconsistencyPage({ onBack }) {
 
   return (
     <div className="inconsistency-page">
-      <button onClick={onBack} style={{ marginBottom: 10 }}>← Назад</button>
-      <h2 className="center">🔁 Нарушения последовательности загрузки</h2>
+      <button onClick={onBack} style={{ marginBottom: 10 }}>← Back</button>
+      <h2 className="center">🔁 Load order violations</h2>
 
-      {loading && <p className="center muted">Загрузка...</p>}
-      {error && <p className="center error">Ошибка: {error}</p>}
+      {loading && <p className="center muted">Loading...</p>}
+      {error && <p className="center error">Error: {error}</p>}
 
       {violations.length === 0 && !loading && (
-        <p className="center">✅ Нарушений не найдено</p>
+        <p className="center">✅ No violations found</p>
       )}
 
       {violations.length > 0 && (
         <table>
           <thead>
             <tr>
-              <th>Источник</th>
-              <th>⏱ Последняя загрузка источника</th>
-              <th>Зависимая таблица</th>
-              <th>⏱ Последняя загрузка зависимой</th>
+              <th>Source</th>
+              <th>⏱ Source last load</th>
+              <th>Dependent table</th>
+              <th>⏱ Dependent last load</th>
             </tr>
           </thead>
           <tbody>

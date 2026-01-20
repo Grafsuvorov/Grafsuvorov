@@ -146,7 +146,7 @@ export default function HomePage({ onSelectTable }) {
       console.error("Impact load error:", err);
       setImpactMap((prev) => ({
         ...prev,
-        [target]: { state: "error", rows: [], error: "Не удалось загрузить список влияния." },
+        [target]: { state: "error", rows: [], error: "Failed to load impact list." },
       }));
     }
   };
@@ -182,7 +182,7 @@ export default function HomePage({ onSelectTable }) {
     fetch(
       `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=true`
     )
-      .then((res) => (res.ok ? res.json() : Promise.reject("Ошибка загрузки связей")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load edges")))
       .then((data) => {
         setEntityLinkDetails((prev) => ({
           ...prev,
@@ -226,78 +226,100 @@ export default function HomePage({ onSelectTable }) {
     return "stable";
   }, [history]);
 
+  const healthScore = useMemo(() => {
+    const base = 100;
+    const incidentPenalty = Math.min(activeIncidents.length * 15, 45);
+    const errorPenalty = metrics?.error_count ? Math.min(metrics.error_count * 2, 30) : 0;
+    const breachPenalty = Math.min(orderBreaches.length * 3, 25);
+    const score = Math.max(0, Math.round(base - incidentPenalty - errorPenalty - breachPenalty));
+    let level = "Healthy";
+    if (score < 65) level = "Critical";
+    else if (score < 85) level = "Degraded";
+    return { score, level };
+  }, [activeIncidents.length, metrics?.error_count, orderBreaches.length]);
+
   return (
     <div className="container cc-page">
-
-      {/* ===== HEADER ===== */}
-      <section className="cc-header-zone">
-        <h1>Control Center</h1>
-        <div className="cc-subtitle">
-          Инциденты, стабильность и операционная надёжность системы
+      <section className="cc-hero">
+        <div className="cc-hero-main">
+          <div className="cc-hero-title">DWH Control Center</div>
+          <div className="cc-hero-subtitle">
+            Operational overview of incidents, load reliability, and dependency risks.
+          </div>
+          <div className="cc-hero-status">
+            <span className={`status-dot ${activeIncidents.length ? "degraded" : ""}`} />
+            <span className="status-text">
+              {activeIncidents.length ? "Active incidents detected" : "System is operating normally"}
+            </span>
+            {incidentTrend && (
+              <span className="status-meta">
+                Incident trend:&nbsp;
+                {incidentTrend === "up" && "up ↑"}
+                {incidentTrend === "down" && "down ↓"}
+                {incidentTrend === "stable" && "stable"}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="cc-hero-health">
+          <div className="health-card">
+            <div className="health-label">DWH health</div>
+            <div className="health-score">{healthScore.score}</div>
+            <div className={`health-badge health-${healthScore.level.toLowerCase()}`}>
+              {healthScore.level}
+            </div>
+            <div className="health-meta">
+              Based on active incidents, failed loads, and order breaches.
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ===== OVERVIEW ===== */}
       {metrics && (
         <section className="cc-overview-bar">
           <div className="overview-item">
             <span className="overview-value">{metrics.total_tables}</span>
-            <span className="overview-label">Таблиц</span>
+            <span className="overview-label">Tables</span>
           </div>
 
           <div className="overview-item danger">
             <span className="overview-value">{metrics.error_count}</span>
-            <span className="overview-label">Ошибок</span>
+            <span className="overview-label">Load failures (24h)</span>
           </div>
 
           <div className="overview-item">
             <span className="overview-value">
               {metrics.avg_duration_minutes ?? "—"}
             </span>
-            <span className="overview-label">Среднее, мин</span>
+            <span className="overview-label">Avg duration (24h), min</span>
           </div>
 
           <div className="overview-item">
             <span className="overview-value">{metrics.active_entities}</span>
-            <span className="overview-label">Сущностей</span>
+            <span className="overview-label">Entities</span>
           </div>
         </section>
       )}
 
-      {/* ===== STATUS ===== */}
-      <section className="cc-status-line">
-        <span
-          className={`status-dot ${
-            activeIncidents.length ? "degraded" : ""
-          }`}
-        />
-        <span className="status-text">
-          {activeIncidents.length
-            ? "Обнаружены активные инциденты"
-            : "Система работает штатно"}
-        </span>
-
-        {incidentTrend && (
-          <span className="status-meta">
-            Тренд инцидентов:&nbsp;
-            {incidentTrend === "up" && "рост ↑"}
-            {incidentTrend === "down" && "спад ↓"}
-            {incidentTrend === "stable" && "стабильно"}
-          </span>
-        )}
+      <section className="cc-surface">
+        <div className="section-title">Why this matters</div>
+        <div className="cc-hero-copy">
+          Use this page to identify incidents that block analytics, spot late upstream loads,
+          and prioritize entities at risk. The health score summarizes operational stability at a glance.
+        </div>
       </section>
 
       {/* ===== ACTIVE INCIDENTS ===== */}
-      {loading && <div className="muted">Загрузка…</div>}
+      {loading && <div className="muted">Loading...</div>}
 
       {!loading && activeIncidents.length === 0 && (
         <section className="cc-surface">
           <div className="system-ok system-ok-compact">
             <div className="system-ok-icon">✓</div>
             <div>
-              <div className="system-ok-title">Активных инцидентов нет</div>
+              <div className="system-ok-title">No active incidents</div>
               <div className="system-ok-sub">
-                За последние 24 часа система отработала без ошибок
+                No failures in the last 24 hours
               </div>
             </div>
           </div>
@@ -307,7 +329,7 @@ export default function HomePage({ onSelectTable }) {
       {!loading && activeIncidents.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Активные инциденты
+            Active incidents
             <span className="section-meta">{activeIncidents.length}</span>
           </div>
 
@@ -329,15 +351,15 @@ export default function HomePage({ onSelectTable }) {
                 </div>
 
                 <div className="entity-meta">
-                  Упало таблиц: {i.failed_tables}
+                  Failed tables: {i.failed_tables}
                 </div>
 
                 <div className="entity-meta">
-                  Последнее падение: {i.last_failure_time}
+                  Last failure: {i.last_failure_time}
                 </div>
 
                 <div className="incident-hint">
-                  Нажмите для разбора инцидента →
+                  Click to review incident →
                 </div>
               </div>
             ))}
@@ -349,7 +371,7 @@ export default function HomePage({ onSelectTable }) {
       {!loading && orderBreaches.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Нарушения порядка загрузки
+            Load order breaches
             <span className="section-meta">{orderBreaches.length}</span>
           </div>
           <div className="order-list">
@@ -359,7 +381,7 @@ export default function HomePage({ onSelectTable }) {
                   <div>
                     <div className="order-row-target mono" title={breach.target_fqn}>{breach.target_fqn}</div>
                     <div className="order-row-meta">
-                      Источник стартовал позже: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
+                      Upstream started later: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
                     </div>
                   </div>
                   <div className={`order-pill order-pill-${breach.severity?.toLowerCase() || "warning"}`}>
@@ -374,9 +396,9 @@ export default function HomePage({ onSelectTable }) {
 
                 </div>
                 <p className="order-row-text">
-                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} стартовала
+                  {breach.worst_upstream} finished at {formatTime(breach.worst_upstream_time)}, while {breach.target_fqn} started
                   {" "}
-                  {formatTime(breach.target_last_load)}. Задержка +{breach.gap_minutes} мин.
+                  {formatTime(breach.target_last_load)}. Delay +{breach.gap_minutes} min.
                 </p>
 
 
@@ -385,22 +407,22 @@ export default function HomePage({ onSelectTable }) {
                     className="btn btn-secondary"
                     onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn }, "home")}
                   >
-                    Карточка таблицы
+                    Table card
                   </button>
                   <button
                     className="btn btn-ghost"
                     onClick={() => toggleImpact(breach.target_fqn)}
                   >
-                    {impactOpen[breach.target_fqn] ? "Скрыть влияние" : "Показать влияние"}
+                    {impactOpen[breach.target_fqn] ? "Hide impact" : "Show impact"}
                   </button>
                 </div>
                 {impactOpen[breach.target_fqn] && (
                   <div className="order-impact">
                     <div className="order-impact-header">
                       <div>
-                        <div className="order-impact-title">Затронутые таблицы</div>
+                        <div className="order-impact-title">Affected tables</div>
                         <div className="muted">
-                          Построено по зависимостям от {breach.target_fqn}
+                          Built from dependencies of {breach.target_fqn}
                         </div>
                       </div>
                       <div className="order-impact-count">
@@ -408,17 +430,17 @@ export default function HomePage({ onSelectTable }) {
                       </div>
                     </div>
                     {impactMap[breach.target_fqn]?.state === "loading" && (
-                      <div className="muted">Загружаем влияние…</div>
+                      <div className="muted">Loading impact...</div>
                     )}
                     {impactMap[breach.target_fqn]?.state === "error" && (
                       <div className="card dep-error">
-                        <div className="dep-error-title">Ошибка загрузки</div>
+                        <div className="dep-error-title">Load error</div>
                         <div className="muted">{impactMap[breach.target_fqn]?.error}</div>
                       </div>
                     )}
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length === 0 && (
-                        <div className="card muted">Нет зависимых таблиц.</div>
+                        <div className="card muted">No dependent tables.</div>
                       )}
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length > 0 && (() => {
@@ -500,9 +522,9 @@ export default function HomePage({ onSelectTable }) {
                                       <span className="muted">{item.entity || "—"}</span>
                                       <span className="order-impact-path">
                                         {item.path && item.path.length > 2
-                                          ? `через ${item.path.slice(1, -1).join(" → ")}`
+                                          ? `via ${item.path.slice(1, -1).join(" → ")}`
                                           : item.path
-                                            ? "прямая зависимость"
+                                            ? "direct dependency"
                                             : "—"}
                                       </span>
                                     </div>
@@ -513,7 +535,7 @@ export default function HomePage({ onSelectTable }) {
                                     className="order-impact-more"
                                     onClick={() => toggleImpactGroup(breach.target_fqn, label)}
                                   >
-                                    {isOpen ? "Свернуть список" : `Показать все (${filteredItems.length})`}
+                                    {isOpen ? "Collapse list" : `Show all (${filteredItems.length})`}
                                   </button>
                                 )}
                               </div>
@@ -522,12 +544,12 @@ export default function HomePage({ onSelectTable }) {
                         return (
                           <>
                             <div className="order-impact-note muted">
-                              Список включает косвенные зависимости. Для каждой таблицы показан путь от источника.
+                              The list includes indirect dependencies. Each table shows the path from the source.
                             </div>
                             <div className="order-runbook">
-                              <div className="order-runbook-title">Перезапуск сущностей</div>
+                              <div className="order-runbook-title">Entity rerun order</div>
                               <div className="muted order-runbook-sub">
-                                Рекомендуемый порядок для пересчёта после {breach.target_fqn}
+                                Recommended recalculation order after {breach.target_fqn}
                               </div>
                               <ol className="order-runbook-list">
                                 {visibleEntities.map((entity, idx) => (
@@ -546,7 +568,7 @@ export default function HomePage({ onSelectTable }) {
                                       </span>
                                     </div>
                                     <div className="order-runbook-meta">
-                                      Таблиц: {entity.tables.length} · ближайшая зависимость: {entity.minDepth} шаг
+                                      Tables: {entity.tables.length} · nearest dependency: {entity.minDepth} step
                                     </div>
                                     <div className="order-runbook-tables">
                                       {entity.tables.slice(0, 3).map((table) => (
@@ -569,8 +591,8 @@ export default function HomePage({ onSelectTable }) {
                                   onClick={() => toggleImpactEntities(breach.target_fqn)}
                                 >
                                   {showAllEntities
-                                    ? "Свернуть список"
-                                    : `Показать все сущности (${entityList.length})`}
+                                    ? "Collapse list"
+                                    : `Show all entities (${entityList.length})`}
                                 </button>
                               )}
                             </div>
@@ -592,7 +614,7 @@ export default function HomePage({ onSelectTable }) {
       {!loading && (entityCycles.length > 0 || entityMutual.length > 0) && (
         <section className="cc-surface">
           <div className="section-title">
-            Циклические зависимости сущностей
+            Entity cycles
             <span className="section-meta">
               {entityCycles.length + entityMutual.length}
             </span>
@@ -602,9 +624,9 @@ export default function HomePage({ onSelectTable }) {
               <article key={`cycle-${idx}`} className="order-row">
                 <header className="order-row-header">
                   <div>
-                    <div className="order-row-target mono">Цикл</div>
+                    <div className="order-row-target mono">Cycle</div>
                     <div className="order-row-meta">
-                      Сущностей: {cycle.size}
+                      Entities: {cycle.size}
                     </div>
                   </div>
                   <div className="order-pill order-pill-warning">CYCLE</div>
@@ -624,7 +646,7 @@ export default function HomePage({ onSelectTable }) {
               <article key={`mutual-${idx}`} className="order-row">
                 <header className="order-row-header">
                   <div>
-                    <div className="order-row-target mono">Взаимозависимость</div>
+                    <div className="order-row-target mono">Mutual dependency</div>
                     <div className="order-row-meta">
                       {pair.a} ↔ {pair.b}
                     </div>
@@ -638,7 +660,7 @@ export default function HomePage({ onSelectTable }) {
                 </div>
                 <div className="order-row-actions">
                   <button className="btn btn-ghost" onClick={() => toggleEntityLink(pair, key)}>
-                    {entityLinkOpen[key] ? "Скрыть таблицы" : "Показать таблицы"}
+                    {entityLinkOpen[key] ? "Hide tables" : "Show tables"}
                   </button>
                   <div className="muted">
                     {pair.edges_ab_count || 0} → {pair.edges_ba_count || 0}
@@ -646,7 +668,7 @@ export default function HomePage({ onSelectTable }) {
                 </div>
                 {entityLinkOpen[key] && (
                   <div className="order-impact">
-                    <div className="order-impact-title">Связующие таблицы</div>
+                    <div className="order-impact-title">Connecting tables</div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
                       <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
                       <span className="order-arrow">→</span>
@@ -677,7 +699,7 @@ export default function HomePage({ onSelectTable }) {
                         </span>
                       ))}
                       {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
-                        <span className="muted">Нет примеров {pair.a} → {pair.b}</span>
+                        <span className="muted">No examples for {pair.a} → {pair.b}</span>
                       )}
                     </div>
                     <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -710,7 +732,7 @@ export default function HomePage({ onSelectTable }) {
                         </span>
                       ))}
                       {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (
-                        <span className="muted">Нет примеров {pair.b} → {pair.a}</span>
+                        <span className="muted">No examples for {pair.b} → {pair.a}</span>
                       )}
                     </div>
                     <div className="order-row-actions" style={{ marginTop: 8 }}>
@@ -718,10 +740,10 @@ export default function HomePage({ onSelectTable }) {
                         className="btn btn-secondary"
                         onClick={() => loadEntityLinkDetails(pair, key)}
                       >
-                        Показать все таблицы
+                        Show all tables
                       </button>
-                      {details?.state === "loading" && <span className="muted">Загрузка…</span>}
-                      {details?.state === "error" && <span className="muted">Ошибка загрузки</span>}
+                      {details?.state === "loading" && <span className="muted">Loading...</span>}
+                      {details?.state === "error" && <span className="muted">Load error</span>}
                     </div>
                   </div>
                 )}
@@ -735,7 +757,7 @@ export default function HomePage({ onSelectTable }) {
       {!loading && tableCycles.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Циклы таблиц
+            Table cycles
             <span className="section-meta">{tableCycles.length}</span>
           </div>
           <div className="order-list">
@@ -744,7 +766,7 @@ export default function HomePage({ onSelectTable }) {
                 <header className="order-row-header">
                   <div>
                     <div className="order-row-target mono">Table cycle</div>
-                    <div className="order-row-meta">Таблиц: {cycle.size}</div>
+                    <div className="order-row-meta">Tables: {cycle.size}</div>
                   </div>
                   <div className="order-pill order-pill-warning">CYCLE</div>
                 </header>
@@ -764,18 +786,18 @@ export default function HomePage({ onSelectTable }) {
       {!loading && history.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            История инцидентов (300 дней)
-            <span className="section-meta">топ проблемных таблиц</span>
+            Incident history (300 days)
+            <span className="section-meta">top problematic tables</span>
           </div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            Клик по строке откроет карточку инцидента.
+            Click a row to open the incident card.
           </div>
           <div className="history-board">
             <div className="history-board-head">
               <span>#</span>
-              <span>Таблица</span>
-              <span>Инцидентов</span>
-              <span>Последний случай</span>
+              <span>Table</span>
+              <span>Incidents</span>
+              <span>Last occurrence</span>
             </div>
             {history.map((h, idx) => (
               <button
@@ -799,7 +821,7 @@ export default function HomePage({ onSelectTable }) {
     if (!value) return "—";
     const dt = new Date(value.replace(" ", "T"));
     if (Number.isNaN(dt.getTime())) return value;
-    return dt.toLocaleString("ru-RU", {
+    return dt.toLocaleString("en-GB", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
@@ -810,10 +832,10 @@ export default function HomePage({ onSelectTable }) {
   const severityLabel = (sev) => {
     switch (sev) {
       case "CRITICAL":
-        return "Критично";
+        return "Critical";
       case "MAJOR":
-        return "Важно";
+        return "Major";
       default:
-        return "Предупреждение";
+        return "Warning";
     }
   };

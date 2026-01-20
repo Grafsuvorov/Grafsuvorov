@@ -16,7 +16,7 @@ export default function OrderBreachesBlock() {
   return (
     <div className="card">
       <div className="card-title">
-        Нарушения порядка загрузки
+        Load order breaches
       </div>
 
       <div className="grid grid-3">
@@ -38,7 +38,7 @@ export default function OrderBreachesBlock() {
               <span>{item.worst_upstream}</span>
 
               <span>Gap:</span>
-              <span>+{item.gap_minutes} мин</span>
+              <span>+{item.gap_minutes} min</span>
             </div>
 
             <div className="actions">
@@ -47,7 +47,7 @@ export default function OrderBreachesBlock() {
                   navigate(`/order-breach/${item.target_fqn}`)
                 }
               >
-                Детали
+                Details
               </button>
 
               <button
@@ -56,7 +56,7 @@ export default function OrderBreachesBlock() {
                   navigate(`/dependency-graph/${item.target_fqn}`)
                 }
               >
-                Граф
+                Graph
               </button>
             </div>
           </div>

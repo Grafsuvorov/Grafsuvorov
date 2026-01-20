@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
@@ -9,8 +9,8 @@ export default function TableCard({
   schema,
   tableName,
   onBack,
-  setSchema,
-  setTableName,
+  onNavigateTable,
+  onOpenImpact,
   autoShowGraph = false,
   tableContext = null,
 }) {
@@ -32,6 +32,9 @@ export default function TableCard({
   const [showGantt, setShowGantt] = useState(false);
   const [activeSqlBlock, setActiveSqlBlock] = useState(null);
   const [isSqlModalOpen, setSqlModalOpen] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -41,12 +44,26 @@ export default function TableCard({
 
     fetch(`${API_BASE}/api/card/${schema}/${tableName}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Не удалось получить метаданные таблицы");
+        if (!res.ok) throw new Error("Failed to fetch table metadata");
         return res.json();
       })
       .then(setMeta)
       .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoadingMeta(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setHistoryLoading(true);
+    setHistoryError(null);
+    fetch(`${API_BASE}/api/table-history/${schema}/${tableName}?limit=10`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table history")))
+      .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setHistoryError(typeof err === "string" ? err : "Failed to load table history");
+      })
+      .finally(() => setHistoryLoading(false));
   }, [schema, tableName]);
 
   const status = useMemo(() => {
@@ -85,30 +102,30 @@ export default function TableCard({
     if (!meta) return [];
     return [
       {
-        label: "Последняя загрузка",
+        label: "Last successful load",
         value: meta.last_success_time || "—",
-        hint: "по данным логов",
+        hint: "log-based",
       },
       {
-        label: "Средняя длительность",
+        label: "Average duration",
         value:
           meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
-            ? `${meta.avg_duration_minutes} мин`
+            ? `${meta.avg_duration_minutes} min`
             : "—",
-        hint: "только успешные загрузки",
+        hint: "successful runs only",
       },
       {
-        label: "Режим загрузки",
+        label: "Load mode",
         value: meta.table_load_mode || "—",
-        hint: "конфигурация ETL",
+        hint: "ETL configuration",
       },
       {
-        label: "Размер таблицы",
+        label: "Table size",
         value:
           meta.table_size_mb !== null && meta.table_size_mb !== undefined
             ? `${meta.table_size_mb} MB`
             : "—",
-        hint: "оценка PostgreSQL",
+        hint: "PostgreSQL estimate",
       },
     ];
   }, [meta]);
@@ -171,7 +188,7 @@ export default function TableCard({
 
     fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
+        res.ok ? res.json() : Promise.reject("Failed to build dependency graph"),
       )
       .then((data) => {
         const nodes = Array.isArray(data.nodes) ? data.nodes : [];
@@ -190,10 +207,11 @@ export default function TableCard({
       })
       .catch((err) => {
         console.error(err);
-        setDepsError(typeof err === "string" ? err : "Ошибка загрузки графа");
+        setDepsError(typeof err === "string" ? err : "Failed to load graph");
       })
       .finally(() => setLoadingDeps(false));
   };
+
 
   const autoGraphRef = useRef({ key: "", fired: false });
   useEffect(() => {
@@ -215,7 +233,7 @@ export default function TableCard({
   const copyList = () => {
     if (!tableList.length) return;
     navigator.clipboard.writeText(tableList.join("\n"));
-    alert("Список таблиц скопирован");
+    alert("Table list copied");
   };
 
   const handleNodeClick = (newSchema, newTable) => {
@@ -227,8 +245,9 @@ export default function TableCard({
     setGraphTooLarge(false);
     setGraphStats({ nodes: 0, edges: 0 });
     setGraphTruncated(false);
-    setSchema(newSchema);
-    setTableName(newTable);
+    if (onNavigateTable) {
+      onNavigateTable(newSchema, newTable);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -236,11 +255,11 @@ export default function TableCard({
     return (
       <div className="table-page">
         <div className="card dep-error">
-          <div className="dep-error-title">Не удалось загрузить карточку</div>
+          <div className="dep-error-title">Failed to load table card</div>
           <div className="muted">{error}</div>
           <div style={{ marginTop: 12 }}>
             <button className="btn" onClick={onBack}>
-              ← Назад
+              ← Back
             </button>
           </div>
         </div>
@@ -251,7 +270,7 @@ export default function TableCard({
   if (loadingMeta || !meta) {
     return (
       <div className="table-page">
-        <div className="card muted">Загружаем карточку таблицы…</div>
+        <div className="card muted">Loading table card...</div>
       </div>
     );
   }
@@ -260,10 +279,10 @@ export default function TableCard({
     <div className="table-page">
       <div className="table-header">
         <button className="btn" onClick={onBack}>
-          ← Назад
+          ← Back
         </button>
         <div className="table-head-main">
-          <div className="table-head-label">Таблица</div>
+          <div className="table-head-label">Table</div>
           <div className="table-title">{tableFqn}</div>
           <div className="table-head-meta">
             <span>{meta.entity_name || "—"}</span>
@@ -279,9 +298,9 @@ export default function TableCard({
         <div className="table-health-card">
           <div className="table-health-header">
             <div>
-              <div className="table-health-title">Состояние загрузки</div>
+              <div className="table-health-title">Load health</div>
               <div className="table-health-subtitle muted">
-                По анализу успешных запусков в Slow/Unstable.
+                Based on successful runs in Slow/Unstable.
               </div>
             </div>
             {healthBadge && (
@@ -310,7 +329,7 @@ export default function TableCard({
           </div>
           {tableContext.low_sample && (
             <div className="table-health-note">
-              Мало запусков для стабильной оценки — используйте с осторожностью.
+              Not enough runs for stable assessment — use with caution.
             </div>
           )}
         </div>
@@ -326,33 +345,39 @@ export default function TableCard({
         ))}
 
         <div className="table-info-card table-actions">
-          <div className="table-card-label">Действия</div>
+          <div className="table-card-label">Actions</div>
           <div className="table-action-buttons">
             <button className="btn btn-secondary" onClick={loadDependencies}>
-              Показать граф зависимостей
+              Show dependency graph
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onOpenImpact?.(schema, tableName)}
+            >
+              Open impact graph
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => setShowGantt(!showGantt)}
             >
-              {showGantt ? "Скрыть диаграмму" : "Хронология загрузок"}
+              {showGantt ? "Hide timeline" : "Load timeline"}
             </button>
             <button
               className="btn btn-secondary"
               onClick={copyList}
               disabled={!tableList.length}
             >
-              Скопировать список
+              Copy dependency list
             </button>
             <button className="btn" onClick={onBack}>
-              Вернуться
+              Return
             </button>
           </div>
         </div>
       </div>
 
       <div className="table-section">
-        <div className="section-title">SQL-скрипты</div>
+        <div className="section-title">SQL scripts</div>
         <div className="table-sql-grid">
           {sqlSections.map((block) => {
             const hasSql = Boolean(block.sql && block.sql.length);
@@ -363,7 +388,7 @@ export default function TableCard({
                   <div className="table-sql-type-block">
                     <div className="table-sql-type mono">{block.title}</div>
                     <div className="table-sql-meta muted">
-                      {hasSql ? `${lines.length} строк · ${block.sql.length} символов` : "Скрипт отсутствует"}
+                      {hasSql ? `${lines.length} lines · ${block.sql.length} characters` : "Script not available"}
                     </div>
                   </div>
                   <div className="table-sql-actions">
@@ -372,7 +397,7 @@ export default function TableCard({
                       onClick={() => openSqlModal(block)}
                       disabled={!hasSql}
                     >
-                      Показать
+                      Open
                     </button>
                   </div>
                 </div>
@@ -383,35 +408,68 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">Граф зависимостей</div>
+        <div className="section-title">Recent runs (last 10)</div>
         <div className="card">
-          {loadingDeps && <div className="muted">Строим граф…</div>}
+          {historyLoading && <div className="muted">Loading recent runs...</div>}
+          {historyError && <div className="dep-error-title">{historyError}</div>}
+          {!historyLoading && !historyError && historyRows.length === 0 && (
+            <div className="muted">No recent runs found.</div>
+          )}
+          {!historyLoading && !historyError && historyRows.length > 0 && (
+            <div className="history-table">
+              <div className="history-table-head">
+                <span>Status</span>
+                <span>Start</span>
+                <span>Finish</span>
+                <span>Duration</span>
+                <span>Message</span>
+              </div>
+              {historyRows.map((row, idx) => (
+                <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
+                  <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
+                    {row.state || "UNKNOWN"}
+                  </span>
+                  <span>{row.start || "—"}</span>
+                  <span>{row.finish || "—"}</span>
+                  <span>{row.duration_minutes ?? "—"} min</span>
+                  <span className="history-message">{row.message || "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">Dependency graph</div>
+        <div className="card">
+          {loadingDeps && <div className="muted">Building graph...</div>}
           {depsError && (
             <div className="dep-error-title">{depsError}</div>
           )}
           {!loadingDeps && !depsError && !showGraph && (
-            <div className="muted">Нажмите «Показать граф зависимостей», чтобы отрисовать схему.</div>
+            <div className="muted">Click “Show dependency graph” to render.</div>
           )}
           {!loadingDeps && !depsError && graphTruncated && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Показан укороченный граф</div>
+              <div className="dep-error-title">Truncated graph shown</div>
               <div className="muted">
-                Ограничение по глубине зависимостей. Для полного охвата используйте entity-граф.
+                Depth-limited. Use the entity graph for full coverage.
               </div>
             </div>
           )}
           {!loadingDeps && !depsError && graphTooLarge && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Граф слишком большой</div>
+              <div className="dep-error-title">Graph is too large</div>
               <div className="muted">
-                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. В проде это может зависать.
+                Nodes: {graphStats.nodes}, edges: {graphStats.edges}. This may hang in production.
               </div>
               <div className="table-graph-actions" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" onClick={() => setShowGraph(true)}>
-                  Показать граф всё равно
+                  Render anyway
                 </button>
                 <button className="btn" onClick={() => setShowList(true)}>
-                  Показать список
+                  Show list
                 </button>
               </div>
             </div>
@@ -430,13 +488,13 @@ export default function TableCard({
           {(showGraph || showList) && (
             <div className="table-graph-actions">
               <button className="btn" onClick={() => setShowList(!showList)}>
-                {showList ? "Скрыть список" : "Показать список"}
+                {showList ? "Hide list" : "Show list"}
               </button>
               {showList && (
                 <div style={{ width: "100%" }}>
                   {graphTruncated && (
                     <div className="muted" style={{ marginTop: 10 }}>
-                      Граф ограничен по глубине, список отражает только текущий уровень.
+                      Depth-limited graph; list shows current slice only.
                     </div>
                   )}
                   <pre className="table-code" style={{ marginTop: 12 }}>
@@ -451,7 +509,7 @@ export default function TableCard({
 
       {showGantt && (
         <div className="table-section">
-          <div className="section-title">Хронология загрузок</div>
+          <div className="section-title">Load timeline</div>
           <div className="card">
             <GanttChart schema={schema} table={tableName} />
           </div>
@@ -465,16 +523,16 @@ export default function TableCard({
               <div>
                 <div className="sql-modal-type">{activeSqlBlock.title}</div>
                 <div className="sql-modal-meta">
-                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} строк
+                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} lines
                 </div>
               </div>
               <div className="sql-modal-actions">
-                <span className="sql-modal-hint">Используйте Ctrl+F для поиска</span>
+                <span className="sql-modal-hint">Use Ctrl+F to search</span>
                 <button
                   className="btn btn-secondary"
                   onClick={() => copySql(activeSqlBlock.sql)}
                 >
-                  Копировать
+                  Copy
                 </button>
                 <button className="btn btn-ghost" onClick={closeSqlModal}>
                   ✕

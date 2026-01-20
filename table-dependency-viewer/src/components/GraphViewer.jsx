@@ -381,9 +381,43 @@ export default function GraphViewer({
   return (
     <div className="dep-graph-wrapper">
       <div className="dep-graph-zones">
-        <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Источники</span>
-        <span>Текущая таблица</span>
-        <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>Потребители</span>
+        <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Sources</span>
+        <span>Current table</span>
+        <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>Consumers</span>
+      </div>
+      <div className="dep-graph-controls">
+        <div className="dep-graph-count muted">
+          Showing {graph.visibleNodes}/{graph.totalNodes} nodes · {graph.visibleEdges}/{graph.totalEdges} edges
+        </div>
+        <div className="dep-graph-actions">
+          {!usePreset && !showAll && (
+            <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
+              +1 depth
+            </button>
+          )}
+          {!usePreset && !showAll && onRequestFull && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (onRequestFull) onRequestFull();
+                setShowAll(true);
+              }}
+            >
+              Show all
+            </button>
+          )}
+          {!usePreset && showAll && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setShowAll(false);
+                setDepthLimit(DEFAULT_DEPTH);
+              }}
+            >
+              Collapse
+            </button>
+          )}
+        </div>
       </div>
       <div className="dep-graph-controls">
         <div className="dep-graph-count muted">
@@ -431,7 +465,7 @@ export default function GraphViewer({
             </span>
           ))}
         </div>
-        <div className="dep-graph-hint">Клик по узлу открывает карточку</div>
+        <div className="dep-graph-hint">Click a node to open the card</div>
       </div>
       <div className="dep-graph-canvas">
         <ReactFlow

@@ -14,31 +14,31 @@ export default function ErrorDashboard({ onSelectTable }) {
         setLoading(false);
       })
       .catch((err) => {
-        console.error("Ошибка при загрузке ошибок:", err);
+        console.error("Failed to load failures:", err);
         setLoading(false);
       });
   }, []);
 
   if (loading) {
-    return <div className="center">Загрузка ошибок...</div>;
+    return <div className="center">Loading failures...</div>;
   }
 
   if (errors.length === 0) {
-    return <div className="center">Ошибки загрузки не обнаружены.</div>;
+    return <div className="center">No load failures detected.</div>;
   }
 
   return (
     <div className="error-dashboard">
-      <h2>⚠ Ошибки загрузки</h2>
+      <h2>⚠ Load failures</h2>
       <table>
         <thead>
           <tr>
-            <th>Схема</th>
-            <th>Таблица</th>
-            <th>Тип</th>
-            <th>Сообщение об ошибке</th>
-            <th>Время ошибки</th>
-            <th>Последняя успешная загрузка</th>
+            <th>Schema</th>
+            <th>Table</th>
+            <th>Type</th>
+            <th>Error message</th>
+            <th>Error time</th>
+            <th>Last successful load</th>
           </tr>
         </thead>
         <tbody>

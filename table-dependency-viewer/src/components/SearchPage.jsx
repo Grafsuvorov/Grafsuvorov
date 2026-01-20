@@ -35,31 +35,31 @@ export default function SearchPage({ onSelectTable }) {
   return (
     <div className="page">
       <div className="card">
-        <div className="card-title">🔍 Поиск зависимостей</div>
+        <div className="card-title">🔍 Dependency Search</div>
 
         <input
           className="input"
           type="text"
-          placeholder="Введите имя таблицы…"
+          placeholder="Enter table name..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
 
         {loading && (
           <div className="muted" style={{ marginTop: 12 }}>
-            Загрузка списка таблиц…
+            Loading table list...
           </div>
         )}
 
         {!loading && query.length < 2 && (
           <div className="muted" style={{ marginTop: 12 }}>
-            Начните вводить минимум 2 символа
+            Type at least 2 characters
           </div>
         )}
 
         {!loading && filtered.length === 0 && query.length >= 2 && (
           <div className="muted" style={{ marginTop: 12 }}>
-            Совпадений не найдено
+            No matches found
           </div>
         )}
 

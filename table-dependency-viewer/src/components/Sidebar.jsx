@@ -37,6 +37,9 @@ export default function Sidebar({ currentPath, onChangeView }) {
               <button onClick={() => onChangeView("__slowest_tables__")}>
                 Slow Tables
               </button>
+              <button onClick={() => onChangeView("night_ops")}>
+                Night Ops
+              </button>
               <button onClick={() => onChangeView("__entity_schedule__")}>
                 Entities
               </button>

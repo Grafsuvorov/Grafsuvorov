@@ -16,6 +16,7 @@ import EntityShedule from "./components/EntityShedule.jsx";
 import EntityTablesPage from "./components/EntityTablesPage.jsx";
 import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
 import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
+import NightOpsPage from "./components/NightOpsPage.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -64,6 +65,10 @@ export default function App() {
       }
       if (target === "table_search") {
         navigate("/tables");
+        return;
+      }
+      if (target === "night_ops") {
+        navigate("/night-ops");
         return;
       }
 
@@ -154,6 +159,7 @@ export default function App() {
         <Route path="/sla" element={<SlaPage />} />
         <Route path="/table/:schema/:table" element={<TableRoute />} />
         <Route path="/impact/:schema/:table" element={<ImpactGraphPage />} />
+        <Route path="/night-ops" element={<NightOpsPage />} />
         <Route path="/dependencies" element={<DependenciesRoute />} />
         <Route path="/incident" element={<IncidentRoute />} />
         <Route path="/entity_schedule" element={<Navigate to="/entities" replace />} />

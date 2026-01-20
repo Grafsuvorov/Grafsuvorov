@@ -10,6 +10,7 @@ export default function EntityShedule() {
   const [loadingEntities, setLoadingEntities] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sharedMap, setSharedMap] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -22,6 +23,13 @@ export default function EntityShedule() {
       .then((data) => setEntities(Array.isArray(data) ? data : []))
       .catch(() => setError("Failed to load entities"))
       .finally(() => setLoadingEntities(false));
+  }, []);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/entities/shared?limit=3`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load shared tables")))
+      .then((data) => setSharedMap(data || {}))
+      .catch(() => setSharedMap({}));
   }, []);
 
   const openEntityTables = (row) => {
@@ -139,7 +147,20 @@ export default function EntityShedule() {
                   <div className="entity-meta-label">Interval</div>
                   <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
                 </div>
+                <div>
+                  <div className="entity-meta-label">Shared tables</div>
+                  <div className="entity-meta-value">
+                    {sharedMap[row.entity_name]?.count ?? 0}
+                  </div>
+                </div>
               </div>
+              {sharedMap[row.entity_name]?.tables?.length > 0 && (
+                <div className="entity-shared">
+                  {sharedMap[row.entity_name].tables.map((tbl) => (
+                    <span key={tbl} className="entity-shared-pill mono">{tbl}</span>
+                  ))}
+                </div>
+              )}
               <div className="entity-actions">
                 <button className="btn btn-secondary" onClick={() => openEntityTables(row)}>
                   Entity tables

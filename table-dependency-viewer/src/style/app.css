@@ -591,7 +591,7 @@ main.content {
 
 .night-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -605,6 +605,8 @@ main.content {
   flex-direction: column;
   gap: 6px;
   min-height: 86px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .night-kpi-label {
@@ -621,6 +623,9 @@ main.content {
   font-size: 20px;
   font-weight: 600;
   line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .night-columns {
@@ -668,6 +673,18 @@ main.content {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 1100px) {
+  .night-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .night-kpis {
+    grid-template-columns: 1fr;
+  }
 }
 
 .entity-shared {

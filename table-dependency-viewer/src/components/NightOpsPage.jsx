@@ -11,10 +11,11 @@ export default function NightOpsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFailuresOnly, setShowFailuresOnly] = useState(false);
-  const [showAllLongest, setShowAllLongest] = useState(false);
-  const [showAllAnomalies, setShowAllAnomalies] = useState(false);
-  const [showAllFailed, setShowAllFailed] = useState(false);
-  const [showAllPeak, setShowAllPeak] = useState(false);
+  const [showPeakDetails, setShowPeakDetails] = useState(false);
+  const [longestLimit, setLongestLimit] = useState(10);
+  const [anomalyLimit, setAnomalyLimit] = useState(10);
+  const [failedLimit, setFailedLimit] = useState(10);
+  const [peakLimit, setPeakLimit] = useState(10);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +141,8 @@ export default function NightOpsPage() {
                 <div className="night-panel">
                   <div className="night-panel-title">Longest runs</div>
                   <div className="night-panel-sub muted">Top 10 by duration</div>
-                  <div className="night-list night-list-scroll">
-                    {(showAllLongest ? data.top_runs || [] : (data.top_runs || []).slice(0, 10)).map((row) => (
+                  <div className="night-list">
+                    {(data.top_runs || []).slice(0, longestLimit).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -159,8 +160,11 @@ export default function NightOpsPage() {
                   </div>
                   {(data.top_runs || []).length > 10 && (
                     <div className="night-panel-actions">
-                      <button className="btn btn-ghost" onClick={() => setShowAllLongest((v) => !v)}>
-                        {showAllLongest ? "Show less" : "Show more"}
+                      <button className="btn btn-ghost" onClick={() => setLongestLimit((n) => Math.min(n + 10, (data.top_runs || []).length))}>
+                        Show +10
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => setLongestLimit(10)}>
+                        Reset
                       </button>
                     </div>
                   )}
@@ -170,8 +174,8 @@ export default function NightOpsPage() {
                 <div className="night-panel">
                   <div className="night-panel-title">Anomalies vs p95</div>
                   <div className="night-panel-sub muted">Runs &gt; 1.5x p95</div>
-                  <div className="night-list night-list-scroll">
-                    {(showAllAnomalies ? data.anomalies || [] : (data.anomalies || []).slice(0, 10)).map((row) => (
+                  <div className="night-list">
+                    {(data.anomalies || []).slice(0, anomalyLimit).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -189,8 +193,11 @@ export default function NightOpsPage() {
                   </div>
                   {(data.anomalies || []).length > 10 && (
                     <div className="night-panel-actions">
-                      <button className="btn btn-ghost" onClick={() => setShowAllAnomalies((v) => !v)}>
-                        {showAllAnomalies ? "Show less" : "Show more"}
+                      <button className="btn btn-ghost" onClick={() => setAnomalyLimit((n) => Math.min(n + 10, (data.anomalies || []).length))}>
+                        Show +10
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => setAnomalyLimit(10)}>
+                        Reset
                       </button>
                     </div>
                   )}
@@ -202,8 +209,8 @@ export default function NightOpsPage() {
                   <div className="night-panel-sub muted">
                     {peakHour ? `Peak at ${String(peakHour.hour).padStart(2, "0")}:00` : "No peak data"}
                   </div>
-                  <div className="night-list night-list-scroll">
-                    {(showAllPeak ? peakTables : peakTables.slice(0, 10)).map((row) => (
+                  <div className="night-list">
+                    {peakTables.slice(0, peakLimit).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`}
                         className="night-row"
@@ -222,8 +229,18 @@ export default function NightOpsPage() {
                   </div>
                   {peakTables.length > 10 && (
                     <div className="night-panel-actions">
-                      <button className="btn btn-ghost" onClick={() => setShowAllPeak((v) => !v)}>
-                        {showAllPeak ? "Show less" : "Show more"}
+                      <button className="btn btn-ghost" onClick={() => setPeakLimit((n) => Math.min(n + 10, peakTables.length))}>
+                        Show +10
+                      </button>
+                      <button className="btn btn-ghost" onClick={() => setPeakLimit(10)}>
+                        Reset
+                      </button>
+                    </div>
+                  )}
+                  {peakTables.length > 0 && (
+                    <div className="night-panel-actions">
+                      <button className="btn btn-secondary" onClick={() => setShowPeakDetails(true)}>
+                        Why peak?
                       </button>
                     </div>
                   )}
@@ -232,8 +249,8 @@ export default function NightOpsPage() {
               <div className="night-panel">
                 <div className="night-panel-title">Failed runs</div>
                 <div className="night-panel-sub muted">Last failures in the window</div>
-                <div className="night-list night-list-scroll">
-                  {(showAllFailed ? data.failed_runs || [] : (data.failed_runs || []).slice(0, 10)).map((row) => (
+                <div className="night-list">
+                  {(data.failed_runs || []).slice(0, failedLimit).map((row) => (
                     <button
                       key={`${row.table_fqn}-${row.start}`}
                       className="night-row"
@@ -251,8 +268,11 @@ export default function NightOpsPage() {
                 </div>
                 {(data.failed_runs || []).length > 10 && (
                   <div className="night-panel-actions">
-                    <button className="btn btn-ghost" onClick={() => setShowAllFailed((v) => !v)}>
-                      {showAllFailed ? "Show less" : "Show more"}
+                    <button className="btn btn-ghost" onClick={() => setFailedLimit((n) => Math.min(n + 10, (data.failed_runs || []).length))}>
+                      Show +10
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => setFailedLimit(10)}>
+                      Reset
                     </button>
                   </div>
                 )}
@@ -260,6 +280,33 @@ export default function NightOpsPage() {
             </div>
           </section>
         </>
+      )}
+      {showPeakDetails && peakHour && (
+        <div className="night-modal" onClick={() => setShowPeakDetails(false)}>
+          <div className="night-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="night-modal-head">
+              <div>
+                <div className="night-panel-title">Peak hour details</div>
+                <div className="night-panel-sub muted">
+                  {String(peakHour.hour).padStart(2, "0")}:00 · {peakHour.runs_count ?? 0} runs · {peakHour.total_duration_minutes ?? 0} min
+                </div>
+              </div>
+              <button className="btn btn-ghost" onClick={() => setShowPeakDetails(false)}>
+                Close
+              </button>
+            </div>
+            <div className="night-list">
+              {peakTables.map((row) => (
+                <div key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`} className="night-row">
+                  <span className="mono">{row.table_fqn}</span>
+                  <span className="muted">
+                    {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

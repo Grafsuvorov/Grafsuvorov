@@ -1,18 +1,4 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer> python .\generate_stg_files.py                                                                          
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\generate_stg_files.py", line 270, in <module>
-    sys.exit(main())
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\generate_stg_files.py", line 250, in main
-    args = parse_args()
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\generate_stg_files.py", line 43, in parse_args
-    parser.add_argument("SAPSR3", required=True)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\argparse.py", line 1398, in add_argument
-    kwargs = self._get_positional_kwargs(*args, **kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\argparse.py", line 1514, in _get_positional_kwargs
-    raise TypeError(msg)
-TypeError: 'required' is an invalid argument for positionals
-
-
+#!/usr/bin/env python3
 import argparse
 import os
 import re
@@ -55,22 +41,22 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate STG SQL/YAML files using etl_source_to_greenplum_new output.",
     )
-    parser.add_argument("SAPSR3", required=True)
-    parser.add_argument("KLAH", required=True)
-    parser.add_argument("STG", required=True)
-    parser.add_argument("KLAH", required=True)
-    parser.add_argument("1", required=True, type=int)
-    parser.add_argument("RN", default="")
-    parser.add_argument('"MANDT" || "CLINT"', required=True)
-    parser.add_argument("ALL", default="ALL")
+    parser.add_argument("--source-schema", default="SAPSR3")
+    parser.add_argument("--source-table", default="KLAH")
+    parser.add_argument("--target-schema", default="STG")
+    parser.add_argument("--target-table", default="KLAH")
+    parser.add_argument("--server-id", type=int, default=1)
+    parser.add_argument("--distribution-field", default="RN")
+    parser.add_argument("--pk", default='"MANDT" || "CLINT"')
+    parser.add_argument("--fields-list", default="ALL")
 
-    parser.add_argument("39", required=True, type=int)
-    parser.add_argument("SALES_MM", required=True)
+    parser.add_argument("--entity-id", type=int, default=39)
+    parser.add_argument("--entity-name", default="SALES_MM")
 
-    parser.add_argument("1359", type=int, default=0)
-    parser.add_argument("1", type=int, default=1)
-    parser.add_argument("ORACLE_ERP_PROD", default="ORACLE_ERP_PROD")
-    parser.add_argument("false", action="store_true")
+    parser.add_argument("--table-id", type=int, default=1359)
+    parser.add_argument("--source-id", type=int, default=1)
+    parser.add_argument("--source-type", default="ORACLE_ERP_PROD")
+    parser.add_argument("--flag-has-views", action="store_true")
     parser.add_argument("--table-load-mode", default="TRUNCATE_INIT")
     parser.add_argument("--job-id", type=int, default=296)
     parser.add_argument("--job-name", default="STG_JOB")
@@ -85,11 +71,11 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--out-dir", default=".")
     parser.add_argument("--dsn")
-    parser.add_argument("10.66.229.171")
-    parser.add_argument("5432", type=int)
-    parser.add_argument("dwh")
-    parser.add_argument("gpetl")
-    parser.add_argument("gpetl")
+    parser.add_argument("--host", default="10.66.229.171")
+    parser.add_argument("--port", type=int, default=5432)
+    parser.add_argument("--dbname", default="dwh")
+    parser.add_argument("--user", default="gpetl")
+    parser.add_argument("--password", default="gpetl")
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 

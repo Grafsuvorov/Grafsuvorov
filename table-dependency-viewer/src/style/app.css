@@ -686,9 +686,15 @@ main.content {
   gap: 8px;
 }
 
+.night-list-scroll {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .night-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
   gap: 12px;
   padding: 8px 10px;
   border-radius: 10px;
@@ -698,8 +704,27 @@ main.content {
   text-align: left;
 }
 
+.night-row .mono,
+.night-row .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .night-row:hover {
   border-color: rgba(96, 165, 250, 0.6);
+}
+
+.night-panel-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .night-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .incident-mini {

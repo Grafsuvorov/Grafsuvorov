@@ -448,10 +448,15 @@ export default function HomePage({ onSelectTable }) {
                         className="night-row"
                         onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
                       >
-                        <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
-                        </span>
+                        <div className="night-row-main">
+                          <div className="night-row-title mono">{row.table_fqn}</div>
+                          <div className="night-row-sub muted">
+                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                          </div>
+                        </div>
+                        <div className="night-row-meta">
+                          <span className="night-row-badge">{row.duration_minutes ?? "—"} min</span>
+                        </div>
                       </button>
                     ))}
                     {!nightSummary?.top_runs?.length && (
@@ -469,10 +474,16 @@ export default function HomePage({ onSelectTable }) {
                         className="night-row"
                         onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
                       >
-                        <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
-                        </span>
+                        <div className="night-row-main">
+                          <div className="night-row-title mono">{row.table_fqn}</div>
+                          <div className="night-row-sub muted">
+                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                          </div>
+                        </div>
+                        <div className="night-row-meta">
+                          <span className="night-row-badge">{row.duration_minutes ?? "—"} min</span>
+                          <span className="night-row-badge night-row-badge-warn">{row.ratio ?? "—"}x</span>
+                        </div>
                       </button>
                     ))}
                     {!nightSummary?.anomalies?.length && (
@@ -492,10 +503,15 @@ export default function HomePage({ onSelectTable }) {
                         className="night-row"
                         onClick={() => onSelectTable({ view: "table_info", table: row.table_fqn }, "home")}
                       >
-                        <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.message || "FAILED"}
-                        </span>
+                        <div className="night-row-main">
+                          <div className="night-row-title mono">{row.table_fqn}</div>
+                          <div className="night-row-sub muted">
+                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                          </div>
+                          <div className="night-row-message">
+                            {row.message || "FAILED"}
+                          </div>
+                        </div>
                       </button>
                     ))}
                     {!nightSummary?.failed_runs?.length && (

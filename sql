@@ -1,10 +1,358 @@
-SELECT
-    MAX(length(base.plant_producer_delivery_code)) AS plant_producer_delivery_code_len,
-    MAX(length(base.initial_delivery_code))        AS initial_delivery_code_len,
-    MAX(length(base.batch_code))                   AS batch_code_len,
-    MAX(length(base.sales_delivery_code))          AS sales_delivery_code_len,
-    MAX(length(base.delivery_for_storage_calculation_code)) AS delivery_for_storage_calculation_code_len,
-    MAX(length(base.delivery_in_final_release_code)) AS delivery_in_final_release_code_len,
-    MAX(length(base.bill_of_lading_code))          AS bill_of_lading_code_len,
-    MAX(length(base.shipment_instruction_number))  AS shipment_instruction_number_len
-FROM dm_calc.storage_sales_bundles_amount base;
+# -*- coding: utf-8 -*-
+"""
+Быстрая выгрузка SELECT в CSV с разделителем ';' (опционально .gz) через server-side COPY.
+Подходит для больших выборок (миллионы строк).
+"""
+
+import os
+import time
+import gzip
+import psycopg2
+from typing import Optional, TextIO
+
+# --- НАСТРОЙКИ ПОД СЕБЯ ---
+DB_HOST = "10.66.229.219"
+DB_PORT = 443
+DB_NAME = "dm"
+DB_USER = "clicketl"
+DB_PASSWORD = "clicketl"
+
+# БАЗОВОЕ имя файла (если включена нарезка, получатся *_part001.csv, *_part002.csv, ...)
+OUTPUT_PATH = r"C:\Users\SuvorovND\GIT\sales_stock_balance_with_forecast.csv"
+
+# Кодировка для Excel: UTF-8 с BOM
+CSV_ENCODING = "utf-8-sig"
+
+# Сжимать ли gzip (True -> .csv.gz)
+COMPRESS_GZIP = False
+
+# Нарезать на части по N строк (только строки данных, заголовок в каждом файле).
+# None -> один файл целиком. Пример для Excel: 1_000_000
+SPLIT_ROWS_PER_FILE: Optional[int] = None  # например, 1_000_000
+
+# Сам запрос (можно менять при необходимости)
+QUERY = """
+SELECT 
+    dt_realization AS "Date of Realisation",
+    is_plan_or_actual AS "Plan/Fact",
+    realization_status_name AS "Realization status",
+    receiving_plant_in_sap_system_code AS "Owner (code)",
+    receiving_plant_in_sap_system_name AS "Owner",
+    exporter_name AS "Exporter",
+    sales_order AS "Order No.",
+    sales_order_in_shipment AS "Smelter order",
+    customer_special_requirement AS "Customer PO",
+    delivery_number_sales AS "Delivery number sales",
+    uni AS "UNI",
+    uni_in_shipment AS "UNI (shipment)",
+    railcar AS "Railcar number",
+    container_after_repacking AS "Container after repacking",
+    transport_bill AS "RWB number",
+    railway_platform AS "Railway Platform number",
+    external_contract_in_lot_number AS "Client contract number (lot)",
+    contract_plan_name AS "Planned Contract",
+    dt_quota_yyyymm AS "Quota",
+    lot_customer_name AS "Buyer",
+    buyer_plan_name AS "Planned Buyer",
+    customer_for_scm_report_name AS "Customer for report Metal in Supply Chain",
+    end_user_for_reporting_name AS "End Buyer",
+    buyer_agent_name AS "Trading company",
+    weight_net AS "Net weight",
+    weight_net_with_wirerod AS "NK weight",
+    weight_gross AS "Gross weight",
+    pieces AS "PCS",
+    customer_grade_name AS "Grade (client)",
+    grade_name AS "Grade (specification)",
+    material_shape_name_full AS "Shape",
+    dimensions_unit AS "Dimensions",
+    material_specification_name AS "Specification number",
+    material_group_for_scm_report_name AS "Material Group for report Metal in Supply chain",
+    plant_producer_name AS "Smelter",
+    is_tolling_code AS "Sign of tolling",
+    tsw_location_name AS "Shipment direction",
+    dt_shipment_yyyymm AS "Shipment date (month)",
+    dt_shipment AS "Shipment date",
+    dt_acceptance_in_russian_port_planned AS "Estimated time of arrival to POL",
+    dt_train_scheduled_arrival AS "Estimated date of RW arriwal to POL (with fact)",
+    dt_arrival_by_railway AS "Arrival date by RW",
+    dt_warehouse AS "POL WH date",
+    dt_forwarder AS "Forwarder date",
+    storage_duration_in_russian_port_in_calendar_days AS "Storage period in Russian port (day)",
+    storage_duration_in_russian_port_category_code AS "Storage period in Russian port (month)",
+    release_group_name AS "Release",
+    dt_release AS "Release date",
+    notice_name AS "Notice",
+    dt_notice AS "Date notice",
+    final_release_code AS "Final Release",
+    dt_final_release AS "Final release date",
+    shipment_instruction_name AS "Instr.",
+    dt_shipment_instruction AS "Instr. Date",
+    delivery_instruction_code AS "Shipping instruction",
+    vessel_plan_name AS "Planning Vessel",
+    dt_expected_bill_of_lading AS "Expected BL",
+    vessel_and_voyage_plan_search_name AS "Vessel/ Voyage number (plan)",
+    vessel_and_voyage_actual_search_name AS "Vessel/ Voyage number",
+    bill_of_lading_number AS "B/L",
+    dt_bill_of_lading AS "BL date",
+    dt_arrival_in_port_of_discharge_plan AS "Planned date of arrival Discharge port",
+    dt_arrival_in_second_port_of_discharge_plan AS "Planned date of arrival Discharge port 2",
+    port_of_discharge_name AS "Discharge port",
+    country_of_discharge_port_name AS "Country of discharge port",
+    forwarder_in_foreign_port_name AS "Forwarder in a foreign port",
+    region_of_destination_port_name AS "Region of Discharge port",
+    delivery_region_name AS "Region of supply",
+    sales_team_name AS "Sales team",
+    delivery_country_in_contract_name AS "Country of supply",
+    country_of_end_user_name AS "End Buyers country",
+    forwarder_name AS "Forwarder",
+    dt_warehouse_confirmation AS "Storage confirmation saving date",
+    dt_prepared_for_realization AS "Date of readiness for release",
+    pb1_number AS "PB number 1",
+    pb2_number AS "PB number 2",
+    pb3_number AS "PB number 3",
+    pb1_warehouse_name AS "PB warehouse 1",
+    pb2_warehouse_name AS "PB warehouse 2",
+    pb3_warehouse_name AS "PB warehouse 3",
+    dt_storage_start_in_foreign_port AS "Start of storage in foreign port",
+    dt_storage_end_in_foreign_port AS "End of storage in a foreign port",
+    dt_storage_payed_in_foreign_port_by_rusal AS "Storage costs for Rusal account",
+    shipment_instruction_in_foreign_port_name AS "Shipping Instructions (Foreign Port)",
+    dt_shipment_instruction_in_foreign_port AS "Shipping instructions date (Foreign port)",
+    dt_shipment_instruction_date_from AS "SI: Date from",
+    dt_shipment_instruction_date_to AS "SI: Date to",
+    bill_of_lading_in_foreign_port AS "B/L in foreign port",
+    dt_bill_of_lading_in_foreign_port AS "Date B/L in foreign port",
+    vessel_in_foreign_port_actual_name AS "Vessel foreign port",
+    dt_barge_loading AS "Barge load date",
+    dt_barge_arrival AS "Barge unload date",
+    port_of_discharge_in_foreign_port_name AS "Discharge port 2",
+    dt_storage_start_in_second_foreign_warehouse AS "Start of storage 2",
+    dt_storage_end_in_second_foreign_warehouse AS "End of storage 2",
+    shipment_instruction_in_second_foreign_port_name AS "Shipping Instructions (Foreign Port)2",
+    dt_shipment_instruction_in_second_foreign_port AS "Shipping instructions date (Foreign port)2",
+    delivery_notice_number AS "Deliv. Notice",
+    dt_delivery_notice AS "Delivery notice date",
+    invoice_provisional_number AS "Invoice",
+    dt_invoice_provisional AS "Date Invoice",
+    customs_invoice_code AS "Custom's invoice Group",
+    customs_invoice_number AS "Custom's invoice Number",
+    dt_customs_invoice AS "Custom's invoice Date",
+    provisional_invoice_payment_status_code AS "Status payment invoice",
+    lot_code AS "Lot",
+    incoterms_plan_code AS "Incoterms 1 (plan)",
+    incoterms_location_plan_code AS "Incoterms 2 (plan)",
+    lot_delivery_basis_code AS "Incoterms 1 (lot)",
+    lot_delivery_point_name AS "Incoterms 2 (lot)",
+    delivery_basis AS "Incoterms 1 (total)",
+    delivery_point_name AS "Incoterms 2 (total)",
+    CASE 
+        WHEN dt_realization IS NOT NULL THEN 'Realized' 
+        ELSE coalesce(business_location_name, 'Others') 
+    END AS "Status in Supply chain (Business)",
+    warehouse_or_responsible_customer_for_storage_name AS "General storage location",
+    location AS "Location",
+    storage_duration_in_calendar_days AS "Storage period in location",
+    location_stay_duration_category_code AS "Storage period in location (month)",
+    sales_contract_code AS "Quota contract (code)",
+    contract_name AS "Quota contract",
+    commitment_weight AS "Commitment",
+    total_commitment_weight AS "Commitment total",
+    ready_for_realization_status_name AS "Sign of transfer of ownership",
+    warehouse_shipment_type_name AS "Temporary storage warehouse sign",
+   mh1_storage_document_number AS "Act No. MX-1",
+    dt_mh1_storage_document AS "Act date МХ-1",
+    dt_departure_from_foreigh_port AS "EXP: Load out date",
+    foreign_port_terminal_name AS "EXP: Storage location",
+    vehicle_in_foreign_port_code AS "EXP: Transport ID",
+    vehicle_type_in_foreign_port_code AS "EXP: Transport mode",
+    russian_port_bill_of_lading_forwarder_code AS "EXP: WH Operator code",
+    foreign_port_bill_of_lading_forwarder_code AS "EXP: WH Operator code 2",
+    uzbekistan_cargo_declaration_73 AS "EXP: Cargo declaration 73",
+    toDate(dt_expected_delivery) AS "Expected delivery",
+    dt_realization_forecast AS "Estimated Realization date",
+    dt_final_invoice_payment AS "Due date",
+    homogenisation_name AS "HMG",
+    material_aggr_name AS "Material Group",
+    material_group_name AS "Product Group",
+    pledge_in_bank_name AS "Bank (pledge)",
+    customs_declaration_number AS "CustDeclaratNumber",
+    transport_railcar_type_name AS "Railcar type",
+    dt_transfer_from_consignment_to_customer AS "Date of transfer from consignment to customer",
+    is_consigment_warehouse_applicable AS "Consignment indicator",
+    is_shipped_via_overseas_warehouse AS "Shipment via overseas warehouse",
+    is_shipped_via_overseas_second_foreign_warehouse AS "Shipment via overseas warehouse 2",
+    dt_arrival_in_second_port_of_discharge AS "Date of arrival Discharge port 2",
+    dt_arrival_in_port_of_discharge AS "Date of arrival Discharge",
+    transportation_scenario_code AS "Transportation route scenario",
+    dt_forwarder_discharge_invoice_or_cmr_documented AS "ТН/CMR: Date of truck shipment",
+    dt_repacked AS "Date of reloading",
+    bill_of_lading_in_foreign_port_nomination AS "Nomination from BL in foreign port",
+    dt_arrived_via_ul_system AS "Date of truck arrival (UL)",
+    instruction_number AS "Instruction number (Russia&CIS shipments)",
+    dt_sailed_loading_port AS "Sailed L.Port",
+    warehouse_gross_weight AS "Warehouse gross weight (Russia&CIS shipments)",
+    railway_movement_status_name AS "Railway movement status",
+    dt_bill_of_lading_in_russian_port_created AS "Date of uploading BL in SAP",
+    dt_bill_of_lading_in_foreign_port_created AS "Date of uploading foreign port BL in SAP",
+    dt_bill_of_lading_in_russian_port_scan_copy_uploaded AS "BL scan SAP uploading date",
+    dt_bill_of_lading_in_foreign_port_scan_copy_uploaded AS "Foreign port BL scan SAP uploading date"
+FROM dm_view.sales_stock_balance_with_forecast
+WHERE 
+    (toStartOfMonth(dt_realization) >= '2025-01-01' 
+     AND dt_realization <= '2025-12-31')
+    OR (dt_report = '2025-12-31' AND dt_realization IS NULL)
+
+"""
+
+
+# COPY с нужными опциями
+COPY_SQL = f"""
+COPY (
+    {QUERY}
+) TO STDOUT
+WITH CSV
+DELIMITER ';'
+HEADER
+NULL ''
+QUOTE '"'
+ESCAPE '"'
+"""
+
+# ---- Реализация нарезки ----
+class SplitWriter:
+    """
+    Обёртка над файлом для copy_expert, которая режет вывод на несколько файлов
+    по N строк данных. Заголовок автоматически пишется в каждый файл.
+    """
+    def __init__(self, base_path: str, rows_per_file: int, encoding: str, gzip_mode: bool):
+        self.base_path = base_path
+        self.rows_per_file = rows_per_file
+        self.encoding = encoding
+        self.gzip_mode = gzip_mode
+
+        self.part_idx = 0
+        self.current_rows = 0  # только строки данных (без заголовка)
+        self.header_line: Optional[str] = None
+        self.buffer = ""  # копим до '\n'
+        self.fh: Optional[TextIO] = None
+        self.total_rows = 0
+
+    def _next_filename(self) -> str:
+        root, ext = os.path.splitext(self.base_path)
+        if self.gzip_mode and ext != ".gz":
+            # если сжатие включено, итог будет .gz
+            ext = ".csv.gz" if ext.lower() != ".csv" else ".csv.gz"
+        elif not self.gzip_mode and ext.lower() != ".csv":
+            # гарантируем .csv, если нужен
+            pass
+        return f"{root}_part{self.part_idx:03d}{ext if ext else '.csv'}"
+
+    def _open_new_file(self):
+        if self.fh:
+            self.fh.close()
+        self.part_idx += 1
+        path = self._next_filename()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        if self.gzip_mode:
+            self.fh = gzip.open(path, mode="wt", encoding=self.encoding, newline="")
+        else:
+            self.fh = open(path, mode="w", encoding=self.encoding, newline="")
+        self.current_rows = 0
+        # при открытии нового файла пишем заголовок
+        if self.header_line is not None:
+            self.fh.write(self.header_line)
+
+    def write(self, data: str):
+        """
+        Получаем chunks от copy_expert, режем по строкам и пишем
+        с учётом header и лимита строк на файл.
+        """
+        self.buffer += data
+        while True:
+            nl_pos = self.buffer.find("\n")
+            if nl_pos == -1:
+                break
+            line = self.buffer[:nl_pos + 1]  # включая '\n'
+            self.buffer = self.buffer[nl_pos + 1:]
+
+            if self.header_line is None:
+                # первая строка потока — это заголовок
+                self.header_line = line
+                # открыть первый файл и вписать заголовок
+                self._open_new_file()
+                continue
+
+            # это строка данных
+            if self.rows_per_file and self.current_rows >= self.rows_per_file:
+                # открыть новый файл и снова вписать заголовок
+                self._open_new_file()
+
+            self.fh.write(line)
+            self.current_rows += 1
+            self.total_rows += 1
+
+    def close(self):
+        # на случай, если остался хвост без '\n' (редко, но обработаем)
+        if self.buffer:
+            if self.header_line is None:
+                # если почему-то пришёл поток без '\n' — считаем это заголовком
+                self.header_line = self.buffer
+                self._open_new_file()
+            else:
+                if self.rows_per_file and self.current_rows >= self.rows_per_file:
+                    self._open_new_file()
+                self.fh.write(self.buffer)
+                self.current_rows += 1
+                self.total_rows += 1
+            self.buffer = ""
+        if self.fh:
+            self.fh.close()
+            self.fh = None
+
+def main():
+    t0 = time.time()
+
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        application_name="csv_export_account_debt"
+    )
+    conn.set_session(readonly=True, autocommit=True)
+    conn.set_client_encoding("UTF8")
+
+    try:
+        with conn.cursor() as cur:
+            if SPLIT_ROWS_PER_FILE:
+                writer = SplitWriter(
+                    base_path=OUTPUT_PATH,
+                    rows_per_file=SPLIT_ROWS_PER_FILE,
+                    encoding=CSV_ENCODING,
+                    gzip_mode=COMPRESS_GZIP,
+                )
+                try:
+                    cur.copy_expert(COPY_SQL, writer)
+                finally:
+                    writer.close()
+                print(f"[OK] Экспорт завершён. Всего строк данных: {writer.total_rows}. "
+                      f"Файлов: {writer.part_idx:03d}.")
+            else:
+                # один файл целиком
+                os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+                if COMPRESS_GZIP:
+                    path = OUTPUT_PATH if OUTPUT_PATH.endswith(".gz") else OUTPUT_PATH + ".gz"
+                    with gzip.open(path, mode="wt", encoding=CSV_ENCODING, newline="") as f:
+                        cur.copy_expert(COPY_SQL, f)
+                else:
+                    with open(OUTPUT_PATH, mode="w", encoding=CSV_ENCODING, newline="") as f:
+                        cur.copy_expert(COPY_SQL, f)
+                print(f"[OK] Экспорт завершён: {OUTPUT_PATH}")
+    finally:
+        conn.close()
+
+    print(f"[INFO] Время: {time.time() - t0:.1f} сек")
+
+if __name__ == "__main__":
+    main()

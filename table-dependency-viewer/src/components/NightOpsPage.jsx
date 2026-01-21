@@ -11,6 +11,10 @@ export default function NightOpsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showFailuresOnly, setShowFailuresOnly] = useState(false);
+  const [showAllLongest, setShowAllLongest] = useState(false);
+  const [showAllAnomalies, setShowAllAnomalies] = useState(false);
+  const [showAllFailed, setShowAllFailed] = useState(false);
+  const [showAllPeak, setShowAllPeak] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +51,8 @@ export default function NightOpsPage() {
     );
     return sorted[0];
   }, [data]);
+
+  const peakTables = useMemo(() => peakHour?.top_tables || [], [peakHour]);
 
   return (
     <div className="container cc-page">
@@ -134,8 +140,8 @@ export default function NightOpsPage() {
                 <div className="night-panel">
                   <div className="night-panel-title">Longest runs</div>
                   <div className="night-panel-sub muted">Top 10 by duration</div>
-                  <div className="night-list">
-                    {(data.top_runs || []).slice(0, 10).map((row) => (
+                  <div className="night-list night-list-scroll">
+                    {(showAllLongest ? data.top_runs || [] : (data.top_runs || []).slice(0, 10)).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -151,14 +157,21 @@ export default function NightOpsPage() {
                       </button>
                     ))}
                   </div>
+                  {(data.top_runs || []).length > 10 && (
+                    <div className="night-panel-actions">
+                      <button className="btn btn-ghost" onClick={() => setShowAllLongest((v) => !v)}>
+                        {showAllLongest ? "Show less" : "Show more"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {!showFailuresOnly && (
                 <div className="night-panel">
                   <div className="night-panel-title">Anomalies vs p95</div>
                   <div className="night-panel-sub muted">Runs &gt; 1.5x p95</div>
-                  <div className="night-list">
-                    {(data.anomalies || []).slice(0, 10).map((row) => (
+                  <div className="night-list night-list-scroll">
+                    {(showAllAnomalies ? data.anomalies || [] : (data.anomalies || []).slice(0, 10)).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -174,18 +187,58 @@ export default function NightOpsPage() {
                       </button>
                     ))}
                   </div>
+                  {(data.anomalies || []).length > 10 && (
+                    <div className="night-panel-actions">
+                      <button className="btn btn-ghost" onClick={() => setShowAllAnomalies((v) => !v)}>
+                        {showAllAnomalies ? "Show less" : "Show more"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!showFailuresOnly && (
+                <div className="night-panel">
+                  <div className="night-panel-title">Peak hour tables</div>
+                  <div className="night-panel-sub muted">
+                    {peakHour ? `Peak at ${String(peakHour.hour).padStart(2, "0")}:00` : "No peak data"}
+                  </div>
+                  <div className="night-list night-list-scroll">
+                    {(showAllPeak ? peakTables : peakTables.slice(0, 10)).map((row) => (
+                      <button
+                        key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`}
+                        className="night-row"
+                        onClick={() => {
+                          const path = toTablePath(row.table_fqn);
+                          if (path) navigate(path);
+                        }}
+                      >
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                        </span>
+                      </button>
+                    ))}
+                    {!peakTables.length && <div className="muted">No peak tables.</div>}
+                  </div>
+                  {peakTables.length > 10 && (
+                    <div className="night-panel-actions">
+                      <button className="btn btn-ghost" onClick={() => setShowAllPeak((v) => !v)}>
+                        {showAllPeak ? "Show less" : "Show more"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               <div className="night-panel">
                 <div className="night-panel-title">Failed runs</div>
                 <div className="night-panel-sub muted">Last failures in the window</div>
-                <div className="night-list">
-                    {(data.failed_runs || []).slice(0, 10).map((row) => (
-                      <button
-                        key={`${row.table_fqn}-${row.start}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(row.table_fqn);
+                <div className="night-list night-list-scroll">
+                  {(showAllFailed ? data.failed_runs || [] : (data.failed_runs || []).slice(0, 10)).map((row) => (
+                    <button
+                      key={`${row.table_fqn}-${row.start}`}
+                      className="night-row"
+                      onClick={() => {
+                        const path = toTablePath(row.table_fqn);
                           if (path) navigate(path);
                         }}
                       >
@@ -196,6 +249,13 @@ export default function NightOpsPage() {
                       </button>
                     ))}
                 </div>
+                {(data.failed_runs || []).length > 10 && (
+                  <div className="night-panel-actions">
+                    <button className="btn btn-ghost" onClick={() => setShowAllFailed((v) => !v)}>
+                      {showAllFailed ? "Show less" : "Show more"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </section>

@@ -250,6 +250,10 @@ def write_file(path: str, content: str, overwrite: bool) -> None:
 def main() -> int:
     args = parse_args()
 
+    print("Starting STG file generation...")
+    print(f"Target: {args.target_schema}.{args.target_table}")
+    print(f"Output directory: {os.path.abspath(args.out_dir)}")
+
     insert_query, create_query = fetch_queries(args)
 
     out_dir = os.path.abspath(args.out_dir)
@@ -263,6 +267,12 @@ def main() -> int:
     write_file(os.path.join(out_dir, "sql_query_recreate_init.sql"), create_query, args.overwrite)
     write_file(os.path.join(out_dir, "sql_query_insert_init.sql"), insert_query, args.overwrite)
     write_file(os.path.join(out_dir, "sql_query_truncate.sql"), truncate_sql, args.overwrite)
+
+    print("Done. Files created:")
+    print(os.path.join(out_dir, "meta_data_file.yaml"))
+    print(os.path.join(out_dir, "sql_query_recreate_init.sql"))
+    print(os.path.join(out_dir, "sql_query_insert_init.sql"))
+    print(os.path.join(out_dir, "sql_query_truncate.sql"))
 
     return 0
 

@@ -686,15 +686,9 @@ main.content {
   gap: 8px;
 }
 
-.night-list-scroll {
-  max-height: 320px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
 .night-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(140px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(200px, 360px);
   gap: 12px;
   padding: 8px 10px;
   border-radius: 10px;
@@ -719,12 +713,42 @@ main.content {
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 900px) {
   .night-row {
     grid-template-columns: 1fr;
   }
+}
+
+.night-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+}
+
+.night-modal-card {
+  width: min(860px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  padding: 18px 20px;
+}
+
+.night-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .incident-mini {

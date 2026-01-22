@@ -1387,6 +1387,11 @@ main.content {
   color: #22c55e;
 }
 
+.table-status.warn {
+  background: rgba(251,191,36,0.2);
+  color: #fbbf24;
+}
+
 .table-status.risk {
   background: rgba(239,68,68,0.18);
   color: var(--danger);
@@ -1473,6 +1478,7 @@ main.content {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: auto;
 }
 
 .status-help {

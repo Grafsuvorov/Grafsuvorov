@@ -473,6 +473,7 @@ def build_graph_snapshot():
     meta_hash = _hash_meta(all_meta)
 
     entries = []
+    meta_tables = set()
     for m in all_meta:
         schema = norm(m.get("table_schema"))
         table = norm(m.get("table_name"))
@@ -484,6 +485,7 @@ def build_graph_snapshot():
         if isinstance(entity, str) and entity.lower() == "raw_ext":
             continue
 
+        meta_tables.add(f"{schema}.{table}")
         depends = {}
         for src_schema, tables in (m.get("depends_on") or {}).items():
             src_schema_norm = norm(src_schema)
@@ -721,6 +723,7 @@ def build_graph_snapshot():
         "entity_graph": {"nodes": entity_nodes, "edges": entity_edges},
         "layouts": {"entity": entity_layout, "table": table_layout},
         "table_entity_map": {k: sorted(v) for k, v in table_entities.items()},
+        "table_meta": sorted(meta_tables),
         "entity_cycles": entity_cycles,
         "entity_mutual": entity_mutual,
         "entity_mutual_any": entity_mutual_any,
@@ -761,12 +764,17 @@ def _cap_graph(nodes: dict, edges: list, layout: dict, max_nodes: int, max_edges
     return filtered_nodes, filtered_edges, filtered_layout, truncated
 
 
-def _compute_orphan_tables(snapshot: dict, final_schemas: set[str]) -> dict:
+def _compute_orphan_tables(snapshot: dict, final_schemas: set[str], meta_only: bool = False) -> dict:
     nodes = snapshot.get("table_graph", {}).get("nodes", {}) or {}
     edges = snapshot.get("table_graph", {}).get("edges", []) or []
+    meta_tables = set(snapshot.get("table_meta") or [])
+    if meta_only:
+        nodes = {k: v for k, v in nodes.items() if k in meta_tables}
+        edges = [e for e in edges if e.get("source") in meta_tables and e.get("target") in meta_tables]
     if not nodes:
         return {
             "final_schemas": sorted(final_schemas),
+            "meta_only": meta_only,
             "total_tables": 0,
             "final_count": 0,
             "reachable_count": 0,
@@ -814,6 +822,7 @@ def _compute_orphan_tables(snapshot: dict, final_schemas: set[str]) -> dict:
     coverage_pct = (len(reachable) / len(nodes)) * 100 if nodes else 0.0
     return {
         "final_schemas": sorted(final_schemas),
+        "meta_only": meta_only,
         "total_tables": len(nodes),
         "final_count": len(finals),
         "reachable_count": len(reachable),
@@ -846,13 +855,14 @@ def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
 @router.get("/api/graph/orphans")
 def get_orphan_tables(
     final_schemas: str = Query("dm,dm_view"),
+    meta_only: bool = Query(True),
     offset: int = Query(0, ge=0),
     limit: int = Query(40, ge=0, le=500),
 ):
     snapshot = get_graph_snapshot()
     requested = {norm(s) for s in (final_schemas or "").split(",") if s}
     final_set = {s for s in requested if s}
-    data = _compute_orphan_tables(snapshot, final_set)
+    data = _compute_orphan_tables(snapshot, final_set, meta_only=meta_only)
 
     table_nodes = snapshot.get("table_graph", {}).get("nodes", {}) or {}
     table_entity_map = snapshot.get("table_entity_map") or {}
@@ -880,6 +890,7 @@ def get_orphan_tables(
 
     payload = {
         "final_schemas": data["final_schemas"],
+        "meta_only": data["meta_only"],
         "total_tables": data["total_tables"],
         "final_count": data["final_count"],
         "reachable_count": data["reachable_count"],

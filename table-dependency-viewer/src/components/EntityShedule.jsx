@@ -43,7 +43,7 @@ export default function EntityShedule() {
 
   const loadCoverage = (offset = 0, append = false) => {
     setCoverageLoading(true);
-    fetch(`${API_BASE}/api/graph/orphans?limit=${COVERAGE_PAGE_SIZE}&offset=${offset}`)
+    fetch(`${API_BASE}/api/graph/orphans?limit=${COVERAGE_PAGE_SIZE}&offset=${offset}&meta_only=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load coverage gaps")))
       .then((data) => {
         setCoverage(data || null);
@@ -191,7 +191,7 @@ export default function EntityShedule() {
           <>
             <div className="coverage-kpis">
               <div className="coverage-card">
-                <div className="coverage-label">Coverage to DM</div>
+                <div className="coverage-label">Coverage to DM (YAML)</div>
                 <div className="coverage-value">{coverage.coverage_pct}%</div>
                 <div className="coverage-note">
                   {coverage.reachable_count} / {coverage.total_tables} tables

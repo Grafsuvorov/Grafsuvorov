@@ -59,15 +59,23 @@ export default function EntityShedule() {
   }, [normalized]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const normalize = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "");
+    const q = normalize(query);
     return normalized.filter((row) => {
       if (statusFilter !== "all" && row.status !== statusFilter) return false;
       if (!q) return true;
-      return String(row.entity_name || "")
-        .toLowerCase()
-        .includes(q) || String(row.entity_id || "").includes(q);
+      const name = normalize(row.entity_name);
+      const id = normalize(row.entity_id);
+      const status = normalize(row.status);
+      const shared = (sharedMap[row.entity_name]?.tables || [])
+        .map((t) => normalize(t))
+        .join(" ");
+      return name.includes(q) || id.includes(q) || status.includes(q) || shared.includes(q);
     });
-  }, [normalized, query, statusFilter]);
+  }, [normalized, query, statusFilter, sharedMap]);
 
   return (
     <div className="container entity-page">

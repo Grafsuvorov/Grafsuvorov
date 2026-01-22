@@ -35,6 +35,9 @@ export default function TableCard({
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [variants, setVariants] = useState([]);
+  const [variantsLoading, setVariantsLoading] = useState(false);
+  const [variantsError, setVariantsError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -66,11 +69,25 @@ export default function TableCard({
       .finally(() => setHistoryLoading(false));
   }, [schema, tableName]);
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setVariantsLoading(true);
+    setVariantsError(null);
+    fetch(`${API_BASE}/api/table-variants/${schema}/${tableName}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table variants")))
+      .then((data) => setVariants(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setVariantsError(typeof err === "string" ? err : "Failed to load table variants");
+      })
+      .finally(() => setVariantsLoading(false));
+  }, [schema, tableName]);
+
   const status = useMemo(() => {
     if (!meta) return "ok";
-    if (meta.avg_duration_minutes && meta.avg_duration_minutes > 5) {
-      return "risk";
-    }
+    const avg = meta.avg_duration_minutes;
+    if (avg && avg > 20) return "risk";
+    if (avg && avg > 10) return "warn";
     return "ok";
   }, [meta]);
 
@@ -289,8 +306,22 @@ export default function TableCard({
             <span>ID {meta.table_id ?? "—"}</span>
           </div>
         </div>
-        <div className={`table-status ${status}`}>
-          {status === "risk" ? "RISK" : "OK"}
+        <div className="table-status-wrap">
+          <div className={`table-status ${status}`}>
+            {status === "risk" ? "RISK" : status === "warn" ? "WARN" : "OK"}
+          </div>
+          <button
+            className="status-help"
+            title={
+              status === "risk"
+                ? "RISK: avg duration > 20 min based on recent SUCCESS runs."
+                : status === "warn"
+                ? "WARN: avg duration > 10 min based on recent SUCCESS runs."
+                : "OK: avg duration <= 10 min based on recent SUCCESS runs."
+            }
+          >
+            ?
+          </button>
         </div>
       </div>
 
@@ -308,6 +339,20 @@ export default function TableCard({
                 {healthBadge.label}
               </span>
             )}
+          </div>
+          <div className="table-health-legend">
+            <span className="table-health-legend-item">
+              Slow &amp; Unstable: p95 &gt; 10 min and CV &gt; 0.6
+            </span>
+            <span className="table-health-legend-item">
+              Slow: p95 &gt; 10 min
+            </span>
+            <span className="table-health-legend-item">
+              Unstable: CV &gt; 0.3
+            </span>
+            <span className="table-health-legend-item">
+              Low Sample: not enough runs
+            </span>
           </div>
           <div className="table-health-metrics">
             <div>
@@ -433,6 +478,33 @@ export default function TableCard({
                   <span>{row.finish || "—"}</span>
                   <span>{row.duration_minutes ?? "—"} min</span>
                   <span className="history-message">{row.message || "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">Table variants (other entities)</div>
+        <div className="card">
+          {variantsLoading && <div className="muted">Loading variants...</div>}
+          {variantsError && <div className="dep-error-title">{variantsError}</div>}
+          {!variantsLoading && !variantsError && variants.length <= 1 && (
+            <div className="muted">No other entity variants found.</div>
+          )}
+          {!variantsLoading && !variantsError && variants.length > 1 && (
+            <div className="variants-table">
+              <div className="variants-table-head">
+                <span>Entity</span>
+                <span>Table ID</span>
+                <span>Last load</span>
+              </div>
+              {variants.map((row) => (
+                <div key={`${row.entity_id}-${row.table_id}`} className="variants-table-row">
+                  <span className="mono">{row.entity_name || "—"}</span>
+                  <span>{row.table_id ?? "—"}</span>
+                  <span>{row.table_last_load || "—"}</span>
                 </div>
               ))}
             </div>

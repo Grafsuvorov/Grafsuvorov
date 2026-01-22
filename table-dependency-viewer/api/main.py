@@ -761,6 +761,71 @@ def _cap_graph(nodes: dict, edges: list, layout: dict, max_nodes: int, max_edges
     return filtered_nodes, filtered_edges, filtered_layout, truncated
 
 
+def _compute_orphan_tables(snapshot: dict, final_schemas: set[str]) -> dict:
+    nodes = snapshot.get("table_graph", {}).get("nodes", {}) or {}
+    edges = snapshot.get("table_graph", {}).get("edges", []) or []
+    if not nodes:
+        return {
+            "final_schemas": sorted(final_schemas),
+            "total_tables": 0,
+            "final_count": 0,
+            "reachable_count": 0,
+            "orphan_count": 0,
+            "coverage_pct": 0.0,
+            "orphans": [],
+            "count_by_schema": {},
+        }
+
+    incoming = {}
+    outgoing = {}
+    reverse = {}
+    for edge in edges:
+        src = edge.get("source")
+        tgt = edge.get("target")
+        if not src or not tgt:
+            continue
+        outgoing[src] = outgoing.get(src, 0) + 1
+        incoming[tgt] = incoming.get(tgt, 0) + 1
+        reverse.setdefault(tgt, []).append(src)
+
+    finals = {
+        node_id
+        for node_id, node in nodes.items()
+        if node.get("schema") in final_schemas
+    }
+
+    reachable = set()
+    stack = list(finals)
+    while stack:
+        current = stack.pop()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        for parent in reverse.get(current, []):
+            if parent not in reachable:
+                stack.append(parent)
+
+    orphans = [node_id for node_id in nodes.keys() if node_id not in reachable]
+    count_by_schema = {}
+    for node_id in orphans:
+        schema = nodes[node_id].get("schema") or "unknown"
+        count_by_schema[schema] = count_by_schema.get(schema, 0) + 1
+
+    coverage_pct = (len(reachable) / len(nodes)) * 100 if nodes else 0.0
+    return {
+        "final_schemas": sorted(final_schemas),
+        "total_tables": len(nodes),
+        "final_count": len(finals),
+        "reachable_count": len(reachable),
+        "orphan_count": len(orphans),
+        "coverage_pct": round(coverage_pct, 2),
+        "orphans": orphans,
+        "count_by_schema": count_by_schema,
+        "incoming": incoming,
+        "outgoing": outgoing,
+    }
+
+
 @router.get("/api/entities/shared")
 def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
     snapshot = get_graph_snapshot()
@@ -776,6 +841,57 @@ def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
                 entry["tables"].append(table_fqn)
 
     return JSONResponse(content=shared_map, media_type="application/json; charset=utf-8")
+
+
+@router.get("/api/graph/orphans")
+def get_orphan_tables(
+    final_schemas: str = Query("dm,dm_view"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(40, ge=0, le=500),
+):
+    snapshot = get_graph_snapshot()
+    requested = {norm(s) for s in (final_schemas or "").split(",") if s}
+    final_set = {s for s in requested if s}
+    data = _compute_orphan_tables(snapshot, final_set)
+
+    table_nodes = snapshot.get("table_graph", {}).get("nodes", {}) or {}
+    table_entity_map = snapshot.get("table_entity_map") or {}
+    incoming = data.get("incoming", {})
+    outgoing = data.get("outgoing", {})
+
+    orphans_sorted = sorted(data["orphans"])
+    total_orphans = len(orphans_sorted)
+    start = min(offset, total_orphans)
+    end = total_orphans if limit == 0 else min(start + limit, total_orphans)
+
+    orphans = []
+    for node_id in orphans_sorted[start:end]:
+        node = table_nodes.get(node_id) or {}
+        orphans.append({
+            "id": node_id,
+            "schema": node.get("schema"),
+            "table": node.get("table"),
+            "table_id": node.get("table_id"),
+            "entities": table_entity_map.get(node_id, []),
+            "incoming": incoming.get(node_id, 0),
+            "outgoing": outgoing.get(node_id, 0),
+        })
+    has_more = end < total_orphans
+
+    payload = {
+        "final_schemas": data["final_schemas"],
+        "total_tables": data["total_tables"],
+        "final_count": data["final_count"],
+        "reachable_count": data["reachable_count"],
+        "orphan_count": data["orphan_count"],
+        "coverage_pct": data["coverage_pct"],
+        "count_by_schema": data["count_by_schema"],
+        "offset": start,
+        "limit": limit,
+        "has_more": has_more,
+        "orphans": orphans,
+    }
+    return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
 
 def normalize_fqn(table_fqn: str) -> tuple[str, str]:
     """

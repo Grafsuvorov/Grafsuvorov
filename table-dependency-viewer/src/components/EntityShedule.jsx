@@ -11,7 +11,16 @@ export default function EntityShedule() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sharedMap, setSharedMap] = useState({});
+  const [coverage, setCoverage] = useState(null);
+  const [coverageRows, setCoverageRows] = useState([]);
+  const [coverageError, setCoverageError] = useState(null);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [coverageHasMore, setCoverageHasMore] = useState(false);
+  const [coverageOffset, setCoverageOffset] = useState(0);
+  const [coverageQuery, setCoverageQuery] = useState("");
+  const [coverageSchema, setCoverageSchema] = useState("all");
   const navigate = useNavigate();
+  const COVERAGE_PAGE_SIZE = 50;
 
   useEffect(() => {
     setLoadingEntities(true);
@@ -30,6 +39,24 @@ export default function EntityShedule() {
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load shared tables")))
       .then((data) => setSharedMap(data || {}))
       .catch(() => setSharedMap({}));
+  }, []);
+
+  const loadCoverage = (offset = 0, append = false) => {
+    setCoverageLoading(true);
+    fetch(`${API_BASE}/api/graph/orphans?limit=${COVERAGE_PAGE_SIZE}&offset=${offset}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load coverage gaps")))
+      .then((data) => {
+        setCoverage(data || null);
+        setCoverageHasMore(!!data?.has_more);
+        setCoverageOffset((data?.offset || 0) + (data?.orphans?.length || 0));
+        setCoverageRows((prev) => (append ? [...prev, ...(data?.orphans || [])] : data?.orphans || []));
+      })
+      .catch(() => setCoverageError("Failed to load coverage gaps"))
+      .finally(() => setCoverageLoading(false));
+  };
+
+  useEffect(() => {
+    loadCoverage(0, false);
   }, []);
 
   const openEntityTables = (row) => {
@@ -77,6 +104,35 @@ export default function EntityShedule() {
     });
   }, [normalized, query, statusFilter, sharedMap]);
 
+  const coverageFiltered = useMemo(() => {
+    const normalize = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "");
+    const q = normalize(coverageQuery);
+    return coverageRows.filter((row) => {
+      if (coverageSchema !== "all" && row.schema !== coverageSchema) return false;
+      if (!q) return true;
+      const fqn = normalize(row.id);
+      const entities = (row.entities || []).map((ent) => normalize(ent)).join(" ");
+      return fqn.includes(q) || entities.includes(q);
+    });
+  }, [coverageRows, coverageQuery, coverageSchema]);
+
+  const coverageSchemaOptions = useMemo(() => {
+    if (!coverage?.count_by_schema) return ["all"];
+    const schemas = Object.keys(coverage.count_by_schema).sort();
+    return ["all", ...schemas];
+  }, [coverage]);
+
+  const openTable = (row) => {
+    if (!row?.schema || !row?.table) return;
+    const schema = String(row.schema).trim();
+    const table = String(row.table).trim().replaceAll("/", "").replaceAll("-", "");
+    if (!schema || !table) return;
+    navigate(`/table/${schema}/${table}`);
+  };
+
   return (
     <div className="container entity-page">
       <div className="entity-hero">
@@ -122,6 +178,107 @@ export default function EntityShedule() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="cc-surface">
+        <div className="section-title">
+          Coverage gaps
+          <span className="section-meta">{coverage?.orphan_count ?? 0}</span>
+        </div>
+        {coverageError && <div className="dep-error-title">{coverageError}</div>}
+        {!coverage && !coverageError && <div className="muted">Loading…</div>}
+        {coverage && (
+          <>
+            <div className="coverage-kpis">
+              <div className="coverage-card">
+                <div className="coverage-label">Coverage to DM</div>
+                <div className="coverage-value">{coverage.coverage_pct}%</div>
+                <div className="coverage-note">
+                  {coverage.reachable_count} / {coverage.total_tables} tables
+                </div>
+              </div>
+              <div className="coverage-card">
+                <div className="coverage-label">No path to DM</div>
+                <div className="coverage-value">{coverage.orphan_count}</div>
+                <div className="coverage-note">
+                  Final schemas: {coverage.final_schemas?.join(", ") || "—"}
+                </div>
+              </div>
+              <div className="coverage-card">
+                <div className="coverage-label">Final tables</div>
+                <div className="coverage-value">{coverage.final_count}</div>
+                <div className="coverage-note">DM layer entry points</div>
+              </div>
+            </div>
+
+            <div className="coverage-toolbar">
+              <input
+                className="coverage-search"
+                placeholder="Search table or entity"
+                value={coverageQuery}
+                onChange={(e) => setCoverageQuery(e.target.value)}
+              />
+              <div className="coverage-filters">
+                {coverageSchemaOptions.map((schema) => (
+                  <button
+                    key={schema}
+                    className={`pill ${coverageSchema === schema ? "pill-active" : ""}`}
+                    onClick={() => setCoverageSchema(schema)}
+                  >
+                    {schema === "all" ? "All schemas" : schema}
+                  </button>
+                ))}
+              </div>
+              <div className="coverage-actions">
+                <button className="btn btn-secondary" onClick={() => loadCoverage(0, false)}>
+                  Refresh
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  disabled={!coverageHasMore || coverageLoading}
+                  onClick={() => loadCoverage(coverageOffset, true)}
+                >
+                  {coverageHasMore ? "Load more" : "All loaded"}
+                </button>
+              </div>
+            </div>
+
+            <div className="coverage-summary">
+              Showing {coverageFiltered.length} of {coverage.orphan_count} tables
+            </div>
+
+            {coverage.orphan_count === 0 ? (
+              <div className="muted">All tables reach a DM layer</div>
+            ) : (
+              <div className="coverage-list">
+                {coverageFiltered.map((row) => (
+                  <div key={row.id} className="coverage-row">
+                    <button className="coverage-fqn mono coverage-link" onClick={() => openTable(row)}>
+                      {row.id}
+                    </button>
+                    <div className="coverage-meta">
+                      <span className="coverage-pill">{row.schema || "unknown"}</span>
+                      <span className="coverage-pill">in: {row.incoming}</span>
+                      <span className="coverage-pill">out: {row.outgoing}</span>
+                      {row.entities?.length > 0 ? (
+                        <span className="coverage-entities">
+                          {row.entities.join(", ")}
+                        </span>
+                      ) : (
+                        <span className="coverage-entities muted">entity unknown</span>
+                      )}
+                    </div>
+                    <div className="coverage-actions-row">
+                      <button className="btn btn-secondary" onClick={() => openTable(row)}>
+                        Open table
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       <section className="cc-surface">

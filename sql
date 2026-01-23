@@ -1,401 +1,682 @@
-python scripts/schedule_advisor.py --days 14 --min-samples 3 --concurrency 6
-#!/usr/bin/env python3
-import argparse
-import json
-from collections import defaultdict, deque
-from statistics import median
-from pathlib import Path
-
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
-
-from sqlalchemy import create_engine, text
-
-from api.config import DATABASE_URL, TABLE_LOADING_HISTORY
-from api.main import get_cached_meta_and_index, norm
-
-
-def build_meta_entries():
-    all_meta, _ = get_cached_meta_and_index()
-    entries = []
-    meta_tables = set()
-    for m in all_meta:
-        schema = norm(m.get("table_schema"))
-        table = norm(m.get("table_name"))
-        entity = m.get("entity_name") or "UNKNOWN"
-        if not schema or not table:
-            continue
-        if schema in ("raw_ext", "dict_raw_ext"):
-            continue
-        if isinstance(entity, str) and entity.lower() == "raw_ext":
-            continue
-
-        meta_tables.add(f"{schema}.{table}")
-        depends = {}
-        for src_schema, tables in (m.get("depends_on") or {}).items():
-            src_schema_norm = norm(src_schema)
-            if not src_schema_norm or src_schema_norm in ("raw_ext", "dict_raw_ext"):
-                continue
-            cleaned = [norm(t) for t in (tables or []) if t]
-            depends[src_schema_norm] = [t for t in cleaned if t]
-
-        entries.append(
-            {
-                "table_schema": schema,
-                "table_name": table,
-                "entity_name": entity,
-                "table_id": m.get("table_id"),
-                "depends_on": depends,
-            }
-        )
-    return entries, meta_tables
+table_name: sales_contract_header
+table_schema: dds
+table_id: 2016
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: true
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 35
+entity_name: BI_SB_WUC
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 00:30:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dds/sales_contract_header/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dds/sales_contract_header/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dds/sales_contract_header/sql_query_truncate.sql
+depends_on:
+  ods:
+    - zsd2902m_tollint_ral
+    - vbak_ral
+    - vbkd_ral
+    - texts_from_sap_fm_read_text
+    - zcq_paydox_ral
+verification:
+  - duplicate_check
+key_attributes:
+  - sales_contract_code
 
 
-def build_table_graph(entries, meta_tables):
-    table_entities = defaultdict(set)
-    table_ids = {}
+CREATE TABLE dq.data_quality_results (
+	verification_type varchar(15) NULL,
+	table_schema varchar(10) NULL,
+	table_name varchar(100) NULL,
+	metric_result text NULL,
+	dt_of_verification timestamp NULL,
+	sql_script text NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (table_name);
 
-    for m in entries:
-        fqn = f"{m['table_schema']}.{m['table_name']}"
-        table_entities[fqn].add(m["entity_name"])
-        if m.get("table_id"):
-            table_ids.setdefault(fqn, set()).add(m["table_id"])
-
-    edges = []
-    for m in entries:
-        target = f"{m['table_schema']}.{m['table_name']}"
-        for src_schema, tables in (m.get("depends_on") or {}).items():
-            for src_table in tables:
-                source = f"{src_schema}.{src_table}"
-                if source not in meta_tables or target not in meta_tables:
-                    continue
-                edges.append((source, target))
-
-    return table_entities, table_ids, edges
-
-
-def build_adjacency(edges):
-    forward = defaultdict(list)
-    reverse = defaultdict(list)
-    for src, tgt in edges:
-        forward[src].append(tgt)
-        reverse[tgt].append(src)
-    return forward, reverse
-
-
-def load_durations(days, engine):
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                f"""
-                SELECT
-                    object_id,
-                    AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60.0) AS avg_minutes,
-                    COUNT(*) AS samples
-                FROM {TABLE_LOADING_HISTORY}
-                WHERE object_type = 'table'
-                  AND loading_state = 'SUCCESS'
-                  AND loading_start_dttm >= now() - interval '{days} days'
-                GROUP BY object_id
-                """
-            )
-        ).mappings().all()
-
-    return {int(r["object_id"]): {"avg": float(r["avg_minutes"]), "samples": int(r["samples"])} for r in rows}
-
-
-def table_duration_map(table_ids, duration_by_id, min_samples):
-    durations = {}
-    all_values = []
-    for fqn, ids in table_ids.items():
-        values = []
-        for tid in ids:
-            data = duration_by_id.get(int(tid))
-            if not data:
-                continue
-            if data["samples"] < min_samples:
-                continue
-            values.append(data["avg"])
-        if values:
-            avg_val = sum(values) / len(values)
-            durations[fqn] = avg_val
-            all_values.extend(values)
-    default = median(all_values) if all_values else 5.0
-    return durations, default
-
-
-def get_layer(schema):
-    return schema or "unknown"
-
-
-def dm_tables_by_entity(meta_tables, table_entities):
-    result = defaultdict(list)
-    for fqn in meta_tables:
-        schema, table = fqn.split(".", 1)
-        if schema != "dm":
-            continue
-        for ent in table_entities.get(fqn, []):
-            result[ent].append(fqn)
-    return result
-
-
-def upstream_closure(start_nodes, reverse):
-    seen = set()
-    stack = list(start_nodes)
-    while stack:
-        node = stack.pop()
-        if node in seen:
-            continue
-        seen.add(node)
-        for parent in reverse.get(node, []):
-            if parent not in seen:
-                stack.append(parent)
-    return seen
-
-
-def build_entity_dependencies(dm_by_entity, reverse, table_entities):
-    deps = defaultdict(lambda: defaultdict(set))
-    dm_closure = {}
-    for entity, dm_tables in dm_by_entity.items():
-        closure = upstream_closure(dm_tables, reverse)
-        dm_closure[entity] = closure
-        for table in closure:
-            owners = table_entities.get(table, set())
-            if entity in owners:
-                continue
-            for owner in owners:
-                deps[entity][owner].add(table)
-    return deps, dm_closure
-
-
-def entity_schedule_levels(entities, deps):
-    graph = defaultdict(set)
-    indeg = {e: 0 for e in entities}
-    for entity, external in deps.items():
-        for owner in external.keys():
-            if owner == entity:
-                continue
-            graph[owner].add(entity)
-            indeg[entity] += 1
-
-    queue = deque(sorted([e for e, d in indeg.items() if d == 0]))
-    levels = []
-    visited = set()
-    while queue:
-        level = list(queue)
-        levels.append(level)
-        queue = deque()
-        for e in level:
-            visited.add(e)
-            for nxt in graph.get(e, []):
-                indeg[nxt] -= 1
-                if indeg[nxt] == 0:
-                    queue.append(nxt)
-    remaining = [e for e in entities if e not in visited]
-    if remaining:
-        levels.append(sorted(remaining))
-    return levels
-
-
-def estimate_entity_duration(entity, closure, durations, default_duration, concurrency):
-    layers = defaultdict(list)
-    for fqn in closure:
-        schema, _ = fqn.split(".", 1)
-        layers[get_layer(schema)].append(fqn)
-
-    dm_calc_total = sum(durations.get(t, default_duration) for t in layers.get("dm_calc", []))
-    dm_total = sum(durations.get(t, default_duration) for t in layers.get("dm", []))
-    seq_total = dm_calc_total + dm_total
-
-    parallel_total = 0.0
-    for schema, tables in layers.items():
-        if schema in ("dm_calc", "dm"):
-            continue
-        layer_sum = sum(durations.get(t, default_duration) for t in tables)
-        parallel_total += layer_sum / max(concurrency, 1)
-
-    return round(parallel_total + seq_total, 2), {
-        "parallel_minutes": round(parallel_total, 2),
-        "sequential_minutes": round(seq_total, 2),
-        "tables": sum(len(v) for v in layers.values()),
-    }
-
-
-def recommend_entities(meta_tables, forward, table_entities, dm_entities):
-    recommendations = []
-    dm_nodes = set()
-    dm_owner_map = {}
-    for entity, tables in dm_entities.items():
-        for t in tables:
-            dm_nodes.add(t)
-            dm_owner_map.setdefault(t, set()).add(entity)
-
-    excluded_entities = {"DICT_LOADER"}
-
-    for fqn in sorted(meta_tables):
-        owners = table_entities.get(fqn, set())
-        if not owners:
-            continue
-        if owners.intersection(excluded_entities):
-            continue
-        queue = deque([fqn])
-        seen = set([fqn])
-        hits = defaultdict(int)
-        while queue:
-            node = queue.popleft()
-            if node in dm_nodes:
-                for ent in dm_owner_map.get(node, []):
-                    hits[ent] += 1
-            for nxt in forward.get(node, []):
-                if nxt not in seen:
-                    seen.add(nxt)
-                    queue.append(nxt)
-        if not hits:
-            continue
-        best_ent = max(hits.items(), key=lambda item: item[1])[0]
-        if best_ent in excluded_entities:
-            continue
-        current_owner = sorted(owners)[0]
-        if best_ent != current_owner:
-            recommendations.append(
-                {
-                    "table": fqn,
-                    "current_owner": current_owner,
-                    "suggested_owner": best_ent,
-                    "dm_hits": hits[best_ent],
-                    "owner_set": sorted(owners),
-                }
-            )
-    return recommendations
-
-
-def write_excel_report(path, report):
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Recommendations"
-
-    headers = [
-        "table",
-        "schema",
-        "current_owner",
-        "suggested_owner",
-        "dm_hits",
-        "current_owner_est_min",
-        "suggested_owner_est_min",
-        "current_owner_ext_deps",
-        "suggested_owner_ext_deps",
-        "current_owner_dm_tables",
-        "suggested_owner_dm_tables",
-        "owner_set",
-    ]
-    ws.append(headers)
-
-    entities = report.get("entities", {})
-    for row in report.get("recommendations", []):
-        table = row.get("table") or ""
-        schema = table.split(".", 1)[0] if "." in table else ""
-        current_owner = row.get("current_owner") or ""
-        suggested_owner = row.get("suggested_owner") or ""
-        current_stats = entities.get(current_owner, {})
-        suggested_stats = entities.get(suggested_owner, {})
-        current_ext = current_stats.get("external_dependencies", {}) if isinstance(current_stats, dict) else {}
-        suggested_ext = suggested_stats.get("external_dependencies", {}) if isinstance(suggested_stats, dict) else {}
-        ws.append(
-            [
-                table,
-                schema,
-                current_owner,
-                suggested_owner,
-                row.get("dm_hits"),
-                current_stats.get("estimated_minutes"),
-                suggested_stats.get("estimated_minutes"),
-                sum(current_ext.values()) if isinstance(current_ext, dict) else None,
-                sum(suggested_ext.values()) if isinstance(suggested_ext, dict) else None,
-                current_stats.get("dm_tables"),
-                suggested_stats.get("dm_tables"),
-                ", ".join(row.get("owner_set") or []),
-            ]
-        )
-
-    for col_idx in range(1, len(headers) + 1):
-        col_letter = get_column_letter(col_idx)
-        ws.column_dimensions[col_letter].width = 22
-
-    wb.save(path)
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Schedule advisor for entity parallelization.")
-    parser.add_argument("--days", type=int, default=14, help="History window in days.")
-    parser.add_argument("--min-samples", type=int, default=3, help="Min samples to trust duration.")
-    parser.add_argument("--concurrency", type=int, default=6, help="Max tables per entity in parallel.")
-    parser.add_argument("--max-blocking", type=int, default=8, help="Max blocking tables per entity pair.")
-    parser.add_argument("--output", type=str, default="", help="Write JSON report to file.")
-    parser.add_argument("--excel", type=str, default="schedule_report.xlsx", help="Write Excel report to file.")
-    args = parser.parse_args()
-
-    entries, meta_tables = build_meta_entries()
-    table_entities, table_ids, edges = build_table_graph(entries, meta_tables)
-    forward, reverse = build_adjacency(edges)
-    dm_by_entity = dm_tables_by_entity(meta_tables, table_entities)
-    deps, closures = build_entity_dependencies(dm_by_entity, reverse, table_entities)
-
-    engine = create_engine(DATABASE_URL)
-    duration_by_id = load_durations(args.days, engine)
-    table_durations, default_duration = table_duration_map(table_ids, duration_by_id, args.min_samples)
-
-    entity_stats = {}
-    for entity, closure in closures.items():
-        total, detail = estimate_entity_duration(
-            entity, closure, table_durations, default_duration, args.concurrency
-        )
-        entity_stats[entity] = {
-            "estimated_minutes": total,
-            "details": detail,
-            "dm_tables": len(dm_by_entity.get(entity, [])),
-            "external_dependencies": {k: len(v) for k, v in deps.get(entity, {}).items()},
-        }
-
-    levels = entity_schedule_levels(sorted(closures.keys()), deps)
-
-    blocking = []
-    for entity, external in deps.items():
-        for owner, tables in external.items():
-            ranked = sorted(
-                tables,
-                key=lambda t: table_durations.get(t, default_duration),
-                reverse=True,
-            )
-            blocking.append(
-                {
-                    "needs": entity,
-                    "from": owner,
-                    "count": len(tables),
-                    "top_tables": ranked[: args.max_blocking],
-                }
-            )
-
-    recommendations = recommend_entities(meta_tables, forward, table_entities, dm_by_entity)
-    recommendations = sorted(recommendations, key=lambda r: r["dm_hits"], reverse=True)[:200]
-
-    report = {
-        "days": args.days,
-        "default_duration_minutes": round(default_duration, 2),
-        "entities": entity_stats,
-        "parallel_levels": levels,
-        "blocking_dependencies": blocking,
-        "recommendations": recommendations,
-    }
-
-    excel_path = Path(args.excel).resolve()
-    write_excel_report(excel_path, report)
-
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(report, f, ensure_ascii=True, indent=2)
-    else:
-        print(json.dumps(report, ensure_ascii=True, indent=2))
-
-
-if __name__ == "__main__":
-    main()
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-11 08:58:50.242', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-15 07:06:32.605', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-16 07:04:44.007', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-12 07:04:18.229', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-15 15:57:58.236', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-13 07:01:31.621', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-14 07:01:29.141', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-22 07:01:33.719', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-23 07:01:44.489', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-17 07:07:18.282', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-18 07:01:39.450', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-19 07:05:29.701', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-15 15:58:02.667', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-18 07:01:53.518', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-11 08:58:25.628', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-12 07:04:25.942', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-13 07:01:46.640', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-14 07:01:44.829', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-15 07:06:44.084', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-16 07:04:52.008', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-17 07:07:19.397', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-22 07:01:47.864', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-19 07:05:47.806', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-20 07:07:34.459', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-21 07:01:56.708', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-23 07:01:57.551', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-24 07:01:14.790', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-20 07:07:14.666', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-21 07:01:40.539', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-24 07:00:59.817', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-25 07:01:51.205', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-26 07:03:12.974', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-27 07:08:00.937', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-25 07:01:59.919', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-26 07:03:21.075', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-27 07:09:08.954', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_documents', '1', '2025-12-28 07:01:23.139', '
+SELECT *
+FROM dds."accounting_documents"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" )
+    FROM dds."accounting_documents"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dm', 'demand_planning_purchase_request_analysis_by_status', '1', '2026-01-05 07:06:33.813', '
+SELECT *
+FROM dm."demand_planning_purchase_request_analysis_by_status"
+WHERE CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code",  "purchase_request_position_status_name_for_quantity" )
+IN (
+    SELECT CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code",  "purchase_request_position_status_name_for_quantity" )
+    FROM dm."demand_planning_purchase_request_analysis_by_status"
+    GROUP BY "purchase_requisition_code",  "purchase_requisition_position_line_item_code",  "purchase_request_position_status_name_for_quantity" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dm_calc', 'accounting_document_contracts', '1', '2025-12-19 07:05:45.856', '
+SELECT *
+FROM dm_calc."accounting_document_contracts"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "accounting_document_position_code" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "accounting_document_position_code" )
+    FROM dm_calc."accounting_document_contracts"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "accounting_document_position_code" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'accounting_document_position_correspondence', '1', '2025-12-28 07:01:08.707', '
+SELECT *
+FROM dds."accounting_document_position_correspondence"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" )
+    FROM dds."accounting_document_position_correspondence"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "debit_line_item_number",  "credit_line_item_number",  "debit_item_for_new_item_number",  "credit_item_for_new_item_number",  "debit_item_number_from_ledger_item_split",  "credit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dm', 'demand_planning_purchase_request_analysis', '1', '2026-01-05 07:06:33.533', '
+SELECT *
+FROM dm."demand_planning_purchase_request_analysis"
+WHERE CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code" )
+IN (
+    SELECT CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code" )
+    FROM dm."demand_planning_purchase_request_analysis"
+    GROUP BY "purchase_requisition_code",  "purchase_requisition_position_line_item_code" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'purchase_requisition', '1', '2026-01-05 07:06:22.671', '
+SELECT *
+FROM dds."purchase_requisition"
+WHERE CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code" )
+IN (
+    SELECT CONCAT_WS(''~'', "purchase_requisition_code",  "purchase_requisition_position_line_item_code" )
+    FROM dds."purchase_requisition"
+    GROUP BY "purchase_requisition_code",  "purchase_requisition_position_line_item_code" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dm', 'account_turnover', '1', '2026-01-22 07:01:34.303', '
+SELECT *
+FROM dm."account_turnover"
+WHERE CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item",  "correspondence_debit_or_credit_code",  "correspondence_line_item_number",  "credit_line_item_number",  "debit_line_item_number",  "credit_item_for_new_item_number",  "debit_item_for_new_item_number",  "credit_item_number_from_ledger_item_split",  "debit_item_number_from_ledger_item_split" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item",  "correspondence_debit_or_credit_code",  "correspondence_line_item_number",  "credit_line_item_number",  "debit_line_item_number",  "credit_item_for_new_item_number",  "debit_item_for_new_item_number",  "credit_item_number_from_ledger_item_split",  "debit_item_number_from_ledger_item_split" )
+    FROM dm."account_turnover"
+    GROUP BY "unit_balance_code",  "fiscal_year",  "accounting_document_code",  "position_line_item",  "correspondence_debit_or_credit_code",  "correspondence_line_item_number",  "credit_line_item_number",  "debit_line_item_number",  "credit_item_for_new_item_number",  "debit_item_for_new_item_number",  "credit_item_number_from_ledger_item_split",  "debit_item_number_from_ledger_item_split" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dm_calc', 'accounting_external_contracts', '1', '2025-12-19 07:05:35.879', '
+SELECT *
+FROM dm_calc."accounting_external_contracts"
+WHERE CONCAT_WS(''~'', "contract_code",  "unit_balance_code",  "dt_external_contract" )
+IN (
+    SELECT CONCAT_WS(''~'', "contract_code",  "unit_balance_code",  "dt_external_contract" )
+    FROM dm_calc."accounting_external_contracts"
+    GROUP BY "contract_code",  "unit_balance_code",  "dt_external_contract" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('duplicate_check', 'dds', 'investment_expenses', '1', '2025-12-15 07:00:04.725', '
+SELECT *
+FROM dds."investment_expenses"
+WHERE CONCAT_WS(''~'', "unit_budget_code",  "measure_type_code",  "investment_budget_section_code",  "investment_budget_subsection_code",  "version_code",  "fiscal_year",  "division_code",  "is_additional_finance_code",  "unit_budget_partner_code",  "investment_activity_code",  "investment_area_code",  "purchase_document_code",  "investment_budget_adjustment_number",  "investment_activity_status_code",  "financing_status_code",  "budget_group_code",  "amount_currency_code",  "dt_report",  "dt_investment_expense_or_payment",  "dt_created",  "created_by",  "counterparty_code",  "unit_budget_payer_code" )
+IN (
+    SELECT CONCAT_WS(''~'', "unit_budget_code",  "measure_type_code",  "investment_budget_section_code",  "investment_budget_subsection_code",  "version_code",  "fiscal_year",  "division_code",  "is_additional_finance_code",  "unit_budget_partner_code",  "investment_activity_code",  "investment_area_code",  "purchase_document_code",  "investment_budget_adjustment_number",  "investment_activity_status_code",  "financing_status_code",  "budget_group_code",  "amount_currency_code",  "dt_report",  "dt_investment_expense_or_payment",  "dt_created",  "created_by",  "counterparty_code",  "unit_budget_payer_code" )
+    FROM dds."investment_expenses"
+    GROUP BY "unit_budget_code",  "measure_type_code",  "investment_budget_section_code",  "investment_budget_subsection_code",  "version_code",  "fiscal_year",  "division_code",  "is_additional_finance_code",  "unit_budget_partner_code",  "investment_activity_code",  "investment_area_code",  "purchase_document_code",  "investment_budget_adjustment_number",  "investment_activity_status_code",  "financing_status_code",  "budget_group_code",  "amount_currency_code",  "dt_report",  "dt_investment_expense_or_payment",  "dt_created",  "created_by",  "counterparty_code",  "unit_budget_payer_code" 
+    HAVING COUNT(1)>1
+)
+');
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_ods', 'T001K', '568', '2025-11-06 13:51:26.519', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'budget_group_texts', '43', '2025-11-06 13:51:27.203', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'client_grp2', '22', '2025-11-06 13:51:43.773', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'material_type', '45', '2025-11-06 13:51:43.929', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'general_ledger_accounts_main_data', '1330659', '2025-11-06 13:51:44.559', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'doc_grp_process', '70', '2025-11-06 13:51:45.966', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'foreign_trade', '13747', '2025-11-06 13:51:59.191', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'vat_rates_texts', '9405', '2025-11-06 13:52:01.234', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'sb_unit_org_department_dsc', '399', '2025-11-06 13:52:03.276', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'plant_and_subsidiary', '613', '2025-11-06 13:52:16.896', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'counterparty_td', '487605', '2025-11-06 13:52:18.780', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'map_counterparty_to_market_region2', '20', '2025-11-06 13:52:20.075', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'accrual_type_texts', '8', '2025-11-06 13:52:33.356', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'indicator_yes_no_texts', '4', '2025-11-06 13:52:33.456', NULL);
+INSERT INTO dq.data_quality_results
+(verification_type, table_schema, table_name, metric_result, dt_of_verification, sql_script)
+VALUES('row_count', 'dict_dds', 'purchase_supplier_master_data', '868029', '2025-11-06 13:52:33.941', NULL);

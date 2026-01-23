@@ -1,8 +1,13 @@
+python scripts/schedule_advisor.py --days 14 --min-samples 3 --concurrency 6
 #!/usr/bin/env python3
 import argparse
 import json
 from collections import defaultdict, deque
 from statistics import median
+from pathlib import Path
+
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 from sqlalchemy import create_engine, text
 
@@ -225,9 +230,13 @@ def recommend_entities(meta_tables, forward, table_entities, dm_entities):
             dm_nodes.add(t)
             dm_owner_map.setdefault(t, set()).add(entity)
 
+    excluded_entities = {"DICT_LOADER"}
+
     for fqn in sorted(meta_tables):
         owners = table_entities.get(fqn, set())
         if not owners:
+            continue
+        if owners.intersection(excluded_entities):
             continue
         queue = deque([fqn])
         seen = set([fqn])
@@ -244,6 +253,8 @@ def recommend_entities(meta_tables, forward, table_entities, dm_entities):
         if not hits:
             continue
         best_ent = max(hits.items(), key=lambda item: item[1])[0]
+        if best_ent in excluded_entities:
+            continue
         current_owner = sorted(owners)[0]
         if best_ent != current_owner:
             recommendations.append(
@@ -258,6 +269,61 @@ def recommend_entities(meta_tables, forward, table_entities, dm_entities):
     return recommendations
 
 
+def write_excel_report(path, report):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Recommendations"
+
+    headers = [
+        "table",
+        "schema",
+        "current_owner",
+        "suggested_owner",
+        "dm_hits",
+        "current_owner_est_min",
+        "suggested_owner_est_min",
+        "current_owner_ext_deps",
+        "suggested_owner_ext_deps",
+        "current_owner_dm_tables",
+        "suggested_owner_dm_tables",
+        "owner_set",
+    ]
+    ws.append(headers)
+
+    entities = report.get("entities", {})
+    for row in report.get("recommendations", []):
+        table = row.get("table") or ""
+        schema = table.split(".", 1)[0] if "." in table else ""
+        current_owner = row.get("current_owner") or ""
+        suggested_owner = row.get("suggested_owner") or ""
+        current_stats = entities.get(current_owner, {})
+        suggested_stats = entities.get(suggested_owner, {})
+        current_ext = current_stats.get("external_dependencies", {}) if isinstance(current_stats, dict) else {}
+        suggested_ext = suggested_stats.get("external_dependencies", {}) if isinstance(suggested_stats, dict) else {}
+        ws.append(
+            [
+                table,
+                schema,
+                current_owner,
+                suggested_owner,
+                row.get("dm_hits"),
+                current_stats.get("estimated_minutes"),
+                suggested_stats.get("estimated_minutes"),
+                sum(current_ext.values()) if isinstance(current_ext, dict) else None,
+                sum(suggested_ext.values()) if isinstance(suggested_ext, dict) else None,
+                current_stats.get("dm_tables"),
+                suggested_stats.get("dm_tables"),
+                ", ".join(row.get("owner_set") or []),
+            ]
+        )
+
+    for col_idx in range(1, len(headers) + 1):
+        col_letter = get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = 22
+
+    wb.save(path)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Schedule advisor for entity parallelization.")
     parser.add_argument("--days", type=int, default=14, help="History window in days.")
@@ -265,6 +331,7 @@ def main():
     parser.add_argument("--concurrency", type=int, default=6, help="Max tables per entity in parallel.")
     parser.add_argument("--max-blocking", type=int, default=8, help="Max blocking tables per entity pair.")
     parser.add_argument("--output", type=str, default="", help="Write JSON report to file.")
+    parser.add_argument("--excel", type=str, default="schedule_report.xlsx", help="Write Excel report to file.")
     args = parser.parse_args()
 
     entries, meta_tables = build_meta_entries()
@@ -319,6 +386,9 @@ def main():
         "blocking_dependencies": blocking,
         "recommendations": recommendations,
     }
+
+    excel_path = Path(args.excel).resolve()
+    write_excel_report(excel_path, report)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8") as f:

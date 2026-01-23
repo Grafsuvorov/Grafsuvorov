@@ -22,6 +22,8 @@ export default function HomePage({ onSelectTable }) {
   const [nightLoading, setNightLoading] = useState(false);
   const [nightError, setNightError] = useState(null);
   const [incidentTimeline, setIncidentTimeline] = useState([]);
+  const [dqSummary, setDqSummary] = useState(null);
+  const [dqAlerts, setDqAlerts] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +47,8 @@ export default function HomePage({ onSelectTable }) {
             setTableCycles(Array.isArray(cached.tableCycles) ? cached.tableCycles : []);
             setNightSummary(cached.nightSummary || null);
             setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
+            setDqSummary(cached.dqSummary || null);
+            setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -58,7 +62,9 @@ export default function HomePage({ onSelectTable }) {
           metricsResp,
           diagResp,
           nightResp,
-          timelineResp
+          timelineResp,
+          dqSummaryResp,
+          dqAlertsResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
@@ -66,7 +72,9 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/metrics`),
           fetch(`${API_BASE}/api/graph/diagnostics?include_any=true`),
           fetch(`${API_BASE}/api/night-summary?days=30&limit=10`),
-          fetch(`${API_BASE}/api/incidents/timeline?days=7`)
+          fetch(`${API_BASE}/api/incidents/timeline?days=7`),
+          fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
+          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -76,6 +84,8 @@ export default function HomePage({ onSelectTable }) {
         const diagJson = await diagResp.json();
         const nightJson = await nightResp.json();
         const timelineJson = await timelineResp.json();
+        const dqSummaryJson = await dqSummaryResp.json();
+        const dqAlertsJson = await dqAlertsResp.json();
 
         if (!cancelled) {
           setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
@@ -87,6 +97,8 @@ export default function HomePage({ onSelectTable }) {
           setTableCycles(Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : []);
           setNightSummary(nightJson || null);
           setIncidentTimeline(Array.isArray(timelineJson) ? timelineJson : []);
+          setDqSummary(dqSummaryJson || null);
+          setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
           setNightLoading(false);
           sessionStorage.setItem(
             "home:payload",
@@ -101,6 +113,8 @@ export default function HomePage({ onSelectTable }) {
               tableCycles: Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : [],
               nightSummary: nightJson || null,
               incidentTimeline: Array.isArray(timelineJson) ? timelineJson : [],
+              dqSummary: dqSummaryJson || null,
+              dqAlerts: Array.isArray(dqAlertsJson) ? dqAlertsJson : [],
             })
           );
         }
@@ -134,6 +148,11 @@ export default function HomePage({ onSelectTable }) {
   const layerOrder = ["DICT", "STG", "ODS", "DDS", "DM_CALC", "DM"];
   const impactLimit = 8;
   const entityLimit = 6;
+  const dqLimit = 8;
+
+  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
+  const fmtPct = (value) =>
+    Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—";
 
   const sortLayers = (a, b) => {
     const aIndex = layerOrder.indexOf(a);
@@ -400,6 +419,64 @@ export default function HomePage({ onSelectTable }) {
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* ===== DATA QUALITY ===== */}
+      {!loading && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Data quality (last 7 days)
+            <span className="section-meta">{dqAlerts.length}</span>
+          </div>
+          {dqSummary && (
+            <div className="dq-summary-grid">
+              <div className="dq-summary-card">
+                <div className="dq-summary-label">Tables with duplicates</div>
+                <div className="dq-summary-value">{dqSummary.duplicate_tables ?? 0}</div>
+              </div>
+              <div className="dq-summary-card">
+                <div className="dq-summary-label">Row count deviations</div>
+                <div className="dq-summary-value">{dqSummary.row_count_tables ?? 0}</div>
+                <div className="dq-summary-hint muted">
+                  Checked: {dqSummary.row_count_checked ?? 0}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {dqAlerts.length === 0 && (
+            <div className="muted">No data quality alerts detected.</div>
+          )}
+          {dqAlerts.length > 0 && (
+            <div className="dq-alerts-list">
+              {dqAlerts.slice(0, dqLimit).map((row, idx) => {
+                const fqn = `${row.table_schema}.${row.table_name}`;
+                return (
+                  <button
+                    key={`${fqn}-${idx}`}
+                    className="dq-alert-row"
+                    onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                  >
+                    <div className="dq-alert-main">
+                      <div className="dq-alert-title mono">{fqn}</div>
+                      <div className="dq-alert-sub muted">
+                        {row.entity_name || "—"} · {row.type === "duplicate_check" ? "Duplicate" : "Row count"}
+                      </div>
+                    </div>
+                    <div className="dq-alert-meta">
+                      <span className="dq-alert-pill">
+                        {row.type === "duplicate_check"
+                          ? `${fmtInt(row.metric_value)} dupes`
+                          : `Δ ${fmtPct(row.delta_pct)}`}
+                      </span>
+                      <span className="dq-alert-date muted">{row.dt || "—"}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 

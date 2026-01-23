@@ -38,6 +38,12 @@ export default function TableCard({
   const [variants, setVariants] = useState([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [variantsError, setVariantsError] = useState(null);
+  const [dqData, setDqData] = useState(null);
+  const [dqLoading, setDqLoading] = useState(false);
+  const [dqError, setDqError] = useState(null);
+  const [dqHistory, setDqHistory] = useState([]);
+  const [dqHistoryLoading, setDqHistoryLoading] = useState(false);
+  const [dqHistoryError, setDqHistoryError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -83,6 +89,34 @@ export default function TableCard({
       .finally(() => setVariantsLoading(false));
   }, [schema, tableName]);
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setDqLoading(true);
+    setDqError(null);
+    fetch(`${API_BASE}/api/dq/table/${schema}/${tableName}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality")))
+      .then((data) => setDqData(data))
+      .catch((err) => {
+        console.error(err);
+        setDqError(typeof err === "string" ? err : "Failed to load data quality");
+      })
+      .finally(() => setDqLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setDqHistoryLoading(true);
+    setDqHistoryError(null);
+    fetch(`${API_BASE}/api/dq/history/${schema}/${tableName}?limit=20`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality history")))
+      .then((data) => setDqHistory(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setDqHistoryError(typeof err === "string" ? err : "Failed to load data quality history");
+      })
+      .finally(() => setDqHistoryLoading(false));
+  }, [schema, tableName]);
+
   const status = useMemo(() => {
     if (!meta) return "ok";
     const avg = meta.avg_duration_minutes;
@@ -108,6 +142,8 @@ export default function TableCard({
   }, [tableContext]);
 
   const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
+  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
+  const fmtPct = (value) => (Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—");
 
   const tableFqn = meta
     ? `${meta.table_schema}.${meta.table_name}`
@@ -417,6 +453,75 @@ export default function TableCard({
             <button className="btn" onClick={onBack}>
               Return
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">Data quality</div>
+        <div className="card">
+          {dqLoading && <div className="muted">Loading data quality...</div>}
+          {dqError && <div className="dep-error-title">{dqError}</div>}
+          {!dqLoading && !dqError && !dqData && (
+            <div className="muted">No data quality checks found.</div>
+          )}
+          {!dqLoading && !dqError && dqData && (
+            <div className="dq-grid">
+              <div className="dq-card">
+                <div className="dq-label">Duplicate check</div>
+                <div className="dq-value">
+                  {dqData.duplicate?.count !== null && dqData.duplicate?.count !== undefined
+                    ? fmtInt(dqData.duplicate.count)
+                    : "—"}
+                </div>
+                <div className="dq-hint muted">
+                  Last check: {dqData.duplicate?.last_check || "—"}
+                </div>
+              </div>
+              <div className="dq-card">
+                <div className="dq-label">Row count</div>
+                <div className="dq-value">
+                  {dqData.row_count?.count !== null && dqData.row_count?.count !== undefined
+                    ? fmtInt(dqData.row_count.count)
+                    : "—"}
+                </div>
+                <div className="dq-hint muted">
+                  Baseline median:{" "}
+                  {dqData.row_count?.baseline_median !== null && dqData.row_count?.baseline_median !== undefined
+                    ? fmtInt(dqData.row_count.baseline_median)
+                    : "—"}
+                  {" · "}
+                  Δ {fmtPct(dqData.row_count?.delta_pct)}
+                </div>
+                {Number.isFinite(dqData.row_count?.delta_pct) &&
+                  Math.abs(dqData.row_count.delta_pct) >= 10 && (
+                    <div className="dq-alert">Deviation exceeds 10%</div>
+                  )}
+              </div>
+            </div>
+          )}
+          <div className="dq-history">
+            {dqHistoryLoading && <div className="muted">Loading data quality history...</div>}
+            {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
+            {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
+              <div className="muted">No data quality history yet.</div>
+            )}
+            {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
+              <div className="dq-history-table">
+                <div className="dq-history-head">
+                  <span>Check</span>
+                  <span>Value</span>
+                  <span>Date</span>
+                </div>
+                {dqHistory.map((row, idx) => (
+                  <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
+                    <span className="dq-history-type">{row.verification_type || "—"}</span>
+                    <span>{row.value !== null && row.value !== undefined ? fmtInt(row.value) : "—"}</span>
+                    <span>{row.dt || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

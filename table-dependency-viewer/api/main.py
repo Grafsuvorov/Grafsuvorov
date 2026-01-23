@@ -35,6 +35,7 @@ from .config import (
     TABLE_YT_SLA,
     TABLE_YTREK_INCIDENTS,
     TABLE_TABLES_META_CLICK,
+    TABLE_DATA_QUALITY,
     DATABASE_URL,
 )
 
@@ -854,7 +855,7 @@ def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
 
 @router.get("/api/graph/orphans")
 def get_orphan_tables(
-    final_schemas: str = Query("dm,dm_view"),
+    final_schemas: str = Query("dm"),
     meta_only: bool = Query(True),
     offset: int = Query(0, ge=0),
     limit: int = Query(40, ge=0, le=500),
@@ -919,6 +920,30 @@ def normalize_fqn(table_fqn: str) -> tuple[str, str]:
         raise ValueError("Expected schema.table")
 
     return tuple(s.split(".", 1))
+
+
+def _parse_numeric(text_val: Optional[str]) -> Optional[float]:
+    if text_val is None:
+        return None
+    match = re.search(r"-?\d+(?:\.\d+)?", str(text_val))
+    if not match:
+        return None
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return None
+
+
+def _entity_map_from_meta() -> dict:
+    all_meta, _ = get_cached_meta_and_index()
+    entity_map = {}
+    for meta in all_meta:
+        schema = norm(meta.get("table_schema"))
+        table = norm(meta.get("table_name"))
+        entity = meta.get("entity_name")
+        if schema and table and entity:
+            entity_map[f"{schema}.{table}"] = entity
+    return entity_map
 
 @app.on_event("startup")
 def warm_up_cache():
@@ -1857,6 +1882,365 @@ def get_table_variants(schema: str, table: str):
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/dq/table/{schema}/{table}")
+def get_table_quality(schema: str, table: str):
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    try:
+        with engine.connect() as conn:
+            dup_row = conn.execute(
+                text(
+                    f"""
+                    SELECT metric_result, dt_of_verification
+                    FROM {TABLE_DATA_QUALITY}
+                    WHERE verification_type = 'duplicate_check'
+                      AND lower(table_schema) = :schema
+                      AND lower(table_name) = :table
+                    ORDER BY dt_of_verification DESC NULLS LAST
+                    LIMIT 1
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm},
+            ).mappings().first()
+
+            rc_rows = conn.execute(
+                text(
+                    f"""
+                    SELECT metric_result, dt_of_verification
+                    FROM {TABLE_DATA_QUALITY}
+                    WHERE verification_type = 'row_count'
+                      AND lower(table_schema) = :schema
+                      AND lower(table_name) = :table
+                    ORDER BY dt_of_verification DESC NULLS LAST
+                    LIMIT 8
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm},
+            ).mappings().all()
+
+        duplicate_count = _parse_numeric(dup_row.get("metric_result")) if dup_row else None
+        duplicate_last = serialize_datetime(dup_row.get("dt_of_verification")) if dup_row else None
+
+        row_counts = []
+        for row in rc_rows:
+            value = _parse_numeric(row.get("metric_result"))
+            if value is None:
+                continue
+            row_counts.append({
+                "value": value,
+                "dt": row.get("dt_of_verification"),
+            })
+
+        row_counts_sorted = sorted(row_counts, key=lambda r: r["dt"] or datetime.min, reverse=True)
+        latest_row = row_counts_sorted[0] if row_counts_sorted else None
+        baseline_values = [r["value"] for r in row_counts_sorted[1:8] if r.get("value") is not None]
+
+        baseline = None
+        if baseline_values:
+            baseline = float(sorted(baseline_values)[len(baseline_values) // 2])
+
+        delta_pct = None
+        if baseline and latest_row:
+            delta_pct = round(((latest_row["value"] - baseline) / baseline) * 100, 2)
+
+        payload = {
+            "duplicate": {
+                "count": int(duplicate_count) if duplicate_count is not None else None,
+                "last_check": duplicate_last,
+            },
+            "row_count": {
+                "count": int(latest_row["value"]) if latest_row else None,
+                "last_check": serialize_datetime(latest_row["dt"]) if latest_row else None,
+                "baseline_median": baseline,
+                "delta_pct": delta_pct,
+                "samples": len(baseline_values),
+            },
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/dq/history/{schema}/{table}")
+def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT verification_type, metric_result, dt_of_verification
+                    FROM {TABLE_DATA_QUALITY}
+                    WHERE lower(table_schema) = :schema
+                      AND lower(table_name) = :table
+                    ORDER BY dt_of_verification DESC NULLS LAST
+                    LIMIT :limit
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm, "limit": limit},
+            ).mappings().all()
+
+        payload = [
+            {
+                "verification_type": row.get("verification_type"),
+                "metric_result": row.get("metric_result"),
+                "value": _parse_numeric(row.get("metric_result")),
+                "dt": serialize_datetime(row.get("dt_of_verification")),
+            }
+            for row in rows
+        ]
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
+    now = datetime.utcnow()
+    entity_map = _entity_map_from_meta()
+    with engine.connect() as conn:
+        dup_rows = conn.execute(
+            text(
+                f"""
+                WITH ranked AS (
+                  SELECT
+                    lower(table_schema) AS schema,
+                    lower(table_name) AS table,
+                    metric_result,
+                    dt_of_verification,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY lower(table_schema), lower(table_name)
+                      ORDER BY dt_of_verification DESC
+                    ) AS rn
+                  FROM {TABLE_DATA_QUALITY}
+                  WHERE verification_type = 'duplicate_check'
+                    AND dt_of_verification >= now() - interval '{days} days'
+                )
+                SELECT schema, table, metric_result, dt_of_verification
+                FROM ranked
+                WHERE rn = 1
+                """
+            )
+        ).mappings().all()
+
+        rc_rows = conn.execute(
+            text(
+                f"""
+                WITH ranked AS (
+                  SELECT
+                    lower(table_schema) AS schema,
+                    lower(table_name) AS table,
+                    metric_result,
+                    dt_of_verification,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY lower(table_schema), lower(table_name)
+                      ORDER BY dt_of_verification DESC
+                    ) AS rn
+                  FROM {TABLE_DATA_QUALITY}
+                  WHERE verification_type = 'row_count'
+                )
+                SELECT schema, table, metric_result, dt_of_verification, rn
+                FROM ranked
+                WHERE rn <= 8
+                """
+            )
+        ).mappings().all()
+
+    alerts = []
+    for row in dup_rows:
+        count = _parse_numeric(row.get("metric_result")) or 0
+        if count <= 0:
+            continue
+        fqn = f"{row.get('schema')}.{row.get('table')}"
+        alerts.append({
+            "type": "duplicate_check",
+            "table_schema": row.get("schema"),
+            "table_name": row.get("table"),
+            "entity_name": entity_map.get(fqn),
+            "metric_value": int(count),
+            "delta_pct": None,
+            "dt": serialize_datetime(row.get("dt_of_verification")),
+        })
+
+    rc_grouped = {}
+    for row in rc_rows:
+        key = f"{row.get('schema')}.{row.get('table')}"
+        rc_grouped.setdefault(key, []).append(row)
+
+    for key, rows in rc_grouped.items():
+        rows_sorted = sorted(rows, key=lambda r: r.get("dt_of_verification") or datetime.min, reverse=True)
+        latest = rows_sorted[0]
+        if latest.get("dt_of_verification") and (now - latest["dt_of_verification"]).days > days:
+            continue
+        latest_val = _parse_numeric(latest.get("metric_result"))
+        baseline_vals = [
+            _parse_numeric(r.get("metric_result"))
+            for r in rows_sorted[1:8]
+            if _parse_numeric(r.get("metric_result")) is not None
+        ]
+        if latest_val is None or not baseline_vals:
+            continue
+        baseline = float(sorted(baseline_vals)[len(baseline_vals) // 2])
+        if baseline == 0:
+            continue
+        delta_pct = ((latest_val - baseline) / baseline) * 100
+        if abs(delta_pct) < delta:
+            continue
+        schema, table = key.split(".", 1)
+        alerts.append({
+            "type": "row_count",
+            "table_schema": schema,
+            "table_name": table,
+            "entity_name": entity_map.get(key),
+            "metric_value": int(latest_val),
+            "delta_pct": round(delta_pct, 2),
+            "dt": serialize_datetime(latest.get("dt_of_verification")),
+        })
+
+    alerts.sort(
+        key=lambda a: (
+            0 if a["type"] == "duplicate_check" else 1,
+            -(a.get("metric_value") or 0),
+            -abs(a.get("delta_pct") or 0),
+        )
+    )
+    return alerts
+
+
+@router.get("/api/dq/summary")
+def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(10.0, ge=0)):
+    try:
+        now = datetime.utcnow()
+        with engine.connect() as conn:
+            dup_rows = conn.execute(
+                text(
+                    f"""
+                    WITH ranked AS (
+                      SELECT
+                        lower(table_schema) AS schema,
+                        lower(table_name) AS table,
+                        metric_result,
+                        dt_of_verification,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY lower(table_schema), lower(table_name)
+                          ORDER BY dt_of_verification DESC
+                        ) AS rn
+                      FROM {TABLE_DATA_QUALITY}
+                      WHERE verification_type = 'duplicate_check'
+                        AND dt_of_verification >= now() - interval '{days} days'
+                    )
+                    SELECT schema, table, metric_result, dt_of_verification
+                    FROM ranked
+                    WHERE rn = 1
+                    """
+                )
+            ).mappings().all()
+
+            rc_rows = conn.execute(
+                text(
+                    f"""
+                    WITH ranked AS (
+                      SELECT
+                        lower(table_schema) AS schema,
+                        lower(table_name) AS table,
+                        metric_result,
+                        dt_of_verification,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY lower(table_schema), lower(table_name)
+                          ORDER BY dt_of_verification DESC
+                        ) AS rn
+                      FROM {TABLE_DATA_QUALITY}
+                      WHERE verification_type = 'row_count'
+                    )
+                    SELECT schema, table, metric_result, dt_of_verification, rn
+                    FROM ranked
+                    WHERE rn <= 8
+                    """
+                )
+            ).mappings().all()
+
+        dup_issues = 0
+        for row in dup_rows:
+            count = _parse_numeric(row.get("metric_result")) or 0
+            if count > 0:
+                dup_issues += 1
+
+        rc_grouped = {}
+        for row in rc_rows:
+            key = f"{row.get('schema')}.{row.get('table')}"
+            rc_grouped.setdefault(key, []).append(row)
+
+        rc_issues = 0
+        checked_rc = 0
+        for key, rows in rc_grouped.items():
+            rows_sorted = sorted(rows, key=lambda r: r.get("dt_of_verification") or datetime.min, reverse=True)
+            latest = rows_sorted[0]
+            if latest.get("dt_of_verification") and (now - latest["dt_of_verification"]).days > days:
+                continue
+            latest_val = _parse_numeric(latest.get("metric_result"))
+            baseline_vals = [
+                _parse_numeric(r.get("metric_result"))
+                for r in rows_sorted[1:8]
+                if _parse_numeric(r.get("metric_result")) is not None
+            ]
+            if latest_val is None or not baseline_vals:
+                continue
+            checked_rc += 1
+            baseline = float(sorted(baseline_vals)[len(baseline_vals) // 2])
+            if baseline == 0:
+                continue
+            delta_pct = ((latest_val - baseline) / baseline) * 100
+            if abs(delta_pct) >= delta:
+                rc_issues += 1
+
+        payload = {
+            "days": days,
+            "duplicate_tables": dup_issues,
+            "row_count_tables": rc_issues,
+            "row_count_checked": checked_rc,
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/dq/alerts")
+def get_quality_alerts(
+    days: int = Query(7, ge=1, le=90),
+    delta: float = Query(10.0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
+):
+    try:
+        alerts = _collect_dq_alerts(days, delta)
+        return JSONResponse(content=alerts[:limit], media_type="application/json; charset=utf-8")
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/dq/entity")
+def get_quality_by_entity(
+    days: int = Query(7, ge=1, le=90),
+    delta: float = Query(10.0, ge=0),
+    limit: int = Query(12, ge=1, le=50),
+):
+    alerts = _collect_dq_alerts(days, delta)
+    grouped = {}
+    for alert in alerts:
+        entity = alert.get("entity_name") or "UNKNOWN"
+        entry = grouped.setdefault(entity, {"entity": entity, "duplicates": 0, "row_count": 0})
+        if alert.get("type") == "duplicate_check":
+            entry["duplicates"] += 1
+        if alert.get("type") == "row_count":
+            entry["row_count"] += 1
+
+    rows = sorted(grouped.values(), key=lambda r: (-(r["duplicates"] + r["row_count"]), r["entity"]))
+    return JSONResponse(content=rows[:limit], media_type="application/json; charset=utf-8")
 
 
 def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:

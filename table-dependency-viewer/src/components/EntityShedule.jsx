@@ -19,6 +19,9 @@ export default function EntityShedule() {
   const [coverageOffset, setCoverageOffset] = useState(0);
   const [coverageQuery, setCoverageQuery] = useState("");
   const [coverageSchema, setCoverageSchema] = useState("all");
+  const [dqEntities, setDqEntities] = useState([]);
+  const [dqEntitiesError, setDqEntitiesError] = useState(null);
+  const [dqEntitiesLoading, setDqEntitiesLoading] = useState(false);
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -57,6 +60,19 @@ export default function EntityShedule() {
 
   useEffect(() => {
     loadCoverage(0, false);
+  }, []);
+
+  useEffect(() => {
+    setDqEntitiesLoading(true);
+    setDqEntitiesError(null);
+    fetch(`${API_BASE}/api/dq/entity?days=7&delta=10&limit=12`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality entities")))
+      .then((data) => setDqEntities(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setDqEntitiesError(typeof err === "string" ? err : "Failed to load data quality entities");
+      })
+      .finally(() => setDqEntitiesLoading(false));
   }, []);
 
   const openEntityTables = (row) => {
@@ -191,7 +207,7 @@ export default function EntityShedule() {
           <>
             <div className="coverage-kpis">
               <div className="coverage-card">
-                <div className="coverage-label">Coverage to DM (YAML)</div>
+                <div className="coverage-label">Coverage to DM (YAML only)</div>
                 <div className="coverage-value">{coverage.coverage_pct}%</div>
                 <div className="coverage-note">
                   {coverage.reachable_count} / {coverage.total_tables} tables
@@ -278,6 +294,31 @@ export default function EntityShedule() {
               </div>
             )}
           </>
+        )}
+      </section>
+
+      <section className="cc-surface">
+        <div className="section-title">
+          Data quality by entity
+          <span className="section-meta">{dqEntities.length}</span>
+        </div>
+        {dqEntitiesLoading && <div className="muted">Loading data quality summary...</div>}
+        {dqEntitiesError && <div className="dep-error-title">{dqEntitiesError}</div>}
+        {!dqEntitiesLoading && !dqEntitiesError && dqEntities.length === 0 && (
+          <div className="muted">No data quality alerts found.</div>
+        )}
+        {!dqEntitiesLoading && !dqEntitiesError && dqEntities.length > 0 && (
+          <div className="dq-entity-grid">
+            {dqEntities.map((row) => (
+              <div key={row.entity} className="dq-entity-card">
+                <div className="dq-entity-name">{row.entity}</div>
+                <div className="dq-entity-metrics">
+                  <span>Duplicates: {row.duplicates}</span>
+                  <span>Row count: {row.row_count}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 

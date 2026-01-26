@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
@@ -44,6 +44,7 @@ export default function TableCard({
   const [dqHistory, setDqHistory] = useState([]);
   const [dqHistoryLoading, setDqHistoryLoading] = useState(false);
   const [dqHistoryError, setDqHistoryError] = useState(null);
+  const [showDqHistory, setShowDqHistory] = useState(false);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -51,7 +52,7 @@ export default function TableCard({
     setLoadingMeta(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/card/${schema}/${tableName}`)
+    fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch table metadata");
         return res.json();
@@ -65,7 +66,7 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setHistoryLoading(true);
     setHistoryError(null);
-    fetch(`${API_BASE}/api/table-history/${schema}/${tableName}?limit=10`)
+    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=10`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table history")))
       .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
       .catch((err) => {
@@ -79,7 +80,7 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setVariantsLoading(true);
     setVariantsError(null);
-    fetch(`${API_BASE}/api/table-variants/${schema}/${tableName}`)
+    fetch(`${API_BASE}/api/table-variants/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table variants")))
       .then((data) => setVariants(Array.isArray(data) ? data : []))
       .catch((err) => {
@@ -93,7 +94,7 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setDqLoading(true);
     setDqError(null);
-    fetch(`${API_BASE}/api/dq/table/${schema}/${tableName}`)
+    fetch(`${API_BASE}/api/dq/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality")))
       .then((data) => setDqData(data))
       .catch((err) => {
@@ -107,7 +108,7 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setDqHistoryLoading(true);
     setDqHistoryError(null);
-    fetch(`${API_BASE}/api/dq/history/${schema}/${tableName}?limit=20`)
+    fetch(`${API_BASE}/api/dq/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality history")))
       .then((data) => setDqHistory(Array.isArray(data) ? data : []))
       .catch((err) => {
@@ -486,7 +487,7 @@ export default function TableCard({
                     : "—"}
                 </div>
                 <div className="dq-hint muted">
-                  Baseline median:{" "}
+                  Baseline median (last 7 checks):{" "}
                   {dqData.row_count?.baseline_median !== null && dqData.row_count?.baseline_median !== undefined
                     ? fmtInt(dqData.row_count.baseline_median)
                     : "—"}
@@ -501,26 +502,36 @@ export default function TableCard({
             </div>
           )}
           <div className="dq-history">
-            {dqHistoryLoading && <div className="muted">Loading data quality history...</div>}
-            {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
-            {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
-              <div className="muted">No data quality history yet.</div>
-            )}
-            {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
-              <div className="dq-history-table">
-                <div className="dq-history-head">
-                  <span>Check</span>
-                  <span>Value</span>
-                  <span>Date</span>
-                </div>
-                {dqHistory.map((row, idx) => (
-                  <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
-                    <span className="dq-history-type">{row.verification_type || "—"}</span>
-                    <span>{row.value !== null && row.value !== undefined ? fmtInt(row.value) : "—"}</span>
-                    <span>{row.dt || "—"}</span>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowDqHistory((prev) => !prev)}
+            >
+              {showDqHistory ? "Hide history" : "Show history"}
+            </button>
+            {showDqHistory && (
+              <>
+                {dqHistoryLoading && <div className="muted">Loading data quality history...</div>}
+                {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
+                {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
+                  <div className="muted">No data quality history yet.</div>
+                )}
+                {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
+                  <div className="dq-history-table">
+                    <div className="dq-history-head">
+                      <span>Check</span>
+                      <span>Value</span>
+                      <span>Date</span>
+                    </div>
+                    {dqHistory.map((row, idx) => (
+                      <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
+                        <span className="dq-history-type">{row.verification_type || "—"}</span>
+                        <span>{row.value !== null && row.value !== undefined ? fmtInt(row.value) : "—"}</span>
+                        <span>{row.dt || "—"}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -616,6 +627,21 @@ export default function TableCard({
           )}
         </div>
       </div>
+
+      {Array.isArray(meta.key_attributes) && meta.key_attributes.length > 0 && (
+        <div className="table-section">
+          <div className="section-title">Key attributes</div>
+          <div className="card">
+            <div className="table-key-list">
+              {meta.key_attributes.map((key) => (
+                <span key={key} className="table-key-pill mono">
+                  {key}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="table-section">
         <div className="section-title">Dependency graph</div>

@@ -520,6 +520,14 @@ main.content {
   flex-wrap: wrap;
 }
 
+.cc-hero-refresh {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .cc-hero-health {
   display: flex;
   justify-content: flex-end;
@@ -1802,6 +1810,9 @@ main.content {
 
 .dq-history {
   margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .dq-history-table {
@@ -1837,6 +1848,21 @@ main.content {
   font-size: 11px;
   letter-spacing: 0.06em;
   color: #cbd5f5;
+}
+
+.table-key-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-key-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #bfdbfe;
 }
 
 .dq-summary-grid {

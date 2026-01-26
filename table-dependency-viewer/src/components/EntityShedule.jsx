@@ -19,6 +19,7 @@ export default function EntityShedule() {
   const [coverageOffset, setCoverageOffset] = useState(0);
   const [coverageQuery, setCoverageQuery] = useState("");
   const [coverageSchema, setCoverageSchema] = useState("all");
+  const [showCoverageList, setShowCoverageList] = useState(false);
   const [dqEntities, setDqEntities] = useState([]);
   const [dqEntitiesError, setDqEntitiesError] = useState(null);
   const [dqEntitiesLoading, setDqEntitiesLoading] = useState(false);
@@ -227,71 +228,86 @@ export default function EntityShedule() {
               </div>
             </div>
 
-            <div className="coverage-toolbar">
-              <input
-                className="coverage-search"
-                placeholder="Search table or entity"
-                value={coverageQuery}
-                onChange={(e) => setCoverageQuery(e.target.value)}
-              />
-              <div className="coverage-filters">
-                {coverageSchemaOptions.map((schema) => (
-                  <button
-                    key={schema}
-                    className={`pill ${coverageSchema === schema ? "pill-active" : ""}`}
-                    onClick={() => setCoverageSchema(schema)}
-                  >
-                    {schema === "all" ? "All schemas" : schema}
-                  </button>
-                ))}
-              </div>
-              <div className="coverage-actions">
-                <button className="btn btn-secondary" onClick={() => loadCoverage(0, false)}>
-                  Refresh
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  disabled={!coverageHasMore || coverageLoading}
-                  onClick={() => loadCoverage(coverageOffset, true)}
-                >
-                  {coverageHasMore ? "Load more" : "All loaded"}
-                </button>
-              </div>
-            </div>
-
             <div className="coverage-summary">
-              Showing {coverageFiltered.length} of {coverage.orphan_count} tables
+              Tables without path to DM: {coverage.orphan_count}. These do not feed any DM tables.
             </div>
 
-            {coverage.orphan_count === 0 ? (
-              <div className="muted">All tables reach a DM layer</div>
-            ) : (
-              <div className="coverage-list">
-                {coverageFiltered.map((row) => (
-                  <div key={row.id} className="coverage-row">
-                    <button className="coverage-fqn mono coverage-link" onClick={() => openTable(row)}>
-                      {row.id}
-                    </button>
-                    <div className="coverage-meta">
-                      <span className="coverage-pill">{row.schema || "unknown"}</span>
-                      <span className="coverage-pill">in: {row.incoming}</span>
-                      <span className="coverage-pill">out: {row.outgoing}</span>
-                      {row.entities?.length > 0 ? (
-                        <span className="coverage-entities">
-                          {row.entities.join(", ")}
-                        </span>
-                      ) : (
-                        <span className="coverage-entities muted">entity unknown</span>
-                      )}
-                    </div>
-                    <div className="coverage-actions-row">
-                      <button className="btn btn-secondary" onClick={() => openTable(row)}>
-                        Open table
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowCoverageList((prev) => !prev)}
+            >
+              {showCoverageList ? "Hide gaps list" : "Show gaps list"}
+            </button>
+
+            {showCoverageList && (
+              <>
+                <div className="coverage-toolbar">
+                  <input
+                    className="coverage-search"
+                    placeholder="Search table or entity"
+                    value={coverageQuery}
+                    onChange={(e) => setCoverageQuery(e.target.value)}
+                  />
+                  <div className="coverage-filters">
+                    {coverageSchemaOptions.map((schema) => (
+                      <button
+                        key={schema}
+                        className={`pill ${coverageSchema === schema ? "pill-active" : ""}`}
+                        onClick={() => setCoverageSchema(schema)}
+                      >
+                        {schema === "all" ? "All schemas" : schema}
                       </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <div className="coverage-actions">
+                    <button className="btn btn-secondary" onClick={() => loadCoverage(0, false)}>
+                      Refresh
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={!coverageHasMore || coverageLoading}
+                      onClick={() => loadCoverage(coverageOffset, true)}
+                    >
+                      {coverageHasMore ? "Load more" : "All loaded"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="coverage-summary">
+                  Showing {coverageFiltered.length} of {coverage.orphan_count} tables
+                </div>
+
+                {coverage.orphan_count === 0 ? (
+                  <div className="muted">All tables reach a DM layer</div>
+                ) : (
+                  <div className="coverage-list">
+                    {coverageFiltered.map((row) => (
+                      <div key={row.id} className="coverage-row">
+                        <button className="coverage-fqn mono coverage-link" onClick={() => openTable(row)}>
+                          {row.id}
+                        </button>
+                        <div className="coverage-meta">
+                          <span className="coverage-pill">{row.schema || "unknown"}</span>
+                          <span className="coverage-pill">in: {row.incoming}</span>
+                          <span className="coverage-pill">out: {row.outgoing}</span>
+                          {row.entities?.length > 0 ? (
+                            <span className="coverage-entities">
+                              {row.entities.join(", ")}
+                            </span>
+                          ) : (
+                            <span className="coverage-entities muted">entity unknown</span>
+                          )}
+                        </div>
+                        <div className="coverage-actions-row">
+                          <button className="btn btn-secondary" onClick={() => openTable(row)}>
+                            Open table
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

@@ -27,16 +27,16 @@ import hashlib
 import subprocess
 import tempfile
 
-from config import (
+from .config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
     TABLE_TABLES_META,
     TABLE_TABLE_COMPARE,
     TABLE_YT_SLA,
-    TABLE_TABLES_META_CLICK,
     TABLE_YTREK_INCIDENTS,
+    TABLE_TABLES_META_CLICK,
+    TABLE_DATA_QUALITY,
     DATABASE_URL,
-    TABLE_DATA_QUALITY
 )
 
 app = FastAPI()
@@ -88,21 +88,7 @@ TOP_DIRS = [
     "SALES_MM",
     "SALES_MARGIN",
     "MANAGEMENT_REPORTING_1",
-    "MANAGEMENT_REPORTING_2",
-    "MANAGEMENT_REPORTING_3",
-    "MANAGEMENT_REPORTING_4",
     "TEST_SAP_ODATA_DELTA",
-    "DQ",
-    "SALES_SHIPMENT_FROM_PLANT_4",
-    "SALES_SHIPMENT_FROM_PLANT_3",
-    "SALES_SHIPMENT_FROM_PLANT_2",
-    "SALES_SHIPMENT_FROM_PLANT_1",
-    "FI_FIXED_ASSETS",
-    "KAIZEN_LOADER",
-    "ALVERSE",
-    "EXECUTIVE_DASHBOARDS",
-    "TORO",
-
 ]
 
 _cached_meta_index = None
@@ -1791,7 +1777,7 @@ def get_metrics():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/table-history/{schema}/{table}")
+@router.get("/api/table-history/{schema}/{table:path}")
 def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
     schema_norm = norm(schema)
     table_norm = norm(table)
@@ -1858,7 +1844,7 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/table-variants/{schema}/{table}")
+@router.get("/api/table-variants/{schema}/{table:path}")
 def get_table_variants(schema: str, table: str):
     schema_norm = norm(schema)
     table_norm = norm(table)
@@ -1898,7 +1884,7 @@ def get_table_variants(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dq/table/{schema}/{table}")
+@router.get("/api/dq/table/{schema}/{table:path}")
 def get_table_quality(schema: str, table: str):
     schema_norm = norm(schema)
     table_norm = norm(table)
@@ -1978,7 +1964,7 @@ def get_table_quality(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dq/history/{schema}/{table}")
+@router.get("/api/dq/history/{schema}/{table:path}")
 def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
     schema_norm = norm(schema)
     table_norm = norm(table)
@@ -2264,7 +2250,7 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
     return None
 
 
-@router.get("/api/card/{schema}/{table}")
+@router.get("/api/card/{schema}/{table:path}")
 def get_table_card_info_by_path(schema: str, table: str):
     for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)

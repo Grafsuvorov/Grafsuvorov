@@ -27,16 +27,16 @@ import hashlib
 import subprocess
 import tempfile
 
-from .config import (
+from config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
     TABLE_TABLES_META,
     TABLE_TABLE_COMPARE,
     TABLE_YT_SLA,
-    TABLE_YTREK_INCIDENTS,
     TABLE_TABLES_META_CLICK,
-    TABLE_DATA_QUALITY,
+    TABLE_YTREK_INCIDENTS,
     DATABASE_URL,
+    TABLE_DATA_QUALITY
 )
 
 app = FastAPI()
@@ -88,7 +88,21 @@ TOP_DIRS = [
     "SALES_MM",
     "SALES_MARGIN",
     "MANAGEMENT_REPORTING_1",
+    "MANAGEMENT_REPORTING_2",
+    "MANAGEMENT_REPORTING_3",
+    "MANAGEMENT_REPORTING_4",
     "TEST_SAP_ODATA_DELTA",
+    "DQ",
+    "SALES_SHIPMENT_FROM_PLANT_4",
+    "SALES_SHIPMENT_FROM_PLANT_3",
+    "SALES_SHIPMENT_FROM_PLANT_2",
+    "SALES_SHIPMENT_FROM_PLANT_1",
+    "FI_FIXED_ASSETS",
+    "KAIZEN_LOADER",
+    "ALVERSE",
+    "EXECUTIVE_DASHBOARDS",
+    "TORO",
+
 ]
 
 _cached_meta_index = None
@@ -3332,7 +3346,7 @@ def get_night_summary(
                             ELSE NULL
                         END AS ratio
                     FROM night_runs n
-                    JOIN history h ON h.object_id = n.object_id
+                    JOIN history h ON h.object_id = n.table_id
                     WHERE n.duration > h.p95_duration * 1.5
                     ORDER BY n.duration DESC
                     LIMIT :limit
@@ -4094,7 +4108,7 @@ def group_failures(failures: list):
             entity = meta.get("entity_name") if meta else None
 
         entity = entity or f"{f['schema']}"
-        f["entity_name"] = entity  # 🔴 фикс
+        f["entity_name"] = entity  #
 
         try:
             t0 = datetime.strptime(f["error_time"], "%Y-%m-%d %H:%M:%S")

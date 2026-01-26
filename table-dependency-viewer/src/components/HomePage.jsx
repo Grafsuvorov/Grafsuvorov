@@ -466,7 +466,7 @@ export default function HomePage({ onSelectTable }) {
                 <div className="dq-summary-value">{dqSummary.duplicate_tables ?? 0}</div>
               </div>
               <div className="dq-summary-card">
-                <div className="dq-summary-label">Row count deviations</div>
+                <div className="dq-summary-label">Row count deviations (median of last 7 checks)</div>
                 <div className="dq-summary-value">{dqSummary.row_count_tables ?? 0}</div>
                 <div className="dq-summary-hint muted">
                   Checked: {dqSummary.row_count_checked ?? 0}

@@ -3044,11 +3044,15 @@ main.content {
 }
 
 .slow-table-name {
-  max-width: 280px;
+  max-width: 420px;
   display: inline-block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.slow-entity .slow-table-name {
+  max-width: 520px;
 }
 
 .slow-status {

@@ -1,155 +1,82 @@
-WITH items AS (
-	SELECT
-        unnest(xpath('//Item',document_xml)) AS xml_item
-		, flow_id
-		, source_system
-		, record_id
-		, uuid
-		, dt_insert
-    FROM 
-    	landing."INPUT_DATA_FROM_SAPXI_IN"
-    WHERE 
-    	flow_id = 'SI_MaintenaceOrder_AI')
-    	--AND uuid NOT IN (
-    	--	SELECT DISTINCT 
-    	--		uuid 
-    	--	FROM 
-    	--		stg."TORO2_ORD_OPR")
-	--)
--- SELECT * FROM items;
-, items_attr AS (
-	SELECT 
-      (xpath('AUFNR/text()', xml_item))[1]::varchar AS "AUFNR"
-    , unnest(xpath('ORDER_OPR', xml_item)) 			AS attr_node
-    , flow_id
-	, source_system
-	, record_id
-	, uuid
-	, dt_insert
-	FROM 
-		items
-	)
--- SELECT * FROM items_attr;	
 SELECT
-    "AUFNR"
-	, (xpath('VORNR/text()', attr_node))[1]::varchar 					AS "VORNR"
-	, (xpath('KTSCH/text()', attr_node))[1]::varchar 					AS "KTSCH"
-	, (xpath('ARBPL/text()', attr_node))[1]::varchar 					AS "ARBPL"
-	, (xpath('WERKS/text()', attr_node))[1]::varchar 					AS "WERKS"
-	, (xpath('NTANF_DT/text()', attr_node))[1]::varchar::timestamp 		AS "NTANF_DT"
-	, (xpath('NTEND_DT/text()', attr_node))[1]::varchar::timestamp 		AS "NTEND_DT"
-	, (xpath('FSAVD_DT/text()', attr_node))[1]::varchar::timestamp 		AS "FSAVD_DT"
-	, (xpath('FSEDD_DT/text()', attr_node))[1]::varchar::timestamp		AS "FSEDD_DT"
-	, (xpath('EQUNR/text()', attr_node))[1]::varchar					AS "EQUNR"
-	, (xpath('TPLNR/text()', attr_node))[1]::varchar 					AS "TPLNR"
-	, (xpath('ARBEI/text()', attr_node))[1]::varchar::numeric(11,2) 	AS "ARBEI"
-	, (xpath('ANZZL/text()', attr_node))[1]::varchar::integer 			AS "ANZZL"
-	, (xpath('ISMNW/text()', attr_node))[1]::varchar::numeric(11,2) 	AS "ISMNW"
-	, (xpath('DAUNO/text()', attr_node))[1]::varchar::numeric(10,2) 	AS "DAUNO"
-	, (xpath('DAUNE/text()', attr_node))[1]::varchar 					AS "DAUNE"
-	, (xpath('ARBEH/text()', attr_node))[1]::varchar 					AS "ARBEH"
-	, (xpath('LTXA1/text()', attr_node))[1]::varchar 					AS "LTXA1"
-	, (xpath('ZOP_STTXT/text()', attr_node))[1]::varchar				AS "ZOP_STTXT"
-	, (xpath('ZOP_ASTXT/text()', attr_node))[1]::varchar 				AS "ZOP_ASTXT"
-	, (xpath('PLNNR/text()', attr_node))[1]::varchar 					AS "PLNNR"
-	, CASE 
-		WHEN (xpath('USR10/text()', attr_node))[1]::varchar IS NULL
-			THEN FALSE 
-		ELSE TRUE 
-	END::bool 															AS "USR10"
-	, CASE 
-		WHEN (xpath('ZREJECT_OPR/text()', attr_node))[1]::varchar IS NULL
-			THEN FALSE 
-		ELSE TRUE 
-	END::bool 															AS "ZREJECT_OPR"
-    , flow_id
-	, source_system
-	, record_id
-	, uuid
-	, dt_insert
-FROM 
-	items_attr
+    i.flow_id,
+    i.source_system,
+    i.record_id,
+    i.uuid,
+    i.dt_insert,
 
+    item.aufnr                     AS "AUFNR",
 
+    opr.vornr                      AS "VORNR",
+    opr.ktsch                      AS "KTSCH",
+    opr.arbpl                      AS "ARBPL",
+    opr.werks                      AS "WERKS",
 
-[
-  {
-    "Plan": {
-      "Node Type": "Gather Motion",
-      "Senders": 6,
-      "Receivers": 1,
-      "Slice": 1,
-      "Segments": 6,
-      "Gang Type": "primary reader",
-      "Startup Cost": 0.00,
-      "Total Cost": 26409.82,
-      "Plan Rows": 221818,
-      "Plan Width": 864,
-      "Output": ["items_attr.\"AUFNR\"", "(((xpath('VORNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('KTSCH/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('ARBPL/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('WERKS/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "((((xpath('NTANF_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone)", "((((xpath('NTEND_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone)", "((((xpath('FSAVD_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone)", "((((xpath('FSEDD_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone)", "(((xpath('EQUNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('TPLNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "((((xpath('ARBEI/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(11,2))", "((((xpath('ANZZL/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::integer)", "((((xpath('ISMNW/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(11,2))", "((((xpath('DAUNO/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(10,2))", "(((xpath('DAUNE/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('ARBEH/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('LTXA1/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('ZOP_STTXT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('ZOP_ASTXT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(((xpath('PLNNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)", "(CASE WHEN (((xpath('USR10/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying IS NULL) THEN false ELSE true END)", "(CASE WHEN (((xpath('ZREJECT_OPR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying IS NULL) THEN false ELSE true END)", "items_attr.flow_id", "items_attr.source_system", "items_attr.record_id", "items_attr.uuid", "items_attr.dt_insert"],
-      "Plans": [
-        {
-          "Node Type": "Subquery Scan",
-          "Parent Relationship": "Outer",
-          "Slice": 1,
-          "Segments": 6,
-          "Gang Type": "primary reader",
-          "Alias": "items_attr",
-          "Startup Cost": 0.00,
-          "Total Cost": 26409.82,
-          "Plan Rows": 221818,
-          "Plan Width": 864,
-          "Output": ["items_attr.\"AUFNR\"", "((xpath('VORNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('KTSCH/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('ARBPL/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('WERKS/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "(((xpath('NTANF_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone", "(((xpath('NTEND_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone", "(((xpath('FSAVD_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone", "(((xpath('FSEDD_DT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::timestamp without time zone", "((xpath('EQUNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('TPLNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "(((xpath('ARBEI/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(11,2)", "(((xpath('ANZZL/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::integer", "(((xpath('ISMNW/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(11,2)", "(((xpath('DAUNO/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying)::numeric(10,2)", "((xpath('DAUNE/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('ARBEH/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('LTXA1/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('ZOP_STTXT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('ZOP_ASTXT/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "((xpath('PLNNR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying", "CASE WHEN (((xpath('USR10/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying IS NULL) THEN false ELSE true END", "CASE WHEN (((xpath('ZREJECT_OPR/text()'::text, items_attr.attr_node, '{}'::text[]))[1])::character varying IS NULL) THEN false ELSE true END", "items_attr.flow_id", "items_attr.source_system", "items_attr.record_id", "items_attr.uuid", "items_attr.dt_insert"],
-          "Plans": [
-            {
-              "Node Type": "Result",
-              "Parent Relationship": "Subquery",
-              "Slice": 1,
-              "Segments": 6,
-              "Gang Type": "primary reader",
-              "Startup Cost": 0.00,
-              "Total Cost": 1455.31,
-              "Plan Rows": 221818,
-              "Plan Width": 864,
-              "Output": ["((xpath('AUFNR/text()'::text, (unnest(xpath('//Item'::text, \"INPUT_DATA_FROM_SAPXI_IN\".document_xml, '{}'::text[]))), '{}'::text[]))[1])::character varying", "unnest(xpath('ORDER_OPR'::text, (unnest(xpath('//Item'::text, \"INPUT_DATA_FROM_SAPXI_IN\".document_xml, '{}'::text[]))), '{}'::text[]))", "\"INPUT_DATA_FROM_SAPXI_IN\".flow_id", "\"INPUT_DATA_FROM_SAPXI_IN\".source_system", "\"INPUT_DATA_FROM_SAPXI_IN\".record_id", "\"INPUT_DATA_FROM_SAPXI_IN\".uuid", "\"INPUT_DATA_FROM_SAPXI_IN\".dt_insert"],
-              "Plans": [
-                {
-                  "Node Type": "Result",
-                  "Parent Relationship": "Outer",
-                  "Slice": 1,
-                  "Segments": 6,
-                  "Gang Type": "primary reader",
-                  "Startup Cost": 0.00,
-                  "Total Cost": 318.49,
-                  "Plan Rows": 2218,
-                  "Plan Width": 864,
-                  "Output": ["unnest(xpath('//Item'::text, \"INPUT_DATA_FROM_SAPXI_IN\".document_xml, '{}'::text[]))", "\"INPUT_DATA_FROM_SAPXI_IN\".flow_id", "\"INPUT_DATA_FROM_SAPXI_IN\".source_system", "\"INPUT_DATA_FROM_SAPXI_IN\".record_id", "\"INPUT_DATA_FROM_SAPXI_IN\".uuid", "\"INPUT_DATA_FROM_SAPXI_IN\".dt_insert"],
-                  "Plans": [
-                    {
-                      "Node Type": "Seq Scan",
-                      "Parent Relationship": "Outer",
-                      "Slice": 1,
-                      "Segments": 6,
-                      "Gang Type": "primary reader",
-                      "Relation Name": "INPUT_DATA_FROM_SAPXI_IN",
-                      "Schema": "landing",
-                      "Alias": "INPUT_DATA_FROM_SAPXI_IN",
-                      "Startup Cost": 0.00,
-                      "Total Cost": 318.49,
-                      "Plan Rows": 2218,
-                      "Plan Width": 864,
-                      "Output": ["\"INPUT_DATA_FROM_SAPXI_IN\".document_xml", "\"INPUT_DATA_FROM_SAPXI_IN\".flow_id", "\"INPUT_DATA_FROM_SAPXI_IN\".source_system", "\"INPUT_DATA_FROM_SAPXI_IN\".record_id", "\"INPUT_DATA_FROM_SAPXI_IN\".uuid", "\"INPUT_DATA_FROM_SAPXI_IN\".dt_insert"],
-                      "Filter": "((\"INPUT_DATA_FROM_SAPXI_IN\".flow_id)::text = 'SI_MaintenaceOrder_AI'::text)"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    },
-    "Settings": {
-      "Optimizer": "Postgres query optimizer"
-    }
-  }
-]
+    NULLIF(opr.ntanf_dt, '')::timestamp  AS "NTANF_DT",
+    NULLIF(opr.ntend_dt, '')::timestamp  AS "NTEND_DT",
+    NULLIF(opr.fsavd_dt, '')::timestamp  AS "FSAVD_DT",
+    NULLIF(opr.fsedd_dt, '')::timestamp  AS "FSEDD_DT",
+
+    opr.equnr                      AS "EQUNR",
+    opr.tplnr                      AS "TPLNR",
+
+    NULLIF(opr.arbei, '')::numeric(11,2) AS "ARBEI",
+    NULLIF(opr.anzzl, '')::integer       AS "ANZZL",
+    NULLIF(opr.ismnw, '')::numeric(11,2) AS "ISMNW",
+    NULLIF(opr.dauno, '')::numeric(10,2) AS "DAUNO",
+
+    opr.daune                      AS "DAUNE",
+    opr.arbeh                      AS "ARBEH",
+    opr.ltxa1                      AS "LTXA1",
+    opr.zop_sttxt                  AS "ZOP_STTXT",
+    opr.zop_astxt                  AS "ZOP_ASTXT",
+    opr.plnnr                      AS "PLNNR",
+
+    (opr.usr10 IS NOT NULL)        AS "USR10",
+    (opr.zreject_opr IS NOT NULL)  AS "ZREJECT_OPR"
+
+FROM landing."INPUT_DATA_FROM_SAPXI_IN" i
+
+-- ========= уровень Item =========
+CROSS JOIN LATERAL
+xpath_table(
+    i.document_xml,
+    '//Item',
+    PASSING i.document_xml,
+    COLUMNS
+        xml_item xml PATH '.',
+        aufnr    text PATH 'AUFNR'
+) item
+
+-- ========= уровень ORDER_OPR =========
+CROSS JOIN LATERAL
+xpath_table(
+    item.xml_item,
+    'ORDER_OPR',
+    PASSING item.xml_item,
+    COLUMNS
+        vornr        text PATH 'VORNR',
+        ktsch        text PATH 'KTSCH',
+        arbpl        text PATH 'ARBPL',
+        werks        text PATH 'WERKS',
+        ntanf_dt     text PATH 'NTANF_DT',
+        ntend_dt     text PATH 'NTEND_DT',
+        fsavd_dt     text PATH 'FSAVD_DT',
+        fsedd_dt     text PATH 'FSEDD_DT',
+        equnr        text PATH 'EQUNR',
+        tplnr        text PATH 'TPLNR',
+        arbei        text PATH 'ARBEI',
+        anzzl        text PATH 'ANZZL',
+        ismnw        text PATH 'ISMNW',
+        dauno        text PATH 'DAUNO',
+        daune        text PATH 'DAUNE',
+        arbeh        text PATH 'ARBEH',
+        ltxa1        text PATH 'LTXA1',
+        zop_sttxt    text PATH 'ZOP_STTXT',
+        zop_astxt    text PATH 'ZOP_ASTXT',
+        plnnr        text PATH 'PLNNR',
+        usr10        text PATH 'USR10',
+        zreject_opr  text PATH 'ZREJECT_OPR'
+) opr
+
+WHERE i.flow_id = 'SI_MaintenaceOrder_AI';

@@ -945,6 +945,17 @@ def _entity_map_from_meta() -> dict:
             entity_map[f"{schema}.{table}"] = entity
     return entity_map
 
+
+def _normalize_table_param(schema: str, table: str) -> tuple[Optional[str], Optional[str]]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    if not table_norm:
+        return schema_norm, table_norm
+    table_norm = table_norm.strip()
+    if "/" in table_norm or "-" in table_norm or " " in table_norm:
+        table_norm = table_norm.replace("/", "").replace("-", "").replace(" ", "")
+    return schema_norm, table_norm
+
 @app.on_event("startup")
 def warm_up_cache():
     try:
@@ -1779,8 +1790,7 @@ def get_metrics():
 
 @router.get("/api/table-history/{schema}/{table:path}")
 def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
     table_id = None
 
     try:
@@ -1846,8 +1856,7 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
 
 @router.get("/api/table-variants/{schema}/{table:path}")
 def get_table_variants(schema: str, table: str):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
     query = f"""
         SELECT
             t.table_id,
@@ -1886,8 +1895,7 @@ def get_table_variants(schema: str, table: str):
 
 @router.get("/api/dq/table/{schema}/{table:path}")
 def get_table_quality(schema: str, table: str):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
     try:
         with engine.connect() as conn:
             dup_row = conn.execute(
@@ -1966,8 +1974,7 @@ def get_table_quality(schema: str, table: str):
 
 @router.get("/api/dq/history/{schema}/{table:path}")
 def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
     try:
         with engine.connect() as conn:
             rows = conn.execute(
@@ -2009,7 +2016,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                 WITH ranked AS (
                   SELECT
                     lower(table_schema) AS schema,
-                    lower(table_name) AS table,
+                    lower(table_name) AS table_name,
                     metric_result,
                     dt_of_verification,
                     ROW_NUMBER() OVER (
@@ -2020,7 +2027,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                   WHERE verification_type = 'duplicate_check'
                     AND dt_of_verification >= now() - interval '{days} days'
                 )
-                SELECT schema, table, metric_result, dt_of_verification
+                SELECT schema, table_name, metric_result, dt_of_verification
                 FROM ranked
                 WHERE rn = 1
                 """
@@ -2033,7 +2040,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                 WITH ranked AS (
                   SELECT
                     lower(table_schema) AS schema,
-                    lower(table_name) AS table,
+                    lower(table_name) AS table_name,
                     metric_result,
                     dt_of_verification,
                     ROW_NUMBER() OVER (
@@ -2043,7 +2050,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                   FROM {TABLE_DATA_QUALITY}
                   WHERE verification_type = 'row_count'
                 )
-                SELECT schema, table, metric_result, dt_of_verification, rn
+                SELECT schema, table_name, metric_result, dt_of_verification, rn
                 FROM ranked
                 WHERE rn <= 8
                 """
@@ -2055,11 +2062,11 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
         count = _parse_numeric(row.get("metric_result")) or 0
         if count <= 0:
             continue
-        fqn = f"{row.get('schema')}.{row.get('table')}"
+        fqn = f"{row.get('schema')}.{row.get('table_name')}"
         alerts.append({
             "type": "duplicate_check",
             "table_schema": row.get("schema"),
-            "table_name": row.get("table"),
+            "table_name": row.get("table_name"),
             "entity_name": entity_map.get(fqn),
             "metric_value": int(count),
             "delta_pct": None,
@@ -2068,7 +2075,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
 
     rc_grouped = {}
     for row in rc_rows:
-        key = f"{row.get('schema')}.{row.get('table')}"
+        key = f"{row.get('schema')}.{row.get('table_name')}"
         rc_grouped.setdefault(key, []).append(row)
 
     for key, rows in rc_grouped.items():
@@ -2090,16 +2097,16 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
         delta_pct = ((latest_val - baseline) / baseline) * 100
         if abs(delta_pct) < delta:
             continue
-        schema, table = key.split(".", 1)
-        alerts.append({
-            "type": "row_count",
-            "table_schema": schema,
-            "table_name": table,
-            "entity_name": entity_map.get(key),
-            "metric_value": int(latest_val),
-            "delta_pct": round(delta_pct, 2),
-            "dt": serialize_datetime(latest.get("dt_of_verification")),
-        })
+            schema, table_name = key.split(".", 1)
+            alerts.append({
+                "type": "row_count",
+                "table_schema": schema,
+                "table_name": table_name,
+                "entity_name": entity_map.get(key),
+                "metric_value": int(latest_val),
+                "delta_pct": round(delta_pct, 2),
+                "dt": serialize_datetime(latest.get("dt_of_verification")),
+            })
 
     alerts.sort(
         key=lambda a: (
@@ -2122,7 +2129,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                     WITH ranked AS (
                       SELECT
                         lower(table_schema) AS schema,
-                        lower(table_name) AS table,
+                        lower(table_name) AS table_name,
                         metric_result,
                         dt_of_verification,
                         ROW_NUMBER() OVER (
@@ -2133,7 +2140,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                       WHERE verification_type = 'duplicate_check'
                         AND dt_of_verification >= now() - interval '{days} days'
                     )
-                    SELECT schema, table, metric_result, dt_of_verification
+                    SELECT schema, table_name, metric_result, dt_of_verification
                     FROM ranked
                     WHERE rn = 1
                     """
@@ -2146,7 +2153,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                     WITH ranked AS (
                       SELECT
                         lower(table_schema) AS schema,
-                        lower(table_name) AS table,
+                        lower(table_name) AS table_name,
                         metric_result,
                         dt_of_verification,
                         ROW_NUMBER() OVER (
@@ -2156,7 +2163,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                       FROM {TABLE_DATA_QUALITY}
                       WHERE verification_type = 'row_count'
                     )
-                    SELECT schema, table, metric_result, dt_of_verification, rn
+                    SELECT schema, table_name, metric_result, dt_of_verification, rn
                     FROM ranked
                     WHERE rn <= 8
                     """
@@ -2171,7 +2178,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
 
         rc_grouped = {}
         for row in rc_rows:
-            key = f"{row.get('schema')}.{row.get('table')}"
+            key = f"{row.get('schema')}.{row.get('table_name')}"
             rc_grouped.setdefault(key, []).append(row)
 
         rc_issues = 0

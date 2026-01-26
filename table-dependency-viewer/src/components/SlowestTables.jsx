@@ -178,6 +178,13 @@ export default function SlowestTables({ onSelectTable }) {
     onSelectTable?.({ view: "table_info", table: `${schema}.${table}`, context }, "slowest_tables");
   };
 
+  const openTableFqn = (fqn, context) => {
+    if (!fqn || typeof fqn !== "string") return;
+    const [schema, ...rest] = fqn.split(".");
+    const table = rest.join(".");
+    openTable(schema, table, context);
+  };
+
   return (
     <div className="container cc-page slow-page">
       <section className="cc-header-zone">
@@ -515,7 +522,11 @@ export default function SlowestTables({ onSelectTable }) {
               </thead>
               <tbody>
                 {filteredEntityLoads.map((row, idx) => (
-                  <tr key={`${row.table_fqn}-${idx}`} className="slow-row-click">
+                  <tr
+                    key={`${row.table_fqn}-${idx}`}
+                    className="slow-row-click"
+                    onClick={() => openTableFqn(row.table_fqn)}
+                  >
                     <td className="mono slow-table-name" title={row.table_fqn}>
                       {row.table_fqn}
                     </td>

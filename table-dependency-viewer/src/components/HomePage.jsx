@@ -24,6 +24,7 @@ export default function HomePage({ onSelectTable }) {
   const [incidentTimeline, setIncidentTimeline] = useState([]);
   const [dqSummary, setDqSummary] = useState(null);
   const [dqAlerts, setDqAlerts] = useState([]);
+  const [nextRefreshAt, setNextRefreshAt] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,10 +35,10 @@ export default function HomePage({ onSelectTable }) {
     async function load() {
       try {
         setLoading(true);
-        const cachedRaw = sessionStorage.getItem("home:payload");
+        const cachedRaw = localStorage.getItem("home:payload");
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
-          if (cached?.ts && Date.now() - cached.ts < 120000) {
+          if (cached?.expiresAt && Date.now() < cached.expiresAt) {
             setActiveIncidents(Array.isArray(cached.activeIncidents) ? cached.activeIncidents : []);
             setOrderBreaches(Array.isArray(cached.orderBreaches) ? cached.orderBreaches : []);
             setHistory(Array.isArray(cached.history) ? cached.history : []);
@@ -49,6 +50,7 @@ export default function HomePage({ onSelectTable }) {
             setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
             setDqSummary(cached.dqSummary || null);
             setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
+            setNextRefreshAt(cached.expiresAt || null);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -88,6 +90,14 @@ export default function HomePage({ onSelectTable }) {
         const dqAlertsJson = await dqAlertsResp.json();
 
         if (!cancelled) {
+          const now = new Date();
+          const nextRefresh = new Date(now);
+          nextRefresh.setHours(9, 0, 0, 0);
+          if (now >= nextRefresh) {
+            nextRefresh.setDate(nextRefresh.getDate() + 1);
+          }
+          const expiresAt = nextRefresh.getTime();
+
           setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
           setOrderBreaches(Array.isArray(orderJson) ? orderJson : []);
           setHistory(Array.isArray(historyJson) ? historyJson : []);
@@ -100,10 +110,12 @@ export default function HomePage({ onSelectTable }) {
           setDqSummary(dqSummaryJson || null);
           setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
           setNightLoading(false);
-          sessionStorage.setItem(
+          setNextRefreshAt(expiresAt);
+          localStorage.setItem(
             "home:payload",
             JSON.stringify({
               ts: Date.now(),
+              expiresAt,
               activeIncidents: Array.isArray(activeJson) ? activeJson : [],
               orderBreaches: Array.isArray(orderJson) ? orderJson : [],
               history: Array.isArray(historyJson) ? historyJson : [],
@@ -153,6 +165,17 @@ export default function HomePage({ onSelectTable }) {
   const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
   const fmtPct = (value) =>
     Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—";
+
+  const refreshNow = () => {
+    localStorage.removeItem("home:payload");
+    window.location.reload();
+  };
+
+  const nextRefreshLabel = useMemo(() => {
+    if (!nextRefreshAt) return "—";
+    const dt = new Date(nextRefreshAt);
+    return dt.toLocaleString();
+  }, [nextRefreshAt]);
 
   const sortLayers = (a, b) => {
     const aIndex = layerOrder.indexOf(a);
@@ -314,6 +337,13 @@ export default function HomePage({ onSelectTable }) {
                 {incidentTrend === "stable" && "stable"}
               </span>
             )}
+          </div>
+          <div className="cc-hero-refresh">
+            <span className="muted">Next refresh at 09:00</span>
+            <span className="muted">{nextRefreshLabel}</span>
+            <button className="btn btn-secondary" onClick={refreshNow}>
+              Refresh now
+            </button>
           </div>
         </div>
         <div className="cc-hero-health">

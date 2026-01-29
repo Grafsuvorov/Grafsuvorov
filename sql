@@ -1,76 +1,112 @@
 INSERT INTO dict_stg."TORO2_FLC_HDR" (
-	/* ---------- бизнес‑атрибуты ---------- */
-	  "TPLNR"  			-- Техническое место (код)
-	, "FLTYP"  			-- Тип технического места (код)
-	, "PLTXT"  			-- Техническое место (имя)
-	, "EARTX" 			-- Вид объекта (имя)
-	, "ZZWERKS"  		-- Завод владелец (код)
-	, "ZZDIVISION"  	-- Участок (код)
-	, "IWERK"  			-- Завод, планирующий выполнение (код)
-	, "STTXT"  			-- Системные статусы
-	, "ASTTX"  			-- Пользовательские статусы
-	, "ZCOBTYP"  		-- Тип технологического оборудования (код)
-	, "ZCOBCOD"  		-- Комплексный объект (код)
-	, "KLART"  			-- Вид класса (код)
-	, "CLASS" 			-- Класс (код)
-	, "TPLMA"  			-- Вышестоящее техническое место (код)
-	, "BUKRS"			-- Балансовая единица (код)
-	, "RBNR"  			-- Каталог кодов ТОРО (код)
-	, "ZZTPLNR"  		-- Образец (код)
-	, "EQART"  			-- Вид технического объекта (код)
-	, "SUBMT"  			-- Материал типа конструкции (код)
-	, "DATAB"  			-- Дата начала эксплуатации
+    /* ---------- бизнес-атрибуты ---------- */
+      "TPLNR"
+    , "FLTYP"
+    , "PLTXT"
+    , "EARTX"
+    , "ZZWERKS"
+    , "ZZDIVISION"
+    , "IWERK"
+    , "STTXT"
+    , "ASTTX"
+    , "ZCOBTYP"
+    , "ZCOBCOD"
+    , "KLART"
+    , "CLASS"
+    , "TPLMA"
+    , "BUKRS"
+    , "RBNR"
+    , "ZZTPLNR"
+    , "EQART"
+    , "SUBMT"
+    , "DATAB"
     /* ---------- атрибуты источника ---------- */
-    , flow_id        	   			
-    , source_system  	   			
-    , record_id      	   			
-    , uuid           	   		
-    , dt_insert      	 		
+    , flow_id
+    , source_system
+    , record_id
+    , uuid
+    , dt_insert
 )
-WITH items AS (
-	SELECT
+WITH src AS (
+    /* 1. Берём нужные сообщения из landing */
+    SELECT
         unnest(xpath('//item', document_xml)) AS xml_item,
         flow_id,
         source_system,
         record_id,
         uuid,
         dt_insert
-    FROM
-        landing."INPUT_DATA_FROM_SAPXI_IN"
-    WHERE
-        flow_id = 'SI_TechPlaceReplicate_AI'
-        AND uuid NOT IN (
-        	SELECT  
-    			uuid 
-    		FROM 
-    			dict_stg."TORO2_FLC_HDR")
-	)
---SELECT * FROM items;
+    FROM landing."INPUT_DATA_FROM_SAPXI_IN"
+    WHERE flow_id = 'SI_TechPlaceReplicate_AI'
+),
+new_only AS (
+    /* 2. Отсекаем уже загруженные uuid (БЕЗ NOT IN) */
+    SELECT s.*
+    FROM src s
+    LEFT JOIN dict_stg."TORO2_FLC_HDR" d
+        ON d.uuid = s.uuid
+    WHERE d.uuid IS NULL
+),
+parsed AS (
+    /* 3. Парсинг XML → scalar-типы */
+    SELECT
+          (xpath('TPLNR_INT/text()', xml_item))[1]::text AS "TPLNR"
+        , (xpath('FLTYP/text()',       xml_item))[1]::text AS "FLTYP"
+        , (xpath('PLTXT/text()',       xml_item))[1]::text AS "PLTXT"
+        , (xpath('EARTX/text()',       xml_item))[1]::text AS "EARTX"
+        , (xpath('WERKS/text()',       xml_item))[1]::text AS "ZZWERKS"
+        , (xpath('DIVISION_1/text()',  xml_item))[1]::text AS "ZZDIVISION"
+        , (xpath('IWERK/text()',       xml_item))[1]::text AS "IWERK"
+        , (xpath('STTXT/text()',       xml_item))[1]::text AS "STTXT"
+        , (xpath('USTXT/text()',       xml_item))[1]::text AS "ASTTX"
+        , (xpath('ZCOBTYP/text()',     xml_item))[1]::text AS "ZCOBTYP"
+        , (xpath('ZCOBCOD/text()',     xml_item))[1]::text AS "ZCOBCOD"
+        , (xpath('KLART/text()',       xml_item))[1]::text AS "KLART"
+        , (xpath('CLASS/text()',       xml_item))[1]::text AS "CLASS"
+        , (xpath('TPLMA/text()',       xml_item))[1]::text AS "TPLMA"
+        , (xpath('BUKRS/text()',       xml_item))[1]::text AS "BUKRS"
+        , (xpath('RBNR/text()',        xml_item))[1]::text AS "RBNR"
+        , (xpath('ZZTPLNR/text()',     xml_item))[1]::text AS "ZZTPLNR"
+        , (xpath('EQART/text()',       xml_item))[1]::text AS "EQART"
+        , (xpath('SUBMT/text()',       xml_item))[1]::text AS "SUBMT"
+
+        /* дата — с защитой */
+        , CASE
+            WHEN (xpath('DATAB/text()', xml_item))[1]::text ~ '^\d{8}$'
+            THEN to_date((xpath('DATAB/text()', xml_item))[1]::text, 'YYYYMMDD')
+          END AS "DATAB"
+
+        , flow_id
+        , source_system
+        , record_id
+        , uuid
+        , dt_insert
+    FROM new_only
+)
 SELECT
-	  (xpath('TPLNR_INT/text()', xml_item))[1]::varchar 	AS "TPLNR"
-	, (xpath('FLTYP/text()', xml_item))[1]::varchar 		AS "FLTYP"
-	, (xpath('PLTXT/text()', xml_item))[1]::varchar 		AS "PLTXT"
-	, (xpath('EARTX/text()', xml_item))[1]::varchar 		AS "EARTX"
-	, (xpath('WERKS/text()', xml_item))[1]::varchar 		AS "ZZWERKS"
-	, (xpath('DIVISION_1/text()', xml_item))[1]::varchar 	AS "ZZDIVISION"
-	, (xpath('IWERK/text()', xml_item))[1]::varchar 		AS "IWERK"
-	, (xpath('STTXT/text()', xml_item))[1]::varchar 		AS "STTXT"
-	, (xpath('USTXT/text()', xml_item))[1]::varchar 		AS "ASTTX"
-	, (xpath('ZCOBTYP/text()', xml_item))[1]::varchar 		AS "ZCOBTYP"
-	, (xpath('ZCOBCOD/text()', xml_item))[1]::varchar 		AS "ZCOBCOD"
-	, (xpath('KLART/text()', xml_item))[1]::varchar 		AS "KLART"
-	, (xpath('CLASS/text()', xml_item))[1]::varchar 		AS "CLASS"
-	, (xpath('TPLMA/text()', xml_item))[1]::varchar 		AS "TPLMA"
-	, (xpath('BUKRS/text()', xml_item))[1]::varchar 		AS "BUKRS"
-	, (xpath('RBNR/text()', xml_item))[1]::varchar 			AS "RBNR"
-	, (xpath('ZZTPLNR/text()', xml_item))[1]::varchar 		AS "ZZTPLNR"
-	, (xpath('EQART/text()', xml_item))[1]::varchar 		AS "EQART"
-	, (xpath('SUBMT/text()', xml_item))[1]::varchar 		AS "SUBMT"
-	, (xpath('DATAB/text()', xml_item))[1]::varchar::date 	AS "DATAB"
+      "TPLNR"
+    , "FLTYP"
+    , "PLTXT"
+    , "EARTX"
+    , "ZZWERKS"
+    , "ZZDIVISION"
+    , "IWERK"
+    , "STTXT"
+    , "ASTTX"
+    , "ZCOBTYP"
+    , "ZCOBCOD"
+    , "KLART"
+    , "CLASS"
+    , "TPLMA"
+    , "BUKRS"
+    , "RBNR"
+    , "ZZTPLNR"
+    , "EQART"
+    , "SUBMT"
+    , "DATAB"
     , flow_id
-	, source_system
-	, record_id
-	, uuid
-	, dt_insert
-FROM 
-	items;
+    , source_system
+    , record_id
+    , uuid
+    , dt_insert
+FROM parsed;

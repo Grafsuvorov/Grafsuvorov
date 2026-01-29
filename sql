@@ -1,80 +1,27 @@
-WITH src AS (
-    SELECT
-        unnest(xpath('//item', document_xml)) AS xml_item,
-        flow_id,
-        source_system,
-        record_id,
-        uuid,
-        dt_insert
-    FROM landing."INPUT_DATA_FROM_SAPXI_IN"
-    WHERE flow_id = 'SI_TechPlaceReplicate_AI'
-),
-new_only AS (
-    /* 
-       Только новые uuid — 
-       ровно как было раньше через NOT IN,
-       но безопасно через anti-join
-    */
-    SELECT s.*
-    FROM src s
-    LEFT JOIN dict_stg."TORO2_FLC_HDR" d
-        ON d.uuid = s.uuid
-    WHERE d.uuid IS NULL
-)
-INSERT INTO dict_stg."TORO2_FLC_HDR" (
-      "TPLNR"
-    , "FLTYP"
-    , "PLTXT"
-    , "EARTX"
-    , "ZZWERKS"
-    , "ZZDIVISION"
-    , "IWERK"
-    , "STTXT"
-    , "ASTTX"
-    , "ZCOBTYP"
-    , "ZCOBCOD"
-    , "KLART"
-    , "CLASS"
-    , "TPLMA"
-    , "BUKRS"
-    , "RBNR"
-    , "ZZTPLNR"
-    , "EQART"
-    , "SUBMT"
-    , "DATAB"
-    , flow_id
-    , source_system
-    , record_id
-    , uuid
-    , dt_insert
-)
-SELECT
-      (xpath('TPLNR_INT/text()', xml_item))[1]::text
-    , (xpath('FLTYP/text()',     xml_item))[1]::text
-    , (xpath('PLTXT/text()',     xml_item))[1]::text
-    , (xpath('EARTX/text()',     xml_item))[1]::text
-    , (xpath('WERKS/text()',     xml_item))[1]::text
-    , (xpath('DIVISION_1/text()',xml_item))[1]::text
-    , (xpath('IWERK/text()',     xml_item))[1]::text
-    , (xpath('STTXT/text()',     xml_item))[1]::text
-    , (xpath('USTXT/text()',     xml_item))[1]::text
-    , (xpath('ZCOBTYP/text()',   xml_item))[1]::text
-    , (xpath('ZCOBCOD/text()',   xml_item))[1]::text
-    , (xpath('KLART/text()',     xml_item))[1]::text
-    , (xpath('CLASS/text()',     xml_item))[1]::text
-    , (xpath('TPLMA/text()',     xml_item))[1]::text
-    , (xpath('BUKRS/text()',     xml_item))[1]::text
-    , (xpath('RBNR/text()',      xml_item))[1]::text
-    , (xpath('ZZTPLNR/text()',   xml_item))[1]::text
-    , (xpath('EQART/text()',     xml_item))[1]::text
-    , (xpath('SUBMT/text()',     xml_item))[1]::text
-    , CASE
-        WHEN (xpath('DATAB/text()', xml_item))[1]::text ~ '^\d{8}$'
-        THEN to_date((xpath('DATAB/text()', xml_item))[1]::text,'YYYYMMDD')
-      END
-    , flow_id
-    , source_system
-    , record_id
-    , uuid
-    , dt_insert
-FROM new_only;
+Gather Motion 6:1  (slice3; segments: 6)  (cost=27543.97..27685.89 rows=20 width=618)
+  ->  Subquery Scan on new_only  (cost=27543.97..27685.89 rows=4 width=618)
+        ->  Hash Anti Join  (cost=27543.97..27684.59 rows=4 width=618)
+              Hash Cond: (("INPUT_DATA_FROM_SAPXI_IN".uuid)::text = (d.uuid)::text)
+              ->  Redistribute Motion 6:6  (slice1; segments: 6)  (cost=0.00..88.73 rows=370 width=618)
+                    Hash Key: "INPUT_DATA_FROM_SAPXI_IN".uuid
+                    ->  Result  (cost=0.00..318.49 rows=370 width=864)
+                          ->  Seq Scan on "INPUT_DATA_FROM_SAPXI_IN"  (cost=0.00..318.49 rows=370 width=864)
+                                Filter: ((flow_id)::text = 'SI_TechPlaceReplicate_AI'::text)
+              ->  Hash  (cost=19561.33..19561.33 rows=106436 width=37)
+                    ->  Redistribute Motion 6:6  (slice2; segments: 6)  (cost=0.00..19561.33 rows=106436 width=37)
+                          Hash Key: d.uuid
+                          ->  Seq Scan on "TORO2_FLC_HDR" d  (cost=0.00..6789.11 rows=106436 width=37)
+Optimizer: Postgres query optimizer
+
+
+Gather Motion 6:1  (slice2; segments: 6)  (cost=106871.71..118327.56 rows=1929 width=864)
+  ->  Subquery Scan on items  (cost=106871.71..118327.56 rows=322 width=864)
+        ->  Result  (cost=106871.71..118202.21 rows=322 width=864)
+              ->  Hash Left Anti Semi (Not-In) Join  (cost=106871.71..118202.21 rows=322 width=864)
+                    Hash Cond: (("INPUT_DATA_FROM_SAPXI_IN".uuid)::text = ("TORO2_FLC_HDR".uuid)::text)
+                    ->  Seq Scan on "INPUT_DATA_FROM_SAPXI_IN"  (cost=0.00..307.40 rows=4 width=864)
+                          Filter: ((flow_id)::text = 'SI_TechPlaceReplicate_AI'::text)
+                    ->  Hash  (cost=51491.88..51491.88 rows=638611 width=37)
+                          ->  Broadcast Motion 6:6  (slice1; segments: 6)  (cost=0.00..51491.88 rows=638611 width=37)
+                                ->  Seq Scan on "TORO2_FLC_HDR"  (cost=0.00..6789.11 rows=106436 width=37)
+Optimizer: Postgres query optimizer

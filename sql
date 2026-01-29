@@ -1,20 +1,27 @@
-create temporary table disloc on commit drop as
-select distinct on (numvag, numnakl)
-    numvag,
-    numnakl,
-    datd,
-    uzeit,
-    knote1,
-    knote2,
-    knote_naz,
-    opcode,
-    deliv_date,
-    distance_left
-from ods."/rusal/ledisloc_ral"
-order by
-    numvag,
-    numnakl,
-    datd + uzeit desc,
-    erdat + erzet desc,
-    opcode desc
-distributed by (numvag, numnakl);
+DELETE FROM dict_stg."TORO2_EQP_HDR"
+WHERE (
+	  "EQUNR"
+	, source_system
+	) IN (
+		SELECT DISTINCT
+      		  (xpath('TECHOBJ/text()', xml_item))[1]::varchar AS "EQUNR"
+			, source_system
+		FROM (
+			SELECT
+        		  unnest(xpath('//item',document_xml)) AS xml_item
+				, flow_id
+				, source_system
+				, record_id
+				, uuid
+				, dt_insert
+	    		FROM 
+	    			landing."INPUT_DATA_FROM_SAPXI_IN"
+	    		WHERE 
+	    			flow_id = 'SI_TechObjectReplicate_AI' 
+	    			AND uuid NOT IN (
+	    				SELECT DISTINCT  
+	    					uuid 
+	    				FROM 
+	    					dict_stg."TORO2_EQP_HDR")
+	    		) AS t1
+    		);

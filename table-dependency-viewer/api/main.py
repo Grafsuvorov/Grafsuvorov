@@ -952,9 +952,13 @@ def _normalize_table_param(schema: str, table: str) -> tuple[Optional[str], Opti
     if not table_norm:
         return schema_norm, table_norm
     table_norm = table_norm.strip()
-    if "/" in table_norm or "-" in table_norm or " " in table_norm:
-        table_norm = table_norm.replace("/", "").replace("-", "").replace(" ", "")
     return schema_norm, table_norm
+
+
+def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
+    if not table_norm:
+        return table_norm
+    return table_norm.replace("/", "").replace("-", "").replace(" ", "")
 
 @app.on_event("startup")
 def warm_up_cache():
@@ -967,7 +971,7 @@ def warm_up_cache():
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-META_PARENT_DIRS = [BASE_DIR / "project", BASE_DIR]
+META_PARENT_DIRS = [BASE_DIR / "etl_loads_entity"]
 
 
 def iter_meta_dirs(targets: Optional[List[str]] = None):
@@ -1791,6 +1795,7 @@ def get_metrics():
 @router.get("/api/table-history/{schema}/{table:path}")
 def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
     schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     table_id = None
 
     try:
@@ -1801,11 +1806,11 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
                     SELECT table_id
                     FROM {TABLE_TABLES_META}
                     WHERE lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     LIMIT 1
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).scalar()
 
             params = {"limit": limit}
@@ -1813,9 +1818,16 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
                 where_clause = "object_id = :table_id"
                 params["table_id"] = table_id
             else:
-                where_clause = "lower(object_name) = :table_fqn OR lower(object_name) = :table_name"
+                where_clause = """
+                    lower(object_name) = :table_fqn
+                    OR lower(object_name) = :table_fqn_clean
+                    OR lower(object_name) = :table_name
+                    OR lower(object_name) = :table_name_clean
+                """
                 params["table_fqn"] = f"{schema_norm}.{table_norm}"
+                params["table_fqn_clean"] = f"{schema_norm}.{table_clean}" if table_clean else None
                 params["table_name"] = table_norm
+                params["table_name_clean"] = table_clean
 
             rows = conn.execute(
                 text(
@@ -1857,6 +1869,7 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
 @router.get("/api/table-variants/{schema}/{table:path}")
 def get_table_variants(schema: str, table: str):
     schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     query = f"""
         SELECT
             t.table_id,
@@ -1868,12 +1881,15 @@ def get_table_variants(schema: str, table: str):
         FROM {TABLE_TABLES_META} t
         LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
         WHERE lower(t.table_schema) = :schema
-          AND lower(t.table_name) = :table
+          AND (lower(t.table_name) = :table OR lower(t.table_name) = :table_clean)
         ORDER BY t.table_id
     """
     try:
         with engine.connect() as conn:
-            rows = conn.execute(text(query), {"schema": schema_norm, "table": table_norm}).mappings().all()
+            rows = conn.execute(
+                text(query),
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
+            ).mappings().all()
 
         payload = []
         for row in rows:
@@ -1896,6 +1912,7 @@ def get_table_variants(schema: str, table: str):
 @router.get("/api/dq/table/{schema}/{table:path}")
 def get_table_quality(schema: str, table: str):
     schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     try:
         with engine.connect() as conn:
             dup_row = conn.execute(
@@ -1905,12 +1922,12 @@ def get_table_quality(schema: str, table: str):
                     FROM {TABLE_DATA_QUALITY}
                     WHERE verification_type = 'duplicate_check'
                       AND lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT 1
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).mappings().first()
 
             rc_rows = conn.execute(
@@ -1920,12 +1937,12 @@ def get_table_quality(schema: str, table: str):
                     FROM {TABLE_DATA_QUALITY}
                     WHERE verification_type = 'row_count'
                       AND lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT 8
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).mappings().all()
 
         duplicate_count = _parse_numeric(dup_row.get("metric_result")) if dup_row else None
@@ -1975,6 +1992,7 @@ def get_table_quality(schema: str, table: str):
 @router.get("/api/dq/history/{schema}/{table:path}")
 def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
     schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     try:
         with engine.connect() as conn:
             rows = conn.execute(
@@ -1983,12 +2001,12 @@ def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge
                     SELECT verification_type, metric_result, dt_of_verification
                     FROM {TABLE_DATA_QUALITY}
                     WHERE lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "limit": limit},
             ).mappings().all()
 
         payload = [

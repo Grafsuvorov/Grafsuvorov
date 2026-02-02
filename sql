@@ -1,118 +1,368 @@
---Таблицу не дропать и не транкейтить !!!!
-create table if not exists dm.dq_sd0001(
-	error_code text null,												-- ID проверки
-    error_short_name text null,											-- Краткое наименование
-    error_full_name text null,											-- Полное наименование (текст ошибки)
-    business_area_code text null,										-- Функциональная область
-    error_type_code text null,											-- Тип проверки (1-бизнес/2-технический)
-    severity_type_code text null,										-- Степень критичности (3-info|2-warning|1-critical)
-    error_description_text text null,									-- Бизнес-смысл
-    error_algorithm_text text null,										-- Алгоритм
-    table_source_code text null,										-- Проверяемые таблицы
-    table_log_code text null,											-- Таблица-лог с деталями   
-    delivery_number_sales varchar null,									-- Продажная поставка SD.000002
-    batch varchar null,													-- Партия SD.000004
-    dt_sailed_loading_port date null,									-- Sailed L.Port SD.000058
-	bill_of_lading_group_code varchar null,								-- Группа коносамента SD.000040
-	is_shipped_via_overseas_second_foreign_warehouse varchar null,		-- Наличие Иностранный склад 2 SD.000485
-	delivery_basis varchar null,										-- Базис поставки SD.000067
-	second_foreign_port_of_discharge_plan_name varchar null,			-- Плановый порт выгрузки 2 SD.000493     
-  	dttm_inserted timestamp not null default now(),
-	dttm_updated timestamp not null default now(),
-	job_name varchar(60) not null default 'airflow'::character varying,
-	deleted_flag bool not null default false
-)
-with (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-distributed by (delivery_number_sales, batch);
-
-comment on table dm.dq_sd0001 IS 'есть Sailed. L. Port, но нет коносамента РФ';
-comment on column dm.dq_sd0001.error_code is 'ID проверки | - | dict_dds.dq_error.error_code';
-comment on column dm.dq_sd0001.error_short_name is 'Краткое наименование | - | dict_dds.dq_error.error_short_name';
-comment on column dm.dq_sd0001.error_full_name is 'Полное наименование (текст ошибки) | - | dict_dds.dq_error.error_full_name';
-comment on column dm.dq_sd0001.business_area_code is 'Функциональная область | - | dict_dds.dq_error.business_area_code';
-comment on column dm.dq_sd0001.error_type_code is 'Тип проверки (1-бизнес/2-технический) | - | dict_dds.dq_error.error_type_code';
-comment on column dm.dq_sd0001.severity_type_code is 'Степень критичности (3-info|2-warning|1-critical) | - | dict_dds.dq_error.severity_type_code';
-comment on column dm.dq_sd0001.error_description_text is 'Бизнес-смысл | - | dict_dds.dq_error.error_description_text';
-comment on column dm.dq_sd0001.error_algorithm_text is 'Алгоритм  | - | dict_dds.dq_error.error_algorithm_text';
-comment on column dm.dq_sd0001.table_source_code is 'Проверяемые таблицы | - | dict_dds.dq_error.table_source_code';
-comment on column dm.dq_sd0001.table_log_code is 'Таблица-лог с деталями | - | dict_dds.dq_error.table_log_code';
-comment on column dm.dq_sd0001.delivery_number_sales is 'Продажная поставка | - | dm_calc.sd_sales_main_scm.delivery_number_sales';
-comment on column dm.dq_sd0001.batch is 'Партия | - | dm_calc.sd_sales_main_scm.batch';
-comment on column dm.dq_sd0001.dt_sailed_loading_port is 'Sailed L.Port | - | dm_calc.sd_sales_main_scm.dt_sailed_loading_port';
-comment on column dm.dq_sd0001.bill_of_lading_group_code is 'Группа коносамента | - | dm_calc.sd_sales_main_scm.bill_of_lading_group_code';
-comment on column dm.dq_sd0001.is_shipped_via_overseas_second_foreign_warehouse is 'Наличие Иностранный склад 2 | - | dm_calc.sd_sales_main_scm.is_shipped_via_overseas_second_foreign_warehouse';
-comment on column dm.dq_sd0001.delivery_basis is 'Базис поставки | - | dm_calc.sd_sales_main_scm.delivery_basis';
-comment on column dm.dq_sd0001.second_foreign_port_of_discharge_plan_name is 'Плановый порт выгрузки 2 | - | dm_calc.sd_sales_main_scm.second_foreign_port_of_discharge_plan_name';
-
-delete from 
-	dm.dq_sd0001
-where 
-	dttm_inserted < current_date - 180
-	or dttm_inserted::date = current_date;
-
-insert into dm.dq_sd0001 (
-	error_code,															-- ID проверки
-    error_short_name,													-- Краткое наименование
-    error_full_name,													-- Полное наименование (текст ошибки)
-    business_area_code,													-- Функциональная область
-    error_type_code,													-- Тип проверки (1-бизнес/2-технический)
-    severity_type_code,													-- Степень критичности (3-info|2-warning|1-critical)    
-    error_description_text,												-- Бизнес-смысл
-    error_algorithm_text,												-- Алгоритм
-    table_source_code,													-- Проверяемые таблицы 
-    table_log_code,														-- Таблица-лог с деталями 
-    delivery_number_sales,												-- Продажная поставка SD.000002
-    batch,																-- Партия SD.000004
-    dt_sailed_loading_port,												-- Sailed L.Port SD.000058
-	bill_of_lading_group_code,											-- Группа коносамента SD.000040
-	is_shipped_via_overseas_second_foreign_warehouse,					-- Наличие Иностранный склад 2 SD.000485
-	delivery_basis,														-- Базис поставки SD.000067
-	second_foreign_port_of_discharge_plan_name							-- Плановый порт выгрузки 2 SD.000493   
-)
-
-with inco as (
-	select 
-		range_low_value
-	from
-		dict_dds.settings_and_parameters_sap 
-	where
-		abap_program_code = '/RUSAL/MK_TRACK_ROUTE' 					
-		and parameter_code in ('INCO1CIF', 'INCO1CIP', 'INCO1FOB')									
-		and range_sign_code = 'I' 
-		and range_option_code = 'EQ' 
-		and range_low_value is not null		
-)
 select
-	de.error_code,														-- ID проверки
-    de.error_short_name,												-- Краткое наименование
-    de.error_full_name,													-- Полное наименование (текст ошибки)
-    de.business_area_code,												-- Функциональная область
-    de.error_type_code,													-- Тип проверки (1-бизнес/2-технический)
-    de.severity_type_code,												-- Степень критичности (3-info|2-warning|1-critical)
-    de.error_description_text,											-- Бизнес-смысл
-    de.error_algorithm_text,											-- Алгоритм
-    de.table_source_code,												-- Проверяемые таблицы
-    de.table_log_code,													-- Таблица-лог с деталями
-	wuc.delivery_number_sales, 											-- Продажная поставка SD.000002
-	wuc.batch,															-- Партия SD.000004
-	wuc.dt_sailed_loading_port,											-- Sailed L.Port SD.000058
-	wuc.bill_of_lading_group_code,										-- Группа коносамента SD.000040
-	wuc.is_shipped_via_overseas_second_foreign_warehouse,				-- Наличие Иностранный склад 2 SD.000485
-	wuc.delivery_basis,													-- Базис поставки SD.000067
-	wuc.second_foreign_port_of_discharge_plan_name						-- Плановый порт выгрузки 2 SD.000493 	
-from 
-	dm.sb_wuc as wuc
-	left join dict_dds.dq_error as de 
-		on de.error_code = 'dq_sd0001'
-where 	
-	wuc.dt_sailed_loading_port is not null
-	and wuc.bill_of_lading_group_code is null
-	and (wuc.is_shipped_via_overseas_second_foreign_warehouse is null 
-	or wuc.delivery_basis not in (select range_low_value from inco))
-	and wuc.second_foreign_port_of_discharge_plan_name is null
-;
+  current_user,
+  current_setting('gp_resource_group_memory_limit') as rg_mem_limit,
+  current_setting('gp_vmem_protect_limit') as vmem_limit,
+  current_setting('work_mem') as work_mem,
+  current_setting('statement_mem') as statement_mem;
+
+
+-- ============================================================
+-- 0) (Опционально) чуть безопаснее по памяти на сессию
+-- ============================================================
+-- set statement_mem = '2GB';
+-- set work_mem = '64MB';
+-- set gp_workfile_limit_per_query = '0'; -- если у вас есть лимит workfile и он мешает
+
+-- ============================================================
+-- 1) Параметр периода (с начала года "год назад")
+-- ============================================================
+drop table if exists tmp_params;
+create temporary table tmp_params on commit drop as
+select
+    date_trunc('year', current_date - interval '1 year')::date as dt_from
+distributed randomly;
+
+analyze tmp_params;
+
+-- ============================================================
+-- 2) Маленький справочник SAP-параметров для ZFI5668M (61 строка у вас в плане)
+-- ============================================================
+drop table if exists tmp_sap_bwasl;
+create temporary table tmp_sap_bwasl on commit drop as
+select
+    range_low_value,
+    parameter_code
+from dict_dds.settings_and_parameters_sap
+where abap_program_code = 'ZFI5668M'
+  and range_sign_code is not null
+  and is_anlc is null
+distributed randomly;
+
+analyze tmp_sap_bwasl;
+
+-- ============================================================
+-- 3) Витрина vbrk: берём последнюю реализацию по material_code
+--    ВАЖНО: DISTINCT ON часто стабильнее и экономнее памяти, чем row_number + filter
+-- ============================================================
+drop table if exists tmp_vbrk;
+create temporary table tmp_vbrk on commit drop as
+with base as (
+    select
+        rf.unit_balance_code,
+        substring(irp.material_code, 3) as asset_main_code,
+        ir.payee_or_payer_code as buyer_code,
+        sdcr.personnel_code as realization_supervisor_code,
+        irp.document_currency_vat_excluded_amount as realization_document_currency_amount,
+        irp.document_currency_code as realization_document_currency_code,
+        irp.material_code,
+        ir.invoice_realization_code,
+        ir.dt_billing_document
+    from dds.invoice_realization ir
+    join dds.invoice_realization_position irp
+      on ir.invoice_realization_code = irp.invoice_realization_code
+    left join dds.sales_document_counterparty_role sdcr
+      on sdcr.sales_document_code = irp.sales_document_code
+     and (sdcr.sales_document_position_code = irp.sales_document_position_code
+          or sdcr.sales_document_position_code = '000000')
+     and sdcr.counterparty_role_code = 'VE'
+    left join dict_dds.unit_balance rf
+      on rf.fixed_asset_material_prefix_code = left(irp.material_code, 2)
+    where irp.sales_document_position_type_code in ('ZAOS', 'ZAKT')
+)
+select distinct on (material_code)
+    unit_balance_code,
+    asset_main_code,
+    buyer_code,
+    realization_supervisor_code,
+    realization_document_currency_amount,
+    realization_document_currency_code
+from base
+where unit_balance_code is not null
+order by
+    material_code,
+    invoice_realization_code desc,
+    dt_billing_document desc
+distributed by (unit_balance_code, asset_main_code);
+
+analyze tmp_vbrk;
+
+-- ============================================================
+-- 4) Часть A: операции из dm_calc.fixed_asset_operations (основной поток)
+--    Сразу считаем disposal_type_* через tmp_sap_bwasl
+-- ============================================================
+drop table if exists tmp_fa_ops;
+create temporary table tmp_fa_ops on commit drop as
+select
+    fao.unit_balance_code,
+    fao.dt_depreciation_posting_mmm,
+    fao.depreciation_posting_internal_code,
+    fao.asset_main_code,
+    fao.asset_sub_code,
+    fao.reference_asset_main_code,
+    fao.reference_asset_sub_code,
+    fao.dt_posting_yyyy as dt_depreciation_posting_yyyy,
+    fao.valuation_area_code,
+    fao.depreciation_internal_order_code,
+    fao.asset_position_code,
+    fao.dt_posting::date as dt_posting,
+    fao.dt_reference,
+    fao.business_transaction_code,
+    fao.reference_operation_code,
+    fao.reference_organization_unit_code,
+    fao.general_ledger_operation_type_code,
+    fao.dt_asset_document_created,
+    fao.asset_movement_type_code,
+    fao.red_reverse_reason_code,
+    fao.dt_red_reverse,
+    fao.red_reverse_code,
+    fao.is_virtual_asset_movement,
+    fao.depreciation_cost_center_code,
+    fao.depreciation_typical_amount,
+    fao.depreciation_special_amount,
+    fao.valuation_area_currency_amount,
+    fao.acquisition_cost_valuation_area_currency_amount,
+    fao.proportional_cumulative_revaluation_amount,
+    fao.asset_realization_revenue_amount,
+    fao.depreciation_unplanned_amount,
+    fao.cumulative_acquisition_and_production_cost_amount,
+    fao.cumulative_depreciation_typical_amount,
+    fao.cumulative_depreciation_special_amount,
+    fao.cumulative_depreciation_unplanned_amount,
+    fao.valuation_area_currency_code,
+    fao.asset_movement_type_or_depreciation_calculation_code,
+    case
+        when sap.parameter_code = 'BWASL_L'  then 'Ликвидация'
+        when sap.parameter_code = 'BWASL_SE' then 'Внешняя продажа'
+        when sap.parameter_code = 'BWASL_SI' then 'Внутренняя продажа'
+        when sap.parameter_code = 'BWASL_TR' then 'Безвозмездная передача'
+    end as disposal_type_source_name,
+    case
+        when sap.parameter_code = 'BWASL_L'  then '3'
+        when sap.parameter_code = 'BWASL_SE' then '5'
+        when sap.parameter_code = 'BWASL_SI' then '8'
+        when sap.parameter_code = 'BWASL_TR' then '1'
+    end as disposal_type_code,
+    'A' as non_liquid_asset_type_code,
+    'Основные средства' as non_liquid_asset_type_name
+from dm_calc.fixed_asset_operations fao
+join tmp_params p on true
+left join tmp_sap_bwasl sap
+  on sap.range_low_value = fao.asset_movement_type_code
+where fao.dt_posting >= p.dt_from
+distributed by (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+analyze tmp_fa_ops;
+
+-- ============================================================
+-- 5) Часть B: "Передача в аренду" (lend_lease) — выделяем последнюю запись cd на дату <= posting
+-- ============================================================
+drop table if exists tmp_cd_rn;
+create temporary table tmp_cd_rn on commit drop as
+select
+    cd.unit_balance_code,
+    cd.asset_main_code,
+    cd.asset_sub_code,
+    cd.valuation_area_code,
+    ll.dt_lend_lease_posting,
+    cd.depreciation_total_cumulative_amount as depreciation_typical_amount,
+    cd.depreciation_special_cumulative_amount as depreciation_special_amount,
+    cd.acquisition_cost_cumulative_amount as valuation_area_currency_amount,
+    cd.acquisition_cost_cumulative_amount as acquisition_cost_valuation_area_currency_amount,
+    cd.depreciation_unplanned_cumulative_amount as depreciation_unplanned_amount,
+    cd.valuation_area_currency_code,
+    cd.non_liquid_asset_type_code,
+    cd.non_liquid_asset_type_name,
+    row_number() over (
+        partition by cd.unit_balance_code, cd.asset_main_code, cd.asset_sub_code, cd.valuation_area_code
+        order by cd.dt_report desc
+    ) as rn
+from dm.fixed_asset_cost_and_depreciation cd
+join dict_dds.fixed_asset_lend_lease ll
+  on ll.unit_balance_code = cd.unit_balance_code
+ and ll.asset_main_code    = cd.asset_main_code
+ and ll.asset_sub_code     = cd.asset_sub_code
+join tmp_params p on true
+where cd.dt_report >= p.dt_from
+  and cd.dt_report <= ll.dt_lend_lease_posting
+distributed by (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+analyze tmp_cd_rn;
+
+drop table if exists tmp_fa_lease;
+create temporary table tmp_fa_lease on commit drop as
+select
+    unit_balance_code,
+    null::text as dt_depreciation_posting_mmm,
+    null::text as depreciation_posting_internal_code,
+    asset_main_code,
+    asset_sub_code,
+    null::text as reference_asset_main_code,
+    null::text as reference_asset_sub_code,
+    null::int as dt_depreciation_posting_yyyy,
+    valuation_area_code,
+    null::text as depreciation_internal_order_code,
+    null::text as asset_position_code,
+    dt_lend_lease_posting::date as dt_posting,
+    dt_lend_lease_posting::date as dt_reference,
+    null::text as business_transaction_code,
+    null::text as reference_operation_code,
+    null::text as reference_organization_unit_code,
+    null::text as general_ledger_operation_type_code,
+    null::timestamp as dt_asset_document_created,
+    null::text as asset_movement_type_code,
+    null::text as red_reverse_reason_code,
+    null::date as dt_red_reverse,
+    null::text as red_reverse_code,
+    null::bool as is_virtual_asset_movement,
+    null::text as depreciation_cost_center_code,
+    depreciation_typical_amount,
+    depreciation_special_amount,
+    valuation_area_currency_amount,
+    acquisition_cost_valuation_area_currency_amount,
+    null::numeric as proportional_cumulative_revaluation_amount,
+    null::numeric as asset_realization_revenue_amount,
+    depreciation_unplanned_amount,
+    null::numeric as cumulative_acquisition_and_production_cost_amount,
+    null::numeric as cumulative_depreciation_typical_amount,
+    null::numeric as cumulative_depreciation_special_amount,
+    null::numeric as cumulative_depreciation_unplanned_amount,
+    valuation_area_currency_code,
+    'ZANLU_TRENT' as asset_movement_type_or_depreciation_calculation_code,
+    'Передача в аренду' as disposal_type_source_name,
+    '7' as disposal_type_code,
+    non_liquid_asset_type_code,
+    non_liquid_asset_type_name
+from tmp_cd_rn
+where rn = 1
+distributed by (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+analyze tmp_fa_lease;
+
+-- ============================================================
+-- 6) Итоговый набор fa = union all двух потоков (важно: одинаковое распределение)
+-- ============================================================
+drop table if exists tmp_fa;
+create temporary table tmp_fa on commit drop as
+select * from tmp_fa_ops
+union all
+select * from tmp_fa_lease
+distributed by (unit_balance_code, asset_main_code, asset_sub_code, valuation_area_code);
+
+analyze tmp_fa;
+
+-- ============================================================
+-- 7) Финальная выборка: join'ы к fam и справочникам
+-- ============================================================
+select 
+    fam.unit_balance_code,
+    fam.unit_balance_name,
+    fam.asset_main_code,
+    fam.asset_sub_code,
+    fam.valuation_area_code,
+    fam.valuation_area_name,
+    fam.valuation_area_currency_code,
+    fam.valuation_area_currency_name,
+    fam.asset_depreciation_rule_code,
+    fam.asset_depreciation_rule_name,
+    fam.asset_class_code,
+    fam.asset_class_name,
+    fam.asset_inventory_number,
+    fam.asset_name,
+    fa.dt_depreciation_posting_yyyy,
+    fa.asset_position_code,
+    fa.depreciation_posting_internal_code,
+    fa.asset_movement_type_or_depreciation_calculation_code,
+    fa.dt_posting,
+    fa.depreciation_internal_order_code,
+    ord.order_short_name as depreciation_internal_order_name,
+    fa.dt_depreciation_posting_mmm,
+    fa.dt_reference,
+    fa.business_transaction_code,
+    fa.reference_operation_code,
+    fa.reference_organization_unit_code,
+    fa.is_virtual_asset_movement,
+    fa.reference_asset_main_code,
+    fa.reference_asset_sub_code,
+    fa.general_ledger_operation_type_code,
+    fa.dt_asset_document_created,
+    fa.asset_movement_type_code,
+    mtt.fixed_asset_movement_type_name as asset_movement_type_name,
+    fa.red_reverse_code,
+    fa.red_reverse_reason_code,
+    fa.dt_red_reverse,
+    fa.asset_realization_revenue_amount,
+    fa.proportional_cumulative_revaluation_amount,
+    fam.base_uom_code,
+    fam.base_uom_name,
+    fam.asset_quantity,    
+    fam.cost_center_code,
+    fam.cost_center_name,
+    fa.depreciation_cost_center_code,
+    cc.cost_center_name_rus as depreciation_cost_center_name, 
+    fam.plant_code,
+    fam.plant_name,  
+    fam.is_asset_conservated,
+    fam.dt_conservated_from, 
+    fam.dt_conservated_to, 
+    fam.dt_conservated_actual,
+    fam.document_type_code,
+    fam.document_type_name,
+    fam.special_order_for_conservation_number,
+    fam.dt_special_order_for_conservation,
+    fam.special_order_for_cancelling_conservation_number,
+    fam.dt_special_order_for_cancelling_conservation,
+    fam.dt_conservation_cancelled_actual,
+    fam.dt_approved_of_techical_state,
+    fam.non_liquid_asset_techical_state_code,
+    fam.non_liquid_asset_techical_state_name,
+    fam.is_non_liquid_asset_record_created_manually,
+    fam.dt_asset_status_reverse_from_non_liquid,
+    fa.non_liquid_asset_type_code,
+    fa.non_liquid_asset_type_name,
+    fam.dt_asset_recognized,
+    fam.dt_asset_write_off,
+    fa.disposal_type_source_name,
+    fa.disposal_type_code,
+    dtt.disposal_type_name,
+    fa.valuation_area_currency_amount,
+    fa.acquisition_cost_valuation_area_currency_amount,
+    (fa.depreciation_typical_amount + fa.depreciation_special_amount + fa.depreciation_unplanned_amount) as depreciation_total_amount,
+    fa.depreciation_typical_amount,
+    fa.depreciation_special_amount,
+    fa.depreciation_unplanned_amount,
+    fa.cumulative_acquisition_and_production_cost_amount,
+    fa.cumulative_depreciation_typical_amount,
+    fa.cumulative_depreciation_special_amount,
+    fa.cumulative_depreciation_unplanned_amount,
+    v.buyer_code,
+    c.counterparty_full_name as buyer_name,
+    v.realization_supervisor_code,
+    p.employee_full_name as realization_supervisor_name,
+    v.realization_document_currency_amount,
+    v.realization_document_currency_code
+from tmp_fa fa
+left join dm.fixed_asset_main fam
+  on fa.unit_balance_code  = fam.unit_balance_code
+ and fa.asset_main_code    = fam.asset_main_code
+ and fa.asset_sub_code     = fam.asset_sub_code
+ and fa.valuation_area_code= fam.valuation_area_code
+ and fa.dt_posting between fam.dt_valid_from and fam.dt_valid_to
+left join dict_dds.disposal_type_texts dtt
+  on fa.disposal_type_code = dtt.disposal_type_code
+ and dtt.language_code = 'R'
+left join tmp_vbrk v
+  on v.unit_balance_code = fa.unit_balance_code
+ and v.asset_main_code   = fa.asset_main_code
+left join dict_dds.counterparty c
+  on c.counterparty_code = v.buyer_code
+left join dict_dds.personnel_main_data p
+  on p.employee_code = v.realization_supervisor_code
+ and fa.dt_posting between p.dt_valid_from and p.dt_valid_to
+left join dict_dds.order_controlling ord
+  on fa.depreciation_internal_order_code = ord.order_code
+left join dict_dds.cost_center cc
+  on fa.depreciation_cost_center_code = cc.cost_center_code
+ and fa.dt_posting between cc.dt_valid_from and cc.dt_valid_to
+left join dict_dds.fixed_asset_movement_type_texts mtt
+  on fa.asset_movement_type_code = mtt.fixed_asset_movement_type_code
+ and mtt.language_code = 'R';

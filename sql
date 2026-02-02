@@ -1,605 +1,116 @@
-with vbrk as (
-select
-	t.unit_balance_code,
-	t.asset_main_code,
-	t.payee_or_payer_code as buyer_code,
-	t.personnel_code as realization_supervisor_code,
-	t.document_currency_vat_excluded_amount as realization_document_currency_amount,
-	t.document_currency_code as realization_document_currency_code,
-	t.wbs_element_code
-from
-	(
-	select
-		ir.payee_or_payer_code,
-		ir.invoice_realization_code,
-		sum(irp.document_currency_vat_excluded_amount) over (partition by irp.material_code, ir.invoice_realization_code) as document_currency_vat_excluded_amount,
-		irp.document_currency_code,
-		sdcr.personnel_code,
-		rf.unit_balance_code as unit_balance_code,
-		sales.wbs_element_code, 
-		substring(irp.material_code, 3) as asset_main_code,
-		row_number() over (partition by irp.material_code
-	order by
-		ir.dt_billing_document desc
-	) as rnum
-	from
-		dds.invoice_realization as ir
-	left join dds.invoice_realization_position as irp on
-		ir.invoice_realization_code = irp.invoice_realization_code
-	left join dds.sales_document_counterparty_role as sdcr on
-		sdcr.sales_document_code = irp.sales_document_code
-		and (sdcr.sales_document_position_code = irp.sales_document_position_code
-			or sdcr.sales_document_position_code = '000000')
-		and sdcr.counterparty_role_code = 'VE'
-	left join dict_dds.unit_balance as rf on
-		rf.fixed_asset_material_prefix_code = left(irp.material_code, 2)
-	left join (
-			select
-			sales_contract_code as sales_document_code,
-			sales_contract_non_liquid_wbs_element_code as wbs_element_code
-		from
-			dds.sales_contract_header
-	union all
-		select
-			sales_order_code as sales_document_code,
-			sales_order_non_liquid_wbs_element_code as wbs_element_code
-		from
-			dds.sales_order_header
-	union all
-		select
-			sales_proposal_code as sales_document_code,
-			sales_proposal_non_liquid_wbs_element_code as wbs_element_code
-		from
-			dds.sales_proposal_header
-) sales on
-		irp.sales_document_code = sales.sales_document_code
-	where
-		irp.sales_document_position_type_code in ('ZAOS', 'ZAKT')) as t
-where
-	t.rnum = 1
-	and t.unit_balance_code is not null) 
-select 
-	fam.unit_balance_code,
-	fam.unit_balance_name,
-	fam.asset_main_code,
-	fam.asset_sub_code,
-	fam.valuation_area_code,
-	fam.valuation_area_name,
-	fam.valuation_area_currency_code,
-	fam.valuation_area_currency_name,
-	fam.asset_depreciation_rule_code,
-	fam.asset_depreciation_rule_name,
-	fam.asset_class_code,
-	fam.asset_class_name,
-	fam.asset_inventory_number,
-	fam.asset_name,
-	fa.dt_depreciation_posting_yyyy,
-	fa.asset_position_code,
-	fa.depreciation_posting_internal_code,
-	fa.asset_movement_type_or_depreciation_calculation_code,
-	fa.dt_posting,
-	fa.depreciation_internal_order_code,
-	ord.order_short_name as depreciation_internal_order_name,
-	fa.dt_depreciation_posting_mmm,
-	fa.dt_reference,
-	fa.business_transaction_code,
-	fa.reference_operation_code,
-	fa.reference_organization_unit_code,
-	fa.is_virtual_asset_movement,
-	fa.reference_asset_main_code,
-	fa.reference_asset_sub_code,
-	fa.general_ledger_operation_type_code,
-	fa.dt_asset_document_created,
-	fa.asset_movement_type_code,
-	mtt.fixed_asset_movement_type_name as asset_movement_type_name,
-	fa.red_reverse_code,
-	fa.red_reverse_reason_code,
-	fa.dt_red_reverse,
-	fa.asset_realization_revenue_amount,
-	fa.proportional_cumulative_revaluation_amount,
-	fam.base_uom_code,
-	fam.base_uom_name,
-	fam.asset_quantity,	
-	fam.cost_center_code,
-	fam.cost_center_name,
-	fa.depreciation_cost_center_code,
-	cc.cost_center_name_rus as depreciation_cost_center_name, 
-	fam.plant_code,
-	fam.plant_name,  
-	fam.is_asset_conservated,
-	fam.dt_conservated_from, 
-	fam.dt_conservated_to, 
-	fam.dt_conservated_actual,
-	fam.document_type_code,
-	fam.document_type_name,
-	fam.special_order_for_conservation_number,
-	fam.dt_special_order_for_conservation,
-	fam.special_order_for_cancelling_conservation_number,
-	fam.dt_special_order_for_cancelling_conservation,
-	fam.dt_conservation_cancelled_actual,
-	fam.dt_approved_of_techical_state,
-	fam.non_liquid_asset_techical_state_code,
-	fam.non_liquid_asset_techical_state_name,
-	fam.is_non_liquid_asset_record_created_manually,
-	fam.dt_asset_status_reverse_from_non_liquid,
-	fa.non_liquid_asset_type_code,
-	fa.non_liquid_asset_type_name,
-	fam.dt_asset_recognized,
-	fam.dt_asset_write_off,
-	fa.disposal_type_source_name,
-	fa.disposal_type_code,
-	dtt.disposal_type_name,
-	fa.valuation_area_currency_amount,
-	fa.acquisition_cost_valuation_area_currency_amount,
-	fa.depreciation_typical_amount + fa.depreciation_special_amount + fa.depreciation_unplanned_amount as depreciation_total_amount,
-	fa.depreciation_typical_amount,
-	fa.depreciation_special_amount,
-	fa.depreciation_unplanned_amount,
-	fa.cumulative_acquisition_and_production_cost_amount,
-	fa.cumulative_depreciation_typical_amount,
-	fa.cumulative_depreciation_special_amount,
-	fa.cumulative_depreciation_unplanned_amount,
-	v.buyer_code,
-	c.counterparty_full_name as buyer_name,
-	v.wbs_element_code,
-	v.realization_supervisor_code,
-	p.employee_full_name as realization_supervisor_name,
-	v.realization_document_currency_amount,
-	v.realization_document_currency_code
-from (
-	select 	
-		unit_balance_code,
-		dt_depreciation_posting_mmm, 
-		depreciation_posting_internal_code, 
-		asset_main_code,
-		asset_sub_code,
-		reference_asset_main_code,
-		reference_asset_sub_code,
-		dt_posting_yyyy as dt_depreciation_posting_yyyy,
-		valuation_area_code,
-		depreciation_internal_order_code,
-		asset_position_code,
-		dt_posting::date,
-		dt_reference,
-		business_transaction_code,
-		reference_operation_code,
-		reference_organization_unit_code,
-		general_ledger_operation_type_code,
-		dt_asset_document_created,
-		asset_movement_type_code,		
-		red_reverse_reason_code,
-		dt_red_reverse,
-		red_reverse_code,
-		is_virtual_asset_movement,	
-		depreciation_cost_center_code,
-		depreciation_typical_amount,
-		depreciation_special_amount,
-		valuation_area_currency_amount,
-		acquisition_cost_valuation_area_currency_amount,
-		proportional_cumulative_revaluation_amount,
-	   	asset_realization_revenue_amount,
-		depreciation_unplanned_amount,  
-		cumulative_acquisition_and_production_cost_amount,
-		cumulative_depreciation_typical_amount,
-		cumulative_depreciation_special_amount,
-		cumulative_depreciation_unplanned_amount,
-		valuation_area_currency_code,
-		asset_movement_type_or_depreciation_calculation_code,
-		case when parameter_code = 'BWASL_L' then 'Ликвидация'
-		when parameter_code = 'BWASL_SE' then 'Внешняя продажа'
-		when parameter_code = 'BWASL_SI' then 'Внутренняя продажа'
-		when parameter_code = 'BWASL_TR' then 'Безвозмездная передача'
-		end as  disposal_type_source_name,
-		case when parameter_code = 'BWASL_L' then '3'
-		when parameter_code = 'BWASL_SE' then '5'
-		when parameter_code = 'BWASL_SI' then '8'
-		when parameter_code = 'BWASL_TR' then '1'
-		end as  disposal_type_code,
-		'A'	as non_liquid_asset_type_code,
-		'Основные средства' as non_liquid_asset_type_name
-from 
-	dm_calc.fixed_asset_operations
-left join dict_dds.settings_and_parameters_sap sap on
-	asset_movement_type_code between sap.range_low_value and coalesce(sap.range_high_value,sap.range_low_value)
-	and sap.abap_program_code = 'ZFI5668M'
-	and sap.range_sign_code is not null
-where dt_posting >= date_trunc('year', now()- interval '1 year')::date
-and is_anlc is null
-
-union all
-
-select 
-	unit_balance_code,
-	null as dt_depreciation_posting_mmm, 
-	null as depreciation_posting_internal_code, 
-	asset_main_code,
-	asset_sub_code,
-	null as reference_asset_main_code,
-	null as reference_asset_sub_code,
-	null  as dt_depreciation_posting_yyyy,
-	valuation_area_code,
-	null  as depreciation_internal_order_code,
-	null  as asset_position_code,
-	dt_lend_lease_posting as dt_posting,
-	dt_lend_lease_posting as dt_reference,
-	null  as business_transaction_code,
-	null  as reference_operation_code,
-	null  as reference_organization_unit_code,
-	null  as general_ledger_operation_type_code,
-	null  as dt_asset_document_created,
-	null  as asset_movement_type_code,
-	null  as red_reverse_reason_code,
-	null  as dt_red_reverse,
-	null  as red_reverse_code,
-	null  as is_virtual_asset_movement,
-	null  as depreciation_cost_center_code,
-	depreciation_typical_amount,
-	depreciation_special_amount,
-	valuation_area_currency_amount,
-	acquisition_cost_valuation_area_currency_amount,
-	null as proportional_cumulative_revaluation_amount,
-   	null as asset_realization_revenue_amount,
-	depreciation_unplanned_amount,  
-	null as cumulative_acquisition_and_production_cost_amount,
-	null as cumulative_depreciation_typical_amount,
-	null as cumulative_depreciation_special_amount,
-	null as cumulative_depreciation_unplanned_amount,
-	valuation_area_currency_code,
-	'ZANLU_TRENT' as asset_movement_type_or_depreciation_calculation_code,
-	'Передача в аренду' as  disposal_type_source_name,
-	'7' as  disposal_type_code,
-	non_liquid_asset_type_code,
-	non_liquid_asset_type_name
-	from 
-(
-select 	
-	cd.unit_balance_code,
-	cd.asset_main_code,
-	cd.asset_sub_code,
-	cd.valuation_area_code,
-	ll.dt_lend_lease_posting,
-	cd.depreciation_total_cumulative_amount as depreciation_typical_amount,
-	cd.depreciation_special_cumulative_amount as depreciation_special_amount,
-	cd.acquisition_cost_cumulative_amount as valuation_area_currency_amount,
-	cd.acquisition_cost_cumulative_amount as acquisition_cost_valuation_area_currency_amount,
-	depreciation_unplanned_cumulative_amount as depreciation_unplanned_amount,
-	cd.valuation_area_currency_code,
-	cd.non_liquid_asset_type_code,
-	cd.non_liquid_asset_type_name,
-	row_number() over (partition by cd.unit_balance_code,
-						cd.asset_main_code,
-						cd.asset_sub_code,
-						cd.valuation_area_code
-					order by
-						dt_report desc) as rn
-from
-	dm.fixed_asset_cost_and_depreciation cd
-join dict_dds.fixed_asset_lend_lease ll on
-	ll.unit_balance_code = cd.unit_balance_code
-	and ll.asset_main_code = cd.asset_main_code
-	and ll.asset_sub_code = cd.asset_sub_code
-	and cd.dt_report <= ll.dt_lend_lease_posting
-where 
-	dt_report >= date_trunc('year', now()- interval '1 year')::date	
-) t	
-where 
-rn = 1  )fa
----встречались 15.12 с владельцем продуктаа, договорились брать inner join 
----чтобы нивелировать  раассинхрон  по  времени загрузки транзакционных и спарвочных данных
-join  dm.fixed_asset_main fam on 
-	fa.unit_balance_code = fam.unit_balance_code
-	and fa.asset_main_code = fam.asset_main_code
-	and fa.asset_sub_code = fam.asset_sub_code
-	and fa.valuation_area_code = fam.valuation_area_code
-	and fa.dt_posting between fam.dt_valid_from and fam.dt_valid_to
-left join dict_dds.disposal_type_texts dtt on 
-	fa.disposal_type_code = dtt.disposal_type_code
-	and language_code = 'R'
-left join vbrk v on 	
-	v.unit_balance_code = fa.unit_balance_code
-	and	v.asset_main_code = fa.asset_main_code 
-left join dict_dds.counterparty c on 
-	c.counterparty_code = v.buyer_code
-left join dict_dds.personnel_main_data p on p.
-	employee_code = v.realization_supervisor_code
-	and fa.dt_posting between p.dt_valid_from and p.dt_valid_to
-left join dict_dds.order_controlling ord on
-	fa.depreciation_internal_order_code = ord.order_code
-left join dict_dds.cost_center cc on		
-	 fa.depreciation_cost_center_code = cc.cost_center_code
-	and fa.dt_posting between cc.dt_valid_from and cc.dt_valid_to	
-left join dict_dds.fixed_asset_movement_type_texts mtt on
-	fa.asset_movement_type_code = mtt.fixed_asset_movement_type_code
-	and mtt.language_code = 'R';
-
-
-
-2
-with vbrk as (
-select
-	t.unit_balance_code,
-	t.asset_main_code,
-	t.payee_or_payer_code as buyer_code,
-	t.personnel_code as realization_supervisor_code,
-	t.document_currency_vat_excluded_amount as realization_document_currency_amount,
-	t.document_currency_code as realization_document_currency_code
-from
-	(
-	select
-		ir.payee_or_payer_code,
-		irp.document_currency_vat_excluded_amount,
-		irp.document_currency_code,
-		sdcr.personnel_code,
-		rf.unit_balance_code as unit_balance_code,
-		substring(irp.material_code, 3) as asset_main_code,
-		row_number() over (partition by irp.material_code  order by ir.invoice_realization_code desc,ir.dt_billing_document desc
-	) as rnum
-	from
-		dds.invoice_realization as ir
-	left join dds.invoice_realization_position as irp on
-		ir.invoice_realization_code = irp.invoice_realization_code
-	left join dds.sales_document_counterparty_role as sdcr on
-		sdcr.sales_document_code = irp.sales_document_code
-		and (sdcr.sales_document_position_code = irp.sales_document_position_code
-			or sdcr.sales_document_position_code = '000000')
-		and sdcr.counterparty_role_code = 'VE'
-	left join dict_dds.unit_balance as rf on
-		rf.fixed_asset_material_prefix_code = left(irp.material_code, 2)
-	where
-		irp.sales_document_position_type_code in ('ZAOS', 'ZAKT')) as t
-where
-	t.rnum = 1
-	and t.unit_balance_code is not null)
-select 
-	fam.unit_balance_code,
-	fam.unit_balance_name,
-	fam.asset_main_code,
-	fam.asset_sub_code,
-	fam.valuation_area_code,
-	fam.valuation_area_name,
-	fam.valuation_area_currency_code,
-	fam.valuation_area_currency_name,
-	fam.asset_depreciation_rule_code,
-	fam.asset_depreciation_rule_name,
-	fam.asset_class_code,
-	fam.asset_class_name,
-	fam.asset_inventory_number,
-	fam.asset_name,
-	fa.dt_depreciation_posting_yyyy,
-	fa.asset_position_code,
-	fa.depreciation_posting_internal_code,
-	fa.asset_movement_type_or_depreciation_calculation_code,
-	fa.dt_posting,
-	fa.depreciation_internal_order_code,
-	ord.order_short_name as depreciation_internal_order_name,
-	fa.dt_depreciation_posting_mmm,
-	fa.dt_reference,
-	fa.business_transaction_code,
-	fa.reference_operation_code,
-	fa.reference_organization_unit_code,
-	fa.is_virtual_asset_movement,
-	fa.reference_asset_main_code,
-	fa.reference_asset_sub_code,
-	fa.general_ledger_operation_type_code,
-	fa.dt_asset_document_created,
-	fa.asset_movement_type_code,
-	mtt.fixed_asset_movement_type_name as asset_movement_type_name,
-	fa.red_reverse_code,
-	fa.red_reverse_reason_code,
-	fa.dt_red_reverse,
-	fa.asset_realization_revenue_amount,
-	fa.proportional_cumulative_revaluation_amount,
-	fam.base_uom_code,
-	fam.base_uom_name,
-	fam.asset_quantity,	
-	fam.cost_center_code,
-	fam.cost_center_name,
-	fa.depreciation_cost_center_code,
-	cc.cost_center_name_rus as depreciation_cost_center_name, 
-	fam.plant_code,
-	fam.plant_name,  
-	fam.is_asset_conservated,
-	fam.dt_conservated_from, 
-	fam.dt_conservated_to, 
-	fam.dt_conservated_actual,
-	fam.document_type_code,
-	fam.document_type_name,
-	fam.special_order_for_conservation_number,
-	fam.dt_special_order_for_conservation,
-	fam.special_order_for_cancelling_conservation_number,
-	fam.dt_special_order_for_cancelling_conservation,
-	fam.dt_conservation_cancelled_actual,
-	fam.dt_approved_of_techical_state,
-	fam.non_liquid_asset_techical_state_code,
-	fam.non_liquid_asset_techical_state_name,
-	fam.is_non_liquid_asset_record_created_manually,
-	fam.dt_asset_status_reverse_from_non_liquid,
-	fa.non_liquid_asset_type_code,
-	fa.non_liquid_asset_type_name,
-	fam.dt_asset_recognized,
-	fam.dt_asset_write_off,
-	fa.disposal_type_source_name,
-	fa.disposal_type_code,
-	dtt.disposal_type_name,
-	fa.valuation_area_currency_amount,
-	fa.acquisition_cost_valuation_area_currency_amount,
-	fa.depreciation_typical_amount + fa.depreciation_special_amount + fa.depreciation_unplanned_amount as depreciation_total_amount,
-	fa.depreciation_typical_amount,
-	fa.depreciation_special_amount,
-	fa.depreciation_unplanned_amount,
-	fa.cumulative_acquisition_and_production_cost_amount,
-	fa.cumulative_depreciation_typical_amount,
-	fa.cumulative_depreciation_special_amount,
-	fa.cumulative_depreciation_unplanned_amount,
-	v.buyer_code,
-	c.counterparty_full_name as buyer_name,
-	v.realization_supervisor_code,
-	p.employee_full_name as realization_supervisor_name,
-	v.realization_document_currency_amount,
-	v.realization_document_currency_code
-from (
-
-
-	select 	
-		unit_balance_code,
-		dt_depreciation_posting_mmm, 
-		depreciation_posting_internal_code, 
-		asset_main_code,
-		asset_sub_code,
-		reference_asset_main_code,
-		reference_asset_sub_code,
-		dt_posting_yyyy as dt_depreciation_posting_yyyy,
-		valuation_area_code,
-		depreciation_internal_order_code,
-		asset_position_code,
-		dt_posting::date,
-		dt_reference,
-		business_transaction_code,
-		reference_operation_code,
-		reference_organization_unit_code,
-		general_ledger_operation_type_code,
-		dt_asset_document_created,
-		asset_movement_type_code,		
-		red_reverse_reason_code,
-		dt_red_reverse,
-		red_reverse_code,
-		is_virtual_asset_movement,	
-		depreciation_cost_center_code,
-		depreciation_typical_amount,
-		depreciation_special_amount,
-		valuation_area_currency_amount,
-		acquisition_cost_valuation_area_currency_amount,
-		proportional_cumulative_revaluation_amount,
-	   	asset_realization_revenue_amount,
-		depreciation_unplanned_amount,  
-		cumulative_acquisition_and_production_cost_amount,
-		cumulative_depreciation_typical_amount,
-		cumulative_depreciation_special_amount,
-		cumulative_depreciation_unplanned_amount,
-		valuation_area_currency_code,
-		asset_movement_type_or_depreciation_calculation_code,
-		case when parameter_code = 'BWASL_L' then 'Ликвидация'
-		when parameter_code = 'BWASL_SE' then 'Внешняя продажа'
-		when parameter_code = 'BWASL_SI' then 'Внутренняя продажа'
-		when parameter_code = 'BWASL_TR' then 'Безвозмездная передача'
-		end as  disposal_type_source_name,
-		case when parameter_code = 'BWASL_L' then '3'
-		when parameter_code = 'BWASL_SE' then '5'
-		when parameter_code = 'BWASL_SI' then '8'
-		when parameter_code = 'BWASL_TR' then '1'
-		end as  disposal_type_code,
-		'A'	as non_liquid_asset_type_code,
-		'Основные средства' as non_liquid_asset_type_name
-from 
-	dm_calc.fixed_asset_operations
-left join dict_dds.settings_and_parameters_sap sap on
-	sap.range_low_value = asset_movement_type_code
-	and sap.abap_program_code = 'ZFI5668M'
-	and sap.range_sign_code is not null
-	and is_anlc is null
-where dt_posting >= date_trunc('year', now()- interval '1 year')::date
-
-union all
-
-select 
-	unit_balance_code,
-	null as dt_depreciation_posting_mmm, 
-	null as depreciation_posting_internal_code, 
-	asset_main_code,
-	asset_sub_code,
-	null as reference_asset_main_code,
-	null as reference_asset_sub_code,
-	null  as dt_depreciation_posting_yyyy,
-	valuation_area_code,
-	null  as depreciation_internal_order_code,
-	null  as asset_position_code,
-	dt_lend_lease_posting as dt_posting,
-	dt_lend_lease_posting as dt_reference,
-	null  as business_transaction_code,
-	null  as reference_operation_code,
-	null  as reference_organization_unit_code,
-	null  as general_ledger_operation_type_code,
-	null  as dt_asset_document_created,
-	null  as asset_movement_type_code,
-	null  as red_reverse_reason_code,
-	null  as dt_red_reverse,
-	null  as red_reverse_code,
-	null  as is_virtual_asset_movement,
-	null  as depreciation_cost_center_code,
-	depreciation_typical_amount,
-	depreciation_special_amount,
-	valuation_area_currency_amount,
-	acquisition_cost_valuation_area_currency_amount,
-	null as proportional_cumulative_revaluation_amount,
-   	null as asset_realization_revenue_amount,
-	depreciation_unplanned_amount,  
-	null as cumulative_acquisition_and_production_cost_amount,
-	null as cumulative_depreciation_typical_amount,
-	null as cumulative_depreciation_special_amount,
-	null as cumulative_depreciation_unplanned_amount,
-	valuation_area_currency_code,
-	'ZANLU_TRENT' as asset_movement_type_or_depreciation_calculation_code,
-	'Передача в аренду' as  disposal_type_source_name,
-	'7' as  disposal_type_code,
-	non_liquid_asset_type_code,
-	non_liquid_asset_type_name
-	from 
-(
-select 	
-	cd.unit_balance_code,
-	cd.asset_main_code,
-	cd.asset_sub_code,
-	cd.valuation_area_code,
-	ll.dt_lend_lease_posting,
-	cd.depreciation_total_cumulative_amount as depreciation_typical_amount,
-	cd.depreciation_special_cumulative_amount as depreciation_special_amount,
-	cd.acquisition_cost_cumulative_amount as valuation_area_currency_amount,
-	cd.acquisition_cost_cumulative_amount as acquisition_cost_valuation_area_currency_amount,
-	depreciation_unplanned_cumulative_amount as depreciation_unplanned_amount,
-	cd.valuation_area_currency_code,
-	cd.non_liquid_asset_type_code,
-	cd.non_liquid_asset_type_name,
-	row_number() over (partition by cd.unit_balance_code,
-						cd.asset_main_code,
-						cd.asset_sub_code,
-						cd.valuation_area_code
-					order by
-						dt_report desc) as rn
-from
-	dm.fixed_asset_cost_and_depreciation cd
-join dict_dds.fixed_asset_lend_lease ll on
-	ll.unit_balance_code = cd.unit_balance_code
-	and ll.asset_main_code = cd.asset_main_code
-	and ll.asset_sub_code = cd.asset_sub_code
-	and cd.dt_report <= ll.dt_lend_lease_posting
-where 
-	dt_report >= date_trunc('year', now()- interval '1 year')::date	
-) t	
-where 
-rn = 1  )fa
-left join  dm.fixed_asset_main fam on 
-	fa.unit_balance_code = fam.unit_balance_code
-	and fa.asset_main_code = fam.asset_main_code
-	and fa.asset_sub_code = fam.asset_sub_code
-	and fa.valuation_area_code = fam.valuation_area_code
-	and fa.dt_posting between fam.dt_valid_from and fam.dt_valid_to
-left join dict_dds.disposal_type_texts dtt on 
-	fa.disposal_type_code = dtt.disposal_type_code
-	and language_code = 'R'
-left join vbrk v on 	
-	v.unit_balance_code = fa.unit_balance_code
-	and	v.asset_main_code = fa.asset_main_code 
-left join dict_dds.counterparty c on 
-	c.counterparty_code = v.buyer_code
-left join dict_dds.personnel_main_data p on p.
-	employee_code = v.realization_supervisor_code
-	and fa.dt_posting between p.dt_valid_from and p.dt_valid_to
-left join dict_dds.order_controlling ord on
-		fa.depreciation_internal_order_code = ord.order_code
-left join dict_dds.cost_center cc on		
-	 fa.depreciation_cost_center_code = cc.cost_center_code
-	and fa.dt_posting between cc.dt_valid_from and cc.dt_valid_to	
-left join dict_dds.fixed_asset_movement_type_texts mtt on
-		fa.asset_movement_type_code = mtt.fixed_asset_movement_type_code
-		and mtt.language_code = 'R'
-;
+Gather Motion 6:1  (slice9; segments: 6)  (cost=0.00..28860288.94 rows=341255441 width=644)
+  ->  Result  (cost=0.00..28209041.61 rows=56875907 width=644)
+        ->  Hash Left Join  (cost=0.00..28172413.52 rows=56875907 width=1086)
+              Hash Cond: ((fixed_asset_operations.asset_movement_type_code)::text = (fixed_asset_movement_type_texts.fixed_asset_movement_type_code)::text)
+              ->  Hash Left Join  (cost=0.00..27932824.73 rows=28437954 width=1041)
+                    Hash Cond: ((fixed_asset_operations.depreciation_cost_center_code)::text = (cost_center.cost_center_code)::text)
+                    Join Filter: ((fixed_asset_operations.dt_posting >= cost_center.dt_valid_from) AND (fixed_asset_operations.dt_posting <= cost_center.dt_valid_to))
+                    ->  Hash Left Join  (cost=0.00..27799228.31 rows=28437954 width=989)
+                          Hash Cond: ((fixed_asset_operations.depreciation_internal_order_code)::text = (order_controlling.order_code)::text)
+                          ->  Hash Left Join  (cost=0.00..27689286.86 rows=14218977 width=936)
+                                Hash Cond: ((sales_document_counterparty_role.personnel_code)::text = (personnel_main_data.employee_code)::text)
+                                Join Filter: ((fixed_asset_operations.dt_posting >= personnel_main_data.dt_valid_from) AND (fixed_asset_operations.dt_posting <= personnel_main_data.dt_valid_to))
+                                ->  Hash Left Join  (cost=0.00..27628776.39 rows=12561952 width=885)
+                                      Hash Cond: ((invoice_realization.payee_or_payer_code)::text = (counterparty.counterparty_code)::text)
+                                      ->  Hash Left Join  (cost=0.00..27584344.75 rows=6280976 width=840)
+                                            Hash Cond: (((fixed_asset_operations.unit_balance_code)::text = (unit_balance.unit_balance_code)::text) AND ((fixed_asset_operations.asset_main_code)::text = ("substring"((invoice_realization_position.material_code)::text, 3))))
+                                            ->  Redistribute Motion 6:6  (slice3; segments: 6)  (cost=0.00..27344246.98 rows=6280976 width=814)
+                                                  Hash Key: fixed_asset_operations.unit_balance_code, fixed_asset_operations.asset_main_code
+                                                  ->  Hash Left Join  (cost=0.00..27328244.19 rows=6280976 width=814)
+                                                        Hash Cond: ((CASE WHEN ((settings_and_parameters_sap.parameter_code)::text = 'BWASL_L'::text) THEN '3'::text WHEN ((settings_and_parameters_sap.parameter_code)::text = 'BWASL_SE'::text) THEN '5'::text WHEN ((settings_and_parameters_sap.parameter_code)::text = 'BWASL_SI'::text) THEN '8'::text WHEN ((settings_and_parameters_sap.parameter_code)::text = 'BWASL_TR'::text) THEN '1'::text ELSE NULL::text END) = (disposal_type_texts.disposal_type_code)::text)
+                                                        ->  Hash Join  (cost=0.00..27305809.03 rows=6280976 width=789)
+                                                              Hash Cond: (((fixed_asset_main.unit_balance_code)::text = (fixed_asset_operations.unit_balance_code)::text) AND ((fixed_asset_main.asset_main_code)::text = (fixed_asset_operations.asset_main_code)::text) AND ((fixed_asset_main.asset_sub_code)::text = (fixed_asset_operations.asset_sub_code)::text) AND ((fixed_asset_main.valuation_area_code)::text = (fixed_asset_operations.valuation_area_code)::text))
+                                                              Join Filter: ((fixed_asset_operations.dt_posting >= fixed_asset_main.dt_valid_from) AND (fixed_asset_operations.dt_posting <= fixed_asset_main.dt_valid_to))
+                                                              ->  Seq Scan on fixed_asset_main  (cost=0.00..4648.99 rows=6280976 width=570)
+                                                              ->  Hash  (cost=27151289.91..27151289.91 rows=15167384 width=235)
+                                                                    ->  Append  (cost=0.00..27151289.91 rows=15167384 width=235)
+                                                                          ->  Result  (cost=0.00..27110432.97 rows=14482070 width=235)
+                                                                                ->  Redistribute Motion 6:6  (slice1; segments: 6)  (cost=0.00..27107029.68 rows=14482070 width=208)
+                                                                                      Hash Key: fixed_asset_operations.unit_balance_code, fixed_asset_operations.asset_main_code, fixed_asset_operations.asset_sub_code, fixed_asset_operations.valuation_area_code
+                                                                                      ->  Nested Loop Left Join  (cost=0.00..27097601.27 rows=14482070 width=208)
+                                                                                            Join Filter: (((fixed_asset_operations.asset_movement_type_code)::text >= (settings_and_parameters_sap.range_low_value)::text) AND ((fixed_asset_operations.asset_movement_type_code)::text <= (COALESCE(settings_and_parameters_sap.range_high_value, settings_and_parameters_sap.range_low_value))::text))
+                                                                                            ->  Seq Scan on fixed_asset_operations  (cost=0.00..1970.02 rows=1854703 width=203)
+                                                                                                  Filter: ((dt_posting >= '2025-01-01'::date) AND (is_anlc IS NULL))
+                                                                                            ->  Seq Scan on settings_and_parameters_sap  (cost=0.00..510.56 rows=58 width=21)
+                                                                                                  Filter: (((abap_program_code)::text = 'ZFI5668M'::text) AND (NOT (range_sign_code IS NULL)))
+                                                                          ->  Result  (cost=0.00..37292.61 rows=685314 width=294)
+                                                                                ->  Result  (cost=0.00..37292.61 rows=685314 width=294)
+                                                                                      ->  Result  (cost=0.00..37091.13 rows=685314 width=82)
+                                                                                            Filter: ((row_number() OVER (?)) = 1)
+                                                                                            ->  WindowAgg  (cost=0.00..37034.76 rows=1713285 width=90)
+                                                                                                  Partition By: fixed_asset_cost_and_depreciation.unit_balance_code, fixed_asset_cost_and_depreciation.asset_main_code, fixed_asset_cost_and_depreciation.asset_sub_code, fixed_asset_cost_and_depreciation.valuation_area_code
+                                                                                                  Order By: fixed_asset_cost_and_depreciation.dt_report
+                                                                                                  ->  Sort  (cost=0.00..36887.42 rows=1713285 width=86)
+                                                                                                        Sort Key: fixed_asset_cost_and_depreciation.unit_balance_code, fixed_asset_cost_and_depreciation.asset_main_code, fixed_asset_cost_and_depreciation.asset_sub_code, fixed_asset_cost_and_depreciation.valuation_area_code, fixed_asset_cost_and_depreciation.dt_report
+                                                                                                        ->  Redistribute Motion 6:6  (slice2; segments: 6)  (cost=0.00..19587.03 rows=1713285 width=86)
+                                                                                                              Hash Key: fixed_asset_cost_and_depreciation.unit_balance_code, fixed_asset_cost_and_depreciation.asset_main_code, fixed_asset_cost_and_depreciation.asset_sub_code, fixed_asset_cost_and_depreciation.valuation_area_code
+                                                                                                              ->  Hash Join  (cost=0.00..19125.85 rows=1713285 width=86)
+                                                                                                                    Hash Cond: (((fixed_asset_cost_and_depreciation.unit_balance_code)::text = (fixed_asset_lend_lease.unit_balance_code)::text) AND ((fixed_asset_cost_and_depreciation.asset_main_code)::text = (fixed_asset_lend_lease.asset_main_code)::text) AND ((fixed_asset_cost_and_depreciation.asset_sub_code)::text = (fixed_asset_lend_lease.asset_sub_code)::text))
+                                                                                                                    Join Filter: (fixed_asset_cost_and_depreciation.dt_report <= fixed_asset_lend_lease.dt_lend_lease_posting)
+                                                                                                                    ->  Seq Scan on fixed_asset_cost_and_depreciation  (cost=0.00..11317.02 rows=8395263 width=82)
+                                                                                                                          Filter: (dt_report >= '2025-01-01'::date)
+                                                                                                                    ->  Hash  (cost=483.51..483.51 rows=533417 width=26)
+                                                                                                                          ->  Seq Scan on fixed_asset_lend_lease  (cost=0.00..483.51 rows=533417 width=26)
+                                                        ->  Hash  (cost=431.00..431.00 rows=9 width=27)
+                                                              ->  Seq Scan on disposal_type_texts  (cost=0.00..431.00 rows=9 width=27)
+                                                                    Filter: ((language_code)::text = 'R'::text)
+                                            ->  Hash  (cost=194539.94..194539.94 rows=3748043 width=57)
+                                                  ->  Redistribute Motion 6:6  (slice8; segments: 6)  (cost=0.00..194539.94 rows=3748043 width=57)
+                                                        Hash Key: unit_balance.unit_balance_code, ("substring"((invoice_realization_position.material_code)::text, 3))
+                                                        ->  Result  (cost=0.00..193871.25 rows=3748043 width=57)
+                                                              ->  Result  (cost=0.00..193871.25 rows=3748043 width=57)
+                                                                    ->  Result  (cost=0.00..193282.81 rows=3748043 width=64)
+                                                                          Filter: (((row_number() OVER (?)) = 1) AND (NOT (unit_balance.unit_balance_code IS NULL)))
+                                                                          ->  WindowAgg  (cost=0.00..192666.26 rows=9370106 width=72)
+                                                                                Partition By: invoice_realization_position.material_code
+                                                                                Order By: invoice_realization.dt_billing_document
+                                                                                ->  Sort  (cost=0.00..192029.09 rows=9370106 width=68)
+                                                                                      Sort Key: invoice_realization_position.material_code, invoice_realization.dt_billing_document
+                                                                                      ->  Redistribute Motion 6:6  (slice7; segments: 6)  (cost=0.00..108359.41 rows=9370106 width=68)
+                                                                                            Hash Key: invoice_realization_position.material_code
+                                                                                            ->  Result  (cost=0.00..106365.07 rows=9370106 width=68)
+                                                                                                  ->  WindowAgg  (cost=0.00..106365.07 rows=9370106 width=68)
+                                                                                                        Partition By: invoice_realization_position.material_code, invoice_realization.invoice_realization_code
+                                                                                                        ->  Sort  (cost=0.00..106365.07 rows=9370106 width=75)
+                                                                                                              Sort Key: invoice_realization_position.material_code, invoice_realization.invoice_realization_code
+                                                                                                              ->  Redistribute Motion 6:6  (slice6; segments: 6)  (cost=0.00..14082.33 rows=9370106 width=75)
+                                                                                                                    Hash Key: invoice_realization_position.material_code, invoice_realization.invoice_realization_code
+                                                                                                                    ->  Hash Left Join  (cost=0.00..11882.70 rows=9370106 width=75)
+                                                                                                                          Hash Cond: ((invoice_realization_position.sales_document_code)::text = (sales_contract_header.sales_contract_code)::text)
+                                                                                                                          ->  Hash Left Join  (cost=0.00..6527.39 rows=4021540 width=77)
+                                                                                                                                Hash Cond: ("left"((invoice_realization_position.material_code)::text, 2) = (unit_balance.fixed_asset_material_prefix_code)::text)
+                                                                                                                                ->  Hash Right Join  (cost=0.00..4998.11 rows=65631 width=72)
+                                                                                                                                      Hash Cond: ((sales_document_counterparty_role.sales_document_code)::text = (invoice_realization_position.sales_document_code)::text)
+                                                                                                                                      Join Filter: (((sales_document_counterparty_role.sales_document_position_code)::text = (invoice_realization_position.sales_document_position_code)::text) OR ((sales_document_counterparty_role.sales_document_position_code)::text = '000000'::text))
+                                                                                                                                      ->  Seq Scan on sales_document_counterparty_role  (cost=0.00..2634.33 rows=1552991 width=27)
+                                                                                                                                            Filter: ((counterparty_role_code)::text = 'VE'::text)
+                                                                                                                                      ->  Hash  (cost=1692.24..1692.24 rows=50112 width=70)
+                                                                                                                                            ->  Redistribute Motion 6:6  (slice5; segments: 6)  (cost=0.00..1692.24 rows=50112 width=70)
+                                                                                                                                                  Hash Key: invoice_realization_position.sales_document_code
+                                                                                                                                                  ->  Hash Join  (cost=0.00..1681.26 rows=50112 width=70)
+                                                                                                                                                        Hash Cond: ((invoice_realization.invoice_realization_code)::text = (invoice_realization_position.invoice_realization_code)::text)
+                                                                                                                                                        ->  Seq Scan on invoice_realization  (cost=0.00..490.53 rows=845594 width=26)
+                                                                                                                                                        ->  Hash  (cost=909.63..909.63 rows=50112 width=55)
+                                                                                                                                                              ->  Redistribute Motion 6:6  (slice4; segments: 6)  (cost=0.00..909.63 rows=50112 width=55)
+                                                                                                                                                                    Hash Key: invoice_realization_position.invoice_realization_code
+                                                                                                                                                                    ->  Seq Scan on invoice_realization_position  (cost=0.00..901.01 rows=50112 width=55)
+                                                                                                                                                                          Filter: ((sales_document_position_type_code)::text = ANY ('{ZAOS,ZAKT}'::text[]))
+                                                                                                                                ->  Hash  (cost=431.04..431.04 rows=487 width=8)
+                                                                                                                                      ->  Seq Scan on unit_balance  (cost=0.00..431.04 rows=487 width=8)
+                                                                                                                          ->  Hash  (cost=1499.90..1499.90 rows=917402 width=20)
+                                                                                                                                ->  Append  (cost=0.00..1499.90 rows=917402 width=20)
+                                                                                                                                      ->  Seq Scan on sales_contract_header  (cost=0.00..563.78 rows=689787 width=20)
+                                                                                                                                      ->  Seq Scan on sales_order_header  (cost=0.00..452.17 rows=222469 width=20)
+                                                                                                                                      ->  Seq Scan on sales_proposal_header  (cost=0.00..431.47 rows=5147 width=20)
+                                      ->  Hash  (cost=573.56..573.56 rows=435628 width=56)
+                                            ->  Seq Scan on counterparty  (cost=0.00..573.56 rows=435628 width=56)
+                                ->  Hash  (cost=502.71..502.71 rows=623814 width=68)
+                                      ->  Seq Scan on personnel_main_data  (cost=0.00..502.71 rows=623814 width=68)
+                          ->  Hash  (cost=488.07..488.07 rows=258771 width=65)
+                                ->  Seq Scan on order_controlling  (cost=0.00..488.07 rows=258771 width=65)
+                    ->  Hash  (cost=433.76..433.76 rows=32745 width=70)
+                          ->  Seq Scan on cost_center  (cost=0.00..433.76 rows=32745 width=70)
+              ->  Hash  (cost=431.39..431.39 rows=651 width=49)
+                    ->  Seq Scan on fixed_asset_movement_type_texts  (cost=0.00..431.39 rows=651 width=49)
+                          Filter: ((language_code)::text = 'R'::text)
+Optimizer: Pivotal Optimizer (GPORCA)

@@ -5,6 +5,62 @@ select
   current_setting('work_mem') as work_mem,
   current_setting('statement_mem') as statement_mem;
 
+select
+    rolname,
+    rolcanlogin,
+    rolcreaterole,
+    rolcreatedb,
+    rolreplication,
+    rolbypassrls
+from pg_roles
+where rolname = 'ANALYST_LOGIN';   -- <-- логин аналитика
+
+select
+    r.rolname as member_of
+from pg_auth_members m
+join pg_roles r on r.oid = m.roleid
+join pg_roles u on u.oid = m.member
+where u.rolname = 'ANALYST_LOGIN';
+Пример результата:
+member_of
+----------------
+analyst_role
+readonly_role
+analytics_rg_role
+👉 Именно эти роли определяют доступы к схемам/таблицам.
+3️⃣ Посмотри его resource group (ключ к OOM!)
+select
+    rolname,
+    rolresgroup
+from pg_roles
+where rolname = 'ANALYST_LOGIN';
+И затем:
+select *
+from gp_toolkit.gp_resgroup_config
+where groupname = (
+    select rolresgroup
+    from pg_roles
+    where rolname = 'ANALYST_LOGIN'
+);
+Ты увидишь, например:
+memory_limit = 20%
+concurrency = 5
+👉 Если ты не назначишь ту же resource group — поведение будет другим.
+4️⃣ Создаём ТВОЙ логин с теми же правами
+🔹 Шаг 1. Создать пользователя
+create role my_test_user
+login
+password 'strong_password';
+🔹 Шаг 2. Добавить его во ВСЕ роли аналитика
+Берёшь результат из шага 2 и выполняешь:
+grant analyst_role to my_test_user;
+grant readonly_role to my_test_user;
+grant analytics_rg_role to my_test_user;
+(названия — точно как у аналитика)
+🔹 Шаг 3. Назначить ТУ ЖЕ resource group (если она не через роль)
+Если resource group назначена на login:
+alter role my_test_user resource group analyst_rg;
+Если через 
 
 -- ============================================================
 -- 0) (Опционально) чуть безопаснее по памяти на сессию

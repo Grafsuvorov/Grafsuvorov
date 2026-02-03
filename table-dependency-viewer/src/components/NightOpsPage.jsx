@@ -331,9 +331,6 @@ export default function NightOpsPage() {
                         <span className="muted">
                           {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} min · max {row.max_duration_minutes ?? "—"} min · runs {row.runs_count ?? 0}
                         </span>
-                        {row.table_size_mb !== null && row.table_size_mb !== undefined && (
-                          <span className="night-row-badge">{row.table_size_mb} MB</span>
-                        )}
                       </button>
                     ))}
                     {!heavyLoading && !heavyRows.length && <div className="muted">No heavy tables in this window.</div>}

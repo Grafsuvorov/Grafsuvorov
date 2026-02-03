@@ -903,6 +903,213 @@ main.content {
   font-size: 13px;
 }
 
+.logic-audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.logic-audit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.logic-audit-field select,
+.logic-audit-field input {
+  min-width: 140px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(2, 6, 23, 0.65);
+  color: #e2e8f0;
+  padding: 8px 10px;
+}
+
+.logic-audit-field-wide input {
+  min-width: 280px;
+}
+
+.logic-audit-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.logic-audit-kpi {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.logic-audit-kpi .label {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.85);
+  text-transform: uppercase;
+}
+
+.logic-audit-kpi .value {
+  margin-top: 4px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.logic-audit-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.logic-audit-card {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(2, 6, 23, 0.55);
+  color: inherit;
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  display: grid;
+  gap: 8px;
+}
+
+.logic-audit-card.active,
+.logic-audit-card:hover {
+  border-color: rgba(96, 165, 250, 0.65);
+}
+
+.logic-audit-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.logic-audit-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.logic-audit-pill {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.logic-audit-pill.tone-high {
+  background: rgba(34, 197, 94, 0.2);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #bbf7d0;
+}
+
+.logic-audit-pill.tone-medium {
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  color: #fde68a;
+}
+
+.logic-audit-pill.tone-low {
+  background: rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  color: #cbd5e1;
+}
+
+.logic-audit-type {
+  font-size: 11px;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.logic-audit-fqns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.logic-audit-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 12px;
+}
+
+.logic-audit-explain {
+  margin-bottom: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(30, 64, 175, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.logic-audit-explain-decision {
+  font-weight: 600;
+}
+
+.logic-audit-detail-card {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  background: rgba(2, 6, 23, 0.55);
+}
+
+.logic-audit-detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.logic-audit-detail-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.logic-audit-fqn-big {
+  font-size: 14px;
+}
+
+.logic-audit-mini-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(148, 163, 184, 0.85);
+}
+
+.logic-audit-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.logic-audit-tag {
+  font-size: 11px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
+}
+
+.logic-audit-targets {
+  display: grid;
+  gap: 6px;
+}
+
+.logic-audit-target-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
 @media (max-width: 900px) {
   .night-row-title {
     white-space: normal;

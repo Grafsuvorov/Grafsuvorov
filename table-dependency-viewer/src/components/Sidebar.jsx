@@ -44,6 +44,12 @@ export default function Sidebar({ currentPath, onChangeView }) {
                 Entities
               </button>
               <button
+                className={isActive("/logic-audit") ? "active" : ""}
+                onClick={() => onChangeView("logic_audit")}
+              >
+                Logic Audit
+              </button>
+              <button
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >

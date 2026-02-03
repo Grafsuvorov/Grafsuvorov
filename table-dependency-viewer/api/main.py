@@ -26,6 +26,7 @@ import json
 import hashlib
 import subprocess
 import tempfile
+from itertools import combinations
 
 from .config import (
     TABLE_LOADING_HISTORY,
@@ -108,6 +109,396 @@ _graph_cache = {}
 _graph_cache_ts = 0
 _GRAPH_CACHE_TTL = 86400  # 24 часа
 _graph_cache_meta_ts = 0
+
+_logic_audit_cache_payload = None
+_logic_audit_cache_ts = 0
+_LOGIC_AUDIT_CACHE_TTL = 3600
+
+SQL_STOPWORDS = {
+    "select", "from", "where", "join", "left", "right", "inner", "outer", "full", "on",
+    "and", "or", "not", "null", "is", "as", "case", "when", "then", "else", "end",
+    "group", "by", "order", "limit", "with", "distinct", "union", "all", "into", "insert",
+    "create", "table", "truncate", "having", "over", "partition", "rows", "range",
+}
+
+SQL_FUNCTION_BLACKLIST = {
+    "select", "from", "where", "group", "order", "when", "then", "else", "end", "and", "or",
+    "in", "on", "over", "partition", "by", "as",
+}
+
+
+def _strip_sql_comments(sql_text: str) -> str:
+    if not sql_text:
+        return ""
+    text_wo_block = re.sub(r"/\*.*?\*/", " ", sql_text, flags=re.S)
+    text_wo_inline = re.sub(r"--.*?$", " ", text_wo_block, flags=re.M)
+    return text_wo_inline
+
+
+def _normalize_sql(sql_text: str) -> str:
+    text = _strip_sql_comments(sql_text).lower()
+    text = text.replace("`", "").replace('"', "")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _tokenize_sql(sql_text: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z_][a-z0-9_]*", sql_text))
+    return {t for t in tokens if t not in SQL_STOPWORDS and len(t) > 2}
+
+
+def _canonical_source_name(name: str) -> str:
+    raw = (name or "").strip().strip(",")
+    if not raw:
+        return ""
+    raw = raw.split()[0]
+    # remove typical temporary table patterns to group stable base logic
+    raw = re.sub(r"^(tmp_|temp_|cte_)", "", raw)
+    raw = re.sub(r"(_tmp|_temp)$", "", raw)
+    raw = re.sub(r"_[0-9]{6,}$", "", raw)
+    raw = raw.replace('"', "").replace("`", "")
+    return raw
+
+
+def _extract_source_tables(normalized_sql: str) -> set[str]:
+    tables = set()
+    for match in re.finditer(r"\b(from|join)\s+([a-z0-9_./]+)", normalized_sql):
+        cleaned = _canonical_source_name(match.group(2) or "")
+        if cleaned and cleaned not in {"select"}:
+            tables.add(cleaned)
+    return tables
+
+
+def _extract_functions(normalized_sql: str) -> set[str]:
+    funcs = set()
+    for fn in re.findall(r"\b([a-z_][a-z0-9_]*)\s*\(", normalized_sql):
+        if fn not in SQL_FUNCTION_BLACKLIST:
+            funcs.add(fn)
+    return funcs
+
+
+def _extract_where_clause(normalized_sql: str) -> str:
+    match = re.search(r"\bwhere\b(.*?)(\bgroup\s+by\b|\border\s+by\b|\blimit\b|$)", normalized_sql, flags=re.S)
+    return (match.group(1) or "").strip() if match else ""
+
+
+def _split_top_level(text: str) -> list[str]:
+    if not text:
+        return []
+    parts = []
+    buf = []
+    level = 0
+    for ch in text:
+        if ch == "(":
+            level += 1
+        elif ch == ")" and level > 0:
+            level -= 1
+        if ch == "," and level == 0:
+            piece = "".join(buf).strip()
+            if piece:
+                parts.append(piece)
+            buf = []
+            continue
+        buf.append(ch)
+    tail = "".join(buf).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _extract_select_targets(normalized_sql: str) -> list[dict]:
+    match = re.search(r"\bselect\b(.*?)(\bfrom\b)", normalized_sql, flags=re.S)
+    if not match:
+        return []
+    body = (match.group(1) or "").strip()
+    targets = []
+    for expr in _split_top_level(body):
+        alias_match = re.search(r"\bas\s+([a-z_][a-z0-9_]*)\s*$", expr)
+        alias = alias_match.group(1) if alias_match else None
+        targets.append({
+            "expression": expr,
+            "alias": alias,
+        })
+    return targets
+
+
+def _expression_signature(expr: str) -> tuple[str, set[str]]:
+    normalized = re.sub(r"\s+", " ", (expr or "").strip().lower())
+    normalized = normalized.replace('"', "").replace("`", "")
+    tokens = _tokenize_sql(normalized)
+    expr_hash = hashlib.sha1(normalized.encode("utf-8")).hexdigest()
+    return expr_hash, tokens
+
+
+def _jaccard_similarity(a: set[str], b: set[str]) -> float:
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    union = len(a | b)
+    return inter / union if union else 0.0
+
+
+def _build_story(obj: dict) -> str:
+    checks = obj.get("verification") or []
+    keys = obj.get("key_attributes") or []
+    sources = sorted(obj.get("source_tables") or [])
+    funcs = sorted(obj.get("functions") or [])
+    depends_on = obj.get("depends_on") or {}
+    layers = ", ".join(sorted(depends_on.keys())) if depends_on else "не заданы"
+    parts = [
+        f"{obj.get('fqn')} ({obj.get('entity_name') or 'UNKNOWN'})",
+        f"Режим загрузки: {obj.get('table_load_mode') or 'N/A'}",
+        f"Слои зависимостей: {layers}",
+        f"Ключевые поля: {', '.join(keys[:8]) if keys else 'не указаны'}",
+        f"Проверки: {', '.join(checks) if checks else 'не указаны'}",
+        f"SQL-функции: {', '.join(funcs[:10]) if funcs else 'не найдены'}",
+        f"Источники SQL: {', '.join(sources[:8]) if sources else 'не найдены'}",
+    ]
+    return " | ".join(parts)
+
+
+def _extract_field_descriptions(meta: dict) -> list[dict]:
+    result = []
+    for key in ("columns", "fields", "attributes", "column_descriptions"):
+        value = meta.get(key)
+        if isinstance(value, list):
+            for item in value:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name") or item.get("column") or item.get("field")
+                descr = item.get("description") or item.get("comment") or item.get("caption")
+                if name and descr:
+                    result.append({"name": str(name), "description": str(descr)})
+        elif isinstance(value, dict):
+            for name, descr in value.items():
+                if name and descr:
+                    result.append({"name": str(name), "description": str(descr)})
+    dedup = {}
+    for row in result:
+        dedup[row["name"]] = row["description"]
+    return [{"name": k, "description": v} for k, v in dedup.items()]
+
+
+def _build_diff_hints(left: dict, right: dict) -> list[str]:
+    hints = []
+    src_left = left.get("source_tables") or set()
+    src_right = right.get("source_tables") or set()
+    fn_left = left.get("functions") or set()
+    fn_right = right.get("functions") or set()
+    where_left = left.get("where_clause") or ""
+    where_right = right.get("where_clause") or ""
+    if src_left != src_right:
+        hints.append("Разные источники в FROM/JOIN")
+    if fn_left != fn_right:
+        hints.append("Отличаются используемые SQL-функции")
+    if where_left != where_right:
+        hints.append("Отличаются условия WHERE")
+    if not hints:
+        hints.append("Логика почти идентична, различия минимальны")
+    return hints
+
+
+def _build_pair_explanation(record: dict, left: dict, right: dict) -> dict:
+    score = record.get("score") or 0
+    expr_overlap = record.get("expression_overlap_count") or 0
+    merge_potential = record.get("merge_potential") or "LOW"
+    diff_hints = record.get("diff_hints") or []
+
+    if merge_potential == "HIGH":
+        decision = "Кандидат на объединение в один канонический расчет."
+    elif merge_potential == "MEDIUM":
+        decision = "Логику стоит унифицировать после проверки бизнес-правил."
+    else:
+        decision = "Пока лучше оставить отдельно, но задокументировать различия."
+
+    left_fields = left.get("field_descriptions") or []
+    right_fields = right.get("field_descriptions") or []
+    common_field_names = sorted(
+        {row.get("name") for row in left_fields if row.get("name")}
+        & {row.get("name") for row in right_fields if row.get("name")}
+    )
+
+    summary = (
+        f"Похожесть {round(score * 100)}%, совпадающих выражений: {expr_overlap}. "
+        f"Ключевые отличия: {', '.join(diff_hints[:3])}."
+    )
+
+    return {
+        "summary": summary,
+        "decision": decision,
+        "common_fields": common_field_names[:12],
+        "left_field_docs_count": len(left_fields),
+        "right_field_docs_count": len(right_fields),
+    }
+
+
+def _calc_logic_similarity(left: dict, right: dict) -> float:
+    token_sim = _jaccard_similarity(left["tokens"], right["tokens"])
+    source_sim = _jaccard_similarity(left["source_tables"], right["source_tables"])
+    function_sim = _jaccard_similarity(left["functions"], right["functions"])
+    expr_exact_count = len((left.get("expr_hashes") or set()) & (right.get("expr_hashes") or set()))
+    expr_exact_den = max(min(len(left.get("expr_hashes") or []), len(right.get("expr_hashes") or [])), 1)
+    expr_exact_sim = expr_exact_count / expr_exact_den
+    expr_token_sim = _jaccard_similarity(left.get("expr_token_union") or set(), right.get("expr_token_union") or set())
+    expr_sim = 0.6 * expr_exact_sim + 0.4 * expr_token_sim
+
+    score = 0.35 * token_sim + 0.25 * source_sim + 0.15 * function_sim + 0.25 * expr_sim
+    if left["sql_hash"] == right["sql_hash"]:
+        score = 1.0
+    return round(score, 4), {
+        "expr_exact_count": expr_exact_count,
+        "expr_exact_sim": round(expr_exact_sim, 4),
+        "expr_token_sim": round(expr_token_sim, 4),
+    }
+
+
+def _build_logic_object(meta_path: Path) -> Optional[dict]:
+    try:
+        meta = yaml.safe_load(meta_path.read_text("utf-8")) or {}
+    except Exception:
+        return None
+
+    schema = (meta.get("table_schema") or "").strip().lower()
+    table = (meta.get("table_name") or "").strip().lower()
+    if not schema or not table:
+        return None
+
+    sql_candidates = [
+        meta_path.parent / "sql_query_insert_init.sql",
+        meta_path.parent / "sql_query_recreate_init.sql",
+    ]
+    sql_path = next((p for p in sql_candidates if p.exists()), None)
+    sql_text = sql_path.read_text("utf-8", errors="ignore") if sql_path else ""
+    normalized_sql = _normalize_sql(sql_text)
+    if not normalized_sql:
+        return None
+    select_targets = _extract_select_targets(normalized_sql)[:25]
+    expr_hashes = set()
+    expr_token_union = set()
+    for target in select_targets:
+        expr_hash, expr_tokens = _expression_signature(target.get("expression") or "")
+        expr_hashes.add(expr_hash)
+        expr_token_union |= expr_tokens
+
+    return {
+        "fqn": f"{schema}.{table}",
+        "schema": schema,
+        "table": table,
+        "entity_name": meta.get("entity_name"),
+        "entity_id": meta.get("entity_id"),
+        "table_id": meta.get("table_id"),
+        "table_load_mode": meta.get("table_load_mode"),
+        "depends_on": meta.get("depends_on") or {},
+        "field_descriptions": _extract_field_descriptions(meta),
+        "key_attributes": list(meta.get("key_attributes") or []),
+        "verification": list(meta.get("verification") or []),
+        "sql_path": str(sql_path) if sql_path else None,
+        "sql_hash": hashlib.sha1(normalized_sql.encode("utf-8")).hexdigest(),
+        "sql_preview": normalized_sql[:700],
+        "tokens": _tokenize_sql(normalized_sql),
+        "source_tables": _extract_source_tables(normalized_sql),
+        "functions": _extract_functions(normalized_sql),
+        "where_clause": _extract_where_clause(normalized_sql),
+        "select_targets": select_targets,
+        "expr_hashes": expr_hashes,
+        "expr_token_union": expr_token_union,
+    }
+
+
+def _build_logic_audit_cache():
+    global _logic_audit_cache_payload, _logic_audit_cache_ts
+    now = time.time()
+    if _logic_audit_cache_payload and now - _logic_audit_cache_ts < _LOGIC_AUDIT_CACHE_TTL:
+        return _logic_audit_cache_payload
+
+    objects = []
+    for root_dir in iter_meta_dirs():
+        for root, _, files in os.walk(root_dir):
+            if "meta_data_file.yaml" not in files:
+                continue
+            obj = _build_logic_object(Path(root) / "meta_data_file.yaml")
+            if obj:
+                obj["story"] = _build_story(obj)
+                objects.append(obj)
+
+    pairs = []
+    pair_index = {}
+    for left, right in combinations(objects, 2):
+        # быстрый pre-filter
+        if not (left["source_tables"] & right["source_tables"] or left["functions"] & right["functions"]):
+            continue
+
+        score, sim_meta = _calc_logic_similarity(left, right)
+        if score < 0.72:
+            continue
+
+        if left["sql_hash"] == right["sql_hash"]:
+            issue_type = "duplicate_exact"
+            merge_potential = "HIGH"
+        elif score >= 0.86:
+            issue_type = "duplicate_candidate"
+            merge_potential = "HIGH"
+        elif score >= 0.78:
+            issue_type = "similar_candidate"
+            merge_potential = "MEDIUM"
+        else:
+            issue_type = "similar_candidate"
+            merge_potential = "LOW"
+
+        pair_key = "|".join(sorted([left["fqn"], right["fqn"]]))
+        pair_id = hashlib.sha1(pair_key.encode("utf-8")).hexdigest()[:16]
+        diff_hints = _build_diff_hints(left, right)
+        record = {
+            "pair_id": pair_id,
+            "left_fqn": left["fqn"],
+            "right_fqn": right["fqn"],
+            "left_entity": left.get("entity_name"),
+            "right_entity": right.get("entity_name"),
+            "score": score,
+            "expression_overlap_count": sim_meta.get("expr_exact_count", 0),
+            "expression_overlap_score": sim_meta.get("expr_exact_sim", 0),
+            "issue_type": issue_type,
+            "merge_potential": merge_potential,
+            "diff_hints": diff_hints,
+        }
+        pairs.append(record)
+        explanation = _build_pair_explanation(record, left, right)
+        pair_index[pair_id] = {
+            **record,
+            "explanation": explanation,
+            "left": {
+                k: v for k, v in left.items()
+                if k not in {"tokens", "source_tables", "functions", "expr_hashes", "expr_token_union"}
+            },
+            "right": {
+                k: v for k, v in right.items()
+                if k not in {"tokens", "source_tables", "functions", "expr_hashes", "expr_token_union"}
+            },
+            "left_features": {
+                "tokens_count": len(left["tokens"]),
+                "source_tables": sorted(left["source_tables"]),
+                "functions": sorted(left["functions"]),
+            },
+            "right_features": {
+                "tokens_count": len(right["tokens"]),
+                "source_tables": sorted(right["source_tables"]),
+                "functions": sorted(right["functions"]),
+            },
+        }
+
+    pairs.sort(key=lambda row: (row["score"], row["merge_potential"]), reverse=True)
+    payload = {
+        "generated_at": datetime.utcnow().isoformat(),
+        "objects_count": len(objects),
+        "pairs_count": len(pairs),
+        "pairs": pairs,
+        "pair_index": pair_index,
+    }
+    _logic_audit_cache_payload = payload
+    _logic_audit_cache_ts = now
+    return payload
 
 def compute_order_breaches():
     """
@@ -947,6 +1338,21 @@ def _entity_map_from_meta() -> dict:
             entity_map[f"{schema}.{table}"] = entity
     return entity_map
 
+
+def _normalize_table_param(schema: str, table: str) -> tuple[Optional[str], Optional[str]]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    if not table_norm:
+        return schema_norm, table_norm
+    table_norm = table_norm.strip()
+    return schema_norm, table_norm
+
+
+def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
+    if not table_norm:
+        return table_norm
+    return table_norm.replace("/", "").replace("-", "").replace(" ", "")
+
 @app.on_event("startup")
 def warm_up_cache():
     try:
@@ -958,7 +1364,7 @@ def warm_up_cache():
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-META_PARENT_DIRS = [BASE_DIR / "project", BASE_DIR]
+META_PARENT_DIRS = [BASE_DIR / "etl_loads_entity"]
 
 
 def iter_meta_dirs(targets: Optional[List[str]] = None):
@@ -1779,10 +2185,10 @@ def get_metrics():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/table-history/{schema}/{table}")
+@router.get("/api/table-history/{schema}/{table:path}")
 def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     table_id = None
 
     try:
@@ -1793,11 +2199,11 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
                     SELECT table_id
                     FROM {TABLE_TABLES_META}
                     WHERE lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     LIMIT 1
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).scalar()
 
             params = {"limit": limit}
@@ -1805,9 +2211,16 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
                 where_clause = "object_id = :table_id"
                 params["table_id"] = table_id
             else:
-                where_clause = "lower(object_name) = :table_fqn OR lower(object_name) = :table_name"
+                where_clause = """
+                    lower(object_name) = :table_fqn
+                    OR lower(object_name) = :table_fqn_clean
+                    OR lower(object_name) = :table_name
+                    OR lower(object_name) = :table_name_clean
+                """
                 params["table_fqn"] = f"{schema_norm}.{table_norm}"
+                params["table_fqn_clean"] = f"{schema_norm}.{table_clean}" if table_clean else None
                 params["table_name"] = table_norm
+                params["table_name_clean"] = table_clean
 
             rows = conn.execute(
                 text(
@@ -1846,10 +2259,10 @@ def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=5
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/table-variants/{schema}/{table}")
+@router.get("/api/table-variants/{schema}/{table:path}")
 def get_table_variants(schema: str, table: str):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     query = f"""
         SELECT
             t.table_id,
@@ -1861,12 +2274,15 @@ def get_table_variants(schema: str, table: str):
         FROM {TABLE_TABLES_META} t
         LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
         WHERE lower(t.table_schema) = :schema
-          AND lower(t.table_name) = :table
+          AND (lower(t.table_name) = :table OR lower(t.table_name) = :table_clean)
         ORDER BY t.table_id
     """
     try:
         with engine.connect() as conn:
-            rows = conn.execute(text(query), {"schema": schema_norm, "table": table_norm}).mappings().all()
+            rows = conn.execute(
+                text(query),
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
+            ).mappings().all()
 
         payload = []
         for row in rows:
@@ -1886,10 +2302,10 @@ def get_table_variants(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dq/table/{schema}/{table}")
+@router.get("/api/dq/table/{schema}/{table:path}")
 def get_table_quality(schema: str, table: str):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     try:
         with engine.connect() as conn:
             dup_row = conn.execute(
@@ -1899,12 +2315,12 @@ def get_table_quality(schema: str, table: str):
                     FROM {TABLE_DATA_QUALITY}
                     WHERE verification_type = 'duplicate_check'
                       AND lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT 1
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).mappings().first()
 
             rc_rows = conn.execute(
@@ -1914,12 +2330,12 @@ def get_table_quality(schema: str, table: str):
                     FROM {TABLE_DATA_QUALITY}
                     WHERE verification_type = 'row_count'
                       AND lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT 8
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
             ).mappings().all()
 
         duplicate_count = _parse_numeric(dup_row.get("metric_result")) if dup_row else None
@@ -1966,10 +2382,10 @@ def get_table_quality(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dq/history/{schema}/{table}")
+@router.get("/api/dq/history/{schema}/{table:path}")
 def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
-    schema_norm = norm(schema)
-    table_norm = norm(table)
+    schema_norm, table_norm = _normalize_table_param(schema, table)
+    table_clean = _clean_table_name(table_norm)
     try:
         with engine.connect() as conn:
             rows = conn.execute(
@@ -1978,12 +2394,12 @@ def get_table_quality_history(schema: str, table: str, limit: int = Query(20, ge
                     SELECT verification_type, metric_result, dt_of_verification
                     FROM {TABLE_DATA_QUALITY}
                     WHERE lower(table_schema) = :schema
-                      AND lower(table_name) = :table
+                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
                     ORDER BY dt_of_verification DESC NULLS LAST
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "limit": limit},
             ).mappings().all()
 
         payload = [
@@ -2011,7 +2427,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                 WITH ranked AS (
                   SELECT
                     lower(table_schema) AS schema,
-                    lower(table_name) AS table,
+                    lower(table_name) AS table_name,
                     metric_result,
                     dt_of_verification,
                     ROW_NUMBER() OVER (
@@ -2022,7 +2438,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                   WHERE verification_type = 'duplicate_check'
                     AND dt_of_verification >= now() - interval '{days} days'
                 )
-                SELECT schema, table, metric_result, dt_of_verification
+                SELECT schema, table_name, metric_result, dt_of_verification
                 FROM ranked
                 WHERE rn = 1
                 """
@@ -2035,7 +2451,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                 WITH ranked AS (
                   SELECT
                     lower(table_schema) AS schema,
-                    lower(table_name) AS table,
+                    lower(table_name) AS table_name,
                     metric_result,
                     dt_of_verification,
                     ROW_NUMBER() OVER (
@@ -2045,7 +2461,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
                   FROM {TABLE_DATA_QUALITY}
                   WHERE verification_type = 'row_count'
                 )
-                SELECT schema, table, metric_result, dt_of_verification, rn
+                SELECT schema, table_name, metric_result, dt_of_verification, rn
                 FROM ranked
                 WHERE rn <= 8
                 """
@@ -2057,11 +2473,11 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
         count = _parse_numeric(row.get("metric_result")) or 0
         if count <= 0:
             continue
-        fqn = f"{row.get('schema')}.{row.get('table')}"
+        fqn = f"{row.get('schema')}.{row.get('table_name')}"
         alerts.append({
             "type": "duplicate_check",
             "table_schema": row.get("schema"),
-            "table_name": row.get("table"),
+            "table_name": row.get("table_name"),
             "entity_name": entity_map.get(fqn),
             "metric_value": int(count),
             "delta_pct": None,
@@ -2070,7 +2486,7 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
 
     rc_grouped = {}
     for row in rc_rows:
-        key = f"{row.get('schema')}.{row.get('table')}"
+        key = f"{row.get('schema')}.{row.get('table_name')}"
         rc_grouped.setdefault(key, []).append(row)
 
     for key, rows in rc_grouped.items():
@@ -2092,16 +2508,16 @@ def _collect_dq_alerts(days: int, delta: float) -> list[dict]:
         delta_pct = ((latest_val - baseline) / baseline) * 100
         if abs(delta_pct) < delta:
             continue
-        schema, table = key.split(".", 1)
-        alerts.append({
-            "type": "row_count",
-            "table_schema": schema,
-            "table_name": table,
-            "entity_name": entity_map.get(key),
-            "metric_value": int(latest_val),
-            "delta_pct": round(delta_pct, 2),
-            "dt": serialize_datetime(latest.get("dt_of_verification")),
-        })
+            schema, table_name = key.split(".", 1)
+            alerts.append({
+                "type": "row_count",
+                "table_schema": schema,
+                "table_name": table_name,
+                "entity_name": entity_map.get(key),
+                "metric_value": int(latest_val),
+                "delta_pct": round(delta_pct, 2),
+                "dt": serialize_datetime(latest.get("dt_of_verification")),
+            })
 
     alerts.sort(
         key=lambda a: (
@@ -2124,7 +2540,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                     WITH ranked AS (
                       SELECT
                         lower(table_schema) AS schema,
-                        lower(table_name) AS table,
+                        lower(table_name) AS table_name,
                         metric_result,
                         dt_of_verification,
                         ROW_NUMBER() OVER (
@@ -2135,7 +2551,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                       WHERE verification_type = 'duplicate_check'
                         AND dt_of_verification >= now() - interval '{days} days'
                     )
-                    SELECT schema, table, metric_result, dt_of_verification
+                    SELECT schema, table_name, metric_result, dt_of_verification
                     FROM ranked
                     WHERE rn = 1
                     """
@@ -2148,7 +2564,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                     WITH ranked AS (
                       SELECT
                         lower(table_schema) AS schema,
-                        lower(table_name) AS table,
+                        lower(table_name) AS table_name,
                         metric_result,
                         dt_of_verification,
                         ROW_NUMBER() OVER (
@@ -2158,7 +2574,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
                       FROM {TABLE_DATA_QUALITY}
                       WHERE verification_type = 'row_count'
                     )
-                    SELECT schema, table, metric_result, dt_of_verification, rn
+                    SELECT schema, table_name, metric_result, dt_of_verification, rn
                     FROM ranked
                     WHERE rn <= 8
                     """
@@ -2173,7 +2589,7 @@ def get_quality_summary(days: int = Query(7, ge=1, le=90), delta: float = Query(
 
         rc_grouped = {}
         for row in rc_rows:
-            key = f"{row.get('schema')}.{row.get('table')}"
+            key = f"{row.get('schema')}.{row.get('table_name')}"
             rc_grouped.setdefault(key, []).append(row)
 
         rc_issues = 0
@@ -2252,7 +2668,7 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
     return None
 
 
-@router.get("/api/card/{schema}/{table}")
+@router.get("/api/card/{schema}/{table:path}")
 def get_table_card_info_by_path(schema: str, table: str):
     for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)
@@ -3334,7 +3750,7 @@ def get_night_summary(
                             ELSE NULL
                         END AS ratio
                     FROM night_runs n
-                    JOIN history h ON h.object_id = n.object_id
+                    JOIN history h ON h.object_id = n.table_id
                     WHERE n.duration > h.p95_duration * 1.5
                     ORDER BY n.duration DESC
                     LIMIT :limit
@@ -3510,7 +3926,6 @@ def get_night_heavy_tables(
                     COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
                     COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                     COALESCE(e.entity_name, 'UNKNOWN') AS entity_name,
-                    t.table_size_mb,
                     l.loading_start_dttm,
                     l.loading_finish_dttm,
                     EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_minutes,
@@ -3534,7 +3949,6 @@ def get_night_heavy_tables(
                 table_schema,
                 table_name,
                 entity_name,
-                MAX(table_size_mb) AS table_size_mb,
                 COUNT(*) AS runs_count,
                 SUM(duration_minutes) AS total_duration_minutes,
                 AVG(duration_minutes) AS avg_duration_minutes,
@@ -3608,7 +4022,6 @@ def get_night_heavy_tables(
                     "table_schema": row.get("table_schema"),
                     "table_name": row.get("table_name"),
                     "entity_name": row.get("entity_name"),
-                    "table_size_mb": round(float(row["table_size_mb"]), 2) if row.get("table_size_mb") is not None else None,
                     "runs_count": int(row.get("runs_count") or 0),
                     "total_duration_minutes": round(float(row.get("total_duration_minutes") or 0.0), 2),
                     "avg_duration_minutes": round(float(row.get("avg_duration_minutes") or 0.0), 2),
@@ -3625,6 +4038,67 @@ def get_night_heavy_tables(
         print("❌ /api/night/heavy-tables error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/logic-audit")
+def get_logic_audit(
+    issue_type: str = Query("all"),
+    mode: str = Query("standard"),
+    min_score: float = Query(0.72, ge=0.0, le=1.0),
+    limit: int = Query(200, ge=1, le=1000),
+    search: Optional[str] = Query(None),
+):
+    payload = _build_logic_audit_cache()
+    pairs = payload.get("pairs") or []
+
+    if issue_type != "all":
+        pairs = [row for row in pairs if row.get("issue_type") == issue_type]
+
+    if min_score > 0:
+        pairs = [row for row in pairs if (row.get("score") or 0) >= min_score]
+
+    if mode == "strict":
+        pairs = [
+            row for row in pairs
+            if (row.get("expression_overlap_count") or 0) >= 1
+            and (row.get("score") or 0) >= max(min_score, 0.72)
+        ]
+
+    if search:
+        term = search.strip().lower()
+        if term:
+            pairs = [
+                row for row in pairs
+                if term in (row.get("left_fqn") or "").lower()
+                or term in (row.get("right_fqn") or "").lower()
+                or term in (row.get("left_entity") or "").lower()
+                or term in (row.get("right_entity") or "").lower()
+            ]
+
+    pairs = pairs[:limit]
+    stats = {
+        "duplicate_exact": sum(1 for row in pairs if row.get("issue_type") == "duplicate_exact"),
+        "duplicate_candidate": sum(1 for row in pairs if row.get("issue_type") == "duplicate_candidate"),
+        "similar_candidate": sum(1 for row in pairs if row.get("issue_type") == "similar_candidate"),
+    }
+    return {
+        "generated_at": payload.get("generated_at"),
+        "objects_count": payload.get("objects_count"),
+        "pairs_count": payload.get("pairs_count"),
+        "mode": mode,
+        "returned_count": len(pairs),
+        "stats": stats,
+        "pairs": pairs,
+    }
+
+
+@router.get("/api/logic-audit/pair/{pair_id}")
+def get_logic_audit_pair(pair_id: str):
+    payload = _build_logic_audit_cache()
+    detail = (payload.get("pair_index") or {}).get(pair_id)
+    if not detail:
+        return JSONResponse(status_code=404, content={"error": "pair not found"})
+    return detail
 
 
 @router.get("/api/entity-loads")
@@ -4251,7 +4725,7 @@ def group_failures(failures: list):
             entity = meta.get("entity_name") if meta else None
 
         entity = entity or f"{f['schema']}"
-        f["entity_name"] = entity  # 🔴 фикс
+        f["entity_name"] = entity  #
 
         try:
             t0 = datetime.strptime(f["error_time"], "%Y-%m-%d %H:%M:%S")

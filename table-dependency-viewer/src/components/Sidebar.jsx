@@ -43,6 +43,12 @@ export default function Sidebar({ currentPath, onChangeView }) {
               <button onClick={() => onChangeView("__entity_schedule__")}>
                 Entities
               </button>
+              <button
+                className={isActive("/onboarding") ? "active" : ""}
+                onClick={() => onChangeView("onboarding")}
+              >
+                Onboarding
+              </button>
             </div>
           </nav>
         </div>

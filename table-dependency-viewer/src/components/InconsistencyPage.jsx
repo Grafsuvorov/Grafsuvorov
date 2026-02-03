@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export default function InconsistencyPage({ onBack }) {
   const [violations, setViolations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/inconsistencies')
+    fetch(`${API_BASE}/api/inconsistencies`)
       .then(res => {
         if (!res.ok) throw new Error("Failed to load data");
         return res.json();

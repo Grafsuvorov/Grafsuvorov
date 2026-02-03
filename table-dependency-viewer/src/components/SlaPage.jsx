@@ -1,6 +1,8 @@
 // 📁 src/components/SlaPage.jsx
 import { useEffect, useState } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export default function SlaPage() {
   const [data, setData] = useState([]);
   const [filter, setFilter] = useState("");
@@ -8,7 +10,7 @@ export default function SlaPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/sla")
+    fetch(`${API_BASE}/api/sla`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load SLA data");
         return res.json();

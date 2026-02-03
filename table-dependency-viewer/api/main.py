@@ -338,7 +338,9 @@ def _layer_of_table(fqn: str) -> str:
         return "other"
     schema = fqn.split(".", 1)[0]
     schema_norm = schema.lower()
-    if schema_norm in ("dict", "dict_stg", "dict_dds"):
+    if schema_norm in ("dict", "dict_stg", "dict_ods", "dict_dds"):
+        if "dict_ods" in fqn or schema_norm == "dict_ods":
+            return "dict_ods"
         if "dict_dds" in fqn or schema_norm == "dict_dds":
             return "dict_dds"
         return "dict_stg"
@@ -350,7 +352,7 @@ def _layer_of_table(fqn: str) -> str:
 
 
 def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
-    order = ["raw_ext", "landing", "dict_stg", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
+    order = ["raw_ext", "landing", "dict_stg", "dict_ods", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
         layer = _layer_of_table(node_id)
@@ -3466,6 +3468,161 @@ def get_night_summary(
         return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
     except Exception as e:
         print("❌ /api/night-summary error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+def _parse_hhmm_to_minutes(value: str, field_name: str) -> int:
+    if not isinstance(value, str):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a string in HH:MM format")
+    match = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", value.strip())
+    if not match:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {value}. Expected HH:MM")
+    hours = int(match.group(1))
+    minutes = int(match.group(2))
+    return hours * 60 + minutes
+
+
+@router.get("/api/night/heavy-tables")
+def get_night_heavy_tables(
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(25, ge=1, le=200),
+    window_start: str = Query("04:30"),
+    window_end: str = Query("05:20"),
+):
+    try:
+        start_minutes = _parse_hhmm_to_minutes(window_start, "window_start")
+        end_minutes = _parse_hhmm_to_minutes(window_end, "window_end")
+        crosses_midnight = start_minutes > end_minutes
+
+        time_filter = """
+            (
+                (:crosses_midnight = false AND minute_of_day >= :start_minutes AND minute_of_day < :end_minutes)
+                OR
+                (:crosses_midnight = true AND (minute_of_day >= :start_minutes OR minute_of_day < :end_minutes))
+            )
+        """
+
+        query = f"""
+            WITH base AS (
+                SELECT
+                    l.object_id AS table_id,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+                    COALESCE(e.entity_name, 'UNKNOWN') AS entity_name,
+                    t.table_size_mb,
+                    l.loading_start_dttm,
+                    l.loading_finish_dttm,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_minutes,
+                    (EXTRACT(HOUR FROM l.loading_start_dttm)::int * 60 + EXTRACT(MINUTE FROM l.loading_start_dttm)::int) AS minute_of_day
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+            ),
+            windowed AS (
+                SELECT *
+                FROM base
+                WHERE {time_filter}
+            )
+            SELECT
+                table_id,
+                table_schema,
+                table_name,
+                entity_name,
+                MAX(table_size_mb) AS table_size_mb,
+                COUNT(*) AS runs_count,
+                SUM(duration_minutes) AS total_duration_minutes,
+                AVG(duration_minutes) AS avg_duration_minutes,
+                MAX(duration_minutes) AS max_duration_minutes,
+                MAX(loading_start_dttm) AS last_start
+            FROM windowed
+            GROUP BY table_id, table_schema, table_name, entity_name
+            ORDER BY total_duration_minutes DESC NULLS LAST
+            LIMIT :limit
+        """
+
+        summary_query = f"""
+            WITH base AS (
+                SELECT
+                    l.object_id AS table_id,
+                    (EXTRACT(HOUR FROM l.loading_start_dttm)::int * 60 + EXTRACT(MINUTE FROM l.loading_start_dttm)::int) AS minute_of_day,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_minutes
+                FROM {TABLE_LOADING_HISTORY} l
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+            ),
+            windowed AS (
+                SELECT *
+                FROM base
+                WHERE {time_filter}
+            )
+            SELECT
+                COUNT(*) AS runs_count,
+                COUNT(DISTINCT table_id) AS tables_count,
+                SUM(duration_minutes) AS total_duration_minutes,
+                AVG(duration_minutes) AS avg_duration_minutes,
+                MAX(duration_minutes) AS max_duration_minutes
+            FROM windowed
+        """
+
+        params = {
+            "days": days,
+            "limit": limit,
+            "start_minutes": start_minutes,
+            "end_minutes": end_minutes,
+            "crosses_midnight": crosses_midnight,
+        }
+
+        with engine.connect() as conn:
+            rows = conn.execute(text(query), params).mappings().all()
+            summary = conn.execute(text(summary_query), params).mappings().first() or {}
+
+        payload = {
+            "window": {
+                "start": window_start,
+                "end": window_end,
+                "start_minutes": start_minutes,
+                "end_minutes": end_minutes,
+                "crosses_midnight": crosses_midnight,
+                "days": days,
+            },
+            "summary": {
+                "runs_count": int(summary.get("runs_count") or 0),
+                "tables_count": int(summary.get("tables_count") or 0),
+                "total_duration_minutes": round(float(summary.get("total_duration_minutes") or 0.0), 2),
+                "avg_duration_minutes": round(float(summary.get("avg_duration_minutes") or 0.0), 2),
+                "max_duration_minutes": round(float(summary.get("max_duration_minutes") or 0.0), 2),
+            },
+            "rows": [
+                {
+                    "table_id": row.get("table_id"),
+                    "table_fqn": f"{row.get('table_schema')}.{row.get('table_name')}".strip("."),
+                    "table_schema": row.get("table_schema"),
+                    "table_name": row.get("table_name"),
+                    "entity_name": row.get("entity_name"),
+                    "table_size_mb": round(float(row["table_size_mb"]), 2) if row.get("table_size_mb") is not None else None,
+                    "runs_count": int(row.get("runs_count") or 0),
+                    "total_duration_minutes": round(float(row.get("total_duration_minutes") or 0.0), 2),
+                    "avg_duration_minutes": round(float(row.get("avg_duration_minutes") or 0.0), 2),
+                    "max_duration_minutes": round(float(row.get("max_duration_minutes") or 0.0), 2),
+                    "last_start": serialize_datetime(row.get("last_start")),
+                }
+                for row in rows
+            ],
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ /api/night/heavy-tables error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 

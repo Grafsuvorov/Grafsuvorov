@@ -17,6 +17,7 @@ const NODE_WIDTH_BY_LAYER = {
   landing: 220,
   raw_ext: 230,
   dict_stg: 210,
+  dict_ods: 220,
   dict_dds: 210,
   stg: 240,
   ods: 260,
@@ -31,6 +32,7 @@ const LAYER_ORDER = [
   "raw_ext",
   "landing",
   "dict_stg",
+  "dict_ods",
   "dict_dds",
   "stg",
   "ods",
@@ -82,6 +84,11 @@ const NODE_STYLE_BY_LAYER = {
     color: "#e0f2fe",
     border: "1px dashed rgba(148,163,184,.5)",
   },
+  dict_ods: {
+    background: "#123e66",
+    color: "#e0f2fe",
+    border: "1px dashed rgba(125, 211, 252, .45)",
+  },
   dict_dds: {
     background: "#1e1b4b",
     color: "#c7d2fe",
@@ -108,6 +115,7 @@ const CENTRAL_STYLE = {
 const LEGEND_ITEMS = [
   { label: "Landing/Raw", color: NODE_STYLE_BY_LAYER.raw_ext.background },
   { label: "STG", color: NODE_STYLE_BY_LAYER.stg.background },
+  { label: "Dict ODS", color: NODE_STYLE_BY_LAYER.dict_ods.background, dashed: true },
   { label: "ODS", color: NODE_STYLE_BY_LAYER.ods.background },
   { label: "DDS", color: NODE_STYLE_BY_LAYER.dds.background },
   { label: "DM", color: NODE_STYLE_BY_LAYER.dm.background },

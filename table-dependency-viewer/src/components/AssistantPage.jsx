@@ -115,6 +115,16 @@ export default function AssistantPage() {
                     • Dependencies: {m.payload.dependencies.upstream_count ?? 0} upstream tables
                   </div>
                 )}
+                {m.payload.entity_tables && (
+                  <div>
+                    • Entity max tables: {m.payload.entity_tables.entity_name} ({m.payload.entity_tables.tables_count})
+                  </div>
+                )}
+                {m.payload.peak_load_time && (
+                  <div>
+                    • Peak load: runs at {String(m.payload.peak_load_time.peak_runs_hour).padStart(2, "0")}:00, duration at {String(m.payload.peak_load_time.peak_duration_hour).padStart(2, "0")}:00
+                  </div>
+                )}
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}

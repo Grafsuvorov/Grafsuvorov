@@ -4586,6 +4586,14 @@ def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id
     if pair_id:
         return "pair_analysis"
     if any(
+        key in q for key in ["сущность в которой больше всего таблиц", "какая сущность больше всего таблиц", "entity with most tables", "больше всего таблиц в сущности"]
+    ):
+        return "entity_most_tables"
+    if any(
+        key in q for key in ["в какое время грузится больше всего таблиц", "пиковый час", "peak hour", "когда больше всего загрузок", "час максимальной загрузки"]
+    ):
+        return "peak_load_time"
+    if any(
         key in q for key in ["самая долгая", "максимальная загрузка", "макс загрузка", "longest load", "самый долгий запуск", "max duration"]
     ):
         return "max_duration"
@@ -4766,6 +4774,48 @@ def _assistant_dependencies_summary(context_tools: dict, table_fqn: Optional[str
     }
 
 
+def _assistant_entity_most_tables_summary() -> Optional[dict]:
+    snapshot = _safe_call(get_graph_snapshot, {})
+    if not isinstance(snapshot, dict):
+        return None
+    table_entity_map = snapshot.get("table_entity_map") or {}
+    if not isinstance(table_entity_map, dict) or not table_entity_map:
+        return None
+    counter = {}
+    for _, entities in table_entity_map.items():
+        for ent in (entities or []):
+            counter[ent] = counter.get(ent, 0) + 1
+    if not counter:
+        return None
+    top = sorted(counter.items(), key=lambda x: x[1], reverse=True)
+    preferred = [x for x in top if (x[0] or "").upper() not in {"UNKNOWN", ""}]
+    entity, count = (preferred[0] if preferred else top[0])
+    return {
+        "entity_name": entity,
+        "tables_count": count,
+        "top_entities": [{"entity_name": x[0], "tables_count": x[1]} for x in (preferred[:8] if preferred else top[:8])],
+    }
+
+
+def _assistant_peak_load_time_summary(days: int = 30) -> Optional[dict]:
+    payload = _safe_call(lambda: get_load_profile(days=days), {})
+    if not isinstance(payload, dict):
+        return None
+    profile = payload.get("profile") or []
+    if not isinstance(profile, list) or not profile:
+        return None
+    top_by_runs = max(profile, key=lambda x: x.get("runs_count") or 0)
+    top_by_duration = max(profile, key=lambda x: x.get("total_duration_minutes") or 0)
+    return {
+        "days": days,
+        "peak_runs_hour": top_by_runs.get("hour"),
+        "peak_runs_count": top_by_runs.get("runs_count"),
+        "peak_duration_hour": top_by_duration.get("hour"),
+        "peak_duration_minutes": top_by_duration.get("total_duration_minutes"),
+        "top_hours": sorted(profile, key=lambda x: x.get("runs_count") or 0, reverse=True)[:6],
+    }
+
+
 def _assistant_global_max_duration(days: int = 30) -> Optional[dict]:
     payload = _safe_call(lambda: get_slowest_tables(days=days, limit=1), {"rows": []})
     if not isinstance(payload, dict):
@@ -4918,10 +4968,16 @@ def assistant_query(req: AssistantQueryRequest):
     duration_payload = None
     max_duration_payload = None
     deps_payload = None
+    entity_tables_payload = None
+    peak_load_payload = None
     if intent == "compare_scripts" and len(table_candidates) >= 2:
         compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
     if intent == "dependencies":
         deps_payload = _assistant_dependencies_summary(context.get("tools") or {}, table_candidates[0] if table_candidates else req.table_fqn)
+    if intent == "entity_most_tables":
+        entity_tables_payload = _assistant_entity_most_tables_summary()
+    if intent == "peak_load_time":
+        peak_load_payload = _assistant_peak_load_time_summary(days=30)
     if intent == "max_duration":
         if table_candidates:
             duration_payload = _assistant_table_duration_summary(table_candidates[0])
@@ -4929,7 +4985,25 @@ def assistant_query(req: AssistantQueryRequest):
             max_duration_payload = _assistant_global_max_duration(days=30)
     if intent == "table_duration" and table_candidates:
         duration_payload = _assistant_table_duration_summary(table_candidates[0])
-    if deps_payload:
+    if entity_tables_payload:
+        answer = (
+            f"Больше всего таблиц у сущности {entity_tables_payload.get('entity_name')}: "
+            f"{entity_tables_payload.get('tables_count')} таблиц."
+        )
+        context.setdefault("tools", {})["entity_tables"] = entity_tables_payload
+        context.setdefault("used_tools", []).append("graph_snapshot")
+    elif intent == "peak_load_time" and peak_load_payload:
+        answer = (
+            f"Пиковое время по числу запусков: {int(peak_load_payload.get('peak_runs_hour')):02d}:00 "
+            f"({peak_load_payload.get('peak_runs_count')} запусков). "
+            f"По суммарной длительности: {int(peak_load_payload.get('peak_duration_hour')):02d}:00 "
+            f"({peak_load_payload.get('peak_duration_minutes')} мин)."
+        )
+        context.setdefault("tools", {})["peak_load_time"] = peak_load_payload
+        context.setdefault("used_tools", []).append("load_profile")
+    elif intent == "peak_load_time":
+        answer = "Не удалось получить профиль загрузки (`/api/load-profile`), поэтому пиковый час сейчас не определён."
+    elif deps_payload:
         if deps_payload.get("upstream_count", 0) > 0:
             preview = ", ".join((deps_payload.get("upstream_tables") or [])[:12])
             answer = (
@@ -5003,6 +5077,8 @@ def assistant_query(req: AssistantQueryRequest):
         "duration": duration_payload,
         "max_duration": max_duration_payload,
         "dependencies": deps_payload,
+        "entity_tables": entity_tables_payload,
+        "peak_load_time": peak_load_payload,
         "tools_context": tools,
         "model_info": {
             "enabled": ASSISTANT_LLM_ENABLED,

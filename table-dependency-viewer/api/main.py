@@ -4431,6 +4431,10 @@ def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id
     q = (question or "").lower()
     if pair_id:
         return "pair_analysis"
+    if any(
+        key in q for key in ["самая долгая", "максимальная загрузка", "макс загрузка", "longest load", "самый долгий запуск", "max duration"]
+    ):
+        return "max_duration"
     if table_candidates and any(
         key in q for key in ["сколько времени", "долго груз", "как долго", "среднее время", "avg duration", "p95", "время загрузки", "грузится таблица"]
     ):
@@ -4579,6 +4583,23 @@ def _assistant_table_duration_summary(table_fqn: str) -> Optional[dict]:
     }
 
 
+def _assistant_global_max_duration(days: int = 30) -> Optional[dict]:
+    payload = _safe_call(lambda: get_slowest_tables(days=days, limit=1), {"rows": []})
+    if not isinstance(payload, dict):
+        return None
+    rows = payload.get("rows") or []
+    if not rows:
+        return None
+    row = rows[0]
+    return {
+        "table_fqn": row.get("table_fqn"),
+        "entity_name": row.get("entity_name"),
+        "max_duration_minutes": row.get("max_duration"),
+        "p95_duration_minutes": row.get("p95_duration"),
+        "days": days,
+    }
+
+
 def _assistant_fallback_answer(question: str, context: dict) -> str:
     tools = context.get("tools") or {}
     parts = []
@@ -4686,11 +4707,25 @@ def assistant_query(req: AssistantQueryRequest):
 
     compare_payload = None
     duration_payload = None
+    max_duration_payload = None
     if intent == "compare_scripts" and len(table_candidates) >= 2:
         compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
+    if intent == "max_duration":
+        if table_candidates:
+            duration_payload = _assistant_table_duration_summary(table_candidates[0])
+        else:
+            max_duration_payload = _assistant_global_max_duration(days=30)
     if intent == "table_duration" and table_candidates:
         duration_payload = _assistant_table_duration_summary(table_candidates[0])
-    if duration_payload:
+    if max_duration_payload:
+        answer = (
+            f"Самая долгая загрузка за последние {max_duration_payload.get('days')} дней: "
+            f"{max_duration_payload.get('table_fqn')} "
+            f"(max={max_duration_payload.get('max_duration_minutes')} мин, p95={max_duration_payload.get('p95_duration_minutes')} мин)."
+        )
+        context.setdefault("tools", {})["max_duration"] = max_duration_payload
+        context.setdefault("used_tools", []).append("slowest_tables")
+    elif duration_payload:
         if duration_payload.get("avg_minutes") is None:
             answer = (
                 f"По {duration_payload.get('table_fqn')} нет успешных запусков в доступной истории, "
@@ -4744,6 +4779,7 @@ def assistant_query(req: AssistantQueryRequest):
         "intent": intent,
         "compare": compare_payload,
         "duration": duration_payload,
+        "max_duration": max_duration_payload,
         "tools_context": tools,
         "model_info": {
             "enabled": ASSISTANT_LLM_ENABLED,

@@ -105,6 +105,11 @@ export default function AssistantPage() {
                     • Duration: avg={m.payload.duration.avg_minutes ?? "n/a"} min, p95={m.payload.duration.p95_minutes ?? "n/a"} min, max={m.payload.duration.max_minutes ?? "n/a"} min
                   </div>
                 )}
+                {m.payload.max_duration && (
+                  <div>
+                    • Max duration: {m.payload.max_duration.table_fqn} (max={m.payload.max_duration.max_duration_minutes ?? "n/a"} min)
+                  </div>
+                )}
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}

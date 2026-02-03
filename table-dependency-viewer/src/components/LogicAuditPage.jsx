@@ -94,7 +94,7 @@ export default function LogicAuditPage() {
   return (
     <div className="container cc-page">
       <section className="cc-header-zone">
-        <button className="btn" onClick={() => navigate("/")}>← Back</button>
+        <button className="btn" onClick={() => navigate("/")}>← Назад</button>
         <h1>Logic Audit</h1>
         <div className="cc-subtitle">Поиск дублирующейся и слишком похожей SQL-логики между объектами.</div>
       </section>
@@ -103,19 +103,19 @@ export default function LogicAuditPage() {
         <div className="section-title">Фильтры</div>
         <div className="logic-audit-filters">
           <label className="logic-audit-field">
-            Type
+            Тип
             <select value={issueType} onChange={(e) => setIssueType(e.target.value)}>
-              <option value="all">All</option>
-              <option value="duplicate_exact">Exact duplicate</option>
-              <option value="duplicate_candidate">Duplicate candidate</option>
-              <option value="similar_candidate">Similar candidate</option>
+              <option value="all">Все</option>
+              <option value="duplicate_exact">Полные дубликаты</option>
+              <option value="duplicate_candidate">Кандидаты на дубли</option>
+              <option value="similar_candidate">Похожие</option>
             </select>
           </label>
           <label className="logic-audit-field">
-            Mode
+            Режим
             <select value={mode} onChange={(e) => setMode(e.target.value)}>
-              <option value="standard">Standard</option>
-              <option value="strict">Strict (field overlap)</option>
+              <option value="standard">Стандартный</option>
+              <option value="strict">Строгий (пересечение полей)</option>
             </select>
           </label>
           <label className="logic-audit-field">
@@ -127,7 +127,7 @@ export default function LogicAuditPage() {
             </select>
           </label>
           <label className="logic-audit-field logic-audit-field-wide">
-            Search
+            Поиск
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -135,28 +135,29 @@ export default function LogicAuditPage() {
             />
           </label>
         </div>
+        <div className="muted">Min score — минимальный общий коэффициент похожести (от 0 до 1).</div>
       </section>
 
-      {loading && <div className="muted">Loading audit...</div>}
+      {loading && <div className="muted">Загружаю аудит...</div>}
       {error && <div className="dep-error-title">{error}</div>}
 
       {!loading && !error && data && (
         <>
           <section className="logic-audit-kpis">
             <div className="logic-audit-kpi">
-              <div className="label">Objects</div>
+              <div className="label">Объектов</div>
               <div className="value">{data.objects_count ?? 0}</div>
             </div>
             <div className="logic-audit-kpi">
-              <div className="label">Pairs found</div>
+              <div className="label">Найдено пар</div>
               <div className="value">{data.returned_count ?? 0}</div>
             </div>
             <div className="logic-audit-kpi">
-              <div className="label">Exact duplicates</div>
+              <div className="label">Полные дубли</div>
               <div className="value">{data.stats?.duplicate_exact ?? 0}</div>
             </div>
             <div className="logic-audit-kpi">
-              <div className="label">Merge potential</div>
+              <div className="label">Потенциал merge</div>
               <div className="value">{pairs.filter((x) => x.merge_potential === "HIGH").length}</div>
             </div>
           </section>
@@ -193,20 +194,43 @@ export default function LogicAuditPage() {
           <section className="cc-surface">
             <div className="section-title">Детали</div>
             {!selectedPairId && <div className="muted">Выберите пару, чтобы провалиться в детали.</div>}
-            {pairLoading && <div className="muted">Loading pair details...</div>}
+            {pairLoading && <div className="muted">Загружаю детали пары...</div>}
             {!pairLoading && pairDetails && (
               <>
                 <div className="logic-audit-explain">
-                  <div className="logic-audit-mini-title">Generator verdict</div>
+                  <div className="logic-audit-mini-title">Итог по паре</div>
                   <div>{pairDetails.explanation?.summary}</div>
                   <div className="logic-audit-explain-decision">{pairDetails.explanation?.decision}</div>
-                  {Array.isArray(pairDetails.explanation?.common_fields) && pairDetails.explanation.common_fields.length > 0 && (
-                    <div className="logic-audit-tags">
-                      {pairDetails.explanation.common_fields.map((field) => (
-                        <span key={field} className="logic-audit-tag mono">{field}</span>
-                      ))}
-                    </div>
-                  )}
+                </div>
+                <div className="logic-audit-compare-grid">
+                  <div className="logic-audit-compare-card is-same">
+                    <div className="logic-audit-mini-title">Совпадает</div>
+                    {!pairDetails.comparison?.same?.length && <div className="muted">Явных совпадений не выделено.</div>}
+                    {(pairDetails.comparison?.same || []).map((row) => (
+                      <div className="logic-audit-compare-row" key={`same-${row.label}`}>
+                        <div className="logic-audit-compare-label">{row.label}</div>
+                        <div className="logic-audit-tags">
+                          {(row.items || []).map((item) => (
+                            <span key={`same-${row.label}-${item}`} className="logic-audit-tag mono">{item}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="logic-audit-compare-card is-diff">
+                    <div className="logic-audit-mini-title">Отличается</div>
+                    {!pairDetails.comparison?.different?.length && <div className="muted">Сильных отличий не найдено.</div>}
+                    {(pairDetails.comparison?.different || []).map((row) => (
+                      <div className="logic-audit-compare-row" key={`diff-${row.label}`}>
+                        <div className="logic-audit-compare-label">{row.label}</div>
+                        <div className="logic-audit-tags">
+                          {(row.items || []).map((item) => (
+                            <span key={`diff-${row.label}-${item}`} className="logic-audit-tag mono">{item}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="logic-audit-detail-grid">
                   {[{ key: "left", title: "Object A" }, { key: "right", title: "Object B" }].map((side) => {
@@ -217,12 +241,12 @@ export default function LogicAuditPage() {
                       <div className="logic-audit-detail-head">
                         <div className="logic-audit-detail-title">{side.title}</div>
                         <button className="btn btn-secondary" onClick={() => openTable(obj.fqn)}>
-                          Open table
+                          Открыть таблицу
                         </button>
                       </div>
                       <div className="mono logic-audit-fqn-big">{obj.fqn}</div>
                       <div className="muted">{obj.story}</div>
-                      <div className="logic-audit-mini-title">Features</div>
+                      <div className="logic-audit-mini-title">Фичи SQL</div>
                       <div className="logic-audit-tags">
                         {(feature.functions || []).slice(0, 12).map((fn) => (
                           <span key={`${side.key}-${fn}`} className="logic-audit-tag">fn:{fn}</span>
@@ -231,7 +255,7 @@ export default function LogicAuditPage() {
                           <span key={`${side.key}-${src}`} className="logic-audit-tag mono">src:{src}</span>
                         ))}
                       </div>
-                      <div className="logic-audit-mini-title">Select targets</div>
+                      <div className="logic-audit-mini-title">SELECT-выражения</div>
                       <div className="logic-audit-targets">
                         {(obj.select_targets || []).slice(0, 8).map((target, idx) => (
                           <div key={`${side.key}-${idx}`} className="logic-audit-target-row">

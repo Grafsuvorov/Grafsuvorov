@@ -1048,6 +1048,43 @@ main.content {
   font-weight: 600;
 }
 
+.logic-audit-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.logic-audit-compare-card {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.55);
+  display: grid;
+  gap: 10px;
+}
+
+.logic-audit-compare-card.is-same {
+  border-color: rgba(34, 197, 94, 0.36);
+  background: rgba(22, 101, 52, 0.16);
+}
+
+.logic-audit-compare-card.is-diff {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+.logic-audit-compare-row {
+  display: grid;
+  gap: 6px;
+}
+
+.logic-audit-compare-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.95);
+  font-weight: 600;
+}
+
 .logic-audit-detail-card {
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 12px;

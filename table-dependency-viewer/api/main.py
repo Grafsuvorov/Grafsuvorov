@@ -300,18 +300,83 @@ def _build_diff_hints(left: dict, right: dict) -> list[str]:
     return hints
 
 
-def _build_pair_explanation(record: dict, left: dict, right: dict) -> dict:
+def _build_pair_comparison(left: dict, right: dict) -> dict:
+    left_sources = left.get("source_tables") or set()
+    right_sources = right.get("source_tables") or set()
+    left_functions = left.get("functions") or set()
+    right_functions = right.get("functions") or set()
+
+    left_aliases = {x.get("alias") for x in (left.get("select_targets") or []) if x.get("alias")}
+    right_aliases = {x.get("alias") for x in (right.get("select_targets") or []) if x.get("alias")}
+
+    left_keys = {str(x).lower() for x in (left.get("key_attributes") or []) if str(x).strip()}
+    right_keys = {str(x).lower() for x in (right.get("key_attributes") or []) if str(x).strip()}
+
+    left_where = (left.get("where_clause") or "").strip()
+    right_where = (right.get("where_clause") or "").strip()
+
+    left_common_fields = {
+        str(row.get("name")).strip().lower()
+        for row in (left.get("field_descriptions") or [])
+        if row.get("name")
+    }
+    right_common_fields = {
+        str(row.get("name")).strip().lower()
+        for row in (right.get("field_descriptions") or [])
+        if row.get("name")
+    }
+
+    same = []
+    if left_sources & right_sources:
+        same.append({"label": "Общие источники", "items": sorted(left_sources & right_sources)[:14]})
+    if left_functions & right_functions:
+        same.append({"label": "Общие SQL-функции", "items": sorted(left_functions & right_functions)[:14]})
+    if left_aliases & right_aliases:
+        same.append({"label": "Одинаковые алиасы в SELECT", "items": sorted(left_aliases & right_aliases)[:14]})
+    if left_keys & right_keys:
+        same.append({"label": "Общие ключевые поля", "items": sorted(left_keys & right_keys)[:14]})
+    if left_common_fields & right_common_fields:
+        same.append({"label": "Совпадающие описанные поля", "items": sorted(left_common_fields & right_common_fields)[:14]})
+    if left_where and right_where and left_where == right_where:
+        same.append({"label": "WHERE совпадает", "items": [left_where[:220]]})
+
+    different = []
+    if left_sources - right_sources:
+        different.append({"label": "Источники только в левом объекте", "items": sorted(left_sources - right_sources)[:14]})
+    if right_sources - left_sources:
+        different.append({"label": "Источники только в правом объекте", "items": sorted(right_sources - left_sources)[:14]})
+    if left_functions - right_functions:
+        different.append({"label": "Функции только в левом объекте", "items": sorted(left_functions - right_functions)[:14]})
+    if right_functions - left_functions:
+        different.append({"label": "Функции только в правом объекте", "items": sorted(right_functions - left_functions)[:14]})
+    if left_aliases - right_aliases:
+        different.append({"label": "Алиасы только в левом объекте", "items": sorted(left_aliases - right_aliases)[:14]})
+    if right_aliases - left_aliases:
+        different.append({"label": "Алиасы только в правом объекте", "items": sorted(right_aliases - left_aliases)[:14]})
+    if left_where != right_where:
+        if left_where:
+            different.append({"label": "WHERE (левый объект)", "items": [left_where[:220]]})
+        if right_where:
+            different.append({"label": "WHERE (правый объект)", "items": [right_where[:220]]})
+
+    return {
+        "same": same,
+        "different": different,
+    }
+
+
+def _build_pair_explanation(record: dict, left: dict, right: dict, comparison: dict) -> dict:
     score = record.get("score") or 0
     expr_overlap = record.get("expression_overlap_count") or 0
     merge_potential = record.get("merge_potential") or "LOW"
     diff_hints = record.get("diff_hints") or []
 
     if merge_potential == "HIGH":
-        decision = "Кандидат на объединение в один канонический расчет."
+        decision = "Пара выглядит как хороший кандидат на объединение в один расчёт."
     elif merge_potential == "MEDIUM":
-        decision = "Логику стоит унифицировать после проверки бизнес-правил."
+        decision = "Логику лучше унифицировать, но сначала сверить бизнес-правила."
     else:
-        decision = "Пока лучше оставить отдельно, но задокументировать различия."
+        decision = "Пока лучше оставить отдельно и явно зафиксировать различия."
 
     left_fields = left.get("field_descriptions") or []
     right_fields = right.get("field_descriptions") or []
@@ -320,9 +385,14 @@ def _build_pair_explanation(record: dict, left: dict, right: dict) -> dict:
         & {row.get("name") for row in right_fields if row.get("name")}
     )
 
+    same_labels = [x.get("label") for x in (comparison.get("same") or []) if x.get("label")]
+    diff_labels = [x.get("label") for x in (comparison.get("different") or []) if x.get("label")]
+    diff_text = ", ".join(diff_labels[:2]) if diff_labels else ", ".join(diff_hints[:2]) or "критичных отличий не видно"
     summary = (
-        f"Похожесть {round(score * 100)}%, совпадающих выражений: {expr_overlap}. "
-        f"Ключевые отличия: {', '.join(diff_hints[:3])}."
+        f"{left.get('fqn')} и {right.get('fqn')} похожи на {round(score * 100)}%. "
+        f"Совпадающих выражений SELECT: {expr_overlap}. "
+        f"Совпадает: {', '.join(same_labels[:2]) if same_labels else 'базовый SQL-паттерн'}. "
+        f"Отличается: {diff_text}."
     )
 
     return {
@@ -426,6 +496,8 @@ def _build_logic_audit_cache():
     pairs = []
     pair_index = {}
     for left, right in combinations(objects, 2):
+        if left["fqn"] == right["fqn"]:
+            continue
         # быстрый pre-filter
         if not (left["source_tables"] & right["source_tables"] or left["functions"] & right["functions"]):
             continue
@@ -464,10 +536,12 @@ def _build_logic_audit_cache():
             "diff_hints": diff_hints,
         }
         pairs.append(record)
-        explanation = _build_pair_explanation(record, left, right)
+        comparison = _build_pair_comparison(left, right)
+        explanation = _build_pair_explanation(record, left, right, comparison)
         pair_index[pair_id] = {
             **record,
             "explanation": explanation,
+            "comparison": comparison,
             "left": {
                 k: v for k, v in left.items()
                 if k not in {"tokens", "source_tables", "functions", "expr_hashes", "expr_token_union"}

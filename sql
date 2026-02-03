@@ -1,34 +1,55 @@
-with base as (
-  select
-    xiin.document_xml,
-    (xpath('Data/MdmId/text()', xiin.document_xml))[1]::varchar as mdmid,
-    (xpath('Data/RopId/text()', xiin.document_xml))[1]::varchar as ropid,
-    (xpath('Data/Inn/text()', xiin.document_xml))[1]::varchar as inn,
-    (xpath('Data/Okpo/text()', xiin.document_xml))[1]::varchar as okpo,
-    (xpath('Data/Ogrn/text()', xiin.document_xml))[1]::varchar as ogrn,
-    (xpath('Data/CreatedAt/text()', xiin.document_xml))[1]::varchar::timestamp as createdat,
-    (xpath('Data/Id/text()', xiin.document_xml))[1]::varchar as id,
-    xiin.uuid,
-    xiin.dt_insert
-  from landing."INPUT_DATA_FROM_SAPXI_IN" xiin
-  left join dict_stg.sok_counterparty_parameters prm
-    on xiin.uuid = prm.uuid
-  where xiin.source_system = 'BSP_SOK'
-    and prm.job_name is null
-)
-select
-  b.mdmid,
-  b.ropid,
-  b.inn,
-  b.okpo,
-  b.ogrn,
-  (xpath('Code/text()', p))[1]::varchar as code,
-  (xpath('SubCode/text()', p))[1]::varchar as subcode,
-  (xpath('SubSubCode/text()', p))[1]::varchar as subsubcode,
-  b.createdat,
-  (xpath('Value/text()', p))[1]::varchar as value,
-  b.id,
-  b.uuid,
-  b.dt_insert
-from base b
-cross join lateral unnest(xpath('Data/Params', b.document_xml)) as p;
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 75, in app
+    response = await f(request)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 302, in app
+    raw_response = await run_endpoint_function(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
+    return await future
+  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
+    result = context.run(func, *args)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 4064, in get_logic_audit
+    payload = _build_logic_audit_cache()
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 441, in _build_logic_audit_cache
+    for left, right in combinations(objects, 2):
+NameError: name 'combinations' is not defined

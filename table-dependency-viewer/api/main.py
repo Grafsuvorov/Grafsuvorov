@@ -4356,6 +4356,7 @@ def _assistant_fetch_tools_context(
     table_fqn: Optional[str],
     pair_id: Optional[str],
     time_window: Optional[str],
+    intent: str = "general",
 ):
     q = f"{question} {history_text}".lower()
     window_start, window_end = _extract_time_window(time_window or q)
@@ -4364,9 +4365,9 @@ def _assistant_fetch_tools_context(
         table_candidates.insert(0, table_fqn.lower())
     search_term = (table_fqn or (table_candidates[0] if table_candidates else "")).lower()
 
-    need_night = any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window)
-    need_incidents = any(x in q for x in ["incident", "инцид", "error", "ошиб", "fail", "паден", "слом"])
-    need_logic = any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"])
+    need_night = intent == "night_ops" or (intent == "general" and (any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window)))
+    need_incidents = intent == "incidents" or (intent == "general" and any(x in q for x in ["incident", "инцид", "error", "ошиб", "fail", "паден", "слом"]))
+    need_logic = intent in {"pair_analysis", "compare_scripts"} or (intent == "general" and any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"]))
 
     tools = {}
     used_tools = []
@@ -4430,6 +4431,10 @@ def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id
     q = (question or "").lower()
     if pair_id:
         return "pair_analysis"
+    if table_candidates and any(
+        key in q for key in ["сколько времени", "долго груз", "как долго", "среднее время", "avg duration", "p95", "время загрузки", "грузится таблица"]
+    ):
+        return "table_duration"
     if len(table_candidates) >= 2 and any(
         key in q for key in ["чем отличаются", "разница", "difference", "diff", "отличия", "сравни скрипт", "compare script"]
     ):
@@ -4528,6 +4533,52 @@ def _assistant_render_compare_answer(cmp_result: dict) -> str:
     return " ".join(parts)
 
 
+def _assistant_table_duration_summary(table_fqn: str) -> Optional[dict]:
+    if not table_fqn or "." not in table_fqn:
+        return None
+    schema, table = table_fqn.split(".", 1)
+    rows = _safe_call(lambda: get_table_history(schema=schema, table=table, limit=40), [])
+    if not isinstance(rows, list) or not rows:
+        return {
+            "table_fqn": table_fqn,
+            "runs_total": 0,
+            "success_runs": 0,
+            "avg_minutes": None,
+            "p95_minutes": None,
+            "max_minutes": None,
+            "last_duration_minutes": None,
+        }
+
+    success = [r for r in rows if (r.get("state") or "").upper() == "SUCCESS" and r.get("duration_minutes") is not None]
+    if not success:
+        return {
+            "table_fqn": table_fqn,
+            "runs_total": len(rows),
+            "success_runs": 0,
+            "avg_minutes": None,
+            "p95_minutes": None,
+            "max_minutes": None,
+            "last_duration_minutes": None,
+        }
+
+    durations = sorted([float(r.get("duration_minutes") or 0.0) for r in success])
+    n = len(durations)
+    p95_index = max(0, min(n - 1, int(round(0.95 * (n - 1)))))
+    avg_minutes = round(sum(durations) / n, 2)
+    p95_minutes = round(durations[p95_index], 2)
+    max_minutes = round(durations[-1], 2)
+    last_duration_minutes = round(float(success[0].get("duration_minutes") or 0.0), 2)
+    return {
+        "table_fqn": table_fqn,
+        "runs_total": len(rows),
+        "success_runs": n,
+        "avg_minutes": avg_minutes,
+        "p95_minutes": p95_minutes,
+        "max_minutes": max_minutes,
+        "last_duration_minutes": last_duration_minutes,
+    }
+
+
 def _assistant_fallback_answer(question: str, context: dict) -> str:
     tools = context.get("tools") or {}
     parts = []
@@ -4617,25 +4668,43 @@ def assistant_query(req: AssistantQueryRequest):
 
     history = req.history or []
     history_text = " ".join([str(x.get("text") or "") for x in history if isinstance(x, dict)])
+    table_candidates = _extract_table_fqn_candidates(f"{question} {history_text}")
+    if req.table_fqn:
+        table_candidates.insert(0, req.table_fqn.lower())
+    seen = set()
+    table_candidates = [x for x in table_candidates if not (x in seen or seen.add(x))]
+    intent = _assistant_detect_intent(question, table_candidates, req.pair_id)
+
     context = _assistant_fetch_tools_context(
         question=question,
         history_text=history_text,
         table_fqn=req.table_fqn,
         pair_id=req.pair_id,
         time_window=req.time_window,
+        intent=intent,
     )
-    table_candidates = _extract_table_fqn_candidates(f"{question} {history_text}")
-    if req.table_fqn:
-        table_candidates.insert(0, req.table_fqn.lower())
-    # de-dup preserving order
-    seen = set()
-    table_candidates = [x for x in table_candidates if not (x in seen or seen.add(x))]
-    intent = _assistant_detect_intent(question, table_candidates, req.pair_id)
 
     compare_payload = None
+    duration_payload = None
     if intent == "compare_scripts" and len(table_candidates) >= 2:
         compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
-    if compare_payload:
+    if intent == "table_duration" and table_candidates:
+        duration_payload = _assistant_table_duration_summary(table_candidates[0])
+    if duration_payload:
+        if duration_payload.get("avg_minutes") is None:
+            answer = (
+                f"По {duration_payload.get('table_fqn')} нет успешных запусков в доступной истории, "
+                f"всего записей: {duration_payload.get('runs_total')}."
+            )
+        else:
+            answer = (
+                f"{duration_payload.get('table_fqn')} обычно грузится ~{duration_payload.get('avg_minutes')} мин "
+                f"(p95={duration_payload.get('p95_minutes')} мин, max={duration_payload.get('max_minutes')} мин, "
+                f"последний запуск={duration_payload.get('last_duration_minutes')} мин, выборка={duration_payload.get('success_runs')})."
+            )
+        context.setdefault("tools", {})["table_duration"] = duration_payload
+        context.setdefault("used_tools", []).append("table_history")
+    elif compare_payload:
         answer = _assistant_render_compare_answer(compare_payload)
     else:
         answer = _call_assistant_llm(question, history, context) or _assistant_fallback_answer(question, context)
@@ -4674,6 +4743,7 @@ def assistant_query(req: AssistantQueryRequest):
         "used_tools": context.get("used_tools") or [],
         "intent": intent,
         "compare": compare_payload,
+        "duration": duration_payload,
         "tools_context": tools,
         "model_info": {
             "enabled": ASSISTANT_LLM_ENABLED,

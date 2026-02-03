@@ -100,6 +100,11 @@ export default function AssistantPage() {
                     • Script diff: aliases diff={m.payload.compare.expr_diff?.length || 0}, sources only left={m.payload.compare.left_sources_only?.length || 0}, right={m.payload.compare.right_sources_only?.length || 0}
                   </div>
                 )}
+                {m.payload.duration && (
+                  <div>
+                    • Duration: avg={m.payload.duration.avg_minutes ?? "n/a"} min, p95={m.payload.duration.p95_minutes ?? "n/a"} min, max={m.payload.duration.max_minutes ?? "n/a"} min
+                  </div>
+                )}
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}

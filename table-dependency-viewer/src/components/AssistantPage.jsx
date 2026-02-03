@@ -113,6 +113,9 @@ export default function AssistantPage() {
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}
+                {m.payload.intent && (
+                  <div className="muted">Intent: {m.payload.intent}</div>
+                )}
               </div>
             )}
           </div>

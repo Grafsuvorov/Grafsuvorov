@@ -4350,6 +4350,59 @@ def _extract_table_fqn_candidates(text_value: str) -> list[str]:
     return result[:4]
 
 
+def _split_fqn(fqn: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    value = (fqn or "").strip().lower()
+    if "." not in value:
+        return None, None
+    schema, table = value.split(".", 1)
+    if not schema or not table:
+        return None, None
+    return schema, table
+
+
+def _assistant_extract_sql_context(card_payload: dict) -> dict:
+    if not isinstance(card_payload, dict):
+        return {}
+    insert_sql = card_payload.get("sql_query_insert_init_sql") or ""
+    recreate_sql = card_payload.get("sql_query_recreate_init_sql") or ""
+    normalized_insert = _normalize_sql(insert_sql)
+    select_targets = _extract_select_targets(normalized_insert)[:20] if normalized_insert else []
+    source_tables = sorted(_extract_source_tables(normalized_insert))[:20] if normalized_insert else []
+    functions = sorted(_extract_functions(normalized_insert))[:20] if normalized_insert else []
+    where_clause = _extract_where_clause(normalized_insert)[:400] if normalized_insert else ""
+
+    table_comment_match = re.search(
+        r"comment\s+on\s+table\s+[a-z0-9_.]+\s+is\s+'([^']*)'",
+        recreate_sql,
+        flags=re.I,
+    )
+    table_comment = table_comment_match.group(1).strip() if table_comment_match else None
+    column_comments = []
+    for col, comment in re.findall(
+        r"comment\s+on\s+column\s+[a-z0-9_.]+\.([a-z0-9_]+)\s+is\s+'([^']*)'",
+        recreate_sql,
+        flags=re.I,
+    ):
+        column_comments.append({"column": col, "comment": comment.strip()})
+        if len(column_comments) >= 25:
+            break
+
+    return {
+        "table_comment": table_comment,
+        "column_comments": column_comments,
+        "source_tables": source_tables,
+        "functions": functions,
+        "where_clause": where_clause,
+        "select_targets": [
+            {
+                "alias": row.get("alias") or "",
+                "expression": (row.get("expression") or "")[:220],
+            }
+            for row in select_targets
+        ],
+    }
+
+
 def _assistant_fetch_tools_context(
     question: str,
     history_text: str,
@@ -4365,9 +4418,21 @@ def _assistant_fetch_tools_context(
         table_candidates.insert(0, table_fqn.lower())
     search_term = (table_fqn or (table_candidates[0] if table_candidates else "")).lower()
 
-    need_night = intent == "night_ops" or (intent == "general" and (any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window)))
+    need_night = intent in {"night_ops", "table_duration", "max_duration"} or (
+        intent == "general" and (any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window))
+    )
     need_incidents = intent == "incidents" or (intent == "general" and any(x in q for x in ["incident", "инцид", "error", "ошиб", "fail", "паден", "слом"]))
-    need_logic = intent in {"pair_analysis", "compare_scripts"} or (intent == "general" and any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"]))
+    need_logic = intent in {"pair_analysis", "compare_scripts", "logic"} or (
+        intent == "general" and any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"])
+    )
+    need_dependencies = intent == "dependencies" or any(x in q for x in ["зависим", "lineage", "upstream", "downstream", "impact", "влияни"])
+    need_dq = intent == "dq" or any(x in q for x in ["dq", "quality", "качество", "дублик", "row count"])
+    need_sla = intent == "sla" or any(x in q for x in ["sla", "опоздан", "просроч", "breach"])
+    need_metrics = intent == "metrics" or any(x in q for x in ["метрик", "сколько таблиц", "total tables", "active entities", "общая картин"])
+    need_table_card = bool(table_candidates) and (
+        intent in {"table_explain", "table_duration", "compare_scripts", "dependencies", "dq", "general"}
+        or any(x in q for x in ["sql", "скрипт", "комментар", "поле", "что считает", "как считается", "where", "select"])
+    )
 
     tools = {}
     used_tools = []
@@ -4384,6 +4449,12 @@ def _assistant_fetch_tools_context(
                 "rows": (heavy_payload.get("rows") or [])[:8],
             }
             used_tools.append("night_heavy_tables")
+
+    if intent == "max_duration":
+        slow_payload = _safe_call(lambda: get_slowest_tables(days=30, limit=5), {"rows": []})
+        if isinstance(slow_payload, dict):
+            tools["slowest_tables"] = (slow_payload.get("rows") or [])[:5]
+            used_tools.append("slowest_tables")
 
     if need_incidents:
         active_incidents = _safe_call(get_active_incidents, [])
@@ -4415,6 +4486,83 @@ def _assistant_fetch_tools_context(
                 tools["logic_audit_pair_detail"] = pair_detail
                 used_tools.append("logic_audit_pair_detail")
 
+    if need_dependencies and table_candidates:
+        schema, table = _split_fqn(table_candidates[0])
+        if schema and table:
+            dep_graph = _safe_call(lambda: get_dependency_graph(schema=schema, table=table), {})
+            if isinstance(dep_graph, dict):
+                tools["dependencies_graph"] = {
+                    "table": f"{schema}.{table}",
+                    "nodes_count": len(dep_graph.get("nodes") or []),
+                    "links_count": len(dep_graph.get("links") or []),
+                }
+                used_tools.append("dependencies_graph")
+            dep_down = _safe_call(lambda: get_dependencies_down(schema=schema, table=table), {})
+            if isinstance(dep_down, dict):
+                tools["dependencies_down"] = {
+                    "nodes_count": len(dep_down.get("nodes") or []),
+                    "links_count": len(dep_down.get("links") or []),
+                }
+                used_tools.append("dependencies_down")
+            impact_summary = _safe_call(lambda: get_impact_summary(schema=schema, table=table), {})
+            if isinstance(impact_summary, dict):
+                tools["impact_summary"] = impact_summary
+                used_tools.append("impact_summary")
+
+    if need_dq:
+        dq_summary = _safe_call(lambda: get_quality_summary(days=14), {})
+        if isinstance(dq_summary, dict):
+            tools["dq_summary"] = dq_summary
+            used_tools.append("dq_summary")
+        if table_candidates:
+            schema, table = _split_fqn(table_candidates[0])
+            if schema and table:
+                dq_table = _safe_call(lambda: get_table_quality(schema=schema, table=table), {})
+                if isinstance(dq_table, dict):
+                    tools["dq_table"] = dq_table
+                    used_tools.append("dq_table")
+
+    if need_sla:
+        sla_payload = _safe_call(get_sla_monitoring, {})
+        if isinstance(sla_payload, dict):
+            tools["sla"] = sla_payload
+            used_tools.append("sla")
+        order_breaches = _safe_call(get_order_breaches, [])
+        if isinstance(order_breaches, list):
+            tools["order_breaches"] = order_breaches[:12]
+            used_tools.append("order_breaches")
+
+    if need_metrics:
+        metrics_payload = _safe_call(get_metrics, {})
+        if isinstance(metrics_payload, dict):
+            tools["metrics"] = metrics_payload
+            used_tools.append("metrics")
+        load_profile = _safe_call(lambda: get_load_profile(days=30), {})
+        if isinstance(load_profile, dict):
+            profile = load_profile.get("profile") or []
+            top_hours = sorted(profile, key=lambda x: x.get("total_duration_minutes") or 0, reverse=True)[:6]
+            tools["load_profile"] = {"days": load_profile.get("days"), "top_hours": top_hours}
+            used_tools.append("load_profile")
+
+    if need_table_card and table_candidates:
+        schema, table = _split_fqn(table_candidates[0])
+        if schema and table:
+            card_payload = _safe_call(lambda: get_table_card_info_by_path(schema=schema, table=table), {})
+            if isinstance(card_payload, dict):
+                sql_ctx = _assistant_extract_sql_context(card_payload)
+                tools["table_card"] = {
+                    "table_fqn": f"{schema}.{table}",
+                    "entity_name": card_payload.get("entity_name"),
+                    "table_id": card_payload.get("table_id"),
+                    "table_load_mode": card_payload.get("table_load_mode"),
+                    "avg_duration_minutes": card_payload.get("avg_duration_minutes"),
+                    "last_success_time": card_payload.get("last_success_time"),
+                    "key_attributes": card_payload.get("key_attributes") or [],
+                    "depends_on": card_payload.get("depends_on") or {},
+                    "sql": sql_ctx,
+                }
+                used_tools.append("table_card")
+
     docs = _assistant_retrieve_docs(question + " " + history_text, table_fqn or (table_candidates[0] if table_candidates else None), limit=6)
     tools["yaml_docs"] = docs
     used_tools.append("yaml_docs")
@@ -4443,10 +4591,20 @@ def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id
         key in q for key in ["чем отличаются", "разница", "difference", "diff", "отличия", "сравни скрипт", "compare script"]
     ):
         return "compare_scripts"
+    if any(key in q for key in ["зависим", "lineage", "upstream", "downstream", "impact", "влияние"]):
+        return "dependencies"
+    if any(key in q for key in ["dq", "качество", "дублик", "row count"]):
+        return "dq"
+    if any(key in q for key in ["sla", "опоздан", "просроч", "breach"]):
+        return "sla"
+    if any(key in q for key in ["метрик", "active entities", "total tables", "общая картин"]):
+        return "metrics"
     if any(key in q for key in ["инцид", "ошиб", "fail", "error", "слом"]):
         return "incidents"
     if any(key in q for key in ["пик", "окно", "night", "тяж", "долго", "slow"]):
         return "night_ops"
+    if table_candidates and any(key in q for key in ["sql", "скрипт", "поля", "комментар", "что считает", "как считается"]):
+        return "table_explain"
     if table_candidates:
         return "table_explain"
     return "general"
@@ -4623,6 +4781,32 @@ def _assistant_fallback_answer(question: str, context: dict) -> str:
     docs = tools.get("yaml_docs") or []
     if docs:
         parts.append("По описаниям ближе всего: " + ", ".join([d.get("fqn") for d in docs[:3] if d.get("fqn")]))
+    table_card = tools.get("table_card") or {}
+    sql_ctx = table_card.get("sql") or {}
+    if table_card.get("table_fqn"):
+        parts.append(
+            f"Карточка {table_card.get('table_fqn')}: режим {table_card.get('table_load_mode')}, "
+            f"avg={table_card.get('avg_duration_minutes')} мин."
+        )
+    if sql_ctx.get("table_comment"):
+        parts.append(f"Комментарий таблицы: {sql_ctx.get('table_comment')}.")
+    if sql_ctx.get("source_tables"):
+        parts.append("SQL источники: " + ", ".join((sql_ctx.get("source_tables") or [])[:4]))
+    if sql_ctx.get("column_comments"):
+        top_cols = ", ".join([f"{x.get('column')}" for x in (sql_ctx.get("column_comments") or [])[:6]])
+        parts.append(f"Есть комментарии по полям: {top_cols}.")
+    if tools.get("dependencies_graph"):
+        dg = tools.get("dependencies_graph") or {}
+        parts.append(
+            f"Граф зависимостей: nodes={dg.get('nodes_count')}, links={dg.get('links_count')}."
+        )
+    if tools.get("dq_summary"):
+        dq = tools.get("dq_summary") or {}
+        parts.append(f"DQ summary: alerts={dq.get('alerts_count')}, tables={dq.get('tables_count')}.")
+    if tools.get("sla"):
+        sla = tools.get("sla") or {}
+        if isinstance(sla, dict):
+            parts.append("SLA данные доступны для анализа текущего состояния.")
     if not parts:
         parts.append("Контекста из инструментов мало, уточни вопрос или добавь schema.table.")
     return " ".join(parts)

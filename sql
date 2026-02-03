@@ -1,55 +1,82 @@
-ERROR:    Exception in ASGI application
-Traceback (most recent call last):
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\protocols\http\h11_impl.py", line 403, in run_asgi
-    result = await app(  # type: ignore[func-returns-value]
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
-    return await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\applications.py", line 1054, in __call__
-    await super().__call__(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\applications.py", line 113, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
-    await self.app(scope, receive, _send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 93, in __call__
-    await self.simple_response(scope, receive, send, request_headers=headers)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\cors.py", line 144, in simple_response
-    await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 716, in __call__
-    await self.middleware_stack(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 736, in app
-    await route.handle(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 290, in handle
-    await self.app(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 78, in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
-    raise exc
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
-    await app(scope, receive, sender)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\routing.py", line 75, in app
-    response = await f(request)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 302, in app
-    raw_response = await run_endpoint_function(
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\fastapi\routing.py", line 215, in run_endpoint_function
-    return await run_in_threadpool(dependant.call, **values)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\starlette\concurrency.py", line 38, in run_in_threadpool
-    return await anyio.to_thread.run_sync(func)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\to_thread.py", line 56, in run_sync
-    return await get_async_backend().run_sync_in_worker_thread(
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 2470, in run_sync_in_worker_thread
-    return await future
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\anyio\_backends\_asyncio.py", line 967, in run
-    result = context.run(func, *args)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 4064, in get_logic_audit
-    payload = _build_logic_audit_cache()
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 441, in _build_logic_audit_cache
-    for left, right in combinations(objects, 2):
-NameError: name 'combinations' is not defined
+Итог по паре
+dds.sales_contract и ods.sales_contract похожи на 95%. Совпадающих выражений SELECT: 11. Совпадает: Общие источники, Общие SQL-функции. Отличается: Логика почти идентична, различия минимальны.
+Пара выглядит как хороший кандидат на объединение в один расчёт.
+Совпадает
+Общие источники
+stg.vbak
+stg.vbkd
+Общие SQL-функции
+util_text_to_date_validation
+util_text_to_null_validation
+util_text_to_timestamp_validation
+Одинаковые алиасы в SELECT
+contract_type_code
+created_by
+dt_changed
+dt_created
+dt_sales_contract
+external_contract_number
+frame_contract_code
+responsibility_center_code
+sales_contract_code
+sales_contract_registration_number
+sales_contract_type_code
+sales_group_code
+WHERE совпадает
+auart in ('zdgs', 'zdgq', 'zdgo', 'zdgt', 'zdtt') and tech_etl.util_text_to_null_validation(vbak.vbeln) is not null;
+Отличается
+Сильных отличий не найдено.
+Object A
+Открыть таблицу
+dds.sales_contract
+dds.sales_contract (BI_SB_WUC) | Режим загрузки: TRUNCATE_INIT | Слои зависимостей: stg | Ключевые поля: не указаны | Проверки: не указаны | SQL-функции: util_text_to_date_validation, util_text_to_null_validation, util_text_to_timestamp_validation | Источники SQL: stg.vbak, stg.vbkd
+Фичи SQL
+fn:util_text_to_date_validation
+fn:util_text_to_null_validation
+fn:util_text_to_timestamp_validation
+src:stg.vbak
+src:stg.vbkd
+SELECT-выражения
+sales_contract_code
+tech_etl.util_text_to_null_validation(vbak.vbeln) as sales_contract_code
+sales_contract_type_code
+tech_etl.util_text_to_null_validation(vbkd.bsark) as sales_contract_type_code
+frame_contract_code
+tech_etl.util_text_to_null_validation(vbak.zuonr) as frame_contract_code
+dt_sales_contract
+tech_etl.util_text_to_date_validation(vbak.audat) as dt_sales_contract
+external_contract_number
+tech_etl.util_text_to_null_validation(vbkd.bstkd) as external_contract_number
+sales_group_code
+tech_etl.util_text_to_null_validation(vbak.vkgrp) as sales_group_code
+responsibility_center_code
+tech_etl.util_text_to_null_validation(vbak.zzresp) as responsibility_center_code
+contract_type_code
+tech_etl.util_text_to_null_validation(vbak.abrvw) as contract_type_code
+Object B
+Открыть таблицу
+ods.sales_contract
+ods.sales_contract (BI_SB_WUC) | Режим загрузки: TRUNCATE_INIT | Слои зависимостей: stg | Ключевые поля: не указаны | Проверки: не указаны | SQL-функции: util_text_to_date_validation, util_text_to_null_validation, util_text_to_timestamp_validation | Источники SQL: stg.vbak, stg.vbkd
+Фичи SQL
+fn:util_text_to_date_validation
+fn:util_text_to_null_validation
+fn:util_text_to_timestamp_validation
+src:stg.vbak
+src:stg.vbkd
+SELECT-выражения
+sales_contract_code
+tech_etl.util_text_to_null_validation(vbak.vbeln) as sales_contract_code
+sales_contract_type_code
+tech_etl.util_text_to_null_validation(vbkd.bsark) as sales_contract_type_code
+frame_contract_code
+tech_etl.util_text_to_null_validation(vbak.zuonr) as frame_contract_code
+dt_sales_contract
+tech_etl.util_text_to_date_validation(vbak.audat) as dt_sales_contract
+external_contract_number
+tech_etl.util_text_to_null_validation(vbak.bstnk) as external_contract_number
+sales_group_code
+tech_etl.util_text_to_null_validation(vbak.vkgrp) as sales_group_code
+responsibility_center_code
+tech_etl.util_text_to_null_validation(vbak.zzresp) as responsibility_center_code
+contract_type_code
+tech_etl.util_text_to_null_validation(vbak.abrvw) as contract_type_code

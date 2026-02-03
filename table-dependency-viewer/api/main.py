@@ -26,6 +26,8 @@ import json
 import hashlib
 import subprocess
 import tempfile
+import urllib.request
+import urllib.error
 from itertools import combinations
 
 from .config import (
@@ -4238,6 +4240,16 @@ ASSISTANT_STOPWORDS = {
     "таблицы", "нужно", "можно", "есть", "было", "были", "все", "ещё", "еще", "сравни", "сравнение",
     "анализ", "логика", "logic", "audit", "table", "tables", "with", "from", "into", "and", "the",
 }
+ASSISTANT_LLM_BASE_URL = os.getenv("ASSISTANT_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+ASSISTANT_LLM_MODEL = os.getenv("ASSISTANT_LLM_MODEL", "gpt-4o-mini")
+ASSISTANT_LLM_API_KEY = os.getenv("ASSISTANT_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+ASSISTANT_LLM_TIMEOUT_SEC = int(os.getenv("ASSISTANT_LLM_TIMEOUT_SEC", "60"))
+ASSISTANT_LLM_ENABLED = os.getenv("ASSISTANT_LLM_ENABLED", "1") not in {"0", "false", "False"}
+ASSISTANT_SYSTEM_PROMPT = (
+    "Ты аналитический ассистент Data Control. Отвечай только на базе переданного контекста инструментов. "
+    "Если данных недостаточно — явно скажи это. Формат: 1) Что произошло, 2) Почему вероятно, 3) Что проверить дальше. "
+    "Пиши по-русски, конкретно, без воды."
+)
 
 
 def _decode_json_response(payload):
@@ -4324,149 +4336,234 @@ def _safe_call(callable_obj, default_value):
         return default_value
 
 
+def _extract_table_fqn_candidates(text_value: str) -> list[str]:
+    if not text_value:
+        return []
+    matches = re.findall(r"\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_./-]*)\b", text_value.lower())
+    result = []
+    seen = set()
+    for schema, table in matches:
+        fqn = f"{schema}.{table.strip('.')}"
+        if fqn not in seen:
+            seen.add(fqn)
+            result.append(fqn)
+    return result[:4]
+
+
+def _assistant_fetch_tools_context(
+    question: str,
+    history_text: str,
+    table_fqn: Optional[str],
+    pair_id: Optional[str],
+    time_window: Optional[str],
+):
+    q = f"{question} {history_text}".lower()
+    window_start, window_end = _extract_time_window(time_window or q)
+    table_candidates = _extract_table_fqn_candidates(q)
+    if table_fqn:
+        table_candidates.insert(0, table_fqn.lower())
+    search_term = (table_fqn or (table_candidates[0] if table_candidates else "")).lower()
+
+    need_night = any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window)
+    need_incidents = any(x in q for x in ["incident", "инцид", "error", "ошиб", "fail", "паден", "слом"])
+    need_logic = any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"])
+
+    tools = {}
+    used_tools = []
+
+    if need_night or need_incidents:
+        heavy_payload = _safe_call(
+            lambda: get_night_heavy_tables(days=30, limit=12, window_start=window_start, window_end=window_end),
+            {"rows": [], "summary": {}, "window": {"start": window_start, "end": window_end}},
+        )
+        if isinstance(heavy_payload, dict):
+            tools["night_heavy_tables"] = {
+                "window": heavy_payload.get("window") or {"start": window_start, "end": window_end},
+                "summary": heavy_payload.get("summary") or {},
+                "rows": (heavy_payload.get("rows") or [])[:8],
+            }
+            used_tools.append("night_heavy_tables")
+
+    if need_incidents:
+        active_incidents = _safe_call(get_active_incidents, [])
+        if isinstance(active_incidents, list):
+            tools["incidents_active"] = active_incidents[:8]
+            used_tools.append("incidents_active")
+        incident_history = _safe_call(lambda: get_incident_history(days=14, limit=10), [])
+        if isinstance(incident_history, list):
+            tools["incidents_history"] = incident_history[:8]
+            used_tools.append("incidents_history")
+
+    if need_logic or pair_id:
+        logic_rows = _safe_call(
+            lambda: get_logic_audit(
+                issue_type="all",
+                mode="standard",
+                min_score=0.78,
+                limit=60,
+                search=search_term or None,
+            ),
+            {"pairs": []},
+        )
+        if isinstance(logic_rows, dict):
+            tools["logic_audit_pairs"] = (logic_rows.get("pairs") or [])[:10]
+            used_tools.append("logic_audit_pairs")
+        if pair_id:
+            pair_detail = _safe_call(lambda: get_logic_audit_pair(pair_id), None)
+            if isinstance(pair_detail, dict) and not pair_detail.get("error"):
+                tools["logic_audit_pair_detail"] = pair_detail
+                used_tools.append("logic_audit_pair_detail")
+
+    docs = _assistant_retrieve_docs(question + " " + history_text, table_fqn or (table_candidates[0] if table_candidates else None), limit=6)
+    tools["yaml_docs"] = docs
+    used_tools.append("yaml_docs")
+    tools["table_candidates"] = table_candidates
+
+    return {
+        "window": {"start": window_start, "end": window_end},
+        "tools": tools,
+        "used_tools": used_tools,
+    }
+
+
+def _assistant_fallback_answer(question: str, context: dict) -> str:
+    tools = context.get("tools") or {}
+    parts = []
+    night = tools.get("night_heavy_tables") or {}
+    summary = night.get("summary") or {}
+    if summary.get("tables_count"):
+        parts.append(
+            f"В окне {context['window']['start']}-{context['window']['end']} попало {summary.get('tables_count')} таблиц, "
+            f"суммарно {summary.get('total_duration_minutes')} мин."
+        )
+    heavy_rows = (night.get("rows") or [])[:3]
+    if heavy_rows:
+        parts.append(
+            "Топ тяжёлых: " + ", ".join(
+                [f"{r.get('table_fqn')} ({r.get('total_duration_minutes')} мин)" for r in heavy_rows]
+            )
+        )
+    active = tools.get("incidents_active") or []
+    if active:
+        parts.append("Активные инциденты: " + ", ".join([f"{x.get('entity')} ({x.get('failed_tables')} tbl)" for x in active[:3]]))
+    docs = tools.get("yaml_docs") or []
+    if docs:
+        parts.append("По описаниям ближе всего: " + ", ".join([d.get("fqn") for d in docs[:3] if d.get("fqn")]))
+    if not parts:
+        parts.append("Контекста из инструментов мало, уточни вопрос или добавь schema.table.")
+    return " ".join(parts)
+
+
+def _call_assistant_llm(question: str, history: list, context: dict) -> Optional[str]:
+    if not ASSISTANT_LLM_ENABLED or not ASSISTANT_LLM_API_KEY:
+        return None
+    user_context = {
+        "question": question,
+        "window": context.get("window"),
+        "used_tools": context.get("used_tools"),
+        "tools": context.get("tools"),
+    }
+    messages = [{"role": "system", "content": ASSISTANT_SYSTEM_PROMPT}]
+    for item in history[-6:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        text_value = item.get("text")
+        if role in {"user", "assistant"} and isinstance(text_value, str) and text_value.strip():
+            messages.append({"role": role, "content": text_value.strip()[:1200]})
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"Вопрос: {question}\n\n"
+                f"Контекст инструментов (JSON):\n{json.dumps(user_context, ensure_ascii=False)}\n\n"
+                "Сделай короткий практичный разбор."
+            ),
+        }
+    )
+    body = {
+        "model": ASSISTANT_LLM_MODEL,
+        "messages": messages,
+        "temperature": 0.2,
+    }
+    request = urllib.request.Request(
+        url=f"{ASSISTANT_LLM_BASE_URL}/chat/completions",
+        data=json.dumps(body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {ASSISTANT_LLM_API_KEY}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=ASSISTANT_LLM_TIMEOUT_SEC) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        choices = payload.get("choices") or []
+        if not choices:
+            return None
+        content = (((choices[0] or {}).get("message") or {}).get("content") or "").strip()
+        return content or None
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
+        return None
+
+
 @router.post("/api/assistant/query")
 def assistant_query(req: AssistantQueryRequest):
     question = (req.question or "").strip()
     if not question:
         return JSONResponse(status_code=400, content={"error": "question is required"})
 
-    history_text = " ".join([str(x.get("text") or "") for x in (req.history or []) if isinstance(x, dict)])
-    window_start, window_end = _extract_time_window(req.time_window or question or history_text)
-
-    heavy_payload = _safe_call(
-        lambda: get_night_heavy_tables(days=30, limit=8, window_start=window_start, window_end=window_end),
-        {"rows": [], "summary": {}, "window": {"start": window_start, "end": window_end}},
+    history = req.history or []
+    history_text = " ".join([str(x.get("text") or "") for x in history if isinstance(x, dict)])
+    context = _assistant_fetch_tools_context(
+        question=question,
+        history_text=history_text,
+        table_fqn=req.table_fqn,
+        pair_id=req.pair_id,
+        time_window=req.time_window,
     )
-    active_incidents = _safe_call(get_active_incidents, [])
-    incident_history = _safe_call(lambda: get_incident_history(days=14, limit=6), [])
-    if not isinstance(heavy_payload, dict):
-        heavy_payload = {"rows": [], "summary": {}, "window": {"start": window_start, "end": window_end}}
-    if not isinstance(active_incidents, list):
-        active_incidents = []
-    if not isinstance(incident_history, list):
-        incident_history = []
-    docs = _assistant_retrieve_docs(question + " " + history_text, req.table_fqn, req.top_k)
-
-    pair_detail = None
-    if req.pair_id:
-        pair_detail = _safe_call(lambda: get_logic_audit_pair(req.pair_id), None)
-        if isinstance(pair_detail, dict) and pair_detail.get("error"):
-            pair_detail = None
-
-    top_heavy = (heavy_payload.get("rows") or [])[:3]
-    top_incidents = active_incidents[:3]
-    top_history = incident_history[:3]
-
-    what_happened = []
-    possible_causes = []
-    next_steps = []
-    evidence = []
-
-    summary = heavy_payload.get("summary") or {}
-    if summary.get("tables_count"):
-        what_happened.append(
-            f"В окне {window_start}-{window_end} нагружено {summary.get('tables_count')} таблиц, суммарно {summary.get('total_duration_minutes')} мин."
+    answer = _call_assistant_llm(question, history, context) or _assistant_fallback_answer(question, context)
+    tools = context.get("tools") or {}
+    blocks = {
+        "what_happened": [],
+        "possible_causes": [],
+        "next_steps": [],
+    }
+    night = tools.get("night_heavy_tables") or {}
+    night_summary = night.get("summary") or {}
+    if night_summary.get("tables_count"):
+        blocks["what_happened"].append(
+            f"Окно {context['window']['start']}-{context['window']['end']}: {night_summary.get('tables_count')} таблиц, "
+            f"суммарно {night_summary.get('total_duration_minutes')} мин."
         )
-    if top_heavy:
-        what_happened.append(
-            "Топ тяжёлых в окне: "
-            + ", ".join(
-                [f"{r.get('table_fqn')} ({r.get('total_duration_minutes')} мин)" for r in top_heavy]
-            )
+    if tools.get("incidents_active"):
+        blocks["possible_causes"].append("Есть активные инциденты по нескольким сущностям.")
+    if tools.get("logic_audit_pair_detail"):
+        blocks["possible_causes"].append(
+            (tools.get("logic_audit_pair_detail") or {}).get("explanation", {}).get("summary") or "Найдена похожая пара логики."
         )
-        evidence.extend(
-            [
-                {
-                    "kind": "heavy_table",
-                    "table_fqn": r.get("table_fqn"),
-                    "total_duration_minutes": r.get("total_duration_minutes"),
-                    "avg_duration_minutes": r.get("avg_duration_minutes"),
-                }
-                for r in top_heavy
-            ]
-        )
-
-    if top_incidents:
-        what_happened.append(
-            "Есть активные инциденты: "
-            + ", ".join([f"{x.get('entity')} ({x.get('failed_tables')} tbl)" for x in top_incidents])
-        )
-        evidence.extend(
-            [
-                {
-                    "kind": "active_incident",
-                    "entity": x.get("entity"),
-                    "failed_tables": x.get("failed_tables"),
-                    "last_failure_time": x.get("last_failure_time"),
-                }
-                for x in top_incidents
-            ]
-        )
-    elif top_history:
-        what_happened.append(
-            "По истории инцидентов чаще всего падали: "
-            + ", ".join([f"{x.get('table')} ({x.get('count')})" for x in top_history])
-        )
-
-    if pair_detail:
-        possible_causes.append(pair_detail.get("explanation", {}).get("summary"))
-        decision = pair_detail.get("explanation", {}).get("decision")
-        if decision:
-            possible_causes.append(decision)
-        evidence.append(
-            {
-                "kind": "logic_pair",
-                "left_fqn": pair_detail.get("left_fqn"),
-                "right_fqn": pair_detail.get("right_fqn"),
-                "score": pair_detail.get("score"),
-            }
-        )
-
+    docs = tools.get("yaml_docs") or []
     if docs:
-        possible_causes.append(
-            "По документации ближе всего: "
-            + ", ".join([f"{d.get('fqn')} ({d.get('entity_name') or 'UNKNOWN'})" for d in docs[:3]])
-        )
-        evidence.extend(
-            [
-                {
-                    "kind": "doc_context",
-                    "table_fqn": d.get("fqn"),
-                    "sql_path": d.get("sql_path"),
-                    "score": d.get("score"),
-                }
-                for d in docs[:4]
-            ]
-        )
-
-    next_steps.append(f"Проверь топ таблиц в окне {window_start}-{window_end} на странице Night Ops.")
-    if docs:
-        next_steps.append(f"Открой карточку {docs[0].get('fqn')} и проверь WHERE + ключевые поля.")
-    if pair_detail:
-        next_steps.append("Сверь блоки 'Совпадает/Отличается' и зафиксируй решение: merge или оставить отдельно.")
-    if top_incidents:
-        next_steps.append("По активным инцидентам проверь upstream зависимости и последний успешный прогон.")
-
-    answer_parts = []
-    if what_happened:
-        answer_parts.append("Что видно сейчас: " + " ".join(what_happened))
-    if possible_causes:
-        answer_parts.append("Вероятные причины: " + " ".join(possible_causes))
-    if next_steps:
-        answer_parts.append("Что сделать дальше: " + " ".join(next_steps[:3]))
+        blocks["next_steps"].append(f"Открой {docs[0].get('fqn')} и сверяй описание полей с SQL.")
+    if tools.get("logic_audit_pairs"):
+        blocks["next_steps"].append("Проверь топ пар на странице Logic Audit.")
 
     return {
         "generated_at": datetime.utcnow().isoformat(),
         "question": question,
-        "window": {"start": window_start, "end": window_end},
-        "answer": " ".join(answer_parts) if answer_parts else "Недостаточно данных для уверенного ответа.",
-        "blocks": {
-            "what_happened": what_happened,
-            "possible_causes": possible_causes,
-            "next_steps": next_steps,
-        },
+        "window": context.get("window"),
+        "answer": answer,
+        "blocks": blocks,
         "docs": docs,
-        "evidence": evidence,
+        "used_tools": context.get("used_tools") or [],
+        "tools_context": tools,
+        "model_info": {
+            "enabled": ASSISTANT_LLM_ENABLED,
+            "provider": "openai_compatible",
+            "base_url": ASSISTANT_LLM_BASE_URL,
+            "model": ASSISTANT_LLM_MODEL,
+            "used_llm": bool(ASSISTANT_LLM_ENABLED and ASSISTANT_LLM_API_KEY),
+        },
     }
 
 

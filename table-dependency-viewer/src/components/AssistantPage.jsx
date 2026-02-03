@@ -95,6 +95,9 @@ export default function AssistantPage() {
                 {(m.payload.blocks.what_happened || []).map((x, idx) => <div key={`wh-${idx}`}>• {x}</div>)}
                 {(m.payload.blocks.possible_causes || []).map((x, idx) => <div key={`pc-${idx}`}>• {x}</div>)}
                 {(m.payload.blocks.next_steps || []).map((x, idx) => <div key={`ns-${idx}`}>• {x}</div>)}
+                {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
+                  <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
+                )}
               </div>
             )}
           </div>
@@ -117,4 +120,3 @@ export default function AssistantPage() {
     </div>
   );
 }
-

@@ -971,11 +971,15 @@ main.content {
   text-align: left;
   display: grid;
   gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
 .logic-audit-card.active,
 .logic-audit-card:hover {
   border-color: rgba(96, 165, 250, 0.65);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(2, 6, 23, 0.32);
 }
 
 .logic-audit-card-head {

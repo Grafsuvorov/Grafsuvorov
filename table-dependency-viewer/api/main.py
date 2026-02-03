@@ -126,6 +126,10 @@ SQL_FUNCTION_BLACKLIST = {
     "in", "on", "over", "partition", "by", "as",
 }
 
+SQL_FUNCTION_COMMON_PREFIXES = (
+    "util_text_to_",
+)
+
 
 def _strip_sql_comments(sql_text: str) -> str:
     if not sql_text:
@@ -175,6 +179,17 @@ def _extract_functions(normalized_sql: str) -> set[str]:
         if fn not in SQL_FUNCTION_BLACKLIST:
             funcs.add(fn)
     return funcs
+
+
+def _is_common_function(fn: str, freq_map: dict[str, int], total_objects: int) -> bool:
+    if not fn:
+        return True
+    if any(fn.startswith(prefix) for prefix in SQL_FUNCTION_COMMON_PREFIXES):
+        return True
+    if total_objects <= 0:
+        return False
+    frequency = freq_map.get(fn, 0) / total_objects
+    return frequency >= 0.35
 
 
 def _extract_where_clause(normalized_sql: str) -> str:
@@ -244,7 +259,7 @@ def _build_story(obj: dict) -> str:
     checks = obj.get("verification") or []
     keys = obj.get("key_attributes") or []
     sources = sorted(obj.get("source_tables") or [])
-    funcs = sorted(obj.get("functions") or [])
+    funcs = sorted(obj.get("signal_functions") or obj.get("functions") or [])
     depends_on = obj.get("depends_on") or {}
     layers = ", ".join(sorted(depends_on.keys())) if depends_on else "не заданы"
     parts = [
@@ -285,8 +300,8 @@ def _build_diff_hints(left: dict, right: dict) -> list[str]:
     hints = []
     src_left = left.get("source_tables") or set()
     src_right = right.get("source_tables") or set()
-    fn_left = left.get("functions") or set()
-    fn_right = right.get("functions") or set()
+    fn_left = left.get("signal_functions") or set()
+    fn_right = right.get("signal_functions") or set()
     where_left = left.get("where_clause") or ""
     where_right = right.get("where_clause") or ""
     if src_left != src_right:
@@ -303,8 +318,8 @@ def _build_diff_hints(left: dict, right: dict) -> list[str]:
 def _build_pair_comparison(left: dict, right: dict) -> dict:
     left_sources = left.get("source_tables") or set()
     right_sources = right.get("source_tables") or set()
-    left_functions = left.get("functions") or set()
-    right_functions = right.get("functions") or set()
+    left_functions = left.get("signal_functions") or set()
+    right_functions = right.get("signal_functions") or set()
 
     left_aliases = {x.get("alias") for x in (left.get("select_targets") or []) if x.get("alias")}
     right_aliases = {x.get("alias") for x in (right.get("select_targets") or []) if x.get("alias")}
@@ -330,7 +345,7 @@ def _build_pair_comparison(left: dict, right: dict) -> dict:
     if left_sources & right_sources:
         same.append({"label": "Общие источники", "items": sorted(left_sources & right_sources)[:14]})
     if left_functions & right_functions:
-        same.append({"label": "Общие SQL-функции", "items": sorted(left_functions & right_functions)[:14]})
+        same.append({"label": "Общие бизнес-функции", "items": sorted(left_functions & right_functions)[:14]})
     if left_aliases & right_aliases:
         same.append({"label": "Одинаковые алиасы в SELECT", "items": sorted(left_aliases & right_aliases)[:14]})
     if left_keys & right_keys:
@@ -407,7 +422,7 @@ def _build_pair_explanation(record: dict, left: dict, right: dict, comparison: d
 def _calc_logic_similarity(left: dict, right: dict) -> float:
     token_sim = _jaccard_similarity(left["tokens"], right["tokens"])
     source_sim = _jaccard_similarity(left["source_tables"], right["source_tables"])
-    function_sim = _jaccard_similarity(left["functions"], right["functions"])
+    function_sim = _jaccard_similarity(left.get("signal_functions") or set(), right.get("signal_functions") or set())
     expr_exact_count = len((left.get("expr_hashes") or set()) & (right.get("expr_hashes") or set()))
     expr_exact_den = max(min(len(left.get("expr_hashes") or []), len(right.get("expr_hashes") or [])), 1)
     expr_exact_sim = expr_exact_count / expr_exact_den
@@ -490,16 +505,32 @@ def _build_logic_audit_cache():
                 continue
             obj = _build_logic_object(Path(root) / "meta_data_file.yaml")
             if obj:
-                obj["story"] = _build_story(obj)
                 objects.append(obj)
+
+    function_freq = {}
+    total_objects = len(objects)
+    for obj in objects:
+        for fn in obj.get("functions") or set():
+            function_freq[fn] = function_freq.get(fn, 0) + 1
+
+    for obj in objects:
+        filtered = {
+            fn for fn in (obj.get("functions") or set())
+            if not _is_common_function(fn, function_freq, total_objects)
+        }
+        obj["signal_functions"] = filtered
+        obj["story"] = _build_story(obj)
 
     pairs = []
     pair_index = {}
     for left, right in combinations(objects, 2):
         if left["fqn"] == right["fqn"]:
             continue
+        # dm_view рассматриваем только внутри dm_view (1-1 view слой)
+        if (left["schema"] == "dm_view") != (right["schema"] == "dm_view"):
+            continue
         # быстрый pre-filter
-        if not (left["source_tables"] & right["source_tables"] or left["functions"] & right["functions"]):
+        if not (left["source_tables"] & right["source_tables"] or left["signal_functions"] & right["signal_functions"]):
             continue
 
         score, sim_meta = _calc_logic_similarity(left, right)
@@ -553,12 +584,12 @@ def _build_logic_audit_cache():
             "left_features": {
                 "tokens_count": len(left["tokens"]),
                 "source_tables": sorted(left["source_tables"]),
-                "functions": sorted(left["functions"]),
+                "functions": sorted(left.get("signal_functions") or []),
             },
             "right_features": {
                 "tokens_count": len(right["tokens"]),
                 "source_tables": sorted(right["source_tables"]),
-                "functions": sorted(right["functions"]),
+                "functions": sorted(right.get("signal_functions") or []),
             },
         }
 

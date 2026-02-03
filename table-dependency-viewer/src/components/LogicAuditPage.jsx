@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
@@ -26,6 +26,7 @@ export default function LogicAuditPage() {
   const [selectedPairId, setSelectedPairId] = useState(null);
   const [pairDetails, setPairDetails] = useState(null);
   const [pairLoading, setPairLoading] = useState(false);
+  const detailsRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +82,11 @@ export default function LogicAuditPage() {
     return () => {
       cancelled = true;
     };
+  }, [selectedPairId]);
+
+  useEffect(() => {
+    if (!selectedPairId || !detailsRef.current) return;
+    detailsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedPairId]);
 
   const pairs = useMemo(() => data?.pairs || [], [data]);
@@ -191,7 +197,7 @@ export default function LogicAuditPage() {
             </div>
           </section>
 
-          <section className="cc-surface">
+          <section className="cc-surface" ref={detailsRef}>
             <div className="section-title">Детали</div>
             {!selectedPairId && <div className="muted">Выберите пару, чтобы провалиться в детали.</div>}
             {pairLoading && <div className="muted">Загружаю детали пары...</div>}

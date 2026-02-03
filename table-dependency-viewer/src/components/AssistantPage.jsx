@@ -110,6 +110,11 @@ export default function AssistantPage() {
                     • Max duration: {m.payload.max_duration.table_fqn} (max={m.payload.max_duration.max_duration_minutes ?? "n/a"} min)
                   </div>
                 )}
+                {m.payload.dependencies && (
+                  <div>
+                    • Dependencies: {m.payload.dependencies.upstream_count ?? 0} upstream tables
+                  </div>
+                )}
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}

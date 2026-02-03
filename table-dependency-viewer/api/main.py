@@ -4489,7 +4489,10 @@ def _assistant_fetch_tools_context(
     if need_dependencies and table_candidates:
         schema, table = _split_fqn(table_candidates[0])
         if schema and table:
-            dep_graph = _safe_call(lambda: get_dependency_graph(schema=schema, table=table), {})
+            dep_graph = _safe_call(
+                lambda: get_dependency_graph(schema=schema, table=table, max_depth=6, max_edges=1500),
+                {},
+            )
             if isinstance(dep_graph, dict):
                 tools["dependencies_graph"] = {
                     "table": f"{schema}.{table}",
@@ -4504,7 +4507,10 @@ def _assistant_fetch_tools_context(
                     "links_count": len(dep_down.get("links") or []),
                 }
                 used_tools.append("dependencies_down")
-            impact_summary = _safe_call(lambda: get_impact_summary(schema=schema, table=table), {})
+            impact_summary = _safe_call(
+                lambda: get_impact_summary(schema=schema, table=table, depth=3, max_nodes=800, limit=120),
+                {},
+            )
             if isinstance(impact_summary, dict):
                 tools["impact_summary"] = impact_summary
                 used_tools.append("impact_summary")
@@ -4591,7 +4597,7 @@ def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id
         key in q for key in ["чем отличаются", "разница", "difference", "diff", "отличия", "сравни скрипт", "compare script"]
     ):
         return "compare_scripts"
-    if any(key in q for key in ["зависим", "lineage", "upstream", "downstream", "impact", "влияние"]):
+    if any(key in q for key in ["завис", "depends", "lineage", "upstream", "downstream", "impact", "влияние", "от каких таблиц", "зависит от"]):
         return "dependencies"
     if any(key in q for key in ["dq", "качество", "дублик", "row count"]):
         return "dq"
@@ -4738,6 +4744,25 @@ def _assistant_table_duration_summary(table_fqn: str) -> Optional[dict]:
         "p95_minutes": p95_minutes,
         "max_minutes": max_minutes,
         "last_duration_minutes": last_duration_minutes,
+    }
+
+
+def _assistant_dependencies_summary(context_tools: dict, table_fqn: Optional[str]) -> Optional[dict]:
+    card = (context_tools or {}).get("table_card") or {}
+    depends_on = card.get("depends_on") or {}
+    if not isinstance(depends_on, dict):
+        depends_on = {}
+    flat = []
+    for schema, tables in depends_on.items():
+        for table in tables or []:
+            flat.append(f"{schema}.{table}")
+    flat = sorted(set(flat))
+    if not flat and not table_fqn:
+        return None
+    return {
+        "table_fqn": table_fqn or card.get("table_fqn"),
+        "upstream_tables": flat[:60],
+        "upstream_count": len(flat),
     }
 
 
@@ -4892,8 +4917,11 @@ def assistant_query(req: AssistantQueryRequest):
     compare_payload = None
     duration_payload = None
     max_duration_payload = None
+    deps_payload = None
     if intent == "compare_scripts" and len(table_candidates) >= 2:
         compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
+    if intent == "dependencies":
+        deps_payload = _assistant_dependencies_summary(context.get("tools") or {}, table_candidates[0] if table_candidates else req.table_fqn)
     if intent == "max_duration":
         if table_candidates:
             duration_payload = _assistant_table_duration_summary(table_candidates[0])
@@ -4901,7 +4929,17 @@ def assistant_query(req: AssistantQueryRequest):
             max_duration_payload = _assistant_global_max_duration(days=30)
     if intent == "table_duration" and table_candidates:
         duration_payload = _assistant_table_duration_summary(table_candidates[0])
-    if max_duration_payload:
+    if deps_payload:
+        if deps_payload.get("upstream_count", 0) > 0:
+            preview = ", ".join((deps_payload.get("upstream_tables") or [])[:12])
+            answer = (
+                f"{deps_payload.get('table_fqn')} зависит от {deps_payload.get('upstream_count')} таблиц. "
+                f"Основные upstream: {preview}."
+            )
+        else:
+            answer = f"Для {deps_payload.get('table_fqn')} upstream-зависимости в метаданных не найдены."
+        context.setdefault("tools", {})["dependencies_summary"] = deps_payload
+    elif max_duration_payload:
         answer = (
             f"Самая долгая загрузка за последние {max_duration_payload.get('days')} дней: "
             f"{max_duration_payload.get('table_fqn')} "
@@ -4964,6 +5002,7 @@ def assistant_query(req: AssistantQueryRequest):
         "compare": compare_payload,
         "duration": duration_payload,
         "max_duration": max_duration_payload,
+        "dependencies": deps_payload,
         "tools_context": tools,
         "model_info": {
             "enabled": ASSISTANT_LLM_ENABLED,

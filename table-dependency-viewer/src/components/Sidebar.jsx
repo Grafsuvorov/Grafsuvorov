@@ -50,6 +50,12 @@ export default function Sidebar({ currentPath, onChangeView }) {
                 Logic Audit
               </button>
               <button
+                className={isActive("/assistant") ? "active" : ""}
+                onClick={() => onChangeView("assistant")}
+              >
+                Assistant
+              </button>
+              <button
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >

@@ -1,0 +1,72 @@
+.assistant-controls {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 10px;
+}
+
+.assistant-field {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.assistant-field input {
+  width: 100%;
+}
+
+.assistant-field-wide {
+  min-width: 0;
+}
+
+.assistant-quick {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.assistant-chat {
+  display: grid;
+  gap: 10px;
+}
+
+.assistant-msg {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(2, 6, 23, 0.4);
+}
+
+.assistant-msg.is-user {
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.assistant-msg.is-assistant {
+  border-color: rgba(34, 197, 94, 0.35);
+}
+
+.assistant-role {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+  margin-bottom: 6px;
+}
+
+.assistant-blocks {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.assistant-input-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .assistant-controls {
+    grid-template-columns: 1fr;
+  }
+}
+

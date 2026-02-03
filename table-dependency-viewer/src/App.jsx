@@ -19,6 +19,7 @@ import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 import NightOpsPage from "./components/NightOpsPage.jsx";
 import OnboardingPage from "./components/OnboardingPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
+import AssistantPage from "./components/AssistantPage.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -79,6 +80,10 @@ export default function App() {
       }
       if (target === "logic_audit") {
         navigate("/logic-audit");
+        return;
+      }
+      if (target === "assistant") {
+        navigate("/assistant");
         return;
       }
 
@@ -171,6 +176,7 @@ export default function App() {
         <Route path="/impact/:schema/:table" element={<ImpactGraphPage />} />
         <Route path="/night-ops" element={<NightOpsPage />} />
         <Route path="/logic-audit" element={<LogicAuditPage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/dependencies" element={<DependenciesRoute />} />
         <Route path="/incident" element={<IncidentRoute />} />

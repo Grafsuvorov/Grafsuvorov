@@ -95,6 +95,11 @@ export default function AssistantPage() {
                 {(m.payload.blocks.what_happened || []).map((x, idx) => <div key={`wh-${idx}`}>• {x}</div>)}
                 {(m.payload.blocks.possible_causes || []).map((x, idx) => <div key={`pc-${idx}`}>• {x}</div>)}
                 {(m.payload.blocks.next_steps || []).map((x, idx) => <div key={`ns-${idx}`}>• {x}</div>)}
+                {m.payload.compare && (
+                  <div>
+                    • Script diff: aliases diff={m.payload.compare.expr_diff?.length || 0}, sources only left={m.payload.compare.left_sources_only?.length || 0}, right={m.payload.compare.right_sources_only?.length || 0}
+                  </div>
+                )}
                 {Array.isArray(m.payload.used_tools) && m.payload.used_tools.length > 0 && (
                   <div className="muted">Источники: {m.payload.used_tools.join(", ")}</div>
                 )}

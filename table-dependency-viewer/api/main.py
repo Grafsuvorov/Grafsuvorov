@@ -4426,6 +4426,108 @@ def _assistant_fetch_tools_context(
     }
 
 
+def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id: Optional[str]) -> str:
+    q = (question or "").lower()
+    if pair_id:
+        return "pair_analysis"
+    if len(table_candidates) >= 2 and any(
+        key in q for key in ["чем отличаются", "разница", "difference", "diff", "отличия", "сравни скрипт", "compare script"]
+    ):
+        return "compare_scripts"
+    if any(key in q for key in ["инцид", "ошиб", "fail", "error", "слом"]):
+        return "incidents"
+    if any(key in q for key in ["пик", "окно", "night", "тяж", "долго", "slow"]):
+        return "night_ops"
+    if table_candidates:
+        return "table_explain"
+    return "general"
+
+
+def _assistant_compare_scripts(fqn_left: str, fqn_right: str) -> Optional[dict]:
+    payload = _build_logic_audit_cache()
+    objects_index = payload.get("objects_index") or {}
+    left = objects_index.get((fqn_left or "").lower())
+    right = objects_index.get((fqn_right or "").lower())
+    if not left or not right:
+        return None
+
+    left_sources = set(left.get("source_tables") or [])
+    right_sources = set(right.get("source_tables") or [])
+    left_where = (left.get("where_clause") or "").strip()
+    right_where = (right.get("where_clause") or "").strip()
+
+    left_expr = {
+        (row.get("alias") or f"expr_{idx+1}"): (row.get("expression") or "")
+        for idx, row in enumerate(left.get("select_targets") or [])
+    }
+    right_expr = {
+        (row.get("alias") or f"expr_{idx+1}"): (row.get("expression") or "")
+        for idx, row in enumerate(right.get("select_targets") or [])
+    }
+    common_aliases = sorted(set(left_expr.keys()) & set(right_expr.keys()))
+    expr_diff = []
+    for alias in common_aliases:
+        if (left_expr.get(alias) or "").strip() != (right_expr.get(alias) or "").strip():
+            expr_diff.append(
+                {
+                    "alias": alias,
+                    "left": left_expr.get(alias),
+                    "right": right_expr.get(alias),
+                }
+            )
+
+    left_only_aliases = sorted(set(left_expr.keys()) - set(right_expr.keys()))
+    right_only_aliases = sorted(set(right_expr.keys()) - set(left_expr.keys()))
+
+    return {
+        "left_fqn": left.get("fqn"),
+        "right_fqn": right.get("fqn"),
+        "left_sources_only": sorted(left_sources - right_sources)[:12],
+        "right_sources_only": sorted(right_sources - left_sources)[:12],
+        "common_sources": sorted(left_sources & right_sources)[:12],
+        "where_equal": bool(left_where and right_where and left_where == right_where),
+        "left_where": left_where[:260],
+        "right_where": right_where[:260],
+        "expr_diff": expr_diff[:10],
+        "left_only_aliases": left_only_aliases[:10],
+        "right_only_aliases": right_only_aliases[:10],
+        "left_sql_path": left.get("sql_path"),
+        "right_sql_path": right.get("sql_path"),
+    }
+
+
+def _assistant_render_compare_answer(cmp_result: dict) -> str:
+    left_fqn = cmp_result.get("left_fqn")
+    right_fqn = cmp_result.get("right_fqn")
+    parts = [f"Скрипты {left_fqn} и {right_fqn} не одинаковые."]
+
+    if cmp_result.get("left_sources_only") or cmp_result.get("right_sources_only"):
+        parts.append(
+            "Разные источники: "
+            f"только слева [{', '.join(cmp_result.get('left_sources_only') or ['-'])}], "
+            f"только справа [{', '.join(cmp_result.get('right_sources_only') or ['-'])}]."
+        )
+    if not cmp_result.get("where_equal"):
+        lw = cmp_result.get("left_where") or "нет WHERE"
+        rw = cmp_result.get("right_where") or "нет WHERE"
+        parts.append(f"WHERE отличается: left=`{lw}` vs right=`{rw}`.")
+
+    expr_diff = cmp_result.get("expr_diff") or []
+    if expr_diff:
+        top = ", ".join([x.get("alias") or "?" for x in expr_diff[:4]])
+        parts.append(f"Отличаются выражения в SELECT (например: {top}).")
+    else:
+        parts.append("SELECT-выражения по общим алиасам совпадают.")
+
+    if cmp_result.get("left_only_aliases") or cmp_result.get("right_only_aliases"):
+        parts.append(
+            "Есть уникальные поля: "
+            f"left [{', '.join(cmp_result.get('left_only_aliases') or ['-'])}], "
+            f"right [{', '.join(cmp_result.get('right_only_aliases') or ['-'])}]."
+        )
+    return " ".join(parts)
+
+
 def _assistant_fallback_answer(question: str, context: dict) -> str:
     tools = context.get("tools") or {}
     parts = []
@@ -4522,7 +4624,21 @@ def assistant_query(req: AssistantQueryRequest):
         pair_id=req.pair_id,
         time_window=req.time_window,
     )
-    answer = _call_assistant_llm(question, history, context) or _assistant_fallback_answer(question, context)
+    table_candidates = _extract_table_fqn_candidates(f"{question} {history_text}")
+    if req.table_fqn:
+        table_candidates.insert(0, req.table_fqn.lower())
+    # de-dup preserving order
+    seen = set()
+    table_candidates = [x for x in table_candidates if not (x in seen or seen.add(x))]
+    intent = _assistant_detect_intent(question, table_candidates, req.pair_id)
+
+    compare_payload = None
+    if intent == "compare_scripts" and len(table_candidates) >= 2:
+        compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
+    if compare_payload:
+        answer = _assistant_render_compare_answer(compare_payload)
+    else:
+        answer = _call_assistant_llm(question, history, context) or _assistant_fallback_answer(question, context)
     tools = context.get("tools") or {}
     blocks = {
         "what_happened": [],
@@ -4556,6 +4672,8 @@ def assistant_query(req: AssistantQueryRequest):
         "blocks": blocks,
         "docs": docs,
         "used_tools": context.get("used_tools") or [],
+        "intent": intent,
+        "compare": compare_payload,
         "tools_context": tools,
         "model_info": {
             "enabled": ASSISTANT_LLM_ENABLED,

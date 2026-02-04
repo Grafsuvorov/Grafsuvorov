@@ -459,4 +459,17 @@ SELECT
 
     (o.exchange_diff_local_currency_amount)::numeric(17,2) AS exchange_diff_local_currency_amount,
     (o.exchange_diff_local_currency_amount + COALESCE(cp.exchange_diff_local_currency_amount,0))::numeric(17,2)
-        AS debt
+        AS debt_balance_exchange_diff_local_currency_amount,
+
+    (o.exchange_diff_second_local_currency_amount)::numeric(17,2) AS exchange_diff_second_local_currency_amount,
+    (o.exchange_diff_second_local_currency_amount + COALESCE(cp.exchange_diff_second_local_currency_amount,0))::numeric(17,2)
+        AS debt_balance_exchange_diff_second_local_currency_amount
+
+FROM opening_documents_no_invoices o
+LEFT JOIN closing_sum_to_opening_documents cp
+  ON cp.dt = o.dt
+ AND cp.unit_balance_code = o.unit_balance_code
+ AND cp.fiscal_year = o.fiscal_year
+ AND cp.accounting_document_code = o.accounting_document_code
+ AND cp.position_line_item = o.position_line_item
+WHERE 1 = 1;

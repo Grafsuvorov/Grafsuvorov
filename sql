@@ -1,9 +1,11 @@
+SQL Error [42703]: ERROR: column x.final_fiscal_year does not exist
+  Позиция: 3193
 with params as (
   select
     (date_trunc('month', now()) - interval '1 month' - interval '1 day')::date as dt_from,
     (date_trunc('month', now()) + interval '1 month' - interval '1 day')::date as dt_to
 )
-🔹 Шаг 1. Переоценка — агрегируем СРАЗУ корректно
+-- Шаг 1. Переоценка — агрегируем СРАЗУ корр
 , revaluation_documents as (
 select
   unit_balance_code,
@@ -22,9 +24,9 @@ group by
   reference_document_fiscal_year,
   reference_document_code,
   reference_document_position_line_item
-)
-✅ Минус раздувание по dt_posting
-🔹 Шаг 2. БАЗА документов (один проход)
+) 
+--✅ Минус раздувание по dt_posting
+--🔹 Шаг 2. БАЗА документов (один проход)
 , arap_base as (
 select
   o.*,
@@ -43,14 +45,14 @@ where
   and o.deleted_flag = false
   and s.range_low_value is null
 )
-🔹 Шаг 3. СРАЗУ ограничиваем календарь
+--🔹 Шаг 3. СРАЗУ ограничиваем календарь
 , periods as (
 select st.*
 from dm_calc.operating_periods_for_account_debt st
 join params p on st.dt between p.dt_from and p.dt_to
 where st.deleted_flag = false
 )
-🔹 Шаг 4. Открывающие документы + период
+--🔹 Шаг 4. Открывающие документы + период
 , opening_docs as (
 select
   p.dt,
@@ -69,8 +71,8 @@ left join revaluation_documents r
  and r.accounting_document_code = a.accounting_document_code
  and r.position_line_item = a.position_line_item
 )
-✅ Здесь заканчивается раздувание
-🔹 Шаг 5. Исключаем документы с инвойсами (БЕЗ self-scan)
+--✅ Здесь заканчивается раздувание
+--🔹 Шаг 5. Исключаем документы с инвойсами (БЕЗ self-scan)
 , opening_no_invoice as (
 select o.*
 from opening_docs o
@@ -89,8 +91,8 @@ where not exists (
     and x.debit_or_credit = o.debit_or_credit_code_of_relevant_invoice
 )
 )
-✅ Работает по уже ограниченному набору, а не по всей CTE.
-🔹 Шаг 6. Закрывающие суммы
+--✅ Работает по уже ограниченному набору, а не по всей CTE.
+--🔹 Шаг 6. Закрывающие суммы
 , closing_sum as (
 select
   o.dt,
@@ -115,22 +117,72 @@ join opening_docs cp
 group by
   o.dt, o.unit_balance_code, o.fiscal_year, o.accounting_document_code, o.position_line_item
 )
-🔹 Финал INSERT
-insert into dm_calc.account_debt
+--🔹 Финал INSERT
+insert into dm_calc.account_debt_v2
 select
-  o.dt,
-  o.is_second_friday,
-  o.unit_balance_code,
-  o.plant_code,
-  o.fiscal_year,
-  o.accounting_document_code,
-  ...
-  (o.document_currency_amount_s + coalesce(c.document_currency_amount,0))::numeric(17,2),
-  ...
-from opening_no_invoice o
-left join closing_sum c
-  on c.dt = o.dt
- and c.unit_balance_code = o.unit_balance_code
- and c.fiscal_year = o.fiscal_year
- and c.accounting_document_code = o.accounting_document_code
- and c.position_line_item = o.position_line_item;
+	o.dt,
+	o.is_second_friday,
+	o.unit_balance_code,
+	o.plant_code,
+	o.fiscal_year,
+	o.accounting_document_code,
+	o.dt_posting,
+	o.dt_clearing,
+	o.contract_number,
+	o.counterparty_code,
+	o.debit_or_credit,
+	o.account_type,
+	o.general_ledger_account_code,
+	(o.document_currency_amount + coalesce(cp.document_currency_amount,0))::numeric(17,2) as debt_balance_document_currency_amount,
+	o.document_currency_code,
+	(o.local_currency_amount + coalesce(cp.local_currency_amount,0))::numeric(17,2) as debt_balance_local_currency_amount,	
+	o.local_currency_code,
+	(o.second_local_currency_amount + coalesce(cp.second_local_currency_amount,0))::numeric(17,2) as debt_balance_second_local_currency_amount,
+	(o.second_local_currency_amount + coalesce(cp.second_local_currency_amount,0) +
+	coalesce(o.valuation_difference_second_local_currency_amount, 0) +coalesce(cp.valuation_difference_second_local_currency_amount,0))::numeric(17,2) as debt_balance_with_revaluation_diff_second_currency_amount,
+	(o.usd_amount + coalesce(cp.usd_amount,0))::numeric(17,2) as debt_balance_usd_amount,
+	o.second_local_currency_code,
+	o.accounting_document_type,
+	o.position_line_item,
+	o.reverse_document_code,
+	o.reference_document_number,
+	o.accounting_document_status_code,
+	o.clearing_document_code,
+	o.tax_code,
+	o.position_line_item_text,
+	o.special_general_ledger_indicator,
+	o.dt_baseline_due_date_calculation,
+	o.assignment_number,
+	o.dt_accounting_document,
+	o.terms_of_payment_code,
+	o.document_currency_amount,
+	o.local_currency_amount,
+	o.second_local_currency_amount,
+	o.usd_amount,
+	o.reverse_document_fiscal_year,
+	o.reason_for_reversal,
+	o.invoice_document_code,
+	o.fiscal_year_of_relevant_invoice,
+	o.position_number_of_relevant_invoice,
+	o.final_position_line_item ,
+	o.final_fiscal_year,
+	o.final_accounting_document_code,
+	o.document_currency_code_of_relevant_invoice,
+	o.general_ledger_account_code_of_relevant_invoice,
+	o.debit_or_credit_code_of_relevant_invoice,
+	o.reference_procedure as reference_operation_type_code,
+	o.reference_object_key as reference_object_key_code,
+	(o.exchange_diff_local_currency_amount)::numeric(17,2) as exchange_diff_local_currency_amount,
+	(o.exchange_diff_local_currency_amount + coalesce(cp.exchange_diff_local_currency_amount,0))::numeric(17,2) as debt_balance_exchange_diff_local_currency_amount,
+	(o.exchange_diff_second_local_currency_amount)::numeric(17,2) as exchange_diff_second_local_currency_amount,
+	(o.exchange_diff_second_local_currency_amount + coalesce(cp.exchange_diff_second_local_currency_amount,0) )::numeric(17,2) as debt_balance_exchange_diff_second_local_currency_amount
+from 
+	opening_documents_no_invoices o
+left join closing_sum_to_opening_documents cp on
+	cp.dt = o.dt
+	and cp.unit_balance_code = o.unit_balance_code
+	and cp.fiscal_year = o.fiscal_year
+	and cp.accounting_document_code = o.accounting_document_code
+	and cp.position_line_item = o.position_line_item
+where
+	1 = 1;

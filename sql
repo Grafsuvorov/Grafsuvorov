@@ -1,81 +1,243 @@
-Gather Motion 8:1  (slice6; segments: 8)  (cost=0.00..29421225.98 rows=11019337106 width=413)
-  ->  Sequence  (cost=0.00..16803616.68 rows=1377417139 width=413)
-        ->  Shared Scan (share slice:id 6:3)  (cost=0.00..2335407.55 rows=1377417139 width=1)
-              ->  Materialize  (cost=0.00..2335407.55 rows=1377417139 width=1)
-                    ->  Result  (cost=0.00..2334030.13 rows=1377417139 width=365)
-                          ->  Result  (cost=0.00..1831272.88 rows=1377417139 width=335)
-                                Filter: ((NOT accounting_receivables_and_payables_2.deleted_flag) OR (accounting_receivables_and_payables_2.deleted_flag IS NULL))
-                                ->  Hash Left Join  (cost=0.00..1785955.85 rows=1377417139 width=336)
-                                      Hash Cond: (((accounting_receivables_and_payables.unit_balance_code)::text = (accounting_receivables_and_payables_2.unit_balance_code)::text) AND (accounting_receivables_and_payables.fiscal_year_of_relevant_invoice = accounting_receivables_and_payables_2.fiscal_year) AND ((accounting_receivables_and_payables.invoice_document_code)::text = (accounting_receivables_and_payables_2.accounting_document_code)::text) AND (accounting_receivables_and_payables.position_number_of_relevant_invoice = accounting_receivables_and_payables_2.position_line_item))
-                                      ->  Redistribute Motion 8:8  (slice5; segments: 8)  (cost=0.00..119636.81 rows=10344687 width=318)
-                                            Hash Key: accounting_receivables_and_payables.unit_balance_code, accounting_receivables_and_payables.fiscal_year_of_relevant_invoice, accounting_receivables_and_payables.invoice_document_code, accounting_receivables_and_payables.position_number_of_relevant_invoice
-                                            ->  Hash Join  (cost=0.00..109340.33 rows=10344687 width=318)
-                                                  Hash Cond: (((accounting_receivables_and_payables.unit_balance_code)::text = (accounting_receivables_and_payables_1.unit_balance_code)::text) AND (accounting_receivables_and_payables.fiscal_year = accounting_receivables_and_payables_1.fiscal_year) AND ((accounting_receivables_and_payables.accounting_document_code)::text = (accounting_receivables_and_payables_1.accounting_document_code)::text) AND (accounting_receivables_and_payables.position_line_item = accounting_receivables_and_payables_1.position_line_item))
-                                                  ->  Seq Scan on accounting_receivables_and_payables  (cost=0.00..2985.62 rows=10344687 width=257)
-                                                  ->  Hash  (cost=37390.81..37390.81 rows=10415596 width=87)
-                                                        ->  HashAggregate  (cost=0.00..37390.81 rows=10415596 width=87)
-                                                              Group Key: operating_periods_for_account_debt.dt, operating_periods_for_account_debt.is_second_friday, accounting_receivables_and_payables_1.unit_balance_code, accounting_receivables_and_payables_1.fiscal_year, accounting_receivables_and_payables_1.accounting_document_code, accounting_receivables_and_payables_1.position_line_item
-                                                              ->  Hash Join  (cost=0.00..28774.29 rows=10415596 width=91)
-                                                                    Hash Cond: ((accounting_receivables_and_payables_1.unit_balance_code)::text = (operating_periods_for_account_debt.unit_balance_code)::text)
-                                                                    Join Filter: ((COALESCE(accounting_receivables_and_payables_1.dt_clearing, '2299-12-31'::date) > operating_periods_for_account_debt.dt) AND (operating_periods_for_account_debt.dt >= accounting_receivables_and_payables_1.dt_posting))
-                                                                    ->  Result  (cost=0.00..22987.77 rows=4087884 width=94)
-                                                                          ->  Result  (cost=0.00..22603.51 rows=4087884 width=87)
-                                                                                Filter: (settings_and_parameters_sap.range_low_value IS NULL)
-                                                                                ->  Hash Left Join  (cost=0.00..22467.37 rows=4137875 width=95)
-                                                                                      Hash Cond: ((accounting_receivables_and_payables_1.unit_balance_code)::text = (settings_and_parameters_sap.range_low_value)::text)
-                                                                                      ->  Hash Left Join  (cost=0.00..19642.29 rows=4137875 width=87)
-                                                                                            Hash Cond: (((accounting_receivables_and_payables_1.unit_balance_code)::text = (accounting_exchange_rate_revaluation_with_document_reference.unit_balance_code)::text) AND (accounting_receivables_and_payables_1.fiscal_year = accounting_exchange_rate_revaluation_with_document_reference.reference_document_fiscal_year) AND ((accounting_receivables_and_payables_1.accounting_document_code)::text = (accounting_exchange_rate_revaluation_with_document_reference.reference_document_code)::text) AND (accounting_receivables_and_payables_1.position_line_item = accounting_exchange_rate_revaluation_with_document_reference.reference_document_position_line_item))
-                                                                                            ->  Seq Scan on accounting_receivables_and_payables accounting_receivables_and_payables_1  (cost=0.00..4560.79 rows=4137875 width=67)
-                                                                                                  Filter: ((NOT (document_currency_code IS NULL)) AND ((unit_balance_code)::text !~ '^[A-Za-z]'::text) AND (NOT deleted_flag))
-                                                                                            ->  Hash  (cost=2429.10..2429.10 rows=2217682 width=46)
-                                                                                                  ->  Result  (cost=0.00..2429.10 rows=2217682 width=46)
-                                                                                                        ->  HashAggregate  (cost=0.00..2327.09 rows=2217682 width=46)
-                                                                                                              Group Key: accounting_exchange_rate_revaluation_with_document_reference.unit_balance_code, accounting_exchange_rate_revaluation_with_document_reference.reference_document_fiscal_year, accounting_exchange_rate_revaluation_with_document_reference.reference_document_code, accounting_exchange_rate_revaluation_with_document_reference.reference_document_position_line_item, accounting_exchange_rate_revaluation_with_document_reference.dt_posting
-                                                                                                              ->  Seq Scan on accounting_exchange_rate_revaluation_with_document_reference  (cost=0.00..882.12 rows=2217682 width=41)
-                                                                                                                    Filter: (NOT deleted_flag)
-                                                                                      ->  Hash  (cost=510.84..510.84 rows=1 width=8)
-                                                                                            ->  Seq Scan on settings_and_parameters_sap  (cost=0.00..510.84 rows=1 width=8)
-                                                                                                  Filter: (((abap_program_code)::text = '/RUSAL/FI_KHD'::text) AND ((parameter_code)::text = 'INACTBUK'::text))
-                                                                    ->  Hash  (cost=457.99..457.99 rows=2031 width=10)
-                                                                          ->  Seq Scan on operating_periods_for_account_debt  (cost=0.00..457.99 rows=2031 width=10)
-                                                                                Filter: ((dt >= '2025-12-31'::date) AND (dt <= '2026-02-28'::date) AND (NOT deleted_flag))
-                                      ->  Hash  (cost=2985.62..2985.62 rows=10344687 width=44)
-                                            ->  Seq Scan on accounting_receivables_and_payables accounting_receivables_and_payables_2  (cost=0.00..2985.62 rows=10344687 width=44)
-        ->  Sequence  (cost=0.00..13899335.85 rows=1377417139 width=413)
-              ->  Shared Scan (share slice:id 6:4)  (cost=0.00..5096477.90 rows=45 width=1)
-                    ->  Materialize  (cost=0.00..5096477.90 rows=45 width=1)
-                          ->  Hash Anti Join  (cost=0.00..5096477.90 rows=45 width=342)
-                                Hash Cond: ((share3_ref3.dt = share3_ref2.dt) AND ((share3_ref3.unit_balance_code)::text = (share3_ref2.unit_balance_code)::text) AND (share3_ref3.final_fiscal_year = share3_ref2.fiscal_year) AND ((share3_ref3.final_accounting_document_code)::text = (share3_ref2.accounting_document_code)::text) AND (share3_ref3.final_position_line_item = share3_ref2.position_line_item) AND ((share3_ref3.document_currency_code_1)::text = (share3_ref2.document_currency_code)::text) AND ((share3_ref3.general_ledger_account_code_1)::text = (share3_ref2.general_ledger_account_code)::text) AND (share3_ref3.debit_or_credit_1 = share3_ref2.debit_or_credit))
-                                ->  Redistribute Motion 8:8  (slice3; segments: 8)  (cost=0.00..2610195.70 rows=1377417139 width=342)
-                                      Hash Key: share3_ref3.dt, share3_ref3.unit_balance_code, share3_ref3.final_fiscal_year, share3_ref3.final_accounting_document_code, share3_ref3.final_position_line_item, share3_ref3.document_currency_code_1, share3_ref3.general_ledger_account_code_1, share3_ref3.debit_or_credit_1
-                                      ->  Shared Scan (share slice:id 3:3)  (cost=0.00..1135725.75 rows=1377417139 width=342)
-                                ->  Hash  (cost=283660.24..283660.24 rows=308224 width=47)
-                                      ->  Result  (cost=0.00..283660.24 rows=308224 width=47)
-                                            ->  Redistribute Motion 8:8  (slice4; segments: 8)  (cost=0.00..283645.76 rows=308224 width=47)
-                                                  Hash Key: share3_ref2.dt, share3_ref2.unit_balance_code, share3_ref2.fiscal_year, share3_ref2.accounting_document_code, share3_ref2.position_line_item, share3_ref2.document_currency_code, share3_ref2.general_ledger_account_code, share3_ref2.debit_or_credit
-                                                  ->  Result  (cost=0.00..283600.42 rows=308224 width=47)
-                                                        Filter: ((share3_ref2.invoice_document_code IS NULL) AND (share3_ref2.dt >= '2025-12-31'::date) AND (share3_ref2.dt <= '2026-02-28'::date))
-                                                        ->  Shared Scan (share slice:id 4:3)  (cost=0.00..192966.37 rows=1377417139 width=58)
-              ->  Result  (cost=0.00..8233984.67 rows=1377417139 width=413)
-                    ->  Hash Left Join  (cost=0.00..7527369.68 rows=1377417139 width=398)
-                          Hash Cond: ((share4_ref3.dt = share4_ref2.dt) AND ((share4_ref3.unit_balance_code)::text = (share4_ref2.unit_balance_code)::text) AND (share4_ref3.fiscal_year = share4_ref2.fiscal_year) AND ((share4_ref3.accounting_document_code)::text = (share4_ref2.accounting_document_code)::text) AND (share4_ref3.position_line_item = share4_ref2.position_line_item))
-                          ->  Shared Scan (share slice:id 6:4)  (cost=0.00..1135725.75 rows=1377417139 width=342)
-                          ->  Hash  (cost=2989040.49..2989040.49 rows=75 width=86)
-                                ->  Broadcast Motion 8:8  (slice2; segments: 8)  (cost=0.00..2989040.49 rows=75 width=86)
-                                      ->  Result  (cost=0.00..2989040.44 rows=10 width=86)
-                                            ->  Result  (cost=0.00..2989040.44 rows=10 width=86)
-                                                  ->  HashAggregate  (cost=0.00..2989040.44 rows=59 width=86)
-                                                        Group Key: share4_ref2.dt, share4_ref2.unit_balance_code, share4_ref2.fiscal_year, share4_ref2.accounting_document_code, share4_ref2.position_line_item
-                                                        ->  Hash Join  (cost=0.00..2989040.40 rows=59 width=86)
-                                                              Hash Cond: ((share3_ref4.dt = share4_ref2.dt) AND ((share3_ref4.unit_balance_code)::text = (share4_ref2.unit_balance_code)::text) AND (share3_ref4.fiscal_year_of_relevant_invoice = share4_ref2.fiscal_year) AND ((share3_ref4.invoice_document_code)::text = (share4_ref2.accounting_document_code)::text) AND (share3_ref4.position_number_of_relevant_invoice = share4_ref2.position_line_item) AND ((share3_ref4.document_currency_code)::text = (share4_ref2.document_currency_code)::text) AND ((share3_ref4.general_ledger_account_code)::text = (share4_ref2.general_ledger_account_code)::text))
-                                                              Join Filter: (share3_ref4.debit_or_credit <> share4_ref2.debit_or_credit)
-                                                              ->  Result  (cost=0.00..387664.28 rows=1377417139 width=103)
-                                                                    Filter: ((share3_ref4.dt >= '2025-12-31'::date) AND (share3_ref4.dt <= '2026-02-28'::date))
-                                                                    ->  Shared Scan (share slice:id 2:3)  (cost=0.00..342347.26 rows=1377417139 width=103)
-                                                              ->  Hash  (cost=599814.07..599814.07 rows=1 width=47)
-                                                                    ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..599814.07 rows=1 width=47)
-                                                                          Hash Key: share4_ref2.unit_balance_code, share4_ref2.fiscal_year, share4_ref2.accounting_document_code, share4_ref2.position_line_item
-                                                                          ->  Result  (cost=0.00..599814.07 rows=1 width=47)
-                                                                                Filter: ((share4_ref2.general_ledger_account_code_1 IS NULL) AND (share4_ref2.document_currency_code_1 IS NULL) AND (share4_ref2.debit_or_credit_1 IS NULL) AND (share4_ref2.invoice_document_code IS NULL) AND (share4_ref2.fiscal_year_of_relevant_invoice IS NULL) AND (share4_ref2.position_number_of_relevant_invoice IS NULL) AND (share4_ref2.dt >= '2025-12-31'::date) AND (share4_ref2.dt <= '2026-02-28'::date) AND (share4_ref2.dt >= '2025-12-31'::date) AND (share4_ref2.dt <= '2026-02-28'::date))
-                                                                                ->  Shared Scan (share slice:id 1:4)  (cost=0.00..282594.90 rows=1377417139 width=85)
-Optimizer: Pivotal Optimizer (GPORCA)
+-- ============================================================
+-- STEP 0. Параметры периода (чтобы не дублировать константы)
+-- ============================================================
+WITH params AS (
+  SELECT
+    DATE '2025-12-31' AS dt_from,
+    DATE '2026-02-28' AS dt_to
+)
+SELECT 1;
+
+-- ============================================================
+-- STEP 1. База: один раз читаем accounting_receivables_and_payables
+-- (то, что в плане называется accounting_receivables_and_payables_1)
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_arap_base;
+CREATE TEMP TABLE tmp_wrk_arap_base
+AS
+SELECT
+    a.unit_balance_code,
+    a.fiscal_year,
+    a.accounting_document_code,
+    a.position_line_item,
+
+    a.dt_posting,
+    a.dt_clearing,
+    a.document_currency_code,
+
+    a.fiscal_year_of_relevant_invoice,
+    a.invoice_document_code,
+    a.position_number_of_relevant_invoice,
+
+    a.general_ledger_account_code,
+    a.debit_or_credit,
+
+    -- + все нужные поля дальше
+    a.*
+FROM accounting_receivables_and_payables a
+WHERE
+    a.document_currency_code IS NOT NULL
+    AND a.unit_balance_code !~ '^[A-Za-z]'
+    AND NOT a.deleted_flag
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_arap_base;
+
+-- ============================================================
+-- STEP 2. Подмешиваем revaluation (в плане это hash left join к accounting_exchange_rate...)
+-- Важно: делаем агрегацию заранее и раздачу по ключу ссылки
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_reval_ref;
+CREATE TEMP TABLE tmp_wrk_reval_ref
+AS
+SELECT
+    r.unit_balance_code,
+    r.reference_document_fiscal_year,
+    r.reference_document_code,
+    r.reference_document_position_line_item,
+    MAX(r.dt_posting) AS max_reval_dt_posting
+FROM accounting_exchange_rate_revaluation_with_document_reference r
+WHERE NOT r.deleted_flag
+GROUP BY
+    r.unit_balance_code,
+    r.reference_document_fiscal_year,
+    r.reference_document_code,
+    r.reference_document_position_line_item
+DISTRIBUTED BY (unit_balance_code, reference_document_fiscal_year, reference_document_code, reference_document_position_line_item);
+
+ANALYZE tmp_wrk_reval_ref;
+
+DROP TABLE IF EXISTS tmp_wrk_arap_enriched;
+CREATE TEMP TABLE tmp_wrk_arap_enriched
+AS
+SELECT
+    b.*,
+    rr.max_reval_dt_posting
+FROM tmp_wrk_arap_base b
+LEFT JOIN tmp_wrk_reval_ref rr
+  ON  b.unit_balance_code = rr.unit_balance_code
+  AND b.fiscal_year = rr.reference_document_fiscal_year
+  AND b.accounting_document_code = rr.reference_document_code
+  AND b.position_line_item = rr.reference_document_position_line_item
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_arap_enriched;
+
+-- ============================================================
+-- STEP 3. Исключение INACTBUK (в плане settings_and_parameters_sap + фильтр range_low_value IS NULL)
+-- По плану: "Filter: (settings_and_parameters_sap.range_low_value IS NULL)" => т.е. исключаем совпавшие unit_balance_code
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_inactbuk;
+CREATE TEMP TABLE tmp_wrk_inactbuk
+AS
+SELECT DISTINCT s.range_low_value::text AS unit_balance_code
+FROM settings_and_parameters_sap s
+WHERE
+  s.abap_program_code = '/RUSAL/FI_KHD'
+  AND s.parameter_code = 'INACTBUK'
+  AND s.range_low_value IS NOT NULL
+DISTRIBUTED REPLICATED;
+
+ANALYZE tmp_wrk_inactbuk;
+
+DROP TABLE IF EXISTS tmp_wrk_arap_active;
+CREATE TEMP TABLE tmp_wrk_arap_active
+AS
+SELECT e.*
+FROM tmp_wrk_arap_enriched e
+LEFT JOIN tmp_wrk_inactbuk i
+  ON e.unit_balance_code::text = i.unit_balance_code
+WHERE i.unit_balance_code IS NULL
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_arap_active;
+
+-- ============================================================
+-- STEP 4. Period expansion (в плане: join с operating_periods_for_account_debt по unit_balance_code
+-- и фильтр: dt между dt_posting и coalesce(dt_clearing, '2299-12-31')
+-- Важно: ограничиваем operating_periods сразу по диапазону params
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_periods;
+CREATE TEMP TABLE tmp_wrk_periods
+AS
+SELECT p.*
+FROM operating_periods_for_account_debt p
+JOIN (SELECT DATE '2025-12-31' AS dt_from, DATE '2026-02-28' AS dt_to) prm ON 1=1
+WHERE
+  NOT p.deleted_flag
+  AND p.dt BETWEEN prm.dt_from AND prm.dt_to
+DISTRIBUTED BY (unit_balance_code);
+
+ANALYZE tmp_wrk_periods;
+
+DROP TABLE IF EXISTS tmp_wrk_arap_periods;
+CREATE TEMP TABLE tmp_wrk_arap_periods
+AS
+SELECT
+  pr.dt,
+  pr.is_second_friday,
+  a.*
+FROM tmp_wrk_arap_active a
+JOIN tmp_wrk_periods pr
+  ON a.unit_balance_code = pr.unit_balance_code
+WHERE
+  pr.dt >= a.dt_posting
+  AND pr.dt < COALESCE(a.dt_clearing, DATE '2299-12-31')  -- TODO verify strictness > or >= as in original
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_arap_periods;
+
+-- ============================================================
+-- STEP 5. Присоединение "релевантного инвойса" (в плане: Hash Left Join с accounting_receivables_and_payables_2 + deleted_flag)
+-- Важно: вместо третьего Seq Scan по исходной таблице — используем уже base (или отдельную thin-таблицу ключей)
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_invoice_ref;
+CREATE TEMP TABLE tmp_wrk_invoice_ref
+AS
+SELECT
+  unit_balance_code,
+  fiscal_year,
+  accounting_document_code,
+  position_line_item,
+  deleted_flag
+  -- + любые нужные поля из "инвойса"
+FROM accounting_receivables_and_payables
+-- если инвойсная часть тоже огромная — можно тоже фильтровать/сужать
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_invoice_ref;
+
+DROP TABLE IF EXISTS tmp_wrk_joined_invoice;
+CREATE TEMP TABLE tmp_wrk_joined_invoice
+AS
+SELECT
+  p.*,
+  inv.deleted_flag AS inv_deleted_flag
+  -- + inv.<fields>
+FROM tmp_wrk_arap_periods p
+LEFT JOIN tmp_wrk_invoice_ref inv
+  ON  p.unit_balance_code = inv.unit_balance_code
+  AND p.fiscal_year_of_relevant_invoice = inv.fiscal_year
+  AND p.invoice_document_code = inv.accounting_document_code
+  AND p.position_number_of_relevant_invoice = inv.position_line_item
+WHERE
+  (NOT inv.deleted_flag) OR inv.deleted_flag IS NULL
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_joined_invoice;
+
+-- ============================================================
+-- STEP 6. Anti-join / исключения
+-- В плане: Hash Anti Join, где справа ~308k ключей
+-- Делай ключи исключений отдельной маленькой таблицей (не на 1.3 млрд строк!)
+-- ============================================================
+DROP TABLE IF EXISTS tmp_wrk_exclude_keys;
+CREATE TEMP TABLE tmp_wrk_exclude_keys
+AS
+SELECT DISTINCT
+  x.dt,
+  x.unit_balance_code,
+  x.fiscal_year,
+  x.accounting_document_code,
+  x.position_line_item,
+  x.document_currency_code,
+  x.general_ledger_account_code,
+  x.debit_or_credit
+FROM tmp_wrk_joined_invoice x
+WHERE
+  x.invoice_document_code IS NULL
+  AND x.dt BETWEEN DATE '2025-12-31' AND DATE '2026-02-28'
+  -- + остальные условия как в плане (GL/doc_curr/debit_credit is null и т.п.)
+DISTRIBUTED BY (dt, unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE tmp_wrk_exclude_keys;
+
+-- ============================================================
+-- STEP 7. Финальный SELECT без Gather Motion:
+-- Важно: либо писать в таблицу с нормальным DISTRIBUTED BY,
+-- либо если это просто SELECT в клиент — тогда Gather неизбежен (но хотя бы итог будет малым).
+-- ============================================================
+DROP TABLE IF EXISTS final_result_tmp;
+CREATE TEMP TABLE final_result_tmp
+AS
+SELECT
+  j.*
+FROM tmp_wrk_joined_invoice j
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM tmp_wrk_exclude_keys e
+  WHERE
+    e.dt = j.dt
+    AND e.unit_balance_code = j.unit_balance_code
+    AND e.fiscal_year = j.fiscal_year
+    AND e.accounting_document_code = j.accounting_document_code
+    AND e.position_line_item = j.position_line_item
+    AND e.document_currency_code = j.document_currency_code
+    AND e.general_ledger_account_code = j.general_ledger_account_code
+    AND e.debit_or_credit = j.debit_or_credit
+)
+DISTRIBUTED BY (unit_balance_code, fiscal_year, accounting_document_code, position_line_item);
+
+ANALYZE final_result_tmp;
+
+SELECT * FROM final_result_tmp;

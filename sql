@@ -1,14 +1,46 @@
-SQL Error [42701]: ERROR: column "document_currency_amount" specified more than once
-
-Позиция ошибки:
-
 DROP TABLE IF EXISTS tmp_opening_documents;
 CREATE TEMP TABLE tmp_opening_documents AS
 SELECT
     k.dt,
     k.is_second_friday,
-    o.*,
 
+    -- аналитика документа (БЕЗ сумм)
+    o.unit_balance_code,
+    o.fiscal_year,
+    o.accounting_document_code,
+    o.position_line_item,
+    o.dt_posting,
+    o.dt_clearing,
+    o.accounting_document_type,
+    o.reverse_document_code,
+    o.reference_document_number,
+    o.accounting_document_status_code,
+    o.dt_accounting_document,
+    o.document_currency_code,
+    o.local_currency_code,
+    o.second_local_currency_code,
+    o.debit_or_credit,
+    o.general_ledger_account_code,
+    o.tax_code,
+    o.account_type,
+    o.position_line_item_text,
+    o.clearing_document_code,
+    o.special_general_ledger_indicator,
+    o.counterparty_code,
+    o.contract_number,
+    o.plant_code,
+    o.dt_baseline_due_date_calculation,
+    o.terms_of_payment_code,
+    o.assignment_number,
+    o.reverse_document_fiscal_year,
+    o.reason_for_reversal,
+    o.invoice_document_code,
+    o.fiscal_year_of_relevant_invoice,
+    o.position_number_of_relevant_invoice,
+    o.reference_procedure,
+    o.reference_object_key,
+
+    -- СУММЫ ТОЛЬКО ИЗ k
     k.document_currency_amount,
     k.local_currency_amount,
     k.second_local_currency_amount,
@@ -17,6 +49,7 @@ SELECT
     k.exchange_diff_local_currency_amount,
     k.exchange_diff_second_local_currency_amount,
 
+    -- final_* логика
     CASE
         WHEN cp2.document_currency_code = o.document_currency_code
          AND cp2.general_ledger_account_code = o.general_ledger_account_code

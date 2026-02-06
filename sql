@@ -1,3 +1,9 @@
+SQL Error [42601]: ERROR: INSERT has more target columns than expressions
+  Позиция: 514
+
+
+Позиция ошибки: line: 1472 pos: 513
+
 /* ============================================================
    1. Переоценка: агрегируем один раз
    ============================================================ */
@@ -174,6 +180,63 @@ DISTRIBUTED BY (
 /* ============================================================
    5. Финальный расчёт остатков (closing + opening)
    ============================================================ */
+INSERT INTO   dm_calc.account_debt_old (
+    dt,
+    is_second_friday,
+    unit_balance_code,
+    plant_code,
+    fiscal_year,
+    accounting_document_code,
+    dt_debt,
+    dt_clearing,
+    contract_number,
+    counterparty_code,
+    debit_or_credit,
+    account_type,
+    general_ledger_account_code,
+    debt_balance_document_currency_amount,
+    document_currency_code,
+    debt_balance_local_currency_amount,
+    local_currency_code,
+    debt_balance_second_local_currency_amount,
+    debt_balance_with_revaluation_diff_second_currency_amount,
+    debt_balance_usd_amount,
+    second_local_currency_code,
+    accounting_document_type,
+    position_line_item,
+    reverse_document_code,
+    reference_document_number,
+    accounting_document_status_code,
+    clearing_document_code,
+    tax_code,
+    position_line_item_text,
+    special_general_ledger_indicator,
+    dt_baseline_due_date_calculation,
+    assignment_number,
+    dt_accounting_document,
+    terms_of_payment_code,
+    document_currency_amount,
+    local_currency_amount,
+    second_local_currency_amount,
+    usd_amount,
+    reverse_document_fiscal_year,
+    reason_for_reversal,
+    invoice_document_code,
+    fiscal_year_of_relevant_invoice,
+    position_number_of_relevant_invoice,
+    final_position_line_item,
+    final_fiscal_year,
+    final_accounting_document_code,
+    document_currency_code_of_relevant_invoice,
+    general_ledger_account_code_of_relevant_invoice,
+    debit_or_credit_code_of_relevant_invoice,
+    reference_operation_type_code,
+    reference_object_key_code,
+    exchange_diff_local_currency_amount,
+    debt_balance_exchange_diff_local_currency_amount,
+    exchange_diff_second_local_currency_amount,
+    debt_balance_exchange_diff_second_local_currency_amount
+)
 SELECT
     o.dt,
     o.is_second_friday,
@@ -194,3 +257,59 @@ SELECT
     o.exchange_diff_second_local_currency_amount::numeric(17,2) AS exchange_diff_second_local_currency_amount
 
 FROM tmp_opening_keys o;
+
+
+
+вот этот кусок долгий 
+explain
+SELECT
+    p.dt,
+    p.is_second_friday,
+    a.unit_balance_code,
+    a.fiscal_year,
+    a.accounting_document_code,
+    a.position_line_item,
+
+    MAX(a.document_currency_amount) AS document_currency_amount,
+    MAX(a.local_currency_amount) AS local_currency_amount,
+    MAX(a.second_local_currency_amount) AS second_local_currency_amount,
+    MAX(a.valuation_difference_second_local_currency_amount) AS valuation_difference_second_local_currency_amount,
+    MAX(a.usd_amount) AS usd_amount,
+
+    SUM(
+        CASE WHEN a.dt_posting_rev IS NULL OR a.dt_posting_rev <= p.dt
+             THEN a.exchange_diff_local_currency_amount
+        END
+    ) AS exchange_diff_local_currency_amount,
+
+    SUM(
+        CASE WHEN a.dt_posting_rev IS NULL OR a.dt_posting_rev <= p.dt
+             THEN a.exchange_diff_second_local_currency_amount
+        END
+    ) AS exchange_diff_second_local_currency_amount
+
+FROM tmp_arap a
+JOIN tmp_periods p
+  ON p.unit_balance_code = a.unit_balance_code
+WHERE
+    p.dt >= a.dt_posting
+    AND COALESCE(a.dt_clearing, '2299-12-31') > p.dt
+GROUP BY
+    p.dt,
+    p.is_second_friday,
+    a.unit_balance_code,
+    a.fiscal_year,
+    a.accounting_document_code,
+    a.position_line_item
+
+Gather Motion 8:1  (slice2; segments: 8)  (cost=0.00..282713.81 rows=726294130 width=87)
+  ->  HashAggregate  (cost=0.00..107526.22 rows=90786767 width=87)
+        Group Key: tmp_periods.dt, tmp_periods.is_second_friday, tmp_arap.unit_balance_code, tmp_arap.fiscal_year, tmp_arap.accounting_document_code, tmp_arap.position_line_item
+        ->  Hash Join  (cost=0.00..32420.96 rows=90786767 width=75)
+              Hash Cond: ((tmp_arap.unit_balance_code)::text = (tmp_periods.unit_balance_code)::text)
+              Join Filter: ((tmp_periods.dt >= tmp_arap.dt_posting) AND (COALESCE(tmp_arap.dt_clearing, '2299-12-31'::date) > tmp_periods.dt))
+              ->  Seq Scan on tmp_arap  (cost=0.00..1494.54 rows=10624817 width=78)
+              ->  Hash  (cost=431.19..431.19 rows=2257 width=10)
+                    ->  Broadcast Motion 8:8  (slice1; segments: 8)  (cost=0.00..431.19 rows=2257 width=10)
+                          ->  Seq Scan on tmp_periods  (cost=0.00..431.01 rows=283 width=10)
+Optimizer: Pivotal Optimizer (GPORCA)

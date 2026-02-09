@@ -192,49 +192,155 @@ INSERT INTO dm_calc.account_debt_old (
     dt,
     is_second_friday,
     unit_balance_code,
+    plant_code,
     fiscal_year,
     accounting_document_code,
-    position_line_item,
+    dt_debt,
+    dt_clearing,
+    contract_number,
+    counterparty_code,
+    debit_or_credit,
+    account_type,
+    general_ledger_account_code,
+
     debt_balance_document_currency_amount,
+    document_currency_code,
     debt_balance_local_currency_amount,
+    local_currency_code,
     debt_balance_second_local_currency_amount,
     debt_balance_with_revaluation_diff_second_currency_amount,
     debt_balance_usd_amount,
+    second_local_currency_code,
+
+    accounting_document_type,
+    position_line_item,
+    reverse_document_code,
+    reference_document_number,
+    accounting_document_status_code,
+    clearing_document_code,
+    tax_code,
+    position_line_item_text,
+    special_general_ledger_indicator,
+    dt_baseline_due_date_calculation,
+    assignment_number,
+    dt_accounting_document,
+    terms_of_payment_code,
+
+    document_currency_amount,
+    local_currency_amount,
+    second_local_currency_amount,
+    usd_amount,
+
+    reverse_document_fiscal_year,
+    reason_for_reversal,
+
+    invoice_document_code,
+    fiscal_year_of_relevant_invoice,
+    position_number_of_relevant_invoice,
+
+    final_position_line_item,
+    final_fiscal_year,
+    final_accounting_document_code,
+
+    document_currency_code_of_relevant_invoice,
+    general_ledger_account_code_of_relevant_invoice,
+    debit_or_credit_code_of_relevant_invoice,
+
+    reference_operation_type_code,
+    reference_object_key_code,
+
     exchange_diff_local_currency_amount,
-    exchange_diff_second_local_currency_amount
+    debt_balance_exchange_diff_local_currency_amount,
+    exchange_diff_second_local_currency_amount,
+    debt_balance_exchange_diff_second_local_currency_amount
 )
 SELECT
-    o.dt,
-    o.is_second_friday,
-    o.unit_balance_code,
-    o.fiscal_year,
-    o.accounting_document_code,
-    o.position_line_item,
+    ok.dt,
+    ok.is_second_friday,
+    a.unit_balance_code,
+    a.plant_code,
+    a.fiscal_year,
+    a.accounting_document_code,
+    a.dt_posting       AS dt_debt,
+    a.dt_clearing,
+    a.contract_number,
+    a.counterparty_code,
+    a.debit_or_credit,
+    a.account_type,
+    a.general_ledger_account_code,
 
-    o.document_currency_amount::numeric(17,2),
-    o.local_currency_amount::numeric(17,2),
-    o.second_local_currency_amount::numeric(17,2),
-    (o.second_local_currency_amount + o.valuation_difference_second_local_currency_amount)::numeric(17,2),
-    o.usd_amount::numeric(17,2),
+    ok.document_currency_amount,
+    a.document_currency_code,
+    ok.local_currency_amount,
+    a.local_currency_code,
+    ok.second_local_currency_amount,
+    ok.second_local_currency_amount
+        + ok.valuation_difference_second_local_currency_amount,
+    ok.usd_amount,
+    a.second_local_currency_code,
 
-    o.exchange_diff_local_currency_amount::numeric(17,2),
-    o.exchange_diff_second_local_currency_amount::numeric(17,2)
+    a.accounting_document_type,
+    a.position_line_item,
+    a.reverse_document_code,
+    a.reference_document_number,
+    a.accounting_document_status_code,
+    a.clearing_document_code,
+    a.tax_code,
+    a.position_line_item_text,
+    a.special_general_ledger_indicator,
+    a.dt_baseline_due_date_calculation,
+    a.assignment_number,
+    a.dt_accounting_document,
+    a.terms_of_payment_code,
 
-FROM tmp_opening_keys o
+    a.document_currency_amount,
+    a.local_currency_amount,
+    a.second_local_currency_amount,
+    a.usd_amount,
+
+    a.reverse_document_fiscal_year,
+    a.reason_for_reversal,
+
+    a.invoice_document_code,
+    a.fiscal_year_of_relevant_invoice,
+    a.position_number_of_relevant_invoice,
+
+    a.position_number_of_relevant_invoice       AS final_position_line_item,
+    a.fiscal_year_of_relevant_invoice           AS final_fiscal_year,
+    a.invoice_document_code                     AS final_accounting_document_code,
+
+    a.document_currency_code_of_relevant_invoice,
+    a.general_ledger_account_code_of_relevant_invoice,
+    a.debit_or_credit_code_of_relevant_invoice,
+
+    a.reference_operation_type_code,
+    a.reference_object_key_code,
+
+    ok.exchange_diff_local_currency_amount,
+    ok.exchange_diff_local_currency_amount,
+    ok.exchange_diff_second_local_currency_amount,
+    ok.exchange_diff_second_local_currency_amount
+
+FROM tmp_opening_keys ok
+JOIN tmp_arap a
+  ON a.unit_balance_code = ok.unit_balance_code
+ AND a.fiscal_year = ok.fiscal_year
+ AND a.accounting_document_code = ok.accounting_document_code
+ AND a.position_line_item = ok.position_line_item
+
 WHERE NOT EXISTS (
     SELECT 1
-    FROM tmp_opening_keys i
+    FROM tmp_opening_keys inv
     WHERE
-        i.dt = o.dt
-        AND i.unit_balance_code = o.unit_balance_code
-        AND i.fiscal_year = o.fiscal_year_of_relevant_invoice
-        AND i.accounting_document_code = o.invoice_document_code
-        AND i.position_line_item = o.position_number_of_relevant_invoice
-        AND i.document_currency_code = o.document_currency_code
-        AND i.general_ledger_account_code = o.general_ledger_account_code
-        AND i.debit_or_credit <> o.debit_or_credit
+        inv.dt = ok.dt
+        AND inv.unit_balance_code = ok.unit_balance_code
+        AND inv.fiscal_year = a.fiscal_year_of_relevant_invoice
+        AND inv.accounting_document_code = a.invoice_document_code
+        AND inv.position_line_item = a.position_number_of_relevant_invoice
+        AND inv.document_currency_code = a.document_currency_code
+        AND inv.general_ledger_account_code = a.general_ledger_account_code
+        AND inv.debit_or_credit <> a.debit_or_credit
 );
-
 
 /* ============================================================
    6. CLEANUP

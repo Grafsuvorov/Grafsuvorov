@@ -1,60 +1,118 @@
-FATAL: the database system is resetting
-Позиция ошибки: - такая ошибка была
+Провести оптимизацию витрины dm.sales_material_turnover_detailed.
 
-on ssh:notty
-There was 1 failed login attempt since the last successful login.
-Last login: Wed Nov 19 20:34:16 2025 from rgm-vd-10cf-222.hq.root.ad
-[suvorovnd@rgm-s-khgpm01 ~]$ sudo -i -u gpadmin
-[gpadmin@rgm-s-khgpm01 ~]$ gpstate -e
-20260210:18:17:44:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Starting gpstate with args: -e
-20260210:18:17:44:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Gr                                             eenplum Database) 6.26.2_arenadata55 build 2980.gitafb5f3f.el7'
-20260210:18:17:44:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL                                              9.4.26 (Greenplum Database 6.26.2_arenadata55 build 2980.gitafb5f3f.el7) on x86_64-unknown-linux-gnu,                                              compiled by gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-44), 64-bit compiled on Mar 22 2024 17:20:50'
-20260210:18:17:44:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Obtaining Segment details from master.                                             ..
-20260210:18:17:44:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Gathering data from segments...
-20260210:18:17:45:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:---------------------------------------                                             --------------
-20260210:18:17:45:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Segment Mirroring Status Report
-20260210:18:17:45:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:---------------------------------------                                             --------------
-20260210:18:17:45:087499 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-All segments are running normally
-[gpadmin@rgm-s-khgpm01 ~]$ gpstate
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Starting gpstate with args:
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-local Greenplum Version: 'postgres (Greenplum Database                             ) 6.26.2_arenadata55 build 2980.gitafb5f3f.el7'
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-master Greenplum Version: 'PostgreSQL 9.4.26 (Greenplu                             m Database 6.26.2_arenadata55 build 2980.gitafb5f3f.el7) on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.8.5 201                             50623 (Red Hat 4.8.5-44), 64-bit compiled on Mar 22 2024 17:20:50'
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Obtaining Segment details from master...
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Gathering data from segments...
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-Greenplum instance status summary
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Master instance                                                                        = Active
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Master standby                                                                         = rgm-s-khgpm02.hq.root.ad
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Standby master state                                                                   = Standby host passive
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total segment instance count from metadata                                             = 16
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Primary Segment Status
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total primary segments                                                                 = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total primary segment valid (at master)                                                = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total primary segment failures (at master)                                             = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid files missing                                           = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid files found                                             = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid PIDs missing                                            = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid PIDs found                                              = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of /tmp lock files missing                                                = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of /tmp lock files found                                                  = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number postmaster processes missing                                              = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number postmaster processes found                                                = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Mirror Segment Status
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total mirror segments                                                                  = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total mirror segment valid (at master)                                                 = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total mirror segment failures (at master)                                              = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid files missing                                           = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid files found                                             = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid PIDs missing                                            = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of postmaster.pid PIDs found                                              = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of /tmp lock files missing                                                = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number of /tmp lock files found                                                  = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number postmaster processes missing                                              = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number postmaster processes found                                                = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number mirror segments acting as primary segm                             ents   = 0
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-   Total number mirror segments acting as mirror segme                             nts    = 8
-20260210:18:18:08:088587 gpstate:rgm-s-khgpm01:gpadmin-[INFO]:-----------------------------------------------------
+По факту написать время расчета, сделать except с текущими результатами.
+
+select * from tech_etl.tables_meta tm
+
+where table_name='sales_material_turnover_detailed'
+
+and table_schema ='dm';
+
+select * from tech_etl.log_objects_loading_history lolh
+
+where object_name='sales_material_turnover_detailed' and object_id=2919
+
+order by loading_id desc limit 10;
+
+
+Вложения2
+Прикрепить файлы
+
+
+
+Настройка событий 
+Suvorov Nikita
+Обновлено 9 дней назад
+Исполнитель:Aleksandr Kornienko → Zernov Aleksandr
+Обновлено 9 дней назад
+Изменено описание:Подробнее
+Обновлено 9 дней назад
+Изменено описание:Подробнее
+Zernov Aleksandr
+Обновлено 9 дней назад
+Состояние:Зарегистрирована → В работе
+Zernov Aleksandr
+Обновлено 7 дней назад
+2ч00м
+3 фев. 2026
+Тип работы отсутствует
+поиск проблемных мест, начало разработки
+
+Фактические трудозатраты:? → 2ч
+Zernov Aleksandr
+Обновлено 6 дней назад
+6ч00м
+4 фев. 2026
+Тип работы отсутствует
+разработка
+
+Фактические трудозатраты:2ч → 1д
+Zernov Aleksandr
+Обновлено 6 дней назад
+вложения:10082 v7w.sql
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) 6 дней назад
+приложил скрипт 10082 v7w.sql
+он работает 17 мин, прежний вариант 26 мин
+для сравнения запускались оба варианта параллельно
+
+в общем используются фактовые источники и пересчет на full-е это тупик
+С каждым днем расчет будет замедлятся
+Нужен пересчет по дельте, а для этого во всех источниках нужна метка изменения
+Также в данной витрине dm.sales_material_turnover_detailed странная дистрибьюция
+DISTRIBUTED BY (warehouse_name, dt_storage_start, dt_storage_end)
+это даже не ключ
+и это фактовая витрина в ключ которой точно входит sales_bundle_code
+но есть и null значения
+Пути для дальнейшей оптимизации
+1)нужен пересчет по дельте, а для этого источники должны содержать метки времени изменения
+если не все то хотя бы фактовые чтобы по ним собрать ключи для пересчета
+2)нужно узнать какой ключ в витрине и возможность пожмены в нем NULL значений
+3)фактовые источники по возможности должны иметь общий ключ дистрибьюции для обеспечения соединения больших таблиц внутри сегмента
+
+Состояние:В работе → Подлежит обсуждению
+Zernov Aleksandr
+Обновлено 6 дней назад
+4ч00м
+5 фев. 2026
+Тип работы отсутствует
+разработка, тестирование
+
+Фактические трудозатраты:1д → 1д 4ч
+Zernov Aleksandr
+Обновлено 5 дней назад
+2ч45м
+6 фев. 2026
+Тип работы отсутствует
+разработка
+
+Фактические трудозатраты:1д 4ч → 1д 6ч
+Zernov Aleksandr
+Обновлено 2 дня назад
+вложения:10082 v10w.sql
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) 2 дня назад
+в скрипте "10082 v10w.sql" по предложению Никиты было сделано ограничение по номерам строк - ненужные rn сразу убрать но время такое же осталось
+попробовал еще pg_temp.result_03 разбить на части - но прироста скорости не дало
+так что "10082 v7w.sql" и "10082 v10w.sql" по скорости идентичны и можно любой ставить
+
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) 2 дня назад
+
+@Slabozhanova Lada
+Лада, посмотри пожта скрипт "10082 v10w.sql" приложенный к задаче
+Планируется ли менять логику в ближайшее время или можно в это релиз отправить оптимизацию?
+
+User avatar
+Slabozhanova Lada
+Прокомментировал(а) 2 дня назад
+@Zernov Aleksandr Привет! логика пока не меняется. Мне получается нужно протестировать данные?
+
+User avatar
+Suvorov Nikita
+Прокомментировал(а) 2 дня назад
+@Slabozhanova Lada да протестируй пожалуйста, нужен от тебя ок, что ничего не потеряли и добавь ее пожалуйста на страницу релиза.
+И нужно обновить в вашем гите

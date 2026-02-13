@@ -1,1 +1,1 @@
-https://easyretro.io/publicboard/scuBe9bRLrTiShdWJTJhWXtR4N63/0a056342-42f0-4149-b252-06a011471b41
+https://meet365.ru/ru-RU/meeting/07210266113?secret=g5zwlgUQFbbp8qDV.UslCg

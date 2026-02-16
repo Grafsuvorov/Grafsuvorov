@@ -19,7 +19,6 @@ import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 import NightOpsPage from "./components/NightOpsPage.jsx";
 import OnboardingPage from "./components/OnboardingPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
-import AssistantPage from "./components/AssistantPage.jsx";
 
 export default function App() {
   const location = useLocation();
@@ -29,7 +28,7 @@ export default function App() {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
     if (!trimmed.includes(".")) return null;
-    const clean = trimmed.replaceAll("/", "").replaceAll("-", "");
+    const clean = trimmed.replaceAll("\"", "").replaceAll("`", "");
     const [schema, table] = clean.split(".", 2);
     if (!schema || !table) return null;
     return { schema, table, fqn: `${schema}.${table}` };
@@ -82,10 +81,6 @@ export default function App() {
         navigate("/logic-audit");
         return;
       }
-      if (target === "assistant") {
-        navigate("/assistant");
-        return;
-      }
 
       if (typeof target === "object" && target.view) {
         if (target.view === "incident") {
@@ -95,7 +90,7 @@ export default function App() {
         if (target.view === "table_info") {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
-            navigate(`/table/${parsed.schema}/${parsed.table}`, {
+            navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}`, {
               state: { from: location.pathname + location.search },
             });
           }
@@ -176,7 +171,6 @@ export default function App() {
         <Route path="/impact/:schema/:table" element={<ImpactGraphPage />} />
         <Route path="/night-ops" element={<NightOpsPage />} />
         <Route path="/logic-audit" element={<LogicAuditPage />} />
-        <Route path="/assistant" element={<AssistantPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/dependencies" element={<DependenciesRoute />} />
         <Route path="/incident" element={<IncidentRoute />} />

@@ -93,7 +93,7 @@ npm run build
 npm run preview
 ```
 
-Docker-сборка (только фронт через nginx):
+Docker-сборка (frontend + backend):
 
 ```bash
 docker compose up --build

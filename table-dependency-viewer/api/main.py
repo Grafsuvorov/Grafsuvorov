@@ -26,8 +26,6 @@ import json
 import hashlib
 import subprocess
 import tempfile
-import urllib.request
-import urllib.error
 from itertools import combinations
 
 from .config import (
@@ -1489,7 +1487,11 @@ def warm_up_cache():
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-META_PARENT_DIRS = [BASE_DIR / "etl_loads_entity"]
+# Можно переопределить путь к метаданным через переменную окружения:
+# export META_PARENT_DIR=/path/to/meta_info/database/greenplum/schema_name/tech_etl/etl_load_entity
+# Локальный Windows путь (раскомментируй на Win):
+# META_PARENT_DIRS = [Path(r"C:\\GIT\\meta_info\\database\\greenplum\\schema_name\\tech_etl\\etl_load_entity")]
+META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", BASE_DIR / "etl_loads_entity"))]
 
 
 def iter_meta_dirs(targets: Optional[List[str]] = None):
@@ -3369,38 +3371,89 @@ def get_dependency_violations():
         all_tables.add(src)
         all_tables.add(dep)
 
+    # Load last N successful runs per table to avoid false positives when tables run multiple times (e.g. sales1..4).
     last_loads = {}
     with engine.connect() as conn:
+        tables_by_schema = {}
         for schema, table in all_tables:
-            result = conn.execute(
-                text(
-                    f"""
-                SELECT table_last_load
-                FROM {TABLE_TABLES_META}
-                WHERE  entity_id not in (50,49,48) and table_schema = :schema AND table_name = :table
-            """
-                ),
-                {"schema": schema, "table": table},
+            tables_by_schema.setdefault(schema, set()).add(table)
+
+        for schema, tables in tables_by_schema.items():
+            if not schema or not tables:
+                continue
+            query = text(
+                f"""
+                WITH base AS (
+                    SELECT
+                        COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                        COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+                        l.loading_finish_dttm
+                    FROM {TABLE_LOADING_HISTORY} l
+                    LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                    WHERE l.object_type = 'table'
+                      AND l.loading_state = 'SUCCESS'
+                      AND l.loading_finish_dttm IS NOT NULL
+                      AND t.table_schema = :schema
+                      AND t.table_name = ANY(:tables)
+                )
+                SELECT table_schema, table_name, loading_finish_dttm
+                FROM (
+                    SELECT
+                        table_schema,
+                        table_name,
+                        loading_finish_dttm,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY table_schema, table_name
+                            ORDER BY loading_finish_dttm DESC
+                        ) AS rn
+                    FROM base
+                ) x
+                WHERE rn <= :limit
+                """
             )
-            dt = result.scalar()
-            last_loads[(schema, table)] = dt
+            result = conn.execute(
+                query,
+                {"schema": schema, "tables": list(tables), "limit": 6},
+            ).mappings().all()
+
+            for row in result:
+                key = (row.get("table_schema"), row.get("table_name"))
+                if not key[0] or not key[1]:
+                    continue
+                last_loads.setdefault(key, []).append(row.get("loading_finish_dttm"))
+
+    # Sort times DESC for each table
+    for key in list(last_loads.keys()):
+        times = [t for t in last_loads.get(key, []) if t]
+        times.sort(reverse=True)
+        last_loads[key] = times
 
     problems = []
     for (src_schema, src_table), (dep_schema, dep_table) in dependency_pairs:
-        src_time = last_loads.get((src_schema, src_table))
-        dep_time = last_loads.get((dep_schema, dep_table))
-
-        if src_time and dep_time and dep_time < src_time:
-            problems.append(
-                {
-                    "source_schema": src_schema,
-                    "source_table": src_table,
-                    "source_last_load": src_time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "dependent_schema": dep_schema,
-                    "dependent_table": dep_table,
-                    "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-            )
+        dep_times = last_loads.get((dep_schema, dep_table)) or []
+        src_times = last_loads.get((src_schema, src_table)) or []
+        if not dep_times or not src_times:
+            continue
+        dep_time = dep_times[0]
+        src_before = None
+        for t in src_times:
+            if t and t <= dep_time:
+                src_before = t
+                break
+        # If there is any source run before dependent run, it's OK.
+        if src_before:
+            continue
+        # Violation only when all source runs are after dependent run.
+        problems.append(
+            {
+                "source_schema": src_schema,
+                "source_table": src_table,
+                "source_last_load": src_times[0].strftime("%Y-%m-%d %H:%M:%S"),
+                "dependent_schema": dep_schema,
+                "dependent_table": dep_table,
+                "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        )
 
     return JSONResponse(content=problems, media_type="application/json; charset=utf-8")
 
@@ -4224,870 +4277,6 @@ def get_logic_audit_pair(pair_id: str):
     if not detail:
         return JSONResponse(status_code=404, content={"error": "pair not found"})
     return detail
-
-
-class AssistantQueryRequest(BaseModel):
-    question: str
-    time_window: Optional[str] = None
-    table_fqn: Optional[str] = None
-    pair_id: Optional[str] = None
-    top_k: int = 4
-    history: Optional[List[Dict[str, Any]]] = None
-
-
-ASSISTANT_STOPWORDS = {
-    "что", "как", "где", "когда", "если", "или", "это", "для", "при", "про", "после", "таблица",
-    "таблицы", "нужно", "можно", "есть", "было", "были", "все", "ещё", "еще", "сравни", "сравнение",
-    "анализ", "логика", "logic", "audit", "table", "tables", "with", "from", "into", "and", "the",
-}
-ASSISTANT_LLM_BASE_URL = os.getenv("ASSISTANT_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-ASSISTANT_LLM_MODEL = os.getenv("ASSISTANT_LLM_MODEL", "gpt-4o-mini")
-ASSISTANT_LLM_API_KEY = os.getenv("ASSISTANT_LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
-ASSISTANT_LLM_TIMEOUT_SEC = int(os.getenv("ASSISTANT_LLM_TIMEOUT_SEC", "60"))
-ASSISTANT_LLM_ENABLED = os.getenv("ASSISTANT_LLM_ENABLED", "1") not in {"0", "false", "False"}
-ASSISTANT_SYSTEM_PROMPT = (
-    "Ты аналитический ассистент Data Control. Отвечай только на базе переданного контекста инструментов. "
-    "Если данных недостаточно — явно скажи это. Формат: 1) Что произошло, 2) Почему вероятно, 3) Что проверить дальше. "
-    "Пиши по-русски, конкретно, без воды."
-)
-
-
-def _decode_json_response(payload):
-    if isinstance(payload, JSONResponse):
-        try:
-            return json.loads(payload.body.decode("utf-8"))
-        except Exception:
-            return None
-    return payload
-
-
-def _extract_time_window(raw: Optional[str]) -> tuple[str, str]:
-    text = (raw or "").replace(".", ":")
-    match = re.search(r"([01]?\d|2[0-3]):([0-5]\d)\s*[-–]\s*([01]?\d|2[0-3]):([0-5]\d)", text)
-    if not match:
-        return "04:30", "05:20"
-    return f"{int(match.group(1)):02d}:{match.group(2)}", f"{int(match.group(3)):02d}:{match.group(4)}"
-
-
-def _assistant_terms(question: str) -> list[str]:
-    terms = []
-    for term in re.findall(r"[a-zа-я0-9_./-]{3,}", (question or "").lower()):
-        if term in ASSISTANT_STOPWORDS:
-            continue
-        terms.append(term)
-    return terms[:20]
-
-
-def _assistant_retrieve_docs(question: str, table_fqn: Optional[str], limit: int = 4) -> list[dict]:
-    payload = _build_logic_audit_cache()
-    objects_index = (payload.get("objects_index") or {}).values()
-    terms = _assistant_terms(question)
-    normalized_table = (table_fqn or "").strip().lower()
-
-    scored = []
-    for obj in objects_index:
-        fqn = (obj.get("fqn") or "").lower()
-        text_blob = " ".join(
-            [
-                obj.get("story") or "",
-                " ".join(obj.get("source_tables") or []),
-                " ".join(obj.get("functions") or []),
-                obj.get("where_clause") or "",
-                " ".join(
-                    [str(x.get("name") or "") for x in (obj.get("field_descriptions") or [])]
-                ),
-            ]
-        ).lower()
-        score = 0
-        if normalized_table and fqn == normalized_table:
-            score += 100
-        for term in terms:
-            if term in fqn:
-                score += 5
-            if term in text_blob:
-                score += 2
-        if score > 0:
-            scored.append((score, obj))
-
-    scored.sort(key=lambda x: x[0], reverse=True)
-    docs = []
-    for score, obj in scored[: max(1, min(limit, 8))]:
-        docs.append(
-            {
-                "fqn": obj.get("fqn"),
-                "entity_name": obj.get("entity_name"),
-                "story": obj.get("story"),
-                "source_tables": obj.get("source_tables") or [],
-                "functions": obj.get("functions") or [],
-                "where_clause": obj.get("where_clause") or "",
-                "sql_path": obj.get("sql_path"),
-                "score": score,
-            }
-        )
-    return docs
-
-
-def _safe_call(callable_obj, default_value):
-    try:
-        value = callable_obj()
-        decoded = _decode_json_response(value)
-        return decoded if decoded is not None else default_value
-    except Exception:
-        return default_value
-
-
-def _extract_table_fqn_candidates(text_value: str) -> list[str]:
-    if not text_value:
-        return []
-    matches = re.findall(r"\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_./-]*)\b", text_value.lower())
-    result = []
-    seen = set()
-    for schema, table in matches:
-        fqn = f"{schema}.{table.strip('.')}"
-        if fqn not in seen:
-            seen.add(fqn)
-            result.append(fqn)
-    return result[:4]
-
-
-def _split_fqn(fqn: Optional[str]) -> tuple[Optional[str], Optional[str]]:
-    value = (fqn or "").strip().lower()
-    if "." not in value:
-        return None, None
-    schema, table = value.split(".", 1)
-    if not schema or not table:
-        return None, None
-    return schema, table
-
-
-def _assistant_extract_sql_context(card_payload: dict) -> dict:
-    if not isinstance(card_payload, dict):
-        return {}
-    insert_sql = card_payload.get("sql_query_insert_init_sql") or ""
-    recreate_sql = card_payload.get("sql_query_recreate_init_sql") or ""
-    normalized_insert = _normalize_sql(insert_sql)
-    select_targets = _extract_select_targets(normalized_insert)[:20] if normalized_insert else []
-    source_tables = sorted(_extract_source_tables(normalized_insert))[:20] if normalized_insert else []
-    functions = sorted(_extract_functions(normalized_insert))[:20] if normalized_insert else []
-    where_clause = _extract_where_clause(normalized_insert)[:400] if normalized_insert else ""
-
-    table_comment_match = re.search(
-        r"comment\s+on\s+table\s+[a-z0-9_.]+\s+is\s+'([^']*)'",
-        recreate_sql,
-        flags=re.I,
-    )
-    table_comment = table_comment_match.group(1).strip() if table_comment_match else None
-    column_comments = []
-    for col, comment in re.findall(
-        r"comment\s+on\s+column\s+[a-z0-9_.]+\.([a-z0-9_]+)\s+is\s+'([^']*)'",
-        recreate_sql,
-        flags=re.I,
-    ):
-        column_comments.append({"column": col, "comment": comment.strip()})
-        if len(column_comments) >= 25:
-            break
-
-    return {
-        "table_comment": table_comment,
-        "column_comments": column_comments,
-        "source_tables": source_tables,
-        "functions": functions,
-        "where_clause": where_clause,
-        "select_targets": [
-            {
-                "alias": row.get("alias") or "",
-                "expression": (row.get("expression") or "")[:220],
-            }
-            for row in select_targets
-        ],
-    }
-
-
-def _assistant_fetch_tools_context(
-    question: str,
-    history_text: str,
-    table_fqn: Optional[str],
-    pair_id: Optional[str],
-    time_window: Optional[str],
-    intent: str = "general",
-):
-    q = f"{question} {history_text}".lower()
-    window_start, window_end = _extract_time_window(time_window or q)
-    table_candidates = _extract_table_fqn_candidates(q)
-    if table_fqn:
-        table_candidates.insert(0, table_fqn.lower())
-    search_term = (table_fqn or (table_candidates[0] if table_candidates else "")).lower()
-
-    need_night = intent in {"night_ops", "table_duration", "max_duration"} or (
-        intent == "general" and (any(x in q for x in ["night", "пик", "окно", "heavy", "slow", "долго", "длитель"]) or bool(time_window))
-    )
-    need_incidents = intent == "incidents" or (intent == "general" and any(x in q for x in ["incident", "инцид", "error", "ошиб", "fail", "паден", "слом"]))
-    need_logic = intent in {"pair_analysis", "compare_scripts", "logic"} or (
-        intent == "general" and any(x in q for x in ["logic", "дубл", "similar", "похож", "merge", "сравн"])
-    )
-    need_dependencies = intent == "dependencies" or any(x in q for x in ["зависим", "lineage", "upstream", "downstream", "impact", "влияни"])
-    need_dq = intent == "dq" or any(x in q for x in ["dq", "quality", "качество", "дублик", "row count"])
-    need_sla = intent == "sla" or any(x in q for x in ["sla", "опоздан", "просроч", "breach"])
-    need_metrics = intent == "metrics" or any(x in q for x in ["метрик", "сколько таблиц", "total tables", "active entities", "общая картин"])
-    need_table_card = bool(table_candidates) and (
-        intent in {"table_explain", "table_duration", "compare_scripts", "dependencies", "dq", "general"}
-        or any(x in q for x in ["sql", "скрипт", "комментар", "поле", "что считает", "как считается", "where", "select"])
-    )
-
-    tools = {}
-    used_tools = []
-
-    if need_night or need_incidents:
-        heavy_payload = _safe_call(
-            lambda: get_night_heavy_tables(days=30, limit=12, window_start=window_start, window_end=window_end),
-            {"rows": [], "summary": {}, "window": {"start": window_start, "end": window_end}},
-        )
-        if isinstance(heavy_payload, dict):
-            tools["night_heavy_tables"] = {
-                "window": heavy_payload.get("window") or {"start": window_start, "end": window_end},
-                "summary": heavy_payload.get("summary") or {},
-                "rows": (heavy_payload.get("rows") or [])[:8],
-            }
-            used_tools.append("night_heavy_tables")
-
-    if intent == "max_duration":
-        slow_payload = _safe_call(lambda: get_slowest_tables(days=30, limit=5), {"rows": []})
-        if isinstance(slow_payload, dict):
-            tools["slowest_tables"] = (slow_payload.get("rows") or [])[:5]
-            used_tools.append("slowest_tables")
-
-    if need_incidents:
-        active_incidents = _safe_call(get_active_incidents, [])
-        if isinstance(active_incidents, list):
-            tools["incidents_active"] = active_incidents[:8]
-            used_tools.append("incidents_active")
-        incident_history = _safe_call(lambda: get_incident_history(days=14, limit=10), [])
-        if isinstance(incident_history, list):
-            tools["incidents_history"] = incident_history[:8]
-            used_tools.append("incidents_history")
-
-    if need_logic or pair_id:
-        logic_rows = _safe_call(
-            lambda: get_logic_audit(
-                issue_type="all",
-                mode="standard",
-                min_score=0.78,
-                limit=60,
-                search=search_term or None,
-            ),
-            {"pairs": []},
-        )
-        if isinstance(logic_rows, dict):
-            tools["logic_audit_pairs"] = (logic_rows.get("pairs") or [])[:10]
-            used_tools.append("logic_audit_pairs")
-        if pair_id:
-            pair_detail = _safe_call(lambda: get_logic_audit_pair(pair_id), None)
-            if isinstance(pair_detail, dict) and not pair_detail.get("error"):
-                tools["logic_audit_pair_detail"] = pair_detail
-                used_tools.append("logic_audit_pair_detail")
-
-    if need_dependencies and table_candidates:
-        schema, table = _split_fqn(table_candidates[0])
-        if schema and table:
-            dep_graph = _safe_call(
-                lambda: get_dependency_graph(schema=schema, table=table, max_depth=6, max_edges=1500),
-                {},
-            )
-            if isinstance(dep_graph, dict):
-                tools["dependencies_graph"] = {
-                    "table": f"{schema}.{table}",
-                    "nodes_count": len(dep_graph.get("nodes") or []),
-                    "links_count": len(dep_graph.get("links") or []),
-                }
-                used_tools.append("dependencies_graph")
-            dep_down = _safe_call(lambda: get_dependencies_down(schema=schema, table=table), {})
-            if isinstance(dep_down, dict):
-                tools["dependencies_down"] = {
-                    "nodes_count": len(dep_down.get("nodes") or []),
-                    "links_count": len(dep_down.get("links") or []),
-                }
-                used_tools.append("dependencies_down")
-            impact_summary = _safe_call(
-                lambda: get_impact_summary(schema=schema, table=table, depth=3, max_nodes=800, limit=120),
-                {},
-            )
-            if isinstance(impact_summary, dict):
-                tools["impact_summary"] = impact_summary
-                used_tools.append("impact_summary")
-
-    if need_dq:
-        dq_summary = _safe_call(lambda: get_quality_summary(days=14), {})
-        if isinstance(dq_summary, dict):
-            tools["dq_summary"] = dq_summary
-            used_tools.append("dq_summary")
-        if table_candidates:
-            schema, table = _split_fqn(table_candidates[0])
-            if schema and table:
-                dq_table = _safe_call(lambda: get_table_quality(schema=schema, table=table), {})
-                if isinstance(dq_table, dict):
-                    tools["dq_table"] = dq_table
-                    used_tools.append("dq_table")
-
-    if need_sla:
-        sla_payload = _safe_call(get_sla_monitoring, {})
-        if isinstance(sla_payload, dict):
-            tools["sla"] = sla_payload
-            used_tools.append("sla")
-        order_breaches = _safe_call(get_order_breaches, [])
-        if isinstance(order_breaches, list):
-            tools["order_breaches"] = order_breaches[:12]
-            used_tools.append("order_breaches")
-
-    if need_metrics:
-        metrics_payload = _safe_call(get_metrics, {})
-        if isinstance(metrics_payload, dict):
-            tools["metrics"] = metrics_payload
-            used_tools.append("metrics")
-        load_profile = _safe_call(lambda: get_load_profile(days=30), {})
-        if isinstance(load_profile, dict):
-            profile = load_profile.get("profile") or []
-            top_hours = sorted(profile, key=lambda x: x.get("total_duration_minutes") or 0, reverse=True)[:6]
-            tools["load_profile"] = {"days": load_profile.get("days"), "top_hours": top_hours}
-            used_tools.append("load_profile")
-
-    if need_table_card and table_candidates:
-        schema, table = _split_fqn(table_candidates[0])
-        if schema and table:
-            card_payload = _safe_call(lambda: get_table_card_info_by_path(schema=schema, table=table), {})
-            if isinstance(card_payload, dict):
-                sql_ctx = _assistant_extract_sql_context(card_payload)
-                tools["table_card"] = {
-                    "table_fqn": f"{schema}.{table}",
-                    "entity_name": card_payload.get("entity_name"),
-                    "table_id": card_payload.get("table_id"),
-                    "table_load_mode": card_payload.get("table_load_mode"),
-                    "avg_duration_minutes": card_payload.get("avg_duration_minutes"),
-                    "last_success_time": card_payload.get("last_success_time"),
-                    "key_attributes": card_payload.get("key_attributes") or [],
-                    "depends_on": card_payload.get("depends_on") or {},
-                    "sql": sql_ctx,
-                }
-                used_tools.append("table_card")
-
-    docs = _assistant_retrieve_docs(question + " " + history_text, table_fqn or (table_candidates[0] if table_candidates else None), limit=6)
-    tools["yaml_docs"] = docs
-    used_tools.append("yaml_docs")
-    tools["table_candidates"] = table_candidates
-
-    return {
-        "window": {"start": window_start, "end": window_end},
-        "tools": tools,
-        "used_tools": used_tools,
-    }
-
-
-def _assistant_detect_intent(question: str, table_candidates: list[str], pair_id: Optional[str]) -> str:
-    q = (question or "").lower()
-    if pair_id:
-        return "pair_analysis"
-    if any(
-        key in q for key in ["сущность в которой больше всего таблиц", "какая сущность больше всего таблиц", "entity with most tables", "больше всего таблиц в сущности"]
-    ):
-        return "entity_most_tables"
-    if any(
-        key in q for key in ["в какое время грузится больше всего таблиц", "пиковый час", "peak hour", "когда больше всего загрузок", "час максимальной загрузки"]
-    ):
-        return "peak_load_time"
-    if any(
-        key in q for key in ["самая долгая", "максимальная загрузка", "макс загрузка", "longest load", "самый долгий запуск", "max duration"]
-    ):
-        return "max_duration"
-    if table_candidates and any(
-        key in q for key in ["сколько времени", "долго груз", "как долго", "среднее время", "avg duration", "p95", "время загрузки", "грузится таблица"]
-    ):
-        return "table_duration"
-    if len(table_candidates) >= 2 and any(
-        key in q for key in ["чем отличаются", "разница", "difference", "diff", "отличия", "сравни скрипт", "compare script"]
-    ):
-        return "compare_scripts"
-    if any(key in q for key in ["завис", "depends", "lineage", "upstream", "downstream", "impact", "влияние", "от каких таблиц", "зависит от"]):
-        return "dependencies"
-    if any(key in q for key in ["dq", "качество", "дублик", "row count"]):
-        return "dq"
-    if any(key in q for key in ["sla", "опоздан", "просроч", "breach"]):
-        return "sla"
-    if any(key in q for key in ["метрик", "active entities", "total tables", "общая картин"]):
-        return "metrics"
-    if any(key in q for key in ["инцид", "ошиб", "fail", "error", "слом"]):
-        return "incidents"
-    if any(key in q for key in ["пик", "окно", "night", "тяж", "долго", "slow"]):
-        return "night_ops"
-    if table_candidates and any(key in q for key in ["sql", "скрипт", "поля", "комментар", "что считает", "как считается"]):
-        return "table_explain"
-    if table_candidates:
-        return "table_explain"
-    return "general"
-
-
-def _assistant_compare_scripts(fqn_left: str, fqn_right: str) -> Optional[dict]:
-    payload = _build_logic_audit_cache()
-    objects_index = payload.get("objects_index") or {}
-    left = objects_index.get((fqn_left or "").lower())
-    right = objects_index.get((fqn_right or "").lower())
-    if not left or not right:
-        return None
-
-    left_sources = set(left.get("source_tables") or [])
-    right_sources = set(right.get("source_tables") or [])
-    left_where = (left.get("where_clause") or "").strip()
-    right_where = (right.get("where_clause") or "").strip()
-
-    left_expr = {
-        (row.get("alias") or f"expr_{idx+1}"): (row.get("expression") or "")
-        for idx, row in enumerate(left.get("select_targets") or [])
-    }
-    right_expr = {
-        (row.get("alias") or f"expr_{idx+1}"): (row.get("expression") or "")
-        for idx, row in enumerate(right.get("select_targets") or [])
-    }
-    common_aliases = sorted(set(left_expr.keys()) & set(right_expr.keys()))
-    expr_diff = []
-    for alias in common_aliases:
-        if (left_expr.get(alias) or "").strip() != (right_expr.get(alias) or "").strip():
-            expr_diff.append(
-                {
-                    "alias": alias,
-                    "left": left_expr.get(alias),
-                    "right": right_expr.get(alias),
-                }
-            )
-
-    left_only_aliases = sorted(set(left_expr.keys()) - set(right_expr.keys()))
-    right_only_aliases = sorted(set(right_expr.keys()) - set(left_expr.keys()))
-
-    return {
-        "left_fqn": left.get("fqn"),
-        "right_fqn": right.get("fqn"),
-        "left_sources_only": sorted(left_sources - right_sources)[:12],
-        "right_sources_only": sorted(right_sources - left_sources)[:12],
-        "common_sources": sorted(left_sources & right_sources)[:12],
-        "where_equal": bool(left_where and right_where and left_where == right_where),
-        "left_where": left_where[:260],
-        "right_where": right_where[:260],
-        "expr_diff": expr_diff[:10],
-        "left_only_aliases": left_only_aliases[:10],
-        "right_only_aliases": right_only_aliases[:10],
-        "left_sql_path": left.get("sql_path"),
-        "right_sql_path": right.get("sql_path"),
-    }
-
-
-def _assistant_render_compare_answer(cmp_result: dict) -> str:
-    left_fqn = cmp_result.get("left_fqn")
-    right_fqn = cmp_result.get("right_fqn")
-    parts = [f"Скрипты {left_fqn} и {right_fqn} не одинаковые."]
-
-    if cmp_result.get("left_sources_only") or cmp_result.get("right_sources_only"):
-        parts.append(
-            "Разные источники: "
-            f"только слева [{', '.join(cmp_result.get('left_sources_only') or ['-'])}], "
-            f"только справа [{', '.join(cmp_result.get('right_sources_only') or ['-'])}]."
-        )
-    if not cmp_result.get("where_equal"):
-        lw = cmp_result.get("left_where") or "нет WHERE"
-        rw = cmp_result.get("right_where") or "нет WHERE"
-        parts.append(f"WHERE отличается: left=`{lw}` vs right=`{rw}`.")
-
-    expr_diff = cmp_result.get("expr_diff") or []
-    if expr_diff:
-        top = ", ".join([x.get("alias") or "?" for x in expr_diff[:4]])
-        parts.append(f"Отличаются выражения в SELECT (например: {top}).")
-    else:
-        parts.append("SELECT-выражения по общим алиасам совпадают.")
-
-    if cmp_result.get("left_only_aliases") or cmp_result.get("right_only_aliases"):
-        parts.append(
-            "Есть уникальные поля: "
-            f"left [{', '.join(cmp_result.get('left_only_aliases') or ['-'])}], "
-            f"right [{', '.join(cmp_result.get('right_only_aliases') or ['-'])}]."
-        )
-    return " ".join(parts)
-
-
-def _assistant_table_duration_summary(table_fqn: str) -> Optional[dict]:
-    if not table_fqn or "." not in table_fqn:
-        return None
-    schema, table = table_fqn.split(".", 1)
-    rows = _safe_call(lambda: get_table_history(schema=schema, table=table, limit=40), [])
-    if not isinstance(rows, list) or not rows:
-        return {
-            "table_fqn": table_fqn,
-            "runs_total": 0,
-            "success_runs": 0,
-            "avg_minutes": None,
-            "p95_minutes": None,
-            "max_minutes": None,
-            "last_duration_minutes": None,
-        }
-
-    success = [r for r in rows if (r.get("state") or "").upper() == "SUCCESS" and r.get("duration_minutes") is not None]
-    if not success:
-        return {
-            "table_fqn": table_fqn,
-            "runs_total": len(rows),
-            "success_runs": 0,
-            "avg_minutes": None,
-            "p95_minutes": None,
-            "max_minutes": None,
-            "last_duration_minutes": None,
-        }
-
-    durations = sorted([float(r.get("duration_minutes") or 0.0) for r in success])
-    n = len(durations)
-    p95_index = max(0, min(n - 1, int(round(0.95 * (n - 1)))))
-    avg_minutes = round(sum(durations) / n, 2)
-    p95_minutes = round(durations[p95_index], 2)
-    max_minutes = round(durations[-1], 2)
-    last_duration_minutes = round(float(success[0].get("duration_minutes") or 0.0), 2)
-    return {
-        "table_fqn": table_fqn,
-        "runs_total": len(rows),
-        "success_runs": n,
-        "avg_minutes": avg_minutes,
-        "p95_minutes": p95_minutes,
-        "max_minutes": max_minutes,
-        "last_duration_minutes": last_duration_minutes,
-    }
-
-
-def _assistant_dependencies_summary(context_tools: dict, table_fqn: Optional[str]) -> Optional[dict]:
-    card = (context_tools or {}).get("table_card") or {}
-    depends_on = card.get("depends_on") or {}
-    if not isinstance(depends_on, dict):
-        depends_on = {}
-    flat = []
-    for schema, tables in depends_on.items():
-        for table in tables or []:
-            flat.append(f"{schema}.{table}")
-    flat = sorted(set(flat))
-    if not flat and not table_fqn:
-        return None
-    return {
-        "table_fqn": table_fqn or card.get("table_fqn"),
-        "upstream_tables": flat[:60],
-        "upstream_count": len(flat),
-    }
-
-
-def _assistant_entity_most_tables_summary() -> Optional[dict]:
-    snapshot = _safe_call(get_graph_snapshot, {})
-    if not isinstance(snapshot, dict):
-        return None
-    table_entity_map = snapshot.get("table_entity_map") or {}
-    if not isinstance(table_entity_map, dict) or not table_entity_map:
-        return None
-    counter = {}
-    for _, entities in table_entity_map.items():
-        for ent in (entities or []):
-            counter[ent] = counter.get(ent, 0) + 1
-    if not counter:
-        return None
-    top = sorted(counter.items(), key=lambda x: x[1], reverse=True)
-    preferred = [x for x in top if (x[0] or "").upper() not in {"UNKNOWN", ""}]
-    entity, count = (preferred[0] if preferred else top[0])
-    return {
-        "entity_name": entity,
-        "tables_count": count,
-        "top_entities": [{"entity_name": x[0], "tables_count": x[1]} for x in (preferred[:8] if preferred else top[:8])],
-    }
-
-
-def _assistant_peak_load_time_summary(days: int = 30) -> Optional[dict]:
-    payload = _safe_call(lambda: get_load_profile(days=days), {})
-    if not isinstance(payload, dict):
-        return None
-    profile = payload.get("profile") or []
-    if not isinstance(profile, list) or not profile:
-        return None
-    top_by_runs = max(profile, key=lambda x: x.get("runs_count") or 0)
-    top_by_duration = max(profile, key=lambda x: x.get("total_duration_minutes") or 0)
-    return {
-        "days": days,
-        "peak_runs_hour": top_by_runs.get("hour"),
-        "peak_runs_count": top_by_runs.get("runs_count"),
-        "peak_duration_hour": top_by_duration.get("hour"),
-        "peak_duration_minutes": top_by_duration.get("total_duration_minutes"),
-        "top_hours": sorted(profile, key=lambda x: x.get("runs_count") or 0, reverse=True)[:6],
-    }
-
-
-def _assistant_global_max_duration(days: int = 30) -> Optional[dict]:
-    payload = _safe_call(lambda: get_slowest_tables(days=days, limit=1), {"rows": []})
-    if not isinstance(payload, dict):
-        return None
-    rows = payload.get("rows") or []
-    if not rows:
-        return None
-    row = rows[0]
-    return {
-        "table_fqn": row.get("table_fqn"),
-        "entity_name": row.get("entity_name"),
-        "max_duration_minutes": row.get("max_duration"),
-        "p95_duration_minutes": row.get("p95_duration"),
-        "days": days,
-    }
-
-
-def _assistant_fallback_answer(question: str, context: dict) -> str:
-    tools = context.get("tools") or {}
-    parts = []
-    night = tools.get("night_heavy_tables") or {}
-    summary = night.get("summary") or {}
-    if summary.get("tables_count"):
-        parts.append(
-            f"В окне {context['window']['start']}-{context['window']['end']} попало {summary.get('tables_count')} таблиц, "
-            f"суммарно {summary.get('total_duration_minutes')} мин."
-        )
-    heavy_rows = (night.get("rows") or [])[:3]
-    if heavy_rows:
-        parts.append(
-            "Топ тяжёлых: " + ", ".join(
-                [f"{r.get('table_fqn')} ({r.get('total_duration_minutes')} мин)" for r in heavy_rows]
-            )
-        )
-    active = tools.get("incidents_active") or []
-    if active:
-        parts.append("Активные инциденты: " + ", ".join([f"{x.get('entity')} ({x.get('failed_tables')} tbl)" for x in active[:3]]))
-    docs = tools.get("yaml_docs") or []
-    if docs:
-        parts.append("По описаниям ближе всего: " + ", ".join([d.get("fqn") for d in docs[:3] if d.get("fqn")]))
-    table_card = tools.get("table_card") or {}
-    sql_ctx = table_card.get("sql") or {}
-    if table_card.get("table_fqn"):
-        parts.append(
-            f"Карточка {table_card.get('table_fqn')}: режим {table_card.get('table_load_mode')}, "
-            f"avg={table_card.get('avg_duration_minutes')} мин."
-        )
-    if sql_ctx.get("table_comment"):
-        parts.append(f"Комментарий таблицы: {sql_ctx.get('table_comment')}.")
-    if sql_ctx.get("source_tables"):
-        parts.append("SQL источники: " + ", ".join((sql_ctx.get("source_tables") or [])[:4]))
-    if sql_ctx.get("column_comments"):
-        top_cols = ", ".join([f"{x.get('column')}" for x in (sql_ctx.get("column_comments") or [])[:6]])
-        parts.append(f"Есть комментарии по полям: {top_cols}.")
-    if tools.get("dependencies_graph"):
-        dg = tools.get("dependencies_graph") or {}
-        parts.append(
-            f"Граф зависимостей: nodes={dg.get('nodes_count')}, links={dg.get('links_count')}."
-        )
-    if tools.get("dq_summary"):
-        dq = tools.get("dq_summary") or {}
-        parts.append(f"DQ summary: alerts={dq.get('alerts_count')}, tables={dq.get('tables_count')}.")
-    if tools.get("sla"):
-        sla = tools.get("sla") or {}
-        if isinstance(sla, dict):
-            parts.append("SLA данные доступны для анализа текущего состояния.")
-    if not parts:
-        parts.append("Контекста из инструментов мало, уточни вопрос или добавь schema.table.")
-    return " ".join(parts)
-
-
-def _call_assistant_llm(question: str, history: list, context: dict) -> Optional[str]:
-    if not ASSISTANT_LLM_ENABLED or not ASSISTANT_LLM_API_KEY:
-        return None
-    user_context = {
-        "question": question,
-        "window": context.get("window"),
-        "used_tools": context.get("used_tools"),
-        "tools": context.get("tools"),
-    }
-    messages = [{"role": "system", "content": ASSISTANT_SYSTEM_PROMPT}]
-    for item in history[-6:]:
-        if not isinstance(item, dict):
-            continue
-        role = item.get("role")
-        text_value = item.get("text")
-        if role in {"user", "assistant"} and isinstance(text_value, str) and text_value.strip():
-            messages.append({"role": role, "content": text_value.strip()[:1200]})
-    messages.append(
-        {
-            "role": "user",
-            "content": (
-                f"Вопрос: {question}\n\n"
-                f"Контекст инструментов (JSON):\n{json.dumps(user_context, ensure_ascii=False)}\n\n"
-                "Сделай короткий практичный разбор."
-            ),
-        }
-    )
-    body = {
-        "model": ASSISTANT_LLM_MODEL,
-        "messages": messages,
-        "temperature": 0.2,
-    }
-    request = urllib.request.Request(
-        url=f"{ASSISTANT_LLM_BASE_URL}/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {ASSISTANT_LLM_API_KEY}",
-        },
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=ASSISTANT_LLM_TIMEOUT_SEC) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-        choices = payload.get("choices") or []
-        if not choices:
-            return None
-        content = (((choices[0] or {}).get("message") or {}).get("content") or "").strip()
-        return content or None
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError):
-        return None
-
-
-@router.post("/api/assistant/query")
-def assistant_query(req: AssistantQueryRequest):
-    question = (req.question or "").strip()
-    if not question:
-        return JSONResponse(status_code=400, content={"error": "question is required"})
-
-    history = req.history or []
-    history_text = " ".join([str(x.get("text") or "") for x in history if isinstance(x, dict)])
-    table_candidates = _extract_table_fqn_candidates(f"{question} {history_text}")
-    if req.table_fqn:
-        table_candidates.insert(0, req.table_fqn.lower())
-    seen = set()
-    table_candidates = [x for x in table_candidates if not (x in seen or seen.add(x))]
-    intent = _assistant_detect_intent(question, table_candidates, req.pair_id)
-
-    context = _assistant_fetch_tools_context(
-        question=question,
-        history_text=history_text,
-        table_fqn=req.table_fqn,
-        pair_id=req.pair_id,
-        time_window=req.time_window,
-        intent=intent,
-    )
-
-    compare_payload = None
-    duration_payload = None
-    max_duration_payload = None
-    deps_payload = None
-    entity_tables_payload = None
-    peak_load_payload = None
-    if intent == "compare_scripts" and len(table_candidates) >= 2:
-        compare_payload = _assistant_compare_scripts(table_candidates[0], table_candidates[1])
-    if intent == "dependencies":
-        deps_payload = _assistant_dependencies_summary(context.get("tools") or {}, table_candidates[0] if table_candidates else req.table_fqn)
-    if intent == "entity_most_tables":
-        entity_tables_payload = _assistant_entity_most_tables_summary()
-    if intent == "peak_load_time":
-        peak_load_payload = _assistant_peak_load_time_summary(days=30)
-    if intent == "max_duration":
-        if table_candidates:
-            duration_payload = _assistant_table_duration_summary(table_candidates[0])
-        else:
-            max_duration_payload = _assistant_global_max_duration(days=30)
-    if intent == "table_duration" and table_candidates:
-        duration_payload = _assistant_table_duration_summary(table_candidates[0])
-    if entity_tables_payload:
-        answer = (
-            f"Больше всего таблиц у сущности {entity_tables_payload.get('entity_name')}: "
-            f"{entity_tables_payload.get('tables_count')} таблиц."
-        )
-        context.setdefault("tools", {})["entity_tables"] = entity_tables_payload
-        context.setdefault("used_tools", []).append("graph_snapshot")
-    elif intent == "peak_load_time" and peak_load_payload:
-        answer = (
-            f"Пиковое время по числу запусков: {int(peak_load_payload.get('peak_runs_hour')):02d}:00 "
-            f"({peak_load_payload.get('peak_runs_count')} запусков). "
-            f"По суммарной длительности: {int(peak_load_payload.get('peak_duration_hour')):02d}:00 "
-            f"({peak_load_payload.get('peak_duration_minutes')} мин)."
-        )
-        context.setdefault("tools", {})["peak_load_time"] = peak_load_payload
-        context.setdefault("used_tools", []).append("load_profile")
-    elif intent == "peak_load_time":
-        answer = "Не удалось получить профиль загрузки (`/api/load-profile`), поэтому пиковый час сейчас не определён."
-    elif deps_payload:
-        if deps_payload.get("upstream_count", 0) > 0:
-            preview = ", ".join((deps_payload.get("upstream_tables") or [])[:12])
-            answer = (
-                f"{deps_payload.get('table_fqn')} зависит от {deps_payload.get('upstream_count')} таблиц. "
-                f"Основные upstream: {preview}."
-            )
-        else:
-            answer = f"Для {deps_payload.get('table_fqn')} upstream-зависимости в метаданных не найдены."
-        context.setdefault("tools", {})["dependencies_summary"] = deps_payload
-    elif max_duration_payload:
-        answer = (
-            f"Самая долгая загрузка за последние {max_duration_payload.get('days')} дней: "
-            f"{max_duration_payload.get('table_fqn')} "
-            f"(max={max_duration_payload.get('max_duration_minutes')} мин, p95={max_duration_payload.get('p95_duration_minutes')} мин)."
-        )
-        context.setdefault("tools", {})["max_duration"] = max_duration_payload
-        context.setdefault("used_tools", []).append("slowest_tables")
-    elif duration_payload:
-        if duration_payload.get("avg_minutes") is None:
-            answer = (
-                f"По {duration_payload.get('table_fqn')} нет успешных запусков в доступной истории, "
-                f"всего записей: {duration_payload.get('runs_total')}."
-            )
-        else:
-            answer = (
-                f"{duration_payload.get('table_fqn')} обычно грузится ~{duration_payload.get('avg_minutes')} мин "
-                f"(p95={duration_payload.get('p95_minutes')} мин, max={duration_payload.get('max_minutes')} мин, "
-                f"последний запуск={duration_payload.get('last_duration_minutes')} мин, выборка={duration_payload.get('success_runs')})."
-            )
-        context.setdefault("tools", {})["table_duration"] = duration_payload
-        context.setdefault("used_tools", []).append("table_history")
-    elif compare_payload:
-        answer = _assistant_render_compare_answer(compare_payload)
-    else:
-        answer = _call_assistant_llm(question, history, context) or _assistant_fallback_answer(question, context)
-    tools = context.get("tools") or {}
-    blocks = {
-        "what_happened": [],
-        "possible_causes": [],
-        "next_steps": [],
-    }
-    night = tools.get("night_heavy_tables") or {}
-    night_summary = night.get("summary") or {}
-    if night_summary.get("tables_count"):
-        blocks["what_happened"].append(
-            f"Окно {context['window']['start']}-{context['window']['end']}: {night_summary.get('tables_count')} таблиц, "
-            f"суммарно {night_summary.get('total_duration_minutes')} мин."
-        )
-    if tools.get("incidents_active"):
-        blocks["possible_causes"].append("Есть активные инциденты по нескольким сущностям.")
-    if tools.get("logic_audit_pair_detail"):
-        blocks["possible_causes"].append(
-            (tools.get("logic_audit_pair_detail") or {}).get("explanation", {}).get("summary") or "Найдена похожая пара логики."
-        )
-    docs = tools.get("yaml_docs") or []
-    if docs:
-        blocks["next_steps"].append(f"Открой {docs[0].get('fqn')} и сверяй описание полей с SQL.")
-    if tools.get("logic_audit_pairs"):
-        blocks["next_steps"].append("Проверь топ пар на странице Logic Audit.")
-
-    return {
-        "generated_at": datetime.utcnow().isoformat(),
-        "question": question,
-        "window": context.get("window"),
-        "answer": answer,
-        "blocks": blocks,
-        "docs": docs,
-        "used_tools": context.get("used_tools") or [],
-        "intent": intent,
-        "compare": compare_payload,
-        "duration": duration_payload,
-        "max_duration": max_duration_payload,
-        "dependencies": deps_payload,
-        "entity_tables": entity_tables_payload,
-        "peak_load_time": peak_load_payload,
-        "tools_context": tools,
-        "model_info": {
-            "enabled": ASSISTANT_LLM_ENABLED,
-            "provider": "openai_compatible",
-            "base_url": ASSISTANT_LLM_BASE_URL,
-            "model": ASSISTANT_LLM_MODEL,
-            "used_llm": bool(ASSISTANT_LLM_ENABLED and ASSISTANT_LLM_API_KEY),
-        },
-    }
 
 
 @router.get("/api/entity-loads")

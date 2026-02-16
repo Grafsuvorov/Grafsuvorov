@@ -1,0 +1,14 @@
+services:
+  frontend:
+    build: .
+    ports:
+      - "8090:80"
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - META_PARENT_DIR=/app/etl_loads_entity

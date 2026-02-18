@@ -1,11 +1,9 @@
-# stage: node + dagre
+stage: node + dagre
   FROM node:20-slim AS node
-  ARG HTTP_PROXY
-  ARG HTTPS_PROXY
-  ENV HTTP_PROXY=$HTTP_PROXY
-  ENV HTTPS_PROXY=$HTTPS_PROXY
-  RUN npm config set proxy $HTTP_PROXY \
-   && npm config set https-proxy $HTTPS_PROXY \
+  ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+   && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
    && npm install -g dagre
 
   # stage: python

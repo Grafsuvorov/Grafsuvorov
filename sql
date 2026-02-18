@@ -1,8 +1,17 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# npm install react-router-dom
-node: /lib64/libstdc++.so.6: version `GLIBCXX_3.4.21' not found (required by node)
-node: /lib64/libstdc++.so.6: version `GLIBCXX_3.4.20' not found (required by node)
-node: /lib64/libstdc++.so.6: version `CXXABI_1.3.9' not found (required by node)
-node: /lib64/libm.so.6: version `GLIBC_2.27' not found (required by node)
-node: /lib64/libc.so.6: version `GLIBC_2.27' not found (required by node)
-node: /lib64/libc.so.6: version `GLIBC_2.28' not found (required by node)
-node: /lib64/libc.so.6: version `GLIBC_2.25' not found (required by node)
+docker run --rm \
+    -e HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010" \
+    -e HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010" \
+    -v "$PWD":/app -w /app \
+    node:20-alpine sh -lc \
+    "npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && \
+     npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && \
+     npm install react-router-dom"
+
+  Это обновит и package.json, и package-lock.json.
+
+  Дальше:
+
+  DOCKER_BUILDKIT=0 docker compose build --no-cache frontend
+  docker compose up -d --force-recreate
+
+  Если с прокси снова упадёт — скажи, я добавлю NO_PROXY или укажем корпоративный registry.

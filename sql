@@ -1,24 +1,13 @@
-В api/main.py:
 
-  META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", "/root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity"))]
-
-  И в docker-compose.yml для api добавить:
-
-  environment:
-    - META_PARENT_DIR=/root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-
-  ———
-
-  После правки:
-
-  cd /root/table-dependency-viewer
-  docker compose build --no-cache api
-  docker compose up -d --force-recreate
-
-  Проверка:
-
-  docker compose logs -f api
-
-  Ищем строку META COUNT: — должно быть больше 0.
-
-  Скажи, какой вариан
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs -f api
+table-dependency-viewer-api-1  | BOOT FILE: /app/api/main.py
+table-dependency-viewer-api-1  | /app/api/main.py:62: UserWarning: Field name "schema" in "DependencyItem" shadows an attribute in parent "BaseModel"
+table-dependency-viewer-api-1  |   class DependencyItem(BaseModel):
+table-dependency-viewer-api-1  | Reg
+table-dependency-viewer-api-1  | INFO:     Started server process [1]
+table-dependency-viewer-api-1  | INFO:     Waiting for application startup.
+table-dependency-viewer-api-1  | META COUNT: 0
+table-dependency-viewer-api-1  | META SAMPLE: []
+table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
+table-dependency-viewer-api-1  | INFO:     Application startup complete.
+table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)

@@ -1,26 +1,14 @@
-# stage с node
-  FROM node:20-slim AS node
+Проверим ответ графа (без прокси):
 
-  # stage с python
-  FROM python:3.11-slim
+  curl -x "" -i "http://localhost:5312/api/graph/diagnostics?include_any=true" | head -n 20
 
-  WORKDIR /app/api
-  ENV PYTHONDONTWRITEBYTECODE=1
-  ENV PYTHONUNBUFFERED=1
+  2. Проверим, что node доступен внутри контейнера:
 
-  # копируем node runtime
-  COPY --from=node /usr/local/bin/node /usr/local/bin/node
-  COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-  ENV PATH="/usr/local/bin:${PATH}"
+  docker compose exec api node -v
 
-  COPY api/ /app/api/
-  # (если не монтируешь scripts volume)
-  # COPY scripts/ /app/scripts/
+  3. Логи после запроса:
 
-  RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
-      --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
-      --retries 100 --timeout 600000 --no-cache-dir \
-      fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+  docker compose logs --tail=50 api
 
-  EXPOSE 8000
-  CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+  По этим трём пунктам будет видно, это снова 500 или что-то ещё (например proxy/403).
+

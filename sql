@@ -1,11 +1,21 @@
-cd /root/table-dependency-viewer
-  docker compose exec api /bin/sh -c 'python -c "import urllib.request; url=\"http://localhost:8000/api/graph/diagnostics?include_any=true\";
-  try:
-      r=urllib.request.urlopen(url); print(\"status\", r.status); print(r.read(200))
-  except Exception as e:
-      print(\"error\", e)"'
-
-  Если shell ругается, ещё проще:
-
-  docker compose exec api /bin/sh -c 'python -c "import urllib.request; url=\"http://localhost:8000/api/graph/diagnostics?include_any=true\";
-  r=urllib.request.urlopen(url); print(r.status); print(r.read(200))"'
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api /bin/sh -c 'python -c "import urllib.request; url=\"http://localhost:8000/api/graph/diagnostics?include_any=true\";r=urllib.request.urlopen(url); print(r.status); print(r.read(200))"'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.11/urllib/request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 500: Internal Server Error

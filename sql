@@ -1,28 +1,45 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate
-[+] Running 2/2
- ⠿ Container table-dependency-viewer-api-1       Started                                                                           0.9s
- ⠿ Container table-dependency-viewer-frontend-1  Started                                                                           0.9s
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api /bin/sh -c 'ls /app/etl_loads_entity | head'
-1C_FI
-ALARM_ACCIDENT_LOADER_1
-ALARM_ACCIDENT_LOADER_2
-ALARM_ACCIDENT_LOADER_3
-ALARM_ACCIDENT_LOADER_4
-ALVERSE
-BI_FI
-BI_FI_FACT_PAYMENTS
-BI_INVESTMENT
-BI_SB_WUC
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=10 api
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_flc_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ntf_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ntf_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_cst depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
-table-dependency-viewer-api-1  | Ошибка при старте приложения: /app/scripts/dagre_layout.cjs
-table-dependency-viewer-api-1  | INFO:     Application startup complete.
-table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-[root@rgm-s-dwhapp01 table-dependency-viewer]# cd table-dependency-viewer
+Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/api/graph/diagnostics?include_any=true' from origin 'http://rgm-s-dwhapp01.hq.root.ad:15312' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+:5312/api/graph/diagnostics?include_any=true:1   Failed to load resource: net::ERR_FAILED
+index-CvBZ_oHQ.js:60  HomePage load error: TypeError: Failed to fetch
+    at Se (index-CvBZ_oHQ.js:60:25585)
+    at index-CvBZ_oHQ.js:60:27107
+    at Bo (index-CvBZ_oHQ.js:48:84240)
+    at mS (index-CvBZ_oHQ.js:48:99000)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:99736)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)
+Se @ index-CvBZ_oHQ.js:60
+(index):1  Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/api/graph/diagnostics?include_any=true' from origin 'http://rgm-s-dwhapp01.hq.root.ad:15312' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+:5312/api/graph/diagnostics?include_any=true:1   Failed to load resource: net::ERR_FAILED
+index-CvBZ_oHQ.js:60  HomePage load error: TypeError: Failed to fetch
+    at Se (index-CvBZ_oHQ.js:60:25585)
+    at index-CvBZ_oHQ.js:60:27107
+    at Bo (index-CvBZ_oHQ.js:48:84240)
+    at mS (index-CvBZ_oHQ.js:48:99000)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:99736)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)
+Se @ index-CvBZ_oHQ.js:60
+:15312/entities:1  Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/api/entities/shared?limit=3' from origin 'http://rgm-s-dwhapp01.hq.root.ad:15312' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+:5312/api/entities/shared?limit=3:1   Failed to load resource: net::ERR_FAILED
+:15312/entities:1  Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/api/graph/orphans?limit=50&offset=0&meta_only=true' from origin 'http://rgm-s-dwhapp01.hq.root.ad:15312' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+:5312/api/graph/orphans?limit=50&offset=0&meta_only=true:1   Failed to load resource: net::ERR_FAILED
+(index):1  Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/api/graph/diagnostics?include_any=true' from origin 'http://rgm-s-dwhapp01.hq.root.ad:15312' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+:5312/api/graph/diagnostics?include_any=true:1   Failed to load resource: net::ERR_FAILED
+index-CvBZ_oHQ.js:60  HomePage load error: TypeError: Failed to fetch
+    at Se (index-CvBZ_oHQ.js:60:25585)
+    at index-CvBZ_oHQ.js:60:27107
+    at Bo (index-CvBZ_oHQ.js:48:84240)
+    at mS (index-CvBZ_oHQ.js:48:99000)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:99736)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)
+    at Xr (index-CvBZ_oHQ.js:48:98884)
+    at mS (index-CvBZ_oHQ.js:48:98980)

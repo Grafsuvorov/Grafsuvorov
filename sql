@@ -1,7 +1,3 @@
-Сделай и пришли лог по этому запросу:
-
-  docker compose logs -f api | tail -n 50
-
-  или конкретно:
-
-  curl -s "http://localhost:5312/api/graph/diagnostics?include_any=true"
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -s "http://localhost:5312/api/graph/diagnostics?include_any=true"
+<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency  [root@rgm-s-dwhapp01 table-dependency-viewer]# curl -s "http://rgm-s-dwhapp01.hq.root.ad/api/graph/diagnostics?include_any=true"
+<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -s "http://rgm-s-dwhapp01.hq.root.docker compose logs -f api | tail -n 50

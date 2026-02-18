@@ -1,41 +1,26 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache api
-[+] Building 38.6s (7/9)
- => [internal] load build definition from Dockerfile                                                                                 0.0s
- => => transferring dockerfile: 659B                                                                                                 0.0s
- => [internal] load metadata for docker.io/library/python:3.11-slim                                                                  0.0s
- => [internal] load .dockerignore                                                                                                    0.0s
- => => transferring context: 162B                                                                                                    0.0s
- => [1/5] FROM docker.io/library/python:3.11-slim                                                                                    0.0s
- => [internal] load build context                                                                                                    0.0s
- => => transferring context: 1.56kB                                                                                                  0.0s
- => CACHED [2/5] WORKDIR /app/api                                                                                                    0.0s
- => ERROR [3/5] RUN apt-get update && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*                                      38.5s
-------
- > [3/5] RUN apt-get update && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*:
-#7 31.39 Ign:1 http://deb.debian.org/debian trixie InRelease
-#7 31.39 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#7 31.39 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#7 32.39 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#7 32.39 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#7 32.39 Ign:1 http://deb.debian.org/debian trixie InRelease
-#7 34.39 Ign:1 http://deb.debian.org/debian trixie InRelease
-#7 34.39 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
-#7 34.39 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
-#7 38.39 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
-#7 38.39   Unable to connect to deb.debian.org:http:
-#7 38.39 Err:2 http://deb.debian.org/debian trixie-updates InRelease
-#7 38.39   Unable to connect to deb.debian.org:http:
-#7 38.39 Err:1 http://deb.debian.org/debian trixie InRelease
-#7 38.39   Could not connect to debian.map.fastlydns.net:80 (151.101.66.132), connection timed out Could not connect to debian.map.fastlydns.net:80 (151.101.130.132), connection timed out Could not connect to debian.map.fastlydns.net:80 (151.101.194.132), connection timed out Could not connect to debian.map.fastlydns.net:80 (151.101.2.132), connection timed out Unable to connect to deb.debian.org:http:
-#7 38.39   Unable to connect to deb.debian.org:http:
-#7 38.39 Reading package lists...
-#7 38.40 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Unable to connect to deb.debian.org:http:
-#7 38.40 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Unable to connect to deb.debian.org:http:
-#7 38.40 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Unable to connect to deb.debian.org:http:
-#7 38.40 W: Some index files failed to download. They have been ignored, or old ones used instead.
-#7 38.41 Reading package lists...
-#7 38.42 Building dependency tree...
-#7 38.42 Reading state information...
-#7 38.42 E: Unable to locate package nodejs
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+# stage с node
+  FROM node:20-slim AS node
+
+  # stage с python
+  FROM python:3.11-slim
+
+  WORKDIR /app/api
+  ENV PYTHONDONTWRITEBYTECODE=1
+  ENV PYTHONUNBUFFERED=1
+
+  # копируем node runtime
+  COPY --from=node /usr/local/bin/node /usr/local/bin/node
+  COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+  ENV PATH="/usr/local/bin:${PATH}"
+
+  COPY api/ /app/api/
+  # (если не монтируешь scripts volume)
+  # COPY scripts/ /app/scripts/
+
+  RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+      --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+      --retries 100 --timeout 600000 --no-cache-dir \
+      fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+  EXPOSE 8000
+  CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

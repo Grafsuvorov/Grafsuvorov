@@ -1,27 +1,44 @@
+# stage: node + dagre
+  FROM node:20-slim AS node
+  ARG HTTP_PROXY
+  ARG HTTPS_PROXY
+  ENV HTTP_PROXY=$HTTP_PROXY
+  ENV HTTPS_PROXY=$HTTPS_PROXY
+  RUN npm config set proxy $HTTP_PROXY \
+   && npm config set https-proxy $HTTPS_PROXY \
+   && npm install -g dagre
 
-[+] Building 461.6s (9/15)
- => [internal] load build definition from Dockerfile                                                                                 0.0s
- => => transferring dockerfile: 1.02kB                                                                                               0.0s
- => [internal] load metadata for docker.io/library/python:3.11-slim                                                                  0.0s
- => [internal] load metadata for docker.io/library/node:20-slim                                                                      0.7s
- => [internal] load .dockerignore                                                                                                    0.0s
- => => transferring context: 162B                                                                                                    0.0s
- => [stage-1 1/8] FROM docker.io/library/python:3.11-slim                                                                            0.0s
- => CACHED [node 1/2] FROM docker.io/library/node:20-slim@sha256:c6585df72c34172bebd8d36abed961e231d7d3b5cee2e01294c4495e8a03f687    0.0s
- => [internal] load build context                                                                                                    0.0s
- => => transferring context: 1.92kB                                                                                                  0.0s
- => CACHED [stage-1 2/8] WORKDIR /app/api                                                                                            0.0s
- => ERROR [node 2/2] RUN npm install -g dagre                                                                                      460.8s
-------
- > [node 2/2] RUN npm install -g dagre:
-#10 460.7 npm error code ETIMEDOUT
-#10 460.7 npm error errno ETIMEDOUT
-#10 460.7 npm error network request to https://registry.npmjs.org/dagre failed, reason:
-#10 460.7 npm error network This is a problem related to network connectivity.
-#10 460.7 npm error network In most cases you are behind a proxy or have bad network settings.
-#10 460.7 npm error network
-#10 460.7 npm error network If you are behind a proxy, please make sure that the
-#10 460.7 npm error network 'proxy' config is set properly.  See: 'npm help config'
-#10 460.7 npm error A complete log of this run can be found in: /root/.npm/_logs/2026-02-18T16_29_40_045Z-debug-0.log
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c npm install -g dagre" did not complete successfully: exit code: 1
+  # stage: python
+  FROM python:3.11-slim
+
+  WORKDIR /app/api
+  ENV PYTHONDONTWRITEBYTECODE=1
+  ENV PYTHONUNBUFFERED=1
+
+  # копируем node и npm из stage
+  COPY --from=node /usr/local/bin/node /usr/local/bin/node
+  COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+  COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+  COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+  ENV PATH="/usr/local/bin:${PATH}"
+  ENV NODE_PATH=/usr/local/lib/node_modules
+
+  COPY api/ /app/api/
+
+  RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+    --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+    --retries 100 --timeout 600000 --no-cache-dir \
+    fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+  EXPOSE 8000
+  CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  Сборка:
+
+  docker compose build --no-cache api \
+    --build-arg HTTP_PROXY=http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+    --build-arg HTTPS_PROXY=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+
+  Запуск:
+
+  docker compose up -d --force-recreate

@@ -1,5 +1,5 @@
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs -f api
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=20 api
 table-dependency-viewer-api-1  | BOOT FILE: /app/api/main.py
 table-dependency-viewer-api-1  | /app/api/main.py:62: UserWarning: Field name "schema" in "DependencyItem" shadows an attribute in parent "BaseModel"
 table-dependency-viewer-api-1  |   class DependencyItem(BaseModel):

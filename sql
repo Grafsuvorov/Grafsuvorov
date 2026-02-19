@@ -1,6 +1,3 @@
-  python scripts\build_depends_on.py --file "C:
-  \Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\dm\sales_delivery_tracking\meta_data_file.yaml" --write
-
 #!/usr/bin/env python3
 from __future__ import annotations
 
@@ -167,15 +164,20 @@ def main() -> int:
             continue
 
         depends_on = build_depends_on_from_sql(sql_path, target_schema, target_table)
+        has_deps = bool(depends_on)
 
         count += 1
         if args.write:
+            if not has_deps:
+                # No FROM/JOIN deps (e.g., only function calls) -> keep existing depends_on
+                continue
             data["depends_on"] = depends_on
             dump_yaml(meta_path, data)
             updated += 1
         else:
-            print(f"\n== {meta_path.relative_to(repo_root)} ==")
-            print(yaml.safe_dump({"depends_on": depends_on}, sort_keys=False, allow_unicode=True))
+            if has_deps:
+                print(f"\n== {meta_path.relative_to(repo_root)} ==")
+                print(yaml.safe_dump({"depends_on": depends_on}, sort_keys=False, allow_unicode=True))
 
         if args.limit and count >= args.limit:
             break

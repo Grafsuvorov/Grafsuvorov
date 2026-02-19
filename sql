@@ -1,4 +1,4 @@
-python3 scripts/audit_depends_on.py --out reports/depends_audit.txt
+python scripts\audit_depends_on.py --out reports\depends_audit.txt
 
 
 #!/usr/bin/env python3
@@ -33,17 +33,24 @@ def extract_schema_table_refs(sql: str) -> Set[Tuple[str, str]]:
     return refs
 
 
-def resolve_sql_path(repo_root: Path, raw_path: str) -> Optional[Path]:
+def resolve_sql_path(repo_root: Path, root_dir: Path, raw_path: str) -> Optional[Path]:
     if not raw_path:
         return None
     raw_path = raw_path.strip()
+    raw_candidate = Path(raw_path)
+    if raw_candidate.is_absolute() and raw_candidate.exists():
+        return raw_candidate
+
     candidate = (repo_root / raw_path).resolve()
+    if candidate.exists():
+        return candidate
+    candidate = (root_dir / raw_path).resolve()
     if candidate.exists():
         return candidate
     marker = "etl_loads_entity/"
     if marker in raw_path:
         suffix = raw_path.split(marker, 1)[1]
-        candidate = (repo_root / "etl_loads_entity" / suffix).resolve()
+        candidate = (root_dir / suffix).resolve()
         if candidate.exists():
             return candidate
     return None
@@ -87,13 +94,18 @@ def build_meta_index(root: Path) -> Set[Tuple[str, str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit depends_on vs SQL references")
-    parser.add_argument("--root", default="etl_loads_entity", help="Root directory with meta_data_file.yaml")
+    parser.add_argument(
+        "--root",
+        default=r"C:\Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity",
+        help="Root directory with meta_data_file.yaml",
+    )
     parser.add_argument("--out", default="", help="Write text report to file")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of files (for testing)")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
-    root = (repo_root / args.root).resolve()
+    root_arg = Path(args.root)
+    root = root_arg if root_arg.is_absolute() else (repo_root / root_arg).resolve()
 
     meta_index = build_meta_index(root)
     report_lines: List[str] = []
@@ -104,7 +116,7 @@ def main() -> int:
         sql_path_raw = data.get("sql_query_insert_init")
         if not sql_path_raw:
             continue
-        sql_path = resolve_sql_path(repo_root, sql_path_raw)
+        sql_path = resolve_sql_path(repo_root, root, sql_path_raw)
         if not sql_path or not sql_path.exists():
             report_lines.append(
                 f"{meta_path.relative_to(repo_root)}: ERROR sql_query_insert_init not found -> {sql_path_raw}"

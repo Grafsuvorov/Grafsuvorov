@@ -1,35 +1,86 @@
-Traceback (most recent call last):
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 315, in _bootstrap
-    self.run()
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\multiprocessing\process.py", line 108, in run
-    self._target(*self._args, **self._kwargs)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\_subprocess.py", line 80, in subprocess_started
-    target(sockets=sockets)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 67, in run
-    return asyncio.run(self.serve(sockets=sockets))
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\runners.py", line 44, in run
-    return loop.run_until_complete(main)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\asyncio\base_events.py", line 642, in run_until_complete
-    return future.result()
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 71, in serve
-    await self._serve(sockets)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\server.py", line 78, in _serve
-    config.load()
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\config.py", line 436, in load
-    self.loaded_app = import_from_string(self.app)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\site-packages\uvicorn\importer.py", line 19, in import_from_string
-    module = importlib.import_module(module_str)
-  File "c:\users\suvorovnd\appdata\local\programs\python\python39\lib\importlib\__init__.py", line 127, in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-  File "<frozen importlib._bootstrap>", line 1030, in _gcd_import
-  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
-  File "<frozen importlib._bootstrap>", line 986, in _find_and_load_unlocked
-  File "<frozen importlib._bootstrap>", line 680, in _load_unlocked
-  File "<frozen importlib._bootstrap_external>", line 786, in exec_module
-  File "<frozen importlib._bootstrap_external>", line 923, in get_code
-  File "<frozen importlib._bootstrap_external>", line 853, in source_to_code
-  File "<frozen importlib._bootstrap>", line 228, in _call_with_frames_removed
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\api\main.py", line 1156
-    return f"\"{value.replace('\"', '\"\"')}\""
-                                               ^
-SyntaxError: f-string expression part cannot include a backslash
+table_name: KPI_INDICATORS_ACTUAL_REPORT_AD
+table_schema: ods
+table_id: 2896
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: STG_LOADER
+table_loading_index: 1
+entity_id: 42
+entity_name: MANAGEMENT_REPORTING_1
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/kpi_indicators_actual_report_ad/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/kpi_indicators_actual_report_ad/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/kpi_indicators_actual_report_ad/sql_query_truncate.sql
+depends_on:
+  c:
+  - dt
+  dds:
+  - accidents
+  dict_dds:
+  - calendar
+  - currency_rates
+  - global_identifier_zyfra
+  - map_kpi_report_account_to_entity
+  - map_material_sap_to_material_group_hyperion
+  - map_production_area_to_production_activity_type
+  - plant_and_subsidiary
+  - production_activity_type_texts
+  - production_area_texts
+  dict_stg:
+  - V_DOB_QUOTE_VALUES
+  dm:
+  - exp_material_stock_balance_mr_ad
+  - exp_production_ad_kaizen_employee_involve
+  - exp_production_ad_kaizens
+  - sales_shipment_from_plant
+  dm_view:
+  - sales_shipment_from_plant
+  ods:
+  - KPI_INDICATORS_ACTUAL_REPORT_AD
+  pa:
+  - dt_report
+  qlt:
+  - REPORT_DATE
+  stg:
+  - /BIC/AZIR_O2200
+  - /BIC/AZIR_O2300
+  - MES_LP_ALSGP_2MONTH
+  - MES_LP_ALSGP_AR
+  - MES_LP_SLAG
+  - TFACS
+  - V_KPI_FG_AL_HYP
+  - V_KPI_GOALS_REPORT
+  - V_MES_LP_PRODUCTION_MELT
+  - V_MES_LP_REJECT_PRODUCT
+  - V_MES_LP_WASTE_MOVEMENT
+  - V_TORO2_UNPLANNED_DWNT
+  - V_TORO_ETO_STAT
+  - auxiliary_production_anode_zyfra
+  - bip_zbw1689m_srv
+  - kpi_aggregation_characteristic_ppk
+  - kpi_aggregation_parameters_ppk
+  - kpi_indicators_register_of_claims
+  - macro_aluminium_alumina_indexes_v2_xlsx
+  - macro_index_rsv_atsenergo
+  - macro_key_rate_and_inflation_cbr
+  - sapxi_1c_personnel_attendance
+  - sapxi_production_aluminium_finish_goods_kubal
+  - sapxi_production_waste_report
+  - sapxi_raw_cubal_downtime
+  - sapxi_raw_cubal_downtimeklass
+  - sapxi_reject_product_kubal
+  - sapxi_sharepoint_workspacestandartisation
+  vkgr:
+  - REPORT_DATE
+  zyf:
+  - beg_date

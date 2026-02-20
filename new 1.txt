@@ -124,6 +124,13 @@ def collect_known_schemas(root: Path) -> Set[str]:
     return schemas
 
 
+def _safe_rel(path: Path, root: Path) -> str:
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
+
+
 def _detect_root(repo_root: Path, arg_root: str) -> Path:
     if arg_root:
         root_arg = Path(arg_root)
@@ -143,6 +150,8 @@ def main() -> int:
     parser.add_argument("--root", default="", help="Root directory with meta_data_file.yaml")
     parser.add_argument("--file", default="", help="Single meta_data_file.yaml (absolute or relative to root)")
     parser.add_argument("--write", action="store_true", help="Write depends_on back to meta_data_file.yaml")
+    parser.add_argument("--report-unchanged", action="store_true", help="Print list of files not changed")
+    parser.add_argument("--report-skipped", action="store_true", help="Print list of files skipped (no deps)")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of files (for testing)")
     args = parser.parse_args()
 
@@ -151,6 +160,8 @@ def main() -> int:
 
     count = 0
     updated = 0
+    unchanged: List[str] = []
+    skipped: List[str] = []
     known_schemas = collect_known_schemas(root) | EXTRA_SCHEMAS
     if args.limit == 0:
         print(f"[INFO] Known schemas ({len(known_schemas)}): {', '.join(sorted(known_schemas))}")
@@ -196,7 +207,12 @@ def main() -> int:
         count += 1
         if args.write:
             if not has_deps:
+                skipped.append(_safe_rel(meta_path, root))
                 # No FROM/JOIN deps (e.g., only function calls) -> keep existing depends_on
+                continue
+            existing = data.get("depends_on")
+            if existing == depends_on:
+                unchanged.append(_safe_rel(meta_path, root))
                 continue
             data["depends_on"] = depends_on
             dump_yaml(meta_path, data)
@@ -211,6 +227,14 @@ def main() -> int:
 
     if args.write:
         print(f"\nUpdated {updated} file(s).")
+        if args.report_unchanged and unchanged:
+            print("\nUnchanged files:")
+            for item in unchanged:
+                print(f"  - {item}")
+        if args.report_skipped and skipped:
+            print("\nSkipped (no deps) files:")
+            for item in skipped:
+                print(f"  - {item}")
     return 0
 
 

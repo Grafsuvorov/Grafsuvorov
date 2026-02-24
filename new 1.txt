@@ -1,8 +1,7 @@
-SELECT
-    *
+SELECT database, name
 FROM system.tables
 WHERE engine LIKE '%View%'
-  AND match(lower(create_table_query),
-            '(coalesce|case|join|union|multiif|if\\(|group by|having|over)');
-
-CREATE VIEW dm.view_account_counterparty_credit_limit (`dt_limit` Date, `counterparty_code` Nullable(String), `limit_type_code` Nullable(String), `limit_currency_code` Nullable(String), `counterparty_truncated_code` Nullable(String), `counterparty_search_name` Nullable(String), `counterparty_limit_amount` Nullable(Decimal(15, 2)), `counterparty_annual_turnover_amount` Nullable(Decimal(15, 2)), `dttm_inserted` Nullable(DateTime), `dttm_updated` Nullable(DateTime), `job_name` Nullable(String), `deleted_flag` Nullable(UInt8)) AS SELECT dt_limit, counterparty_code, limit_type_code, limit_currency_code, counterparty_truncated_code, counterparty_search_name, counterparty_limit_amount, counterparty_annual_turnover_amount, dttm_inserted, dttm_updated, job_name, deleted_flag FROM dm.account_counterparty_credit_limit AS sync
+  AND match(
+        lower(create_table_query),
+        '\\b(coalesce|case|join|union|multiif|group by|having)\\b|over\\s*\\('
+      );

@@ -7,8 +7,37 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+    volumes:
+      - ./api:/app/api
+      - ./scripts:/app/scripts
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - META_PARENT_DIR=/app/etl_loads_entity
+      - AUTH_ENABLED=${AUTH_ENABLED}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
+      - AUTH_ACCESS_TTL_MIN=${AUTH_ACCESS_TTL_MIN}
+      - AUTH_ALLOW_REGISTER=${AUTH_ALLOW_REGISTER}
+      - AUTH_BOOTSTRAP_ADMIN_EMAIL=${AUTH_BOOTSTRAP_ADMIN_EMAIL}
+      - AUTH_BOOTSTRAP_ADMIN_PASSWORD=${AUTH_BOOTSTRAP_ADMIN_PASSWORD}
+
+# --- PROD пример (раскомментируй нужные строки) ---
+#services:
+#  frontend:
+#    build: .
+#    ports:
+#      - "80:80"
+#  api:
+#    build:
+#      context: .
+#      dockerfile: api/Dockerfile
+#    ports:
+#      - "8000:8000"
+#    # Вариант А: брать переменные из api/.env
+#    #env_file:
+#    #  - ./api/.env
+#    # Вариант Б: задать явно (если не хочешь env_file)
+#    #environment:
+#    #  - DATABASE_URL=postgresql://user:pass@db-host:5432/db
+#    #  - META_PARENT_DIR=/app/etl_loads_entity

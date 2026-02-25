@@ -28,6 +28,8 @@ import subprocess
 import tempfile
 from itertools import combinations
 
+from fastapi import APIRouter, HTTPException
+
 from .config import (
     TABLE_LOADING_HISTORY,
     TABLE_ENTITIES_META,
@@ -40,6 +42,8 @@ from .config import (
     DATABASE_URL,
 )
 
+from .auth import auth_middleware, init_auth, router as auth_router
+
 app = FastAPI()
 # CORS для взаимодействия с фронтом
 app.add_middleware(
@@ -50,12 +54,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.middleware("http")(auth_middleware)
+app.include_router(auth_router)
+
 # Подключение
 engine = create_engine(DATABASE_URL)
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 print("BOOT FILE:", __file__)
+
+init_auth()
+
+
+@app.get("/api/health")
+def healthcheck():
+    return {"status": "ok"}
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):

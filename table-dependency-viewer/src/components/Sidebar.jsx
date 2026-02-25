@@ -1,7 +1,14 @@
 import "../style/app.css";
 
-export default function Sidebar({ currentPath, onChangeView }) {
+export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
   const isActive = (path) => currentPath === path;
+  const roleLabel = userProfile?.role === "admin"
+    ? "Админ"
+    : userProfile?.role === "engineer"
+      ? "Инженер"
+      : userProfile?.role === "analyst"
+        ? "Аналитик"
+        : userProfile?.role;
   return (
     <header className="topnav">
       <div className="topnav-inner">
@@ -42,6 +49,22 @@ export default function Sidebar({ currentPath, onChangeView }) {
               >
                 Аудит логики
               </button>
+              {authEnabled && userProfile && (
+                <button
+                  className={isActive("/account") ? "active" : ""}
+                  onClick={() => onChangeView("/account")}
+                >
+                  Профиль
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  className={isActive("/admin/users") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/users")}
+                >
+                  Админка
+                </button>
+              )}
               <button
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
@@ -53,6 +76,19 @@ export default function Sidebar({ currentPath, onChangeView }) {
         </div>
 
         {/* RIGHT */}
+        {authEnabled && userProfile && (
+          <div className="topnav-right">
+            <div className="auth-pill">
+              <div className="auth-user">
+                {userProfile?.username || userProfile?.email || "Пользователь"}
+              </div>
+              <div className="auth-role">{roleLabel}</div>
+            </div>
+            <button className="auth-logout" onClick={onLogout}>
+              Выйти
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

@@ -1,21 +1,92 @@
-[root@rgm-s-dwhapp01 ~]# ps aux | egrep 'nginx|traefik|caddy'
-root      98052  0.0  0.0 112816   984 pts/0    S+   11:14   0:00 grep -E --colo                                      r=auto nginx|traefik|caddy
-root     104468  0.0  0.0  10252  3808 ?        Ss   Feb20   0:00 nginx: master                                       process nginx -g daemon off;
-101      104553  0.0  0.0  10740  2444 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104554  0.0  0.0  10740  2444 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104555  0.0  0.0  10740  2444 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104556  0.0  0.0  10740  2596 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104557  0.0  0.0  10740  2448 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104558  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104559  0.0  0.0  10740  2448 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104560  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104561  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104562  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104563  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104564  0.0  0.0  10740  2444 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104565  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104566  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104567  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-101      104568  0.0  0.0  10716  2224 ?        S    Feb20   0:00 nginx: worker                                       process
-[root@rgm-s-dwhapp01 ~]# nginx -T | head -n 60
--bash: nginx: command not found
+ explain-- analyze
+select
+  (xpath('//Item/@a', item_document_xml))[1]::varchar as "RW_PART"
+, (xpath('//Item/@b', item_document_xml))[1]::varchar as "KPR_HOME"
+, (xpath('//Item/@c', item_document_xml))[1]::varchar as "CAR_NUM"
+, (xpath('//Item/@d', item_document_xml))[1]::varchar as "CAR_TYPE"
+, (xpath('//Item/@e', item_document_xml))[1]::varchar as "TARA"
+, (xpath('//Item/@f', item_document_xml))[1]::varchar as "TONNAGE"
+, (xpath('//Item/@g', item_document_xml))[1]::varchar as "KPR_OWNER"
+, (xpath('//Item/@h', item_document_xml))[1]::varchar as "KPR_RENT"
+, (xpath('//Item/@i', item_document_xml))[1]::varchar as "PR_EXP"
+, (xpath('//Item/@j', item_document_xml))[1]::varchar as "ID_SHIPDIR"
+, (xpath('//Item/@k', item_document_xml))[1]::varchar as "RW_KG_LOAD"
+, (xpath('//Item/@l', item_document_xml))[1]::varchar as "DT_START_RZD"
+, (xpath('//Item/@m', item_document_xml))[1]::varchar as "DT_START_PPGT"
+, (xpath('//Item/@n', item_document_xml))[1]::varchar as "PR_PAY_USE"
+, (xpath('//Item/@o', item_document_xml))[1]::varchar as "WEIGHT_IN"
+, (xpath('//Item/@p', item_document_xml))[1]::varchar as "WEIGHT_OUT"
+, (xpath('//Item/@q', item_document_xml))[1]::varchar as "WEIGHT_TARA"
+, (xpath('//Item/@r', item_document_xml))[1]::varchar as "ETRAN_RW_ST"
+, (xpath('//Item/@s', item_document_xml))[1]::varchar as "ETRAN_DOC_NUM"
+, (xpath('//Item/@t', item_document_xml))[1]::varchar as "RW_ZPU"
+, (xpath('//Item/@u', item_document_xml))[1]::varchar as "ZPU_NUM"
+, (xpath('//Item/@v', item_document_xml))[1]::varchar as "REF_PART"
+, (xpath('//Item/@w', item_document_xml))[1]::varchar as "PART_PRIM"
+, (xpath('//Item/@x', item_document_xml))[1]::varchar as "CAR_VIEWER"
+, (xpath('//Item/@y', item_document_xml))[1]::varchar as "CERT_NUM"
+, (xpath('//Item/@z', item_document_xml))[1]::varchar as "ZZNP"
+, (xpath('//Item/@aa', item_document_xml))[1]::varchar as "DT_START_SVH"
+, (xpath('//Item/@ab', item_document_xml))[1]::varchar as "DT_END_SVH"
+, (xpath('//Item/@ac', item_document_xml))[1]::varchar as "GTD"
+, (xpath('//Item/@ad', item_document_xml))[1]::varchar as "DT_GTD"
+, (xpath('//Item/@ae', item_document_xml))[1]::varchar as "ORDER_NUM"
+, (xpath('//Item/@af', item_document_xml))[1]::varchar as "TARA_LAST_CLEAR"
+, (xpath('//Item/@ag', item_document_xml))[1]::varchar as "RW_KG_OPERLOAD"
+, (xpath('//Item/@ah', item_document_xml))[1]::varchar as "PR_ZD"
+, (xpath('//Item/@ai', item_document_xml))[1]::varchar as "RW_ZPU5_8"
+, (xpath('//Item/@aj', item_document_xml))[1]::varchar as "ZPU_NUM5_8"
+, (xpath('//Item/@ak', item_document_xml))[1]::varchar as "PR_OUT"
+, (xpath('//Item/@al', item_document_xml))[1]::varchar as "DT_OUT_BEG"
+, (xpath('//Item/@am', item_document_xml))[1]::varchar as "K_LUK"
+, (xpath('//Item/@an', item_document_xml))[1]::varchar as "DT_OUT_END"
+, (xpath('//Item/@ao', item_document_xml))[1]::varchar as "PR_ACCEPTED"
+, (xpath('//Item/@ap', item_document_xml))[1]::varchar as "PR_CLEAN"
+, (xpath('//Item/@aq', item_document_xml))[1]::varchar as "ID_CARGO_FORM"
+, (xpath('//Item/@ar', item_document_xml))[1]::varchar as "PR_TRANSIT"
+, (xpath('//Item/@as', item_document_xml))[1]::varchar as "KPR_OCCUP"
+, (xpath('//Item/@at', item_document_xml))[1]::varchar as "DT_GDC_IN"
+, (xpath('//Item/@au', item_document_xml))[1]::varchar as "EXPLANATION"
+, (xpath('//Item/@av', item_document_xml))[1]::varchar as "ID_EXPL_WRK"
+, (xpath('//Item/@aw', item_document_xml))[1]::varchar as "ID_EXPL_CTRL"
+, (xpath('//Item/@ax', item_document_xml))[1]::varchar as "PR_RET_BY_LOAD"
+, (xpath('//Item/@ay', item_document_xml))[1]::varchar as "RGB"
+, (xpath('//Item/@az', item_document_xml))[1]::varchar as "SILOS"
+, (xpath('//Item/@ba', item_document_xml))[1]::varchar as "WEIGHT_TARA_IN"
+, (xpath('//Item/@bb', item_document_xml))[1]::varchar as "LOAD_CARGO_PRIM"
+, (xpath('//Item/@bc', item_document_xml))[1]::varchar as "RASPOR"
+, (xpath('//Item/@bd', item_document_xml))[1]::varchar as "FOREIGN_SEAPORT_ID"
+, (xpath('//Item/@be', item_document_xml))[1]::varchar as "KPR_BUYER"
+, (xpath('//Item/@bf', item_document_xml))[1]::varchar as "KPR_SEAPORT_TRANS"
+, (xpath('//Item/@bg', item_document_xml))[1]::varchar as "ID_MDM_HOME"
+, (xpath('//Item/@bh', item_document_xml))[1]::varchar as "ID_MDM_OWNER"
+, (xpath('//Item/@bi', item_document_xml))[1]::varchar as "ID_MDM_RENT"
+, (xpath('//Item/@bj', item_document_xml))[1]::varchar as "DSP_ID"
+, (xpath('//Item/@bk', item_document_xml))[1]::varchar as "CHECK_BIT"
+, (xpath('//Item/@bl', item_document_xml))[1]::varchar as "DT_DEL"
+, xiin.uuid
+, xiin.record_id 
+, xiin.dt_insert
+, (xpath('Header/Sender/text()', document_xml))[1]::varchar as sender
+, (xpath('Header/Receiver/text()', document_xml))[1]::varchar as receiver
+, ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp as create_date_time 
+from landing."INPUT_DATA_FROM_SAPXI_IN" xiin
+cross join lateral unnest(xpath('Body/Item', document_xml)) AS item_document_xml
+left join stg.asuzdc_rwcar_parts asurp
+	on xiin.uuid = asurp.uuid
+where 
+	flow_id = 'SI_GdcVehicleBatchTracking_AI'
+	and asurp.uuid is null;
+
+
+Gather Motion 6:1  (slice2; segments: 6)  (cost=10000000001.62..10000000319.99 rows=12 width=865)
+  ->  Nested Loop  (cost=10000000001.62..10000000319.99 rows=2 width=865)
+        ->  Hash Anti Join  (cost=1.62..309.12 rows=1 width=833)
+              Hash Cond: ((xiin.uuid)::text = (asurp.uuid)::text)
+              ->  Seq Scan on "INPUT_DATA_FROM_SAPXI_IN" xiin  (cost=0.00..307.40 rows=4 width=833)
+                    Filter: ((flow_id)::text = 'SI_GdcVehicleBatchTracking_AI'::text)
+              ->  Hash  (cost=1.32..1.32 rows=4 width=37)
+                    ->  Broadcast Motion 6:6  (slice1; segments: 6)  (cost=0.00..1.32 rows=4 width=37)
+                          ->  Seq Scan on asuzdc_rwcar_parts asurp  (cost=0.00..1.04 rows=1 width=37)
+        ->  Function Scan on unnest item_document_xml  (cost=0.01..1.00 rows=17 width=32)
+Optimizer: Postgres query optimizer

@@ -3,27 +3,22 @@ import "../style/app.css";
 
 const QUICK_ROUTES = [
   {
-    title: "Night Ops",
+    title: "Ночное окно",
     desc: "Пики загрузок, тяжелые таблицы по окну времени, фейлы.",
     path: "/night-ops",
   },
   {
-    title: "Errors",
-    desc: "Инциденты из YouTrack и связь с таблицами DWH.",
-    path: "/errors",
-  },
-  {
-    title: "Tables",
+    title: "Таблицы",
     desc: "Поиск таблиц и переход в детальную карточку.",
     path: "/tables",
   },
   {
-    title: "Entities",
+    title: "Сущности",
     desc: "Справочник сущностей и покрытие до DM.",
     path: "/entities",
   },
   {
-    title: "Slow Tables",
+    title: "Медленные",
     desc: "Медленные и нестабильные таблицы по p95/CV.",
     path: "/slow-tables",
   },
@@ -35,8 +30,8 @@ export default function OnboardingPage() {
   return (
     <div className="container cc-page">
       <section className="cc-header-zone">
-        <button className="btn" onClick={() => navigate("/")}>← Back</button>
-        <h1>Onboarding</h1>
+        <button className="btn" onClick={() => navigate("/")}>← Назад</button>
+        <h1>Как пользоваться</h1>
         <div className="cc-subtitle">Как быстро пользоваться приложением и с чего начинать анализ.</div>
       </section>
 
@@ -61,7 +56,7 @@ export default function OnboardingPage() {
             <div className="onboarding-step-index">3</div>
             <div>
               <div className="onboarding-step-title">Проверьте последствия</div>
-              <div className="muted">В карточке запустите Dependency/Impact graph и сверяйте Errors/DQ.</div>
+              <div className="muted">В карточке запустите Dependency/Impact graph и сверяйте DQ.</div>
             </div>
           </div>
         </div>
@@ -91,7 +86,6 @@ export default function OnboardingPage() {
           <div>2) Table Card: history + variants + DQ.</div>
           <div>3) Dependency Graph: upstream источник задержки.</div>
           <div>4) Impact Graph: какие витрины/сущности пострадали.</div>
-          <div>5) Errors: есть ли подтвержденный инцидент в YouTrack.</div>
         </div>
       </section>
     </div>

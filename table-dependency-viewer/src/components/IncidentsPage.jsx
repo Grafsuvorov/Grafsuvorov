@@ -134,52 +134,52 @@ export default function IncidentsPage({ onSelectTable }) {
   return (
     <div className="cc-page">
       <section className="cc-header-zone">
-        <h1>YouTrack Incidents</h1>
+        <h1>Инциденты YouTrack</h1>
         <div className="cc-subtitle">
-          Tracker issues mapped to DWH facts.
+          Инциденты и связь с таблицами DWH.
         </div>
       </section>
 
       {stats && (
         <section className="incidents-overview">
           <div className="incidents-overview-card">
-            <div className="label">Total incidents</div>
+            <div className="label">Всего инцидентов</div>
             <div className="value">{stats.total}</div>
           </div>
           <div className="incidents-overview-card">
-            <div className="label">Mapped to tables</div>
+            <div className="label">Привязаны к таблицам</div>
             <div className="value">{stats.with_table}</div>
-            <div className="hint">{stats.unique_tables} unique tables</div>
+            <div className="hint">{stats.unique_tables} уникальных</div>
           </div>
           <div className="incidents-overview-card">
-            <div className="label">Entities affected</div>
+            <div className="label">Задетые сущности</div>
             <div className="value">{stats.unique_entities}</div>
           </div>
           <div className="incidents-overview-card danger">
-            <div className="label">DWH failures</div>
+            <div className="label">Сбоев DWH</div>
             <div className="value">{stats.with_db_failures}</div>
-            <div className="hint">log history</div>
+            <div className="hint">по логам</div>
           </div>
         </section>
       )}
 
       {periodLabel && (
         <div className="cc-header-meta">
-          <span className="period-pill">Period: {periodLabel}</span>
-          <span className="period-note">YouTrack sample</span>
+          <span className="period-pill">Период: {periodLabel}</span>
+          <span className="period-note">срез YouTrack</span>
         </div>
       )}
 
       {timeline.length > 0 && (
         <section className="cc-surface incidents-chart">
-          <div className="section-title">Daily incident trend</div>
+          <div className="section-title">Динамика по дням</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={timeline} margin={{ top: 12, right: 16, left: -16, bottom: 0 }}>
               <XAxis dataKey="day" tickFormatter={chartTick} fontSize={12} interval={0} angle={-20} dy={10} dx={-8} height={60} />
               <YAxis allowDecimals={false} fontSize={12} width={24} />
               <Tooltip
                 labelFormatter={(value) => formatDayTitle(value)}
-                formatter={(value) => [`${value} incidents`, ""]}
+                formatter={(value) => [`${value} инцидентов`, ""]}
               />
               <Bar dataKey="count" fill="#f97316" radius={[6, 6, 0, 0]} />
             </BarChart>
@@ -188,19 +188,19 @@ export default function IncidentsPage({ onSelectTable }) {
       )}
 
       <section className="incidents-top">
-        <div className="incidents-top-head">
-          <div>
-            <div className="section-title">Top entities and tables</div>
-            <div className="incidents-top-desc">Full period summary from YouTrack, sorted by incident count.</div>
-          </div>
-          <div className="incidents-top-toggle">
+          <div className="incidents-top-head">
+            <div>
+            <div className="section-title">Топ сущностей и таблиц</div>
+            <div className="incidents-top-desc">Сводка по периоду из YouTrack, сортировка по числу инцидентов.</div>
+            </div>
+            <div className="incidents-top-toggle">
             {topToggleOptions.map((size) => (
               <button
                 key={size}
                 className={size === topSize ? "active" : ""}
                 onClick={() => setTopSize(size)}
               >
-                Top {size}
+                Топ {size}
               </button>
             ))}
           </div>
@@ -208,14 +208,14 @@ export default function IncidentsPage({ onSelectTable }) {
 
         <div className="incidents-top-columns">
           <div className="incidents-top-list">
-            <div className="top-list-title">Entities</div>
-            {topEntities.length === 0 && <div className="muted">No data</div>}
+            <div className="top-list-title">Сущности</div>
+            {topEntities.length === 0 && <div className="muted">Нет данных</div>}
             {topEntities.map((item) => (
               <div key={item.label} className="incidents-top-row">
                 <div>
-                  <div className="top-label-type">Entity</div>
+                  <div className="top-label-type">Сущность</div>
                   <div className="top-label">{item.label}</div>
-                  <div className="top-hint">Last incident: {formatDate(item.last_incident)}</div>
+                  <div className="top-hint">Последний инцидент: {formatDate(item.last_incident)}</div>
                 </div>
                 <div className="top-count">{item.count}</div>
               </div>
@@ -223,14 +223,14 @@ export default function IncidentsPage({ onSelectTable }) {
           </div>
 
           <div className="incidents-top-list">
-            <div className="top-list-title">Tables</div>
-            {topTables.length === 0 && <div className="muted">No data</div>}
+            <div className="top-list-title">Таблицы</div>
+            {topTables.length === 0 && <div className="muted">Нет данных</div>}
             {topTables.map((item) => (
               <div key={item.label} className="incidents-top-row">
                 <div>
-                  <div className="top-label-type">Table</div>
+                  <div className="top-label-type">Таблица</div>
                   <div className="top-label mono">{item.label}</div>
-                  <div className="top-hint">Last incident: {formatDate(item.last_incident)}</div>
+                  <div className="top-hint">Последний инцидент: {formatDate(item.last_incident)}</div>
                 </div>
                 <div className="top-count">{item.count}</div>
               </div>
@@ -244,7 +244,7 @@ export default function IncidentsPage({ onSelectTable }) {
           <input
             className="incidents-search"
             value={search}
-            placeholder="Search by ID, title, table"
+            placeholder="Поиск по ID, теме, таблице"
             onChange={(e) => setSearch(e.target.value)}
           />
 
@@ -258,7 +258,7 @@ export default function IncidentsPage({ onSelectTable }) {
                 if (next) setShowMissingTable(false);
               }}
             />
-            Only with matched table
+            Только с таблицей
           </label>
 
           <label className="incidents-toggle">
@@ -267,7 +267,7 @@ export default function IncidentsPage({ onSelectTable }) {
               checked={showDbOnly}
               onChange={(e) => setShowDbOnly(e.target.checked)}
             />
-            Only with DWH failures
+            Только со сбоями DWH
           </label>
 
           <label className="incidents-toggle">
@@ -281,25 +281,25 @@ export default function IncidentsPage({ onSelectTable }) {
                 if (next) setShowMappedOnly(false);
               }}
             />
-            Without table
+            Без таблицы
           </label>
         </div>
       </section>
 
-      {loading && <div className="page-loading">Loading incidents...</div>}
+      {loading && <div className="page-loading">Загрузка инцидентов...</div>}
       {error && !loading && (
-        <div className="page-error">Failed to load incidents: {error}</div>
+        <div className="page-error">Не удалось загрузить инциденты: {error}</div>
       )}
 
       {!loading && !error && (
         <section className="cc-surface">
           <div className="section-title">
-            Details
+            Детали
             <span className="section-meta">{filtered.length}</span>
           </div>
 
           {filtered.length === 0 ? (
-            <div className="incident-empty">No matches found.</div>
+            <div className="incident-empty">Ничего не найдено.</div>
           ) : (
             <div className="incident-groups">
               {groupedIncidents.map((group) => (
@@ -320,7 +320,7 @@ export default function IncidentsPage({ onSelectTable }) {
                                   target="_blank"
                                   rel="noreferrer"
                                 >
-                                  Open issue
+                                  Открыть
                                 </a>
                               )}
                               <button
@@ -328,7 +328,7 @@ export default function IncidentsPage({ onSelectTable }) {
                                 disabled={!incident.has_table}
                                 onClick={() => openTable(incident.table_fqn)}
                               >
-                                Table card
+                                Карточка
                               </button>
                             </div>
                           </header>
@@ -340,32 +340,32 @@ export default function IncidentsPage({ onSelectTable }) {
                                 {incident.entity_name || "—"}
                               </div>
                               {incident.has_db_failures && (
-                                <div className="db-badge">DWH failures ({incident.db_failures_count})</div>
+                                <div className="db-badge">Сбоев DWH ({incident.db_failures_count})</div>
                               )}
                             </div>
 
                             <div className="incident-card-meta">
-                              <div className="meta-label">Table</div>
+                              <div className="meta-label">Таблица</div>
                               <div className="mono" title={tableTitle}>
                                 {incident.table_fqn || tableTitle}
                               </div>
                               {!incident.has_table && (
-                                <div className="incident-badge warning">not in DB</div>
+                                <div className="incident-badge warning">нет в БД</div>
                               )}
                             </div>
                           </div>
 
                           <div className="incident-card-times">
                             <div>
-                              <div className="meta-label">Started</div>
+                              <div className="meta-label">Старт</div>
                               <div>{formatDate(incident.start_at)}</div>
                             </div>
                             <div>
-                              <div className="meta-label">Detected</div>
+                              <div className="meta-label">Обнаружен</div>
                               <div>{formatDate(incident.detected_at)}</div>
                             </div>
                             <div>
-                              <div className="meta-label">Resolved</div>
+                              <div className="meta-label">Закрыт</div>
                               <div>{formatDate(incident.resolved_at)}</div>
                             </div>
                           </div>

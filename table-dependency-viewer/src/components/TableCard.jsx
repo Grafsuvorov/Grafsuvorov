@@ -44,6 +44,7 @@ export default function TableCard({
   const [dqHistory, setDqHistory] = useState([]);
   const [dqHistoryLoading, setDqHistoryLoading] = useState(false);
   const [dqHistoryError, setDqHistoryError] = useState(null);
+  const [showDqHistory, setShowDqHistory] = useState(false);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -51,9 +52,9 @@ export default function TableCard({
     setLoadingMeta(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/card/${schema}/${tableName}`)
+    fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch table metadata");
+        if (!res.ok) throw new Error("Не удалось загрузить карточку таблицы");
         return res.json();
       })
       .then(setMeta)
@@ -65,12 +66,12 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setHistoryLoading(true);
     setHistoryError(null);
-    fetch(`${API_BASE}/api/table-history/${schema}/${tableName}?limit=10`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table history")))
+    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=10`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
       .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setHistoryError(typeof err === "string" ? err : "Failed to load table history");
+        setHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю запусков");
       })
       .finally(() => setHistoryLoading(false));
   }, [schema, tableName]);
@@ -79,12 +80,12 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setVariantsLoading(true);
     setVariantsError(null);
-    fetch(`${API_BASE}/api/table-variants/${schema}/${tableName}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table variants")))
+    fetch(`${API_BASE}/api/table-variants/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить варианты таблицы")))
       .then((data) => setVariants(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setVariantsError(typeof err === "string" ? err : "Failed to load table variants");
+        setVariantsError(typeof err === "string" ? err : "Не удалось загрузить варианты таблицы");
       })
       .finally(() => setVariantsLoading(false));
   }, [schema, tableName]);
@@ -93,12 +94,12 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setDqLoading(true);
     setDqError(null);
-    fetch(`${API_BASE}/api/dq/table/${schema}/${tableName}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality")))
+    fetch(`${API_BASE}/api/dq/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить качество данных")))
       .then((data) => setDqData(data))
       .catch((err) => {
         console.error(err);
-        setDqError(typeof err === "string" ? err : "Failed to load data quality");
+        setDqError(typeof err === "string" ? err : "Не удалось загрузить качество данных");
       })
       .finally(() => setDqLoading(false));
   }, [schema, tableName]);
@@ -107,12 +108,12 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setDqHistoryLoading(true);
     setDqHistoryError(null);
-    fetch(`${API_BASE}/api/dq/history/${schema}/${tableName}?limit=20`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality history")))
+    fetch(`${API_BASE}/api/dq/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю качества данных")))
       .then((data) => setDqHistory(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setDqHistoryError(typeof err === "string" ? err : "Failed to load data quality history");
+        setDqHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю качества данных");
       })
       .finally(() => setDqHistoryLoading(false));
   }, [schema, tableName]);
@@ -129,20 +130,20 @@ export default function TableCard({
     if (!tableContext?.status) return null;
     switch (tableContext.status) {
       case "slow_unstable":
-        return { label: "Slow & Unstable", tone: "danger" };
+        return { label: "Медленно и нестабильно", tone: "danger" };
       case "slow":
-        return { label: "Slow", tone: "danger" };
+        return { label: "Медленно", tone: "danger" };
       case "unstable":
-        return { label: "Unstable", tone: "warn" };
+        return { label: "Нестабильно", tone: "warn" };
       case "low_sample":
-        return { label: "Low Sample", tone: "muted" };
+        return { label: "Мало запусков", tone: "muted" };
       default:
         return { label: "OK", tone: "ok" };
     }
   }, [tableContext]);
 
   const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
-  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
+  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("ru-RU") : "—");
   const fmtPct = (value) => (Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—");
 
   const tableFqn = meta
@@ -155,30 +156,30 @@ export default function TableCard({
     if (!meta) return [];
     return [
       {
-        label: "Last successful load",
+        label: "Последняя успешная загрузка",
         value: meta.last_success_time || "—",
-        hint: "log-based",
+        hint: "по логам",
       },
       {
-        label: "Average duration",
+        label: "Средняя длительность",
         value:
           meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
-            ? `${meta.avg_duration_minutes} min`
+            ? `${meta.avg_duration_minutes} мин`
             : "—",
-        hint: "successful runs only",
+        hint: "только успешные",
       },
       {
-        label: "Load mode",
+        label: "Режим загрузки",
         value: meta.table_load_mode || "—",
-        hint: "ETL configuration",
+        hint: "настройка ETL",
       },
       {
-        label: "Table size",
+        label: "Размер таблицы",
         value:
           meta.table_size_mb !== null && meta.table_size_mb !== undefined
             ? `${meta.table_size_mb} MB`
             : "—",
-        hint: "PostgreSQL estimate",
+        hint: "оценка БД",
       },
     ];
   }, [meta]);
@@ -241,7 +242,7 @@ export default function TableCard({
 
     fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Failed to build dependency graph"),
+        res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
       .then((data) => {
         const nodes = Array.isArray(data.nodes) ? data.nodes : [];
@@ -260,7 +261,7 @@ export default function TableCard({
       })
       .catch((err) => {
         console.error(err);
-        setDepsError(typeof err === "string" ? err : "Failed to load graph");
+        setDepsError(typeof err === "string" ? err : "Не удалось загрузить граф");
       })
       .finally(() => setLoadingDeps(false));
   };
@@ -286,7 +287,7 @@ export default function TableCard({
   const copyList = () => {
     if (!tableList.length) return;
     navigator.clipboard.writeText(tableList.join("\n"));
-    alert("Table list copied");
+    alert("Список таблиц скопирован");
   };
 
   const handleNodeClick = (newSchema, newTable) => {
@@ -308,11 +309,11 @@ export default function TableCard({
     return (
       <div className="table-page">
         <div className="card dep-error">
-          <div className="dep-error-title">Failed to load table card</div>
+          <div className="dep-error-title">Не удалось загрузить карточку</div>
           <div className="muted">{error}</div>
           <div style={{ marginTop: 12 }}>
             <button className="btn" onClick={onBack}>
-              ← Back
+              ← Назад
             </button>
           </div>
         </div>
@@ -323,7 +324,7 @@ export default function TableCard({
   if (loadingMeta || !meta) {
     return (
       <div className="table-page">
-        <div className="card muted">Loading table card...</div>
+        <div className="card muted">Загрузка карточки...</div>
       </div>
     );
   }
@@ -332,10 +333,10 @@ export default function TableCard({
     <div className="table-page">
       <div className="table-header">
         <button className="btn" onClick={onBack}>
-          ← Back
+          ← Назад
         </button>
         <div className="table-head-main">
-          <div className="table-head-label">Table</div>
+          <div className="table-head-label">Таблица</div>
           <div className="table-title">{tableFqn}</div>
           <div className="table-head-meta">
             <span>{meta.entity_name || "—"}</span>
@@ -344,16 +345,16 @@ export default function TableCard({
         </div>
         <div className="table-status-wrap">
           <div className={`table-status ${status}`}>
-            {status === "risk" ? "RISK" : status === "warn" ? "WARN" : "OK"}
+            {status === "risk" ? "Риск" : status === "warn" ? "Внимание" : "OK"}
           </div>
           <button
             className="status-help"
             title={
               status === "risk"
-                ? "RISK: avg duration > 20 min based on recent SUCCESS runs."
+                ? "Риск: средняя длительность > 20 мин по успешным загрузкам."
                 : status === "warn"
-                ? "WARN: avg duration > 10 min based on recent SUCCESS runs."
-                : "OK: avg duration <= 10 min based on recent SUCCESS runs."
+                ? "Внимание: средняя длительность > 10 мин по успешным загрузкам."
+                : "OK: средняя длительность ≤ 10 мин по успешным загрузкам."
             }
           >
             ?
@@ -365,9 +366,9 @@ export default function TableCard({
         <div className="table-health-card">
           <div className="table-health-header">
             <div>
-              <div className="table-health-title">Load health</div>
+              <div className="table-health-title">Стабильность загрузки</div>
               <div className="table-health-subtitle muted">
-                Based on successful runs in Slow/Unstable.
+                На основе успешных запусков (Slow/Unstable).
               </div>
             </div>
             {healthBadge && (
@@ -378,21 +379,21 @@ export default function TableCard({
           </div>
           <div className="table-health-legend">
             <span className="table-health-legend-item">
-              Slow &amp; Unstable: p95 &gt; 10 min and CV &gt; 0.6
+              Медленно и нестабильно: p95 &gt; 10 мин и CV &gt; 0.6
             </span>
             <span className="table-health-legend-item">
-              Slow: p95 &gt; 10 min
+              Медленно: p95 &gt; 10 мин
             </span>
             <span className="table-health-legend-item">
-              Unstable: CV &gt; 0.3
+              Нестабильно: CV &gt; 0.3
             </span>
             <span className="table-health-legend-item">
-              Low Sample: not enough runs
+              Мало запусков: недостаточно данных
             </span>
           </div>
           <div className="table-health-metrics">
             <div>
-              <div className="table-health-label">Runs</div>
+              <div className="table-health-label">Запусков</div>
               <div className="table-health-value">{tableContext.runs_count ?? "—"}</div>
             </div>
             <div>
@@ -410,7 +411,7 @@ export default function TableCard({
           </div>
           {tableContext.low_sample && (
             <div className="table-health-note">
-              Not enough runs for stable assessment — use with caution.
+              Недостаточно запусков для уверенной оценки.
             </div>
           )}
         </div>
@@ -426,67 +427,67 @@ export default function TableCard({
         ))}
 
         <div className="table-info-card table-actions">
-          <div className="table-card-label">Actions</div>
+          <div className="table-card-label">Действия</div>
           <div className="table-action-buttons">
             <button className="btn btn-secondary" onClick={loadDependencies}>
-              Show dependency graph
+              Граф зависимостей
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => onOpenImpact?.(schema, tableName)}
             >
-              Open impact graph
+              Граф влияния
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => setShowGantt(!showGantt)}
             >
-              {showGantt ? "Hide timeline" : "Load timeline"}
+              {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
             </button>
             <button
               className="btn btn-secondary"
               onClick={copyList}
               disabled={!tableList.length}
             >
-              Copy dependency list
+              Скопировать список
             </button>
             <button className="btn" onClick={onBack}>
-              Return
+              Назад
             </button>
           </div>
         </div>
       </div>
 
       <div className="table-section">
-        <div className="section-title">Data quality</div>
+        <div className="section-title">Качество данных</div>
         <div className="card">
-          {dqLoading && <div className="muted">Loading data quality...</div>}
+          {dqLoading && <div className="muted">Загрузка качества данных...</div>}
           {dqError && <div className="dep-error-title">{dqError}</div>}
           {!dqLoading && !dqError && !dqData && (
-            <div className="muted">No data quality checks found.</div>
+            <div className="muted">Проверки качества не найдены.</div>
           )}
           {!dqLoading && !dqError && dqData && (
             <div className="dq-grid">
               <div className="dq-card">
-                <div className="dq-label">Duplicate check</div>
+                <div className="dq-label">Проверка дублей</div>
                 <div className="dq-value">
                   {dqData.duplicate?.count !== null && dqData.duplicate?.count !== undefined
                     ? fmtInt(dqData.duplicate.count)
                     : "—"}
                 </div>
                 <div className="dq-hint muted">
-                  Last check: {dqData.duplicate?.last_check || "—"}
+                  Последняя проверка: {dqData.duplicate?.last_check || "—"}
                 </div>
               </div>
               <div className="dq-card">
-                <div className="dq-label">Row count</div>
+                <div className="dq-label">Кол-во строк</div>
                 <div className="dq-value">
                   {dqData.row_count?.count !== null && dqData.row_count?.count !== undefined
                     ? fmtInt(dqData.row_count.count)
                     : "—"}
                 </div>
                 <div className="dq-hint muted">
-                  Baseline median:{" "}
+                  Базовая медиана (7 проверок):{" "}
                   {dqData.row_count?.baseline_median !== null && dqData.row_count?.baseline_median !== undefined
                     ? fmtInt(dqData.row_count.baseline_median)
                     : "—"}
@@ -495,39 +496,49 @@ export default function TableCard({
                 </div>
                 {Number.isFinite(dqData.row_count?.delta_pct) &&
                   Math.abs(dqData.row_count.delta_pct) >= 10 && (
-                    <div className="dq-alert">Deviation exceeds 10%</div>
+                    <div className="dq-alert">Отклонение больше 10%</div>
                   )}
               </div>
             </div>
           )}
           <div className="dq-history">
-            {dqHistoryLoading && <div className="muted">Loading data quality history...</div>}
-            {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
-            {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
-              <div className="muted">No data quality history yet.</div>
-            )}
-            {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
-              <div className="dq-history-table">
-                <div className="dq-history-head">
-                  <span>Check</span>
-                  <span>Value</span>
-                  <span>Date</span>
-                </div>
-                {dqHistory.map((row, idx) => (
-                  <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
-                    <span className="dq-history-type">{row.verification_type || "—"}</span>
-                    <span>{row.value !== null && row.value !== undefined ? fmtInt(row.value) : "—"}</span>
-                    <span>{row.dt || "—"}</span>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowDqHistory((prev) => !prev)}
+            >
+              {showDqHistory ? "Скрыть историю" : "Показать историю"}
+            </button>
+            {showDqHistory && (
+              <>
+                {dqHistoryLoading && <div className="muted">Загрузка истории качества...</div>}
+                {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
+                {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
+                  <div className="muted">Истории качества пока нет.</div>
+                )}
+                {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
+                  <div className="dq-history-table">
+                    <div className="dq-history-head">
+                      <span>Проверка</span>
+                      <span>Значение</span>
+                      <span>Дата</span>
+                    </div>
+                    {dqHistory.map((row, idx) => (
+                      <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
+                        <span className="dq-history-type">{row.verification_type || "—"}</span>
+                        <span>{row.value !== null && row.value !== undefined ? fmtInt(row.value) : "—"}</span>
+                        <span>{row.dt || "—"}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
         </div>
       </div>
 
       <div className="table-section">
-        <div className="section-title">SQL scripts</div>
+        <div className="section-title">SQL-скрипты</div>
         <div className="table-sql-grid">
           {sqlSections.map((block) => {
             const hasSql = Boolean(block.sql && block.sql.length);
@@ -538,7 +549,7 @@ export default function TableCard({
                   <div className="table-sql-type-block">
                     <div className="table-sql-type mono">{block.title}</div>
                     <div className="table-sql-meta muted">
-                      {hasSql ? `${lines.length} lines · ${block.sql.length} characters` : "Script not available"}
+                      {hasSql ? `${lines.length} строк · ${block.sql.length} символов` : "Скрипт недоступен"}
                     </div>
                   </div>
                   <div className="table-sql-actions">
@@ -547,7 +558,7 @@ export default function TableCard({
                       onClick={() => openSqlModal(block)}
                       disabled={!hasSql}
                     >
-                      Open
+                      Открыть
                     </button>
                   </div>
                 </div>
@@ -558,21 +569,21 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">Recent runs (last 10)</div>
+        <div className="section-title">Последние запуски (10)</div>
         <div className="card">
-          {historyLoading && <div className="muted">Loading recent runs...</div>}
+          {historyLoading && <div className="muted">Загрузка запусков...</div>}
           {historyError && <div className="dep-error-title">{historyError}</div>}
           {!historyLoading && !historyError && historyRows.length === 0 && (
-            <div className="muted">No recent runs found.</div>
+            <div className="muted">Запусков не найдено.</div>
           )}
           {!historyLoading && !historyError && historyRows.length > 0 && (
             <div className="history-table">
               <div className="history-table-head">
-                <span>Status</span>
-                <span>Start</span>
-                <span>Finish</span>
-                <span>Duration</span>
-                <span>Message</span>
+                <span>Статус</span>
+                <span>Старт</span>
+                <span>Финиш</span>
+                <span>Длит.</span>
+                <span>Сообщение</span>
               </div>
               {historyRows.map((row, idx) => (
                 <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
@@ -581,7 +592,7 @@ export default function TableCard({
                   </span>
                   <span>{row.start || "—"}</span>
                   <span>{row.finish || "—"}</span>
-                  <span>{row.duration_minutes ?? "—"} min</span>
+                  <span>{row.duration_minutes ?? "—"} мин</span>
                   <span className="history-message">{row.message || "—"}</span>
                 </div>
               ))}
@@ -591,19 +602,19 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">Table variants (other entities)</div>
+        <div className="section-title">Варианты таблицы (другие сущности)</div>
         <div className="card">
-          {variantsLoading && <div className="muted">Loading variants...</div>}
+          {variantsLoading && <div className="muted">Загрузка вариантов...</div>}
           {variantsError && <div className="dep-error-title">{variantsError}</div>}
           {!variantsLoading && !variantsError && variants.length <= 1 && (
-            <div className="muted">No other entity variants found.</div>
+            <div className="muted">Других вариантов нет.</div>
           )}
           {!variantsLoading && !variantsError && variants.length > 1 && (
             <div className="variants-table">
               <div className="variants-table-head">
-                <span>Entity</span>
-                <span>Table ID</span>
-                <span>Last load</span>
+                <span>Сущность</span>
+                <span>ID таблицы</span>
+                <span>Последняя загрузка</span>
               </div>
               {variants.map((row) => (
                 <div key={`${row.entity_id}-${row.table_id}`} className="variants-table-row">
@@ -617,36 +628,51 @@ export default function TableCard({
         </div>
       </div>
 
+      {Array.isArray(meta.key_attributes) && meta.key_attributes.length > 0 && (
+        <div className="table-section">
+          <div className="section-title">Ключевые поля</div>
+          <div className="card">
+            <div className="table-key-list">
+              {meta.key_attributes.map((key) => (
+                <span key={key} className="table-key-pill mono">
+                  {key}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="table-section">
-        <div className="section-title">Dependency graph</div>
+        <div className="section-title">Граф зависимостей</div>
         <div className="card">
-          {loadingDeps && <div className="muted">Building graph...</div>}
+          {loadingDeps && <div className="muted">Построение графа...</div>}
           {depsError && (
             <div className="dep-error-title">{depsError}</div>
           )}
           {!loadingDeps && !depsError && !showGraph && (
-            <div className="muted">Click “Show dependency graph” to render.</div>
+            <div className="muted">Нажмите «Граф зависимостей», чтобы построить.</div>
           )}
           {!loadingDeps && !depsError && graphTruncated && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Truncated graph shown</div>
+              <div className="dep-error-title">Граф усечён</div>
               <div className="muted">
-                Depth-limited. Use the entity graph for full coverage.
+                Ограничение глубины. Для полного обзора используйте граф сущности.
               </div>
             </div>
           )}
           {!loadingDeps && !depsError && graphTooLarge && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Graph is too large</div>
+              <div className="dep-error-title">Слишком большой граф</div>
               <div className="muted">
-                Nodes: {graphStats.nodes}, edges: {graphStats.edges}. This may hang in production.
+                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. Может подвисать.
               </div>
               <div className="table-graph-actions" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" onClick={() => setShowGraph(true)}>
-                  Render anyway
+                  Отрисовать
                 </button>
                 <button className="btn" onClick={() => setShowList(true)}>
-                  Show list
+                  Показать список
                 </button>
               </div>
             </div>
@@ -665,13 +691,13 @@ export default function TableCard({
           {(showGraph || showList) && (
             <div className="table-graph-actions">
               <button className="btn" onClick={() => setShowList(!showList)}>
-                {showList ? "Hide list" : "Show list"}
+                {showList ? "Скрыть список" : "Показать список"}
               </button>
               {showList && (
                 <div style={{ width: "100%" }}>
                   {graphTruncated && (
                     <div className="muted" style={{ marginTop: 10 }}>
-                      Depth-limited graph; list shows current slice only.
+                      Глубина ограничена — список показывает текущий срез.
                     </div>
                   )}
                   <pre className="table-code" style={{ marginTop: 12 }}>
@@ -686,7 +712,7 @@ export default function TableCard({
 
       {showGantt && (
         <div className="table-section">
-          <div className="section-title">Load timeline</div>
+          <div className="section-title">Таймлайн загрузок</div>
           <div className="card">
             <GanttChart schema={schema} table={tableName} />
           </div>
@@ -700,16 +726,16 @@ export default function TableCard({
               <div>
                 <div className="sql-modal-type">{activeSqlBlock.title}</div>
                 <div className="sql-modal-meta">
-                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} lines
+                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} строк
                 </div>
               </div>
               <div className="sql-modal-actions">
-                <span className="sql-modal-hint">Use Ctrl+F to search</span>
+                <span className="sql-modal-hint">Ctrl+F для поиска</span>
                 <button
                   className="btn btn-secondary"
                   onClick={() => copySql(activeSqlBlock.sql)}
                 >
-                  Copy
+                  Копировать
                 </button>
                 <button className="btn btn-ghost" onClick={closeSqlModal}>
                   ✕

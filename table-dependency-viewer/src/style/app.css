@@ -520,6 +520,14 @@ main.content {
   flex-wrap: wrap;
 }
 
+.cc-hero-refresh {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .cc-hero-health {
   display: flex;
   justify-content: flex-end;
@@ -935,6 +943,7 @@ main.content {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 10px;
+  margin-top: 8px;
 }
 
 .logic-audit-kpi {
@@ -2168,11 +2177,16 @@ main.content {
 
 .dq-history {
   margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .dq-history-table {
   display: grid;
   gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
 .dq-history-head,
@@ -2205,6 +2219,21 @@ main.content {
   color: #cbd5f5;
 }
 
+.table-key-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.table-key-pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #bfdbfe;
+}
+
 .dq-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2217,6 +2246,7 @@ main.content {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(2, 6, 23, 0.55);
+  color: var(--text);
 }
 
 .dq-summary-label {
@@ -2230,11 +2260,13 @@ main.content {
   font-size: 22px;
   font-weight: 700;
   margin-top: 6px;
+  color: #e2e8f0;
 }
 
 .dq-summary-hint {
   font-size: 12px;
   margin-top: 6px;
+  color: var(--muted);
 }
 
 .dq-alerts-list {
@@ -2252,6 +2284,7 @@ main.content {
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(15, 23, 42, 0.4);
   text-align: left;
+  color: var(--text);
 }
 
 .dq-alert-main {
@@ -2264,6 +2297,7 @@ main.content {
 .dq-alert-title {
   font-size: 13px;
   font-weight: 600;
+  color: #e2e8f0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2271,6 +2305,7 @@ main.content {
 
 .dq-alert-sub {
   font-size: 12px;
+  color: var(--muted);
 }
 
 .dq-alert-meta {
@@ -3382,11 +3417,15 @@ main.content {
 }
 
 .slow-table-name {
-  max-width: 280px;
+  max-width: 420px;
   display: inline-block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.slow-entity .slow-table-name {
+  max-width: 520px;
 }
 
 .slow-status {

@@ -14,7 +14,7 @@ export default function TableSearch({ onSelectTable }) {
     setLoading(true);
 
     fetch(`${API_BASE}/api/tables`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load tables")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить таблицы")))
       .then((data) => {
         if (!cancelled) {
           setTables(Array.isArray(data) ? data : []);
@@ -48,19 +48,19 @@ export default function TableSearch({ onSelectTable }) {
       <div className="table-search-panel">
         <div className="table-search-head">
           <div>
-            <p className="table-search-label">Tables</p>
-            <h2 className="table-search-title">Find the table you need</h2>
+            <p className="table-search-label">Таблицы</p>
+            <h2 className="table-search-title">Найдите нужную таблицу</h2>
           </div>
           <div className="table-search-count">
             <span className="table-search-count-value">{tables.length}</span>
-            <span className="table-search-count-hint">in catalog</span>
+            <span className="table-search-count-hint">в каталоге</span>
           </div>
         </div>
         <div className="table-search-input-wrapper">
           <input
             type="text"
             className="table-search-input"
-            placeholder="For example, stg.lips or ods.sales"
+            placeholder="Например: stg.lips или ods.sales"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -68,12 +68,12 @@ export default function TableSearch({ onSelectTable }) {
       </div>
 
       <div className="table-search-results">
-        {loading && <div className="muted">Loading table list...</div>}
+        {loading && <div className="muted">Загрузка списка таблиц...</div>}
         {!loading && error && (
-          <div className="table-search-empty">Failed to load tables</div>
+          <div className="table-search-empty">Не удалось загрузить таблицы</div>
         )}
         {!loading && !error && filtered.length === 0 && (
-          <div className="table-search-empty">No tables match the query</div>
+          <div className="table-search-empty">По запросу ничего не найдено</div>
         )}
 
         {!loading && !error && filtered.length > 0 && (
@@ -85,7 +85,7 @@ export default function TableSearch({ onSelectTable }) {
                 onClick={() => handleSelect(name)}
               >
                 <span className="table-search-name mono">{name}</span>
-                <span className="table-search-action">Open</span>
+                <span className="table-search-action">Открыть</span>
               </button>
             ))}
           </div>

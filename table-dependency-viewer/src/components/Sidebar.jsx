@@ -7,7 +7,7 @@ export default function Sidebar({ currentPath, onChangeView }) {
       <div className="topnav-inner">
         {/* LEFT */}
         <div className="topnav-left">
-          <div className="topnav-brand">Data Control</div>
+          <div className="topnav-brand">DWH Контроль</div>
 
           <nav className="topnav-nav">
             <div className="nav-primary">
@@ -15,59 +15,44 @@ export default function Sidebar({ currentPath, onChangeView }) {
                 className={isActive("/") ? "active" : ""}
                 onClick={() => onChangeView(null)}
               >
-                Dashboard
-              </button>
-
-              <button
-                className={isActive("/errors") ? "active" : ""}
-                onClick={() => onChangeView("__show_errors__")}
-              >
-                Errors
+                Главная
               </button>
 
               <button
                 className={isActive("/tables") ? "active" : ""}
                 onClick={() => onChangeView("table_search")}
               >
-                Tables
+                Таблицы
               </button>
             </div>
 
             <div className="nav-secondary">
               <button onClick={() => onChangeView("__slowest_tables__")}>
-                Slow Tables
+                Медленные
               </button>
               <button onClick={() => onChangeView("night_ops")}>
-                Night Ops
+                Ночное окно
               </button>
               <button onClick={() => onChangeView("__entity_schedule__")}>
-                Entities
+                Сущности
               </button>
               <button
                 className={isActive("/logic-audit") ? "active" : ""}
                 onClick={() => onChangeView("logic_audit")}
               >
-                Logic Audit
+                Аудит логики
               </button>
               <button
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >
-                Onboarding
+                Как пользоваться
               </button>
             </div>
           </nav>
         </div>
 
         {/* RIGHT */}
-        <div className="topnav-right">
-          <div className="topnav-status">
-            <span className="sla-dot degraded" />
-            <span className="topnav-status-text">
-              Partial degradation
-            </span>
-          </div>
-        </div>
       </div>
     </header>
   );

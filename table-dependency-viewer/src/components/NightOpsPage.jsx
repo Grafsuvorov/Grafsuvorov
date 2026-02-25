@@ -57,7 +57,7 @@ export default function NightOpsPage() {
       fetch(`${API_BASE}/api/night-summary?days=30&limit=50&shift_days=1`),
     ])
       .then(async ([curr, prev]) => {
-        if (!curr.ok) throw new Error("Failed to load night summary");
+        if (!curr.ok) throw new Error("Не удалось загрузить ночное окно");
         const currJson = await curr.json();
         const prevJson = prev.ok ? await prev.json() : null;
         if (!cancelled) {
@@ -66,7 +66,7 @@ export default function NightOpsPage() {
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(typeof err === "string" ? err : "Failed to load night summary");
+        if (!cancelled) setError(typeof err === "string" ? err : "Не удалось загрузить ночное окно");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -113,7 +113,7 @@ export default function NightOpsPage() {
       const payload = await resp.json();
       setHeavyData(payload);
     } catch (err) {
-      setHeavyError(typeof err === "string" ? err : "Не удалось загрузить тяжелые таблицы");
+    setHeavyError(typeof err === "string" ? err : "Не удалось загрузить тяжелые таблицы");
     } finally {
       setHeavyLoading(false);
     }
@@ -157,60 +157,60 @@ export default function NightOpsPage() {
   return (
     <div className="container cc-page">
       <section className="cc-header-zone">
-        <button className="btn" onClick={() => navigate("/")}>← Back</button>
-        <h1>Night operations</h1>
-        <div className="cc-subtitle">Summary for the last night window (21:00–08:00)</div>
+        <button className="btn" onClick={() => navigate("/")}>← Назад</button>
+        <h1>Ночное окно</h1>
+        <div className="cc-subtitle">Сводка за последнее ночное окно (21:00–08:00)</div>
       </section>
 
-      {loading && <div className="muted">Loading night summary...</div>}
+      {loading && <div className="muted">Загрузка ночного окна...</div>}
       {error && <div className="dep-error-title">{error}</div>}
 
       {!loading && !error && data && (
         <>
           <section className="cc-surface">
-            <div className="section-title">Night KPIs</div>
+            <div className="section-title">Ключевые показатели</div>
             <div className="night-kpis">
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Runs</div>
+                <div className="night-kpi-label">Запусков</div>
                 <div className="night-kpi-value">{data.summary?.runs_count ?? 0}</div>
-                {prevData && <div className="night-kpi-delta">Prev: {prevData.summary?.runs_count ?? 0}</div>}
+                {prevData && <div className="night-kpi-delta">Вчера: {prevData.summary?.runs_count ?? 0}</div>}
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Tables</div>
+                <div className="night-kpi-label">Таблиц</div>
                 <div className="night-kpi-value">{data.summary?.tables_count ?? 0}</div>
-                {prevData && <div className="night-kpi-delta">Prev: {prevData.summary?.tables_count ?? 0}</div>}
+                {prevData && <div className="night-kpi-delta">Вчера: {prevData.summary?.tables_count ?? 0}</div>}
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Entities</div>
+                <div className="night-kpi-label">Сущностей</div>
                 <div className="night-kpi-value">{data.summary?.entities_count ?? 0}</div>
-                {prevData && <div className="night-kpi-delta">Prev: {prevData.summary?.entities_count ?? 0}</div>}
+                {prevData && <div className="night-kpi-delta">Вчера: {prevData.summary?.entities_count ?? 0}</div>}
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Total duration</div>
-                <div className="night-kpi-value">{data.summary?.total_duration_minutes ?? 0} min</div>
+                <div className="night-kpi-label">Суммарно</div>
+                <div className="night-kpi-value">{data.summary?.total_duration_minutes ?? 0} мин</div>
                 {prevData && (
-                  <div className="night-kpi-delta">Prev: {prevData.summary?.total_duration_minutes ?? 0} min</div>
+                  <div className="night-kpi-delta">Вчера: {prevData.summary?.total_duration_minutes ?? 0} мин</div>
                 )}
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Peak hour</div>
+                <div className="night-kpi-label">Пик</div>
                 <div className="night-kpi-value">
                   {peakHour ? `${String(peakHour.hour).padStart(2, "0")}:00` : "—"}
                 </div>
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Failed runs</div>
+                <div className="night-kpi-label">Падения</div>
                 <div className="night-kpi-value">{data.failed_summary?.runs_count ?? 0}</div>
-                {prevData && <div className="night-kpi-delta">Prev: {prevData.failed_summary?.runs_count ?? 0}</div>}
+                {prevData && <div className="night-kpi-delta">Вчера: {prevData.failed_summary?.runs_count ?? 0}</div>}
               </div>
             </div>
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Peak window focus</div>
+            <div className="section-title">Фокус на пиковое окно</div>
             <div className="night-window-controls">
               <label className="night-window-label">
-                Start
+                Начало
                 <input
                   className="night-window-input"
                   value={heavyWindowStart}
@@ -222,7 +222,7 @@ export default function NightOpsPage() {
                 />
               </label>
               <label className="night-window-label">
-                End
+                Конец
                 <input
                   className="night-window-input"
                   value={heavyWindowEnd}
@@ -234,7 +234,7 @@ export default function NightOpsPage() {
                 />
               </label>
               <label className="night-window-label">
-                Interval
+                Интервал
                 <input
                   className="night-window-input night-window-input-wide"
                   value={heavyWindowRange}
@@ -255,19 +255,19 @@ export default function NightOpsPage() {
                 </select>
               </label>
               <label className="night-window-label">
-                Sort
+                Сортировка
                 <select
                   className="night-window-select"
                   value={heavySortMode}
                   onChange={(e) => setHeavySortMode(e.target.value)}
                 >
-                  <option value="heavy_total">Heavy (sum)</option>
-                  <option value="long_max">Long (max run)</option>
+                  <option value="heavy_total">Тяжелые (сумма)</option>
+                  <option value="long_max">Долгие (макс)</option>
                 </select>
               </label>
               <div className="night-window-actions">
                 <button className="btn btn-secondary" onClick={applyWindow} disabled={heavyLoading}>
-                  {heavyLoading ? "Loading..." : "Apply"}
+                  {heavyLoading ? "Загрузка..." : "Применить"}
                 </button>
                 <button
                   className="btn btn-ghost"
@@ -280,7 +280,7 @@ export default function NightOpsPage() {
                   04:30–05:20
                 </button>
                 <button className="btn btn-ghost" onClick={applyPeakPreset} disabled={!peakHour}>
-                  Use peak hour
+                  Использовать пик
                 </button>
               </div>
             </div>
@@ -289,33 +289,33 @@ export default function NightOpsPage() {
 
             {heavyData && (
               <div className="night-window-summary">
-                <span>Runs: <strong>{heavyData.summary?.runs_count ?? 0}</strong></span>
-                <span>Tables: <strong>{heavyData.summary?.tables_count ?? 0}</strong></span>
-                <span>Total: <strong>{heavyData.summary?.total_duration_minutes ?? 0} min</strong></span>
-                <span>Max run: <strong>{heavyData.summary?.max_duration_minutes ?? 0} min</strong></span>
+                <span>Запусков: <strong>{heavyData.summary?.runs_count ?? 0}</strong></span>
+                <span>Таблиц: <strong>{heavyData.summary?.tables_count ?? 0}</strong></span>
+                <span>Сумма: <strong>{heavyData.summary?.total_duration_minutes ?? 0} мин</strong></span>
+                <span>Макс: <strong>{heavyData.summary?.max_duration_minutes ?? 0} мин</strong></span>
               </div>
             )}
           </section>
 
           <section className="cc-surface">
             <div className="section-title night-controls">
-              <span>Night details</span>
+              <span>Детализация</span>
               <label className="night-toggle">
                 <input
                   type="checkbox"
                   checked={showFailuresOnly}
                   onChange={(e) => setShowFailuresOnly(e.target.checked)}
                 />
-                Show failures only
+                Только ошибки
               </label>
             </div>
 
             <div className="night-columns">
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Heavy tables in selected window</div>
+                  <div className="night-panel-title">Тяжелые таблицы в окне</div>
                   <div className="night-panel-sub muted">
-                    {heavyData ? `${heavyData.window?.start}–${heavyData.window?.end}` : "Window not loaded"}
+                    {heavyData ? `${heavyData.window?.start}–${heavyData.window?.end}` : "Окно не загружено"}
                   </div>
                   <div className="night-list">
                     {heavyRows.map((row) => (
@@ -329,19 +329,19 @@ export default function NightOpsPage() {
                       >
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} min · max {row.max_duration_minutes ?? "—"} min · runs {row.runs_count ?? 0}
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} мин · max {row.max_duration_minutes ?? "—"} мин · запусков {row.runs_count ?? 0}
                         </span>
                       </button>
                     ))}
-                    {!heavyLoading && !heavyRows.length && <div className="muted">No heavy tables in this window.</div>}
+                    {!heavyLoading && !heavyRows.length && <div className="muted">Тяжелых таблиц нет.</div>}
                   </div>
                 </div>
               )}
 
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Longest runs</div>
-                  <div className="night-panel-sub muted">Top 10 by duration</div>
+                  <div className="night-panel-title">Самые долгие</div>
+                  <div className="night-panel-sub muted">Топ-10 по длительности</div>
                   <div className="night-list">
                     {(data.top_runs || []).slice(0, longestLimit).map((row) => (
                       <button
@@ -354,7 +354,7 @@ export default function NightOpsPage() {
                       >
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
                         </span>
                       </button>
                     ))}
@@ -362,10 +362,10 @@ export default function NightOpsPage() {
                   {(data.top_runs || []).length > 10 && (
                     <div className="night-panel-actions">
                       <button className="btn btn-ghost" onClick={() => setLongestLimit((n) => Math.min(n + 10, (data.top_runs || []).length))}>
-                        Show +10
+                        Показать +10
                       </button>
                       <button className="btn btn-ghost" onClick={() => setLongestLimit(10)}>
-                        Reset
+                        Сброс
                       </button>
                     </div>
                   )}
@@ -374,8 +374,8 @@ export default function NightOpsPage() {
 
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Anomalies vs p95</div>
-                  <div className="night-panel-sub muted">Runs &gt; 1.5x p95</div>
+                  <div className="night-panel-title">Аномалии vs p95</div>
+                  <div className="night-panel-sub muted">Запуски &gt; 1.5× p95</div>
                   <div className="night-list">
                     {(data.anomalies || []).slice(0, anomalyLimit).map((row) => (
                       <button
@@ -388,7 +388,7 @@ export default function NightOpsPage() {
                       >
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min · {row.ratio ?? "—"}x
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин · {row.ratio ?? "—"}x
                         </span>
                       </button>
                     ))}
@@ -396,10 +396,10 @@ export default function NightOpsPage() {
                   {(data.anomalies || []).length > 10 && (
                     <div className="night-panel-actions">
                       <button className="btn btn-ghost" onClick={() => setAnomalyLimit((n) => Math.min(n + 10, (data.anomalies || []).length))}>
-                        Show +10
+                        Показать +10
                       </button>
                       <button className="btn btn-ghost" onClick={() => setAnomalyLimit(10)}>
-                        Reset
+                        Сброс
                       </button>
                     </div>
                   )}
@@ -408,9 +408,9 @@ export default function NightOpsPage() {
 
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Peak hour tables</div>
+                  <div className="night-panel-title">Таблицы пикового часа</div>
                   <div className="night-panel-sub muted">
-                    {peakHour ? `Peak at ${String(peakHour.hour).padStart(2, "0")}:00` : "No peak data"}
+                    {peakHour ? `Пик в ${String(peakHour.hour).padStart(2, "0")}:00` : "Нет данных по пику"}
                   </div>
                   <div className="night-list">
                     {peakTables.slice(0, peakLimit).map((row) => (
@@ -424,26 +424,26 @@ export default function NightOpsPage() {
                       >
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
                         </span>
                       </button>
                     ))}
-                    {!peakTables.length && <div className="muted">No peak tables.</div>}
+                    {!peakTables.length && <div className="muted">Таблиц в пике нет.</div>}
                   </div>
                   {peakTables.length > 10 && (
                     <div className="night-panel-actions">
                       <button className="btn btn-ghost" onClick={() => setPeakLimit((n) => Math.min(n + 10, peakTables.length))}>
-                        Show +10
+                        Показать +10
                       </button>
                       <button className="btn btn-ghost" onClick={() => setPeakLimit(10)}>
-                        Reset
+                        Сброс
                       </button>
                     </div>
                   )}
                   {peakTables.length > 0 && (
                     <div className="night-panel-actions">
                       <button className="btn btn-secondary" onClick={() => setShowPeakDetails(true)}>
-                        Why peak?
+                        Почему пик?
                       </button>
                     </div>
                   )}
@@ -451,8 +451,8 @@ export default function NightOpsPage() {
               )}
 
               <div className="night-panel">
-                <div className="night-panel-title">Failed runs</div>
-                <div className="night-panel-sub muted">Last failures in the window</div>
+                <div className="night-panel-title">Ошибки</div>
+                <div className="night-panel-sub muted">Последние ошибки в окне</div>
                 <div className="night-list">
                   {(data.failed_runs || []).slice(0, failedLimit).map((row) => (
                     <button
@@ -473,10 +473,10 @@ export default function NightOpsPage() {
                 {(data.failed_runs || []).length > 10 && (
                   <div className="night-panel-actions">
                     <button className="btn btn-ghost" onClick={() => setFailedLimit((n) => Math.min(n + 10, (data.failed_runs || []).length))}>
-                      Show +10
+                      Показать +10
                     </button>
                     <button className="btn btn-ghost" onClick={() => setFailedLimit(10)}>
-                      Reset
+                      Сброс
                     </button>
                   </div>
                 )}
@@ -491,13 +491,13 @@ export default function NightOpsPage() {
           <div className="night-modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="night-modal-head">
               <div>
-                <div className="night-panel-title">Peak hour details</div>
+                <div className="night-panel-title">Детали пикового часа</div>
                 <div className="night-panel-sub muted">
-                  {String(peakHour.hour).padStart(2, "0")}:00 · {peakHour.runs_count ?? 0} runs · {peakHour.total_duration_minutes ?? 0} min
+                  {String(peakHour.hour).padStart(2, "0")}:00 · {peakHour.runs_count ?? 0} запусков · {peakHour.total_duration_minutes ?? 0} мин
                 </div>
               </div>
               <button className="btn btn-ghost" onClick={() => setShowPeakDetails(false)}>
-                Close
+                Закрыть
               </button>
             </div>
             <div className="night-list">
@@ -505,7 +505,7 @@ export default function NightOpsPage() {
                 <div key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`} className="night-row">
                   <span className="mono">{row.table_fqn}</span>
                   <span className="muted">
-                    {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} min
+                    {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
                   </span>
                 </div>
               ))}

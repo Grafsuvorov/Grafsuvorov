@@ -42,7 +42,7 @@ export default function ImpactGraphPage() {
     setError(null);
 
     fetch(`${API_BASE}/api/graph/impact/${schema}/${table}?depth=${depth}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load impact graph")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить граф влияния")))
       .then((data) => {
         if (cancelled) return;
         setGraph(data);
@@ -54,7 +54,7 @@ export default function ImpactGraphPage() {
         setActiveLayers(layers);
       })
       .catch((err) => {
-        if (!cancelled) setError(typeof err === "string" ? err : "Failed to load impact graph");
+        if (!cancelled) setError(typeof err === "string" ? err : "Не удалось загрузить граф влияния");
       })
       .finally(() => {
         if (!cancelled) setLoadingGraph(false);
@@ -71,7 +71,7 @@ export default function ImpactGraphPage() {
     setLoadingSummary(true);
 
     fetch(`${API_BASE}/api/impact/summary/${schema}/${table}?depth=${depth}&limit=160`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load impact summary")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить сводку влияния")))
       .then((data) => {
         if (!cancelled) setSummary(data);
       })
@@ -132,7 +132,7 @@ export default function ImpactGraphPage() {
     setExporting(true);
     try {
       const res = await fetch(`${API_BASE}/api/impact/list/${schema}/${table}?depth=${depth}`);
-      if (!res.ok) throw new Error("Failed to export list");
+      if (!res.ok) throw new Error("Не удалось выгрузить список");
       const data = await res.json();
       const rows = Array.isArray(data.tables) ? data.tables : [];
       const header = ["table_fqn", "layer", "entities", "depth"];
@@ -169,66 +169,66 @@ export default function ImpactGraphPage() {
       <section className="cc-header-zone">
         <div className="table-head-meta">
           <button className="btn" onClick={() => navigate(`/table/${schema}/${table}`)}>
-            ← Back to table
+            ← Назад к таблице
           </button>
         </div>
-        <h1>Impact graph</h1>
+        <h1>Граф влияния</h1>
         <div className="cc-subtitle mono">{central}</div>
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Impact summary</div>
-        {loadingSummary && <div className="muted">Loading summary...</div>}
+        <div className="section-title">Сводка влияния</div>
+        {loadingSummary && <div className="muted">Загрузка сводки...</div>}
         {!loadingSummary && summary && (
           <div className="impact-summary">
             <div className="impact-kpis">
               <div className="impact-kpi-card">
-                <div className="impact-kpi-label">Affected tables</div>
+                <div className="impact-kpi-label">Затронутые таблицы</div>
                 <div className="impact-kpi-value">{summary.total_tables ?? 0}</div>
-                {summary.truncated && <div className="impact-kpi-hint">Truncated</div>}
+                {summary.truncated && <div className="impact-kpi-hint">Усечено</div>}
               </div>
               <div className="impact-kpi-card">
-                <div className="impact-kpi-label">Entities affected</div>
+                <div className="impact-kpi-label">Затронутые сущности</div>
                 <div className="impact-kpi-value">{summary.total_entities ?? 0}</div>
-                <div className="impact-kpi-hint">Depth {summary.depth}</div>
+                <div className="impact-kpi-hint">Глубина {summary.depth}</div>
               </div>
             </div>
             <div className="impact-lists">
               <div className="impact-list-card">
-                <div className="impact-list-title">Top entities</div>
+                <div className="impact-list-title">Топ сущностей</div>
                 <div className="impact-tags">
                   {(summary.entities || []).slice(0, 8).map((e) => (
                     <span key={e.entity} className="impact-tag">
                       {e.entity} · {e.count}
                     </span>
                   ))}
-                  {!summary.entities?.length && <span className="muted">No entities</span>}
+                  {!summary.entities?.length && <span className="muted">Нет сущностей</span>}
                 </div>
               </div>
               <div className="impact-list-card">
-                <div className="impact-list-title">Top layers</div>
+                <div className="impact-list-title">Топ слоев</div>
                 <div className="impact-tags">
                   {(summary.layers || []).slice(0, 8).map((l) => (
                     <span key={l.layer} className="impact-tag">
                       {l.layer} · {l.count}
                     </span>
                   ))}
-                  {!summary.layers?.length && <span className="muted">No layers</span>}
+                  {!summary.layers?.length && <span className="muted">Нет слоев</span>}
                 </div>
               </div>
             </div>
           </div>
         )}
         {!loadingSummary && !summary && (
-          <div className="muted">No summary available.</div>
+          <div className="muted">Сводка недоступна.</div>
         )}
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Graph controls</div>
+        <div className="section-title">Управление графом</div>
         <div className="impact-controls">
           <div className="impact-control">
-            <div className="impact-control-label">Depth</div>
+            <div className="impact-control-label">Глубина</div>
             <select
               className="impact-control-select"
               value={depth}
@@ -240,7 +240,7 @@ export default function ImpactGraphPage() {
             </select>
           </div>
           <div className="impact-control">
-            <div className="impact-control-label">Layers</div>
+            <div className="impact-control-label">Слои</div>
             <div className="impact-layer-grid">
               {availableLayers.map((layer) => (
                 <button
@@ -254,18 +254,18 @@ export default function ImpactGraphPage() {
             </div>
           </div>
           <div className="impact-control">
-            <div className="impact-control-label">Filter</div>
+            <div className="impact-control-label">Фильтр</div>
             <input
               className="impact-control-input"
-              placeholder="Filter by table or entity..."
+              placeholder="Фильтр по таблице или сущности..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <div className="impact-control">
-            <div className="impact-control-label">Export</div>
+            <div className="impact-control-label">Экспорт</div>
             <button className="btn btn-secondary" onClick={exportCsv} disabled={exporting}>
-              {exporting ? "Exporting..." : "Export list (CSV)"}
+              {exporting ? "Экспорт..." : "Скачать список (CSV)"}
             </button>
           </div>
         </div>
@@ -273,19 +273,19 @@ export default function ImpactGraphPage() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Impact graph
+          Граф влияния
           <span className="section-meta">
-            {filteredGraph.nodes.length}/{graph?.nodes?.length || 0} nodes
+            {filteredGraph.nodes.length}/{graph?.nodes?.length || 0} узлов
           </span>
         </div>
-        {loadingGraph && <div className="muted">Loading graph...</div>}
+        {loadingGraph && <div className="muted">Загрузка графа...</div>}
         {error && <div className="dep-error-title">{error}</div>}
         {!loadingGraph && !error && graph?.nodes?.length ? (
           <>
             {graph.truncated && (
               <div className="card dep-error" style={{ marginBottom: 12 }}>
-                <div className="dep-error-title">Graph truncated</div>
-                <div className="muted">Increase depth or export the list for full coverage.</div>
+                <div className="dep-error-title">Граф усечён</div>
+                <div className="muted">Увеличьте глубину или выгрузите список.</div>
               </div>
             )}
             <GraphViewer
@@ -302,19 +302,19 @@ export default function ImpactGraphPage() {
       {summary?.tables?.length ? (
         <section className="cc-surface">
           <div className="section-title">
-            Impacted tables (sample)
+            Затронутые таблицы (срез)
             <span className="section-meta">{summary.tables.length}</span>
           </div>
           <div className="impact-table-actions">
             <button className="btn btn-ghost" onClick={() => setShowAllTables((v) => !v)}>
-              {showAllTables ? "Show less" : "Show more"}
+              {showAllTables ? "Свернуть" : "Показать ещё"}
             </button>
           </div>
           <div className="impact-table">
             <div className="impact-table-head">
-              <span>Table</span>
-              <span>Entities</span>
-              <span>Depth</span>
+              <span>Таблица</span>
+              <span>Сущности</span>
+              <span>Глубина</span>
             </div>
             {(showAllTables ? summary.tables : summary.tables.slice(0, 30)).map((row) => (
               <div key={row.id} className="impact-table-row">

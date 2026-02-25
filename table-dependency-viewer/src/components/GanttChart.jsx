@@ -60,7 +60,7 @@ export default function GanttChart({ schema, table }) {
 
     fetch(`${API_BASE}/api/gantt/${schema}/${table}`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Failed to load data")
+        res.ok ? res.json() : Promise.reject("Не удалось загрузить данные")
       )
       .then((raw) => {
         const latestByTable = Object.values(
@@ -87,11 +87,11 @@ export default function GanttChart({ schema, table }) {
   }, [schema, table]);
 
   if (error) {
-    return <div className="card-error">Error: {error}</div>;
+    return <div className="card-error">Ошибка: {error}</div>;
   }
 
   if (!data.length) {
-    return <div className="card-muted">No data</div>;
+    return <div className="card-muted">Нет данных</div>;
   }
 
   /* ----------------------------------------------------- */
@@ -153,7 +153,7 @@ export default function GanttChart({ schema, table }) {
           color: "#e5e7eb",
         }}
       >
-        Dependency load timeline
+        Таймлайн загрузки зависимостей
       </div>
 
       {/* CHART */}
@@ -177,7 +177,7 @@ export default function GanttChart({ schema, table }) {
               type="number"
               domain={[0, maxX]}
               tickFormatter={(v) =>
-                new Date(minStart + v * 1000).toLocaleTimeString("en-GB")
+                new Date(minStart + v * 1000).toLocaleTimeString("ru-RU")
               }
               tick={{ fill: "#9ca3af", fontSize: 11 }}
               axisLine={{ stroke: "rgba(255,255,255,.1)" }}

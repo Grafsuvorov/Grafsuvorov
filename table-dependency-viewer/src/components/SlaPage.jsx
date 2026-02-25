@@ -12,7 +12,7 @@ export default function SlaPage() {
   useEffect(() => {
     fetch(`${API_BASE}/api/sla`)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to load SLA data");
+        if (!res.ok) throw new Error("Не удалось загрузить SLA");
         return res.json();
       })
       .then((data) => {
@@ -28,7 +28,7 @@ export default function SlaPage() {
   const formatDate = (value) => {
     if (!value) return "-";
     const date = new Date(value);
-    return date.toLocaleString("en-GB");
+    return date.toLocaleString("ru-RU");
   };
 
   const highlight = (text, query) => {
@@ -49,16 +49,16 @@ export default function SlaPage() {
     )
     .sort((a, b) => Number(a.sla_ok) - Number(b.sla_ok)); // failed first
 
-  if (loading) return <div className="p-4">Loading...</div>;
-  if (error) return <div className="p-4 text-red-500">Error: {error}</div>;
+  if (loading) return <div className="p-4">Загрузка...</div>;
+  if (error) return <div className="p-4 text-red-500">Ошибка: {error}</div>;
 
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">SLA Monitoring</h1>
+      <h1 className="text-2xl font-bold mb-4">SLA мониторинг</h1>
 
       <input
         type="text"
-        placeholder="Filter by table, report, or owner..."
+        placeholder="Фильтр по таблице, отчету или владельцу..."
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         className="mb-4 p-2 border border-gray-300 rounded w-full"
@@ -68,14 +68,14 @@ export default function SlaPage() {
         <table className="w-full table-auto border border-collapse">
           <thead className="bg-gray-100">
             <tr>
-              <th className="border p-2 sticky top-0 bg-gray-100">Report</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Table</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Source</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Owner</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Load time</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Usage</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Interval</th>
-              <th className="border p-2 sticky top-0 bg-gray-100">Last load</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Отчет</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Таблица</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Источник</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Владелец</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Загрузка таблицы</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Обновление отчета</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Интервал</th>
+              <th className="border p-2 sticky top-0 bg-gray-100">Последняя загрузка</th>
               <th className="border p-2 sticky top-0 bg-gray-100">SLA</th>
             </tr>
           </thead>
@@ -91,7 +91,7 @@ export default function SlaPage() {
                 <td className="border p-2">{row.load_interval}</td>
                 <td className="border p-2">{formatDate(row.table_last_load)}</td>
                 <td className={`border p-2 font-bold text-center ${row.sla_ok ? "text-green-600" : "text-red-600"}`}>
-                  {row.sla_ok ? "✅ Within SLA" : "❌ Breached"}
+                  {row.sla_ok ? "✅ В SLA" : "❌ Нарушено"}
                 </td>
               </tr>
             ))}

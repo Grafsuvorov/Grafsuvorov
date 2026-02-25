@@ -19,6 +19,7 @@ export default function EntityShedule() {
   const [coverageOffset, setCoverageOffset] = useState(0);
   const [coverageQuery, setCoverageQuery] = useState("");
   const [coverageSchema, setCoverageSchema] = useState("all");
+  const [showCoverageList, setShowCoverageList] = useState(false);
   const [dqEntities, setDqEntities] = useState([]);
   const [dqEntitiesError, setDqEntitiesError] = useState(null);
   const [dqEntitiesLoading, setDqEntitiesLoading] = useState(false);
@@ -33,13 +34,13 @@ export default function EntityShedule() {
         return res.json();
       })
       .then((data) => setEntities(Array.isArray(data) ? data : []))
-      .catch(() => setError("Failed to load entities"))
+      .catch(() => setError("Не удалось загрузить сущности"))
       .finally(() => setLoadingEntities(false));
   }, []);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/entities/shared?limit=3`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load shared tables")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить общие таблицы")))
       .then((data) => setSharedMap(data || {}))
       .catch(() => setSharedMap({}));
   }, []);
@@ -47,14 +48,14 @@ export default function EntityShedule() {
   const loadCoverage = (offset = 0, append = false) => {
     setCoverageLoading(true);
     fetch(`${API_BASE}/api/graph/orphans?limit=${COVERAGE_PAGE_SIZE}&offset=${offset}&meta_only=true`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load coverage gaps")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить разрывы покрытия")))
       .then((data) => {
         setCoverage(data || null);
         setCoverageHasMore(!!data?.has_more);
         setCoverageOffset((data?.offset || 0) + (data?.orphans?.length || 0));
         setCoverageRows((prev) => (append ? [...prev, ...(data?.orphans || [])] : data?.orphans || []));
       })
-      .catch(() => setCoverageError("Failed to load coverage gaps"))
+      .catch(() => setCoverageError("Не удалось загрузить разрывы покрытия"))
       .finally(() => setCoverageLoading(false));
   };
 
@@ -66,11 +67,11 @@ export default function EntityShedule() {
     setDqEntitiesLoading(true);
     setDqEntitiesError(null);
     fetch(`${API_BASE}/api/dq/entity?days=7&delta=10&limit=12`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality entities")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить DQ по сущностям")))
       .then((data) => setDqEntities(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setDqEntitiesError(typeof err === "string" ? err : "Failed to load data quality entities");
+        setDqEntitiesError(typeof err === "string" ? err : "Не удалось загрузить DQ по сущностям");
       })
       .finally(() => setDqEntitiesLoading(false));
   }, []);
@@ -153,13 +154,13 @@ export default function EntityShedule() {
     <div className="container entity-page">
       <div className="entity-hero">
         <div>
-          <div className="entity-title">Entities</div>
-          <div className="entity-subtitle">Entity directory, load schedule, and quick access to tables</div>
+          <div className="entity-title">Сущности</div>
+          <div className="entity-subtitle">Каталог сущностей, статусы и быстрый доступ к таблицам</div>
         </div>
         <div className="entity-toolbar">
           <input
             className="entity-search"
-            placeholder="Search by name or ID"
+            placeholder="Поиск по названию или ID"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -170,7 +171,7 @@ export default function EntityShedule() {
                 className={`pill ${statusFilter === status ? "pill-active" : ""}`}
                 onClick={() => setStatusFilter(status)}
               >
-                {status === "all" ? "All" : status}
+                {status === "all" ? "Все" : status}
               </button>
             ))}
           </div>
@@ -179,12 +180,12 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Summary
+          Сводка
           <span className="section-meta">{stats.total}</span>
         </div>
         <div className="entity-kpis">
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Total entities</div>
+            <div className="entity-kpi-label">Всего сущностей</div>
             <div className="entity-kpi-value">{stats.total}</div>
           </div>
           {Object.entries(stats.statusCounts).map(([status, count]) => (
@@ -198,7 +199,7 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Coverage gaps
+          Разрывы покрытия
           <span className="section-meta">{coverage?.orphan_count ?? 0}</span>
         </div>
         {coverageError && <div className="dep-error-title">{coverageError}</div>}
@@ -207,91 +208,106 @@ export default function EntityShedule() {
           <>
             <div className="coverage-kpis">
               <div className="coverage-card">
-                <div className="coverage-label">Coverage to DM (YAML only)</div>
+                <div className="coverage-label">Покрытие до DM (только YAML)</div>
                 <div className="coverage-value">{coverage.coverage_pct}%</div>
                 <div className="coverage-note">
                   {coverage.reachable_count} / {coverage.total_tables} tables
                 </div>
               </div>
               <div className="coverage-card">
-                <div className="coverage-label">No path to DM</div>
+                <div className="coverage-label">Нет пути до DM</div>
                 <div className="coverage-value">{coverage.orphan_count}</div>
                 <div className="coverage-note">
-                  Final schemas: {coverage.final_schemas?.join(", ") || "—"}
+                  Финальные схемы: {coverage.final_schemas?.join(", ") || "—"}
                 </div>
               </div>
               <div className="coverage-card">
-                <div className="coverage-label">Final tables</div>
+                <div className="coverage-label">Финальные таблицы</div>
                 <div className="coverage-value">{coverage.final_count}</div>
-                <div className="coverage-note">DM layer entry points</div>
-              </div>
-            </div>
-
-            <div className="coverage-toolbar">
-              <input
-                className="coverage-search"
-                placeholder="Search table or entity"
-                value={coverageQuery}
-                onChange={(e) => setCoverageQuery(e.target.value)}
-              />
-              <div className="coverage-filters">
-                {coverageSchemaOptions.map((schema) => (
-                  <button
-                    key={schema}
-                    className={`pill ${coverageSchema === schema ? "pill-active" : ""}`}
-                    onClick={() => setCoverageSchema(schema)}
-                  >
-                    {schema === "all" ? "All schemas" : schema}
-                  </button>
-                ))}
-              </div>
-              <div className="coverage-actions">
-                <button className="btn btn-secondary" onClick={() => loadCoverage(0, false)}>
-                  Refresh
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  disabled={!coverageHasMore || coverageLoading}
-                  onClick={() => loadCoverage(coverageOffset, true)}
-                >
-                  {coverageHasMore ? "Load more" : "All loaded"}
-                </button>
+                <div className="coverage-note">Входные точки слоя DM</div>
               </div>
             </div>
 
             <div className="coverage-summary">
-              Showing {coverageFiltered.length} of {coverage.orphan_count} tables
+              Таблиц без пути до DM: {coverage.orphan_count}. Они не питают витрины.
             </div>
 
-            {coverage.orphan_count === 0 ? (
-              <div className="muted">All tables reach a DM layer</div>
-            ) : (
-              <div className="coverage-list">
-                {coverageFiltered.map((row) => (
-                  <div key={row.id} className="coverage-row">
-                    <button className="coverage-fqn mono coverage-link" onClick={() => openTable(row)}>
-                      {row.id}
-                    </button>
-                    <div className="coverage-meta">
-                      <span className="coverage-pill">{row.schema || "unknown"}</span>
-                      <span className="coverage-pill">in: {row.incoming}</span>
-                      <span className="coverage-pill">out: {row.outgoing}</span>
-                      {row.entities?.length > 0 ? (
-                        <span className="coverage-entities">
-                          {row.entities.join(", ")}
-                        </span>
-                      ) : (
-                        <span className="coverage-entities muted">entity unknown</span>
-                      )}
-                    </div>
-                    <div className="coverage-actions-row">
-                      <button className="btn btn-secondary" onClick={() => openTable(row)}>
-                        Open table
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowCoverageList((prev) => !prev)}
+            >
+              {showCoverageList ? "Скрыть список" : "Показать список"}
+            </button>
+
+            {showCoverageList && (
+              <>
+                <div className="coverage-toolbar">
+                  <input
+                    className="coverage-search"
+                    placeholder="Поиск по таблице или сущности"
+                    value={coverageQuery}
+                    onChange={(e) => setCoverageQuery(e.target.value)}
+                  />
+                  <div className="coverage-filters">
+                    {coverageSchemaOptions.map((schema) => (
+                      <button
+                        key={schema}
+                        className={`pill ${coverageSchema === schema ? "pill-active" : ""}`}
+                        onClick={() => setCoverageSchema(schema)}
+                      >
+                        {schema === "all" ? "Все схемы" : schema}
                       </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                  <div className="coverage-actions">
+                    <button className="btn btn-secondary" onClick={() => loadCoverage(0, false)}>
+                      Обновить
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={!coverageHasMore || coverageLoading}
+                      onClick={() => loadCoverage(coverageOffset, true)}
+                    >
+                      {coverageHasMore ? "Загрузить ещё" : "Всё загружено"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="coverage-summary">
+                  Показано {coverageFiltered.length} из {coverage.orphan_count}
+                </div>
+
+                {coverage.orphan_count === 0 ? (
+                  <div className="muted">Все таблицы достигают слоя DM</div>
+                ) : (
+                  <div className="coverage-list">
+                    {coverageFiltered.map((row) => (
+                      <div key={row.id} className="coverage-row">
+                        <button className="coverage-fqn mono coverage-link" onClick={() => openTable(row)}>
+                          {row.id}
+                        </button>
+                        <div className="coverage-meta">
+                          <span className="coverage-pill">{row.schema || "unknown"}</span>
+                          <span className="coverage-pill">in: {row.incoming}</span>
+                          <span className="coverage-pill">out: {row.outgoing}</span>
+                          {row.entities?.length > 0 ? (
+                            <span className="coverage-entities">
+                              {row.entities.join(", ")}
+                            </span>
+                          ) : (
+                            <span className="coverage-entities muted">сущность неизвестна</span>
+                          )}
+                        </div>
+                        <div className="coverage-actions-row">
+                          <button className="btn btn-secondary" onClick={() => openTable(row)}>
+                            Открыть
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
@@ -299,13 +315,13 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Data quality by entity
+          Качество данных по сущностям
           <span className="section-meta">{dqEntities.length}</span>
         </div>
-        {dqEntitiesLoading && <div className="muted">Loading data quality summary...</div>}
+        {dqEntitiesLoading && <div className="muted">Загрузка DQ-сводки...</div>}
         {dqEntitiesError && <div className="dep-error-title">{dqEntitiesError}</div>}
         {!dqEntitiesLoading && !dqEntitiesError && dqEntities.length === 0 && (
-          <div className="muted">No data quality alerts found.</div>
+          <div className="muted">DQ-алертов нет.</div>
         )}
         {!dqEntitiesLoading && !dqEntitiesError && dqEntities.length > 0 && (
           <div className="dq-entity-grid">
@@ -313,8 +329,8 @@ export default function EntityShedule() {
               <div key={row.entity} className="dq-entity-card">
                 <div className="dq-entity-name">{row.entity}</div>
                 <div className="dq-entity-metrics">
-                  <span>Duplicates: {row.duplicates}</span>
-                  <span>Row count: {row.row_count}</span>
+                  <span>Дубли: {row.duplicates}</span>
+                  <span>Строки: {row.row_count}</span>
                 </div>
               </div>
             ))}
@@ -324,13 +340,13 @@ export default function EntityShedule() {
 
       <section className="cc-surface">
         <div className="section-title">
-          Entities
+          Сущности
           <span className="section-meta">{filtered.length}</span>
         </div>
         {loadingEntities && <div className="muted">Loading…</div>}
         {error && <div className="dep-error-title">{error}</div>}
         {!loadingEntities && filtered.length === 0 && (
-          <div className="muted">No entities match the filters</div>
+          <div className="muted">Ничего не найдено</div>
         )}
         <div className="entity-grid entity-grid-schedule">
           {filtered.map((row) => (
@@ -344,20 +360,20 @@ export default function EntityShedule() {
                   {row.status}
                 </span>
               </div>
-              <div className="entity-meta-grid">
-                <div>
-                  <div className="entity-meta-label">Last load</div>
-                  <div className="entity-meta-value">{row.entity_last_load || "—"}</div>
-                </div>
-                <div>
-                  <div className="entity-meta-label">Interval</div>
-                  <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
-                </div>
-                <div>
-                  <div className="entity-meta-label">Shared tables</div>
-                  <div className="entity-meta-value">
-                    {sharedMap[row.entity_name]?.count ?? 0}
+                <div className="entity-meta-grid">
+                  <div>
+                    <div className="entity-meta-label">Последняя загрузка</div>
+                    <div className="entity-meta-value">{row.entity_last_load || "—"}</div>
                   </div>
+                  <div>
+                    <div className="entity-meta-label">Интервал</div>
+                    <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="entity-meta-label">Общие таблицы</div>
+                    <div className="entity-meta-value">
+                      {sharedMap[row.entity_name]?.count ?? 0}
+                    </div>
                 </div>
               </div>
               {sharedMap[row.entity_name]?.tables?.length > 0 && (
@@ -369,7 +385,7 @@ export default function EntityShedule() {
               )}
               <div className="entity-actions">
                 <button className="btn btn-secondary" onClick={() => openEntityTables(row)}>
-                  Entity tables
+                  Таблицы сущности
                 </button>
               </div>
             </article>

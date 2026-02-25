@@ -47,7 +47,7 @@ export default function LogicAuditPage() {
         if (!cancelled) setData(json);
       })
       .catch((err) => {
-        if (!cancelled) setError(typeof err === "string" ? err : "Failed to load logic audit");
+        if (!cancelled) setError(typeof err === "string" ? err : "Не удалось загрузить аудит логики");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -101,7 +101,7 @@ export default function LogicAuditPage() {
     <div className="container cc-page">
       <section className="cc-header-zone">
         <button className="btn" onClick={() => navigate("/")}>← Назад</button>
-        <h1>Logic Audit</h1>
+        <h1>Аудит логики</h1>
         <div className="cc-subtitle">Поиск дублирующейся и слишком похожей SQL-логики между объектами.</div>
       </section>
 
@@ -125,7 +125,7 @@ export default function LogicAuditPage() {
             </select>
           </label>
           <label className="logic-audit-field">
-            Min score
+            Мин. похожесть
             <select value={String(minScore)} onChange={(e) => setMinScore(Number(e.target.value))}>
               {[0.72, 0.78, 0.84, 0.9].map((v) => (
                 <option key={v} value={v}>{v}</option>
@@ -137,11 +137,11 @@ export default function LogicAuditPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="schema.table, entity..."
+              placeholder="schema.table, сущность..."
             />
           </label>
         </div>
-        <div className="muted">Min score — минимальный общий коэффициент похожести (от 0 до 1).</div>
+        <div className="muted">Мин. похожесть — минимальный общий коэффициент (от 0 до 1).</div>
       </section>
 
       {loading && <div className="muted">Загружаю аудит...</div>}
@@ -149,22 +149,25 @@ export default function LogicAuditPage() {
 
       {!loading && !error && data && (
         <>
-          <section className="logic-audit-kpis">
-            <div className="logic-audit-kpi">
-              <div className="label">Объектов</div>
-              <div className="value">{data.objects_count ?? 0}</div>
-            </div>
-            <div className="logic-audit-kpi">
-              <div className="label">Найдено пар</div>
-              <div className="value">{data.returned_count ?? 0}</div>
-            </div>
-            <div className="logic-audit-kpi">
-              <div className="label">Полные дубли</div>
-              <div className="value">{data.stats?.duplicate_exact ?? 0}</div>
-            </div>
-            <div className="logic-audit-kpi">
-              <div className="label">Потенциал merge</div>
-              <div className="value">{pairs.filter((x) => x.merge_potential === "HIGH").length}</div>
+          <section className="cc-surface">
+            <div className="section-title">Сводка</div>
+            <div className="logic-audit-kpis">
+              <div className="logic-audit-kpi">
+                <div className="label">Объектов</div>
+                <div className="value">{data.objects_count ?? 0}</div>
+              </div>
+              <div className="logic-audit-kpi">
+                <div className="label">Найдено пар</div>
+                <div className="value">{data.returned_count ?? 0}</div>
+              </div>
+              <div className="logic-audit-kpi">
+                <div className="label">Полные дубли</div>
+                <div className="value">{data.stats?.duplicate_exact ?? 0}</div>
+              </div>
+              <div className="logic-audit-kpi">
+                <div className="label">Потенциал merge</div>
+                <div className="value">{pairs.filter((x) => x.merge_potential === "HIGH").length}</div>
+              </div>
             </div>
           </section>
 

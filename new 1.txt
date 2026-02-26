@@ -1,11 +1,10 @@
-
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d
 [+] Running 2/2
- ⠿ Container table-dependency-viewer-api-1       Started                                                         0.4s
  ⠿ Container table-dependency-viewer-frontend-1  Running                                                         0.0s
+ ⠿ Container table-dependency-viewer-api-1       Started                                                         0.4s
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose ps
 NAME                                 COMMAND                  SERVICE             STATUS              PORTS
-table-dependency-viewer-api-1        "uvicorn api.main:ap…"   api                 exited (1)
+table-dependency-viewer-api-1        "uvicorn main:app --…"   api                 exited (1)
 table-dependency-viewer-frontend-1   "/docker-entrypoint.…"   frontend            running             0.0.0.0:15312->80/tcp
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=80 api
 table-dependency-viewer-api-1  | Traceback (most recent call last):
@@ -45,8 +44,6 @@ table-dependency-viewer-api-1  |     config.load()
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 441, in load
 table-dependency-viewer-api-1  |     self.loaded_app = import_from_string(self.app)
 table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 22, in import_from_string
-table-dependency-viewer-api-1  |     raise exc from None
 table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
 table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
 table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -59,6 +56,6 @@ table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 11
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 37, in <module>
-table-dependency-viewer-api-1  |     from config import (
-table-dependency-viewer-api-1  | ModuleNotFoundError: No module named 'config'
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 33, in <module>
+table-dependency-viewer-api-1  |     from .auth import auth_middleware, init_auth, router as auth_router
+table-dependency-viewer-api-1  | ImportError: attempted relative import with no known parent package

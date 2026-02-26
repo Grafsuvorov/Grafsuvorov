@@ -1,92 +1,83 @@
- explain-- analyze
-select
-  (xpath('//Item/@a', item_document_xml))[1]::varchar as "RW_PART"
-, (xpath('//Item/@b', item_document_xml))[1]::varchar as "KPR_HOME"
-, (xpath('//Item/@c', item_document_xml))[1]::varchar as "CAR_NUM"
-, (xpath('//Item/@d', item_document_xml))[1]::varchar as "CAR_TYPE"
-, (xpath('//Item/@e', item_document_xml))[1]::varchar as "TARA"
-, (xpath('//Item/@f', item_document_xml))[1]::varchar as "TONNAGE"
-, (xpath('//Item/@g', item_document_xml))[1]::varchar as "KPR_OWNER"
-, (xpath('//Item/@h', item_document_xml))[1]::varchar as "KPR_RENT"
-, (xpath('//Item/@i', item_document_xml))[1]::varchar as "PR_EXP"
-, (xpath('//Item/@j', item_document_xml))[1]::varchar as "ID_SHIPDIR"
-, (xpath('//Item/@k', item_document_xml))[1]::varchar as "RW_KG_LOAD"
-, (xpath('//Item/@l', item_document_xml))[1]::varchar as "DT_START_RZD"
-, (xpath('//Item/@m', item_document_xml))[1]::varchar as "DT_START_PPGT"
-, (xpath('//Item/@n', item_document_xml))[1]::varchar as "PR_PAY_USE"
-, (xpath('//Item/@o', item_document_xml))[1]::varchar as "WEIGHT_IN"
-, (xpath('//Item/@p', item_document_xml))[1]::varchar as "WEIGHT_OUT"
-, (xpath('//Item/@q', item_document_xml))[1]::varchar as "WEIGHT_TARA"
-, (xpath('//Item/@r', item_document_xml))[1]::varchar as "ETRAN_RW_ST"
-, (xpath('//Item/@s', item_document_xml))[1]::varchar as "ETRAN_DOC_NUM"
-, (xpath('//Item/@t', item_document_xml))[1]::varchar as "RW_ZPU"
-, (xpath('//Item/@u', item_document_xml))[1]::varchar as "ZPU_NUM"
-, (xpath('//Item/@v', item_document_xml))[1]::varchar as "REF_PART"
-, (xpath('//Item/@w', item_document_xml))[1]::varchar as "PART_PRIM"
-, (xpath('//Item/@x', item_document_xml))[1]::varchar as "CAR_VIEWER"
-, (xpath('//Item/@y', item_document_xml))[1]::varchar as "CERT_NUM"
-, (xpath('//Item/@z', item_document_xml))[1]::varchar as "ZZNP"
-, (xpath('//Item/@aa', item_document_xml))[1]::varchar as "DT_START_SVH"
-, (xpath('//Item/@ab', item_document_xml))[1]::varchar as "DT_END_SVH"
-, (xpath('//Item/@ac', item_document_xml))[1]::varchar as "GTD"
-, (xpath('//Item/@ad', item_document_xml))[1]::varchar as "DT_GTD"
-, (xpath('//Item/@ae', item_document_xml))[1]::varchar as "ORDER_NUM"
-, (xpath('//Item/@af', item_document_xml))[1]::varchar as "TARA_LAST_CLEAR"
-, (xpath('//Item/@ag', item_document_xml))[1]::varchar as "RW_KG_OPERLOAD"
-, (xpath('//Item/@ah', item_document_xml))[1]::varchar as "PR_ZD"
-, (xpath('//Item/@ai', item_document_xml))[1]::varchar as "RW_ZPU5_8"
-, (xpath('//Item/@aj', item_document_xml))[1]::varchar as "ZPU_NUM5_8"
-, (xpath('//Item/@ak', item_document_xml))[1]::varchar as "PR_OUT"
-, (xpath('//Item/@al', item_document_xml))[1]::varchar as "DT_OUT_BEG"
-, (xpath('//Item/@am', item_document_xml))[1]::varchar as "K_LUK"
-, (xpath('//Item/@an', item_document_xml))[1]::varchar as "DT_OUT_END"
-, (xpath('//Item/@ao', item_document_xml))[1]::varchar as "PR_ACCEPTED"
-, (xpath('//Item/@ap', item_document_xml))[1]::varchar as "PR_CLEAN"
-, (xpath('//Item/@aq', item_document_xml))[1]::varchar as "ID_CARGO_FORM"
-, (xpath('//Item/@ar', item_document_xml))[1]::varchar as "PR_TRANSIT"
-, (xpath('//Item/@as', item_document_xml))[1]::varchar as "KPR_OCCUP"
-, (xpath('//Item/@at', item_document_xml))[1]::varchar as "DT_GDC_IN"
-, (xpath('//Item/@au', item_document_xml))[1]::varchar as "EXPLANATION"
-, (xpath('//Item/@av', item_document_xml))[1]::varchar as "ID_EXPL_WRK"
-, (xpath('//Item/@aw', item_document_xml))[1]::varchar as "ID_EXPL_CTRL"
-, (xpath('//Item/@ax', item_document_xml))[1]::varchar as "PR_RET_BY_LOAD"
-, (xpath('//Item/@ay', item_document_xml))[1]::varchar as "RGB"
-, (xpath('//Item/@az', item_document_xml))[1]::varchar as "SILOS"
-, (xpath('//Item/@ba', item_document_xml))[1]::varchar as "WEIGHT_TARA_IN"
-, (xpath('//Item/@bb', item_document_xml))[1]::varchar as "LOAD_CARGO_PRIM"
-, (xpath('//Item/@bc', item_document_xml))[1]::varchar as "RASPOR"
-, (xpath('//Item/@bd', item_document_xml))[1]::varchar as "FOREIGN_SEAPORT_ID"
-, (xpath('//Item/@be', item_document_xml))[1]::varchar as "KPR_BUYER"
-, (xpath('//Item/@bf', item_document_xml))[1]::varchar as "KPR_SEAPORT_TRANS"
-, (xpath('//Item/@bg', item_document_xml))[1]::varchar as "ID_MDM_HOME"
-, (xpath('//Item/@bh', item_document_xml))[1]::varchar as "ID_MDM_OWNER"
-, (xpath('//Item/@bi', item_document_xml))[1]::varchar as "ID_MDM_RENT"
-, (xpath('//Item/@bj', item_document_xml))[1]::varchar as "DSP_ID"
-, (xpath('//Item/@bk', item_document_xml))[1]::varchar as "CHECK_BIT"
-, (xpath('//Item/@bl', item_document_xml))[1]::varchar as "DT_DEL"
-, xiin.uuid
-, xiin.record_id 
-, xiin.dt_insert
-, (xpath('Header/Sender/text()', document_xml))[1]::varchar as sender
-, (xpath('Header/Receiver/text()', document_xml))[1]::varchar as receiver
-, ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp as create_date_time 
-from landing."INPUT_DATA_FROM_SAPXI_IN" xiin
-cross join lateral unnest(xpath('Body/Item', document_xml)) AS item_document_xml
-left join stg.asuzdc_rwcar_parts asurp
-	on xiin.uuid = asurp.uuid
-where 
-	flow_id = 'SI_GdcVehicleBatchTracking_AI'
-	and asurp.uuid is null;
+компос
+services:
+  frontend:
+    build: .
+    ports:
+      - "15312:80"
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity:/app/etl_loads_entity:ro
+    ports:
+      - "5312:8000"
+
+    env_file:
+      - ./api/.env
+    environment:
+      - META_PARENT_DIR=/app/etl_loads_entity
 
 
-Gather Motion 6:1  (slice2; segments: 6)  (cost=10000000001.62..10000000319.99 rows=12 width=865)
-  ->  Nested Loop  (cost=10000000001.62..10000000319.99 rows=2 width=865)
-        ->  Hash Anti Join  (cost=1.62..309.12 rows=1 width=833)
-              Hash Cond: ((xiin.uuid)::text = (asurp.uuid)::text)
-              ->  Seq Scan on "INPUT_DATA_FROM_SAPXI_IN" xiin  (cost=0.00..307.40 rows=4 width=833)
-                    Filter: ((flow_id)::text = 'SI_GdcVehicleBatchTracking_AI'::text)
-              ->  Hash  (cost=1.32..1.32 rows=4 width=37)
-                    ->  Broadcast Motion 6:6  (slice1; segments: 6)  (cost=0.00..1.32 rows=4 width=37)
-                          ->  Seq Scan on asuzdc_rwcar_parts asurp  (cost=0.00..1.04 rows=1 width=37)
-        ->  Function Scan on unnest item_document_xml  (cost=0.01..1.00 rows=17 width=32)
-Optimizer: Postgres query optimizer
+dockerfile
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm i -g npm@9
+RUN npm ci --include=dev
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+api\dockerfile 
+# stage: node + dagre
+FROM node:20-slim AS node
+ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm install -g dagre
+
+# stage: python
+FROM python:3.11-slim
+WORKDIR /app/api
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+ENV PATH="/usr/local/bin:${PATH}"
+ENV NODE_PATH=/usr/local/lib/node_modules
+
+COPY api/ /app/api/
+
+RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+--trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+--retries 100 --timeout 600000 --no-cache-dir \
+fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+api\.env
+TABLE_LOADING_HISTORY=tech_etl.log_objects_loading_history
+TABLE_ENTITIES_META=tech_etl.entities_meta
+TABLE_TABLES_META=tech_etl.tables_meta
+TABLE_TABLE_COMPARE=tech_monitoring.vw_table_compare
+TABLE_YT_SLA=tech_etl.yt_sla
+TABLE_TABLES_META_CLICK=tech_etl.tables_meta_clickhouse_upload
+DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh
+TABLE_YTREK_INCIDENTS=tech_etl.YTREK_INCIDENTS
+
+
+
+в корне .env
+VITE_API_BASE_URL=http://rgm-s-dwhapp01.hq.root.ad:5312

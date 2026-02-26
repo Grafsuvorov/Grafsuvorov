@@ -1,25 +1,22 @@
-FROM node:20-alpine AS build
 
-  ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
-  ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d
+[+] Running 3/3
+ ⠿ Network table-dependency-viewer_default       Created                                                         0.0s
+ ⠿ Container table-dependency-viewer-api-1       Started                                                         0.6s
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                         0.6s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose ps
+NAME                                 COMMAND                  SERVICE             STATUS              PORTS
+table-dependency-viewer-api-1        "uvicorn main:app --…"   api                 exited (1)
+table-dependency-viewer-frontend-1   "/docker-entrypoint.…"   frontend            running             0.0.0.0:15312->80/tcp
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose ps
+NAME                                 COMMAND                  SERVICE             STATUS              PORTS
+table-dependency-viewer-api-1        "uvicorn main:app --…"   api                 exited (1)
+table-dependency-viewer-frontend-1   "/docker-entrypoint.…"   frontend            running             0.0.0.0:15312->80/tcp
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i http://localhost:5312/api/health
+HTTP/1.1 407 Proxy Authentication Required
+Proxy-Authenticate: NTLM
+Proxy-Authenticate: Negotiate
+Content-Length: 29
 
-  WORKDIR /app
-  COPY package*.json ./
-
-  RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
-   && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
-   && npm ci --include=dev
-
-  COPY . .
-  RUN npm run build
-
-  FROM nginx:alpine
-  COPY nginx.conf /etc/nginx/conf.d/default.conf
-  COPY --from=build /app/dist /usr/share/nginx/html
-  EXPOSE 80
-  CMD ["nginx", "-g", "daemon off;"]
-
-  После этого на сервере:
-
-  docker compose build frontend
-  docke
+Proxy Authentication Required[root@rgm-s-dwhapp01 table-dependency-viewer]# cat .env
+VITE_API_BASE_URL=http://rgm-s-dwhapp01.hq.root.ad:5312

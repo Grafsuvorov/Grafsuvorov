@@ -217,7 +217,15 @@ export default function App() {
       <Routes>
         <Route
           path="/login"
-          element={<LoginPage onLogin={() => navigate("/", { replace: true })} />}
+          element={
+            <LoginPage
+              onLogin={({ token, profile }) => {
+                if (token) setAuthToken(token);
+                if (profile) setUserProfile(profile);
+                navigate("/", { replace: true });
+              }}
+            />
+          }
         />
         <Route
           path="/admin/users"

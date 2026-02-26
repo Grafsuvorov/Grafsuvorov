@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const CACHE_KEY = "logic_audit:payload";
+const DISPLAY_LIMIT = 400;
 
 function splitFqn(fqn) {
   if (!fqn || !fqn.includes(".")) return null;
@@ -30,21 +32,49 @@ export default function LogicAuditPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const cachedRaw = localStorage.getItem(CACHE_KEY);
+    if (cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw);
+        if (cached?.expiresAt && Date.now() < cached.expiresAt && cached.payload) {
+          setData(cached.payload);
+          setLoading(false);
+          return () => {
+            cancelled = true;
+          };
+        }
+      } catch {
+        // ignore cache parse errors
+      }
+    }
+
     setLoading(true);
     setError(null);
 
     const params = new URLSearchParams({
-      issue_type: issueType,
-      mode,
-      min_score: String(minScore),
-      limit: "400",
-      search,
+      issue_type: "all",
+      mode: "standard",
+      min_score: "0",
+      limit: "1000",
     });
 
     fetch(`${API_BASE}/api/logic-audit?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(`HTTP ${res.status}`)))
       .then((json) => {
-        if (!cancelled) setData(json);
+        if (cancelled) return;
+        setData(json);
+        const now = new Date();
+        const nextRefresh = new Date(now);
+        nextRefresh.setHours(9, 0, 0, 0);
+        if (now >= nextRefresh) {
+          nextRefresh.setDate(nextRefresh.getDate() + 1);
+        }
+        const payload = {
+          payload: json,
+          ts: Date.now(),
+          expiresAt: nextRefresh.getTime(),
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
       })
       .catch((err) => {
         if (!cancelled) setError(typeof err === "string" ? err : "Не удалось загрузить аудит логики");
@@ -56,7 +86,7 @@ export default function LogicAuditPage() {
     return () => {
       cancelled = true;
     };
-  }, [issueType, mode, minScore, search]);
+  }, []);
 
   useEffect(() => {
     if (!selectedPairId) {
@@ -89,7 +119,43 @@ export default function LogicAuditPage() {
     detailsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [selectedPairId]);
 
-  const pairs = useMemo(() => data?.pairs || [], [data]);
+  const pairs = useMemo(() => {
+    const base = data?.pairs || [];
+    let filtered = base;
+
+    if (issueType !== "all") {
+      filtered = filtered.filter((row) => row.issue_type === issueType);
+    }
+
+    if (minScore > 0) {
+      filtered = filtered.filter((row) => (row.score || 0) >= minScore);
+    }
+
+    if (mode === "strict") {
+      const minStrict = Math.max(minScore, 0.72);
+      filtered = filtered.filter(
+        (row) => (row.expression_overlap_count || 0) >= 1 && (row.score || 0) >= minStrict
+      );
+    }
+
+    if (search) {
+      const term = search.trim().toLowerCase();
+      if (term) {
+        filtered = filtered.filter(
+          (row) =>
+            (row.left_fqn || "").toLowerCase().includes(term) ||
+            (row.right_fqn || "").toLowerCase().includes(term) ||
+            (row.left_entity || "").toLowerCase().includes(term) ||
+            (row.right_entity || "").toLowerCase().includes(term)
+        );
+      }
+    }
+
+    return filtered;
+  }, [data, issueType, minScore, mode, search]);
+
+  const shownPairs = useMemo(() => pairs.slice(0, DISPLAY_LIMIT), [pairs]);
+  const isTruncated = pairs.length > DISPLAY_LIMIT;
 
   const openTable = (fqn) => {
     const parsed = splitFqn(fqn);
@@ -158,11 +224,14 @@ export default function LogicAuditPage() {
               </div>
               <div className="logic-audit-kpi">
                 <div className="label">Найдено пар</div>
-                <div className="value">{data.returned_count ?? 0}</div>
+                <div className="value">
+                  {shownPairs.length}
+                  {isTruncated ? ` из ${pairs.length}` : ""}
+                </div>
               </div>
               <div className="logic-audit-kpi">
                 <div className="label">Полные дубли</div>
-                <div className="value">{data.stats?.duplicate_exact ?? 0}</div>
+                <div className="value">{pairs.filter((x) => x.issue_type === "duplicate_exact").length}</div>
               </div>
               <div className="logic-audit-kpi">
                 <div className="label">Потенциал merge</div>
@@ -174,8 +243,13 @@ export default function LogicAuditPage() {
           <section className="cc-surface">
             <div className="section-title">Найденные пары</div>
             {!pairs.length && <div className="muted">Ничего не найдено по текущим фильтрам.</div>}
+            {isTruncated && (
+              <div className="muted" style={{ marginBottom: 12 }}>
+                Показаны первые {DISPLAY_LIMIT} совпадений. Уточните фильтр или поиск.
+              </div>
+            )}
             <div className="logic-audit-list">
-              {pairs.map((pair) => (
+              {shownPairs.map((pair) => (
                 <button
                   key={pair.pair_id}
                   className={`logic-audit-card ${selectedPairId === pair.pair_id ? "active" : ""}`}

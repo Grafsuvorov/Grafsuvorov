@@ -36,7 +36,10 @@ export default function LoginPage({ onLogin }) {
         JSON.stringify({ email: data.email, username: data.username, role: data.role })
       );
       if (onLogin) {
-        onLogin();
+        onLogin({
+          token: data.access_token,
+          profile: { email: data.email, username: data.username, role: data.role },
+        });
       }
     } catch (err) {
       setError(err.message || "Ошибка входа");

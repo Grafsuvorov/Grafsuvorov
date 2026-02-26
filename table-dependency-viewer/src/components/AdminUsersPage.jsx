@@ -12,6 +12,8 @@ export default function AdminUsersPage({ userProfile }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMsg, setRefreshMsg] = useState(null);
   const [form, setForm] = useState({
     email: "",
     username: "",
@@ -40,6 +42,24 @@ export default function AdminUsersPage({ userProfile }) {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const handleRefreshCache = async () => {
+    setRefreshing(true);
+    setRefreshMsg(null);
+    setError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/api/admin/refresh-cache`, { method: "POST" });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось обновить кеш");
+      }
+      setRefreshMsg("Кеш обновлён");
+    } catch (err) {
+      setError(err.message || "Не удалось обновить кеш");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -78,6 +98,12 @@ export default function AdminUsersPage({ userProfile }) {
         <div className="section-title">Управление пользователями</div>
         <div className="section-subtitle">
           Создавайте учётные записи и выдавайте доступ к системе.
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button className="btn btn-secondary" onClick={handleRefreshCache} disabled={refreshing}>
+            {refreshing ? "Обновляем кеш..." : "Принудительно обновить кеш"}
+          </button>
+          {refreshMsg && <div className="muted">{refreshMsg}</div>}
         </div>
 
         <form className="admin-form" onSubmit={handleSubmit}>

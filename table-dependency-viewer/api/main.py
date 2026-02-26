@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import List, Dict, Tuple, Set, Union, Any
@@ -42,7 +42,7 @@ from .config import (
     DATABASE_URL,
 )
 
-from .auth import auth_middleware, init_auth, router as auth_router
+from .auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
 
 app = FastAPI()
 # CORS для взаимодействия с фронтом
@@ -69,6 +69,38 @@ init_auth()
 
 @app.get("/api/health")
 def healthcheck():
+    return {"status": "ok"}
+
+
+@router.post("/api/admin/refresh-cache")
+def refresh_cache(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    globals()["_cached_meta_index"] = None
+    globals()["_cache_timestamp"] = 0
+    globals()["_order_breaches_cache"] = None
+    globals()["_order_breaches_ts"] = 0
+    globals()["_graph_snapshot"] = None
+    globals()["_graph_snapshot_ts"] = 0
+    globals()["_graph_snapshot_hash"] = None
+    globals()["_graph_cache"].clear()
+    globals()["_graph_cache_ts"] = 0
+    globals()["_graph_cache_meta_ts"] = 0
+    globals()["_logic_audit_cache_payload"] = None
+    globals()["_logic_audit_cache_ts"] = 0
+
+    try:
+        get_cached_meta_and_index()
+        get_cached_order_breaches()
+        get_graph_snapshot()
+        _build_logic_audit_cache()
+    except Exception as exc:
+        print("❌ refresh cache error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
+
     return {"status": "ok"}
 
 # Модель для ответа зависимостей
@@ -126,7 +158,7 @@ _graph_cache_meta_ts = 0
 
 _logic_audit_cache_payload = None
 _logic_audit_cache_ts = 0
-_LOGIC_AUDIT_CACHE_TTL = 3600
+_LOGIC_AUDIT_CACHE_TTL = 86400
 
 SQL_STOPWORDS = {
     "select", "from", "where", "join", "left", "right", "inner", "outer", "full", "on",

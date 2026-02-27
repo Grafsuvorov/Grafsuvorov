@@ -1,261 +1,494 @@
-do
-$$
-DECLARE
-	v_row_cnt int8;
-	v_calc_time interval ;
-	v_start_dttm timestamp(0) ;
-    v_key_min text ;
-    v_key_max text ;
-BEGIN
-	v_start_dttm   := clock_timestamp()  ;
-	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
+Для KONV создали O-Data сервис получения дельты, подключили к DEV протестировали в рамках задачи Подключить odata сервис ZBW1758M_SRV : DWH-10632. На базе этой дельты реализовать таблицу ODS с обновлением данных. Предпологаемые действия:
 
-	if not exists(select 1 from ods.ral_konv limit 1) then
-		raise notice '% start initialization loading ', to_char(clock_timestamp(),'hh24:mi:ss');
+Инициализирующая полная прогрузка "KONV"
+Настройка регулярного обновления данных с получаемой дельты. Дельта лежит в таблице stg.ZBW1758M_SRV
 
-		truncate table	ods.ral_konv;
+связана с
+2
+подзадача для
+1
+ Добавить ссылки
 
-		insert into ods.ral_konv(mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty,dttm_inserted,dttm_updated,job_name,deleted_flag)
-		select
-			"MANDT"       as mandt     ,
-			"KNUMV"       as knumv     ,
-			"KPOSN"       as kposn     ,
-			"STUNR"       as stunr     ,
-			"ZAEHK"       as zaehk     ,
-			"KAPPL"       as kappl     ,
-			"KSCHL"       as kschl     ,
-			"KDATU"       as kdatu     ,
-			"KRECH"       as krech     ,
-			"KAWRT"       as kawrt     ,
-			"KBETR"       as kbetr     ,
-			"WAERS"       as waers     ,
-			"KKURS"       as kkurs     ,
-			"KPEIN"       as kpein     ,
-			"KMEIN"       as kmein     ,
-			"KUMZA"       as kumza     ,
-			"KUMNE"       as kumne     ,
-			"KNTYP"       as kntyp     ,
-			"KSTAT"       as kstat     ,
-			"KNPRS"       as knprs     ,
-			"KRUEK"       as kruek     ,
-			"KRELI"       as kreli     ,
-			"KHERK"       as kherk     ,
-			"KGRPE"       as kgrpe     ,
-			"KOUPD"       as koupd     ,
-			"KOLNR"       as kolnr     ,
-			"KNUMH"       as knumh     ,
-			"KOPOS"       as kopos     ,
-			"KVSL1"       as kvsl1     ,
-			"SAKN1"       as sakn1     ,
-			"MWSK1"       as mwsk1     ,
-			"KVSL2"       as kvsl2     ,
-			"SAKN2"       as sakn2     ,
-			"MWSK2"       as mwsk2     ,
-			"LIFNR"       as lifnr     ,
-			"KUNNR"       as kunnr     ,
-			"KDIFF"       as kdiff     ,
-			"KWERT"       as kwert     ,
-			"KSTEU"       as ksteu     ,
-			"KINAK"       as kinak     ,
-			"KOAID"       as koaid     ,
-			"ZAEKO"       as zaeko     ,
-			"KMXAW"       as kmxaw     ,
-			"KMXWR"       as kmxwr     ,
-			"KFAKTOR"     as kfaktor   ,
-			"KDUPL"       as kdupl     ,
-			"KFAKTOR1"    as kfaktor1  ,
-			"KZBZG"       as kzbzg     ,
-			"KSTBS"       as kstbs     ,
-			"KONMS"       as konms     ,
-			"KONWS"       as konws     ,
-			"KAWRT_K"     as kawrt_k   ,
-			"KWAEH"       as kwaeh     ,
-			"KWERT_K"     as kwert_k   ,
-			"KFKIV"       as kfkiv     ,
-			"KVARC"       as kvarc     ,
-			"KMPRS"       as kmprs     ,
-			"PRSQU"       as prsqu     ,
-			"VARCOND"     as varcond   ,
-			"STUFE"       as stufe     ,
-			"WEGXX"       as wegxx     ,
-			"KTREL"       as ktrel     ,
-			"MDFLG"       as mdflg     ,
-			"TXJLV"       as txjlv     ,
-			"KBFLAG"      as kbflag    ,
-			"KOLNR3"      as kolnr3    ,
-			"CPF_GUID"    as cpf_guid  ,
-			"KAQTY"       as kaqty     ,
-			current_timestamp as dttm_inserted,
-			current_timestamp as dttm_updated,
-			'airflow' as job_name,
-			false as deleted_flag
-		from stg."KONV"	;
+связана с
 
-		get diagnostics v_row_cnt = row_count;
-		raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+N
+DWH-10632
+Подключить odata сервис ZBW1758M_SRV
 
-		analyze ods.ral_konv(knumv, kposn, stunr, zaehk);
-		raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
+N
+DWH-9692
+Загрузить таблицу KONV stg DEV/PROD GP
+подзадача для
 
-	end if;
+N
+DWH-9647
+взять в работу тз 336
+
+Вложения2
+Прикрепить файлы
+Файлы, прикрепленные к комментариям
 
 
-	drop table if exists pg_temp.delta;
-	create temporary table pg_temp.delta   as (
-		select distinct on (knumv, kposn, stunr, zaehk)
-			mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty
-			,odq_changemode = 'D' as deleted_flag
-		from stg.ZBW1758M_SRV
-		where sap_pointer = '{sap_pointer}'
-		order by knumv, kposn, stunr, zaehk
-			, sap_pointer desc, dttm_inserted desc
 
-	)
-	distributed by (knumv, kposn, stunr, zaehk);
+Настройка событий 
+Ryazanov Igor
+Обновлено 2 дня назад
+Связана с:DWH-10632, DWH-9692
+Обновлено 2 дня назад
+Изменено описание:Подробнее
+Анастасия Семенова
+Обновлено 2 дня назад
+Приоритет:Normal → Major
+Исполнитель:Suvorov Nikita
+User avatar
+Suvorov Nikita
+Прокомментировал(а) 2 дня назад
+Что было протестировано? Что загрузка пошла? Данные приходят корректно? Мета информация при загрузке заполняется?
+Когда одата будет отдавать данные? Какой ключ в таблице?
+Нужна ли история и требуется ли пометка удаленных записей? В одном пакете может приходить сразу несколько изменений?
 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.delta', v_row_cnt;
+Где и как планируется использоваться таблица? @Анастасия Семенова
 
-	analyze pg_temp.delta;
-	raise notice '% analyze pg_temp.delta', to_char(clock_timestamp(),'hh24:mi:ss');
+Анастасия Семенова
+Обновлено 2 дня назад
+Подзадача для:DWH-9647взять в работу тз 336
+User avatar
+Ryazanov Igor
+Прокомментировал(а) 2 дня назад (изменено)
+@Suvorov Nikita Было протестировано что загрузка пошла, и данные изменений приходят корректно, Одата отдает данные по запросу временной метки, мы разово грузим конв руками, потом запрашиваем дельту, появляется метка, и уже грузим от этой метки (как я понял это стандартный процесс)
+Ключи таблицы: KNUMV, KPOSN, STUNR, ZAEHK
+Нам нужна вся таблица KONV, если под историей имеется ввиду это
+Пометка удаленных записей нужна, такие сценарии могут возникнуть. Всего в О-дата предусмотрено 3 вида дельты, см статью Извлечение данных из SAP через OData | База знаний, нам нужно обрабатывать каждый сценарий
+Таблица будет использоваться в витрине dm.sales_statement_report
 
-	select
-		min(knumv) as knumv_min,
-		max(knumv) as knumv_max
-		into v_key_min , v_key_max
-	from pg_temp.delta;
-	raise notice '% pg_temp.delta v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
+Suvorov Nikita
+Обновлено 2 дня назад
+Исполнитель:Suvorov Nikita → Zernov Aleksandr
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) 1 день назад
+@Ryazanov Igor @Анастасия Семенова
+Коллеги, прошу уточнить по задаче
+1)как назвать ods таблицу? ods.sales_statement_report ?
 
-	drop table if exists pg_temp.clean_delta;
+2)Правильно ли я понял что ods НЕ должна содержать историю
 
-	create temporary table pg_temp.clean_delta   as (
-		select
-			coalesce(src.mandt             , tgt.mandt           ) as mandt          ,
-			coalesce(src.knumv             , tgt.knumv           ) as knumv          ,
-			coalesce(src.kposn             , tgt.kposn           ) as kposn          ,
-			coalesce(src.stunr             , tgt.stunr           ) as stunr          ,
-			coalesce(src.zaehk             , tgt.zaehk           ) as zaehk          ,
-			coalesce(src.kappl             , tgt.kappl           ) as kappl          ,
-			coalesce(src.kschl             , tgt.kschl           ) as kschl          ,
-			coalesce(src.kdatu             , tgt.kdatu           ) as kdatu          ,
-			coalesce(src.krech             , tgt.krech           ) as krech          ,
-			coalesce(src.kawrt             , tgt.kawrt           ) as kawrt          ,
-			coalesce(src.kbetr             , tgt.kbetr           ) as kbetr          ,
-			coalesce(src.waers             , tgt.waers           ) as waers          ,
-			coalesce(src.kkurs             , tgt.kkurs           ) as kkurs          ,
-			coalesce(src.kpein             , tgt.kpein           ) as kpein          ,
-			coalesce(src.kmein             , tgt.kmein           ) as kmein          ,
-			coalesce(src.kumza             , tgt.kumza           ) as kumza          ,
-			coalesce(src.kumne             , tgt.kumne           ) as kumne          ,
-			coalesce(src.kntyp             , tgt.kntyp           ) as kntyp          ,
-			coalesce(src.kstat             , tgt.kstat           ) as kstat          ,
-			coalesce(src.knprs             , tgt.knprs           ) as knprs          ,
-			coalesce(src.kruek             , tgt.kruek           ) as kruek          ,
-			coalesce(src.kreli             , tgt.kreli           ) as kreli          ,
-			coalesce(src.kherk             , tgt.kherk           ) as kherk          ,
-			coalesce(src.kgrpe             , tgt.kgrpe           ) as kgrpe          ,
-			coalesce(src.koupd             , tgt.koupd           ) as koupd          ,
-			coalesce(src.kolnr             , tgt.kolnr           ) as kolnr          ,
-			coalesce(src.knumh             , tgt.knumh           ) as knumh          ,
-			coalesce(src.kopos             , tgt.kopos           ) as kopos          ,
-			coalesce(src.kvsl1             , tgt.kvsl1           ) as kvsl1          ,
-			coalesce(src.sakn1             , tgt.sakn1           ) as sakn1          ,
-			coalesce(src.mwsk1             , tgt.mwsk1           ) as mwsk1          ,
-			coalesce(src.kvsl2             , tgt.kvsl2           ) as kvsl2          ,
-			coalesce(src.sakn2             , tgt.sakn2           ) as sakn2          ,
-			coalesce(src.mwsk2             , tgt.mwsk2           ) as mwsk2          ,
-			coalesce(src.lifnr             , tgt.lifnr           ) as lifnr          ,
-			coalesce(src.kunnr             , tgt.kunnr           ) as kunnr          ,
-			coalesce(src.kdiff             , tgt.kdiff           ) as kdiff          ,
-			coalesce(src.kwert             , tgt.kwert           ) as kwert          ,
-			coalesce(src.ksteu             , tgt.ksteu           ) as ksteu          ,
-			coalesce(src.kinak             , tgt.kinak           ) as kinak          ,
-			coalesce(src.koaid             , tgt.koaid           ) as koaid          ,
-			coalesce(src.zaeko             , tgt.zaeko           ) as zaeko          ,
-			coalesce(src.kmxaw             , tgt.kmxaw           ) as kmxaw          ,
-			coalesce(src.kmxwr             , tgt.kmxwr           ) as kmxwr          ,
-			coalesce(src.kfaktor           , tgt.kfaktor         ) as kfaktor        ,
-			coalesce(src.kdupl             , tgt.kdupl           ) as kdupl          ,
-			coalesce(src.kfaktor1          , tgt.kfaktor1        ) as kfaktor1       ,
-			coalesce(src.kzbzg             , tgt.kzbzg           ) as kzbzg          ,
-			coalesce(src.kstbs             , tgt.kstbs           ) as kstbs          ,
-			coalesce(src.konms             , tgt.konms           ) as konms          ,
-			coalesce(src.konws             , tgt.konws           ) as konws          ,
-			coalesce(src.kawrt_k           , tgt.kawrt_k         ) as kawrt_k        ,
-			coalesce(src.kwaeh             , tgt.kwaeh           ) as kwaeh          ,
-			coalesce(src.kwert_k           , tgt.kwert_k         ) as kwert_k        ,
-			coalesce(src.kfkiv             , tgt.kfkiv           ) as kfkiv          ,
-			coalesce(src.kvarc             , tgt.kvarc           ) as kvarc          ,
-			coalesce(src.kmprs             , tgt.kmprs           ) as kmprs          ,
-			coalesce(src.prsqu             , tgt.prsqu           ) as prsqu          ,
-			coalesce(src.varcond           , tgt.varcond         ) as varcond        ,
-			coalesce(src.stufe             , tgt.stufe           ) as stufe          ,
-			coalesce(src.wegxx             , tgt.wegxx           ) as wegxx          ,
-			coalesce(src.ktrel             , tgt.ktrel           ) as ktrel          ,
-			coalesce(src.mdflg             , tgt.mdflg           ) as mdflg          ,
-			coalesce(src.txjlv             , tgt.txjlv           ) as txjlv          ,
-			coalesce(src.kbflag            , tgt.kbflag          ) as kbflag         ,
-			coalesce(src.kolnr3            , tgt.kolnr3          ) as kolnr3         ,
-			coalesce(src.cpf_guid          , tgt.cpf_guid        ) as cpf_guid       ,
-			coalesce(src.kaqty             , tgt.kaqty           ) as kaqty          ,
-			coalesce(src.deleted_flag      , tgt.deleted_flag    ) as deleted_flag   ,
-			coalesce(tgt.dttm_inserted, current_timestamp)   as dttm_inserted
-		from pg_temp.delta as src
-		left join ods.ral_konv as tgt on
-				src.knumv  = tgt.knumv  and
-				src.kposn  = tgt.kposn  and
-				src.stunr  = tgt.stunr  and
-				src.zaehk  = tgt.zaehk  and
-				tgt.knumv between v_key_min	and v_key_max
-	    where
-	                 md5(concat(src.mandt, '#', src.kappl, '#', src.kschl, '#', src.kdatu, '#', src.krech, '#', src.kawrt, '#', src.kbetr, '#', src.waers, '#', src.kkurs, '#', src.kpein, '#', src.kmein, '#', src.kumza, '#', src.kumne, '#', src.kntyp, '#', src.kstat, '#', src.knprs, '#', src.kruek, '#', src.kreli, '#', src.kherk, '#', src.kgrpe, '#', src.koupd, '#', src.kolnr, '#', src.knumh, '#', src.kopos, '#', src.kvsl1, '#', src.sakn1, '#', src.mwsk1, '#', src.kvsl2, '#', src.sakn2, '#', src.mwsk2, '#', src.lifnr, '#', src.kunnr, '#', src.kdiff, '#', src.kwert, '#', src.ksteu, '#', src.kinak, '#', src.koaid, '#', src.zaeko, '#', src.kmxaw, '#', src.kmxwr, '#', src.kfaktor, '#', src.kdupl, '#', src.kfaktor1, '#')||concat(src.kzbzg, '#', src.kstbs, '#', src.konms, '#', src.konws, '#', src.kawrt_k, '#', src.kwaeh, '#', src.kwert_k, '#', src.kfkiv, '#', src.kvarc, '#', src.kmprs, '#', src.prsqu, '#', src.varcond, '#', src.stufe, '#', src.wegxx, '#', src.ktrel, '#', src.mdflg, '#', src.txjlv, '#', src.kbflag, '#', src.kolnr3, '#', src.cpf_guid, '#', src.kaqty, '#', src.deleted_flag) )
-	              != md5(concat(src.mandt, '#', tgt.kappl, '#', tgt.kschl, '#', tgt.kdatu, '#', tgt.krech, '#', tgt.kawrt, '#', tgt.kbetr, '#', tgt.waers, '#', tgt.kkurs, '#', tgt.kpein, '#', tgt.kmein, '#', tgt.kumza, '#', tgt.kumne, '#', tgt.kntyp, '#', tgt.kstat, '#', tgt.knprs, '#', tgt.kruek, '#', tgt.kreli, '#', tgt.kherk, '#', tgt.kgrpe, '#', tgt.koupd, '#', tgt.kolnr, '#', tgt.knumh, '#', tgt.kopos, '#', tgt.kvsl1, '#', tgt.sakn1, '#', tgt.mwsk1, '#', tgt.kvsl2, '#', tgt.sakn2, '#', tgt.mwsk2, '#', tgt.lifnr, '#', tgt.kunnr, '#', tgt.kdiff, '#', tgt.kwert, '#', tgt.ksteu, '#', tgt.kinak, '#', tgt.koaid, '#', tgt.zaeko, '#', tgt.kmxaw, '#', tgt.kmxwr, '#', tgt.kfaktor, '#', tgt.kdupl, '#', tgt.kfaktor1, '#')||concat(tgt.kzbzg, '#', tgt.kstbs, '#', tgt.konms, '#', tgt.konws, '#', tgt.kawrt_k, '#', tgt.kwaeh, '#', tgt.kwert_k, '#', tgt.kfkiv, '#', tgt.kvarc, '#', tgt.kmprs, '#', tgt.prsqu, '#', tgt.varcond, '#', tgt.stufe, '#', tgt.wegxx, '#', tgt.ktrel, '#', tgt.mdflg, '#', tgt.txjlv, '#', tgt.kbflag, '#', tgt.kolnr3, '#', tgt.cpf_guid, '#', tgt.kaqty, '#', tgt.deleted_flag) )
+т.е. в таблице должна быть только 1 строка с ключом KNUMV, KPOSN, STUNR, ZAEHK и последним состоянием всех атрибутов
 
-	)
-	distributed by (knumv, kposn, stunr, zaehk);
+и берем с максимальной датой dttm_inserted из stg.ZBW1758M_SRV
 
+3)список служебных полей какой нужен?
 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.clean_delta', v_row_cnt;
+sap_pointer **varchar**(24) **null**,
 
+dttm_inserted **timestamp** **not** **null** **default** **now**(),
 
-	analyze pg_temp.clean_delta;
-	raise notice '% analyze pg_temp.clean_delta', to_char(clock_timestamp(),'hh24:mi:ss');
+dttm_updated **timestamp** **not** **null** **default** **now**(),
+
+job_name **varchar**(60) **not** **null** **default** 'airflow'::**character** **varying**,
+
+deleted_flag **bool** **not** **null** **default** **false**
+
+как служебные поля заполнять?
+
+в STG есть sap_pointer, load_type, dttm_inserted, job_name
+
+load_type -  показывает удалена ли строка
+
+dttm_inserted мы не иипользуем и в ODS ставим фактическую дату вставик в ODS?
+
+job_name копируем из STG в ODS или берем константу
+
+4)Есть ли какие то поля типа даты или счетчика которые не меняются для ключа, например kdatu, типа даты создания ключа
+
+5)'{sap_pointer}' идет на вход ив скрипты , откуда он приходит
+
+и там применяется к STG where sap_pointer = '{sap_pointer}'
+
+6)дельта в stg.ZBW1758M_SRV
+
+а как все забрать?
+
+7)stg.ZBW1758M_SRV, чем грузится и с какой периодичностью?
+
+чем чистится и как часто
+
+DISTRIBUTED RANDOMLY; почему?
+
+Zernov Aleksandr
+Обновлено 1 день назад
+Состояние:В работе → Отложена / в ожидании
+User avatar
+Ryazanov Igor
+Прокомментировал(а) около 24 часов назад (изменено)
+@Zernov Aleksandr Привет
+
+Название таблицы в одс по нашему стандартному неймингу - ods.ral_konv
+
+Да. Историю в виде изменений атрибутов SCD type 2 и пр не надо, это фактовая таблица нам важно знать конечное состояние ценовых условий. При этом отмечу что нам нужно все данные из таблицы KONV, а не только дельта из stg.ZBW1758M_SRV.
+
+Нужны все стандартные служебные поля для таблиц ODS.
+Насколько мне известно служебные поля заполняются Фреймворком загрузки, например job_name ставится константа 'Airflow', уточни пожалуйста это у Суворова Никиты.
+
+Нет таких полей нет
+
+Это скорее всего переменная из скриптов для загрузки O-Data, по этому вопросу обратись пожалуйста к @Komlev Daniil.
+
+Дельта в stg.ZBW1758M_SRV. Основную таблицу KONV забираем по стандартному процессу загрузки SAP - DWH.STG. В деве, мы аналитики пользуемся скриптами ручной прогрузки из статьи Ручная загрузка таблиц на stg | База знаний. По этому вопросу можно обратиться к @Staroverova Anastasiya, она как раз разово грузила KONV в рамках задачи Загрузить таблицу KONV stg DEV/PROD GP : DWH-9692
+
+По этим вопросам тоже к @Komlev Daniil. Насколько я знаю дельта забирается по запросу, поэтому время надо будет согласовать, стандартно у нас ночные загрузки в 02:00, можно забирать в это время.
+
+User avatar
+Анастасия Семенова
+Прокомментировал(а) около 22 часов назад (изменено)
+привет.
+
+дополню по п.6.
+
+можно повторно не загружать всю таблицу KONV. достаточно взять те же данные, которые разово уже прогрузили в stg."KONV".
+дальше дельта в stg.ZBW1758M_SRV начала приходить с 01.01.2026, поэтому данные не потеряем.
 
 
-	select
-		min(knumv) as knumv_min,
-		max(knumv) as knumv_max
-		into v_key_min , v_key_max
-	from pg_temp.clean_delta;
-	raise notice '% pg_temp.clean_delta v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 20 часов назад
+прошу что значит поле в stg поле load_type, я думал что по нему определяем признак удаления но сейчас в нем все строки с D
+select * from stg.ZBW1758M_SRV where load_type != 'D'
+https://yt.rusal.ru/articles/DWH-A-289/Izvlechenie-dannyh-iz-SAP-cherez-OData
 
-	delete
-	from ods.ral_konv  as tgt
-	   using pg_temp.clean_delta  as src
-	where
-				src.knumv  = tgt.knumv  and
-				src.kposn  = tgt.kposn  and
-				src.stunr  = tgt.stunr  and
-				src.zaehk  = tgt.zaehk  and
-				tgt.knumv between v_key_min	and v_key_max
-	;
+User avatar
+Ryazanov Igor
+Прокомментировал(а) около 20 часов назад (изменено)
+@Zernov Aleksandr Поле load_type является системным для загрузки O-Data, на него нам смотреть не надо, мы будем получать только дельту.
+В статье которую я упоминал https://yt.rusal.ru/articles/DWH-A-289/Izvlechenie-dannyh-iz-SAP-cherez-OData, указано поле odq_changemode
 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% Delete target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+select odq_changemode from stg.ZBW1758M_SRV
+image.png
 
-	insert into ods.ral_konv(mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty,dttm_inserted,dttm_updated,job_name,deleted_flag)
-	select                   mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty
-	    ,dttm_inserted,current_timestamp as dttm_updated,'airflow' as job_name,deleted_flag
-	from pg_temp.clean_delta;
++ Еще прошу заметить рядом есть поле tstamps, мы берем максимальный tstamps по ключам KNUMV, KPOSN, STUNR, ZAEHK
 
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 20 часов назад
+поле "ODQ_CHANGEMODE выгружается в STG? и как называется в нем?
+в инструкции ttps://yt.rusal.ru/articles/DWH-A-289/Izvlechenie-dannyh-iz-SAP-cherez-OData написано
+В бизнес данных, в поле "ODQ_CHANGEMODE" возможны три варианта значений:
+"D" для удаленных строк
+"C" для вновь созданных строк
+"U" для обновленных существующих строк
 
-	analyze ods.ral_konv(knumv, kposn, stunr, zaehk);
-	raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
+User avatar
+Ryazanov Igor
+Прокомментировал(а) около 20 часов назад
+@Zernov Aleksandr Оно выгружается для дельты, имеет название odq_changemode, я привел выше пример
+select odq_changemode from stg.ZBW1758M_SRV
 
-	v_calc_time :=  clock_timestamp() - v_start_dttm ;
-	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 20 часов назад
+Я правильно понял что в STG системные поля мы не выгружаем в ODS
+(они нам нужны только для выбора последней версии строки по ключу и метки удаления)
+odq_changemode text NULL,
+
+odq_entitycntr text NULL,
+
+file_num int8 NULL,
+
+row_num int8 NULL,
+
+load_id int8 NULL,
+
+sap_pointer text NULL,
+
+load_type text NULL,
+
+dttm_inserted timestamp DEFAULT now() NULL,
+
+job_name varchar(60) DEFAULT 'airflow'::character varying NULL
+
+User avatar
+Ryazanov Igor
+Прокомментировал(а) около 20 часов назад (изменено)
+@Zernov Aleksandr Системные поля от O-Data не выгружаем, это вот эти:
+odq_changemode, odq_entitycntr, tstamps, file_num
+По сути у нас в ODS, будут все поля с KONV + стандартные системные поля для ODS
+
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 20 часов назад
+Игорь, а почему только 4 поля, а вот эт разве не системные stg?
+они нужны в ODS?
+
+row_num int8 NULL,
+
+load_id int8 NULL,
+
+sap_pointer text NULL,
+
+load_type text NULL,
+
+dttm_inserted timestamp DEFAULT now() NULL,
+
+job_name varchar(60) DEFAULT 'airflow'::character varying NULL
+
+User avatar
+Ryazanov Igor
+Прокомментировал(а) около 20 часов назад
+@Zernov Aleksandr Я выше упоминал поля которые мы Не берем, в общем итоговый список полей можно взять из stg."KONV"
+
+	"MANDT" varchar(9) NOT NULL,
+
+	"KNUMV" varchar(30) NOT NULL,
+
+	"KPOSN" varchar(18) NOT NULL,
+
+	"STUNR" varchar(9) NOT NULL,
+
+	"ZAEHK" varchar(6) NOT NULL,
+
+	"KAPPL" varchar(6) NOT NULL,
+
+	"KSCHL" varchar(12) NOT NULL,
+
+	"KDATU" varchar(24) NOT NULL,
+
+	"KRECH" varchar(3) NOT NULL,
+
+	"KAWRT" numeric(15, 2) NOT NULL,
+
+	"KBETR" numeric(11, 2) NOT NULL,
+
+	"WAERS" varchar(15) NOT NULL,
+
+	"KKURS" numeric(9, 5) NOT NULL,
+
+	"KPEIN" int8 NOT NULL,
+
+	"KMEIN" varchar(9) NOT NULL,
+
+	"KUMZA" int8 NOT NULL,
+
+	"KUMNE" int8 NOT NULL,
+
+	"KNTYP" varchar(3) NOT NULL,
+
+	"KSTAT" varchar(3) NOT NULL,
+
+	"KNPRS" varchar(3) NOT NULL,
+
+	"KRUEK" varchar(3) NOT NULL,
+
+	"KRELI" varchar(3) NOT NULL,
+
+	"KHERK" varchar(3) NOT NULL,
+
+	"KGRPE" varchar(3) NOT NULL,
+
+	"KOUPD" varchar(3) NOT NULL,
+
+	"KOLNR" varchar(6) NOT NULL,
+
+	"KNUMH" varchar(30) NOT NULL,
+
+	"KOPOS" varchar(6) NOT NULL,
+
+	"KVSL1" varchar(9) NOT NULL,
+
+	"SAKN1" varchar(30) NOT NULL,
+
+	"MWSK1" varchar(6) NOT NULL,
+
+	"KVSL2" varchar(9) NOT NULL,
+
+	"SAKN2" varchar(30) NOT NULL,
+
+	"MWSK2" varchar(6) NOT NULL,
+
+	"LIFNR" varchar(30) NOT NULL,
+
+	"KUNNR" varchar(30) NOT NULL,
+
+	"KDIFF" numeric(5, 2) NOT NULL,
+
+	"KWERT" numeric(13, 2) NOT NULL,
+
+	"KSTEU" varchar(3) NOT NULL,
+
+	"KINAK" varchar(3) NOT NULL,
+
+	"KOAID" varchar(3) NOT NULL,
+
+	"ZAEKO" varchar(6) NOT NULL,
+
+	"KMXAW" varchar(3) NOT NULL,
+
+	"KMXWR" varchar(3) NOT NULL,
+
+	"KFAKTOR" float8 NOT NULL,
+
+	"KDUPL" varchar(3) NOT NULL,
+
+	"KFAKTOR1" float8 NOT NULL,
+
+	"KZBZG" varchar(3) NOT NULL,
+
+	"KSTBS" numeric(15, 2) NOT NULL,
+
+	"KONMS" varchar(9) NOT NULL,
+
+	"KONWS" varchar(15) NOT NULL,
+
+	"KAWRT_K" numeric(15, 2) NOT NULL,
+
+	"KWAEH" varchar(15) NOT NULL,
+
+	"KWERT_K" numeric(13, 2) NOT NULL,
+
+	"KFKIV" varchar(3) NOT NULL,
+
+	"KVARC" varchar(3) NOT NULL,
+
+	"KMPRS" varchar(3) NOT NULL,
+
+	"PRSQU" varchar(3) NOT NULL,
+
+	"VARCOND" varchar(78) NOT NULL,
+
+	"STUFE" int8 NOT NULL,
+
+	"WEGXX" int8 NOT NULL,
+
+	"KTREL" varchar(3) NOT NULL,
+
+	"MDFLG" varchar(3) NOT NULL,
+
+	"TXJLV" varchar(3) NOT NULL,
+
+	"KBFLAG" text NULL,
+
+	"KOLNR3" varchar(9) NOT NULL,
+
+	"CPF_GUID" varchar(96) NOT NULL,
+
+	"KAQTY" numeric(31, 14) NOT NULL,
+
+	"DTTM_INSERTED" timestamp NOT NULL,
+
+	"DTTM_UPDATED" timestamp NOT NULL,
+
+	"JOB_NAME" varchar(60) NOT NULL,
+
+	"DELETED_FLAG" bool NOT NULL
+
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 19 часов назад
+посмотрел пересечения по именам полей stg."KONV" и stg.ZBW1758M_SRV
+{06768325-0DAE-4984-9B18-4A18F9DECA63}.png
+1)все же типы полей в ODS берутся по типу полей из stg.ZBW1758M_SRV? там всегда text
+
+2)метку удаления считаем по odq_changemode ='D'
+
+3)sap_pointer точно не берем? если все же берем то какой взять из stg."KONV" - там его нет
+
+4)системные поля в ODS делаем в нижнем регистре
+
+т.е. не
+
+**"DTTM_INSERTED"** **timestamp** **NOT** **NULL**,
+
+**"DTTM_UPDATED"** **timestamp** **NOT** **NULL**,
+
+**"JOB_NAME"** **varchar**(60) **NOT** **NULL**,
+
+**"DELETED_FLAG"** **bool** **NOT** **null**
+
+а так
+
+dttm_inserted **timestamp** **NOT** **NULL** **DEFAULT** **now**(),
+
+dttm_updated **timestamp** **NOT** **NULL** **DEFAULT** **now**(),
+
+job_name **varchar**(60) **NOT** **NULL** **DEFAULT** 'airflow'::**character** **varying**,
+
+deleted_flag **bool** **NOT** **NULL** **DEFAULT** **false**
+
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 19 часов назад
+5)есть 4 поля в stg.ZBW1758M_SRVкоторых нет в stg."KONV"
+их просто не создаем в ODS вообще или просто для инициализаирующей загруки заменяем на NULL ?
+awei1 text NULL,
+
+koei1 text NULL,
+
+waerk text NULL,
+
+stei1 text NULL,
+
+Zernov Aleksandr
+Обновлено около 16 часов назад
+5ч00м
+26 фев. 2026
+Тип работы отсутствует
+разбор примеров, разработка, оптимизация
+
+Фактические трудозатраты:? → 5ч
+User avatar
+Zernov Aleksandr
+Прокомментировал(а) около 1 часа назад
+
+МР готов
+DWH-10716 (!1859) · Merge requests · dwh / etl · GitLab
+Таблицу ods.ral_konv сделал без партиций, хотя очень нужно бы, 0,8 млрд строк и сбор статистики по всей табличке(даже только по ключевым полям) занимает более 2 мин
+sql_query_insert_inc и sql_query_insert_init сделал одинаковыми с таким алгоритмом:
+1)Если ods.ral_konv пустая то вставляем из stg."KONV"
+2)инкрементальная загрузка -
+
+2.1)берем грязную дельту из stg.ZBW1758M_SRV
+2.2)берем диапазон по ключу knumv из грязной дельты
+2.3)вычисляем чистую дельту применяя диапазон к целевой таблице
+
+2.4)повторно считаем диапазон по ключу knumv из чистой дельты
+2.5)удаление по чистой дельте применяя диапазон к целевой таблице
+2.7)вставка по чистой дельте
+2.8)вставка по чистой дельте - сбор статистики
+
+Логи отработки инкремента
+08:07:52 START
+
+08:07:52 create temp table pg_temp.delta (1545)
+
+08:07:52 analyze pg_temp.delta
+
+08:07:52 pg_temp.delta v_key_min = 0045720416 ; v_key_max = 0055817967
+
+08:10:12 create temp table pg_temp.clean_delta (0)
+
+08:10:12 analyze pg_temp.clean_delta
+
+08:10:12 pg_temp.clean_delta v_key_min = <NULL> ; v_key_max = <NULL>
+
+08:10:12 Delete target (0)
+
+08:10:12 Insert target (0)
+
+08:12:07 analyze target
+
+08:12:07 FINISH (v_start_dttm = 2026-02-27 08:07:52 ; v_calc_time = 00:04:15.471254.)
+
+Логи отработки инита(делал отдельно )
+
+16:34:22 START
+
+17:00:00 Insert target (875873321)
+
+17:00:00 FINISH (v_start_dttm = 2026-02-26 16:34:22 ; v_calc_time = 00:25:38.721654.)
+
+Время работы:
+Время загрузки дельты 4,5 минуты - из них 2 минуты на сбор статистики
+Время загрузки инита 25 минут + 2 минуты на сбор статистики
+
+Выводы:
+1)табличка очень большая 0,875 млрд строк и очень надо бы иметь поле с датой которое не меняется для ключа для создания партиций
+тогда можно было бы оптимизировать инкрементальную загрузку и сбор статистики

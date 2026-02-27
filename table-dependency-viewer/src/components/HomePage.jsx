@@ -859,6 +859,11 @@ export default function HomePage({ onSelectTable }) {
               {entityCycles.length + demoEntityMutual.length}
             </span>
           </div>
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Здесь показываются случаи, где сущности зависят друг от друга в обе стороны
+            (взаимные зависимости) или образуют цикл. Такие связи мешают корректному порядку
+            загрузки и требуют проверки логики.
+          </div>
           <div className="order-list">
             {demoEntityMutual.slice(0, 4).map((pair, idx) => {
               const key = `${pair.a}::${pair.b}`;
@@ -872,7 +877,7 @@ export default function HomePage({ onSelectTable }) {
                       {pair.a} ↔ {pair.b}
                     </div>
                   </div>
-                  <div className="order-pill order-pill-warning">MUTUAL</div>
+                  <div className="order-pill order-pill-warning">ВЗАИМНО</div>
                 </header>
                 <div className="order-row-chain">
                   <span className="order-node mono">{pair.a}</span>
@@ -977,7 +982,7 @@ export default function HomePage({ onSelectTable }) {
                     <div className="order-row-target mono">Цикл сущностей</div>
                     <div className="order-row-meta">Сущностей: {cycle.size}</div>
                   </div>
-                  <div className="order-pill order-pill-warning">CYCLE</div>
+                  <div className="order-pill order-pill-warning">ЦИКЛ</div>
                 </header>
                 <div className="order-row-chain">
                   {cycle.nodes.slice(0, 6).map((node, i) => (
@@ -1029,7 +1034,7 @@ export default function HomePage({ onSelectTable }) {
               >
                 <div className="entity-card-head">
                   <div className="entity-name">{i.entity}</div>
-                  <span className="pill pill-critical">CRITICAL</span>
+                  <span className="pill pill-critical">КРИТИЧНО</span>
                 </div>
 
                 <div className="entity-meta">

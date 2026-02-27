@@ -80,6 +80,10 @@ class UserListItem(BaseModel):
     is_active: bool
 
 
+class UserDisableResponse(BaseModel):
+    status: str
+
+
 @dataclass
 class AuthUser:
     id: int
@@ -224,6 +228,20 @@ def _update_user_password(user_id: int, new_password: str) -> None:
         )
 
 
+def _disable_user(user_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE public.app_users
+                SET is_active = false
+                WHERE id = :user_id
+                """
+            ),
+            {"user_id": user_id},
+        )
+
+
 def _ensure_users_table() -> None:
     with engine.begin() as conn:
         conn.execute(
@@ -319,7 +337,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=TokenResponse)
 def register(payload: UserRegister):
     if not AUTH_ALLOW_REGISTER:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration disabled")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     role = payload.role.lower()
     if role not in ALLOWED_ROLES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
@@ -369,6 +387,17 @@ def list_users(request: Request):
         )
         for row in rows
     ]
+
+
+@router.delete("/users/{user_id}", response_model=UserDisableResponse)
+def disable_user(user_id: int, request: Request):
+    admin = get_current_user_from_request(request)
+    if admin.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    if admin.id == user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отключить себя")
+    _disable_user(user_id)
+    return UserDisableResponse(status="ok")
 
 
 @router.post("/change-password")

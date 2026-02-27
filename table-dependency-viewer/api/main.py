@@ -138,6 +138,22 @@ TOP_DIRS = [
     "TEST_SAP_ODATA_DELTA",
 ]
 
+ENTITY_GROUP_SUFFIX_RE = re.compile(r"^(.*?)(?:[_-]\d+)$", re.IGNORECASE)
+
+
+def _normalize_entity_group(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+    cleaned = str(name).strip()
+    if not cleaned:
+        return None
+    lowered = cleaned.lower()
+    match = ENTITY_GROUP_SUFFIX_RE.match(lowered)
+    if match:
+        base = match.group(1).strip()
+        return base or lowered
+    return lowered
+
 _cached_meta_index = None
 _cache_timestamp = 0
 
@@ -677,11 +693,16 @@ def compute_order_breaches():
     resp = get_dependency_violations()
     rows = json.loads(resp.body)
 
+    entity_map = _entity_map_from_meta()
     grouped = {}
 
     for r in rows:
         target = f"{r['dependent_schema']}.{r['dependent_table']}"
         source = f"{r['source_schema']}.{r['source_table']}"
+        src_entity = entity_map.get(source)
+        tgt_entity = entity_map.get(target)
+        if _normalize_entity_group(src_entity) == _normalize_entity_group(tgt_entity):
+            continue
 
         src_time = datetime.fromisoformat(r["source_last_load"])
         tgt_time = datetime.fromisoformat(r["dependent_last_load"])
@@ -1145,6 +1166,8 @@ def build_graph_snapshot():
                     or tgt_ent == "UNKNOWN"
                 ):
                     continue
+                if _normalize_entity_group(src_ent) == _normalize_entity_group(tgt_ent):
+                    continue
                 entity_edges_set.add((f"ENTITY::{src_ent}", f"ENTITY::{tgt_ent}"))
 
     entity_edges = [{"source": s, "target": t} for s, t in sorted(entity_edges_set)]
@@ -1184,6 +1207,8 @@ def build_graph_snapshot():
         )
 
     def is_pair_edge(src_ents: set, tgt_ents: set, left_ent: str, right_ent: str) -> bool:
+        if _normalize_entity_group(left_ent) == _normalize_entity_group(right_ent):
+            return False
         src_norm = {e.lower() for e in src_ents if isinstance(e, str)}
         tgt_norm = {e.lower() for e in tgt_ents if isinstance(e, str)}
         left_norm = left_ent.lower()
@@ -1543,10 +1568,13 @@ META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", BASE_DIR / "etl_loads_enti
 def iter_meta_dirs(targets: Optional[List[str]] = None):
     """Yield existing metadata directories, searching both root and project/* trees."""
     seen = set()
-    names = targets or TOP_DIRS
     for parent in META_PARENT_DIRS:
         if not parent.exists():
             continue
+        if targets:
+            names = targets
+        else:
+            names = [p.name for p in parent.iterdir() if p.is_dir()]
         for name in names:
             candidate = parent / name
             if not candidate.exists():
@@ -3020,6 +3048,8 @@ def get_graph_mutual_details(
     b = norm_entity(entity_b)
     if not a or not b:
         return JSONResponse(status_code=400, content={"error": "invalid entities"})
+    if _normalize_entity_group(a) == _normalize_entity_group(b):
+        return {"entity_a": entity_a, "entity_b": entity_b, "edges_ab": [], "edges_ba": []}
 
     edges_ab = []
     edges_ba = []

@@ -14,6 +14,7 @@ export default function AdminUsersPage({ userProfile }) {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [form, setForm] = useState({
     email: "",
     username: "",
@@ -78,6 +79,24 @@ export default function AdminUsersPage({ userProfile }) {
       await fetchUsers();
     } catch (err) {
       setError(err.message || "Не удалось создать пользователя");
+    }
+  };
+
+  const handleDisableUser = async (userId, email) => {
+    if (!window.confirm(`Отключить пользователя ${email}?`)) return;
+    setDeletingId(userId);
+    setError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/auth/users/${userId}`, { method: "DELETE" });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось отключить пользователя");
+      }
+      await fetchUsers();
+    } catch (err) {
+      setError(err.message || "Не удалось отключить пользователя");
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -168,6 +187,7 @@ export default function AdminUsersPage({ userProfile }) {
               <div>Логин</div>
               <div>Роль</div>
               <div>Статус</div>
+              <div>Действия</div>
             </div>
             {users.map((user) => (
               <div className="admin-row" key={user.id}>
@@ -175,6 +195,15 @@ export default function AdminUsersPage({ userProfile }) {
                 <div>{user.username}</div>
                 <div>{user.role}</div>
                 <div>{user.is_active ? "Активен" : "Отключён"}</div>
+                <div>
+                  <button
+                    className="btn btn-ghost"
+                    disabled={!user.is_active || userProfile?.email === user.email || deletingId === user.id}
+                    onClick={() => handleDisableUser(user.id, user.email)}
+                  >
+                    {deletingId === user.id ? "Отключаем..." : "Отключить"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

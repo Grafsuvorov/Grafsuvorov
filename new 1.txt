@@ -1,82 +1,261 @@
+do
+$$
+DECLARE
+	v_row_cnt int8;
+	v_calc_time interval ;
+	v_start_dttm timestamp(0) ;
+    v_key_min text ;
+    v_key_max text ;
+BEGIN
+	v_start_dttm   := clock_timestamp()  ;
+	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=80 api
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 441, in load
-table-dependency-viewer-api-1  |     self.loaded_app = import_from_string(self.app)
-table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in imp             ort_from_string
-table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 72, in <module>
-table-dependency-viewer-api-1  |     init_auth()
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 263, in init_auth
-table-dependency-viewer-api-1  |     _ensure_users_table()
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 228, in _ensure_users_table
-table-dependency-viewer-api-1  |     with engine.begin() as conn:
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/contextlib.py", line 137, in __enter__
-table-dependency-viewer-api-1  |     return next(self.gen)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3257             , in begin
-table-dependency-viewer-api-1  |     with self.connect() as conn:
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3293             , in connect
-table-dependency-viewer-api-1  |     return self._connection_cls(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 145,              in __init__
-table-dependency-viewer-api-1  |     Connection._handle_dbapi_exception_noconnection(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2448             , in _handle_dbapi_exception_noconnection
-table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 143,              in __init__
-table-dependency-viewer-api-1  |     self._dbapi_connection = engine.raw_connection()
-table-dependency-viewer-api-1  |                              ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3317             , in raw_connection
-table-dependency-viewer-api-1  |     return self.pool.connect()
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 448, i             n connect
-table-dependency-viewer-api-1  |     return _ConnectionFairy._checkout(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 1272,              in _checkout
-table-dependency-viewer-api-1  |     fairy = _ConnectionRecord.checkout(pool)
-table-dependency-viewer-api-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 712, i             n checkout
-table-dependency-viewer-api-1  |     rec = pool._do_get()
-table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 177, i             n _do_get
-table-dependency-viewer-api-1  |     with util.safe_reraise():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line              121, in __exit__
-table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 175, i             n _do_get
-table-dependency-viewer-api-1  |     return self._create_connection()
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 389, i             n _create_connection
-table-dependency-viewer-api-1  |     return _ConnectionRecord(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 674, i             n __init__
-table-dependency-viewer-api-1  |     self.__connect()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 900, i             n __connect
-table-dependency-viewer-api-1  |     with util.safe_reraise():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line              121, in __exit__
-table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 896, i             n __connect
-table-dependency-viewer-api-1  |     self.dbapi_connection = connection = pool._invoke_creator(self)
-table-dependency-viewer-api-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 66             1, in connect
-table-dependency-viewer-api-1  |     return dialect.connect(*cargs, **cparams)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 6             30, in connect
-table-dependency-viewer-api-1  |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return             ]  # NOQA: E501
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in c             onnect
-table-dependency-viewer-api-1  |     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) could not translate host              name "host.docker.internal" to address: Name or service not known
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+	if not exists(select 1 from ods.ral_konv limit 1) then
+		raise notice '% start initialization loading ', to_char(clock_timestamp(),'hh24:mi:ss');
+
+		truncate table	ods.ral_konv;
+
+		insert into ods.ral_konv(mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty,dttm_inserted,dttm_updated,job_name,deleted_flag)
+		select
+			"MANDT"       as mandt     ,
+			"KNUMV"       as knumv     ,
+			"KPOSN"       as kposn     ,
+			"STUNR"       as stunr     ,
+			"ZAEHK"       as zaehk     ,
+			"KAPPL"       as kappl     ,
+			"KSCHL"       as kschl     ,
+			"KDATU"       as kdatu     ,
+			"KRECH"       as krech     ,
+			"KAWRT"       as kawrt     ,
+			"KBETR"       as kbetr     ,
+			"WAERS"       as waers     ,
+			"KKURS"       as kkurs     ,
+			"KPEIN"       as kpein     ,
+			"KMEIN"       as kmein     ,
+			"KUMZA"       as kumza     ,
+			"KUMNE"       as kumne     ,
+			"KNTYP"       as kntyp     ,
+			"KSTAT"       as kstat     ,
+			"KNPRS"       as knprs     ,
+			"KRUEK"       as kruek     ,
+			"KRELI"       as kreli     ,
+			"KHERK"       as kherk     ,
+			"KGRPE"       as kgrpe     ,
+			"KOUPD"       as koupd     ,
+			"KOLNR"       as kolnr     ,
+			"KNUMH"       as knumh     ,
+			"KOPOS"       as kopos     ,
+			"KVSL1"       as kvsl1     ,
+			"SAKN1"       as sakn1     ,
+			"MWSK1"       as mwsk1     ,
+			"KVSL2"       as kvsl2     ,
+			"SAKN2"       as sakn2     ,
+			"MWSK2"       as mwsk2     ,
+			"LIFNR"       as lifnr     ,
+			"KUNNR"       as kunnr     ,
+			"KDIFF"       as kdiff     ,
+			"KWERT"       as kwert     ,
+			"KSTEU"       as ksteu     ,
+			"KINAK"       as kinak     ,
+			"KOAID"       as koaid     ,
+			"ZAEKO"       as zaeko     ,
+			"KMXAW"       as kmxaw     ,
+			"KMXWR"       as kmxwr     ,
+			"KFAKTOR"     as kfaktor   ,
+			"KDUPL"       as kdupl     ,
+			"KFAKTOR1"    as kfaktor1  ,
+			"KZBZG"       as kzbzg     ,
+			"KSTBS"       as kstbs     ,
+			"KONMS"       as konms     ,
+			"KONWS"       as konws     ,
+			"KAWRT_K"     as kawrt_k   ,
+			"KWAEH"       as kwaeh     ,
+			"KWERT_K"     as kwert_k   ,
+			"KFKIV"       as kfkiv     ,
+			"KVARC"       as kvarc     ,
+			"KMPRS"       as kmprs     ,
+			"PRSQU"       as prsqu     ,
+			"VARCOND"     as varcond   ,
+			"STUFE"       as stufe     ,
+			"WEGXX"       as wegxx     ,
+			"KTREL"       as ktrel     ,
+			"MDFLG"       as mdflg     ,
+			"TXJLV"       as txjlv     ,
+			"KBFLAG"      as kbflag    ,
+			"KOLNR3"      as kolnr3    ,
+			"CPF_GUID"    as cpf_guid  ,
+			"KAQTY"       as kaqty     ,
+			current_timestamp as dttm_inserted,
+			current_timestamp as dttm_updated,
+			'airflow' as job_name,
+			false as deleted_flag
+		from stg."KONV"	;
+
+		get diagnostics v_row_cnt = row_count;
+		raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+
+		analyze ods.ral_konv(knumv, kposn, stunr, zaehk);
+		raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
+
+	end if;
+
+
+	drop table if exists pg_temp.delta;
+	create temporary table pg_temp.delta   as (
+		select distinct on (knumv, kposn, stunr, zaehk)
+			mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty
+			,odq_changemode = 'D' as deleted_flag
+		from stg.ZBW1758M_SRV
+		where sap_pointer = '{sap_pointer}'
+		order by knumv, kposn, stunr, zaehk
+			, sap_pointer desc, dttm_inserted desc
+
+	)
+	distributed by (knumv, kposn, stunr, zaehk);
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.delta', v_row_cnt;
+
+	analyze pg_temp.delta;
+	raise notice '% analyze pg_temp.delta', to_char(clock_timestamp(),'hh24:mi:ss');
+
+	select
+		min(knumv) as knumv_min,
+		max(knumv) as knumv_max
+		into v_key_min , v_key_max
+	from pg_temp.delta;
+	raise notice '% pg_temp.delta v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
+
+	drop table if exists pg_temp.clean_delta;
+
+	create temporary table pg_temp.clean_delta   as (
+		select
+			coalesce(src.mandt             , tgt.mandt           ) as mandt          ,
+			coalesce(src.knumv             , tgt.knumv           ) as knumv          ,
+			coalesce(src.kposn             , tgt.kposn           ) as kposn          ,
+			coalesce(src.stunr             , tgt.stunr           ) as stunr          ,
+			coalesce(src.zaehk             , tgt.zaehk           ) as zaehk          ,
+			coalesce(src.kappl             , tgt.kappl           ) as kappl          ,
+			coalesce(src.kschl             , tgt.kschl           ) as kschl          ,
+			coalesce(src.kdatu             , tgt.kdatu           ) as kdatu          ,
+			coalesce(src.krech             , tgt.krech           ) as krech          ,
+			coalesce(src.kawrt             , tgt.kawrt           ) as kawrt          ,
+			coalesce(src.kbetr             , tgt.kbetr           ) as kbetr          ,
+			coalesce(src.waers             , tgt.waers           ) as waers          ,
+			coalesce(src.kkurs             , tgt.kkurs           ) as kkurs          ,
+			coalesce(src.kpein             , tgt.kpein           ) as kpein          ,
+			coalesce(src.kmein             , tgt.kmein           ) as kmein          ,
+			coalesce(src.kumza             , tgt.kumza           ) as kumza          ,
+			coalesce(src.kumne             , tgt.kumne           ) as kumne          ,
+			coalesce(src.kntyp             , tgt.kntyp           ) as kntyp          ,
+			coalesce(src.kstat             , tgt.kstat           ) as kstat          ,
+			coalesce(src.knprs             , tgt.knprs           ) as knprs          ,
+			coalesce(src.kruek             , tgt.kruek           ) as kruek          ,
+			coalesce(src.kreli             , tgt.kreli           ) as kreli          ,
+			coalesce(src.kherk             , tgt.kherk           ) as kherk          ,
+			coalesce(src.kgrpe             , tgt.kgrpe           ) as kgrpe          ,
+			coalesce(src.koupd             , tgt.koupd           ) as koupd          ,
+			coalesce(src.kolnr             , tgt.kolnr           ) as kolnr          ,
+			coalesce(src.knumh             , tgt.knumh           ) as knumh          ,
+			coalesce(src.kopos             , tgt.kopos           ) as kopos          ,
+			coalesce(src.kvsl1             , tgt.kvsl1           ) as kvsl1          ,
+			coalesce(src.sakn1             , tgt.sakn1           ) as sakn1          ,
+			coalesce(src.mwsk1             , tgt.mwsk1           ) as mwsk1          ,
+			coalesce(src.kvsl2             , tgt.kvsl2           ) as kvsl2          ,
+			coalesce(src.sakn2             , tgt.sakn2           ) as sakn2          ,
+			coalesce(src.mwsk2             , tgt.mwsk2           ) as mwsk2          ,
+			coalesce(src.lifnr             , tgt.lifnr           ) as lifnr          ,
+			coalesce(src.kunnr             , tgt.kunnr           ) as kunnr          ,
+			coalesce(src.kdiff             , tgt.kdiff           ) as kdiff          ,
+			coalesce(src.kwert             , tgt.kwert           ) as kwert          ,
+			coalesce(src.ksteu             , tgt.ksteu           ) as ksteu          ,
+			coalesce(src.kinak             , tgt.kinak           ) as kinak          ,
+			coalesce(src.koaid             , tgt.koaid           ) as koaid          ,
+			coalesce(src.zaeko             , tgt.zaeko           ) as zaeko          ,
+			coalesce(src.kmxaw             , tgt.kmxaw           ) as kmxaw          ,
+			coalesce(src.kmxwr             , tgt.kmxwr           ) as kmxwr          ,
+			coalesce(src.kfaktor           , tgt.kfaktor         ) as kfaktor        ,
+			coalesce(src.kdupl             , tgt.kdupl           ) as kdupl          ,
+			coalesce(src.kfaktor1          , tgt.kfaktor1        ) as kfaktor1       ,
+			coalesce(src.kzbzg             , tgt.kzbzg           ) as kzbzg          ,
+			coalesce(src.kstbs             , tgt.kstbs           ) as kstbs          ,
+			coalesce(src.konms             , tgt.konms           ) as konms          ,
+			coalesce(src.konws             , tgt.konws           ) as konws          ,
+			coalesce(src.kawrt_k           , tgt.kawrt_k         ) as kawrt_k        ,
+			coalesce(src.kwaeh             , tgt.kwaeh           ) as kwaeh          ,
+			coalesce(src.kwert_k           , tgt.kwert_k         ) as kwert_k        ,
+			coalesce(src.kfkiv             , tgt.kfkiv           ) as kfkiv          ,
+			coalesce(src.kvarc             , tgt.kvarc           ) as kvarc          ,
+			coalesce(src.kmprs             , tgt.kmprs           ) as kmprs          ,
+			coalesce(src.prsqu             , tgt.prsqu           ) as prsqu          ,
+			coalesce(src.varcond           , tgt.varcond         ) as varcond        ,
+			coalesce(src.stufe             , tgt.stufe           ) as stufe          ,
+			coalesce(src.wegxx             , tgt.wegxx           ) as wegxx          ,
+			coalesce(src.ktrel             , tgt.ktrel           ) as ktrel          ,
+			coalesce(src.mdflg             , tgt.mdflg           ) as mdflg          ,
+			coalesce(src.txjlv             , tgt.txjlv           ) as txjlv          ,
+			coalesce(src.kbflag            , tgt.kbflag          ) as kbflag         ,
+			coalesce(src.kolnr3            , tgt.kolnr3          ) as kolnr3         ,
+			coalesce(src.cpf_guid          , tgt.cpf_guid        ) as cpf_guid       ,
+			coalesce(src.kaqty             , tgt.kaqty           ) as kaqty          ,
+			coalesce(src.deleted_flag      , tgt.deleted_flag    ) as deleted_flag   ,
+			coalesce(tgt.dttm_inserted, current_timestamp)   as dttm_inserted
+		from pg_temp.delta as src
+		left join ods.ral_konv as tgt on
+				src.knumv  = tgt.knumv  and
+				src.kposn  = tgt.kposn  and
+				src.stunr  = tgt.stunr  and
+				src.zaehk  = tgt.zaehk  and
+				tgt.knumv between v_key_min	and v_key_max
+	    where
+	                 md5(concat(src.mandt, '#', src.kappl, '#', src.kschl, '#', src.kdatu, '#', src.krech, '#', src.kawrt, '#', src.kbetr, '#', src.waers, '#', src.kkurs, '#', src.kpein, '#', src.kmein, '#', src.kumza, '#', src.kumne, '#', src.kntyp, '#', src.kstat, '#', src.knprs, '#', src.kruek, '#', src.kreli, '#', src.kherk, '#', src.kgrpe, '#', src.koupd, '#', src.kolnr, '#', src.knumh, '#', src.kopos, '#', src.kvsl1, '#', src.sakn1, '#', src.mwsk1, '#', src.kvsl2, '#', src.sakn2, '#', src.mwsk2, '#', src.lifnr, '#', src.kunnr, '#', src.kdiff, '#', src.kwert, '#', src.ksteu, '#', src.kinak, '#', src.koaid, '#', src.zaeko, '#', src.kmxaw, '#', src.kmxwr, '#', src.kfaktor, '#', src.kdupl, '#', src.kfaktor1, '#')||concat(src.kzbzg, '#', src.kstbs, '#', src.konms, '#', src.konws, '#', src.kawrt_k, '#', src.kwaeh, '#', src.kwert_k, '#', src.kfkiv, '#', src.kvarc, '#', src.kmprs, '#', src.prsqu, '#', src.varcond, '#', src.stufe, '#', src.wegxx, '#', src.ktrel, '#', src.mdflg, '#', src.txjlv, '#', src.kbflag, '#', src.kolnr3, '#', src.cpf_guid, '#', src.kaqty, '#', src.deleted_flag) )
+	              != md5(concat(src.mandt, '#', tgt.kappl, '#', tgt.kschl, '#', tgt.kdatu, '#', tgt.krech, '#', tgt.kawrt, '#', tgt.kbetr, '#', tgt.waers, '#', tgt.kkurs, '#', tgt.kpein, '#', tgt.kmein, '#', tgt.kumza, '#', tgt.kumne, '#', tgt.kntyp, '#', tgt.kstat, '#', tgt.knprs, '#', tgt.kruek, '#', tgt.kreli, '#', tgt.kherk, '#', tgt.kgrpe, '#', tgt.koupd, '#', tgt.kolnr, '#', tgt.knumh, '#', tgt.kopos, '#', tgt.kvsl1, '#', tgt.sakn1, '#', tgt.mwsk1, '#', tgt.kvsl2, '#', tgt.sakn2, '#', tgt.mwsk2, '#', tgt.lifnr, '#', tgt.kunnr, '#', tgt.kdiff, '#', tgt.kwert, '#', tgt.ksteu, '#', tgt.kinak, '#', tgt.koaid, '#', tgt.zaeko, '#', tgt.kmxaw, '#', tgt.kmxwr, '#', tgt.kfaktor, '#', tgt.kdupl, '#', tgt.kfaktor1, '#')||concat(tgt.kzbzg, '#', tgt.kstbs, '#', tgt.konms, '#', tgt.konws, '#', tgt.kawrt_k, '#', tgt.kwaeh, '#', tgt.kwert_k, '#', tgt.kfkiv, '#', tgt.kvarc, '#', tgt.kmprs, '#', tgt.prsqu, '#', tgt.varcond, '#', tgt.stufe, '#', tgt.wegxx, '#', tgt.ktrel, '#', tgt.mdflg, '#', tgt.txjlv, '#', tgt.kbflag, '#', tgt.kolnr3, '#', tgt.cpf_guid, '#', tgt.kaqty, '#', tgt.deleted_flag) )
+
+	)
+	distributed by (knumv, kposn, stunr, zaehk);
+
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.clean_delta', v_row_cnt;
+
+
+	analyze pg_temp.clean_delta;
+	raise notice '% analyze pg_temp.clean_delta', to_char(clock_timestamp(),'hh24:mi:ss');
+
+
+	select
+		min(knumv) as knumv_min,
+		max(knumv) as knumv_max
+		into v_key_min , v_key_max
+	from pg_temp.clean_delta;
+	raise notice '% pg_temp.clean_delta v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
+
+	delete
+	from ods.ral_konv  as tgt
+	   using pg_temp.clean_delta  as src
+	where
+				src.knumv  = tgt.knumv  and
+				src.kposn  = tgt.kposn  and
+				src.stunr  = tgt.stunr  and
+				src.zaehk  = tgt.zaehk  and
+				tgt.knumv between v_key_min	and v_key_max
+	;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% Delete target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+
+	insert into ods.ral_konv(mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty,dttm_inserted,dttm_updated,job_name,deleted_flag)
+	select                   mandt,knumv,kposn,stunr,zaehk,kappl,kschl,kdatu,krech,kawrt,kbetr,waers,kkurs,kpein,kmein,kumza,kumne,kntyp,kstat,knprs,kruek,kreli,kherk,kgrpe,koupd,kolnr,knumh,kopos,kvsl1,sakn1,mwsk1,kvsl2,sakn2,mwsk2,lifnr,kunnr,kdiff,kwert,ksteu,kinak,koaid,zaeko,kmxaw,kmxwr,kfaktor,kdupl,kfaktor1,kzbzg,kstbs,konms,konws,kawrt_k,kwaeh,kwert_k,kfkiv,kvarc,kmprs,prsqu,varcond,stufe,wegxx,ktrel,mdflg,txjlv,kbflag,kolnr3,cpf_guid,kaqty
+	    ,dttm_inserted,current_timestamp as dttm_updated,'airflow' as job_name,deleted_flag
+	from pg_temp.clean_delta;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+
+	analyze ods.ral_konv(knumv, kposn, stunr, zaehk);
+	raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
+
+	v_calc_time :=  clock_timestamp() - v_start_dttm ;
+	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$

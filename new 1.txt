@@ -1,18 +1,20 @@
-Без токена (чтобы увидеть, что реально отдаёт):
 
-  curl -x "" -i http://127.0.0.1:5312/api/admin/ci-cd/status
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -x "" -i http://127.0.0.1:5312/api/admin/ci-cd/status
+HTTP/1.1 401 Unauthorized
+date: Mon, 02 Mar 2026 13:51:32 GMT
+server: uvicorn
+access-control-allow-origin: *
+access-control-allow-credentials: true
+access-control-allow-methods: *
+access-control-allow-headers: *
+content-length: 36
+content-type: application/json
 
-  2. С токеном:
-     Возьми токен в браузере (DevTools → Console):
+{"detail":"Authentication required"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -x "" -i -H "Authorization: Bearer eyJhzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3NzI4OTE0NjYsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.mZYoKV0UNfK0Y6xOX2F92a-mm37CJauaKNRTI3192dg" http://127.0.0.1:5312/api/admin/ci-cd/status
+HTTP/1.1 422 Unprocessable Entity
+date: Mon, 02 Mar 2026 13:54:03 GMT
+server: uvicorn
+content-length: 93
+content-type: application/json
 
-  localStorage.getItem("tdv_access_token") || sessionStorage.getItem("tdv_access_token")
-
-  И проверь:
-
-  curl -x "" -i -H "Authorization: Bearer <TOKEN>" http://127.0.0.1:5312/api/admin/ci-cd/status
-
-  Пришли оба ответа целиком (headers + body).
-  Если без токена 401/403, а с токеном 200 — значит фронт не прикрепляет Authorization, надо проверить VITE_AUTH_ENABLED=true и пересобрать фронт.
-
-
-› Explain this codebase
+{"detail":[{"type":"missing","loc":["query","request"],"msg":"Field required","input":null}]}[root@rgm-s-dwhapp01 table-dependency-viewer]#

@@ -1,25 +1,5 @@
-services:
-    frontend:
-      build: .
-      ports:
-        - "15312:80"
-
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/config_files:/app/config_files:ro
-        - /root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity:/app/etl_loads_entity:ro
-        - /root/git_dir:/root/git_dir:ro
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - META_PARENT_DIR=/app/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - ADMIN_CICD_SCRIPT=/app/scripts/ci_cd.sh
-
-  После замены файла:
+/app/scripts/ci_cd.sh: line 11: git: command not found
+Вывод ci_cd
+Статус: failed
+gogogogo
+/app/scripts/ci_cd.sh: line 11: git: command not found

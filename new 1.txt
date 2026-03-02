@@ -1,5 +1,48 @@
-/app/scripts/ci_cd.sh: line 13: cd: /root/table-dependency-viewer/: No such file or directory
-Вывод ci_cd
-Статус: failed
-gogogogo
-/app/scripts/ci_cd.sh: line 13: cd: /root/table-dependency-viewer/: No such file or directory
+#!/usr/bin/bash
+set -euo pipefail
+
+unset http_proxy
+unset HTTPS_PROXY
+unset https_proxy
+unset HTTP_PROXY
+
+echo 'gogogogo'
+
+
+
+cd /root/table-dependency-viewer/
+
+# meta_info (как было)
+rsync -atv --delete /root/git_dir/etl/meta_info/ /root/table-dependency-viewer/meta_info/
+
+# meta -> config_files/meta
+mkdir -p /root/table-dependency-viewer/config_files
+rsync -atv --delete /root/git_dir/etl/meta/ /root/table-dependency-viewer/config_files/meta/
+
+echo 'Закончили упражнение'
+echo 'Как же ты хорош!'
+
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "15312:80"
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/config_files:/app/config_files:ro
+      - /root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity:/app/etl_loads_entity:ro
+      - /root/git_dir:/root/git_dir:ro
+    ports:
+      - "5312:8000"
+
+    env_file:
+      - ./api/.env
+    environment:
+      - META_PARENT_DIR=/app/etl_loads_entity
+      - CLICK_META_DIR=/app/config_files/meta
+      - ADMIN_CICD_SCRIPT=/app/scripts/ci_cd.sh

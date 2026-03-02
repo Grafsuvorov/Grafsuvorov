@@ -80,7 +80,7 @@ class UserListItem(BaseModel):
     is_active: bool
 
 
-class UserDisableResponse(BaseModel):
+class UserActionResponse(BaseModel):
     status: str
 
 
@@ -228,13 +228,26 @@ def _update_user_password(user_id: int, new_password: str) -> None:
         )
 
 
-def _disable_user(user_id: int) -> None:
+def _set_user_active(user_id: int, is_active: bool) -> None:
     with engine.begin() as conn:
         conn.execute(
             text(
                 """
                 UPDATE public.app_users
-                SET is_active = false
+                SET is_active = :is_active
+                WHERE id = :user_id
+                """
+            ),
+            {"user_id": user_id, "is_active": is_active},
+        )
+
+
+def _delete_user(user_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM public.app_users
                 WHERE id = :user_id
                 """
             ),
@@ -389,15 +402,35 @@ def list_users(request: Request):
     ]
 
 
-@router.delete("/users/{user_id}", response_model=UserDisableResponse)
+@router.post("/users/{user_id}/disable", response_model=UserActionResponse)
 def disable_user(user_id: int, request: Request):
     admin = get_current_user_from_request(request)
     if admin.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
     if admin.id == user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отключить себя")
-    _disable_user(user_id)
-    return UserDisableResponse(status="ok")
+    _set_user_active(user_id, False)
+    return UserActionResponse(status="ok")
+
+
+@router.post("/users/{user_id}/enable", response_model=UserActionResponse)
+def enable_user(user_id: int, request: Request):
+    admin = get_current_user_from_request(request)
+    if admin.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    _set_user_active(user_id, True)
+    return UserActionResponse(status="ok")
+
+
+@router.delete("/users/{user_id}", response_model=UserActionResponse)
+def delete_user(user_id: int, request: Request):
+    admin = get_current_user_from_request(request)
+    if admin.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    if admin.id == user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя удалить себя")
+    _delete_user(user_id)
+    return UserActionResponse(status="ok")
 
 
 @router.post("/change-password")

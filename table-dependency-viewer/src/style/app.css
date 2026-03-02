@@ -117,6 +117,13 @@ main.content {
   gap: 16px;
 }
 
+.account-meta > div {
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .account-label {
   font-size: 12px;
   color: rgba(244, 247, 255, 0.7);

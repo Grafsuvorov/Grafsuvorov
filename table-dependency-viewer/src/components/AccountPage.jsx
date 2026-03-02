@@ -15,6 +15,10 @@ export default function AccountPage({ userProfile }) {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
+  const rememberMode =
+    typeof window !== "undefined" && localStorage.getItem("tdv_access_token")
+      ? "С сохранением"
+      : "Только на сессию";
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -65,11 +69,22 @@ export default function AccountPage({ userProfile }) {
             </div>
           </div>
           <div>
+            <div className="account-label">Email</div>
+            <div className="account-value">{userProfile?.email || "—"}</div>
+          </div>
+          <div>
             <div className="account-label">Роль</div>
             <div className="account-value">
               {ROLE_LABELS[userProfile?.role] || userProfile?.role || "—"}
             </div>
           </div>
+          <div>
+            <div className="account-label">Сессия</div>
+            <div className="account-value">{rememberMode}</div>
+          </div>
+        </div>
+        <div className="muted">
+          Пароль хранится только в зашифрованном виде. Для смены используйте форму ниже.
         </div>
       </section>
 

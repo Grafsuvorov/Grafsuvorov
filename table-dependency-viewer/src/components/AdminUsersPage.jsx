@@ -15,6 +15,7 @@ export default function AdminUsersPage({ userProfile }) {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [togglingId, setTogglingId] = useState(null);
   const [form, setForm] = useState({
     email: "",
     username: "",
@@ -82,19 +83,41 @@ export default function AdminUsersPage({ userProfile }) {
     }
   };
 
-  const handleDisableUser = async (userId, email) => {
-    if (!window.confirm(`Отключить пользователя ${email}?`)) return;
+  const handleToggleUser = async (userId, email, isActive) => {
+    const actionLabel = isActive ? "Отключить" : "Включить";
+    if (!window.confirm(`${actionLabel} пользователя ${email}?`)) return;
+    setTogglingId(userId);
+    setError(null);
+    try {
+      const endpoint = isActive
+        ? `${API_BASE}/auth/users/${userId}/disable`
+        : `${API_BASE}/auth/users/${userId}/enable`;
+      const resp = await fetch(endpoint, { method: "POST" });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || "Не удалось изменить статус пользователя");
+      }
+      await fetchUsers();
+    } catch (err) {
+      setError(err.message || "Не удалось изменить статус пользователя");
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDeleteUser = async (userId, email) => {
+    if (!window.confirm(`Удалить пользователя ${email}? Действие необратимо.`)) return;
     setDeletingId(userId);
     setError(null);
     try {
       const resp = await fetch(`${API_BASE}/auth/users/${userId}`, { method: "DELETE" });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось отключить пользователя");
+        throw new Error(data.detail || "Не удалось удалить пользователя");
       }
       await fetchUsers();
     } catch (err) {
-      setError(err.message || "Не удалось отключить пользователя");
+      setError(err.message || "Не удалось удалить пользователя");
     } finally {
       setDeletingId(null);
     }
@@ -196,13 +219,26 @@ export default function AdminUsersPage({ userProfile }) {
                 <div>{user.role}</div>
                 <div>{user.is_active ? "Активен" : "Отключён"}</div>
                 <div>
-                  <button
-                    className="btn btn-ghost"
-                    disabled={!user.is_active || userProfile?.email === user.email || deletingId === user.id}
-                    onClick={() => handleDisableUser(user.id, user.email)}
-                  >
-                    {deletingId === user.id ? "Отключаем..." : "Отключить"}
-                  </button>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button
+                      className="btn btn-ghost"
+                      disabled={userProfile?.email === user.email || togglingId === user.id}
+                      onClick={() => handleToggleUser(user.id, user.email, user.is_active)}
+                    >
+                      {togglingId === user.id
+                        ? "Обновляем..."
+                        : user.is_active
+                          ? "Отключить"
+                          : "Включить"}
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      disabled={userProfile?.email === user.email || deletingId === user.id}
+                      onClick={() => handleDeleteUser(user.id, user.email)}
+                    >
+                      {deletingId === user.id ? "Удаляем..." : "Удалить"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

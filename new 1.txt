@@ -1,6 +1,4 @@
- Вот готовый вариант:
-
-  #!/usr/bin/bash
+#!/usr/bin/bash
   set -euo pipefail
 
   unset http_proxy
@@ -17,20 +15,17 @@
   # meta_info (как было)
   rsync -atv --delete /root/git_dir/etl/meta_info/ /root/table-dependency-viewer/meta_info/
 
-  # config_files/meta (новое)
+  # meta -> config_files/meta
   mkdir -p /root/table-dependency-viewer/config_files
-  rsync -atv --delete /root/git_dir/etl/config_files/ /root/table-dependency-viewer/config_files/
+  rsync -atv --delete /root/git_dir/etl/meta/ /root/table-dependency-viewer/config_files/meta/
 
   echo 'Закончили упражнение'
   echo 'Как же ты хорош!'
 
-  Важно:
-
-  - Если у тебя в репе лежит только config_files/meta, то путь будет такой же: /root/git_dir/etl/config_files/...
-  - Если только meta без config_files, скажи — подстрою.
-
-  После правки не забудь сделать:
+  После этого:
 
   chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
 
-  Если хочешь, добавлю лог ротацию или запись в файл.
+  И обнови контейнеры:
+
+  docker compose up -d --force-recreate

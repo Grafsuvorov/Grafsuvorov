@@ -14,6 +14,12 @@ export default function AdminUsersPage({ userProfile }) {
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMsg, setRefreshMsg] = useState(null);
+  const [deploying, setDeploying] = useState(false);
+  const [deployMsg, setDeployMsg] = useState(null);
+  const [deployOutput, setDeployOutput] = useState(null);
+  const [deployError, setDeployError] = useState(null);
+  const [deployReady, setDeployReady] = useState(false);
+  const [lastDeployAt, setLastDeployAt] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
   const [form, setForm] = useState({
@@ -45,6 +51,28 @@ export default function AdminUsersPage({ userProfile }) {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const loadStatus = async () => {
+      try {
+        const resp = await fetch(`${API_BASE}/api/admin/ci-cd/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        setLastDeployAt(data?.last_run_at || null);
+        if (data?.stdout || data?.stderr) {
+          setDeployOutput({
+            stdout: data?.stdout || "",
+            stderr: data?.stderr || "",
+            status: data?.status || null,
+            return_code: data?.return_code ?? null,
+          });
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadStatus();
+  }, []);
+
   const handleRefreshCache = async () => {
     setRefreshing(true);
     setRefreshMsg(null);
@@ -60,6 +88,38 @@ export default function AdminUsersPage({ userProfile }) {
       setError(err.message || "Не удалось обновить кеш");
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleRunCiCd = async () => {
+    if (!deployReady) {
+      setError("Подтвердите запуск ci_cd");
+      return;
+    }
+    setDeploying(true);
+    setDeployMsg(null);
+    setDeployError(null);
+    setDeployOutput(null);
+    setError(null);
+    try {
+      const resp = await fetch(`${API_BASE}/api/admin/run-ci-cd`, { method: "POST" });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        const detail = data.detail || {};
+        const errText = detail?.stderr || data.detail || "Не удалось запустить ci_cd";
+        setDeployError(errText);
+        setDeployOutput(detail?.stdout || detail?.stderr ? detail : null);
+        throw new Error(errText);
+      }
+      const data = await resp.json().catch(() => ({}));
+      setDeployMsg("Скрипт ci_cd выполнен");
+      setDeployOutput(data);
+      setLastDeployAt(data?.last_run_at || new Date().toLocaleString("ru-RU"));
+      setDeployReady(false);
+    } catch (err) {
+      setError(err.message || "Не удалось запустить ci_cd");
+    } finally {
+      setDeploying(false);
     }
   };
 
@@ -145,7 +205,37 @@ export default function AdminUsersPage({ userProfile }) {
           <button className="btn btn-secondary" onClick={handleRefreshCache} disabled={refreshing}>
             {refreshing ? "Обновляем кеш..." : "Принудительно обновить кеш"}
           </button>
+          <button className="btn btn-secondary" onClick={handleRunCiCd} disabled={deploying}>
+            {deploying ? "Запускаем ci_cd..." : "Обновить метаданные (ci_cd)"}
+          </button>
           {refreshMsg && <div className="muted">{refreshMsg}</div>}
+          {deployMsg && <div className="muted">{deployMsg}</div>}
+        </div>
+        <div className="admin-ci-block">
+          <label className="admin-ci-check">
+            <input
+              type="checkbox"
+              checked={deployReady}
+              onChange={(e) => setDeployReady(e.target.checked)}
+            />
+            Подтверждаю запуск ci_cd
+          </label>
+          {lastDeployAt && <div className="muted">Последний запуск: {lastDeployAt}</div>}
+          {deployError && <div className="login-error">{deployError}</div>}
+          {deployOutput && (
+            <div className="admin-ci-output">
+              <div className="muted">Вывод ci_cd</div>
+              {deployOutput?.status && (
+                <div className="muted">Статус: {deployOutput.status}</div>
+              )}
+              {deployOutput?.stdout && (
+                <pre className="admin-ci-pre">{deployOutput.stdout}</pre>
+              )}
+              {deployOutput?.stderr && (
+                <pre className="admin-ci-pre error">{deployOutput.stderr}</pre>
+              )}
+            </div>
+          )}
         </div>
 
         <form className="admin-form" onSubmit={handleSubmit}>

@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-b
 
 COPY api/ /app/api/
 COPY etl_loads_entity/ /app/etl_loads_entity/
+COPY config_files/ /app/config_files/
 
 EXPOSE 8000
 

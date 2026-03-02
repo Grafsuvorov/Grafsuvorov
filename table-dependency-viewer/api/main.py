@@ -39,6 +39,10 @@ from .config import (
     TABLE_YTREK_INCIDENTS,
     TABLE_TABLES_META_CLICK,
     TABLE_DATA_QUALITY,
+    TABLE_CLICK_LOAD_RUN,
+    TABLE_CLICK_LOAD_STAGE,
+    CLICK_META_DIR,
+    ADMIN_CICD_SCRIPT,
     DATABASE_URL,
 )
 
@@ -49,7 +53,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -65,6 +69,15 @@ router = APIRouter()
 print("BOOT FILE:", __file__)
 
 init_auth()
+
+# admin ci_cd status (in-memory)
+_ci_cd_status = {
+    "last_run_at": None,
+    "status": None,
+    "return_code": None,
+    "stdout": None,
+    "stderr": None,
+}
 
 
 @app.get("/api/health")
@@ -102,6 +115,66 @@ def refresh_cache(request: Request):
         raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
 
     return {"status": "ok"}
+
+
+@router.post("/api/admin/run-ci-cd")
+def run_ci_cd(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    script_path = Path(ADMIN_CICD_SCRIPT)
+    if not script_path.is_absolute():
+        script_path = (BASE_DIR / script_path).resolve()
+
+    if not script_path.exists():
+        raise HTTPException(status_code=404, detail=f"Скрипт не найден: {script_path}")
+    if not script_path.is_file():
+        raise HTTPException(status_code=400, detail="Путь скрипта должен указывать на файл")
+
+    _ci_cd_status.update(
+        {
+            "last_run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "running",
+            "return_code": None,
+            "stdout": None,
+            "stderr": None,
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            ["bash", str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=900,
+            cwd=str(script_path.parent),
+            env=os.environ.copy(),
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Скрипт выполняется слишком долго (timeout)")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось запустить скрипт: {exc}")
+
+    response = {
+        "status": "ok" if result.returncode == 0 else "failed",
+        "return_code": result.returncode,
+        "stdout": (result.stdout or "").strip()[:2000],
+        "stderr": (result.stderr or "").strip()[:2000],
+        "last_run_at": _ci_cd_status.get("last_run_at"),
+    }
+    _ci_cd_status.update(response)
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=response)
+    return response
+
+
+@router.get("/api/admin/ci-cd/status")
+def get_ci_cd_status(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return _ci_cd_status
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):
@@ -1564,6 +1637,51 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # META_PARENT_DIRS = [Path(r"C:\\GIT\\meta_info\\database\\greenplum\\schema_name\\tech_etl\\etl_load_entity")]
 META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", BASE_DIR / "etl_loads_entity"))]
 
+# ClickHouse meta configs (config_files/meta)
+_click_meta_cache = None
+_click_meta_ts = 0
+_CLICK_META_TTL = 300
+
+
+def _load_click_meta_index():
+    root = Path(CLICK_META_DIR)
+    if not root.is_absolute():
+        root = (BASE_DIR / root).resolve()
+
+    meta_index: Dict[Tuple[str, str], Dict[str, Any]] = {}
+    view_sql_index: Dict[Tuple[str, str], str] = {}
+
+    dm_dir = root / "dm"
+    if dm_dir.exists():
+        for path in dm_dir.rglob("*.yaml"):
+            try:
+                data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            except Exception:
+                continue
+            schema_gp = str(data.get("schema_name_gp") or "").strip().lower()
+            obj_name = str(data.get("object_name") or "").strip().lower()
+            if schema_gp and obj_name:
+                meta_index[(schema_gp, obj_name)] = data
+
+    dm_view_dir = root / "dm_view"
+    if dm_view_dir.exists():
+        for path in dm_view_dir.rglob("*.sql"):
+            obj_name = path.stem.strip().lower()
+            if obj_name:
+                view_sql_index[("dm_view", obj_name)] = path.read_text(encoding="utf-8")
+
+    return {"meta": meta_index, "view_sql": view_sql_index, "root": str(root)}
+
+
+def get_click_meta_index():
+    global _click_meta_cache, _click_meta_ts
+    now = time.time()
+    if _click_meta_cache and now - _click_meta_ts < _CLICK_META_TTL:
+        return _click_meta_cache
+    _click_meta_cache = _load_click_meta_index()
+    _click_meta_ts = now
+    return _click_meta_cache
+
 
 def iter_meta_dirs(targets: Optional[List[str]] = None):
     """Yield existing metadata directories, searching both root and project/* trees."""
@@ -2075,6 +2193,19 @@ def serialize_datetime(value):
     if isinstance(value, str):
         return value
     return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _duration_minutes(value):
+    if value is None:
+        return None
+    try:
+        if isinstance(value, timedelta):
+            return round(value.total_seconds() / 60.0, 2)
+        if isinstance(value, (int, float)):
+            return round(float(value) / 60.0, 2)
+        return None
+    except Exception:
+        return None
 
 
 @router.get("/api/ytrek/incidents")
@@ -5170,6 +5301,232 @@ print("Reg")
 @router.get("/api/orderbreaches")
 def get_order_breaches():
     return get_cached_order_breaches()
+
+
+@router.get("/api/click/summary")
+def get_clickhouse_summary(
+    days: int = Query(7, ge=1, le=365),
+    limit: int = Query(8, ge=1, le=50),
+):
+    try:
+        with engine.connect() as conn:
+            summary_row = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        COUNT(*) AS total_runs,
+                        SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS ok_runs,
+                        SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_runs,
+                        SUM(CASE WHEN status = 'RUNNING' THEN 1 ELSE 0 END) AS running_runs,
+                        SUM(CASE WHEN status = 'UP_FOR_RETRY' THEN 1 ELSE 0 END) AS retry_runs,
+                        AVG(EXTRACT(EPOCH FROM duration)) AS avg_seconds,
+                        MAX(EXTRACT(EPOCH FROM duration)) AS max_seconds,
+                        MAX(end_dttm) AS last_finish
+                    FROM {TABLE_CLICK_LOAD_RUN}
+                    WHERE start_dttm >= now() - (:days || ' days')::interval
+                    """
+                ),
+                {"days": days},
+            ).mappings().first() or {}
+
+            failures = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        r.run_uuid,
+                        r.schema_name,
+                        r.table_name,
+                        r.dag_name,
+                        r.dag_run,
+                        r.start_dttm,
+                        r.end_dttm,
+                        r.duration,
+                        r.status,
+                        r.error_text,
+                        st.stage_name,
+                        st.stage_status,
+                        st.stage_error
+                    FROM {TABLE_CLICK_LOAD_RUN} r
+                    LEFT JOIN LATERAL (
+                        SELECT
+                            stage_name,
+                            status AS stage_status,
+                            error_text AS stage_error
+                        FROM {TABLE_CLICK_LOAD_STAGE} s
+                        WHERE s.run_uuid = r.run_uuid
+                        ORDER BY s.start_dttm DESC NULLS LAST
+                        LIMIT 1
+                    ) st ON true
+                    WHERE r.start_dttm >= now() - (:days || ' days')::interval
+                      AND r.status IN ('FAILED', 'UP_FOR_RETRY')
+                    ORDER BY r.start_dttm DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"days": days, "limit": limit},
+            ).mappings().all()
+
+        avg_min = (
+            round((summary_row.get("avg_seconds") or 0) / 60.0, 2)
+            if summary_row.get("avg_seconds") is not None
+            else None
+        )
+        max_min = (
+            round((summary_row.get("max_seconds") or 0) / 60.0, 2)
+            if summary_row.get("max_seconds") is not None
+            else None
+        )
+
+        summary = {
+            "total_runs": int(summary_row.get("total_runs") or 0),
+            "ok_runs": int(summary_row.get("ok_runs") or 0),
+            "failed_runs": int(summary_row.get("failed_runs") or 0),
+            "running_runs": int(summary_row.get("running_runs") or 0),
+            "retry_runs": int(summary_row.get("retry_runs") or 0),
+            "avg_duration_min": avg_min,
+            "max_duration_min": max_min,
+            "last_finish": serialize_datetime(summary_row.get("last_finish")),
+        }
+
+        failure_rows = []
+        for row in failures:
+            stage_name = row.get("stage_name")
+            stage_label = None
+            if stage_name == "UPLOAD_TO_S3":
+                stage_label = "S3"
+            elif stage_name == "CLICKHOUSE_LOAD":
+                stage_label = "ClickHouse"
+
+            failure_rows.append(
+                {
+                    "run_uuid": row.get("run_uuid"),
+                    "schema_name": row.get("schema_name"),
+                    "table_name": row.get("table_name"),
+                    "dag_name": row.get("dag_name"),
+                    "dag_run": row.get("dag_run"),
+                    "start_dttm": serialize_datetime(row.get("start_dttm")),
+                    "end_dttm": serialize_datetime(row.get("end_dttm")),
+                    "duration_min": _duration_minutes(row.get("duration")),
+                    "status": row.get("status"),
+                    "error_text": row.get("error_text"),
+                    "stage_name": stage_name,
+                    "stage_status": row.get("stage_status"),
+                    "stage_error": row.get("stage_error"),
+                    "problem_area": stage_label,
+                }
+            )
+
+        return {"summary": summary, "failures": failure_rows}
+    except Exception as e:
+        print("❌ /api/click/summary error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/click/table/{schema}/{table}")
+def get_clickhouse_table_runs(
+    schema: str,
+    table: str,
+    limit: int = Query(6, ge=1, le=50),
+):
+    try:
+        schema_norm = (schema or "").strip()
+        table_norm = (table or "").strip()
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        run_uuid,
+                        dag_name,
+                        dag_run,
+                        start_dttm,
+                        end_dttm,
+                        duration,
+                        status,
+                        error_text
+                    FROM {TABLE_CLICK_LOAD_RUN}
+                    WHERE schema_name = :schema
+                      AND table_name = :table
+                    ORDER BY start_dttm DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm, "limit": limit},
+            ).mappings().all()
+
+            runs = [
+                {
+                    "run_uuid": row.get("run_uuid"),
+                    "dag_name": row.get("dag_name"),
+                    "dag_run": row.get("dag_run"),
+                    "start_dttm": serialize_datetime(row.get("start_dttm")),
+                    "end_dttm": serialize_datetime(row.get("end_dttm")),
+                    "duration_min": _duration_minutes(row.get("duration")),
+                    "status": row.get("status"),
+                    "error_text": row.get("error_text"),
+                }
+                for row in rows
+            ]
+
+            stages = []
+            if runs:
+                run_uuid = runs[0].get("run_uuid")
+                stages_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT
+                            stage_name,
+                            start_dttm,
+                            end_dttm,
+                            duration,
+                            status,
+                            error_text
+                        FROM {TABLE_CLICK_LOAD_STAGE}
+                        WHERE run_uuid = :run_uuid
+                        ORDER BY start_dttm
+                        """
+                    ),
+                    {"run_uuid": run_uuid},
+                ).mappings().all()
+                stages = [
+                    {
+                        "stage_name": row.get("stage_name"),
+                        "start_dttm": serialize_datetime(row.get("start_dttm")),
+                        "end_dttm": serialize_datetime(row.get("end_dttm")),
+                        "duration_min": _duration_minutes(row.get("duration")),
+                        "status": row.get("status"),
+                        "error_text": row.get("error_text"),
+                    }
+                    for row in stages_rows
+                ]
+
+        return {"runs": runs, "stages": stages}
+    except Exception as e:
+        print("❌ /api/click/table error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/click/meta/{schema}/{table}")
+def get_clickhouse_meta(schema: str, table: str):
+    try:
+        schema_norm = (schema or "").strip().lower()
+        table_norm = (table or "").strip().lower()
+        idx = get_click_meta_index()
+        meta = idx["meta"].get((schema_norm, table_norm))
+        view_sql = idx["view_sql"].get((schema_norm, table_norm))
+        if not meta and not view_sql:
+            return JSONResponse(status_code=404, content={"error": "not found"})
+        return {
+            "meta": meta,
+            "view_sql": view_sql,
+            "meta_root": idx.get("root"),
+        }
+    except Exception as e:
+        print("❌ /api/click/meta error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 app.include_router(router)

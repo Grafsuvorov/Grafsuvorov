@@ -170,6 +170,176 @@ main.content {
   color: #7ee0a8;
 }
 
+/* Admin ci_cd */
+.admin-ci-block {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.admin-ci-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.admin-ci-output {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.admin-ci-pre {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(10,12,18,0.6);
+  color: #dbe7ff;
+  font-size: 12px;
+  line-height: 1.4;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.admin-ci-pre.error {
+  background: rgba(239,68,68,0.12);
+  color: #fca5a5;
+}
+
+/* ClickHouse load block */
+.click-run-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.click-run-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.click-run-status,
+.click-stage-status {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255,255,255,0.08);
+}
+
+.click-run-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.click-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.click-value {
+  font-size: 13px;
+}
+
+.click-run-error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.25);
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.click-stages {
+  margin-top: 12px;
+}
+
+.click-meta-block {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(255,255,255,0.08);
+}
+
+.click-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.click-meta-actions {
+  margin-top: 10px;
+}
+
+.click-stage-table {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.click-stage-head,
+.click-stage-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 0.6fr 0.8fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.click-stage-head {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.click-stage-row {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  font-size: 12px;
+}
+
+.status-success {
+  background: rgba(16,185,129,0.18);
+  color: #6ee7b7;
+}
+.status-failed {
+  background: rgba(239,68,68,0.2);
+  color: #fca5a5;
+}
+.status-running {
+  background: rgba(59,130,246,0.2);
+  color: #bfdbfe;
+}
+.status-up_for_retry {
+  background: rgba(234,179,8,0.2);
+  color: #fde68a;
+}
+
+@media (max-width: 900px) {
+  .click-run-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .click-stage-head,
+  .click-stage-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .login-page {
   min-height: 100vh;
   display: flex;

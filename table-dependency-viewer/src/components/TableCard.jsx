@@ -45,6 +45,13 @@ export default function TableCard({
   const [dqHistoryLoading, setDqHistoryLoading] = useState(false);
   const [dqHistoryError, setDqHistoryError] = useState(null);
   const [showDqHistory, setShowDqHistory] = useState(false);
+  const [clickRuns, setClickRuns] = useState([]);
+  const [clickStages, setClickStages] = useState([]);
+  const [clickLoading, setClickLoading] = useState(false);
+  const [clickError, setClickError] = useState(null);
+  const [clickMeta, setClickMeta] = useState(null);
+  const [clickMetaLoading, setClickMetaLoading] = useState(false);
+  const [clickMetaError, setClickMetaError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -116,6 +123,41 @@ export default function TableCard({
         setDqHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю качества данных");
       })
       .finally(() => setDqHistoryLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickLoading(true);
+    setClickError(null);
+    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=6`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
+      .then((data) => {
+        setClickRuns(Array.isArray(data?.runs) ? data.runs : []);
+        setClickStages(Array.isArray(data?.stages) ? data.stages : []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setClickError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-логи");
+      })
+      .finally(() => setClickLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickMetaLoading(true);
+    setClickMetaError(null);
+    fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => {
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error("Не удалось загрузить ClickHouse-метаданные");
+        return res.json();
+      })
+      .then((data) => setClickMeta(data || null))
+      .catch((err) => {
+        console.error(err);
+        setClickMetaError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-метаданные");
+      })
+      .finally(() => setClickMetaLoading(false));
   }, [schema, tableName]);
 
   const status = useMemo(() => {
@@ -192,6 +234,22 @@ export default function TableCard({
       { title: "SQL: truncate", sql: meta.sql_query_truncate_sql },
     ];
   }, [meta]);
+
+  const clickLastRun = clickRuns[0] || null;
+  const clickStatusLabel = (status) => {
+    switch (status) {
+      case "SUCCESS":
+        return "Успешно";
+      case "FAILED":
+        return "Ошибка";
+      case "RUNNING":
+        return "В процессе";
+      case "UP_FOR_RETRY":
+        return "Повтор";
+      default:
+        return status || "—";
+    }
+  };
 
   const copySql = (sql) => {
     if (!sql) return;
@@ -534,6 +592,140 @@ export default function TableCard({
               </>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">Загрузка в ClickHouse</div>
+        <div className="card">
+          {clickLoading && <div className="muted">Загрузка ClickHouse-логов...</div>}
+          {clickError && <div className="dep-error-title">{clickError}</div>}
+          {!clickLoading && !clickError && clickRuns.length === 0 && (
+            <div className="muted">Запусков ClickHouse не найдено.</div>
+          )}
+          {!clickLoading && !clickError && clickRuns.length > 0 && (
+            <>
+              <div className="click-run-head">
+                <div>
+                  <div className="click-run-title">Последний запуск</div>
+                  <div className="muted">
+                    {clickLastRun?.dag_name || "—"} · {clickLastRun?.dag_run || "—"}
+                  </div>
+                </div>
+                <div className={`click-run-status status-${String(clickLastRun?.status || "").toLowerCase()}`}>
+                  {clickStatusLabel(clickLastRun?.status)}
+                </div>
+              </div>
+              <div className="click-run-meta">
+                <div>
+                  <div className="click-label">Старт</div>
+                  <div className="click-value">{clickLastRun?.start_dttm || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Финиш</div>
+                  <div className="click-value">{clickLastRun?.end_dttm || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Длительность</div>
+                  <div className="click-value">
+                    {clickLastRun?.duration_min !== null && clickLastRun?.duration_min !== undefined
+                      ? `${clickLastRun.duration_min} мин`
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+              {clickLastRun?.error_text && (
+                <div className="click-run-error">
+                  {clickLastRun.error_text}
+                </div>
+              )}
+
+              {clickStages.length > 0 && (
+                <div className="click-stages">
+                  <div className="section-subtitle">Этапы загрузки</div>
+                  <div className="click-stage-table">
+                    <div className="click-stage-head">
+                      <span>Этап</span>
+                      <span>Старт</span>
+                      <span>Финиш</span>
+                      <span>Длит.</span>
+                      <span>Статус</span>
+                    </div>
+                    {clickStages.map((stage, idx) => (
+                      <div key={`${stage.stage_name}-${idx}`} className="click-stage-row">
+                        <span className="mono">{stage.stage_name}</span>
+                        <span>{stage.start_dttm || "—"}</span>
+                        <span>{stage.end_dttm || "—"}</span>
+                        <span>
+                          {stage.duration_min !== null && stage.duration_min !== undefined
+                            ? `${stage.duration_min} мин`
+                            : "—"}
+                        </span>
+                        <span className={`click-stage-status status-${String(stage.status || "").toLowerCase()}`}>
+                          {clickStatusLabel(stage.status)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="click-meta-block">
+                <div className="section-subtitle">ClickHouse метаданные</div>
+                {clickMetaLoading && <div className="muted">Загрузка метаданных...</div>}
+                {clickMetaError && <div className="dep-error-title">{clickMetaError}</div>}
+                {!clickMetaLoading && !clickMetaError && !clickMeta?.meta && !clickMeta?.view_sql && (
+                  <div className="muted">Метаданные не найдены.</div>
+                )}
+                {!clickMetaLoading && !clickMetaError && (clickMeta?.meta || clickMeta?.view_sql) && (
+                  <>
+                    {clickMeta?.meta && (
+                      <div className="click-meta-grid">
+                        <div>
+                          <div className="click-label">Схема GP</div>
+                          <div className="click-value">{clickMeta.meta.schema_name_gp || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Схема ClickHouse</div>
+                          <div className="click-value">{clickMeta.meta.schema_name_click || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Тип загрузки</div>
+                          <div className="click-value">{clickMeta.meta.load_type || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Recreate</div>
+                          <div className="click-value">{clickMeta.meta.recreate_mode || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Truncate</div>
+                          <div className="click-value">
+                            {clickMeta.meta.truncate_mode_on !== undefined ? String(clickMeta.meta.truncate_mode_on) : "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="click-label">Колонки</div>
+                          <div className="click-value">
+                            {Array.isArray(clickMeta.meta.attributes) ? clickMeta.meta.attributes.length : "—"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {clickMeta?.view_sql && (
+                      <div className="click-meta-actions">
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => openSqlModal({ title: "ClickHouse VIEW", sql: clickMeta.view_sql })}
+                        >
+                          Открыть SQL view
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -18,12 +18,16 @@ export default function HomePage({ onSelectTable }) {
   const [impactEntityOpen, setImpactEntityOpen] = useState({});
   const [entityLinkOpen, setEntityLinkOpen] = useState({});
   const [entityLinkDetails, setEntityLinkDetails] = useState({});
+  const [cycleOpen, setCycleOpen] = useState({});
+  const [cycleDetails, setCycleDetails] = useState({});
   const [nightSummary, setNightSummary] = useState(null);
   const [nightLoading, setNightLoading] = useState(false);
   const [nightError, setNightError] = useState(null);
   const [incidentTimeline, setIncidentTimeline] = useState([]);
   const [dqSummary, setDqSummary] = useState(null);
   const [dqAlerts, setDqAlerts] = useState([]);
+  const [clickSummary, setClickSummary] = useState(null);
+  const [clickFailures, setClickFailures] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +53,8 @@ export default function HomePage({ onSelectTable }) {
             setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
             setDqSummary(cached.dqSummary || null);
             setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
+            setClickSummary(cached.clickSummary || null);
+            setClickFailures(Array.isArray(cached.clickFailures) ? cached.clickFailures : []);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -64,7 +70,8 @@ export default function HomePage({ onSelectTable }) {
           nightResp,
           timelineResp,
           dqSummaryResp,
-          dqAlertsResp
+          dqAlertsResp,
+          clickResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
@@ -74,7 +81,8 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/night-summary?days=30&limit=10`),
           fetch(`${API_BASE}/api/incidents/timeline?days=7`),
           fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
-          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`)
+          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`),
+          fetch(`${API_BASE}/api/click/summary?days=7&limit=6`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -86,6 +94,7 @@ export default function HomePage({ onSelectTable }) {
         const timelineJson = await timelineResp.json();
         const dqSummaryJson = await dqSummaryResp.json();
         const dqAlertsJson = await dqAlertsResp.json();
+        const clickJson = await clickResp.json();
 
         if (!cancelled) {
           const now = new Date();
@@ -107,6 +116,8 @@ export default function HomePage({ onSelectTable }) {
           setIncidentTimeline(Array.isArray(timelineJson) ? timelineJson : []);
           setDqSummary(dqSummaryJson || null);
           setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
+          setClickSummary(clickJson?.summary || null);
+          setClickFailures(Array.isArray(clickJson?.failures) ? clickJson.failures : []);
           setNightLoading(false);
           localStorage.setItem(
             "home:payload",
@@ -124,6 +135,8 @@ export default function HomePage({ onSelectTable }) {
               incidentTimeline: Array.isArray(timelineJson) ? timelineJson : [],
               dqSummary: dqSummaryJson || null,
               dqAlerts: Array.isArray(dqAlertsJson) ? dqAlertsJson : [],
+              clickSummary: clickJson?.summary || null,
+              clickFailures: Array.isArray(clickJson?.failures) ? clickJson.failures : [],
             })
           );
         }
@@ -195,6 +208,21 @@ export default function HomePage({ onSelectTable }) {
     return { duplicate_tables: 4, row_count_tables: 6, row_count_checked: 42 };
   }, [isLocal, dqSummary]);
 
+  const clickStatusLabel = (status) => {
+    switch (status) {
+      case "SUCCESS":
+        return "Успешно";
+      case "FAILED":
+        return "Ошибка";
+      case "RUNNING":
+        return "В процессе";
+      case "UP_FOR_RETRY":
+        return "Повтор";
+      default:
+        return status || "—";
+    }
+  };
+
   const demoDqAlerts = useMemo(() => {
     if (!isLocal || dqAlerts.length) return dqAlerts;
     return [
@@ -209,6 +237,55 @@ export default function HomePage({ onSelectTable }) {
       }
     ];
   }, [isLocal, dqAlerts]);
+
+  const toggleCycleDetails = async (cycle, key) => {
+    setCycleOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (cycleDetails[key]?.state || cycleOpen[key]) return;
+
+    const entities = Array.isArray(cycle?.nodes) ? cycle.nodes : [];
+    if (!entities.length) return;
+
+    const maxEntities = 6;
+    const limitedEntities = entities.slice(0, maxEntities);
+    setCycleDetails((prev) => ({ ...prev, [key]: { state: "loading" } }));
+
+    try {
+      const responses = await Promise.all(
+        limitedEntities.map((name) =>
+          fetch(`${API_BASE}/api/graph/entity/${encodeURIComponent(name)}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((payload) => ({ name, payload }))
+        )
+      );
+
+      const entityTables = responses.map(({ name, payload }) => {
+        const lower = (name || "").toLowerCase();
+        const nodes = payload?.nodes || [];
+        const tables = nodes
+          .filter((node) => {
+            const entities = node.entities || [];
+            const entityMatch = entities.some((e) => String(e).toLowerCase() === lower);
+            const singleMatch = String(node.entity || "").toLowerCase() === lower;
+            return entityMatch || singleMatch;
+          })
+          .map((node) => node.id)
+          .filter(Boolean);
+        const uniqueTables = Array.from(new Set(tables));
+        return { name, tables: uniqueTables };
+      });
+
+      setCycleDetails((prev) => ({
+        ...prev,
+        [key]: {
+          state: "ready",
+          entities: entityTables,
+          hiddenCount: Math.max(entities.length - maxEntities, 0),
+        },
+      }));
+    } catch (err) {
+      setCycleDetails((prev) => ({ ...prev, [key]: { state: "error" } }));
+    }
+  };
 
   const demoNightSummary = useMemo(() => {
     if (!isLocal || nightSummary) return nightSummary;
@@ -850,6 +927,93 @@ export default function HomePage({ onSelectTable }) {
         </section>
       )}
 
+      {/* ===== CLICKHOUSE LOADS ===== */}
+      {!loading && clickSummary && (
+        <section className="cc-surface">
+          <div className="section-title">
+            ClickHouse загрузки (7 дней)
+            <span className="section-meta">{clickSummary.total_runs || 0}</span>
+          </div>
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Сводка по выгрузкам витрин в ClickHouse и последние ошибки.
+          </div>
+          <div className="entity-grid">
+            <div className="entity-card">
+              <div className="entity-name">Успешно</div>
+              <div className="entity-meta">{clickSummary.ok_runs || 0} запусков</div>
+            </div>
+            <div className="entity-card critical">
+              <div className="entity-name">Ошибки</div>
+              <div className="entity-meta">{clickSummary.failed_runs || 0} запусков</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Повторы</div>
+              <div className="entity-meta">{clickSummary.retry_runs || 0}</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">В процессе</div>
+              <div className="entity-meta">{clickSummary.running_runs || 0}</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Средняя длительность</div>
+              <div className="entity-meta">
+                {Number.isFinite(clickSummary.avg_duration_min) ? `${clickSummary.avg_duration_min} мин` : "—"}
+              </div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Последняя выгрузка</div>
+              <div className="entity-meta">{clickSummary.last_finish || "—"}</div>
+            </div>
+          </div>
+
+          {clickFailures.length > 0 && (
+            <div className="order-list" style={{ marginTop: 12 }}>
+              {clickFailures.map((row, idx) => {
+                const fqn = `${row.schema_name}.${row.table_name}`;
+                return (
+                  <article key={`${fqn}-${idx}`} className="order-row">
+                    <header className="order-row-header">
+                      <div>
+                        <div className="order-row-target mono">{fqn}</div>
+                        <div className="order-row-meta">
+                          {row.dag_name || "—"} · {row.dag_run || "—"}
+                        </div>
+                      </div>
+                      <div className={`order-pill order-pill-warning status-${String(row.status || "").toLowerCase()}`}>
+                        {clickStatusLabel(row.status)}
+                      </div>
+                    </header>
+                    <div className="order-row-text">
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} ·{" "}
+                      {row.duration_min !== null && row.duration_min !== undefined ? `${row.duration_min} мин` : "—"}
+                    </div>
+                    {(row.problem_area || row.stage_name) && (
+                      <div className="order-row-meta" style={{ marginTop: 6 }}>
+                        {row.problem_area ? `Проблема: ${row.problem_area}` : "Проблема: —"}
+                        {row.stage_name ? ` · Этап: ${row.stage_name}` : ""}
+                      </div>
+                    )}
+                    {row.error_text && (
+                      <div className="order-row-meta" style={{ marginTop: 6 }}>
+                        {row.error_text}
+                      </div>
+                    )}
+                    <div className="order-row-actions">
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                      >
+                        Карточка
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ===== ENTITY CYCLES ===== */}
       {!loading && (entityCycles.length > 0 || demoEntityMutual.length > 0) && (
         <section className="cc-surface">
@@ -990,6 +1154,48 @@ export default function HomePage({ onSelectTable }) {
                   ))}
                   {cycle.nodes.length > 6 && <span className="order-node">…</span>}
                 </div>
+                <div className="order-row-actions">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => toggleCycleDetails(cycle, `cycle-${idx}`)}
+                  >
+                    {cycleOpen[`cycle-${idx}`] ? "Скрыть таблицы цикла" : "Показать таблицы цикла"}
+                  </button>
+                  {cycleDetails[`cycle-${idx}`]?.state === "loading" && <span className="muted">Загрузка...</span>}
+                  {cycleDetails[`cycle-${idx}`]?.state === "error" && <span className="muted">Ошибка</span>}
+                </div>
+                {cycleOpen[`cycle-${idx}`] && cycleDetails[`cycle-${idx}`]?.state === "ready" && (
+                  <div className="order-impact">
+                    <div className="order-impact-title">Таблицы в цикле</div>
+                    {cycleDetails[`cycle-${idx}`]?.entities?.map((entity) => (
+                      <div key={entity.name} className="order-impact-group">
+                        <div className="order-impact-group-title">
+                          <span>{entity.name}</span>
+                          <span className="order-impact-badge">{entity.tables.length}</span>
+                        </div>
+                        <div className="order-impact-list">
+                          {(entity.tables || []).slice(0, 10).map((fqn) => (
+                            <button
+                              key={fqn}
+                              className="btn btn-ghost"
+                              onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                            >
+                              {fqn}
+                            </button>
+                          ))}
+                          {(entity.tables || []).length > 10 && (
+                            <span className="muted">… ещё {entity.tables.length - 10}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {cycleDetails[`cycle-${idx}`]?.hiddenCount > 0 && (
+                      <div className="muted" style={{ marginTop: 8 }}>
+                        Ещё сущностей: {cycleDetails[`cycle-${idx}`].hiddenCount}
+                      </div>
+                    )}
+                  </div>
+                )}
               </article>
             ))}
           </div>

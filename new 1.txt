@@ -1,1 +1,5 @@
-from api.auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
+/app/scripts/ci_cd.sh: line 10: cd: /root/git_dir/etl: No such file or directory
+Вывод ci_cd
+Статус: failed
+gogogogo
+/app/scripts/ci_cd.sh: line 10: cd: /root/git_dir/etl: No such file or directory

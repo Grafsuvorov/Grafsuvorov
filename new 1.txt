@@ -1,14 +1,33 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i http://localhost:5312/api/admin/ci-cd/status
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
-
-<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i -X POST http://localhost:5312/api/admin/run-ci-cd
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
-
-<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# rg -n "api/admin" api/main.py
--bash: rg: command not found
+index-DddO4pkL.js:135 
+ 
+ GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/ci-cd/status 422 (Unprocessable Entity)
+window.fetch	@	index-DddO4pkL.js:135
+(anonymous)	@	index-DddO4pkL.js:135
+(anonymous)	@	index-DddO4pkL.js:135
+Fo	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+da	@	index-DddO4pkL.js:48
+bS	@	index-DddO4pkL.js:48
+IS	@	index-DddO4pkL.js:48
+(anonymous)	@	index-DddO4pkL.js:48
+K	@	index-DddO4pkL.js:25

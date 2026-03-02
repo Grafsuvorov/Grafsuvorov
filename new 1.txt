@@ -1,9 +1,14 @@
-curl -i http://localhost:5312/api/admin/ci-cd/status
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i http://localhost:5312/api/admin/ci-cd/status
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=utf-8
+Content-Length: 99
 
-  и
+<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i -X POST http://localhost:5312/api/admin/run-ci-cd
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=utf-8
+Content-Length: 99
 
-  curl -i -X POST http://localhost:5312/api/admin/run-ci-cd
-
-  Также проверь, нет ли другого роутинга, который перехватывает путь:
-
-  rg -n "api/admin" api/main.py
+<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
+[root@rgm-s-dwhapp01 table-dependency-viewer]# rg -n "api/admin" api/main.py
+-bash: rg: command not found

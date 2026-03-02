@@ -1,407 +1,354 @@
-dict_dds.counterparty_td
-Источник стартовал позже: ods.texts_from_sap_fm_read_text
-Критично
-ods.texts_from_sap_fm_read_text
-→
-dict_dds.counterparty_td
-ods.texts_from_sap_fm_read_text завершилась 01.03, 17:03, а dict_dds.counterparty_td стартовала 21.08, 21:18. Разрыв +276224.5 мин.
-
-Карточка
-Показать влияние
-dm.fixed_asset_cost_and_depreciation
-Источник стартовал позже: dm_calc.unit_balance_operating_periods
-Критично
-dm_calc.unit_balance_operating_periods
-→
-dm.fixed_asset_cost_and_depreciation
-dm_calc.unit_balance_operating_periods завершилась 02.03, 03:49, а dm.fixed_asset_cost_and_depreciation стартовала 18.02, 02:05. Разрыв +17384.4 мин.
-
-Диагностика зависимостей сущностей11
-Здесь показываются случаи, где сущности зависят друг от друга в обе стороны (взаимные зависимости) или образуют цикл. Такие связи мешают корректному порядку загрузки и требуют проверки логики.
-
-Цикл сущностей
-Сущностей: 16
-ЦИКЛ
-TORO
-STG_LOADER
-TRANSPORTATION
-SALES_SHIPMENT_FROM_PLANT_4
-SALES_SHIPMENT_FROM_PLANT_3
-SALES_SHIPMENT_FROM_PLANT_2
-…
-
-
-CREATE TABLE tech_etl.click_fact_table_load_run (
-	id bigserial NOT NULL,
-	run_uuid uuid NOT NULL,
-	entity_id int4 NOT NULL,
-	entity_name varchar(50) NOT NULL,
-	table_id int4 NOT NULL,
-	schema_name varchar(200) NOT NULL,
-	table_name varchar(200) NOT NULL,
-	dag_name varchar(100) NOT NULL,
-	dag_run varchar(100) NOT NULL,
-	start_dttm timestamp NOT NULL,
-	end_dttm timestamp NULL,
-	duration interval NULL,
-	status varchar(20) NOT NULL,
-	error_text text NULL,
-	dttm_inserted timestamp DEFAULT now() NULL
-)
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-DISTRIBUTED BY (table_id, entity_id);
-
-
-CREATE TABLE tech_etl.click_fact_table_load_stage (
-	id bigserial NOT NULL,
-	run_uuid uuid NOT NULL,
-	table_id int4 NOT NULL,
-	table_name varchar(200) NOT NULL,
-	stage_name varchar(50) NOT NULL,
-	start_dttm timestamp NOT NULL,
-	end_dttm timestamp NULL,
-	duration interval NULL,
-	status varchar(20) NOT NULL,
-	error_text text NULL,
-	dttm_inserted timestamp DEFAULT now() NULL
-)
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-DISTRIBUTED BY (table_id);
-
-
-
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(942, 'a7307a92-a6ee-40e4-9043-5ab785b1c859'::uuid, 28, 'RLS_LOADER', 1039, 'rls', 'rls_t', 'rls_rls_t_meta', 'scheduled__2026-03-02T05:00:00+00:00', '2026-03-02 10:01:36.855', NULL, NULL, 'RUNNING', '', '2026-03-02 10:01:36.855');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(941, 'b61a164d-17e2-44e0-a123-0ce96fc49a60'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4023, 'dm_view', 'production_ad_kpa_finish_goods_stock_and_shipment', 'dm_view_production_ad_kpa_finish_goods_stock_and_shipment_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 08:46:55.899', NULL, NULL, 'RUNNING', '', '2026-03-02 08:46:55.899');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(940, 'dc9b1515-4eb7-4704-a190-459a77ddc6d3'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5003, 'dm_view', 'kpi_indicators_daily_ad', 'dm_view_kpi_indicators_daily_ad_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:46:09.070', NULL, NULL, 'RUNNING', '', '2026-03-02 08:46:09.070');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(939, 'cea36df7-22e4-4f7b-9be0-275a18c8f656'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5253, 'dm_view', 'production_ad_kpa_hr_kpi', 'dm_view_production_ad_kpa_hr_kpi_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:46:03.307', NULL, NULL, 'RUNNING', '', '2026-03-02 08:46:03.307');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(938, '9714739e-f0d3-4afc-b0da-b322960d7148'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4369, 'dm', 'toro_equipment_downtime_by_plant_type', 'dm_toro_equipment_downtime_by_plant_type_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 08:45:10.811', NULL, NULL, 'RUNNING', '', '2026-03-02 08:45:10.811');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(937, 'f1931cc9-2c08-48ee-948b-7b87bd72cadb'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5133, 'dm', 'production_aluminium_remelt', 'dm_production_aluminium_remelt_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:45:01.641', NULL, NULL, 'RUNNING', '', '2026-03-02 08:45:01.641');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(936, '2567a043-a157-4c1c-816c-257b56faaf1e'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4028, 'dm', 'production_finish_goods_stock', 'dm_production_finish_goods_stock_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 08:44:29.721', NULL, NULL, 'RUNNING', '', '2026-03-02 08:44:29.721');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(935, '74bcc5f9-eecd-4b17-a796-fda955d0927e'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4037, 'dm', 'production_toro_diesel_equipment_unit_plan_vs_actual', 'dm_production_toro_diesel_equipment_unit_plan_vs_actual_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 08:44:23.451', NULL, NULL, 'RUNNING', '', '2026-03-02 08:44:23.451');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(934, '6bfd57be-4429-4093-ba99-a845273c7aea'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3616, 'dm', 'production_aluminium_finish_goods', 'dm_production_aluminium_finish_goods_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:43:59.282', NULL, NULL, 'RUNNING', '', '2026-03-02 08:43:59.282');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(933, '316b7749-0722-4832-9c04-077b7699243d'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3974, 'dm', 'toro_equipment_downtime_by_production_type', 'dm_toro_equipment_downtime_by_production_type_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 08:43:55.399', NULL, NULL, 'RUNNING', '', '2026-03-02 08:43:55.399');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(932, '15da8c8d-a2fc-4dfa-9873-1c8af3bb56d3'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3933, 'dm', 'kpi_raw_warehouse_stock', 'dm_kpi_raw_warehouse_stock_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:43:48.115', NULL, NULL, 'RUNNING', '', '2026-03-02 08:43:48.115');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(931, '6f9e3a18-2aed-4421-8e0e-822523218241'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3850, 'dm', 'production_aluminium_electrolysis', 'dm_production_aluminium_electrolysis_meta', 'scheduled__2026-03-02T02:20:00+00:00', '2026-03-02 08:43:46.758', NULL, NULL, 'RUNNING', '', '2026-03-02 08:43:46.758');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(930, 'eb1629ba-9a09-441d-a65a-f207caa182d1'::uuid, 64, 'DQ', 3570, 'dm', 'dq_sd0006', 'dm_dq_sd0006_meta', 'manual__2026-03-02T04:33:19.876848+00:00', '2026-03-02 08:23:32.534', NULL, NULL, 'RUNNING', '', '2026-03-02 08:23:32.534');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(929, '0337ecf9-73f2-4ea7-bab7-6c4bf1c246f1'::uuid, 28, 'RLS_LOADER', 1039, 'rls', 'rls_t', 'rls_rls_t_meta', 'scheduled__2026-03-02T03:00:00+00:00', '2026-03-02 08:01:33.806', NULL, NULL, 'RUNNING', '', '2026-03-02 08:01:33.806');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(928, '2589b988-c8fc-49d4-a8ea-aa1abe86e0f0'::uuid, 34, 'TRANSPORTATION', 3314, 'dm', 'asuzdc_container_and_platform_availability_at_plant_dkp', 'dm_asuzdc_container_and_platform_availability_at_plant_dkp_meta', 'manual__2026-03-02T04:33:27.683670+00:00', '2026-03-02 07:33:48.089', NULL, NULL, 'RUNNING', '', '2026-03-02 07:33:48.089');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(927, 'a1419fec-2a3f-4752-b2a9-8656cd5d3d48'::uuid, 34, 'TRANSPORTATION', 2463, 'dm_view', 'purchase_contract_limits_and_current_balances', 'dm_view_purchase_contract_limits_and_current_balances_meta', 'manual__2026-03-02T04:33:11.964704+00:00', '2026-03-02 07:33:30.897', NULL, NULL, 'RUNNING', '', '2026-03-02 07:33:30.897');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(926, '0fa50f4f-b49d-469b-8eb4-fe55552cdbbe'::uuid, 34, 'TRANSPORTATION', 3103, 'dm_view', 'raw_materials_shipment_and_arrival', 'dm_view_raw_materials_shipment_and_arrival_meta', 'manual__2026-03-02T04:32:44.881330+00:00', '2026-03-02 07:33:04.117', NULL, NULL, 'RUNNING', '', '2026-03-02 07:33:04.117');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(925, '0fa50f4f-b49d-469b-8eb4-fe55552cdbbe'::uuid, 34, 'TRANSPORTATION', 3104, 'dm_view', 'raw_materials_shipment_and_arrival', 'dm_view_raw_materials_shipment_and_arrival_meta', 'manual__2026-03-02T04:32:44.881330+00:00', '2026-03-02 07:33:04.117', NULL, NULL, 'RUNNING', '', '2026-03-02 07:33:04.117');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(924, '87b83cfc-a053-465f-9b76-b6584bf83c20'::uuid, 34, 'TRANSPORTATION', 3166, 'dm', 'sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', 'dm_sales_shipment_from_russian_port_actual_vs_plan_dob_dkp_meta', 'manual__2026-03-02T04:32:36.591161+00:00', '2026-03-02 07:32:56.049', NULL, NULL, 'RUNNING', '', '2026-03-02 07:32:56.049');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(923, 'b08fc0b7-5cb3-4d56-903d-9660570ab3ae'::uuid, 34, 'TRANSPORTATION', 3344, 'dm', 'sales_unplanned_metal_stock_at_plant', 'dm_sales_unplanned_metal_stock_at_plant_meta', 'manual__2026-03-02T04:32:22.424024+00:00', '2026-03-02 07:32:42.740', NULL, NULL, 'RUNNING', '', '2026-03-02 07:32:42.740');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(922, 'b7abad2f-e8d5-40f8-b152-cb5bce94b85f'::uuid, 34, 'TRANSPORTATION', 1729, 'dm', 'transportation_aluminium_shipment_from_plant', 'dm_transportation_aluminium_shipment_from_plant_meta', 'manual__2026-03-02T04:32:13.329997+00:00', '2026-03-02 07:32:32.863', NULL, NULL, 'RUNNING', '', '2026-03-02 07:32:32.863');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(921, '6edc2235-e28f-4bc5-aa50-38146dfc8592'::uuid, 34, 'TRANSPORTATION', 3425, 'dm', 'transportation_vehicle_capacity_average_utilization', 'dm_transportation_vehicle_capacity_average_utilization_meta', 'manual__2026-03-02T04:32:03.079833+00:00', '2026-03-02 07:32:22.130', NULL, NULL, 'RUNNING', '', '2026-03-02 07:32:22.130');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(920, 'fd4f8a5e-60cc-4182-bc09-77552776ce0d'::uuid, 34, 'TRANSPORTATION', 2062, 'dm', 'transportation_services_purchase_price_agreement', 'dm_transportation_services_purchase_price_agreement_meta', 'manual__2026-03-02T04:31:29.126434+00:00', '2026-03-02 07:31:47.340', NULL, NULL, 'RUNNING', '', '2026-03-02 07:31:47.340');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(919, 'f1bc8cfc-991c-4f06-94d3-5761e9bfa0f8'::uuid, 64, 'DQ', 3570, 'dm', 'dq_sd0006', 'dm_dq_sd0006_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:21:57.372', NULL, NULL, 'RUNNING', '', '2026-03-02 06:21:57.372');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(918, '02d92cfb-3e3e-4ad1-907b-481f6df3330b'::uuid, 64, 'DQ', 3572, 'dm', 'dq_sd0008', 'dm_dq_sd0008_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:21:38.218', NULL, NULL, 'RUNNING', '', '2026-03-02 06:21:38.218');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(917, '9c1ae625-486c-4c5e-9ffe-60cfff02af17'::uuid, 9, 'SALES_MARGIN', 2191, 'dm', 'sales_margin', 'dm_sales_margin_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:21:25.075', NULL, NULL, 'RUNNING', '', '2026-03-02 06:21:25.075');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(916, 'cab9932a-c5bc-456e-82d9-183a4db08812'::uuid, 64, 'DQ', 6000, 'dm', 'dq_sd0005', 'dm_dq_sd0005_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:21:14.570', NULL, NULL, 'RUNNING', '', '2026-03-02 06:21:14.570');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(915, '28b99b22-567c-4d05-ad82-426181efed15'::uuid, 64, 'DQ', 3571, 'dm', 'dq_sd0007', 'dm_dq_sd0007_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:21:13.479', NULL, NULL, 'RUNNING', '', '2026-03-02 06:21:13.479');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(914, '1dc0374d-37bf-46dc-9586-5d74268c94cf'::uuid, 61, 'ALVERSE', 3940, 'dm', 'alverse_mlc_overview_pivot', 'dm_alverse_mlc_overview_pivot_meta', 'scheduled__2026-03-01T00:20:00+00:00', '2026-03-02 06:20:56.644', NULL, NULL, 'RUNNING', '', '2026-03-02 06:20:56.644');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(913, '211526f6-3d02-41e5-b934-9824ade4d31c'::uuid, 64, 'DQ', 3569, 'dm', 'dq_sd0003', 'dm_dq_sd0003_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:20:31.898', NULL, NULL, 'RUNNING', '', '2026-03-02 06:20:31.898');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(912, '91d97118-3225-4d05-8eba-32df07e7d4aa'::uuid, 64, 'DQ', 3568, 'dm', 'dq_sd0002', 'dm_dq_sd0002_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:20:31.648', NULL, NULL, 'RUNNING', '', '2026-03-02 06:20:31.648');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(911, 'b0495a85-fb96-4e0e-a388-73ae85558a45'::uuid, 64, 'DQ', 3567, 'dm', 'dq_sd0001', 'dm_dq_sd0001_meta', 'scheduled__2026-03-01T03:20:00+00:00', '2026-03-02 06:20:31.097', NULL, NULL, 'RUNNING', '', '2026-03-02 06:20:31.097');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(910, 'cf51cf2d-32a0-4719-b01a-f94f6c35eb36'::uuid, 61, 'ALVERSE', 3501, 'dm', 'alverse_transportation_life_cycle', 'dm_alverse_transportation_life_cycle_meta', 'scheduled__2026-03-01T00:20:00+00:00', '2026-03-02 06:19:43.821', NULL, NULL, 'RUNNING', '', '2026-03-02 06:19:43.821');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(909, '664a65fe-2833-4099-a37b-b3f7c24e6c5b'::uuid, 61, 'ALVERSE', 3872, 'dm', 'production_aluminium_casting_schedule', 'dm_production_aluminium_casting_schedule_meta', 'scheduled__2026-03-01T00:20:00+00:00', '2026-03-02 06:19:43.209', NULL, NULL, 'RUNNING', '', '2026-03-02 06:19:43.209');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(908, '42116509-c6e5-4ea3-97ae-0f450bf08527'::uuid, 61, 'ALVERSE', 3484, 'dm', 'alverse_sales_life_cycle', 'dm_alverse_sales_life_cycle_meta', 'scheduled__2026-03-01T00:20:00+00:00', '2026-03-02 06:18:26.335', NULL, NULL, 'RUNNING', '', '2026-03-02 06:18:26.335');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(907, 'ed2c65e2-7b4e-47bb-bbc6-fcf3cac6b91e'::uuid, 28, 'RLS_LOADER', 1039, 'rls', 'rls_t', 'rls_rls_t_meta', 'scheduled__2026-03-02T01:00:00+00:00', '2026-03-02 06:01:40.223', NULL, NULL, 'RUNNING', '', '2026-03-02 06:01:40.223');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(906, 'ff3366e2-6074-4487-841b-0e220a7488c3'::uuid, 38, 'BI_FI_FACT_PAYMENTS', 2502, 'dm', 'investment_expenses_actual', 'dm_investment_expenses_actual_meta', 'scheduled__2026-03-01T02:50:00+00:00', '2026-03-02 05:50:19.811', NULL, NULL, 'RUNNING', '', '2026-03-02 05:50:19.811');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(905, 'ba28cad7-38a5-43b5-ae9e-2f5c86307849'::uuid, 38, 'BI_FI_FACT_PAYMENTS', 2158, 'dm_view', 'investment_payments_actual', 'dm_view_investment_payments_actual_meta', 'scheduled__2026-03-01T02:50:00+00:00', '2026-03-02 05:50:19.760', NULL, NULL, 'RUNNING', '', '2026-03-02 05:50:19.760');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(904, 'bd1cb357-8b9b-467c-99c5-fbf090119e4b'::uuid, 35, 'BI_SB_WUC', 2598, 'dm_view', 'sd_sales_to_india_scm', 'dm_view_sd_sales_to_india_scm_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:32:19.482', NULL, NULL, 'RUNNING', '', '2026-03-02 05:32:19.482');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(903, 'd58a855b-855d-434e-b685-3a5a4948d506'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5253, 'dm_view', 'production_ad_kpa_hr_kpi', 'dm_view_production_ad_kpa_hr_kpi_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:32:19.482', NULL, NULL, 'RUNNING', '', '2026-03-02 05:32:19.482');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(902, '6c660a36-54f9-44c7-98e9-e10489ccc46b'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5003, 'dm_view', 'kpi_indicators_daily_ad', 'dm_view_kpi_indicators_daily_ad_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:32:16.434', NULL, NULL, 'RUNNING', '', '2026-03-02 05:32:16.434');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(901, '50b735dd-2dcd-40d8-8cb7-ea73035568f7'::uuid, 35, 'BI_SB_WUC', 3011, 'dm_view', 'sales_delivery_tracking_domestic', 'dm_view_sales_delivery_tracking_domestic_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:32:06.849', NULL, NULL, 'RUNNING', '', '2026-03-02 05:32:06.849');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(900, '0a69f622-0009-4e7a-a64b-4e14726a67e4'::uuid, 35, 'BI_SB_WUC', 2600, 'dm_view', 'sales_delivery_tracking_dob_dkp', 'dm_view_sales_delivery_tracking_dob_dkp_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:31:53.571', NULL, NULL, 'RUNNING', '', '2026-03-02 05:31:53.571');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(898, 'd6eba1b1-0fc2-490a-8ba4-ed7afa2d9ea1'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3974, 'dm', 'toro_equipment_downtime_by_production_type', 'dm_toro_equipment_downtime_by_production_type_meta', 'scheduled__2026-03-01T05:20:00+00:00', '2026-03-02 05:30:27.194', NULL, NULL, 'RUNNING', '', '2026-03-02 05:30:27.194');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(897, '5df4a277-298a-4762-9542-abfbdfc2144a'::uuid, 35, 'BI_SB_WUC', 3625, 'dm', 'sales_stock_balance_by_production_bundle', 'dm_sales_stock_balance_by_production_bundle_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:30:13.688', NULL, NULL, 'RUNNING', '', '2026-03-02 05:30:13.688');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(896, '454a7180-6b7e-4d60-b1ef-37e0fb901e77'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4369, 'dm', 'toro_equipment_downtime_by_plant_type', 'dm_toro_equipment_downtime_by_plant_type_meta', 'scheduled__2026-03-01T05:20:00+00:00', '2026-03-02 05:30:02.217', NULL, NULL, 'RUNNING', '', '2026-03-02 05:30:02.217');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(895, '62c74982-282d-4985-8877-dfcb0250d33a'::uuid, 50, 'MANAGEMENT_REPORTING_4', 5133, 'dm', 'production_aluminium_remelt', 'dm_production_aluminium_remelt_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:29:57.782', NULL, NULL, 'RUNNING', '', '2026-03-02 05:29:57.782');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(894, '0a63e714-8813-4c4a-bf75-2caf4f2ea3cf'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3933, 'dm', 'kpi_raw_warehouse_stock', 'dm_kpi_raw_warehouse_stock_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:29:54.385', NULL, NULL, 'RUNNING', '', '2026-03-02 05:29:54.385');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(893, '4e595781-a8d4-44b5-8168-f70e5ac26c53'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3616, 'dm', 'production_aluminium_finish_goods', 'dm_production_aluminium_finish_goods_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:28:47.055', NULL, NULL, 'RUNNING', '', '2026-03-02 05:28:47.055');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(892, '237ebeab-298e-4bc4-84c4-bc9cc0bb9b4c'::uuid, 50, 'MANAGEMENT_REPORTING_4', 3850, 'dm', 'production_aluminium_electrolysis', 'dm_production_aluminium_electrolysis_meta', 'scheduled__2026-03-02T01:20:00+00:00', '2026-03-02 05:28:42.568', NULL, NULL, 'RUNNING', '', '2026-03-02 05:28:42.568');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(891, 'd2787604-5da3-46da-86b9-e962e8499988'::uuid, 35, 'BI_SB_WUC', 3437, 'dm', 'sales_delivery_tracking_normative_check', 'dm_sales_delivery_tracking_normative_check_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:26:54.921', NULL, NULL, 'RUNNING', '', '2026-03-02 05:26:54.921');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(890, 'b45a2594-9bfb-4f8c-90a3-fe1cac9347a8'::uuid, 35, 'BI_SB_WUC', 3565, 'dm', 'sales_forwarder_metal_acceptance_delays', 'dm_sales_forwarder_metal_acceptance_delays_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:26:47.534', NULL, NULL, 'RUNNING', '', '2026-03-02 05:26:47.534');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(889, '0b94287b-6457-4618-b9dc-d5b2395a3276'::uuid, 35, 'BI_SB_WUC', 3622, 'dm', 'sales_delivery_estimated_business_location_by_date', 'dm_sales_delivery_estimated_business_location_by_date_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:26:42.711', NULL, NULL, 'RUNNING', '', '2026-03-02 05:26:42.711');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(888, 'fd13aa76-37cc-4968-8066-39642dcf6a6c'::uuid, 35, 'BI_SB_WUC', 3619, 'dm', 'sales_storage_registration_vs_storage_movement', 'dm_sales_storage_registration_vs_storage_movement_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:26:36.588', NULL, NULL, 'RUNNING', '', '2026-03-02 05:26:36.588');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(887, 'a3c67ade-92ab-40cf-a718-96567949b16d'::uuid, 35, 'BI_SB_WUC', 3530, 'dm', 'sales_statement_report', 'dm_sales_statement_report_meta', 'scheduled__2026-02-28T21:20:00+00:00', '2026-03-02 05:26:29.344', NULL, NULL, 'RUNNING', '', '2026-03-02 05:26:29.344');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(886, 'ba4fb5ad-cc58-42ec-9e77-c3d6a35aa528'::uuid, 35, 'BI_SB_WUC', 3220, 'dm', 'sales_scanned_documents_analysis', 'dm_sales_scanned_documents_analysis_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:23:50.144', NULL, NULL, 'RUNNING', '', '2026-03-02 05:23:50.144');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(885, 'a4fdc9db-9628-4e7c-98fc-68e65324f6e1'::uuid, 35, 'BI_SB_WUC', 3339, 'dm', 'sales_alverse_mlc', 'dm_sales_alverse_mlc_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:23:29.463', NULL, NULL, 'RUNNING', '', '2026-03-02 05:23:29.463');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(884, 'c8ca0017-5e06-450d-83e5-af5a24fc885f'::uuid, 35, 'BI_SB_WUC', 2919, 'dm', 'sales_material_turnover_detailed', 'dm_sales_material_turnover_detailed_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:21:07.973', NULL, NULL, 'RUNNING', '', '2026-03-02 05:21:07.973');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(883, '65b92130-a902-43b1-bf4d-8ab45f3976f4'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4023, 'dm_view', 'production_ad_kpa_finish_goods_stock_and_shipment', 'dm_view_production_ad_kpa_finish_goods_stock_and_shipment_meta', 'scheduled__2026-03-02T00:20:00+00:00', '2026-03-02 05:20:30.049', NULL, NULL, 'RUNNING', '', '2026-03-02 05:20:30.049');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(882, '2cfdfbc4-3620-4bb2-952b-42531d3116df'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4037, 'dm', 'production_toro_diesel_equipment_unit_plan_vs_actual', 'dm_production_toro_diesel_equipment_unit_plan_vs_actual_meta', 'scheduled__2026-03-02T00:20:00+00:00', '2026-03-02 05:19:58.483', NULL, NULL, 'RUNNING', '', '2026-03-02 05:19:58.483');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(881, '596a7a79-823d-4d02-8e83-7104e783e830'::uuid, 50, 'MANAGEMENT_REPORTING_4', 4028, 'dm', 'production_finish_goods_stock', 'dm_production_finish_goods_stock_meta', 'scheduled__2026-03-02T00:20:00+00:00', '2026-03-02 05:19:47.068', NULL, NULL, 'RUNNING', '', '2026-03-02 05:19:47.068');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(880, 'd407e97f-7420-4dcd-9a90-0e9e4874ceaf'::uuid, 63, 'TORO', 3735, 'dm', 'toro_repair_duration_and_cost_plan_vs_actual', 'dm_toro_repair_duration_and_cost_plan_vs_actual_meta', 'scheduled__2026-03-01T02:00:00+00:00', '2026-03-02 05:19:13.361', NULL, NULL, 'RUNNING', '', '2026-03-02 05:19:13.361');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(879, 'd978d8ae-acce-43cb-a3e9-0c790a5580e4'::uuid, 63, 'TORO', 3755, 'dm', 'toro_equipment_downtime_losses', 'dm_toro_equipment_downtime_losses_meta', 'scheduled__2026-03-01T02:00:00+00:00', '2026-03-02 05:19:01.703', NULL, NULL, 'RUNNING', '', '2026-03-02 05:19:01.703');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(878, 'b0d7134d-142d-46cc-b3c2-f97aed702f78'::uuid, 35, 'BI_SB_WUC', 2912, 'dm', 'sales_stock_balance_with_forecast', 'dm_sales_stock_balance_with_forecast_meta', 'scheduled__2026-02-28T22:50:00+00:00', '2026-03-02 05:10:49.073', NULL, NULL, 'RUNNING', '', '2026-03-02 05:10:49.073');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(877, '2e686238-ffb5-48e1-8d86-00c601f3a0b7'::uuid, 66, '1C_FI', 3632, 'dm', 'account_debt_for_working_capital_1c', 'dm_account_debt_for_working_capital_1c_meta', 'scheduled__2026-03-01T01:40:00+00:00', '2026-03-02 05:09:49.036', NULL, NULL, 'RUNNING', '', '2026-03-02 05:09:49.036');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(876, '34ec4f76-3f7f-41aa-a572-04067e2d74da'::uuid, 45, 'LOGISTICS', 3516, 'dm', 'transportation_service_invoice_approvement_history', 'dm_transportation_service_invoice_approvement_history_meta', 'scheduled__2026-03-01T01:35:00+00:00', '2026-03-02 05:09:35.073', NULL, NULL, 'RUNNING', '', '2026-03-02 05:09:35.073');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(875, 'ae54bc1b-e7f9-4b41-afdd-e269084eee6d'::uuid, 36, 'BI_FI', 3801, 'dm', 'general_ledger_balance_sheet_structure', 'dm_general_ledger_balance_sheet_structure_meta', 'scheduled__2026-03-01T00:50:00+00:00', '2026-03-02 05:08:48.781', NULL, NULL, 'RUNNING', '', '2026-03-02 05:08:48.781');
-INSERT INTO tech_etl.click_fact_table_load_run
-(id, run_uuid, entity_id, entity_name, table_id, schema_name, table_name, dag_name, dag_run, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
-VALUES(874, '9e28661f-ac5b-414a-bdef-f54f536d53c0'::uuid, 35, 'BI_SB_WUC', 2096, 'dm', 'sales_carbon_footprint_by_delivery', 'dm_sales_carbon_footprint_by_delivery_meta', 'scheduled__2026-02-28T21:20:00+00:00', '2026-03-02 05:08:34.373', NULL, NULL, 'RUNNING', '', '2026-03-02 05:08:34.373');
-
-
-
-1878	da5fd490-16c6-48ba-8fa7-69f10fc970d8	1039	rls_t	CLICKHOUSE_LOAD	2026-03-02 10:01:49.204	2026-03-02 10:01:49.851	00:00:00.646385	SUCCESS		2026-03-02 10:01:49.204
-1877	a7307a92-a6ee-40e4-9043-5ab785b1c859	1039	rls_t	UPLOAD_TO_S3	2026-03-02 10:01:36.998	2026-03-02 10:01:39.523	00:00:02.525176	SUCCESS		2026-03-02 10:01:36.998
-1876	4d7626c2-9d62-4cb9-94f1-40a71d9f8f37	4023	production_ad_kpa_finish_goods_stock_and_shipment	CLICKHOUSE_LOAD	2026-03-02 08:47:06.536	2026-03-02 08:47:07.046	00:00:00.510597	SUCCESS		2026-03-02 08:47:06.536
-1875	b61a164d-17e2-44e0-a123-0ce96fc49a60	4023	production_ad_kpa_finish_goods_stock_and_shipment	UPLOAD_TO_S3	2026-03-02 08:46:56.026	2026-03-02 08:46:57.416	00:00:01.390449	SUCCESS		2026-03-02 08:46:56.026
-1874	b95b0d90-b7c6-468a-9efd-0ef3cabcda7f	5003	kpi_indicators_daily_ad	CLICKHOUSE_LOAD	2026-03-02 08:46:25.058	2026-03-02 08:46:27.052	00:00:01.994121	SUCCESS		2026-03-02 08:46:25.058
-1873	c241c09c-6d0d-44f5-945a-2682d0c1f4a1	5253	production_ad_kpa_hr_kpi	CLICKHOUSE_LOAD	2026-03-02 08:46:14.624	2026-03-02 08:46:15.381	00:00:00.757187	SUCCESS		2026-03-02 08:46:14.624
-1872	dc9b1515-4eb7-4704-a190-459a77ddc6d3	5003	kpi_indicators_daily_ad	UPLOAD_TO_S3	2026-03-02 08:46:09.210	2026-03-02 08:46:15.013	00:00:05.80259	SUCCESS		2026-03-02 08:46:09.210
-1871	cea36df7-22e4-4f7b-9be0-275a18c8f656	5253	production_ad_kpa_hr_kpi	UPLOAD_TO_S3	2026-03-02 08:46:03.443	2026-03-02 08:46:05.012	00:00:01.569003	SUCCESS		2026-03-02 08:46:03.443
-1870	8662001d-ea7b-42ec-bd26-ff1d8cedb533	4369	toro_equipment_downtime_by_plant_type	CLICKHOUSE_LOAD	2026-03-02 08:45:21.683	2026-03-02 08:45:22.179	00:00:00.495568	SUCCESS		2026-03-02 08:45:21.683
-1869	d36296ff-637b-4167-a958-19d2b35ae1c1	5133	production_aluminium_remelt	CLICKHOUSE_LOAD	2026-03-02 08:45:11.803	2026-03-02 08:45:12.250	00:00:00.446898	SUCCESS		2026-03-02 08:45:11.803
-1868	9714739e-f0d3-4afc-b0da-b322960d7148	4369	toro_equipment_downtime_by_plant_type	UPLOAD_TO_S3	2026-03-02 08:45:10.948	2026-03-02 08:45:12.143	00:00:01.195298	SUCCESS		2026-03-02 08:45:10.948
-1867	f1931cc9-2c08-48ee-948b-7b87bd72cadb	5133	production_aluminium_remelt	UPLOAD_TO_S3	2026-03-02 08:45:01.772	2026-03-02 08:45:02.638	00:00:00.866424	SUCCESS		2026-03-02 08:45:01.772
-1866	aec01024-c8f3-4c78-9004-4e5d26bbb195	4028	production_finish_goods_stock	CLICKHOUSE_LOAD	2026-03-02 08:44:40.529	2026-03-02 08:44:40.988	00:00:00.458968	SUCCESS		2026-03-02 08:44:40.529
-1865	fd562d31-81f3-43d9-ab33-f5f457355730	4037	production_toro_diesel_equipment_unit_plan_vs_actual	CLICKHOUSE_LOAD	2026-03-02 08:44:33.988	2026-03-02 08:44:34.418	00:00:00.430224	SUCCESS		2026-03-02 08:44:33.988
-1864	2567a043-a157-4c1c-816c-257b56faaf1e	4028	production_finish_goods_stock	UPLOAD_TO_S3	2026-03-02 08:44:29.857	2026-03-02 08:44:31.241	00:00:01.384547	SUCCESS		2026-03-02 08:44:29.857
-1863	74bcc5f9-eecd-4b17-a796-fda955d0927e	4037	production_toro_diesel_equipment_unit_plan_vs_actual	UPLOAD_TO_S3	2026-03-02 08:44:23.588	2026-03-02 08:44:24.488	00:00:00.900029	SUCCESS		2026-03-02 08:44:23.588
-1862	831e8d0a-3151-4c4c-a5fd-85ceda662d92	3850	production_aluminium_electrolysis	CLICKHOUSE_LOAD	2026-03-02 08:44:10.419	2026-03-02 08:44:11.433	00:00:01.013845	SUCCESS		2026-03-02 08:44:10.419
-1861	4f5bd337-62f2-43f3-86e0-e78f6bc6045b	3616	production_aluminium_finish_goods	CLICKHOUSE_LOAD	2026-03-02 08:44:10.279	2026-03-02 08:44:10.737	00:00:00.45705	SUCCESS		2026-03-02 08:44:10.279
-1860	5b744fa5-e434-4883-bc88-d22b14390772	3974	toro_equipment_downtime_by_production_type	CLICKHOUSE_LOAD	2026-03-02 08:44:06.547	2026-03-02 08:44:07.000	00:00:00.452902	SUCCESS		2026-03-02 08:44:06.547
-1859	92395f71-0903-4bb8-b9c9-b2521cac61b7	3933	kpi_raw_warehouse_stock	CLICKHOUSE_LOAD	2026-03-02 08:43:59.723	2026-03-02 08:44:00.399	00:00:00.67607	SUCCESS		2026-03-02 08:43:59.723
-1858	6bfd57be-4429-4093-ba99-a845273c7aea	3616	production_aluminium_finish_goods	UPLOAD_TO_S3	2026-03-02 08:43:59.417	2026-03-02 08:44:00.495	00:00:01.077201	SUCCESS		2026-03-02 08:43:59.417
-1857	316b7749-0722-4832-9c04-077b7699243d	3974	toro_equipment_downtime_by_production_type	UPLOAD_TO_S3	2026-03-02 08:43:55.552	2026-03-02 08:43:56.649	00:00:01.097501	SUCCESS		2026-03-02 08:43:55.552
-1856	15da8c8d-a2fc-4dfa-9873-1c8af3bb56d3	3933	kpi_raw_warehouse_stock	UPLOAD_TO_S3	2026-03-02 08:43:48.257	2026-03-02 08:43:49.813	00:00:01.555461	SUCCESS		2026-03-02 08:43:48.257
-1855	6f9e3a18-2aed-4421-8e0e-822523218241	3850	production_aluminium_electrolysis	UPLOAD_TO_S3	2026-03-02 08:43:46.902	2026-03-02 08:43:49.365	00:00:02.462836	SUCCESS		2026-03-02 08:43:46.902
-1854	c87dfe75-b8b3-4fb6-af51-3acf24b4770d	3570	dq_sd0006	CLICKHOUSE_LOAD	2026-03-02 08:23:44.487	2026-03-02 08:23:44.872	00:00:00.38527	SUCCESS		2026-03-02 08:23:44.487
-1853	eb1629ba-9a09-441d-a65a-f207caa182d1	3570	dq_sd0006	UPLOAD_TO_S3	2026-03-02 08:23:32.673	2026-03-02 08:23:33.739	00:00:01.065524	SUCCESS		2026-03-02 08:23:32.673
-1852	a7942352-4ede-4614-bf6c-3f4024c32e95	1039	rls_t	CLICKHOUSE_LOAD	2026-03-02 08:01:53.005	2026-03-02 08:01:53.689	00:00:00.683773	SUCCESS		2026-03-02 08:01:53.005
-1851	0337ecf9-73f2-4ea7-bab7-6c4bf1c246f1	1039	rls_t	UPLOAD_TO_S3	2026-03-02 08:01:34.134	2026-03-02 08:01:40.969	00:00:06.834658	SUCCESS		2026-03-02 08:01:34.134
-1850	3c175928-f824-42a9-b7d3-d8a35b50b1ba	3314	asuzdc_container_and_platform_availability_at_plant_dkp	CLICKHOUSE_LOAD	2026-03-02 07:33:58.229	2026-03-02 07:33:58.680	00:00:00.451572	SUCCESS		2026-03-02 07:33:58.229
-1849	2589b988-c8fc-49d4-a8ea-aa1abe86e0f0	3314	asuzdc_container_and_platform_availability_at_plant_dkp	UPLOAD_TO_S3	2026-03-02 07:33:48.223	2026-03-02 07:33:49.253	00:00:01.030072	SUCCESS		2026-03-02 07:33:48.223
-1848	af5caf27-d8ce-4e6c-bc24-2594ac272c9f	2463	purchase_contract_limits_and_current_balances	CLICKHOUSE_LOAD	2026-03-02 07:33:40.981	2026-03-02 07:33:41.380	00:00:00.398839	SUCCESS		2026-03-02 07:33:40.981
-1847	a1419fec-2a3f-4752-b2a9-8656cd5d3d48	2463	purchase_contract_limits_and_current_balances	UPLOAD_TO_S3	2026-03-02 07:33:31.031	2026-03-02 07:33:31.979	00:00:00.947888	SUCCESS		2026-03-02 07:33:31.031
-1846	db19dd48-41a2-411a-ae85-cc30934e6a50	3103	raw_materials_shipment_and_arrival	CLICKHOUSE_LOAD	2026-03-02 07:33:18.216	2026-03-02 07:33:19.778	00:00:01.561836	SUCCESS		2026-03-02 07:33:18.216
-1845	db19dd48-41a2-411a-ae85-cc30934e6a50	3104	raw_materials_shipment_and_arrival	CLICKHOUSE_LOAD	2026-03-02 07:33:18.216	2026-03-02 07:33:19.778	00:00:01.561836	SUCCESS		2026-03-02 07:33:18.216
-1844	e52110f6-63a9-450e-b8ad-86769d1c9893	3166	sales_shipment_from_russian_port_actual_vs_plan_dob_dkp	CLICKHOUSE_LOAD	2026-03-02 07:33:06.377	2026-03-02 07:33:06.729	00:00:00.352162	SUCCESS		2026-03-02 07:33:06.377
-1843	0fa50f4f-b49d-469b-8eb4-fe55552cdbbe	3103	raw_materials_shipment_and_arrival	UPLOAD_TO_S3	2026-03-02 07:33:04.256	2026-03-02 07:33:08.625	00:00:04.369125	SUCCESS		2026-03-02 07:33:04.256
-1842	0fa50f4f-b49d-469b-8eb4-fe55552cdbbe	3104	raw_materials_shipment_and_arrival	UPLOAD_TO_S3	2026-03-02 07:33:04.256	2026-03-02 07:33:08.625	00:00:04.369125	SUCCESS		2026-03-02 07:33:04.256
-1841	87b83cfc-a053-465f-9b76-b6584bf83c20	3166	sales_shipment_from_russian_port_actual_vs_plan_dob_dkp	UPLOAD_TO_S3	2026-03-02 07:32:56.191	2026-03-02 07:32:56.939	00:00:00.747827	SUCCESS		2026-03-02 07:32:56.191
-1840	e35f0599-8dd2-410b-a508-a766bfa38bf0	3344	sales_unplanned_metal_stock_at_plant	CLICKHOUSE_LOAD	2026-03-02 07:32:52.629	2026-03-02 07:32:53.299	00:00:00.669583	SUCCESS		2026-03-02 07:32:52.629
-1839	d465b427-b3c4-4a4d-ac2d-b16864fda408	1729	transportation_aluminium_shipment_from_plant	CLICKHOUSE_LOAD	2026-03-02 07:32:48.611	2026-03-02 07:32:50.715	00:00:02.104295	SUCCESS		2026-03-02 07:32:48.611
-1838	b08fc0b7-5cb3-4d56-903d-9660570ab3ae	3344	sales_unplanned_metal_stock_at_plant	UPLOAD_TO_S3	2026-03-02 07:32:42.878	2026-03-02 07:32:43.970	00:00:01.092453	SUCCESS		2026-03-02 07:32:42.878
-1837	165d8070-c521-4459-8654-3cc477a841f2	3425	transportation_vehicle_capacity_average_utilization	CLICKHOUSE_LOAD	2026-03-02 07:32:34.796	2026-03-02 07:32:35.600	00:00:00.804019	SUCCESS		2026-03-02 07:32:34.796
-1836	b7abad2f-e8d5-40f8-b152-cb5bce94b85f	1729	transportation_aluminium_shipment_from_plant	UPLOAD_TO_S3	2026-03-02 07:32:32.995	2026-03-02 07:32:39.584	00:00:06.588661	SUCCESS		2026-03-02 07:32:32.995
-1835	6edc2235-e28f-4bc5-aa50-38146dfc8592	3425	transportation_vehicle_capacity_average_utilization	UPLOAD_TO_S3	2026-03-02 07:32:22.302	2026-03-02 07:32:24.173	00:00:01.870982	SUCCESS		2026-03-02 07:32:22.302
-1834	881c7f62-ebc3-462d-af37-0f14aad1c706	2062	transportation_services_purchase_price_agreement	CLICKHOUSE_LOAD	2026-03-02 07:32:04.603	2026-03-02 07:32:06.978	00:00:02.375083	SUCCESS		2026-03-02 07:32:04.603
-1833	fd4f8a5e-60cc-4182-bc09-77552776ce0d	2062	transportation_services_purchase_price_agreement	UPLOAD_TO_S3	2026-03-02 07:31:47.473	2026-03-02 07:31:54.957	00:00:07.484722	SUCCESS		2026-03-02 07:31:47.473
-1832	efa79d0a-01f4-4980-a713-2042c9810caf	6000	dq_sd0005	CLICKHOUSE_LOAD	2026-03-02 06:24:36.587	2026-03-02 06:25:00.677	00:00:24.089786	SUCCESS		2026-03-02 06:24:36.587
-1831	398422a3-af40-49f8-b8f6-df008085e984	3568	dq_sd0002	CLICKHOUSE_LOAD	2026-03-02 06:22:54.056	2026-03-02 06:23:07.638	00:00:13.582087	SUCCESS		2026-03-02 06:22:54.056
-1830	9d8929c2-fe5c-48a4-afb6-c41eddf2c51b	3567	dq_sd0001	CLICKHOUSE_LOAD	2026-03-02 06:22:45.073	2026-03-02 06:22:47.489	00:00:02.415449	SUCCESS		2026-03-02 06:22:45.073
-1829	5073817c-4e19-4b08-b08c-015ef7392ea7	3570	dq_sd0006	CLICKHOUSE_LOAD	2026-03-02 06:22:42.750	2026-03-02 06:22:43.391	00:00:00.64073	SUCCESS		2026-03-02 06:22:42.750
-1828	1d7953fc-b9de-4d2a-b056-9977fab8b008	2191	sales_margin	CLICKHOUSE_LOAD	2026-03-02 06:22:31.231	2026-03-02 06:22:32.425	00:00:01.193841	SUCCESS		2026-03-02 06:22:31.231
-1827	4340720f-ab0f-4e77-93f9-690b20377b33	3569	dq_sd0003	CLICKHOUSE_LOAD	2026-03-02 06:22:31.134	2026-03-02 06:22:35.250	00:00:04.11596	SUCCESS		2026-03-02 06:22:31.134
-1826	d978abb0-5ee4-47c6-9ff3-7cb050ab50d7	3571	dq_sd0007	CLICKHOUSE_LOAD	2026-03-02 06:22:20.376	2026-03-02 06:22:20.889	00:00:00.513294	SUCCESS		2026-03-02 06:22:20.376
-1825	954279c2-0337-48ce-a035-99ad2ef7cef3	3572	dq_sd0008	CLICKHOUSE_LOAD	2026-03-02 06:22:19.184	2026-03-02 06:22:20.744	00:00:01.56001	SUCCESS		2026-03-02 06:22:19.184
-1824	ce7d46ef-fa79-4ceb-9654-ab7ded196a94	3940	alverse_mlc_overview_pivot	CLICKHOUSE_LOAD	2026-03-02 06:22:07.369	2026-03-02 06:22:08.425	00:00:01.056059	SUCCESS		2026-03-02 06:22:07.369
-1823	f1bc8cfc-991c-4f06-94d3-5761e9bfa0f8	3570	dq_sd0006	UPLOAD_TO_S3	2026-03-02 06:21:57.551	2026-03-02 06:21:58.727	00:00:01.176853	SUCCESS		2026-03-02 06:21:57.551
-1822	02d92cfb-3e3e-4ad1-907b-481f6df3330b	3572	dq_sd0008	UPLOAD_TO_S3	2026-03-02 06:21:38.400	2026-03-02 06:21:47.066	00:00:08.666059	SUCCESS		2026-03-02 06:21:38.400
-1821	9c1ae625-486c-4c5e-9ffe-60cfff02af17	2191	sales_margin	UPLOAD_TO_S3	2026-03-02 06:21:25.298	2026-03-02 06:21:28.253	00:00:02.954874	SUCCESS		2026-03-02 06:21:25.298
-1820	cab9932a-c5bc-456e-82d9-183a4db08812	6000	dq_sd0005	UPLOAD_TO_S3	2026-03-02 06:21:14.710	2026-03-02 06:24:27.464	00:03:12.753973	SUCCESS		2026-03-02 06:21:14.710
-1819	28b99b22-567c-4d05-ad82-426181efed15	3571	dq_sd0007	UPLOAD_TO_S3	2026-03-02 06:21:13.617	2026-03-02 06:21:14.947	00:00:01.329669	SUCCESS		2026-03-02 06:21:13.617
-1818	1dc0374d-37bf-46dc-9586-5d74268c94cf	3940	alverse_mlc_overview_pivot	UPLOAD_TO_S3	2026-03-02 06:20:56.817	2026-03-02 06:21:04.361	00:00:07.543754	SUCCESS		2026-03-02 06:20:56.817
-1817	211526f6-3d02-41e5-b934-9824ade4d31c	3569	dq_sd0003	UPLOAD_TO_S3	2026-03-02 06:20:32.298	2026-03-02 06:21:05.309	00:00:33.01147	SUCCESS		2026-03-02 06:20:32.298
-1816	91d97118-3225-4d05-8eba-32df07e7d4aa	3568	dq_sd0002	UPLOAD_TO_S3	2026-03-02 06:20:32.129	2026-03-02 06:22:10.406	00:01:38.27668	SUCCESS		2026-03-02 06:20:32.129
-1815	b0495a85-fb96-4e0e-a388-73ae85558a45	3567	dq_sd0001	UPLOAD_TO_S3	2026-03-02 06:20:31.683	2026-03-02 06:20:46.102	00:00:14.419272	SUCCESS		2026-03-02 06:20:31.683
-1814	58802e12-fed2-4382-a2ea-a20c8ac5d1eb	3501	alverse_transportation_life_cycle	CLICKHOUSE_LOAD	2026-03-02 06:19:57.859	2026-03-02 06:19:59.225	00:00:01.365786	SUCCESS		2026-03-02 06:19:57.859
-1813	9f386c30-7db9-4ce0-b6d6-53c258a7ee74	3872	production_aluminium_casting_schedule	CLICKHOUSE_LOAD	2026-03-02 06:19:53.462	2026-03-02 06:19:53.867	00:00:00.404753	SUCCESS		2026-03-02 06:19:53.462
-1812	cf51cf2d-32a0-4719-b01a-f94f6c35eb36	3501	alverse_transportation_life_cycle	UPLOAD_TO_S3	2026-03-02 06:19:43.959	2026-03-02 06:19:47.686	00:00:03.727291	SUCCESS		2026-03-02 06:19:43.959
-1811	664a65fe-2833-4099-a37b-b3f7c24e6c5b	3872	production_aluminium_casting_schedule	UPLOAD_TO_S3	2026-03-02 06:19:43.344	2026-03-02 06:19:44.341	00:00:00.997581	SUCCESS		2026-03-02 06:19:43.344
-1810	d932e0a3-e906-4d27-92d4-252ecb8c6199	3484	alverse_sales_life_cycle	CLICKHOUSE_LOAD	2026-03-02 06:18:37.270	2026-03-02 06:18:38.055	00:00:00.784895	SUCCESS		2026-03-02 06:18:37.270
-1809	42116509-c6e5-4ea3-97ae-0f450bf08527	3484	alverse_sales_life_cycle	UPLOAD_TO_S3	2026-03-02 06:18:26.472	2026-03-02 06:18:28.189	00:00:01.716623	SUCCESS		2026-03-02 06:18:26.472
-1808	9c834928-b537-4d4e-8eba-b2def4aed9f4	1039	rls_t	CLICKHOUSE_LOAD	2026-03-02 06:01:54.081	2026-03-02 06:01:55.119	00:00:01.037931	SUCCESS		2026-03-02 06:01:54.081
-1807	ed2c65e2-7b4e-47bb-bbc6-fcf3cac6b91e	1039	rls_t	UPLOAD_TO_S3	2026-03-02 06:01:40.539	2026-03-02 06:01:43.318	00:00:02.77889	SUCCESS		2026-03-02 06:01:40.539
-1806	73448442-3240-46ba-8238-398df0e58d3a	2502	investment_expenses_actual	CLICKHOUSE_LOAD	2026-03-02 05:51:05.256	2026-03-02 05:51:16.256	00:00:10.999827	SUCCESS		2026-03-02 05:51:05.256
-1805	57b1ee4a-4442-4b51-aa55-99050697da84	2158	investment_payments_actual	CLICKHOUSE_LOAD	2026-03-02 05:50:33.970	2026-03-02 05:50:36.315	00:00:02.34497	SUCCESS		2026-03-02 05:50:33.970
-1804	ff3366e2-6074-4487-841b-0e220a7488c3	2502	investment_expenses_actual	UPLOAD_TO_S3	2026-03-02 05:50:19.972	2026-03-02 05:50:55.482	00:00:35.509828	SUCCESS		2026-03-02 05:50:19.972
-1803	ba28cad7-38a5-43b5-ae9e-2f5c86307849	2158	investment_payments_actual	UPLOAD_TO_S3	2026-03-02 05:50:19.949	2026-03-02 05:50:24.924	00:00:04.974537	SUCCESS		2026-03-02 05:50:19.949
-1802	b1a6f920-379f-45ee-8139-e18562e6fc8f	4023	production_ad_kpa_finish_goods_stock_and_shipment	CLICKHOUSE_LOAD	2026-03-02 05:39:13.634	2026-03-02 05:39:14.229	00:00:00.594638	SUCCESS		2026-03-02 05:39:13.634
-1801	56d10071-9892-455f-b236-669470c316ff	4037	production_toro_diesel_equipment_unit_plan_vs_actual	CLICKHOUSE_LOAD	2026-03-02 05:39:07.869	2026-03-02 05:39:08.320	00:00:00.451115	SUCCESS		2026-03-02 05:39:07.869
-1800	4ec02aa4-c281-4a3f-b027-b02ca6b54ae4	4028	production_finish_goods_stock	CLICKHOUSE_LOAD	2026-03-02 05:39:03.541	2026-03-02 05:39:04.106	00:00:00.564729	SUCCESS		2026-03-02 05:39:03.541
-1799	fcf4ec62-284c-4fe4-b328-1b5ff616d8af	4369	toro_equipment_downtime_by_plant_type	CLICKHOUSE_LOAD	2026-03-02 05:38:56.975	2026-03-02 05:38:57.625	00:00:00.650544	SUCCESS		2026-03-02 05:38:56.975
-1798	2b5b44d3-4f86-4651-b79b-6ef6bc77ce5d	3974	toro_equipment_downtime_by_production_type	CLICKHOUSE_LOAD	2026-03-02 05:38:52.721	2026-03-02 05:38:53.695	00:00:00.97448	SUCCESS		2026-03-02 05:38:52.721
-1797	bf60a62e-f0ee-4038-b52d-84e2418e15ee	3755	toro_equipment_downtime_losses	CLICKHOUSE_LOAD	2026-03-02 05:38:41.886	2026-03-02 05:38:42.632	00:00:00.746626	SUCCESS		2026-03-02 05:38:41.886
-1796	52aae166-5a29-4ddf-be26-ea15eaccaf3d	3735	toro_repair_duration_and_cost_plan_vs_actual	CLICKHOUSE_LOAD	2026-03-02 05:38:40.927	2026-03-02 05:38:47.548	00:00:06.621063	SUCCESS		2026-03-02 05:38:40.927
-1795	d00a2b48-07e5-44d3-8920-f82ae2641686	3632	account_debt_for_working_capital_1c	CLICKHOUSE_LOAD	2026-03-02 05:38:12.254	2026-03-02 05:38:32.185	00:00:19.930967	SUCCESS		2026-03-02 05:38:12.254
-1794	5d747257-e7eb-4482-b390-b662124b3e69	2355	transportation_service_invoices_and_payments	CLICKHOUSE_LOAD	2026-03-02 05:37:33.337	2026-03-02 05:38:02.154	00:00:28.817267	SUCCESS		2026-03-02 05:37:33.337
-1793	e65e2119-c7ac-47f1-be53-71d2430d33b5	2356	transportation_service_invoices_and_payments_aggregated	CLICKHOUSE_LOAD	2026-03-02 05:37:08.975	2026-03-02 05:38:30.308	00:01:21.332678	SUCCESS		2026-03-02 05:37:08.975
-1792	c8fd93b8-97d8-430d-ac49-ab5eeaf7dbb6	3516	transportation_service_invoice_approvement_history	CLICKHOUSE_LOAD	2026-03-02 05:36:57.288	2026-03-02 05:36:59.194	00:00:01.906297	SUCCESS		2026-03-02 05:36:57.288
-1791	6e1717ed-6bae-4e7d-b432-8175d4b91b4a	3586	transportation_service_invoice_approvement_history_pivot	CLICKHOUSE_LOAD	2026-03-02 05:35:57.982	2026-03-02 05:37:22.862	00:01:24.880269	SUCCESS		2026-03-02 05:35:57.982
-1790	3700a3f1-d29a-4bed-8eb0-a213e889674f	1420	counterparties_and_organizations_relations	CLICKHOUSE_LOAD	2026-03-02 05:35:47.262	2026-03-02 05:35:48.575	00:00:01.312554	SUCCESS		2026-03-02 05:35:47.262
-1789	07b58db5-eb9d-465b-bf94-57d1e25b1756	1415	account_debt_for_working_capital	CLICKHOUSE_LOAD	2026-03-02 05:35:32.931	2026-03-02 05:42:38.033	00:07:05.101969	SUCCESS		2026-03-02 05:35:32.931
-1788	178ee5b5-30a7-425d-a965-b8a93bd67e7c	3022	accounting_documents_leading_to_debt	CLICKHOUSE_LOAD	2026-03-02 05:34:46.357	2026-03-02 05:35:23.394	00:00:37.036871	SUCCESS		2026-03-02 05:34:46.357
-1787	d2179e2e-0b34-401a-b04e-f747b3025749	3510	payment_request_approvement_history_dob_dtil	CLICKHOUSE_LOAD	2026-03-02 05:34:25.311	2026-03-02 05:34:26.648	00:00:01.337748	SUCCESS		2026-03-02 05:34:25.311
-1786	67141ced-0fe7-4ded-ae85-f28ef244a9cb	3119	account_debt	CLICKHOUSE_LOAD	2026-03-02 05:34:15.873	2026-03-02 05:35:37.759	00:01:21.886548	SUCCESS		2026-03-02 05:34:15.873
-1785	261c634e-cb10-440f-8d57-5fbde6f7949f	3217	accounts_receivaible_sales_alverse	CLICKHOUSE_LOAD	2026-03-02 05:34:06.521	2026-03-02 05:34:15.827	00:00:09.306778	SUCCESS		2026-03-02 05:34:06.521
-1784	9a383012-7cbc-4257-90f5-bf9fff2ffb08	1419	accounting_exchange_rate_revaluation	CLICKHOUSE_LOAD	2026-03-02 05:33:34.345	2026-03-02 05:34:06.831	00:00:32.485778	SUCCESS		2026-03-02 05:33:34.345
-1783	a29fc5cf-a334-44c9-b6b2-def192ff7988	1418	account_turnover_by_counterparty_virtual	CLICKHOUSE_LOAD	2026-03-02 05:33:14.433	2026-03-02 05:33:24.144	00:00:09.711051	SUCCESS		2026-03-02 05:33:14.433
-1782	849cae4f-6f81-4e51-b6ee-2753c11fd105	2598	sd_sales_to_india_scm	CLICKHOUSE_LOAD	2026-03-02 05:33:02.805	2026-03-02 05:33:03.682	00:00:00.877557	SUCCESS		2026-03-02 05:33:02.805
-1781	380460eb-484e-4683-afea-978df0ca92fb	3011	sales_delivery_tracking_domestic	CLICKHOUSE_LOAD	2026-03-02 05:32:52.386	2026-03-02 05:32:53.605	00:00:01.218495	SUCCESS		2026-03-02 05:32:52.386
-1780	b0dfa3da-11b2-467b-ae02-7913864079a4	2600	sales_delivery_tracking_dob_dkp	CLICKHOUSE_LOAD	2026-03-02 05:32:41.528	2026-03-02 05:32:43.106	00:00:01.578144	SUCCESS		2026-03-02 05:32:41.528
-1779	f8a5d7a4-8e93-4f51-b6f2-7bb1b82b40f2	5003	kpi_indicators_daily_ad	CLICKHOUSE_LOAD	2026-03-02 05:32:33.072	2026-03-02 05:32:37.801	00:00:04.729487	SUCCESS		2026-03-02 05:32:33.072
-1778	f6259c4d-9019-45ad-abd7-3b3f9a92af18	5253	production_ad_kpa_hr_kpi	CLICKHOUSE_LOAD	2026-03-02 05:32:31.948	2026-03-02 05:32:33.428	00:00:01.479269	SUCCESS		2026-03-02 05:32:31.948
-1776	d58a855b-855d-434e-b685-3a5a4948d506	5253	production_ad_kpa_hr_kpi	UPLOAD_TO_S3	2026-03-02 05:32:19.666	2026-03-02 05:32:21.550	00:00:01.883141	SUCCESS		2026-03-02 05:32:19.666
-1775	bd1cb357-8b9b-467c-99c5-fbf090119e4b	2598	sd_sales_to_india_scm	UPLOAD_TO_S3	2026-03-02 05:32:19.662	2026-03-02 05:32:21.080	00:00:01.417789	SUCCESS		2026-03-02 05:32:19.662
-1774	6c660a36-54f9-44c7-98e9-e10489ccc46b	5003	kpi_indicators_daily_ad	UPLOAD_TO_S3	2026-03-02 05:32:16.608	2026-03-02 05:32:22.722	00:00:06.113673	SUCCESS		2026-03-02 05:32:16.608
-1773	50b735dd-2dcd-40d8-8cb7-ea73035568f7	3011	sales_delivery_tracking_domestic	UPLOAD_TO_S3	2026-03-02 05:32:07.045	2026-03-02 05:32:10.088	00:00:03.043336	SUCCESS		2026-03-02 05:32:07.045
-1772	0a69f622-0009-4e7a-a64b-4e14726a67e4	2600	sales_delivery_tracking_dob_dkp	UPLOAD_TO_S3	2026-03-02 05:31:53.743	2026-03-02 05:31:57.325	00:00:03.581493	SUCCESS		2026-03-02 05:31:53.743
-1771	1f4369ef-f446-4593-8ffd-da00127f6b31	3801	general_ledger_balance_sheet_structure	CLICKHOUSE_LOAD	2026-03-02 05:31:33.617	2026-03-02 05:36:46.928	00:05:13.311252	SUCCESS		2026-03-02 05:31:33.617
-1770	f4db38e6-bbed-4579-a374-8bb854a2d6ad	3625	sales_stock_balance_by_production_bundle	CLICKHOUSE_LOAD	2026-03-02 05:31:30.095	2026-03-02 05:31:43.172	00:00:13.07711	SUCCESS		2026-03-02 05:31:30.095
-1768	00236c98-55bc-4fa4-8f47-2bf01710890c	3800	general_ledger_balances	CLICKHOUSE_LOAD	2026-03-02 05:31:06.815	2026-03-02 05:31:12.949	00:00:06.134465	SUCCESS		2026-03-02 05:31:06.815
-1767	803a9213-5701-42e5-9bcd-a39834f88ef7	1429	account_debt_penalty	CLICKHOUSE_LOAD	2026-03-02 05:30:52.088	2026-03-02 05:30:54.102	00:00:02.01352	SUCCESS		2026-03-02 05:30:52.088
-1766	ed8c2caa-3b6d-4011-9b19-08a090a84288	1417	account_turnover_by_counterparty	CLICKHOUSE_LOAD	2026-03-02 05:30:38.890	2026-03-02 05:33:56.608	00:03:17.71776	SUCCESS		2026-03-02 05:30:38.890
-1765	d6eba1b1-0fc2-490a-8ba4-ed7afa2d9ea1	3974	toro_equipment_downtime_by_production_type	UPLOAD_TO_S3	2026-03-02 05:30:27.432	2026-03-02 05:30:28.826	00:00:01.393727	SUCCESS		2026-03-02 05:30:27.432
-1764	5df4a277-298a-4762-9542-abfbdfc2144a	3625	sales_stock_balance_by_production_bundle	UPLOAD_TO_S3	2026-03-02 05:30:13.937	2026-03-02 05:31:19.993	00:01:06.055982	SUCCESS		2026-03-02 05:30:13.937
-1763	e45c47d7-6565-4c5e-b01c-477ee968ccfe	5133	production_aluminium_remelt	CLICKHOUSE_LOAD	2026-03-02 05:30:09.596	2026-03-02 05:30:10.218	00:00:00.622004	SUCCESS		2026-03-02 05:30:09.596
-1762	df54d6fa-b8f8-4bc4-aec7-15b61ec3433d	3933	kpi_raw_warehouse_stock	CLICKHOUSE_LOAD	2026-03-02 05:30:05.222	2026-03-02 05:30:06.242	00:00:01.019132	SUCCESS		2026-03-02 05:30:05.222
-1761	454a7180-6b7e-4d60-b1ef-37e0fb901e77	4369	toro_equipment_downtime_by_plant_type	UPLOAD_TO_S3	2026-03-02 05:30:02.420	2026-03-02 05:30:03.972	00:00:01.552732	SUCCESS		2026-03-02 05:30:02.420
-1760	62c74982-282d-4985-8877-dfcb0250d33a	5133	production_aluminium_remelt	UPLOAD_TO_S3	2026-03-02 05:29:58.053	2026-03-02 05:29:59.304	00:00:01.250698	SUCCESS		2026-03-02 05:29:58.053
-1759	0a63e714-8813-4c4a-bf75-2caf4f2ea3cf	3933	kpi_raw_warehouse_stock	UPLOAD_TO_S3	2026-03-02 05:29:54.588	2026-03-02 05:29:56.238	00:00:01.649772	SUCCESS		2026-03-02 05:29:54.588
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1878, 'da5fd490-16c6-48ba-8fa7-69f10fc970d8'::uuid, 1039, 'rls_t', 'CLICKHOUSE_LOAD', '2026-03-02 10:01:49.204', '2026-03-02 10:01:49.851', '00:00:00.646385'::interval, 'SUCCESS', '', '2026-03-02 10:01:49.204');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1877, 'a7307a92-a6ee-40e4-9043-5ab785b1c859'::uuid, 1039, 'rls_t', 'UPLOAD_TO_S3', '2026-03-02 10:01:36.998', '2026-03-02 10:01:39.523', '00:00:02.525176'::interval, 'SUCCESS', '', '2026-03-02 10:01:36.998');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1876, '4d7626c2-9d62-4cb9-94f1-40a71d9f8f37'::uuid, 4023, 'production_ad_kpa_finish_goods_stock_and_shipment', 'CLICKHOUSE_LOAD', '2026-03-02 08:47:06.536', '2026-03-02 08:47:07.046', '00:00:00.510597'::interval, 'SUCCESS', '', '2026-03-02 08:47:06.536');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1875, 'b61a164d-17e2-44e0-a123-0ce96fc49a60'::uuid, 4023, 'production_ad_kpa_finish_goods_stock_and_shipment', 'UPLOAD_TO_S3', '2026-03-02 08:46:56.026', '2026-03-02 08:46:57.416', '00:00:01.390449'::interval, 'SUCCESS', '', '2026-03-02 08:46:56.026');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1874, 'b95b0d90-b7c6-468a-9efd-0ef3cabcda7f'::uuid, 5003, 'kpi_indicators_daily_ad', 'CLICKHOUSE_LOAD', '2026-03-02 08:46:25.058', '2026-03-02 08:46:27.052', '00:00:01.994121'::interval, 'SUCCESS', '', '2026-03-02 08:46:25.058');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1873, 'c241c09c-6d0d-44f5-945a-2682d0c1f4a1'::uuid, 5253, 'production_ad_kpa_hr_kpi', 'CLICKHOUSE_LOAD', '2026-03-02 08:46:14.624', '2026-03-02 08:46:15.381', '00:00:00.757187'::interval, 'SUCCESS', '', '2026-03-02 08:46:14.624');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1872, 'dc9b1515-4eb7-4704-a190-459a77ddc6d3'::uuid, 5003, 'kpi_indicators_daily_ad', 'UPLOAD_TO_S3', '2026-03-02 08:46:09.210', '2026-03-02 08:46:15.013', '00:00:05.80259'::interval, 'SUCCESS', '', '2026-03-02 08:46:09.210');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1871, 'cea36df7-22e4-4f7b-9be0-275a18c8f656'::uuid, 5253, 'production_ad_kpa_hr_kpi', 'UPLOAD_TO_S3', '2026-03-02 08:46:03.443', '2026-03-02 08:46:05.012', '00:00:01.569003'::interval, 'SUCCESS', '', '2026-03-02 08:46:03.443');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1870, '8662001d-ea7b-42ec-bd26-ff1d8cedb533'::uuid, 4369, 'toro_equipment_downtime_by_plant_type', 'CLICKHOUSE_LOAD', '2026-03-02 08:45:21.683', '2026-03-02 08:45:22.179', '00:00:00.495568'::interval, 'SUCCESS', '', '2026-03-02 08:45:21.683');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1869, 'd36296ff-637b-4167-a958-19d2b35ae1c1'::uuid, 5133, 'production_aluminium_remelt', 'CLICKHOUSE_LOAD', '2026-03-02 08:45:11.803', '2026-03-02 08:45:12.250', '00:00:00.446898'::interval, 'SUCCESS', '', '2026-03-02 08:45:11.803');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1868, '9714739e-f0d3-4afc-b0da-b322960d7148'::uuid, 4369, 'toro_equipment_downtime_by_plant_type', 'UPLOAD_TO_S3', '2026-03-02 08:45:10.948', '2026-03-02 08:45:12.143', '00:00:01.195298'::interval, 'SUCCESS', '', '2026-03-02 08:45:10.948');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1867, 'f1931cc9-2c08-48ee-948b-7b87bd72cadb'::uuid, 5133, 'production_aluminium_remelt', 'UPLOAD_TO_S3', '2026-03-02 08:45:01.772', '2026-03-02 08:45:02.638', '00:00:00.866424'::interval, 'SUCCESS', '', '2026-03-02 08:45:01.772');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1866, 'aec01024-c8f3-4c78-9004-4e5d26bbb195'::uuid, 4028, 'production_finish_goods_stock', 'CLICKHOUSE_LOAD', '2026-03-02 08:44:40.529', '2026-03-02 08:44:40.988', '00:00:00.458968'::interval, 'SUCCESS', '', '2026-03-02 08:44:40.529');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1865, 'fd562d31-81f3-43d9-ab33-f5f457355730'::uuid, 4037, 'production_toro_diesel_equipment_unit_plan_vs_actual', 'CLICKHOUSE_LOAD', '2026-03-02 08:44:33.988', '2026-03-02 08:44:34.418', '00:00:00.430224'::interval, 'SUCCESS', '', '2026-03-02 08:44:33.988');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1864, '2567a043-a157-4c1c-816c-257b56faaf1e'::uuid, 4028, 'production_finish_goods_stock', 'UPLOAD_TO_S3', '2026-03-02 08:44:29.857', '2026-03-02 08:44:31.241', '00:00:01.384547'::interval, 'SUCCESS', '', '2026-03-02 08:44:29.857');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1863, '74bcc5f9-eecd-4b17-a796-fda955d0927e'::uuid, 4037, 'production_toro_diesel_equipment_unit_plan_vs_actual', 'UPLOAD_TO_S3', '2026-03-02 08:44:23.588', '2026-03-02 08:44:24.488', '00:00:00.900029'::interval, 'SUCCESS', '', '2026-03-02 08:44:23.588');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1862, '831e8d0a-3151-4c4c-a5fd-85ceda662d92'::uuid, 3850, 'production_aluminium_electrolysis', 'CLICKHOUSE_LOAD', '2026-03-02 08:44:10.419', '2026-03-02 08:44:11.433', '00:00:01.013845'::interval, 'SUCCESS', '', '2026-03-02 08:44:10.419');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1861, '4f5bd337-62f2-43f3-86e0-e78f6bc6045b'::uuid, 3616, 'production_aluminium_finish_goods', 'CLICKHOUSE_LOAD', '2026-03-02 08:44:10.279', '2026-03-02 08:44:10.737', '00:00:00.45705'::interval, 'SUCCESS', '', '2026-03-02 08:44:10.279');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1860, '5b744fa5-e434-4883-bc88-d22b14390772'::uuid, 3974, 'toro_equipment_downtime_by_production_type', 'CLICKHOUSE_LOAD', '2026-03-02 08:44:06.547', '2026-03-02 08:44:07.000', '00:00:00.452902'::interval, 'SUCCESS', '', '2026-03-02 08:44:06.547');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1859, '92395f71-0903-4bb8-b9c9-b2521cac61b7'::uuid, 3933, 'kpi_raw_warehouse_stock', 'CLICKHOUSE_LOAD', '2026-03-02 08:43:59.723', '2026-03-02 08:44:00.399', '00:00:00.67607'::interval, 'SUCCESS', '', '2026-03-02 08:43:59.723');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1858, '6bfd57be-4429-4093-ba99-a845273c7aea'::uuid, 3616, 'production_aluminium_finish_goods', 'UPLOAD_TO_S3', '2026-03-02 08:43:59.417', '2026-03-02 08:44:00.495', '00:00:01.077201'::interval, 'SUCCESS', '', '2026-03-02 08:43:59.417');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1857, '316b7749-0722-4832-9c04-077b7699243d'::uuid, 3974, 'toro_equipment_downtime_by_production_type', 'UPLOAD_TO_S3', '2026-03-02 08:43:55.552', '2026-03-02 08:43:56.649', '00:00:01.097501'::interval, 'SUCCESS', '', '2026-03-02 08:43:55.552');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1856, '15da8c8d-a2fc-4dfa-9873-1c8af3bb56d3'::uuid, 3933, 'kpi_raw_warehouse_stock', 'UPLOAD_TO_S3', '2026-03-02 08:43:48.257', '2026-03-02 08:43:49.813', '00:00:01.555461'::interval, 'SUCCESS', '', '2026-03-02 08:43:48.257');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1855, '6f9e3a18-2aed-4421-8e0e-822523218241'::uuid, 3850, 'production_aluminium_electrolysis', 'UPLOAD_TO_S3', '2026-03-02 08:43:46.902', '2026-03-02 08:43:49.365', '00:00:02.462836'::interval, 'SUCCESS', '', '2026-03-02 08:43:46.902');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1854, 'c87dfe75-b8b3-4fb6-af51-3acf24b4770d'::uuid, 3570, 'dq_sd0006', 'CLICKHOUSE_LOAD', '2026-03-02 08:23:44.487', '2026-03-02 08:23:44.872', '00:00:00.38527'::interval, 'SUCCESS', '', '2026-03-02 08:23:44.487');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1853, 'eb1629ba-9a09-441d-a65a-f207caa182d1'::uuid, 3570, 'dq_sd0006', 'UPLOAD_TO_S3', '2026-03-02 08:23:32.673', '2026-03-02 08:23:33.739', '00:00:01.065524'::interval, 'SUCCESS', '', '2026-03-02 08:23:32.673');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1852, 'a7942352-4ede-4614-bf6c-3f4024c32e95'::uuid, 1039, 'rls_t', 'CLICKHOUSE_LOAD', '2026-03-02 08:01:53.005', '2026-03-02 08:01:53.689', '00:00:00.683773'::interval, 'SUCCESS', '', '2026-03-02 08:01:53.005');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1851, '0337ecf9-73f2-4ea7-bab7-6c4bf1c246f1'::uuid, 1039, 'rls_t', 'UPLOAD_TO_S3', '2026-03-02 08:01:34.134', '2026-03-02 08:01:40.969', '00:00:06.834658'::interval, 'SUCCESS', '', '2026-03-02 08:01:34.134');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1850, '3c175928-f824-42a9-b7d3-d8a35b50b1ba'::uuid, 3314, 'asuzdc_container_and_platform_availability_at_plant_dkp', 'CLICKHOUSE_LOAD', '2026-03-02 07:33:58.229', '2026-03-02 07:33:58.680', '00:00:00.451572'::interval, 'SUCCESS', '', '2026-03-02 07:33:58.229');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1849, '2589b988-c8fc-49d4-a8ea-aa1abe86e0f0'::uuid, 3314, 'asuzdc_container_and_platform_availability_at_plant_dkp', 'UPLOAD_TO_S3', '2026-03-02 07:33:48.223', '2026-03-02 07:33:49.253', '00:00:01.030072'::interval, 'SUCCESS', '', '2026-03-02 07:33:48.223');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1848, 'af5caf27-d8ce-4e6c-bc24-2594ac272c9f'::uuid, 2463, 'purchase_contract_limits_and_current_balances', 'CLICKHOUSE_LOAD', '2026-03-02 07:33:40.981', '2026-03-02 07:33:41.380', '00:00:00.398839'::interval, 'SUCCESS', '', '2026-03-02 07:33:40.981');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1847, 'a1419fec-2a3f-4752-b2a9-8656cd5d3d48'::uuid, 2463, 'purchase_contract_limits_and_current_balances', 'UPLOAD_TO_S3', '2026-03-02 07:33:31.031', '2026-03-02 07:33:31.979', '00:00:00.947888'::interval, 'SUCCESS', '', '2026-03-02 07:33:31.031');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1846, 'db19dd48-41a2-411a-ae85-cc30934e6a50'::uuid, 3103, 'raw_materials_shipment_and_arrival', 'CLICKHOUSE_LOAD', '2026-03-02 07:33:18.216', '2026-03-02 07:33:19.778', '00:00:01.561836'::interval, 'SUCCESS', '', '2026-03-02 07:33:18.216');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1845, 'db19dd48-41a2-411a-ae85-cc30934e6a50'::uuid, 3104, 'raw_materials_shipment_and_arrival', 'CLICKHOUSE_LOAD', '2026-03-02 07:33:18.216', '2026-03-02 07:33:19.778', '00:00:01.561836'::interval, 'SUCCESS', '', '2026-03-02 07:33:18.216');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1844, 'e52110f6-63a9-450e-b8ad-86769d1c9893'::uuid, 3166, 'sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', 'CLICKHOUSE_LOAD', '2026-03-02 07:33:06.377', '2026-03-02 07:33:06.729', '00:00:00.352162'::interval, 'SUCCESS', '', '2026-03-02 07:33:06.377');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1843, '0fa50f4f-b49d-469b-8eb4-fe55552cdbbe'::uuid, 3103, 'raw_materials_shipment_and_arrival', 'UPLOAD_TO_S3', '2026-03-02 07:33:04.256', '2026-03-02 07:33:08.625', '00:00:04.369125'::interval, 'SUCCESS', '', '2026-03-02 07:33:04.256');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1842, '0fa50f4f-b49d-469b-8eb4-fe55552cdbbe'::uuid, 3104, 'raw_materials_shipment_and_arrival', 'UPLOAD_TO_S3', '2026-03-02 07:33:04.256', '2026-03-02 07:33:08.625', '00:00:04.369125'::interval, 'SUCCESS', '', '2026-03-02 07:33:04.256');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1841, '87b83cfc-a053-465f-9b76-b6584bf83c20'::uuid, 3166, 'sales_shipment_from_russian_port_actual_vs_plan_dob_dkp', 'UPLOAD_TO_S3', '2026-03-02 07:32:56.191', '2026-03-02 07:32:56.939', '00:00:00.747827'::interval, 'SUCCESS', '', '2026-03-02 07:32:56.191');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1840, 'e35f0599-8dd2-410b-a508-a766bfa38bf0'::uuid, 3344, 'sales_unplanned_metal_stock_at_plant', 'CLICKHOUSE_LOAD', '2026-03-02 07:32:52.629', '2026-03-02 07:32:53.299', '00:00:00.669583'::interval, 'SUCCESS', '', '2026-03-02 07:32:52.629');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1839, 'd465b427-b3c4-4a4d-ac2d-b16864fda408'::uuid, 1729, 'transportation_aluminium_shipment_from_plant', 'CLICKHOUSE_LOAD', '2026-03-02 07:32:48.611', '2026-03-02 07:32:50.715', '00:00:02.104295'::interval, 'SUCCESS', '', '2026-03-02 07:32:48.611');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1838, 'b08fc0b7-5cb3-4d56-903d-9660570ab3ae'::uuid, 3344, 'sales_unplanned_metal_stock_at_plant', 'UPLOAD_TO_S3', '2026-03-02 07:32:42.878', '2026-03-02 07:32:43.970', '00:00:01.092453'::interval, 'SUCCESS', '', '2026-03-02 07:32:42.878');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1837, '165d8070-c521-4459-8654-3cc477a841f2'::uuid, 3425, 'transportation_vehicle_capacity_average_utilization', 'CLICKHOUSE_LOAD', '2026-03-02 07:32:34.796', '2026-03-02 07:32:35.600', '00:00:00.804019'::interval, 'SUCCESS', '', '2026-03-02 07:32:34.796');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1836, 'b7abad2f-e8d5-40f8-b152-cb5bce94b85f'::uuid, 1729, 'transportation_aluminium_shipment_from_plant', 'UPLOAD_TO_S3', '2026-03-02 07:32:32.995', '2026-03-02 07:32:39.584', '00:00:06.588661'::interval, 'SUCCESS', '', '2026-03-02 07:32:32.995');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1835, '6edc2235-e28f-4bc5-aa50-38146dfc8592'::uuid, 3425, 'transportation_vehicle_capacity_average_utilization', 'UPLOAD_TO_S3', '2026-03-02 07:32:22.302', '2026-03-02 07:32:24.173', '00:00:01.870982'::interval, 'SUCCESS', '', '2026-03-02 07:32:22.302');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1834, '881c7f62-ebc3-462d-af37-0f14aad1c706'::uuid, 2062, 'transportation_services_purchase_price_agreement', 'CLICKHOUSE_LOAD', '2026-03-02 07:32:04.603', '2026-03-02 07:32:06.978', '00:00:02.375083'::interval, 'SUCCESS', '', '2026-03-02 07:32:04.603');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1833, 'fd4f8a5e-60cc-4182-bc09-77552776ce0d'::uuid, 2062, 'transportation_services_purchase_price_agreement', 'UPLOAD_TO_S3', '2026-03-02 07:31:47.473', '2026-03-02 07:31:54.957', '00:00:07.484722'::interval, 'SUCCESS', '', '2026-03-02 07:31:47.473');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1832, 'efa79d0a-01f4-4980-a713-2042c9810caf'::uuid, 6000, 'dq_sd0005', 'CLICKHOUSE_LOAD', '2026-03-02 06:24:36.587', '2026-03-02 06:25:00.677', '00:00:24.089786'::interval, 'SUCCESS', '', '2026-03-02 06:24:36.587');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1831, '398422a3-af40-49f8-b8f6-df008085e984'::uuid, 3568, 'dq_sd0002', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:54.056', '2026-03-02 06:23:07.638', '00:00:13.582087'::interval, 'SUCCESS', '', '2026-03-02 06:22:54.056');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1830, '9d8929c2-fe5c-48a4-afb6-c41eddf2c51b'::uuid, 3567, 'dq_sd0001', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:45.073', '2026-03-02 06:22:47.489', '00:00:02.415449'::interval, 'SUCCESS', '', '2026-03-02 06:22:45.073');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1829, '5073817c-4e19-4b08-b08c-015ef7392ea7'::uuid, 3570, 'dq_sd0006', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:42.750', '2026-03-02 06:22:43.391', '00:00:00.64073'::interval, 'SUCCESS', '', '2026-03-02 06:22:42.750');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1828, '1d7953fc-b9de-4d2a-b056-9977fab8b008'::uuid, 2191, 'sales_margin', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:31.231', '2026-03-02 06:22:32.425', '00:00:01.193841'::interval, 'SUCCESS', '', '2026-03-02 06:22:31.231');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1827, '4340720f-ab0f-4e77-93f9-690b20377b33'::uuid, 3569, 'dq_sd0003', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:31.134', '2026-03-02 06:22:35.250', '00:00:04.11596'::interval, 'SUCCESS', '', '2026-03-02 06:22:31.134');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1826, 'd978abb0-5ee4-47c6-9ff3-7cb050ab50d7'::uuid, 3571, 'dq_sd0007', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:20.376', '2026-03-02 06:22:20.889', '00:00:00.513294'::interval, 'SUCCESS', '', '2026-03-02 06:22:20.376');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1825, '954279c2-0337-48ce-a035-99ad2ef7cef3'::uuid, 3572, 'dq_sd0008', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:19.184', '2026-03-02 06:22:20.744', '00:00:01.56001'::interval, 'SUCCESS', '', '2026-03-02 06:22:19.184');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1824, 'ce7d46ef-fa79-4ceb-9654-ab7ded196a94'::uuid, 3940, 'alverse_mlc_overview_pivot', 'CLICKHOUSE_LOAD', '2026-03-02 06:22:07.369', '2026-03-02 06:22:08.425', '00:00:01.056059'::interval, 'SUCCESS', '', '2026-03-02 06:22:07.369');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1823, 'f1bc8cfc-991c-4f06-94d3-5761e9bfa0f8'::uuid, 3570, 'dq_sd0006', 'UPLOAD_TO_S3', '2026-03-02 06:21:57.551', '2026-03-02 06:21:58.727', '00:00:01.176853'::interval, 'SUCCESS', '', '2026-03-02 06:21:57.551');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1822, '02d92cfb-3e3e-4ad1-907b-481f6df3330b'::uuid, 3572, 'dq_sd0008', 'UPLOAD_TO_S3', '2026-03-02 06:21:38.400', '2026-03-02 06:21:47.066', '00:00:08.666059'::interval, 'SUCCESS', '', '2026-03-02 06:21:38.400');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1821, '9c1ae625-486c-4c5e-9ffe-60cfff02af17'::uuid, 2191, 'sales_margin', 'UPLOAD_TO_S3', '2026-03-02 06:21:25.298', '2026-03-02 06:21:28.253', '00:00:02.954874'::interval, 'SUCCESS', '', '2026-03-02 06:21:25.298');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1820, 'cab9932a-c5bc-456e-82d9-183a4db08812'::uuid, 6000, 'dq_sd0005', 'UPLOAD_TO_S3', '2026-03-02 06:21:14.710', '2026-03-02 06:24:27.464', '00:03:12.753973'::interval, 'SUCCESS', '', '2026-03-02 06:21:14.710');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1819, '28b99b22-567c-4d05-ad82-426181efed15'::uuid, 3571, 'dq_sd0007', 'UPLOAD_TO_S3', '2026-03-02 06:21:13.617', '2026-03-02 06:21:14.947', '00:00:01.329669'::interval, 'SUCCESS', '', '2026-03-02 06:21:13.617');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1818, '1dc0374d-37bf-46dc-9586-5d74268c94cf'::uuid, 3940, 'alverse_mlc_overview_pivot', 'UPLOAD_TO_S3', '2026-03-02 06:20:56.817', '2026-03-02 06:21:04.361', '00:00:07.543754'::interval, 'SUCCESS', '', '2026-03-02 06:20:56.817');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1817, '211526f6-3d02-41e5-b934-9824ade4d31c'::uuid, 3569, 'dq_sd0003', 'UPLOAD_TO_S3', '2026-03-02 06:20:32.298', '2026-03-02 06:21:05.309', '00:00:33.01147'::interval, 'SUCCESS', '', '2026-03-02 06:20:32.298');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1816, '91d97118-3225-4d05-8eba-32df07e7d4aa'::uuid, 3568, 'dq_sd0002', 'UPLOAD_TO_S3', '2026-03-02 06:20:32.129', '2026-03-02 06:22:10.406', '00:01:38.27668'::interval, 'SUCCESS', '', '2026-03-02 06:20:32.129');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1815, 'b0495a85-fb96-4e0e-a388-73ae85558a45'::uuid, 3567, 'dq_sd0001', 'UPLOAD_TO_S3', '2026-03-02 06:20:31.683', '2026-03-02 06:20:46.102', '00:00:14.419272'::interval, 'SUCCESS', '', '2026-03-02 06:20:31.683');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1814, '58802e12-fed2-4382-a2ea-a20c8ac5d1eb'::uuid, 3501, 'alverse_transportation_life_cycle', 'CLICKHOUSE_LOAD', '2026-03-02 06:19:57.859', '2026-03-02 06:19:59.225', '00:00:01.365786'::interval, 'SUCCESS', '', '2026-03-02 06:19:57.859');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1813, '9f386c30-7db9-4ce0-b6d6-53c258a7ee74'::uuid, 3872, 'production_aluminium_casting_schedule', 'CLICKHOUSE_LOAD', '2026-03-02 06:19:53.462', '2026-03-02 06:19:53.867', '00:00:00.404753'::interval, 'SUCCESS', '', '2026-03-02 06:19:53.462');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1812, 'cf51cf2d-32a0-4719-b01a-f94f6c35eb36'::uuid, 3501, 'alverse_transportation_life_cycle', 'UPLOAD_TO_S3', '2026-03-02 06:19:43.959', '2026-03-02 06:19:47.686', '00:00:03.727291'::interval, 'SUCCESS', '', '2026-03-02 06:19:43.959');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1811, '664a65fe-2833-4099-a37b-b3f7c24e6c5b'::uuid, 3872, 'production_aluminium_casting_schedule', 'UPLOAD_TO_S3', '2026-03-02 06:19:43.344', '2026-03-02 06:19:44.341', '00:00:00.997581'::interval, 'SUCCESS', '', '2026-03-02 06:19:43.344');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1810, 'd932e0a3-e906-4d27-92d4-252ecb8c6199'::uuid, 3484, 'alverse_sales_life_cycle', 'CLICKHOUSE_LOAD', '2026-03-02 06:18:37.270', '2026-03-02 06:18:38.055', '00:00:00.784895'::interval, 'SUCCESS', '', '2026-03-02 06:18:37.270');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1809, '42116509-c6e5-4ea3-97ae-0f450bf08527'::uuid, 3484, 'alverse_sales_life_cycle', 'UPLOAD_TO_S3', '2026-03-02 06:18:26.472', '2026-03-02 06:18:28.189', '00:00:01.716623'::interval, 'SUCCESS', '', '2026-03-02 06:18:26.472');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1808, '9c834928-b537-4d4e-8eba-b2def4aed9f4'::uuid, 1039, 'rls_t', 'CLICKHOUSE_LOAD', '2026-03-02 06:01:54.081', '2026-03-02 06:01:55.119', '00:00:01.037931'::interval, 'SUCCESS', '', '2026-03-02 06:01:54.081');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1807, 'ed2c65e2-7b4e-47bb-bbc6-fcf3cac6b91e'::uuid, 1039, 'rls_t', 'UPLOAD_TO_S3', '2026-03-02 06:01:40.539', '2026-03-02 06:01:43.318', '00:00:02.77889'::interval, 'SUCCESS', '', '2026-03-02 06:01:40.539');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1806, '73448442-3240-46ba-8238-398df0e58d3a'::uuid, 2502, 'investment_expenses_actual', 'CLICKHOUSE_LOAD', '2026-03-02 05:51:05.256', '2026-03-02 05:51:16.256', '00:00:10.999827'::interval, 'SUCCESS', '', '2026-03-02 05:51:05.256');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1805, '57b1ee4a-4442-4b51-aa55-99050697da84'::uuid, 2158, 'investment_payments_actual', 'CLICKHOUSE_LOAD', '2026-03-02 05:50:33.970', '2026-03-02 05:50:36.315', '00:00:02.34497'::interval, 'SUCCESS', '', '2026-03-02 05:50:33.970');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1804, 'ff3366e2-6074-4487-841b-0e220a7488c3'::uuid, 2502, 'investment_expenses_actual', 'UPLOAD_TO_S3', '2026-03-02 05:50:19.972', '2026-03-02 05:50:55.482', '00:00:35.509828'::interval, 'SUCCESS', '', '2026-03-02 05:50:19.972');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1803, 'ba28cad7-38a5-43b5-ae9e-2f5c86307849'::uuid, 2158, 'investment_payments_actual', 'UPLOAD_TO_S3', '2026-03-02 05:50:19.949', '2026-03-02 05:50:24.924', '00:00:04.974537'::interval, 'SUCCESS', '', '2026-03-02 05:50:19.949');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1802, 'b1a6f920-379f-45ee-8139-e18562e6fc8f'::uuid, 4023, 'production_ad_kpa_finish_goods_stock_and_shipment', 'CLICKHOUSE_LOAD', '2026-03-02 05:39:13.634', '2026-03-02 05:39:14.229', '00:00:00.594638'::interval, 'SUCCESS', '', '2026-03-02 05:39:13.634');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1801, '56d10071-9892-455f-b236-669470c316ff'::uuid, 4037, 'production_toro_diesel_equipment_unit_plan_vs_actual', 'CLICKHOUSE_LOAD', '2026-03-02 05:39:07.869', '2026-03-02 05:39:08.320', '00:00:00.451115'::interval, 'SUCCESS', '', '2026-03-02 05:39:07.869');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1800, '4ec02aa4-c281-4a3f-b027-b02ca6b54ae4'::uuid, 4028, 'production_finish_goods_stock', 'CLICKHOUSE_LOAD', '2026-03-02 05:39:03.541', '2026-03-02 05:39:04.106', '00:00:00.564729'::interval, 'SUCCESS', '', '2026-03-02 05:39:03.541');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1799, 'fcf4ec62-284c-4fe4-b328-1b5ff616d8af'::uuid, 4369, 'toro_equipment_downtime_by_plant_type', 'CLICKHOUSE_LOAD', '2026-03-02 05:38:56.975', '2026-03-02 05:38:57.625', '00:00:00.650544'::interval, 'SUCCESS', '', '2026-03-02 05:38:56.975');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1798, '2b5b44d3-4f86-4651-b79b-6ef6bc77ce5d'::uuid, 3974, 'toro_equipment_downtime_by_production_type', 'CLICKHOUSE_LOAD', '2026-03-02 05:38:52.721', '2026-03-02 05:38:53.695', '00:00:00.97448'::interval, 'SUCCESS', '', '2026-03-02 05:38:52.721');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1797, 'bf60a62e-f0ee-4038-b52d-84e2418e15ee'::uuid, 3755, 'toro_equipment_downtime_losses', 'CLICKHOUSE_LOAD', '2026-03-02 05:38:41.886', '2026-03-02 05:38:42.632', '00:00:00.746626'::interval, 'SUCCESS', '', '2026-03-02 05:38:41.886');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1796, '52aae166-5a29-4ddf-be26-ea15eaccaf3d'::uuid, 3735, 'toro_repair_duration_and_cost_plan_vs_actual', 'CLICKHOUSE_LOAD', '2026-03-02 05:38:40.927', '2026-03-02 05:38:47.548', '00:00:06.621063'::interval, 'SUCCESS', '', '2026-03-02 05:38:40.927');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1795, 'd00a2b48-07e5-44d3-8920-f82ae2641686'::uuid, 3632, 'account_debt_for_working_capital_1c', 'CLICKHOUSE_LOAD', '2026-03-02 05:38:12.254', '2026-03-02 05:38:32.185', '00:00:19.930967'::interval, 'SUCCESS', '', '2026-03-02 05:38:12.254');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1794, '5d747257-e7eb-4482-b390-b662124b3e69'::uuid, 2355, 'transportation_service_invoices_and_payments', 'CLICKHOUSE_LOAD', '2026-03-02 05:37:33.337', '2026-03-02 05:38:02.154', '00:00:28.817267'::interval, 'SUCCESS', '', '2026-03-02 05:37:33.337');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1793, 'e65e2119-c7ac-47f1-be53-71d2430d33b5'::uuid, 2356, 'transportation_service_invoices_and_payments_aggregated', 'CLICKHOUSE_LOAD', '2026-03-02 05:37:08.975', '2026-03-02 05:38:30.308', '00:01:21.332678'::interval, 'SUCCESS', '', '2026-03-02 05:37:08.975');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1792, 'c8fd93b8-97d8-430d-ac49-ab5eeaf7dbb6'::uuid, 3516, 'transportation_service_invoice_approvement_history', 'CLICKHOUSE_LOAD', '2026-03-02 05:36:57.288', '2026-03-02 05:36:59.194', '00:00:01.906297'::interval, 'SUCCESS', '', '2026-03-02 05:36:57.288');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1791, '6e1717ed-6bae-4e7d-b432-8175d4b91b4a'::uuid, 3586, 'transportation_service_invoice_approvement_history_pivot', 'CLICKHOUSE_LOAD', '2026-03-02 05:35:57.982', '2026-03-02 05:37:22.862', '00:01:24.880269'::interval, 'SUCCESS', '', '2026-03-02 05:35:57.982');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1790, '3700a3f1-d29a-4bed-8eb0-a213e889674f'::uuid, 1420, 'counterparties_and_organizations_relations', 'CLICKHOUSE_LOAD', '2026-03-02 05:35:47.262', '2026-03-02 05:35:48.575', '00:00:01.312554'::interval, 'SUCCESS', '', '2026-03-02 05:35:47.262');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1789, '07b58db5-eb9d-465b-bf94-57d1e25b1756'::uuid, 1415, 'account_debt_for_working_capital', 'CLICKHOUSE_LOAD', '2026-03-02 05:35:32.931', '2026-03-02 05:42:38.033', '00:07:05.101969'::interval, 'SUCCESS', '', '2026-03-02 05:35:32.931');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1788, '178ee5b5-30a7-425d-a965-b8a93bd67e7c'::uuid, 3022, 'accounting_documents_leading_to_debt', 'CLICKHOUSE_LOAD', '2026-03-02 05:34:46.357', '2026-03-02 05:35:23.394', '00:00:37.036871'::interval, 'SUCCESS', '', '2026-03-02 05:34:46.357');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1787, 'd2179e2e-0b34-401a-b04e-f747b3025749'::uuid, 3510, 'payment_request_approvement_history_dob_dtil', 'CLICKHOUSE_LOAD', '2026-03-02 05:34:25.311', '2026-03-02 05:34:26.648', '00:00:01.337748'::interval, 'SUCCESS', '', '2026-03-02 05:34:25.311');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1786, '67141ced-0fe7-4ded-ae85-f28ef244a9cb'::uuid, 3119, 'account_debt', 'CLICKHOUSE_LOAD', '2026-03-02 05:34:15.873', '2026-03-02 05:35:37.759', '00:01:21.886548'::interval, 'SUCCESS', '', '2026-03-02 05:34:15.873');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1785, '261c634e-cb10-440f-8d57-5fbde6f7949f'::uuid, 3217, 'accounts_receivaible_sales_alverse', 'CLICKHOUSE_LOAD', '2026-03-02 05:34:06.521', '2026-03-02 05:34:15.827', '00:00:09.306778'::interval, 'SUCCESS', '', '2026-03-02 05:34:06.521');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1784, '9a383012-7cbc-4257-90f5-bf9fff2ffb08'::uuid, 1419, 'accounting_exchange_rate_revaluation', 'CLICKHOUSE_LOAD', '2026-03-02 05:33:34.345', '2026-03-02 05:34:06.831', '00:00:32.485778'::interval, 'SUCCESS', '', '2026-03-02 05:33:34.345');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1783, 'a29fc5cf-a334-44c9-b6b2-def192ff7988'::uuid, 1418, 'account_turnover_by_counterparty_virtual', 'CLICKHOUSE_LOAD', '2026-03-02 05:33:14.433', '2026-03-02 05:33:24.144', '00:00:09.711051'::interval, 'SUCCESS', '', '2026-03-02 05:33:14.433');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1782, '849cae4f-6f81-4e51-b6ee-2753c11fd105'::uuid, 2598, 'sd_sales_to_india_scm', 'CLICKHOUSE_LOAD', '2026-03-02 05:33:02.805', '2026-03-02 05:33:03.682', '00:00:00.877557'::interval, 'SUCCESS', '', '2026-03-02 05:33:02.805');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1781, '380460eb-484e-4683-afea-978df0ca92fb'::uuid, 3011, 'sales_delivery_tracking_domestic', 'CLICKHOUSE_LOAD', '2026-03-02 05:32:52.386', '2026-03-02 05:32:53.605', '00:00:01.218495'::interval, 'SUCCESS', '', '2026-03-02 05:32:52.386');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1780, 'b0dfa3da-11b2-467b-ae02-7913864079a4'::uuid, 2600, 'sales_delivery_tracking_dob_dkp', 'CLICKHOUSE_LOAD', '2026-03-02 05:32:41.528', '2026-03-02 05:32:43.106', '00:00:01.578144'::interval, 'SUCCESS', '', '2026-03-02 05:32:41.528');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1779, 'f8a5d7a4-8e93-4f51-b6f2-7bb1b82b40f2'::uuid, 5003, 'kpi_indicators_daily_ad', 'CLICKHOUSE_LOAD', '2026-03-02 05:32:33.072', '2026-03-02 05:32:37.801', '00:00:04.729487'::interval, 'SUCCESS', '', '2026-03-02 05:32:33.072');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1778, 'f6259c4d-9019-45ad-abd7-3b3f9a92af18'::uuid, 5253, 'production_ad_kpa_hr_kpi', 'CLICKHOUSE_LOAD', '2026-03-02 05:32:31.948', '2026-03-02 05:32:33.428', '00:00:01.479269'::interval, 'SUCCESS', '', '2026-03-02 05:32:31.948');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1776, 'd58a855b-855d-434e-b685-3a5a4948d506'::uuid, 5253, 'production_ad_kpa_hr_kpi', 'UPLOAD_TO_S3', '2026-03-02 05:32:19.666', '2026-03-02 05:32:21.550', '00:00:01.883141'::interval, 'SUCCESS', '', '2026-03-02 05:32:19.666');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1775, 'bd1cb357-8b9b-467c-99c5-fbf090119e4b'::uuid, 2598, 'sd_sales_to_india_scm', 'UPLOAD_TO_S3', '2026-03-02 05:32:19.662', '2026-03-02 05:32:21.080', '00:00:01.417789'::interval, 'SUCCESS', '', '2026-03-02 05:32:19.662');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1774, '6c660a36-54f9-44c7-98e9-e10489ccc46b'::uuid, 5003, 'kpi_indicators_daily_ad', 'UPLOAD_TO_S3', '2026-03-02 05:32:16.608', '2026-03-02 05:32:22.722', '00:00:06.113673'::interval, 'SUCCESS', '', '2026-03-02 05:32:16.608');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1773, '50b735dd-2dcd-40d8-8cb7-ea73035568f7'::uuid, 3011, 'sales_delivery_tracking_domestic', 'UPLOAD_TO_S3', '2026-03-02 05:32:07.045', '2026-03-02 05:32:10.088', '00:00:03.043336'::interval, 'SUCCESS', '', '2026-03-02 05:32:07.045');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1772, '0a69f622-0009-4e7a-a64b-4e14726a67e4'::uuid, 2600, 'sales_delivery_tracking_dob_dkp', 'UPLOAD_TO_S3', '2026-03-02 05:31:53.743', '2026-03-02 05:31:57.325', '00:00:03.581493'::interval, 'SUCCESS', '', '2026-03-02 05:31:53.743');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1771, '1f4369ef-f446-4593-8ffd-da00127f6b31'::uuid, 3801, 'general_ledger_balance_sheet_structure', 'CLICKHOUSE_LOAD', '2026-03-02 05:31:33.617', '2026-03-02 05:36:46.928', '00:05:13.311252'::interval, 'SUCCESS', '', '2026-03-02 05:31:33.617');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1770, 'f4db38e6-bbed-4579-a374-8bb854a2d6ad'::uuid, 3625, 'sales_stock_balance_by_production_bundle', 'CLICKHOUSE_LOAD', '2026-03-02 05:31:30.095', '2026-03-02 05:31:43.172', '00:00:13.07711'::interval, 'SUCCESS', '', '2026-03-02 05:31:30.095');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1768, '00236c98-55bc-4fa4-8f47-2bf01710890c'::uuid, 3800, 'general_ledger_balances', 'CLICKHOUSE_LOAD', '2026-03-02 05:31:06.815', '2026-03-02 05:31:12.949', '00:00:06.134465'::interval, 'SUCCESS', '', '2026-03-02 05:31:06.815');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1767, '803a9213-5701-42e5-9bcd-a39834f88ef7'::uuid, 1429, 'account_debt_penalty', 'CLICKHOUSE_LOAD', '2026-03-02 05:30:52.088', '2026-03-02 05:30:54.102', '00:00:02.01352'::interval, 'SUCCESS', '', '2026-03-02 05:30:52.088');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1766, 'ed8c2caa-3b6d-4011-9b19-08a090a84288'::uuid, 1417, 'account_turnover_by_counterparty', 'CLICKHOUSE_LOAD', '2026-03-02 05:30:38.890', '2026-03-02 05:33:56.608', '00:03:17.71776'::interval, 'SUCCESS', '', '2026-03-02 05:30:38.890');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1765, 'd6eba1b1-0fc2-490a-8ba4-ed7afa2d9ea1'::uuid, 3974, 'toro_equipment_downtime_by_production_type', 'UPLOAD_TO_S3', '2026-03-02 05:30:27.432', '2026-03-02 05:30:28.826', '00:00:01.393727'::interval, 'SUCCESS', '', '2026-03-02 05:30:27.432');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1764, '5df4a277-298a-4762-9542-abfbdfc2144a'::uuid, 3625, 'sales_stock_balance_by_production_bundle', 'UPLOAD_TO_S3', '2026-03-02 05:30:13.937', '2026-03-02 05:31:19.993', '00:01:06.055982'::interval, 'SUCCESS', '', '2026-03-02 05:30:13.937');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1763, 'e45c47d7-6565-4c5e-b01c-477ee968ccfe'::uuid, 5133, 'production_aluminium_remelt', 'CLICKHOUSE_LOAD', '2026-03-02 05:30:09.596', '2026-03-02 05:30:10.218', '00:00:00.622004'::interval, 'SUCCESS', '', '2026-03-02 05:30:09.596');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1762, 'df54d6fa-b8f8-4bc4-aec7-15b61ec3433d'::uuid, 3933, 'kpi_raw_warehouse_stock', 'CLICKHOUSE_LOAD', '2026-03-02 05:30:05.222', '2026-03-02 05:30:06.242', '00:00:01.019132'::interval, 'SUCCESS', '', '2026-03-02 05:30:05.222');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1761, '454a7180-6b7e-4d60-b1ef-37e0fb901e77'::uuid, 4369, 'toro_equipment_downtime_by_plant_type', 'UPLOAD_TO_S3', '2026-03-02 05:30:02.420', '2026-03-02 05:30:03.972', '00:00:01.552732'::interval, 'SUCCESS', '', '2026-03-02 05:30:02.420');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1760, '62c74982-282d-4985-8877-dfcb0250d33a'::uuid, 5133, 'production_aluminium_remelt', 'UPLOAD_TO_S3', '2026-03-02 05:29:58.053', '2026-03-02 05:29:59.304', '00:00:01.250698'::interval, 'SUCCESS', '', '2026-03-02 05:29:58.053');
+INSERT INTO tech_etl.click_fact_table_load_stage
+(id, run_uuid, table_id, table_name, stage_name, start_dttm, end_dttm, duration, status, error_text, dttm_inserted)
+VALUES(1759, '0a63e714-8813-4c4a-bf75-2caf4f2ea3cf'::uuid, 3933, 'kpi_raw_warehouse_stock', 'UPLOAD_TO_S3', '2026-03-02 05:29:54.588', '2026-03-02 05:29:56.238', '00:00:01.649772'::interval, 'SUCCESS', '', '2026-03-02 05:29:54.588');

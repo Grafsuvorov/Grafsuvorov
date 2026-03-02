@@ -29,6 +29,23 @@ export default function AdminUsersPage({ userProfile }) {
     role: "analyst",
   });
 
+  const normalizeError = (value) => {
+    if (!value) return "Неизвестная ошибка";
+    if (typeof value === "string") return value;
+    if (value.detail) {
+      if (typeof value.detail === "string") return value.detail;
+      if (Array.isArray(value.detail)) {
+        return value.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+      }
+      return JSON.stringify(value.detail);
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     setError(null);
@@ -55,7 +72,10 @@ export default function AdminUsersPage({ userProfile }) {
     const loadStatus = async () => {
       try {
         const resp = await fetch(`${API_BASE}/api/admin/ci-cd/status`);
-        if (!resp.ok) return;
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw data;
+        }
         const data = await resp.json();
         setLastDeployAt(data?.last_run_at || null);
         if (data?.stdout || data?.stderr) {
@@ -67,7 +87,7 @@ export default function AdminUsersPage({ userProfile }) {
           });
         }
       } catch {
-        // ignore
+        // ignore (silent)
       }
     };
     loadStatus();
@@ -105,8 +125,8 @@ export default function AdminUsersPage({ userProfile }) {
       const resp = await fetch(`${API_BASE}/api/admin/run-ci-cd`, { method: "POST" });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({}));
-        const detail = data.detail || {};
-        const errText = detail?.stderr || data.detail || "Не удалось запустить ci_cd";
+        const detail = data.detail || data;
+        const errText = detail?.stderr || normalizeError(detail) || "Не удалось запустить ci_cd";
         setDeployError(errText);
         setDeployOutput(detail?.stdout || detail?.stderr ? detail : null);
         throw new Error(errText);
@@ -117,7 +137,7 @@ export default function AdminUsersPage({ userProfile }) {
       setLastDeployAt(data?.last_run_at || new Date().toLocaleString("ru-RU"));
       setDeployReady(false);
     } catch (err) {
-      setError(err.message || "Не удалось запустить ci_cd");
+      setError(normalizeError(err));
     } finally {
       setDeploying(false);
     }
@@ -287,7 +307,7 @@ export default function AdminUsersPage({ userProfile }) {
           </button>
         </form>
 
-        {error && <div className="login-error">{error}</div>}
+        {error && <div className="login-error">{normalizeError(error)}</div>}
       </section>
 
       <section className="cc-surface admin-users">

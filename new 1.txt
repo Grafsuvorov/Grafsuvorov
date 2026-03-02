@@ -1,2 +1,10 @@
-Access to fetch at 'http://rgm-s-dwhapp01.hq.root.ad:5312/auth/login' from origin 'http://10.66.129.242:15312' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
-rgm-s-dwhapp01.hq.root.ad:5312/auth/login:1   Failed to load resource: net::ERR_FAILED
+app.add_middleware(
+  CORSMiddleware,
+  allow_origins=[
+      "http://rgm-s-dwhapp01.hq.root.ad:15312",
+      "http://rgm-s-dwhapp01.hq.root.ad",
+  ],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
+)

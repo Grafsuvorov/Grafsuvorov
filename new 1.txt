@@ -1,33 +1,18 @@
-index-DddO4pkL.js:135 
- 
- GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/ci-cd/status 422 (Unprocessable Entity)
-window.fetch	@	index-DddO4pkL.js:135
-(anonymous)	@	index-DddO4pkL.js:135
-(anonymous)	@	index-DddO4pkL.js:135
-Fo	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-da	@	index-DddO4pkL.js:48
-bS	@	index-DddO4pkL.js:48
-IS	@	index-DddO4pkL.js:48
-(anonymous)	@	index-DddO4pkL.js:48
-K	@	index-DddO4pkL.js:25
+Без токена (чтобы увидеть, что реально отдаёт):
+
+  curl -x "" -i http://127.0.0.1:5312/api/admin/ci-cd/status
+
+  2. С токеном:
+     Возьми токен в браузере (DevTools → Console):
+
+  localStorage.getItem("tdv_access_token") || sessionStorage.getItem("tdv_access_token")
+
+  И проверь:
+
+  curl -x "" -i -H "Authorization: Bearer <TOKEN>" http://127.0.0.1:5312/api/admin/ci-cd/status
+
+  Пришли оба ответа целиком (headers + body).
+  Если без токена 401/403, а с токеном 200 — значит фронт не прикрепляет Authorization, надо проверить VITE_AUTH_ENABLED=true и пересобрать фронт.
+
+
+› Explain this codebase

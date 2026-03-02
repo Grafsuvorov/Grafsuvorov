@@ -1,4 +1,15 @@
-volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/config_files:/app/config_files:ro
-        - /root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity:/app/etl_loads_entity:ro
+#!/usr/bin/bash
+
+unset http_proxy
+unset HTTPS_PROXY
+unset https_proxy
+unset HTTP_PROXY
+
+echo 'gogogogo'
+cd "/root/git_dir/etl"
+git pull
+cd /root/table-dependency-viewer/
+rsync -atv --delete /root/git_dir/etl/meta_info/ /root/table-dependency-viewer/meta_info/
+echo 'Закончили упражнение'
+echo 'Как же ты хорош!'
+

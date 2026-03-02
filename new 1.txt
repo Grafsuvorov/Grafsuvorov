@@ -1,68 +1,9 @@
-index-DWFUPmvZ.js:135   GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/ci-cd/status 422 (Unprocessable Entity)
-window.fetch @ index-DWFUPmvZ.js:135
-(anonymous) @ index-DWFUPmvZ.js:135
-(anonymous) @ index-DWFUPmvZ.js:135
-Fo @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-da @ index-DWFUPmvZ.js:48
-bS @ index-DWFUPmvZ.js:48
-IS @ index-DWFUPmvZ.js:48
-(anonymous) @ index-DWFUPmvZ.js:48
-K @ index-DWFUPmvZ.js:25
-index-DWFUPmvZ.js:135   POST http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/run-ci-cd 422 (Unprocessable Entity)
-window.fetch @ index-DWFUPmvZ.js:135
-$ @ index-DWFUPmvZ.js:135
-XS @ index-DWFUPmvZ.js:48
-(anonymous) @ index-DWFUPmvZ.js:48
-n1 @ index-DWFUPmvZ.js:48
-hv @ index-DWFUPmvZ.js:48
-Ev @ index-DWFUPmvZ.js:49
-Z$ @ index-DWFUPmvZ.js:49
-index-DWFUPmvZ.js:48  Uncaught Error: Minified React error #31; visit https://react.dev/errors/31?args[]=object%20with%20keys%20%7Btype%2C%20loc%2C%20msg%2C%20input%7D for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
-    at sd (index-DWFUPmvZ.js:48:49370)
-    at me (index-DWFUPmvZ.js:48:51393)
-    at Ie (index-DWFUPmvZ.js:48:52956)
-    at ut (index-DWFUPmvZ.js:48:55205)
-    at index-DWFUPmvZ.js:48:55700
-    at jn (index-DWFUPmvZ.js:48:60839)
-    at aS (index-DWFUPmvZ.js:48:75074)
-    at MS (index-DWFUPmvZ.js:48:107499)
-    at d$ (index-DWFUPmvZ.js:48:106558)
-    at av (index-DWFUPmvZ.js:48:106388)
+curl -i http://localhost:5312/api/admin/ci-cd/status
 
+  и
 
+  curl -i -X POST http://localhost:5312/api/admin/run-ci-cd
 
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58067 - "GET /api/entities/shared?limit=3 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58078 - "GET /api/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58061 - "GET /api/graph/orphans?limit=50&offset=0&meta_only=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58069 - "GET /api/dq/entity?days=7&delta=10&limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58069 - "OPTIONS /api/logic-audit?issue_type=all&mode=standard&min_score=0&limit=1000 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58086 - "OPTIONS /auth/users HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58087 - "OPTIONS /api/admin/ci-cd/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58087 - "GET /api/admin/ci-cd/status HTTP/1.1" 422 Unprocessable Entity
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58086 - "GET /auth/users HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58090 - "GET /api/admin/ci-cd/status HTTP/1.1" 422 Unprocessable Entity
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58091 - "GET /auth/users HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58163 - "OPTIONS /api/admin/run-ci-cd HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:58163 - "POST /api/admin/run-ci-cd HTTP/1.1" 422 Unprocessable Entity
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
+  Также проверь, нет ли другого роутинга, который перехватывает путь:
+
+  rg -n "api/admin" api/main.py

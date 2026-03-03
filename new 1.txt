@@ -1,35 +1,17 @@
-#!/usr/bin/bash
-  set -euo pipefail
+index-DddO4pkL.js:135 
+ 
+ POST http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/run-ci-cd 500 (Internal Server Error)
+window.fetch	@	index-DddO4pkL.js:135
+D	@	index-DddO4pkL.js:135
+XS	@	index-DddO4pkL.js:48
+(anonymous)	@	index-DddO4pkL.js:48
+n1	@	index-DddO4pkL.js:48
+hv	@	index-DddO4pkL.js:48
+Ev	@	index-DddO4pkL.js:49
+Z$	@	index-DddO4pkL.js:49
 
-  unset http_proxy
-  unset HTTPS_PROXY
-  unset https_proxy
-  unset HTTP_PROXY
-
-  echo 'gogogogo'
-
-  # meta_info
-  rm -rf /app/meta_info/*
-  cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
-
-  # meta -> config_files/meta
-  mkdir -p /app/config_files/meta
-  rm -rf /app/config_files/meta/*
-  cp -a /root/git_dir/etl/meta/. /app/config_files/meta/
-
-  echo 'Закончили упражнение'
-  echo 'Как же ты хорош!'
-
-  Важно:
-
-  - Тома должны быть rw (без :ro) иначе rm/cp не сработают.
-  - rsync не нужен.
-
-  Почему “кэш обновился быстро” — это нормально: кнопка ci_cd не трогает кеш, а только файлы. Кэш отдельно кнопкой “Принудительно обновить кеш”.
-
-  После правки:
-
-  chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
-  docker compose up -d --force-recreate
-
-  Если хочешь оставить rsync, надо ставить его в образ (но это снова apt/proxy).
+cp: cannot stat '/root/git_dir/etl/meta/.': No such file or directory
+Вывод ci_cd
+Статус: failed
+gogogogo
+cp: cannot stat '/root/git_dir/etl/meta/.': No such file or directory

@@ -28,6 +28,7 @@ export default function HomePage({ onSelectTable }) {
   const [dqAlerts, setDqAlerts] = useState([]);
   const [clickSummary, setClickSummary] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
+  const [clickSlow, setClickSlow] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +56,7 @@ export default function HomePage({ onSelectTable }) {
             setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
             setClickSummary(cached.clickSummary || null);
             setClickFailures(Array.isArray(cached.clickFailures) ? cached.clickFailures : []);
+            setClickSlow(Array.isArray(cached.clickSlow) ? cached.clickSlow : []);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -71,7 +73,8 @@ export default function HomePage({ onSelectTable }) {
           timelineResp,
           dqSummaryResp,
           dqAlertsResp,
-          clickResp
+          clickResp,
+          clickSlowResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
@@ -82,7 +85,8 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/incidents/timeline?days=7`),
           fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
           fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`),
-          fetch(`${API_BASE}/api/click/summary?days=7&limit=6`)
+          fetch(`${API_BASE}/api/click/summary?days=7&limit=6`),
+          fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=6`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -95,6 +99,7 @@ export default function HomePage({ onSelectTable }) {
         const dqSummaryJson = await dqSummaryResp.json();
         const dqAlertsJson = await dqAlertsResp.json();
         const clickJson = await clickResp.json();
+        const clickSlowJson = await clickSlowResp.json();
 
         if (!cancelled) {
           const now = new Date();
@@ -118,6 +123,7 @@ export default function HomePage({ onSelectTable }) {
           setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
           setClickSummary(clickJson?.summary || null);
           setClickFailures(Array.isArray(clickJson?.failures) ? clickJson.failures : []);
+          setClickSlow(Array.isArray(clickSlowJson) ? clickSlowJson : []);
           setNightLoading(false);
           localStorage.setItem(
             "home:payload",
@@ -137,6 +143,7 @@ export default function HomePage({ onSelectTable }) {
               dqAlerts: Array.isArray(dqAlertsJson) ? dqAlertsJson : [],
               clickSummary: clickJson?.summary || null,
               clickFailures: Array.isArray(clickJson?.failures) ? clickJson.failures : [],
+              clickSlow: Array.isArray(clickSlowJson) ? clickSlowJson : [],
             })
           );
         }
@@ -998,6 +1005,42 @@ export default function HomePage({ onSelectTable }) {
                         {row.error_text}
                       </div>
                     )}
+                    <div className="order-row-actions">
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                      >
+                        Карточка
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {clickSlow.length > 0 && (
+            <div className="order-list" style={{ marginTop: 16 }}>
+              <div className="section-subtitle">Долгие выгрузки (топ 6)</div>
+              {clickSlow.map((row, idx) => {
+                const fqn = `${row.schema_name}.${row.table_name}`;
+                return (
+                  <article key={`${fqn}-${idx}`} className="order-row">
+                    <header className="order-row-header">
+                      <div>
+                        <div className="order-row-target mono">{fqn}</div>
+                        <div className="order-row-meta">
+                          {row.stage_name} · {row.dag_name || "—"}
+                        </div>
+                      </div>
+                      <div className={`order-pill status-${String(row.status || "").toLowerCase()}`}>
+                        {clickStatusLabel(row.status)}
+                      </div>
+                    </header>
+                    <div className="order-row-text">
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} ·{" "}
+                      {row.duration_min !== null && row.duration_min !== undefined ? `${row.duration_min} мин` : "—"}
+                    </div>
                     <div className="order-row-actions">
                       <button
                         className="btn btn-secondary"

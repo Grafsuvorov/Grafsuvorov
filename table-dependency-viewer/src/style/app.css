@@ -209,6 +209,39 @@ main.content {
   color: #fca5a5;
 }
 
+/* ClickHouse view search + history toggle */
+.click-view-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.click-view-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.8fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  font-size: 12px;
+}
+
+.history-toggle {
+  display: inline-flex;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  margin-bottom: 12px;
+}
+
+.history-toggle .btn.active {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
 /* ClickHouse load block */
 .click-run-head {
   display: flex;

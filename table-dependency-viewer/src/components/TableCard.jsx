@@ -52,6 +52,13 @@ export default function TableCard({
   const [clickMeta, setClickMeta] = useState(null);
   const [clickMetaLoading, setClickMetaLoading] = useState(false);
   const [clickMetaError, setClickMetaError] = useState(null);
+  const [clickHistory, setClickHistory] = useState([]);
+  const [clickHistoryLoading, setClickHistoryLoading] = useState(false);
+  const [clickHistoryError, setClickHistoryError] = useState(null);
+  const [historyMode, setHistoryMode] = useState("gp");
+  const [viewMatches, setViewMatches] = useState([]);
+  const [viewSearchLoading, setViewSearchLoading] = useState(false);
+  const [viewSearchError, setViewSearchError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -159,6 +166,33 @@ export default function TableCard({
       })
       .finally(() => setClickMetaLoading(false));
   }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickHistoryLoading(true);
+    setClickHistoryError(null);
+    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
+      .then((data) => setClickHistory(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setClickHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю ClickHouse");
+      })
+      .finally(() => setClickHistoryLoading(false));
+  }, [schema, tableName]);
+
+  const handleViewSearch = () => {
+    setViewSearchLoading(true);
+    setViewSearchError(null);
+    fetch(`${API_BASE}/api/click/view/search?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось найти view-скрипты")))
+      .then((data) => setViewMatches(Array.isArray(data?.matches) ? data.matches : []))
+      .catch((err) => {
+        console.error(err);
+        setViewSearchError(typeof err === "string" ? err : "Не удалось найти view-скрипты");
+      })
+      .finally(() => setViewSearchLoading(false));
+  };
 
   const status = useMemo(() => {
     if (!meta) return "ok";
@@ -711,14 +745,47 @@ export default function TableCard({
                         </div>
                       </div>
                     )}
-                    {clickMeta?.view_sql && (
-                      <div className="click-meta-actions">
+                    <div className="click-meta-actions">
+                      {clickMeta?.view_sql && (
                         <button
                           className="btn btn-secondary"
                           onClick={() => openSqlModal({ title: "ClickHouse VIEW", sql: clickMeta.view_sql })}
                         >
                           Открыть SQL view
                         </button>
+                      )}
+                      <button
+                        className="btn btn-ghost"
+                        onClick={handleViewSearch}
+                        disabled={viewSearchLoading}
+                      >
+                        {viewSearchLoading ? "Ищем view..." : "Найти view-скрипты"}
+                      </button>
+                    </div>
+                    {viewSearchError && <div className="dep-error-title">{viewSearchError}</div>}
+                    {viewMatches.length > 0 && (
+                      <div className="click-view-list">
+                        {viewMatches.map((item, idx) => (
+                          <div key={`${item.view_name}-${idx}`} className="click-view-row">
+                            <div className="mono">{item.view_schema}.{item.view_name}</div>
+                            <div className="muted">{item.reason === "from_match" ? "по FROM" : "по имени"}</div>
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() =>
+                                fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(item.view_schema)}/${encodeURIComponent(item.view_name)}`)
+                                  .then((res) => (res.ok ? res.json() : Promise.reject()))
+                                  .then((data) => {
+                                    if (data?.view_sql) {
+                                      openSqlModal({ title: `ClickHouse VIEW: ${item.view_name}`, sql: data.view_sql });
+                                    }
+                                  })
+                                  .catch(() => {})
+                              }
+                            >
+                              Открыть
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
@@ -761,34 +828,83 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">Последние запуски (10)</div>
+        <div className="section-title">Последние запуски</div>
         <div className="card">
-          {historyLoading && <div className="muted">Загрузка запусков...</div>}
-          {historyError && <div className="dep-error-title">{historyError}</div>}
-          {!historyLoading && !historyError && historyRows.length === 0 && (
-            <div className="muted">Запусков не найдено.</div>
-          )}
-          {!historyLoading && !historyError && historyRows.length > 0 && (
-            <div className="history-table">
-              <div className="history-table-head">
-                <span>Статус</span>
-                <span>Старт</span>
-                <span>Финиш</span>
-                <span>Длит.</span>
-                <span>Сообщение</span>
-              </div>
-              {historyRows.map((row, idx) => (
-                <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
-                  <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
-                    {row.state || "UNKNOWN"}
-                  </span>
-                  <span>{row.start || "—"}</span>
-                  <span>{row.finish || "—"}</span>
-                  <span>{row.duration_minutes ?? "—"} мин</span>
-                  <span className="history-message">{row.message || "—"}</span>
+          <div className="history-toggle">
+            <button
+              className={`btn btn-ghost ${historyMode === "gp" ? "active" : ""}`}
+              onClick={() => setHistoryMode("gp")}
+            >
+              GP
+            </button>
+            <button
+              className={`btn btn-ghost ${historyMode === "click" ? "active" : ""}`}
+              onClick={() => setHistoryMode("click")}
+            >
+              ClickHouse
+            </button>
+          </div>
+
+          {historyMode === "gp" && (
+            <>
+              {historyLoading && <div className="muted">Загрузка запусков...</div>}
+              {historyError && <div className="dep-error-title">{historyError}</div>}
+              {!historyLoading && !historyError && historyRows.length === 0 && (
+                <div className="muted">Запусков не найдено.</div>
+              )}
+              {!historyLoading && !historyError && historyRows.length > 0 && (
+                <div className="history-table">
+                  <div className="history-table-head">
+                    <span>Статус</span>
+                    <span>Старт</span>
+                    <span>Финиш</span>
+                    <span>Длит.</span>
+                    <span>Сообщение</span>
+                  </div>
+                  {historyRows.map((row, idx) => (
+                    <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
+                      <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
+                        {row.state || "UNKNOWN"}
+                      </span>
+                      <span>{row.start || "—"}</span>
+                      <span>{row.finish || "—"}</span>
+                      <span>{row.duration_minutes ?? "—"} мин</span>
+                      <span className="history-message">{row.message || "—"}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          )}
+
+          {historyMode === "click" && (
+            <>
+              {clickHistoryLoading && <div className="muted">Загрузка ClickHouse...</div>}
+              {clickHistoryError && <div className="dep-error-title">{clickHistoryError}</div>}
+              {!clickHistoryLoading && !clickHistoryError && clickHistory.length === 0 && (
+                <div className="muted">Запусков ClickHouse не найдено.</div>
+              )}
+              {!clickHistoryLoading && !clickHistoryError && clickHistory.length > 0 && (
+                <div className="history-table">
+                  <div className="history-table-head">
+                    <span>Этап</span>
+                    <span>Старт</span>
+                    <span>Финиш</span>
+                    <span>Длит.</span>
+                    <span>Статус</span>
+                  </div>
+                  {clickHistory.map((row, idx) => (
+                    <div key={`${row.run_uuid}-${idx}`} className={`history-table-row status-${String(row.status || "").toLowerCase()}`}>
+                      <span>{row.stage_name}</span>
+                      <span>{row.start_dttm || "—"}</span>
+                      <span>{row.end_dttm || "—"}</span>
+                      <span>{row.duration_min !== null && row.duration_min !== undefined ? `${row.duration_min} мин` : "—"}</span>
+                      <span>{clickStatusLabel(row.status)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

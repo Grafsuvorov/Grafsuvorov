@@ -1650,6 +1650,7 @@ def _load_click_meta_index():
 
     meta_index: Dict[Tuple[str, str], Dict[str, Any]] = {}
     view_sql_index: Dict[Tuple[str, str], str] = {}
+    view_refs: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
 
     dm_dir = root / "dm"
     if dm_dir.exists():
@@ -1668,9 +1669,31 @@ def _load_click_meta_index():
         for path in dm_view_dir.rglob("*.sql"):
             obj_name = path.stem.strip().lower()
             if obj_name:
-                view_sql_index[("dm_view", obj_name)] = path.read_text(encoding="utf-8")
+                sql_text = path.read_text(encoding="utf-8")
+                view_sql_index[("dm_view", obj_name)] = sql_text
 
-    return {"meta": meta_index, "view_sql": view_sql_index, "root": str(root)}
+                # parse FROM/JOIN references
+                for match in re.finditer(
+                    r"(from|join)\s+([A-Za-z0-9_\"/]+)\.([A-Za-z0-9_\"/]+)",
+                    sql_text,
+                    flags=re.IGNORECASE,
+                ):
+                    schema_ref = match.group(2).replace('"', "").strip().lower()
+                    table_ref = match.group(3).replace('"', "").strip().lower()
+                    schema_ref = schema_ref.replace("/", "")
+                    table_ref = _clean_table_name(table_ref)
+                    if not schema_ref or not table_ref:
+                        continue
+                    key = (schema_ref, table_ref)
+                    view_refs.setdefault(key, []).append(
+                        {
+                            "view_schema": "dm_view",
+                            "view_name": obj_name,
+                            "reason": "from_match",
+                        }
+                    )
+
+    return {"meta": meta_index, "view_sql": view_sql_index, "view_refs": view_refs, "root": str(root)}
 
 
 def get_click_meta_index():
@@ -5525,6 +5548,138 @@ def get_clickhouse_meta(schema: str, table: str):
         }
     except Exception as e:
         print("❌ /api/click/meta error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/click/view/search")
+def search_clickhouse_view(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
+    try:
+        schema_norm = (schema or "").strip().lower()
+        table_norm = _clean_table_name((table or "").strip().lower())
+        idx = get_click_meta_index()
+        matches = idx.get("view_refs", {}).get((schema_norm, table_norm), [])
+
+        # also match by view name
+        name_key = ("dm_view", table_norm)
+        if name_key in idx.get("view_sql", {}):
+            matches = matches + [{"view_schema": "dm_view", "view_name": table_norm, "reason": "name_match"}]
+
+        # de-dup
+        seen = set()
+        uniq = []
+        for item in matches:
+            key = (item.get("view_schema"), item.get("view_name"))
+            if key in seen:
+                continue
+            seen.add(key)
+            uniq.append(item)
+            if len(uniq) >= limit:
+                break
+        return {"matches": uniq}
+    except Exception as e:
+        print("❌ /api/click/view/search error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/click/history/{schema}/{table}")
+def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
+    try:
+        schema_norm = (schema or "").strip()
+        table_norm = (table or "").strip()
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        s.run_uuid,
+                        s.stage_name,
+                        s.start_dttm,
+                        s.end_dttm,
+                        s.duration,
+                        s.status,
+                        s.error_text,
+                        r.dag_name,
+                        r.dag_run
+                    FROM {TABLE_CLICK_LOAD_STAGE} s
+                    JOIN {TABLE_CLICK_LOAD_RUN} r
+                      ON r.run_uuid = s.run_uuid
+                    WHERE r.schema_name = :schema
+                      AND r.table_name = :table
+                    ORDER BY s.start_dttm DESC NULLS LAST
+                    LIMIT :limit
+                    """
+                ),
+                {"schema": schema_norm, "table": table_norm, "limit": limit},
+            ).mappings().all()
+
+        history = [
+            {
+                "run_uuid": row.get("run_uuid"),
+                "stage_name": row.get("stage_name"),
+                "start_dttm": serialize_datetime(row.get("start_dttm")),
+                "end_dttm": serialize_datetime(row.get("end_dttm")),
+                "duration_min": _duration_minutes(row.get("duration")),
+                "status": row.get("status"),
+                "error_text": row.get("error_text"),
+                "dag_name": row.get("dag_name"),
+                "dag_run": row.get("dag_run"),
+            }
+            for row in rows
+        ]
+        return history
+    except Exception as e:
+        print("❌ /api/click/history error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/click/slow-stages")
+def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = Query(10, ge=1, le=50)):
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        r.schema_name,
+                        r.table_name,
+                        s.stage_name,
+                        s.start_dttm,
+                        s.end_dttm,
+                        s.duration,
+                        s.status,
+                        r.dag_name,
+                        r.dag_run
+                    FROM {TABLE_CLICK_LOAD_STAGE} s
+                    JOIN {TABLE_CLICK_LOAD_RUN} r
+                      ON r.run_uuid = s.run_uuid
+                    WHERE s.start_dttm >= now() - (:days || ' days')::interval
+                    ORDER BY s.duration DESC NULLS LAST
+                    LIMIT :limit
+                    """
+                ),
+                {"days": days, "limit": limit},
+            ).mappings().all()
+
+        result = [
+            {
+                "schema_name": row.get("schema_name"),
+                "table_name": row.get("table_name"),
+                "stage_name": row.get("stage_name"),
+                "start_dttm": serialize_datetime(row.get("start_dttm")),
+                "end_dttm": serialize_datetime(row.get("end_dttm")),
+                "duration_min": _duration_minutes(row.get("duration")),
+                "status": row.get("status"),
+                "dag_name": row.get("dag_name"),
+                "dag_run": row.get("dag_run"),
+            }
+            for row in rows
+        ]
+        return result
+    except Exception as e:
+        print("❌ /api/click/slow-stages error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 

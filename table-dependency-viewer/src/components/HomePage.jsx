@@ -29,7 +29,6 @@ export default function HomePage({ onSelectTable }) {
   const [clickSummary, setClickSummary] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
   const [clickSlow, setClickSlow] = useState([]);
-  const [clickSlow, setClickSlow] = useState([]);
 
   useEffect(() => {
     let cancelled = false;

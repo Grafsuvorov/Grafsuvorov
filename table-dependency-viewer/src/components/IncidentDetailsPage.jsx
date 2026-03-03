@@ -166,7 +166,6 @@ export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {
           </>
         )}
       </div>
-      )}
     </div>
   );
 }

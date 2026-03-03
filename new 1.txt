@@ -1,71 +1,69 @@
-
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build frontend
-[+] Building 4.0s (12/14)
+[+] Building 1.6s (12/14)
  => [internal] load build definition from Dockerfile                                                                             0.0s
  => => transferring dockerfile: 659B                                                                                             0.0s
  => [internal] load metadata for docker.io/library/nginx:alpine                                                                  0.0s
  => [internal] load metadata for docker.io/library/node:20-alpine                                                                0.0s
  => [internal] load .dockerignore                                                                                                0.0s
  => => transferring context: 162B                                                                                                0.0s
- => [build 1/6] FROM docker.io/library/node:20-alpine                                                                            0.0s
  => [stage-1 1/3] FROM docker.io/library/nginx:alpine                                                                            0.0s
- => [internal] load build context                                                                                                0.9s
- => => transferring context: 25.47MB                                                                                             0.8s
+ => [build 1/6] FROM docker.io/library/node:20-alpine                                                                            0.0s
+ => [internal] load build context                                                                                                0.4s
+ => => transferring context: 2.78MB                                                                                              0.4s
  => CACHED [build 2/6] WORKDIR /app                                                                                              0.0s
  => CACHED [build 3/6] COPY package*.json ./                                                                                     0.0s
  => CACHED [build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://r  0.0s
- => [build 5/6] COPY . .                                                                                                         1.8s
- => ERROR [build 6/6] RUN npm run build                                                                                          1.2s
+ => CACHED [build 5/6] COPY . .                                                                                                  0.0s
+ => ERROR [build 6/6] RUN npm run build                                                                                          1.1s
 ------
  > [build 6/6] RUN npm run build:
-#6 0.355
-#6 0.355 > table-dependency-viewer@1.0.0 build
-#6 0.355 > vite build
-#6 0.355
-#6 0.611 vite v7.0.5 building for production...
-#6 0.683 transforming...
-#6 0.994 [plugin vite:esbuild] src/components/IncidentDetailsPage.jsx: The character "}" is not valid inside a JSX element
-#6 0.994 167|          )}
-#6 0.994 168|        </div>
-#6 0.994 169|        )}
-#6 0.994    |         ^
-#6 0.994 170|      </div>
-#6 0.994 171|    );
-#6 0.994
-#6 1.001 ✓ 23 modules transformed.
-#6 1.002 ✗ Build failed in 359ms
-#6 1.002 error during build:
-#6 1.002 [vite:esbuild] Transform failed with 2 errors:
-#6 1.002 /app/src/components/HomePage.jsx:32:9: ERROR: The symbol "clickSlow" has already been declared
-#6 1.002 /app/src/components/HomePage.jsx:32:20: ERROR: The symbol "setClickSlow" has already been declared
-#6 1.002 file: /app/src/components/HomePage.jsx:32:9
-#6 1.002
-#6 1.002 The symbol "clickSlow" has already been declared
-#6 1.002 30 |    const [clickFailures, setClickFailures] = useState([]);
-#6 1.002 31 |    const [clickSlow, setClickSlow] = useState([]);
-#6 1.002 32 |    const [clickSlow, setClickSlow] = useState([]);
-#6 1.002    |           ^
-#6 1.002 33 |
-#6 1.002 34 |    useEffect(() => {
-#6 1.002
-#6 1.002 The symbol "setClickSlow" has already been declared
-#6 1.002 30 |    const [clickFailures, setClickFailures] = useState([]);
-#6 1.002 31 |    const [clickSlow, setClickSlow] = useState([]);
-#6 1.002 32 |    const [clickSlow, setClickSlow] = useState([]);
-#6 1.002    |                      ^
-#6 1.002 33 |
-#6 1.002 34 |    useEffect(() => {
-#6 1.002
-#6 1.002     at failureErrorWithLog (/app/node_modules/esbuild/lib/main.js:1467:15)
-#6 1.002     at /app/node_modules/esbuild/lib/main.js:736:50
-#6 1.002     at responseCallbacks.<computed> (/app/node_modules/esbuild/lib/main.js:603:9)
-#6 1.002     at handleIncomingPacket (/app/node_modules/esbuild/lib/main.js:658:12)
-#6 1.002     at Socket.readFromStdout (/app/node_modules/esbuild/lib/main.js:581:7)
-#6 1.002     at Socket.emit (node:events:524:28)
-#6 1.002     at addChunk (node:internal/streams/readable:561:12)
-#6 1.002     at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
-#6 1.002     at Readable.push (node:internal/streams/readable:392:5)
-#6 1.002     at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
+#8 0.300
+#8 0.300 > table-dependency-viewer@1.0.0 build
+#8 0.300 > vite build
+#8 0.300
+#8 0.546 vite v7.0.5 building for production...
+#8 0.615 transforming...
+#8 0.888 [plugin vite:esbuild] src/components/IncidentDetailsPage.jsx: The character "}" is not valid inside a JSX element
+#8 0.888 167|          )}
+#8 0.888 168|        </div>
+#8 0.888 169|        )}
+#8 0.888    |         ^
+#8 0.888 170|      </div>
+#8 0.888 171|    );
+#8 0.888
+#8 0.897 ✓ 23 modules transformed.
+#8 0.898 ✗ Build failed in 323ms
+#8 0.898 error during build:
+#8 0.898 [vite:esbuild] Transform failed with 2 errors:
+#8 0.898 /app/src/components/HomePage.jsx:32:9: ERROR: The symbol "clickSlow" has already been declared
+#8 0.898 /app/src/components/HomePage.jsx:32:20: ERROR: The symbol "setClickSlow" has already been declared
+#8 0.898 file: /app/src/components/HomePage.jsx:32:9
+#8 0.898
+#8 0.898 The symbol "clickSlow" has already been declared
+#8 0.898 30 |    const [clickFailures, setClickFailures] = useState([]);
+#8 0.898 31 |    const [clickSlow, setClickSlow] = useState([]);
+#8 0.898 32 |    const [clickSlow, setClickSlow] = useState([]);
+#8 0.898    |           ^
+#8 0.898 33 |
+#8 0.898 34 |    useEffect(() => {
+#8 0.898
+#8 0.898 The symbol "setClickSlow" has already been declared
+#8 0.898 30 |    const [clickFailures, setClickFailures] = useState([]);
+#8 0.898 31 |    const [clickSlow, setClickSlow] = useState([]);
+#8 0.898 32 |    const [clickSlow, setClickSlow] = useState([]);
+#8 0.898    |                      ^
+#8 0.898 33 |
+#8 0.898 34 |    useEffect(() => {
+#8 0.898
+#8 0.898     at failureErrorWithLog (/app/node_modules/esbuild/lib/main.js:1467:15)
+#8 0.898     at /app/node_modules/esbuild/lib/main.js:736:50
+#8 0.898     at responseCallbacks.<computed> (/app/node_modules/esbuild/lib/main.js:603:9)
+#8 0.898     at handleIncomingPacket (/app/node_modules/esbuild/lib/main.js:658:12)
+#8 0.898     at Socket.readFromStdout (/app/node_modules/esbuild/lib/main.js:581:7)
+#8 0.898     at Socket.emit (node:events:524:28)
+#8 0.898     at addChunk (node:internal/streams/readable:561:12)
+#8 0.898     at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+#8 0.898     at Readable.push (node:internal/streams/readable:392:5)
+#8 0.898     at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
 ------
 failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate

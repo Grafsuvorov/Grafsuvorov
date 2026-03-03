@@ -29,6 +29,7 @@ export default function HomePage({ onSelectTable }) {
   const [clickSummary, setClickSummary] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
   const [clickSlow, setClickSlow] = useState([]);
+  const [clickSlow, setClickSlow] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -942,24 +943,24 @@ export default function HomePage({ onSelectTable }) {
             <span className="section-meta">{clickSummary.total_runs || 0}</span>
           </div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            Сводка по выгрузкам витрин в ClickHouse и последние ошибки.
+            Источник: ClickHouse (этапы S3 и загрузка в ClickHouse).
           </div>
           <div className="entity-grid">
             <div className="entity-card">
-              <div className="entity-name">Успешно</div>
-              <div className="entity-meta">{clickSummary.ok_runs || 0} запусков</div>
+              <div className="entity-name">Объектов</div>
+              <div className="entity-meta">{clickSummary.total_tables || 0}</div>
             </div>
             <div className="entity-card critical">
               <div className="entity-name">Ошибки</div>
               <div className="entity-meta">{clickSummary.failed_runs || 0} запусков</div>
             </div>
             <div className="entity-card">
-              <div className="entity-name">Повторы</div>
-              <div className="entity-meta">{clickSummary.retry_runs || 0}</div>
+              <div className="entity-name">Успешных объектов</div>
+              <div className="entity-meta">{clickSummary.ok_tables || 0}</div>
             </div>
             <div className="entity-card">
-              <div className="entity-name">В процессе</div>
-              <div className="entity-meta">{clickSummary.running_runs || 0}</div>
+              <div className="entity-name">Запусков</div>
+              <div className="entity-meta">{clickSummary.total_runs || 0}</div>
             </div>
             <div className="entity-card">
               <div className="entity-name">Средняя длительность</div>
@@ -971,6 +972,9 @@ export default function HomePage({ onSelectTable }) {
               <div className="entity-name">Последняя выгрузка</div>
               <div className="entity-meta">{clickSummary.last_finish || "—"}</div>
             </div>
+          </div>
+          <div className="muted" style={{ marginTop: 10 }}>
+            В процессе: {clickSummary.running_runs || 0} · Повторы: {clickSummary.retry_runs || 0}
           </div>
 
           {clickFailures.length > 0 && (

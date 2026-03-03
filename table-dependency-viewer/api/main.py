@@ -5338,6 +5338,8 @@ def get_clickhouse_summary(
                     f"""
                     SELECT
                         COUNT(*) AS total_runs,
+                        COUNT(DISTINCT schema_name || '.' || table_name) AS total_tables,
+                        COUNT(DISTINCT CASE WHEN status = 'SUCCESS' THEN schema_name || '.' || table_name END) AS ok_tables,
                         SUM(CASE WHEN status = 'SUCCESS' THEN 1 ELSE 0 END) AS ok_runs,
                         SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_runs,
                         SUM(CASE WHEN status = 'RUNNING' THEN 1 ELSE 0 END) AS running_runs,
@@ -5402,6 +5404,8 @@ def get_clickhouse_summary(
 
         summary = {
             "total_runs": int(summary_row.get("total_runs") or 0),
+            "total_tables": int(summary_row.get("total_tables") or 0),
+            "ok_tables": int(summary_row.get("ok_tables") or 0),
             "ok_runs": int(summary_row.get("ok_runs") or 0),
             "failed_runs": int(summary_row.get("failed_runs") or 0),
             "running_runs": int(summary_row.get("running_runs") or 0),

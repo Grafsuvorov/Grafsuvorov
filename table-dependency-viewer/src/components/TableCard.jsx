@@ -704,6 +704,36 @@ export default function TableCard({
                 </div>
               )}
 
+              {clickHistory.length > 0 && (
+                <div className="click-stages">
+                  <div className="section-subtitle">Последние этапы (S3/Click)</div>
+                  <div className="click-stage-table">
+                    <div className="click-stage-head">
+                      <span>Этап</span>
+                      <span>Старт</span>
+                      <span>Финиш</span>
+                      <span>Длит.</span>
+                      <span>Статус</span>
+                    </div>
+                    {clickHistory.slice(0, 20).map((row, idx) => (
+                      <div key={`${row.run_uuid}-${idx}`} className="click-stage-row">
+                        <span className="mono">{row.stage_name}</span>
+                        <span>{row.start_dttm || "—"}</span>
+                        <span>{row.end_dttm || "—"}</span>
+                        <span>
+                          {row.duration_min !== null && row.duration_min !== undefined
+                            ? `${row.duration_min} мин`
+                            : "—"}
+                        </span>
+                        <span className={`click-stage-status status-${String(row.status || "").toLowerCase()}`}>
+                          {clickStatusLabel(row.status)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="click-meta-block">
                 <div className="section-subtitle">ClickHouse метаданные</div>
                 {clickMetaLoading && <div className="muted">Загрузка метаданных...</div>}
@@ -768,7 +798,7 @@ export default function TableCard({
                         {viewMatches.map((item, idx) => (
                           <div key={`${item.view_name}-${idx}`} className="click-view-row">
                             <div className="mono">{item.view_schema}.{item.view_name}</div>
-                            <div className="muted">{item.reason === "from_match" ? "по FROM" : "по имени"}</div>
+                            <div className="muted">Используется в view</div>
                             <button
                               className="btn btn-secondary"
                               onClick={() =>
@@ -835,13 +865,13 @@ export default function TableCard({
               className={`btn btn-ghost ${historyMode === "gp" ? "active" : ""}`}
               onClick={() => setHistoryMode("gp")}
             >
-              GP
+              GP (основная загрузка)
             </button>
             <button
               className={`btn btn-ghost ${historyMode === "click" ? "active" : ""}`}
               onClick={() => setHistoryMode("click")}
             >
-              ClickHouse
+              ClickHouse (S3/CH)
             </button>
           </div>
 

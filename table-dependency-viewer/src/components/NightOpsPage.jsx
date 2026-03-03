@@ -46,6 +46,12 @@ export default function NightOpsPage() {
   const [heavyData, setHeavyData] = useState(null);
   const [heavyLoading, setHeavyLoading] = useState(false);
   const [heavyError, setHeavyError] = useState(null);
+  const [clickSlow, setClickSlow] = useState([]);
+  const [clickSlowLoading, setClickSlowLoading] = useState(false);
+  const [clickSlowError, setClickSlowError] = useState(null);
+  const [clickFailures, setClickFailures] = useState([]);
+  const [clickFailuresLoading, setClickFailuresLoading] = useState(false);
+  const [clickFailuresError, setClickFailuresError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +76,43 @@ export default function NightOpsPage() {
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setClickSlowLoading(true);
+    setClickSlowError(null);
+    setClickFailuresLoading(true);
+    setClickFailuresError(null);
+
+    Promise.all([
+      fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=20`),
+      fetch(`${API_BASE}/api/click/summary?days=7&limit=10`),
+    ])
+      .then(async ([slowResp, failuresResp]) => {
+        const slowJson = slowResp.ok ? await slowResp.json() : [];
+        const failuresJson = failuresResp.ok ? await failuresResp.json() : {};
+        if (!cancelled) {
+          setClickSlow(Array.isArray(slowJson) ? slowJson : []);
+          setClickFailures(Array.isArray(failuresJson?.failures) ? failuresJson.failures : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClickSlowError("Не удалось загрузить ClickHouse");
+          setClickFailuresError("Не удалось загрузить ClickHouse");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setClickSlowLoading(false);
+          setClickFailuresLoading(false);
+        }
       });
 
     return () => {
@@ -159,7 +202,7 @@ export default function NightOpsPage() {
       <section className="cc-header-zone">
         <button className="btn" onClick={() => navigate("/")}>← Назад</button>
         <h1>Ночное окно</h1>
-        <div className="cc-subtitle">Сводка за последнее ночное окно (21:00–08:00)</div>
+        <div className="cc-subtitle">Источник: GP · Сводка за последнее ночное окно (21:00–08:00)</div>
       </section>
 
       {loading && <div className="muted">Загрузка ночного окна...</div>}
@@ -478,6 +521,65 @@ export default function NightOpsPage() {
                     <button className="btn btn-ghost" onClick={() => setFailedLimit(10)}>
                       Сброс
                     </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">ClickHouse (S3/Click) — 7 дней</div>
+            <div className="night-columns">
+              <div className="night-panel">
+                <div className="night-panel-title">Долгие этапы</div>
+                <div className="night-panel-sub muted">Топ-20 по длительности</div>
+                {clickSlowLoading && <div className="muted">Загрузка...</div>}
+                {clickSlowError && <div className="dep-error-title">{clickSlowError}</div>}
+                {!clickSlowLoading && !clickSlowError && (
+                  <div className="night-list">
+                    {clickSlow.map((row, idx) => (
+                      <button
+                        key={`${row.schema_name}.${row.table_name}-${idx}`}
+                        className="night-row"
+                        onClick={() => {
+                          const path = toTablePath(`${row.schema_name}.${row.table_name}`);
+                          if (path) navigate(path);
+                        }}
+                      >
+                        <span className="mono">{row.schema_name}.{row.table_name}</span>
+                        <span className="muted">
+                          {row.stage_name} · {row.duration_min ?? "—"} мин · {row.status || "—"}
+                        </span>
+                      </button>
+                    ))}
+                    {!clickSlow.length && <div className="muted">Долгих этапов нет.</div>}
+                  </div>
+                )}
+              </div>
+
+              <div className="night-panel">
+                <div className="night-panel-title">Ошибки ClickHouse</div>
+                <div className="night-panel-sub muted">Последние неуспешные запуски</div>
+                {clickFailuresLoading && <div className="muted">Загрузка...</div>}
+                {clickFailuresError && <div className="dep-error-title">{clickFailuresError}</div>}
+                {!clickFailuresLoading && !clickFailuresError && (
+                  <div className="night-list">
+                    {clickFailures.map((row, idx) => (
+                      <button
+                        key={`${row.schema_name}.${row.table_name}-${idx}`}
+                        className="night-row"
+                        onClick={() => {
+                          const path = toTablePath(`${row.schema_name}.${row.table_name}`);
+                          if (path) navigate(path);
+                        }}
+                      >
+                        <span className="mono">{row.schema_name}.{row.table_name}</span>
+                        <span className="muted">
+                          {row.problem_area ? `Проблема: ${row.problem_area}` : "Проблема: —"} · {row.status || "—"}
+                        </span>
+                      </button>
+                    ))}
+                    {!clickFailures.length && <div className="muted">Ошибок нет.</div>}
                   </div>
                 )}
               </div>

@@ -1,69 +1,251 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build frontend
-[+] Building 1.6s (12/14)
- => [internal] load build definition from Dockerfile                                                                             0.0s
- => => transferring dockerfile: 659B                                                                                             0.0s
- => [internal] load metadata for docker.io/library/nginx:alpine                                                                  0.0s
- => [internal] load metadata for docker.io/library/node:20-alpine                                                                0.0s
- => [internal] load .dockerignore                                                                                                0.0s
- => => transferring context: 162B                                                                                                0.0s
- => [stage-1 1/3] FROM docker.io/library/nginx:alpine                                                                            0.0s
- => [build 1/6] FROM docker.io/library/node:20-alpine                                                                            0.0s
- => [internal] load build context                                                                                                0.4s
- => => transferring context: 2.78MB                                                                                              0.4s
- => CACHED [build 2/6] WORKDIR /app                                                                                              0.0s
- => CACHED [build 3/6] COPY package*.json ./                                                                                     0.0s
- => CACHED [build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://r  0.0s
- => CACHED [build 5/6] COPY . .                                                                                                  0.0s
- => ERROR [build 6/6] RUN npm run build                                                                                          1.1s
-------
- > [build 6/6] RUN npm run build:
-#8 0.300
-#8 0.300 > table-dependency-viewer@1.0.0 build
-#8 0.300 > vite build
-#8 0.300
-#8 0.546 vite v7.0.5 building for production...
-#8 0.615 transforming...
-#8 0.888 [plugin vite:esbuild] src/components/IncidentDetailsPage.jsx: The character "}" is not valid inside a JSX element
-#8 0.888 167|          )}
-#8 0.888 168|        </div>
-#8 0.888 169|        )}
-#8 0.888    |         ^
-#8 0.888 170|      </div>
-#8 0.888 171|    );
-#8 0.888
-#8 0.897 ✓ 23 modules transformed.
-#8 0.898 ✗ Build failed in 323ms
-#8 0.898 error during build:
-#8 0.898 [vite:esbuild] Transform failed with 2 errors:
-#8 0.898 /app/src/components/HomePage.jsx:32:9: ERROR: The symbol "clickSlow" has already been declared
-#8 0.898 /app/src/components/HomePage.jsx:32:20: ERROR: The symbol "setClickSlow" has already been declared
-#8 0.898 file: /app/src/components/HomePage.jsx:32:9
-#8 0.898
-#8 0.898 The symbol "clickSlow" has already been declared
-#8 0.898 30 |    const [clickFailures, setClickFailures] = useState([]);
-#8 0.898 31 |    const [clickSlow, setClickSlow] = useState([]);
-#8 0.898 32 |    const [clickSlow, setClickSlow] = useState([]);
-#8 0.898    |           ^
-#8 0.898 33 |
-#8 0.898 34 |    useEffect(() => {
-#8 0.898
-#8 0.898 The symbol "setClickSlow" has already been declared
-#8 0.898 30 |    const [clickFailures, setClickFailures] = useState([]);
-#8 0.898 31 |    const [clickSlow, setClickSlow] = useState([]);
-#8 0.898 32 |    const [clickSlow, setClickSlow] = useState([]);
-#8 0.898    |                      ^
-#8 0.898 33 |
-#8 0.898 34 |    useEffect(() => {
-#8 0.898
-#8 0.898     at failureErrorWithLog (/app/node_modules/esbuild/lib/main.js:1467:15)
-#8 0.898     at /app/node_modules/esbuild/lib/main.js:736:50
-#8 0.898     at responseCallbacks.<computed> (/app/node_modules/esbuild/lib/main.js:603:9)
-#8 0.898     at handleIncomingPacket (/app/node_modules/esbuild/lib/main.js:658:12)
-#8 0.898     at Socket.readFromStdout (/app/node_modules/esbuild/lib/main.js:581:7)
-#8 0.898     at Socket.emit (node:events:524:28)
-#8 0.898     at addChunk (node:internal/streams/readable:561:12)
-#8 0.898     at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
-#8 0.898     at Readable.push (node:internal/streams/readable:392:5)
-#8 0.898     at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
+CREATE TABLE public.release_objects (
+	release_id text NOT NULL,
+	task_id text NOT NULL,
+	target_system text NOT NULL,
+	schema_name text NOT NULL,
+	table_name text NOT NULL,
+	entity_id int4 NOT NULL,
+	entity_name text NOT NULL,
+	change_type text NOT NULL,
+	final_status text NOT NULL,
+	attempts_count int4 NOT NULL,
+	created_at timestamp DEFAULT now() NULL,
+	failed_objects bool DEFAULT false NULL,
+	attempt_no int4 NOT NULL,
+	error_message text NULL,
+	error_stacktrace text NULL
+)
+
+
+CREATE TABLE public.release_log (
+	release_id text NOT NULL,
+	release_type text NOT NULL,
+	initiated_by text NOT NULL,
+	started_at timestamp NOT NULL,
+	finished_at timestamp NULL,
+	status text NOT NULL,
+	total_objects int4 NOT NULL,
+	created_at timestamp DEFAULT now() NULL,
+	ready_to_release bool NULL
+)
+
+
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoices_and_payments_aggregated', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Clickhouse', 'dm_view', 'consolidated_document_workflow_approval_performance', -1, 'clickhouse', 'Представление в Clickhouse изменено, Представление в Clickhouse изменено, Представление в Clickhouse изменено, Представление в Clickhouse изменено', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'paydox_credit_limit_reason_texts', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'paydox_credit_limit_status_texts', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'currency_rates_source_cbr', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'currency_rates_source_ext', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10151', 'Greenplum', 'dict_stg', 'document_approval_stage', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10510', 'Greenplum', 'dict_stg', 'RAL_ZSD7769M_INC_CMP', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта, Очистка объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'unit_budget_texts_td', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'transport_operation_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'non_liquid_asset_employee_type_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10666', 'Greenplum', 'dict_dds', 'fixed_asset_td', 12, 'DICT_LOADER', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'fixed_asset_conservation_document_type_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-9594_', 'Greenplum', 'dict_dds', 'toro_repair_department', 12, 'DICT_LOADER', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10504', 'Greenplum', 'stg', '/RUSAL/SD2882M_7', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта, Очистка объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'ods', '/rusal/perp_ral', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10434', 'Greenplum', 'ods', 'ral_map_transportation_external_location_metal_stock', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10288', 'Greenplum', 'dds', 'transportation_service_invoice_header', 34, 'TRANSPORTATION', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dds', 'transportation_service_invoice_position', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10620', 'Greenplum', 'dm_calc', 'purchase_documents_main_data_part2', 39, 'SALES_MM', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_calc', 'accounting_document_and_purchase_contract_relation', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10397', 'Greenplum', 'dm', 'ligature_consumption', 39, 'SALES_MM', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10312', 'Greenplum', 'dm', 'transportation_services_purchase_price_agreement', 34, 'TRANSPORTATION', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoices_and_payments', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10598', 'Greenplum', 'dm', 'investment_expenses_actual', 38, 'BI_FI_FACT_PAYMENTS', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10367', 'Greenplum', 'dm', 'transportation_own_container_movement', 45, 'LOGISTICS', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoice_approvement_history', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoice_approvement_history_pivot', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10428', 'Greenplum', 'dm', 'accounting_bank_statements', 36, 'BI_FI', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10655', 'Greenplum', 'dm', 'exp_carbon_shipment_and_arrival', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10397', 'Greenplum', 'dm_view', 'ligature_consumption', 39, 'SALES_MM', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_view', 'transportation_service_invoices_and_payments_aggregated', 45, 'LOGISTICS', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_view', 'transportation_service_invoices_and_payments', 45, 'LOGISTICS', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10367', 'Greenplum', 'dm_view', 'transportation_own_container_information_card', 45, 'LOGISTICS', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_view', 'consolidated_document_workflow_approval_performance', 45, 'LOGISTICS', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_view', 'transportation_service_invoice_approvement_history_pivot', 45, 'LOGISTICS', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10428', 'Greenplum', 'dm_view', 'accounting_bank_statements', 36, 'BI_FI', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Clickhouse', 'dm', 'transportation_service_invoice_approvement_history', -1, 'clickhouse', 'Выгрузка витрины в Clickhouse изменена, Выгрузка витрины в Clickhouse изменена, Выгрузка витрины в Clickhouse изменена, Выгрузка витрины в Clickhouse изменена', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10428', 'Clickhouse', 'dm', 'accounting_bank_statements', -1, 'clickhouse', 'Выгрузка витрины в Clickhouse изменена', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10367', 'Clickhouse', 'dm_view', 'transportation_own_container_information_card', -1, 'clickhouse', 'Представление в Clickhouse изменено', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+
+
+
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10367', 'Clickhouse', 'dm_view', 'transportation_own_container_information_card', -1, 'clickhouse', 'Представление в Clickhouse изменено', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoices_and_payments_aggregated', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Clickhouse', 'dm_view', 'consolidated_document_workflow_approval_performance', -1, 'clickhouse', 'Представление в Clickhouse изменено, Представление в Clickhouse изменено, Представление в Clickhouse изменено, Представление в Clickhouse изменено', 'in queued', 0, '2026-02-25 12:07:11.172', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'paydox_credit_limit_reason_texts', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'paydox_credit_limit_status_texts', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'currency_rates_source_cbr', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10153', 'Greenplum', 'dict_stg', 'currency_rates_source_ext', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10151', 'Greenplum', 'dict_stg', 'document_approval_stage', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10510', 'Greenplum', 'dict_stg', 'RAL_ZSD7769M_INC_CMP', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта, Очистка объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'unit_budget_texts_td', 12, 'DICT_LOADER', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'transport_operation_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'non_liquid_asset_employee_type_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10666', 'Greenplum', 'dict_dds', 'fixed_asset_td', 12, 'DICT_LOADER', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10182', 'Greenplum', 'dict_dds', 'fixed_asset_conservation_document_type_texts', 12, 'DICT_LOADER', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-9594_', 'Greenplum', 'dict_dds', 'toro_repair_department', 12, 'DICT_LOADER', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10504', 'Greenplum', 'stg', '/RUSAL/SD2882M_7', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта, Очистка объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'ods', '/rusal/perp_ral', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10434', 'Greenplum', 'ods', 'ral_map_transportation_external_location_metal_stock', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10288', 'Greenplum', 'dds', 'transportation_service_invoice_header', 34, 'TRANSPORTATION', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dds', 'transportation_service_invoice_position', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10620', 'Greenplum', 'dm_calc', 'purchase_documents_main_data_part2', 39, 'SALES_MM', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm_calc', 'accounting_document_and_purchase_contract_relation', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10397', 'Greenplum', 'dm', 'ligature_consumption', 39, 'SALES_MM', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10312', 'Greenplum', 'dm', 'transportation_services_purchase_price_agreement', 34, 'TRANSPORTATION', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoices_and_payments', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10598', 'Greenplum', 'dm', 'investment_expenses_actual', 38, 'BI_FI_FACT_PAYMENTS', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10367', 'Greenplum', 'dm', 'transportation_own_container_movement', 45, 'LOGISTICS', 'Расчёт объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoice_approvement_history', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10667', 'Greenplum', 'dm', 'transportation_service_invoice_approvement_history_pivot', 45, 'LOGISTICS', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10428', 'Greenplum', 'dm', 'accounting_bank_statements', 36, 'BI_FI', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10655', 'Greenplum', 'dm', 'exp_carbon_shipment_and_arrival', 34, 'TRANSPORTATION', 'Расчёт объекта, Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-25T12:04:53+03:00', 'DWH-10397', 'Greenplum', 'dm_view', 'ligature_consumption', 39, 'SALES_MM', 'Структура объекта', 'Success', 1, '2026-02-25 12:07:11.172', false, 0, ' ', ' ');

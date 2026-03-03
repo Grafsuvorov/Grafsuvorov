@@ -1,17 +1,11 @@
-/app/scripts/ci_cd.sh: line 12: git: command not found
-Вывод ci_cd
-Статус: failed
-gogogogo
-/app/scripts/ci_cd.sh: line 12: git: command not found
+ocker compose exec api git --version
 
-index-DddO4pkL.js:135 
- 
- POST http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/run-ci-cd 500 (Internal Server Error)
-window.fetch	@	index-DddO4pkL.js:135
-D	@	index-DddO4pkL.js:135
-XS	@	index-DddO4pkL.js:48
-(anonymous)	@	index-DddO4pkL.js:48
-n1	@	index-DddO4pkL.js:48
-hv	@	index-DddO4pkL.js:48
-Ev	@	index-DddO4pkL.js:49
-Z$	@	index-DddO4pkL.js:49
+  Если ошибки — пересобираем с чисткой:
+
+  docker compose build --no-cache api
+  docker compose up -d --force-recreate
+
+  И покажи лог сборки, особенно строку с apt-get install -y git.
+
+  Также убедись, что ты реально правишь api/Dockerfile, а не другой файл.
+  Можешь прислать sed -n '1,40p' api/Dockerfile — скажу, есть ли там блок с apt.

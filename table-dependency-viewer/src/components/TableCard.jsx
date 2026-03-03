@@ -194,6 +194,11 @@ export default function TableCard({
       .finally(() => setViewSearchLoading(false));
   };
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    handleViewSearch();
+  }, [schema, tableName]);
+
   const status = useMemo(() => {
     if (!meta) return "ok";
     const avg = meta.avg_duration_minutes;
@@ -674,39 +679,9 @@ export default function TableCard({
                 </div>
               )}
 
-              {clickStages.length > 0 && (
-                <div className="click-stages">
-                  <div className="section-subtitle">Этапы загрузки</div>
-                  <div className="click-stage-table">
-                    <div className="click-stage-head">
-                      <span>Этап</span>
-                      <span>Старт</span>
-                      <span>Финиш</span>
-                      <span>Длит.</span>
-                      <span>Статус</span>
-                    </div>
-                    {clickStages.map((stage, idx) => (
-                      <div key={`${stage.stage_name}-${idx}`} className="click-stage-row">
-                        <span className="mono">{stage.stage_name}</span>
-                        <span>{stage.start_dttm || "—"}</span>
-                        <span>{stage.end_dttm || "—"}</span>
-                        <span>
-                          {stage.duration_min !== null && stage.duration_min !== undefined
-                            ? `${stage.duration_min} мин`
-                            : "—"}
-                        </span>
-                        <span className={`click-stage-status status-${String(stage.status || "").toLowerCase()}`}>
-                          {clickStatusLabel(stage.status)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {clickHistory.length > 0 && (
                 <div className="click-stages">
-                  <div className="section-subtitle">Последние этапы (S3/Click)</div>
+                  <div className="section-subtitle">Последние этапы (S3/ClickHouse)</div>
                   <div className="click-stage-table">
                     <div className="click-stage-head">
                       <span>Этап</span>
@@ -775,48 +750,38 @@ export default function TableCard({
                         </div>
                       </div>
                     )}
-                    <div className="click-meta-actions">
-                      {clickMeta?.view_sql && (
-                        <button
-                          className="btn btn-secondary"
-                          onClick={() => openSqlModal({ title: "ClickHouse VIEW", sql: clickMeta.view_sql })}
-                        >
-                          Открыть SQL view
-                        </button>
-                      )}
-                      <button
-                        className="btn btn-ghost"
-                        onClick={handleViewSearch}
-                        disabled={viewSearchLoading}
-                      >
-                        {viewSearchLoading ? "Ищем view..." : "Найти view-скрипты"}
-                      </button>
-                    </div>
+                    {viewSearchLoading && <div className="muted">Ищем view-скрипты...</div>}
                     {viewSearchError && <div className="dep-error-title">{viewSearchError}</div>}
-                    {viewMatches.length > 0 && (
-                      <div className="click-view-list">
-                        {viewMatches.map((item, idx) => (
-                          <div key={`${item.view_name}-${idx}`} className="click-view-row">
-                            <div className="mono">{item.view_schema}.{item.view_name}</div>
-                            <div className="muted">Используется в view</div>
-                            <button
-                              className="btn btn-secondary"
-                              onClick={() =>
-                                fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(item.view_schema)}/${encodeURIComponent(item.view_name)}`)
-                                  .then((res) => (res.ok ? res.json() : Promise.reject()))
-                                  .then((data) => {
-                                    if (data?.view_sql) {
-                                      openSqlModal({ title: `ClickHouse VIEW: ${item.view_name}`, sql: data.view_sql });
-                                    }
-                                  })
-                                  .catch(() => {})
-                              }
-                            >
-                              Открыть
-                            </button>
+                    {!viewSearchLoading && !viewSearchError && (
+                      <>
+                        {viewMatches.length > 0 ? (
+                          <div className="click-view-list">
+                            {viewMatches.map((item, idx) => (
+                              <div key={`${item.view_name}-${idx}`} className="click-view-row">
+                                <div className="mono">{item.view_schema}.{item.view_name}</div>
+                                <div className="muted">Используется в view</div>
+                                <button
+                                  className="btn btn-secondary"
+                                  onClick={() =>
+                                    fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(item.view_schema)}/${encodeURIComponent(item.view_name)}`)
+                                      .then((res) => (res.ok ? res.json() : Promise.reject()))
+                                      .then((data) => {
+                                        if (data?.view_sql) {
+                                          openSqlModal({ title: `ClickHouse VIEW: ${item.view_name}`, sql: data.view_sql });
+                                        }
+                                      })
+                                      .catch(() => {})
+                                  }
+                                >
+                                  Открыть
+                                </button>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        ) : (
+                          <div className="muted">View-скрипты не найдены.</div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
@@ -883,7 +848,7 @@ export default function TableCard({
                 <div className="muted">Запусков не найдено.</div>
               )}
               {!historyLoading && !historyError && historyRows.length > 0 && (
-                <div className="history-table">
+                <div className="history-table gp">
                   <div className="history-table-head">
                     <span>Статус</span>
                     <span>Старт</span>
@@ -915,7 +880,7 @@ export default function TableCard({
                 <div className="muted">Запусков ClickHouse не найдено.</div>
               )}
               {!clickHistoryLoading && !clickHistoryError && clickHistory.length > 0 && (
-                <div className="history-table">
+                <div className="history-table click">
                   <div className="history-table-head">
                     <span>Этап</span>
                     <span>Старт</span>

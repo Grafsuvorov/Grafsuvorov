@@ -238,8 +238,13 @@ main.content {
 }
 
 .history-toggle .btn.active {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
+  background: rgba(79, 124, 255, 0.2);
+  border: 1px solid rgba(79, 124, 255, 0.35);
+  color: #e5edff;
+}
+
+.history-toggle .btn {
+  opacity: 0.8;
 }
 
 /* ClickHouse load block */
@@ -1863,9 +1868,18 @@ main.content {
 .history-table-head,
 .history-table-row {
   display: grid;
-  grid-template-columns: 110px 160px 160px 90px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+}
+
+.history-table.gp .history-table-head,
+.history-table.gp .history-table-row {
+  grid-template-columns: 120px minmax(140px, 1fr) minmax(140px, 1fr) 90px minmax(180px, 2fr);
+}
+
+.history-table.click .history-table-head,
+.history-table.click .history-table-row {
+  grid-template-columns: minmax(140px, 1.2fr) minmax(140px, 1fr) minmax(140px, 1fr) 90px 110px;
 }
 
 .history-table-head {
@@ -1881,6 +1895,7 @@ main.content {
   border: 1px solid rgba(148, 163, 184, 0.12);
   background: rgba(15, 23, 42, 0.35);
   font-size: 12.5px;
+  width: 100%;
 }
 
 .history-message {

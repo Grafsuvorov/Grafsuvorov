@@ -1,60 +1,7 @@
-Вот обновлённый ci_cd.sh и фрагмент compose.
-
-  ### scripts/ci_cd.sh
-
-  #!/usr/bin/bash
-  set -euo pipefail
-
-  unset http_proxy
-  unset HTTPS_PROXY
-  unset https_proxy
-  unset HTTP_PROXY
-
-  export GIT_SSL_NO_VERIFY=1
-
-  echo 'gogogogo'
-
-  cd /root/git_dir/etl
-  git -c http.sslVerify=false pull
-
-  cd /root/git_dir/meta
-  git -c http.sslVerify=false pull
-
-  mkdir -p /app/meta_info
-  mkdir -p /app/config_files/meta
-
-  rm -rf /app/meta_info/*
-  cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
-
-  rm -rf /app/config_files/meta/*
-  cp -a /root/git_dir/meta/. /app/config_files/meta/
-
-  echo 'Закончили упражнение'
-  echo 'Как же ты хорош!'
-
-  ### docker-compose.yml (фрагмент api)
-
-  services:
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - ADMIN_CICD_SCRIPT=/app/scripts/ci_cd.sh
-
-  После правок:
-
-  chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
-  docker compose up -d --force-recreate
-
+fatal: not a git repository (or any parent up to mount point /root) Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+Вывод ci_cd
+Статус: failed
+gogogogo
+Already up to date.
+fatal: not a git repository (or any parent up to mount point /root)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).

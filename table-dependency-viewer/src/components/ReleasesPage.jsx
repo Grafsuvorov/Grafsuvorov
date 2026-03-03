@@ -151,7 +151,6 @@ export default function ReleasesPage() {
               </div>
               {details.objects.map((obj, idx) => (
                 <div key={`${obj.release_id}-${idx}`} className="release-objects-row">
-                  <span className="mono">{obj.schema_name}.{obj.table_name}</span>
                   <button
                     className="release-object-link"
                     onClick={() => openTable(obj.schema_name, obj.table_name)}

@@ -1,3 +1,54 @@
+Вот полный файл целиком с git:
+
+  # stage: node + dagre
+  FROM node:20-slim AS node
+  ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+  && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+  && npm install -g dagre
+
+  # stage: python
+  FROM python:3.11-slim
+  WORKDIR /app
+
+  ENV PYTHONPATH=/app/api
+  ENV PYTHONDONTWRITEBYTECODE=1
+  ENV PYTHONUNBUFFERED=1
+
+  # proxy for apt
+  ENV http_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+  ENV https_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+
+  # install git
+  RUN apt-get update \
+   && apt-get install -y git \
+   && rm -rf /var/lib/apt/lists/*
+
+  COPY --from=node /usr/local/bin/node /usr/local/bin/node
+  COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+  COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+  COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+  ENV PATH="/usr/local/bin:${PATH}"
+  ENV NODE_PATH=/usr/local/lib/node_modules
+
+  COPY api/ /app/api/
+
+  RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+  --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+  --retries 100 --timeout 600000 --no-cache-dir \
+  fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+  EXPOSE 8000
+  CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  После изменения:
+
+  docker compose build api
+  docker compose up -d --force-recreate
+
+  Если сборка упадёт на apt — пришли лог, подстрою прокси.
+
 #!/usr/bin/bash
   set -euo pipefail
 
@@ -8,11 +59,16 @@
 
   echo 'gogogogo'
 
-  # meta_info берём из /root/git_dir/etl
+  cd /root/git_dir/etl
+  git pull
+
+  cd /root/git_dir/meta
+  git pull
+
+  # обновляем файлы внутри контейнера
   rm -rf /app/meta_info/*
   cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
 
-  # meta берём из /root/git_dir/meta
   mkdir -p /app/config_files/meta
   rm -rf /app/config_files/meta/*
   cp -a /root/git_dir/meta/. /app/config_files/meta/
@@ -20,10 +76,8 @@
   echo 'Закончили упражнение'
   echo 'Как же ты хорош!'
 
-  Дальше:
+  После правки:
 
   chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
+  docker compose build api
   docker compose up -d --force-recreate
-
-  После этого кнопка должна сработать.
-

@@ -1,7 +1,14 @@
-fatal: not a git repository (or any parent up to mount point /root) Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
-Вывод ci_cd
-Статус: failed
-gogogogo
-Already up to date.
-fatal: not a git repository (or any parent up to mount point /root)
-Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+гит
+meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+config_files/meta
+
+в приложении 
+/root/table-dependency-viewer/config_files/meta
+/root/table-dependency-viewer/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+
+для гита на сервере 
+/root/git_dir/etl/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+/root/git_dir/meta
+
+
+

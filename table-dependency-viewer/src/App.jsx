@@ -22,8 +22,10 @@ import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
+import ReleasesPage from "./components/ReleasesPage.jsx";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const TOKEN_KEY = "tdv_access_token";
 const USER_KEY = "tdv_user_profile";
 
@@ -56,6 +58,21 @@ export default function App() {
       setUserProfile(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (!AUTH_ENABLED || !authToken || userProfile) return;
+    fetch(`${API_BASE}/auth/me`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((profile) => {
+        if (profile) {
+          setUserProfile(profile);
+          const storage =
+            localStorage.getItem(TOKEN_KEY) ? localStorage : sessionStorage;
+          storage.setItem(USER_KEY, JSON.stringify(profile));
+        }
+      })
+      .catch(() => {});
+  }, [authToken, userProfile]);
 
   const normalizeFqn = useCallback((value) => {
     if (typeof value !== "string") return null;
@@ -120,6 +137,10 @@ export default function App() {
       }
       if (target === "/account") {
         navigate("/account");
+        return;
+      }
+      if (target === "releases") {
+        navigate("/releases");
         return;
       }
 
@@ -214,7 +235,7 @@ export default function App() {
           navigate("/login");
         }}
       />
-      <Routes>
+        <Routes>
         <Route
           path="/login"
           element={
@@ -315,10 +336,14 @@ export default function App() {
           path="/night-ops"
           element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <NightOpsPage />}
         />
-        <Route
-          path="/logic-audit"
-          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <LogicAuditPage />}
-        />
+          <Route
+            path="/logic-audit"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <LogicAuditPage />}
+          />
+          <Route
+            path="/releases"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <ReleasesPage />}
+          />
         <Route
           path="/onboarding"
           element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage />}

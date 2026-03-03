@@ -59,6 +59,9 @@ export default function TableCard({
   const [viewMatches, setViewMatches] = useState([]);
   const [viewSearchLoading, setViewSearchLoading] = useState(false);
   const [viewSearchError, setViewSearchError] = useState(null);
+  const [releaseItems, setReleaseItems] = useState([]);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -199,6 +202,20 @@ export default function TableCard({
     handleViewSearch();
   }, [schema, tableName]);
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setReleaseLoading(true);
+    setReleaseError(null);
+    fetch(`${API_BASE}/api/releases/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=12`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить релизы по объекту")))
+      .then((data) => setReleaseItems(Array.isArray(data?.items) ? data.items : []))
+      .catch((err) => {
+        console.error(err);
+        setReleaseError(typeof err === "string" ? err : "Не удалось загрузить релизы по объекту");
+      })
+      .finally(() => setReleaseLoading(false));
+  }, [schema, tableName]);
+
   const status = useMemo(() => {
     if (!meta) return "ok";
     const avg = meta.avg_duration_minutes;
@@ -288,6 +305,14 @@ export default function TableCard({
       default:
         return status || "—";
     }
+  };
+  const releaseStatusClass = (status) => {
+    const value = String(status || "").toLowerCase();
+    if (!value) return "status-unknown";
+    if (value.includes("success")) return "status-success";
+    if (value.includes("fail") || value.includes("error")) return "status-failed";
+    if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
+    return "status-unknown";
   };
 
   const copySql = (sql) => {
@@ -679,36 +704,6 @@ export default function TableCard({
                 </div>
               )}
 
-              {clickHistory.length > 0 && (
-                <div className="click-stages">
-                  <div className="section-subtitle">Последние этапы (S3/ClickHouse)</div>
-                  <div className="click-stage-table">
-                    <div className="click-stage-head">
-                      <span>Этап</span>
-                      <span>Старт</span>
-                      <span>Финиш</span>
-                      <span>Длит.</span>
-                      <span>Статус</span>
-                    </div>
-                    {clickHistory.slice(0, 20).map((row, idx) => (
-                      <div key={`${row.run_uuid}-${idx}`} className="click-stage-row">
-                        <span className="mono">{row.stage_name}</span>
-                        <span>{row.start_dttm || "—"}</span>
-                        <span>{row.end_dttm || "—"}</span>
-                        <span>
-                          {row.duration_min !== null && row.duration_min !== undefined
-                            ? `${row.duration_min} мин`
-                            : "—"}
-                        </span>
-                        <span className={`click-stage-status status-${String(row.status || "").toLowerCase()}`}>
-                          {clickStatusLabel(row.status)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="click-meta-block">
                 <div className="section-subtitle">ClickHouse метаданные</div>
                 {clickMetaLoading && <div className="muted">Загрузка метаданных...</div>}
@@ -792,6 +787,49 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
+        <div className="section-title">Релизы объекта</div>
+        <div className="card">
+          {releaseLoading && <div className="muted">Загрузка релизов...</div>}
+          {releaseError && <div className="dep-error-title">{releaseError}</div>}
+          {!releaseLoading && !releaseError && releaseItems.length === 0 && (
+            <div className="muted">Релизы по объекту не найдены.</div>
+          )}
+          {!releaseLoading && !releaseError && releaseItems.length > 0 && (
+            <div className="release-table">
+              <div className="release-head">
+                <span>Релиз</span>
+                <span>Задача</span>
+                <span>Система</span>
+                <span>Статус</span>
+                <span>Изменения</span>
+                <span>Дата</span>
+              </div>
+              {releaseItems.map((item, idx) => (
+                <div key={`${item.release_id}-${idx}`} className="release-row">
+                  <span className="mono">{item.release_id}</span>
+                  {item.task_link ? (
+                    <a className="yt-link" href={item.task_link} target="_blank" rel="noreferrer">
+                      {item.task_id || "—"}
+                    </a>
+                  ) : (
+                    <span className="mono">{item.task_id || "—"}</span>
+                  )}
+                  <span>{item.target_system || "—"}</span>
+                  <span className={`status-pill ${releaseStatusClass(item.final_status)}`}>
+                    {item.final_status || "—"}
+                  </span>
+                  <span className="muted" title={item.change_type || ""}>
+                    {item.change_type || "—"}
+                  </span>
+                  <span>{item.created_at || "—"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
         <div className="section-title">SQL-скрипты</div>
         <div className="table-sql-grid">
           {sqlSections.map((block) => {
@@ -854,7 +892,7 @@ export default function TableCard({
                     <span>Старт</span>
                     <span>Финиш</span>
                     <span>Длит.</span>
-                    <span>Сообщение</span>
+                    <span>Комментарий</span>
                   </div>
                   {historyRows.map((row, idx) => (
                     <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
@@ -864,7 +902,11 @@ export default function TableCard({
                       <span>{row.start || "—"}</span>
                       <span>{row.finish || "—"}</span>
                       <span>{row.duration_minutes ?? "—"} мин</span>
-                      <span className="history-message">{row.message || "—"}</span>
+                      <span className="history-message">
+                        {row.message ? (
+                          <span className="history-note" title={row.message}>ℹ︎</span>
+                        ) : "—"}
+                      </span>
                     </div>
                   ))}
                 </div>

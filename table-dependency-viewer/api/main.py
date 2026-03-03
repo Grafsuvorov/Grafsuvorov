@@ -39,10 +39,13 @@ from .config import (
     TABLE_YTREK_INCIDENTS,
     TABLE_TABLES_META_CLICK,
     TABLE_DATA_QUALITY,
+    TABLE_RELEASE_LOG,
+    TABLE_RELEASE_OBJECTS,
     TABLE_CLICK_LOAD_RUN,
     TABLE_CLICK_LOAD_STAGE,
     CLICK_META_DIR,
     ADMIN_CICD_SCRIPT,
+    YTRACK_ISSUE_URL,
     DATABASE_URL,
 )
 
@@ -5686,6 +5689,184 @@ def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = 
         print("❌ /api/click/slow-stages error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+def _build_ytrack_link(task_id: Optional[str]) -> Optional[str]:
+    if not task_id:
+        return None
+    base = (YTRACK_ISSUE_URL or "").strip()
+    if not base:
+        return None
+    return base.replace("{task_id}", task_id).replace("{id}", task_id)
+
+
+@router.get("/api/releases")
+def get_releases(days: int = Query(30, ge=1, le=365), limit: int = Query(50, ge=1, le=200)):
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        l.release_id,
+                        l.release_type,
+                        l.initiated_by,
+                        l.started_at,
+                        l.finished_at,
+                        l.status,
+                        l.total_objects,
+                        l.ready_to_release,
+                        EXTRACT(EPOCH FROM (COALESCE(l.finished_at, now()) - l.started_at)) / 60.0 AS duration_minutes,
+                        COALESCE(o.objects_count, 0) AS objects_count,
+                        COALESCE(o.failed_count, 0) AS failed_count,
+                        COALESCE(o.failed_any, false) AS failed_any,
+                        COALESCE(o.task_ids, ARRAY[]::text[]) AS task_ids
+                    FROM {TABLE_RELEASE_LOG} l
+                    LEFT JOIN (
+                        SELECT
+                            release_id,
+                            COUNT(*) AS objects_count,
+                            COUNT(*) FILTER (WHERE lower(final_status) NOT IN ('success', 'succeeded', 'ok')) AS failed_count,
+                            BOOL_OR(failed_objects) AS failed_any,
+                            ARRAY_AGG(DISTINCT task_id) FILTER (WHERE task_id IS NOT NULL AND task_id <> '') AS task_ids
+                        FROM {TABLE_RELEASE_OBJECTS}
+                        GROUP BY release_id
+                    ) o ON o.release_id = l.release_id
+                    WHERE l.started_at >= (now() - (:days || ' days')::interval)
+                    ORDER BY l.started_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"days": days, "limit": limit},
+            )
+            payload = []
+            for row in rows:
+                record = dict(row._mapping)
+                task_ids = record.get("task_ids") or []
+                record["task_ids"] = task_ids
+                record["task_links"] = [link for link in (_build_ytrack_link(t) for t in task_ids) if link]
+                payload.append(record)
+            return {"items": payload}
+    except Exception as e:
+        print("❌ /api/releases error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить релизы")
+
+
+@router.get("/api/releases/{release_id}")
+def get_release_details(release_id: str, limit: int = Query(500, ge=1, le=2000)):
+    try:
+        with engine.connect() as conn:
+            log_row = conn.execute(
+                text(
+                    f"""
+                    SELECT release_id, release_type, initiated_by, started_at, finished_at,
+                           status, total_objects, ready_to_release,
+                           EXTRACT(EPOCH FROM (COALESCE(finished_at, now()) - started_at)) / 60.0 AS duration_minutes
+                    FROM {TABLE_RELEASE_LOG}
+                    WHERE release_id = :release_id
+                    LIMIT 1
+                    """
+                ),
+                {"release_id": release_id},
+            ).fetchone()
+            if not log_row:
+                raise HTTPException(status_code=404, detail="Релиз не найден")
+            objects = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        release_id,
+                        task_id,
+                        target_system,
+                        schema_name,
+                        table_name,
+                        entity_id,
+                        entity_name,
+                        change_type,
+                        final_status,
+                        attempts_count,
+                        created_at,
+                        failed_objects,
+                        attempt_no,
+                        error_message,
+                        error_stacktrace
+                    FROM {TABLE_RELEASE_OBJECTS}
+                    WHERE release_id = :release_id
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"release_id": release_id, "limit": limit},
+            ).fetchall()
+            obj_payload = []
+            for row in objects:
+                record = dict(row._mapping)
+                record["task_link"] = _build_ytrack_link(record.get("task_id"))
+                obj_payload.append(record)
+            return {"release": dict(log_row._mapping), "objects": obj_payload}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ /api/releases/{id} error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить детали релиза")
+
+
+@router.get("/api/releases/table/{schema}/{table}")
+def get_table_releases(
+    schema: str,
+    table: str,
+    target_system: Optional[str] = None,
+    limit: int = Query(30, ge=1, le=200),
+):
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT
+                        o.release_id,
+                        o.task_id,
+                        o.target_system,
+                        o.schema_name,
+                        o.table_name,
+                        o.entity_id,
+                        o.entity_name,
+                        o.change_type,
+                        o.final_status,
+                        o.attempts_count,
+                        o.created_at,
+                        o.failed_objects,
+                        o.attempt_no,
+                        o.error_message,
+                        o.error_stacktrace,
+                        l.release_type,
+                        l.initiated_by,
+                        l.started_at,
+                        l.finished_at,
+                        l.status AS release_status
+                    FROM {TABLE_RELEASE_OBJECTS} o
+                    LEFT JOIN {TABLE_RELEASE_LOG} l ON l.release_id = o.release_id
+                    WHERE o.schema_name = :schema
+                      AND o.table_name = :table
+                      AND (:target_system IS NULL OR lower(o.target_system) = lower(:target_system))
+                    ORDER BY o.created_at DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"schema": schema, "table": table, "target_system": target_system, "limit": limit},
+            ).fetchall()
+            payload = []
+            for row in rows:
+                record = dict(row._mapping)
+                record["task_link"] = _build_ytrack_link(record.get("task_id"))
+                payload.append(record)
+            return {"items": payload}
+    except Exception as e:
+        print("❌ /api/releases/table error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить релизы по объекту")
 
 
 app.include_router(router)

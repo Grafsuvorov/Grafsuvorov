@@ -44,6 +44,12 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                 Сущности
               </button>
               <button
+                className={isActive("/releases") ? "active" : ""}
+                onClick={() => onChangeView("releases")}
+              >
+                Релизы
+              </button>
+              <button
                 className={isActive("/logic-audit") ? "active" : ""}
                 onClick={() => onChangeView("logic_audit")}
               >

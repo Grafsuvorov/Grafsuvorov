@@ -1,17 +1,12 @@
-index-DddO4pkL.js:135 
- 
- POST http://rgm-s-dwhapp01.hq.root.ad:5312/api/admin/run-ci-cd 500 (Internal Server Error)
-window.fetch	@	index-DddO4pkL.js:135
-D	@	index-DddO4pkL.js:135
-XS	@	index-DddO4pkL.js:48
-(anonymous)	@	index-DddO4pkL.js:48
-n1	@	index-DddO4pkL.js:48
-hv	@	index-DddO4pkL.js:48
-Ev	@	index-DddO4pkL.js:49
-Z$	@	index-DddO4pkL.js:49
+Ошибка говорит, что нет пути /root/git_dir/etl/meta внутри контейнера.
+  Нужно узнать, как реально называется папка внутри /root/git_dir.
 
-cp: cannot stat '/root/git_dir/etl/meta/.': No such file or directory
-Вывод ci_cd
-Статус: failed
-gogogogo
-cp: cannot stat '/root/git_dir/etl/meta/.': No such file or directory
+  Проверь в контейнере:
+
+  docker compose exec api /bin/sh -c "ls -la /root/git_dir"
+
+  Если там, например, /root/git_dir/meta (без etl), то меняем скрипт на:
+
+  cp -a /root/git_dir/meta/. /app/config_files/meta/
+
+  Если папка называется по‑другому — пришли вывод ls, я подставлю точный путь.

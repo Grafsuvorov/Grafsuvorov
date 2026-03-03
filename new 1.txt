@@ -1,35 +1,65 @@
-#!/usr/bin/bash
-  set -euo pipefail
-
-  unset http_proxy
-  unset HTTPS_PROXY
-  unset https_proxy
-  unset HTTP_PROXY
-
-  export GIT_SSL_NO_VERIFY=1
-
-  echo 'gogogogo'
-
-  cd /root/git_dir/etl
-  git -c http.sslVerify=false pull
-
-  cd /root/git_dir/meta
-  git -c http.sslVerify=false pull
-
-  rm -rf /app/meta_info/*
-  cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
-
-  mkdir -p /app/config_files/meta
-  rm -rf /app/config_files/meta/*
-  cp -a /root/git_dir/meta/. /app/config_files/meta/
-
-  echo 'Закончили упражнение'
-  echo 'Как же ты хорош!'
-
-  Потом:
-
-  chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
-  docker compose up -d --force-recreate
-
-  Если всё ок — кнопка заработает.
-
+From https://prod.gitlab.dwh.rusal.com/dwh/etl 0132f28df..6d37369f7 main -> origin/main 62a81c991..f52e14a48 application/2026-02-12 -> origin/application/2026-02-12 * [new branch] feature/DWH-10184 -> origin/feature/DWH-10184 050521fc9..30adafd49 feature/DWH-10305 -> origin/feature/DWH-10305 8f7285994..82521fe9f feature/DWH-10480 -> origin/feature/DWH-10480 * [new branch] feature/DWH-10570 -> origin/feature/DWH-10570 * [new branch] feature/DWH-10704 -> origin/feature/DWH-10704 * [new branch] feature/DWH-10716 -> origin/feature/DWH-10716 * [new branch] feature/DWH-10725 -> origin/feature/DWH-10725 * [new branch] feature/DWH-10744 -> origin/feature/DWH-10744 * [new branch] feature/DWH-10762 -> origin/feature/DWH-10762 * [new branch] feature/DWH-10780 -> origin/feature/DWH-10780 * [new branch] feature/DWH-10799 -> origin/feature/DWH-10799 * [new branch] feature/DWH-10805 -> origin/feature/DWH-10805 * [new branch] feature/DWH-10819 -> origin/feature/DWH-10819 * [new branch] feature/DWH-10821 -> origin/feature/DWH-10821 * [new branch] feature/DWH-10828 -> origin/feature/DWH-10828 * [new branch] feature/DWH-10832 -> origin/feature/DWH-10832 3975c87c1..662241b29 feature/DWH-5874 -> origin/feature/DWH-5874 670e7a35a..f548a1653 feature/DWH-7640 -> origin/feature/DWH-7640 * [new branch] feature/DWH-7640_1 -> origin/feature/DWH-7640_1 * [new branch] feature/DWH-7640_old -> origin/feature/DWH-7640_old 2a7803136..e1bf9fa96 feature/DWH-9525 -> origin/feature/DWH-9525 * [new branch] feature/DWH-9639 -> origin/feature/DWH-9639 44e1fe020..ff7a97886 feature/DWH-9958 -> origin/feature/DWH-9958 * [new branch] release/2026
+Вывод ci_cd
+Статус: failed
+gogogogo
+Updating 0132f28df..6d37369f7
+Fast-forward
+ .../dm/dm_accounting_bank_statements_meta.yaml     |   6 +
+ ...n_service_invoice_approvement_history_meta.yaml |  17 +-
+ ...ice_invoice_approvement_history_pivot_meta.yaml |  51 +++--
+ ...vice_invoices_and_payments_aggregated_meta.yaml |  34 ++-
+ ...rtation_service_invoices_and_payments_meta.yaml |  34 ++-
+ ...ated_document_workflow_approval_performance.sql |   3 +
+ ...ansportation_own_container_information_card.sql |  46 ++++
+ ...n_service_invoice_approvement_history_pivot.sql |  15 +-
+ ...ransportation_service_invoices_and_payments.sql |  91 ++++++++
+ ...on_service_invoices_and_payments_aggregated.sql |  49 ++++
+ dags/clickhouse_datamart_generator.py              |   7 +
+ .../config_generator_clickhouse.py                 |  10 +
+ dags/generation_utility/dag_generator.py           |  21 +-
+ dags/plugins/help_utility/help_utility.py          | 127 +++++++++--
+ .../meta_data_file.yaml                            |  16 +-
+ .../meta_data_file.yaml                            |   5 +-
+ .../meta_data_file.yaml                            |   6 +-
+ .../dds/accidents/meta_data_file.yaml              |   3 +-
+ .../ods/alarm_accidents/meta_data_file.yaml        |   3 +-
+ .../dds/accidents/meta_data_file.yaml              |   3 +-
+ .../ods/alarm_accidents/meta_data_file.yaml        |   3 +-
+ .../dds/accidents/meta_data_file.yaml              |   3 +-
+ .../ods/alarm_accidents/meta_data_file.yaml        |   3 +-
+ .../dds/accidents/meta_data_file.yaml              |   3 +-
+ .../ods/alarm_accidents/meta_data_file.yaml        |   3 +-
+ .../alverse_mlc_overview_pivot/meta_data_file.yaml |   6 +-
+ .../meta_data_file.yaml                            |  65 +++---
+ .../meta_data_file.yaml                            |   9 +-
+ .../alverse_common_documents/meta_data_file.yaml   |   5 +
+ .../meta_data_file.yaml                            |   5 +
+ .../alverse_mlc_overview_pivot/meta_data_file.yaml |   3 +
+ .../alverse_sales_life_cycle/meta_d
+From https://prod.gitlab.dwh.rusal.com/dwh/etl
+   0132f28df..6d37369f7  main                    -> origin/main
+   62a81c991..f52e14a48  application/2026-02-12  -> origin/application/2026-02-12
+ * [new branch]          feature/DWH-10184       -> origin/feature/DWH-10184
+   050521fc9..30adafd49  feature/DWH-10305       -> origin/feature/DWH-10305
+   8f7285994..82521fe9f  feature/DWH-10480       -> origin/feature/DWH-10480
+ * [new branch]          feature/DWH-10570       -> origin/feature/DWH-10570
+ * [new branch]          feature/DWH-10704       -> origin/feature/DWH-10704
+ * [new branch]          feature/DWH-10716       -> origin/feature/DWH-10716
+ * [new branch]          feature/DWH-10725       -> origin/feature/DWH-10725
+ * [new branch]          feature/DWH-10744       -> origin/feature/DWH-10744
+ * [new branch]          feature/DWH-10762       -> origin/feature/DWH-10762
+ * [new branch]          feature/DWH-10780       -> origin/feature/DWH-10780
+ * [new branch]          feature/DWH-10799       -> origin/feature/DWH-10799
+ * [new branch]          feature/DWH-10805       -> origin/feature/DWH-10805
+ * [new branch]          feature/DWH-10819       -> origin/feature/DWH-10819
+ * [new branch]          feature/DWH-10821       -> origin/feature/DWH-10821
+ * [new branch]          feature/DWH-10828       -> origin/feature/DWH-10828
+ * [new branch]          feature/DWH-10832       -> origin/feature/DWH-10832
+   3975c87c1..662241b29  feature/DWH-5874        -> origin/feature/DWH-5874
+   670e7a35a..f548a1653  feature/DWH-7640        -> origin/feature/DWH-7640
+ * [new branch]          feature/DWH-7640_1      -> origin/feature/DWH-7640_1
+ * [new branch]          feature/DWH-7640_old    -> origin/feature/DWH-7640_old
+   2a7803136..e1bf9fa96  feature/DWH-9525        -> origin/feature/DWH-9525
+ * [new branch]          feature/DWH-9639        -> origin/feature/DWH-9639
+   44e1fe020..ff7a97886  feature/DWH-9958        -> origin/feature/DWH-9958
+ * [new branch]          release/2026

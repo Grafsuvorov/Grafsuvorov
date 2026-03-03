@@ -4552,7 +4552,7 @@ main.content {
 
 .release-objects-head,
 .release-objects-row {
-  grid-template-columns: 1.6fr 0.8fr 0.7fr 1.4fr 0.9fr 0.9fr;
+  grid-template-columns: minmax(240px, 1.8fr) 0.7fr 0.7fr minmax(220px, 1.4fr) 0.8fr 0.8fr;
 }
 
 .release-list-head,
@@ -4592,12 +4592,21 @@ main.content {
   white-space: nowrap;
 }
 
+.release-objects-row > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .release-list-row .btn {
   justify-self: end;
 }
 
 .release-objects-row .release-object-link {
   justify-self: start;
+  max-width: 100%;
+  display: block;
 }
 
 .release-object-link {

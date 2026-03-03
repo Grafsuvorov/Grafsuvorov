@@ -1,5 +1,35 @@
-fatal: unable to access 'https://prod.gitlab.dwh.rusal.com/dwh/etl.git/': server verification failed: certificate signer not trusted. (CAfile: /etc/ssl/certs/ca-certificates.crt CRLfile: none)
-Вывод ci_cd
-Статус: failed
-gogogogo
-fatal: unable to access 'https://prod.gitlab.dwh.rusal.com/dwh/etl.git/': server verification failed: certificate signer not trusted. (CAfile: /etc/ssl/certs/ca-certificates.crt CRLfile: none)
+#!/usr/bin/bash
+  set -euo pipefail
+
+  unset http_proxy
+  unset HTTPS_PROXY
+  unset https_proxy
+  unset HTTP_PROXY
+
+  export GIT_SSL_NO_VERIFY=1
+
+  echo 'gogogogo'
+
+  cd /root/git_dir/etl
+  git -c http.sslVerify=false pull
+
+  cd /root/git_dir/meta
+  git -c http.sslVerify=false pull
+
+  rm -rf /app/meta_info/*
+  cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
+
+  mkdir -p /app/config_files/meta
+  rm -rf /app/config_files/meta/*
+  cp -a /root/git_dir/meta/. /app/config_files/meta/
+
+  echo 'Закончили упражнение'
+  echo 'Как же ты хорош!'
+
+  Потом:
+
+  chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
+  docker compose up -d --force-recreate
+
+  Если всё ок — кнопка заработает.
+

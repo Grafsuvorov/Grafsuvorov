@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function ReleasesPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -47,6 +49,20 @@ export default function ReleasesPage() {
     return { total, failed, running };
   }, [items]);
 
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const str = String(value);
+    const normalized = str.replace("T", " ").replace("Z", "");
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    if (match) return `${match[1]} ${match[2]}`;
+    return normalized;
+  };
+
+  const openTable = (schema, table) => {
+    if (!schema || !table) return;
+    navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`);
+  };
+
   return (
     <div className="page releases-page">
       <div className="page-header">
@@ -83,6 +99,7 @@ export default function ReleasesPage() {
               <span>Старт</span>
               <span>Длительность</span>
               <span>Объектов</span>
+              <span>Автор</span>
               <span>Задачи</span>
               <span></span>
             </div>
@@ -92,9 +109,10 @@ export default function ReleasesPage() {
                 <span className={`status-pill ${row.failed_count ? "status-failed" : "status-success"}`}>
                   {row.status || "—"}
                 </span>
-                <span>{row.started_at || "—"}</span>
+                <span>{formatDateTime(row.started_at)}</span>
                 <span>{row.duration_minutes ? `${Math.round(row.duration_minutes)} мин` : "—"}</span>
                 <span>{row.objects_count ?? "—"}</span>
+                <span>{row.initiated_by || "—"}</span>
                 <span className="release-task-links">
                   {Array.isArray(row.task_ids) && row.task_ids.length > 0
                     ? row.task_ids.slice(0, 3).map((task, idx) => (
@@ -125,7 +143,7 @@ export default function ReleasesPage() {
             <div className="release-objects-table">
               <div className="release-objects-head">
                 <span>Объект</span>
-                <span>Система</span>
+                <span>БД</span>
                 <span>Статус</span>
                 <span>Изменения</span>
                 <span>Задача</span>
@@ -134,6 +152,13 @@ export default function ReleasesPage() {
               {details.objects.map((obj, idx) => (
                 <div key={`${obj.release_id}-${idx}`} className="release-objects-row">
                   <span className="mono">{obj.schema_name}.{obj.table_name}</span>
+                  <button
+                    className="release-object-link"
+                    onClick={() => openTable(obj.schema_name, obj.table_name)}
+                    title={`${obj.schema_name}.${obj.table_name}`}
+                  >
+                    {obj.schema_name}.{obj.table_name}
+                  </button>
                   <span>{obj.target_system || "—"}</span>
                   <span className={`status-pill ${obj.final_status?.toLowerCase().includes("success") ? "status-success" : "status-unknown"}`}>
                     {obj.final_status || "—"}
@@ -148,7 +173,7 @@ export default function ReleasesPage() {
                   ) : (
                     <span className="mono">{obj.task_id || "—"}</span>
                   )}
-                  <span>{obj.created_at || "—"}</span>
+                  <span>{formatDateTime(obj.created_at)}</span>
                 </div>
               ))}
             </div>

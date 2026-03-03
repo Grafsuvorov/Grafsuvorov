@@ -314,6 +314,14 @@ export default function TableCard({
     if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
     return "status-unknown";
   };
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const str = String(value);
+    const normalized = str.replace("T", " ").replace("Z", "");
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    if (match) return `${match[1]} ${match[2]}`;
+    return normalized;
+  };
 
   const copySql = (sql) => {
     if (!sql) return;
@@ -799,7 +807,8 @@ export default function TableCard({
               <div className="release-head">
                 <span>Релиз</span>
                 <span>Задача</span>
-                <span>Система</span>
+                <span>БД</span>
+                <span>Автор</span>
                 <span>Статус</span>
                 <span>Изменения</span>
                 <span>Дата</span>
@@ -815,13 +824,14 @@ export default function TableCard({
                     <span className="mono">{item.task_id || "—"}</span>
                   )}
                   <span>{item.target_system || "—"}</span>
+                  <span>{item.initiated_by || "—"}</span>
                   <span className={`status-pill ${releaseStatusClass(item.final_status)}`}>
                     {item.final_status || "—"}
                   </span>
                   <span className="muted" title={item.change_type || ""}>
                     {item.change_type || "—"}
                   </span>
-                  <span>{item.created_at || "—"}</span>
+                  <span>{formatDateTime(item.created_at)}</span>
                 </div>
               ))}
             </div>

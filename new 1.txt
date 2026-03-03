@@ -1,27 +1,51 @@
-[+] Building 188.3s (15/16)
- => [internal] load build definition from Dockerfile                                                                             0.0s
- => => transferring dockerfile: 1.47kB                                                                                           0.0s
- => [internal] load metadata for docker.io/library/python:3.11-slim                                                              0.0s
- => [internal] load metadata for docker.io/library/node:20-slim                                                                  1.3s
- => [internal] load .dockerignore                                                                                                0.0s
- => => transferring context: 162B                                                                                                0.0s
- => [stage-1 1/9] FROM docker.io/library/python:3.11-slim                                                                        0.0s
- => [internal] load build context                                                                                                0.0s
- => => transferring context: 2.46kB                                                                                              0.0s
- => CACHED [node 1/2] FROM docker.io/library/node:20-slim@sha256:d8a35d586fad3af7abb6fdb9ba972388395405f4d462da9e4a4ddcde67b5e0  0.0s
- => CACHED [stage-1 2/9] WORKDIR /app                                                                                            0.0s
- => [stage-1 3/9] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*                                   65.1s
- => [node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://rgm-s-rtp  2.3s
- => [stage-1 4/9] COPY --from=node /usr/local/bin/node /usr/local/bin/node                                                       0.3s
- => [stage-1 5/9] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm                                                         0.2s
- => [stage-1 6/9] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx                                                         0.2s
- => [stage-1 7/9] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules                                       0.6s
- => [stage-1 8/9] COPY api/ /app/api/                                                                                            0.2s
- => [stage-1 9/9] RUN pip install --index-url=https://pypi.nx.sib.rual.ru/simple --trusted-host=nx.sib.rual.ru --trusted-host  120.3s
- => => # WARNING: Retrying (Retry(total=94, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyEr
- => => # ror('Cannot connect to proxy.', OSError('Tunnel connection failed: 407 Proxy Authentication Required'))': /simple/fastapi/
- => => # WARNING: Retrying (Retry(total=93, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyEr
- => => # ror('Cannot connect to proxy.', OSError('Tunnel connection failed: 407 Proxy Authentication Required'))': /simple/fastapi/
- => => # WARNING: Retrying (Retry(total=92, connect=None, read=None, redirect=None, status=None)) after connection broken by 'ProxyEr
- => => # ror('Cannot connect to proxy.', OSError('Tunnel connection failed: 407 Proxy Authentication Required'))': /simple/fastapi/
+# stage: node + dagre
+  FROM node:20-slim AS node
+  ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+  RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+  && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+  && npm install -g dagre
 
+  # stage: python
+  FROM python:3.11-slim
+  WORKDIR /app
+
+  ENV PYTHONPATH=/app/api
+  ENV PYTHONDONTWRITEBYTECODE=1
+  ENV PYTHONUNBUFFERED=1
+
+  # proxy for apt only
+  ENV http_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+  ENV https_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+
+  # install git
+  RUN apt-get update \
+   && apt-get install -y git \
+   && rm -rf /var/lib/apt/lists/*
+
+  COPY --from=node /usr/local/bin/node /usr/local/bin/node
+  COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+  COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+  COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+  ENV PATH="/usr/local/bin:${PATH}"
+  ENV NODE_PATH=/usr/local/lib/node_modules
+
+  COPY api/ /app/api/
+
+  # disable proxy for pip (internal pypi)
+  RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= \
+      pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+      --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+      --retries 100 --timeout 600000 --no-cache-dir \
+      fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+  EXPOSE 8000
+  CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  После замены:
+
+  docker compose build --no-cache api
+  docker compose up -d --force-recreate
+  docker compose exec api git --version
+
+  Если git --version показывает версию — всё ок.

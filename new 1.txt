@@ -1,5 +1,35 @@
-/app/scripts/ci_cd.sh: line 11: rsync: command not found
-Вывод ci_cd
-Статус: failed
-gogogogo
-/app/scripts/ci_cd.sh: line 11: rsync: command not found
+#!/usr/bin/bash
+  set -euo pipefail
+
+  unset http_proxy
+  unset HTTPS_PROXY
+  unset https_proxy
+  unset HTTP_PROXY
+
+  echo 'gogogogo'
+
+  # meta_info
+  rm -rf /app/meta_info/*
+  cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
+
+  # meta -> config_files/meta
+  mkdir -p /app/config_files/meta
+  rm -rf /app/config_files/meta/*
+  cp -a /root/git_dir/etl/meta/. /app/config_files/meta/
+
+  echo 'Закончили упражнение'
+  echo 'Как же ты хорош!'
+
+  Важно:
+
+  - Тома должны быть rw (без :ro) иначе rm/cp не сработают.
+  - rsync не нужен.
+
+  Почему “кэш обновился быстро” — это нормально: кнопка ci_cd не трогает кеш, а только файлы. Кэш отдельно кнопкой “Принудительно обновить кеш”.
+
+  После правки:
+
+  chmod +x /root/table-dependency-viewer/scripts/ci_cd.sh
+  docker compose up -d --force-recreate
+
+  Если хочешь оставить rsync, надо ставить его в образ (но это снова apt/proxy).

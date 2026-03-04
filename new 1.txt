@@ -1,14 +1,68 @@
-ID,Summary,Description,Project_Name,Project_Key,Created_By,Assignee,Created_At,Updated_At,Resolved_At,Last_State_Changed_By,Last_State_Changed_At
-DWH-10841,Доработка dm.purchase_documents_main_data,"* **Направление:** MM
-* **Ссылка на гит:** [Доработка dm.purchase_documents_main_data DWH-10620 (!1509) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1509)
-* [Доработка dm_calc.purchase_documents_main_data_part2 (!1479) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1479)
-* **Ссылка на изменяемые объекты:**
+Проект
 
-**DM**
+КХД
+User avatar
+Тип карточки
 
-* [dm/dm.purchase_documents_main_data.sql · RyazanovIS_DWH-10841 · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/blob/RyazanovIS_DWH-10841/dm/dm.purchase_documents_main_data.sql)
-* **Способ обновления:** Полный
-* **Историчность:** Не нужна;
-* **Стенд:** DEV и PROD;
-* **Время работы скрипта:** 5 min
-* **Ссылка на статью релизов:** [Статусы по задачам (2026-03-11) LE+MM+FI \| База знаний](https://yt.rusal.ru/articles/DWH-A-1344/Statusy-po-zadacham-2026-03-11-LEMMFI)",КХД,N/A,RyazanovIS,N/A,2026-03-02 16:33,2026-03-02 16:45,—,N/A,—
+Task⁠
+T
+Приоритет
+
+Normal⁠
+N
+Состояние
+
+Зарегистрирована
+З
+Исполнитель
+
+Ermolenko Sergey
+User avatar
+Команда (Подсистема)
+
+DE (Data Engineer)⁠
+D
+Оценка (чел./час.)
+
+0
+Срок
+4 мар. 2026, 18:00
+Затраченное время
+
+?
+Направление
+
+ТОРО
+Т
+Дата релиза
+5 мар. 2026
+Spent time
+
+?
+Фактические трудозатраты
+
+?
+Дашборд КХД
+
+Нет: дашборд
+Экономия за счет ИИ
+
+?
+Оценка трудозатрат
+
+?
+Доски
+
+КХД
+
+
+КХД-копия
+
+
+Доска DE
+
+
+КХД-копия.1
+
+
+Тестовая доска релизов

@@ -1,9 +1,31 @@
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status: 200
+[{"removed":[],"added":[{"login":"SuvorovND","name":"Suvorov Nikita","$type":"User"}],"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771
+597924090,"$type":"CustomFieldActivityItem"},{"removed":[{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"}],"added":[],"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"field":{"name":"Исполнитель","$ty
+pe":"CustomFilterField"},"timestamp":1771597926135,"$type":"CustomFieldActivityItem"},{"removed":[],"added":[{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"}],"author":{"login":"SuvorovND","name":"Suvorov
+ Nikita","$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771914654769,"$type":"CustomFieldActivityItem"},{"removed":[{"login":"SuvorovND","name":"Suvorov Nikita","$type":"User"}],"added":[
+],"author":{"login":"SuvorovND","name":"Suvorov Nikita","$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771915038364,"$type":"CustomFieldActivityItem"},{"removed":[{"name":"Зарегистрирован
+а","$type":"StateBundleElement"}],"added":[{"name":"В работе","$type":"StateBundleElement"}],"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Состояние","$type":"CustomFilterFiel
+d"},"timestamp":1771920637940,"$type":"CustomFieldActivityItem"},{"removed":null,"added":240,"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Фактические трудозатраты","$type":"C
+ustomFilterField"},"timestamp":1771935597317,"$type":"CustomFieldActivityItem"},{"removed":[],"added":[{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"}],"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya",
+"$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771935605873,"$type":"CustomFieldActivityItem"},{"removed":[{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"}],"added
+":[],"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771935608480,"$type":"CustomFieldActivityItem"},{"removed":[],"added"
+:[{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"}],"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"field":{"name":"Исполнитель","$type":"CustomFilterField"},"timestamp":1771944865862,
+"$type":"CustomFieldActivityItem"},{"removed":[{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"}],"added":[],"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"field":{"name":"Исполнитель","$type":"Custo
+mFilterField"},"timestamp":1771944867884,"$type":"CustomFieldActivityItem"},{"removed":[{"name":"В работе","$type":"StateBundleElement"}],"added":[{"name":"Проверка / Тест","$type":"StateBundleElement"}],"author":{"login":"Staro
+verovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Состояние","$type":"CustomFilterField"},"timestamp":1771944985460,"$type":"CustomFieldActivityItem"},{"removed":[{"name":"Проверка / Тест","$type":"State
+BundleElement"}],"added":[{"name":"Ожидание релиза","$type":"StateBundleElement"}],"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Состояние","$type":"CustomFilterField"},"times
+tamp":1771944987951,"$type":"CustomFieldActivityItem"},{"removed":[{"name":"Ожидание релиза","$type":"StateBundleElement"}],"added":[{"name":"Завершена","$type":"StateBundleElement"}],"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"field":{"name":"Состояние","$type":"CustomFilterField"},"timestamp":1772102974489,"$type":"CustomFieldActivityItem"}]
+
+
 import os, requests
 
 issue_id = "DWH-10667"
 url = f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
 headers = {
-    "Authorization": f"Bearer {os.environ['YOUTRACK_TOKEN']}",
+    "Authorization": f"Bearer perm-U3V2b3Jvdk5E.NTktNDQ=.JhsxRb2atJbCqF3uP9d9hgVpCOCEDB",
     "Accept": "application/json",
 }
 params = {
@@ -14,15 +36,3 @@ params = {
 r = requests.get(url, headers=headers, params=params, verify=False)
 print("status:", r.status_code)
 print(r.text[:4000])
-
-Если хочешь сразу шире (и комментарии/ссылки тоже), то:
-
-params = {
-    "categories": "CustomFieldCategory,SummaryCategory,DescriptionCategory,CommentsCategory,LinksCategory",
-    "fields": "timestamp,author(name,login),field(name),added(name,login),removed(name,login),to(name,login)"
-}
-Как вытащить именно “переводы” (статус) из ответа
-
-В ответе фильтруй элементы, где:
-
-field.name == "State" (или как у вас называется поле статуса — иногда “Статус”, “State”, “Stage”)

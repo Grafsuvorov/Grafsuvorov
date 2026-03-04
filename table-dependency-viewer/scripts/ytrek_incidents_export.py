@@ -25,7 +25,7 @@ ACTIVITY_FIELDS_DEFAULT = os.getenv(
 )
 ACTIVITY_CATEGORIES_DEFAULT = os.getenv(
     "YOUTRACK_ACTIVITY_CATEGORIES",
-    "IssueCustomFieldHistoryCategory,IssueHistoryCategory,ProjectCategory,CommentsCategory,WorkItemCategory",
+    "CustomFieldCategory,CommentsCategory,WorkItemCategory",
 )
 
 if not TOKEN:
@@ -79,6 +79,16 @@ def fmt_period_value(value):
     return " ".join(parts) if parts else raw
 
 
+def fmt_minutes(value):
+    try:
+        minutes = int(value)
+    except Exception:
+        return str(value)
+    if minutes % 60 == 0:
+        return f"{minutes // 60}ч"
+    return f"{minutes} мин"
+
+
 def fetch_issue_activities(issue_id):
     url = f"{YOUTRACK_URL}/api/issues/{issue_id}/activities"
     params = {"fields": ACTIVITY_FIELDS_DEFAULT, "categories": ACTIVITY_CATEGORIES_DEFAULT}
@@ -101,6 +111,15 @@ def fetch_issue_workitems(issue_id):
     params = {
         "fields": "author(name,login),creator(name,login),date,duration(minutes),text,workType(name)"
     }
+    resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
+    if resp.status_code != 200:
+        return []
+    return resp.json()
+
+
+def fetch_issue_comments(issue_id):
+    url = f"{YOUTRACK_URL}/api/issues/{issue_id}/comments"
+    params = {"fields": "author(name,login),created,text"}
     resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
     if resp.status_code != 200:
         return []
@@ -188,6 +207,8 @@ def main():
     raw_dump = len(issue_ids) == 1
     activities_rows = []
     worklog_rows = []
+    timeline_rows = []
+    comments_rows = []
     for issue_readable in issue_ids:
         issue = fetch_issue_by_readable(issue_readable)
 
@@ -202,6 +223,7 @@ def main():
         last_assignee_author, last_assignee_ts, last_assignee_name = find_last_assignee_change(activities)
         current_state = get_current_state(issue.get("customFields"))
         workitems = fetch_issue_workitems(issue_id)
+        comments = fetch_issue_comments(issue_id)
 
         if raw_dump:
             out_dir = os.path.dirname(__file__)
@@ -279,6 +301,41 @@ def main():
                 "Removed": removed,
             })
 
+            event_type = "Other"
+            if field:
+                lower = field.lower()
+                if "исполнитель" in lower or "assignee" in lower:
+                    event_type = "Assignee change"
+                elif "состояние" in lower or "state" in lower:
+                    event_type = "State change"
+                elif "трудозатрат" in lower or "spent" in lower:
+                    event_type = "Work logged"
+            if isinstance(added, int):
+                added = fmt_minutes(added)
+            if isinstance(removed, int):
+                removed = fmt_minutes(removed)
+
+            timeline_rows.append({
+                "Issue_ID": issue.get("idReadable", "N/A"),
+                "Timestamp": fmt_ts(act.get("timestamp")),
+                "Author": (act.get("author") or {}).get("login") or (act.get("author") or {}).get("name") or "N/A",
+                "Event": event_type,
+                "Field": field or "N/A",
+                "From": removed,
+                "To": added,
+            })
+
+        # created event
+        timeline_rows.append({
+            "Issue_ID": issue.get("idReadable", "N/A"),
+            "Timestamp": fmt_ts(issue.get("created")),
+            "Author": reporter.get("login") or reporter.get("name") or "N/A",
+            "Event": "Created",
+            "Field": "Создание",
+            "From": "",
+            "To": "",
+        })
+
         for wi in workitems:
             worklog_rows.append({
                 "Issue_ID": issue.get("idReadable", "N/A"),
@@ -288,6 +345,14 @@ def main():
                 "Minutes": (wi.get("duration") or {}).get("minutes") if isinstance(wi.get("duration"), dict) else "N/A",
                 "Type": (wi.get("workType") or {}).get("name") if isinstance(wi.get("workType"), dict) else "N/A",
                 "Text": wi.get("text") or "",
+            })
+
+        for cm in comments:
+            comments_rows.append({
+                "Issue_ID": issue.get("idReadable", "N/A"),
+                "Author": (cm.get("author") or {}).get("login") or (cm.get("author") or {}).get("name") or "N/A",
+                "Created_At": fmt_ts(cm.get("created")),
+                "Comment_Text": cm.get("text") or "",
             })
 
     filename = f"issues_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
@@ -343,6 +408,24 @@ def main():
             for row in worklog_rows:
                 writer.writerow(row)
         print(f"✓ Списания времени: {wl_path}")
+
+    if timeline_rows:
+        tl_path = os.path.join(os.path.dirname(__file__), f"issues_timeline_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        with open(tl_path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=list(timeline_rows[0].keys()))
+            writer.writeheader()
+            for row in sorted(timeline_rows, key=lambda x: x.get("Timestamp") or ""):
+                writer.writerow(row)
+        print(f"✓ Хронология задачи: {tl_path}")
+
+    if comments_rows:
+        cm_path = os.path.join(os.path.dirname(__file__), f"issues_comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        with open(cm_path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=list(comments_rows[0].keys()))
+            writer.writeheader()
+            for row in comments_rows:
+                writer.writerow(row)
+        print(f"✓ Комментарии: {cm_path}")
 
 
 if __name__ == "__main__":

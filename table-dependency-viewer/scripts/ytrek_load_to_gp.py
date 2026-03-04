@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 from datetime import datetime, timezone
 
 import requests
@@ -20,6 +21,8 @@ YOUTRACK_TOKEN = os.getenv("YOUTRACK_TOKEN", YOUTRACK_TOKEN)
 PG_DSN = os.getenv("YT_PG_DSN", PG_DSN)
 
 TRUNCATE_BEFORE_LOAD = False
+ONLY_NEW_ISSUES = True
+ONLY_RELEASE_TASKS = True
 
 ISSUE_FIELDS = (
     "id,idReadable,summary,description,project(name,key),"
@@ -145,6 +148,64 @@ def fmt_period_value(value):
     return " ".join(parts) if parts else raw
 
 
+def clean_text(value):
+    if not value:
+        return value
+    text = str(value)
+    # strip markdown links: [text](url) -> text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    # remove bold/italic/code markers
+    text = text.replace("**", "").replace("__", "").replace("*", "").replace("_", "")
+    text = text.replace("`", "")
+    # collapse extra whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def normalize_value(value):
+    if isinstance(value, list):
+        return ", ".join([v.get("name", str(v)) if isinstance(v, dict) else str(v) for v in value])
+    if isinstance(value, dict):
+        if value.get("$type") == "PeriodValue":
+            return fmt_period_value(value)
+        return value.get("name", str(value))
+    if isinstance(value, int):
+        if value > 1_000_000_000_000:
+            return fmt_ts(value)
+    return value
+
+
+def fetch_release_tasks(engine):
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT DISTINCT task_id
+                FROM tech_etl.release_objects
+                WHERE task_id IS NOT NULL
+                """
+            )
+        ).fetchall()
+    return [r[0] for r in rows if r[0]]
+
+
+def existing_issues(engine, issue_ids):
+    if not issue_ids:
+        return set()
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT DISTINCT issue_id
+                FROM tech_etl.yt_issue_snapshot
+                WHERE issue_id = ANY(:ids)
+                """
+            ),
+            {"ids": issue_ids},
+        ).fetchall()
+    return {r[0] for r in rows}
+
+
 def get_current_state(custom_fields):
     for cf in custom_fields or []:
         name = cf.get("name", "")
@@ -179,8 +240,8 @@ def load_issue(engine, issue_readable):
     # snapshot
     snapshot_row = {
         "issue_id": issue.get("idReadable"),
-        "summary": issue.get("summary"),
-        "description": issue.get("description"),
+        "summary": clean_text(issue.get("summary")),
+        "description": clean_text(issue.get("description")),
         "project_name": project.get("name"),
         "project_key": project.get("key"),
         "created_by": reporter.get("login") or reporter.get("name"),
@@ -203,55 +264,63 @@ def load_issue(engine, issue_readable):
     custom_rows = []
     for cf in issue.get("customFields") or []:
         name = cf.get("name") or cf.get("id") or "custom"
-        value = cf.get("value")
-        if isinstance(value, list):
-            value = ", ".join([v.get("name", str(v)) if isinstance(v, dict) else str(v) for v in value])
-        elif isinstance(value, dict):
-            if value.get("$type") == "PeriodValue":
-                value = fmt_period_value(value)
-            else:
-                value = value.get("name", str(value))
-        elif isinstance(value, int):
-            if value > 1_000_000_000_000:
-                value = fmt_ts(value)
+        value = normalize_value(cf.get("value"))
         custom_rows.append({"issue_id": issue.get("idReadable"), "field_name": name, "field_value": value})
 
     # timeline from activities
-    timeline_rows = []
+    raw_events = []
     for act in activities:
         field = (act.get("field") or {}).get("name")
-        added = act.get("added") or act.get("to") or ""
-        removed = act.get("removed") or ""
-        if isinstance(added, list):
-            added = ", ".join([a.get("name", str(a)) if isinstance(a, dict) else str(a) for a in added])
-        elif isinstance(added, dict):
-            added = added.get("name", str(added))
-        if isinstance(removed, list):
-            removed = ", ".join([r.get("name", str(r)) if isinstance(r, dict) else str(r) for r in removed])
-        elif isinstance(removed, dict):
-            removed = removed.get("name", str(removed))
+        if not field:
+            continue
+        lower = field.lower()
+        if "комментарии" in lower or "работа" in lower:
+            continue
 
-        event_type = "Other"
-        if field:
-            lower = field.lower()
-            if "исполнитель" in lower or "assignee" in lower:
-                event_type = "Assignee change"
-            elif "состояние" in lower or "state" in lower:
-                event_type = "State change"
-            elif "трудозатрат" in lower or "spent" in lower:
-                event_type = "Work logged"
+        added = normalize_value(act.get("added") or act.get("to"))
+        removed = normalize_value(act.get("removed"))
 
-        timeline_rows.append(
+        event_type = None
+        if "исполнитель" in lower or "assignee" in lower:
+            event_type = "Assignee change"
+        elif "состояние" in lower or "state" in lower:
+            event_type = "State change"
+        elif "трудозатрат" in lower or "spent" in lower:
+            event_type = "Work logged"
+
+        if not event_type:
+            continue
+
+        raw_events.append(
             {
                 "issue_id": issue.get("idReadable"),
                 "ts": fmt_ts(act.get("timestamp")),
                 "author": (act.get("author") or {}).get("login") or (act.get("author") or {}).get("name"),
-                "event_type": event_type,
                 "field_name": field,
+                "event_type": event_type,
                 "value_from": removed,
                 "value_to": added,
             }
         )
+
+    # merge paired added/removed events for same timestamp/author/field
+    timeline_rows = []
+    bucket = {}
+    for ev in raw_events:
+        key = (ev["issue_id"], ev["ts"], ev["author"], ev["field_name"], ev["event_type"])
+        existing = bucket.get(key, {})
+        value_from = ev.get("value_from") or existing.get("value_from")
+        value_to = ev.get("value_to") or existing.get("value_to")
+        bucket[key] = {**ev, "value_from": value_from, "value_to": value_to}
+    for ev in bucket.values():
+        if ev.get("event_type") == "Work logged":
+            if isinstance(ev.get("value_from"), int):
+                ev["value_from"] = fmt_minutes(ev.get("value_from"))
+            if isinstance(ev.get("value_to"), int):
+                ev["value_to"] = fmt_minutes(ev.get("value_to"))
+        if ev.get("value_from") is None and ev.get("value_to") is None:
+            continue
+        timeline_rows.append(ev)
 
     # worklog
     worklog_rows = []
@@ -355,8 +424,10 @@ def main():
         raise SystemExit("Set YOUTRACK_TOKEN in script or env")
     if "user:pass" in PG_DSN:
         raise SystemExit("Set PG_DSN in script or env")
+    if ONLY_RELEASE_TASKS:
+        ISSUE_IDS[:] = fetch_release_tasks(engine)
     if not ISSUE_IDS:
-        raise SystemExit("Set ISSUE_IDS list")
+        raise SystemExit("No ISSUE_IDS found")
 
     engine = create_engine(PG_DSN)
 
@@ -374,7 +445,14 @@ def main():
             conn.execute(text("TRUNCATE tech_etl.yt_issue_worklog"))
             conn.execute(text("TRUNCATE tech_etl.yt_issue_comment"))
 
+    if ONLY_NEW_ISSUES:
+        existing = existing_issues(engine, ISSUE_IDS)
+    else:
+        existing = set()
+
     for issue_id in ISSUE_IDS:
+        if ONLY_NEW_ISSUES and issue_id in existing:
+            continue
         load_issue(engine, issue_id)
 
     print("Done.")

@@ -1,1 +1,129 @@
-https://yt.rusal.ru/issue/DWH-10835
+import requests
+import urllib3
+import csv
+from datetime import datetime
+
+# Отключаем предупреждения о небезопасном соединении
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+# Конфигурация
+YOUTRACK_URL = 'https://yt.rusal.ru'
+TOKEN = "perm:VmVraG92TlY=.NTktMTQ=.wgZOARnuvxVRh8n3AXAkorT0NqtxzK"
+
+# Заголовки авторизации
+headers = {
+    'Accept': 'application/json',
+    'Authorization': f'Bearer {TOKEN}'
+}
+
+print("Получение всех задач с кастомным полем 'Тип карточки' (ID: 134-394)...")
+
+url = f'{YOUTRACK_URL}/api/issues'
+
+
+all_issues = []
+page = 0
+page_size = 50
+
+while True:
+    print(f"Загрузка страницы {page + 1}...")
+    
+    params = {
+        'fields': 'id,idReadable,summary,description,project(customFields(name,id)),customFields(name,value,id)',
+        '$top': page_size,
+        '$skip': page * page_size
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, params=params, verify=False)
+        
+        if response.status_code == 200:
+            issues_list = response.json()
+            print(f"Получено {len(issues_list)} задач на странице {page + 1}")
+            
+            if not issues_list:  
+                break
+                
+            all_issues.extend(issues_list)
+            
+            
+            if len(issues_list) < page_size:
+                break
+                
+            page += 1
+            
+        else:
+            print(f"Ошибка при получении задач: {response.status_code}")
+            print("Ответ сервера:", response.text)
+            break
+            
+    except Exception as e:
+        print(f"Ошибка при выполнении запроса: {e}")
+        break
+
+print(f"Всего загружено задач: {len(all_issues)}")
+
+incident_issues = []
+
+for i, issue in enumerate(all_issues, 1):
+    issue_id = issue.get('idReadable', 'N/A')
+    summary = issue.get('summary', 'N/A')
+    description = issue.get('description', 'N/A')
+    
+    custom_fields = issue.get('customFields', [])
+    is_incident = False
+    incident_value = 'N/A'
+    
+    for cf in custom_fields:
+        if cf.get('id') == '134-394':
+            is_incident = True
+            value = cf.get('value', 'N/A')
+            if isinstance(value, dict) and 'name' in value:
+                incident_value = value['name']
+            elif isinstance(value, dict):
+                incident_value = str(value)
+            else:
+                incident_value = str(value)
+            break
+    
+    if is_incident:
+        project = issue.get('project', {})
+        project_name = project.get('name', 'N/A')
+        project_key = project.get('key', 'N/A')
+        
+        
+        incident_issues.append({
+            'ID': issue_id,
+            'Summary': summary,
+            'Description': description,
+            'Project_Name': project_name,
+            'Project_Key': project_key,
+            'Custom_Field_ID': '134-394',
+            'Custom_Field_Value': incident_value,
+            'All_Custom_Fields': str(custom_fields)  
+        })
+        
+        print(f"Найдена задача: {issue_id} - {summary} (Тип: {incident_value})")
+
+print(f"\nНайдено {len(incident_issues)} задач типа 'Тип карточки' = 134-394")
+
+# Сохраняем в CSV файл
+if incident_issues:
+    filename = f'incident_issues_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    
+    # Определяем заголовки CSV
+    fieldnames = ['ID', 'Summary', 'Description', 'Project_Name', 'Project_Key', 
+                 'Custom_Field_ID', 'Custom_Field_Value', 'All_Custom_Fields']
+    
+    with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for issue in incident_issues:
+            writer.writerow(issue)
+    
+    print(f"✓ Данные сохранены в файл: {filename}")
+else:
+    print("⚠ Нет задач с указанным кастомным полем")
+
+
+https://yt.rusal.ru/issue/DWH-10841/

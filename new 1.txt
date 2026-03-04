@@ -1,22 +1,5 @@
-import os
-import requests
-
-issue_id = "DWH-10667"
-
-url = f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
-
-headers = {
-    "Authorization": f"Bearer {os.environ['YOUTRACK_TOKEN']}",
-    "Accept": "application/json"
-}
-
 params = {
-    "categories": "IssueUpdatedCategory,IssueCustomFieldHistoryCategory",
-    "fields": "id,$type,timestamp,author(name,login),added(name,login),removed(name,login),field(name)",
+    "categories": "IssueUpdatedCategory",
+    "fields": "id,timestamp,author(name),targetMember(name,login),removed(name,login),added(name,login)",
     "$top": 100
 }
-
-r = requests.get(url, headers=headers, params=params, verify=False)
-
-print("status:", r.status_code)
-print(r.text)

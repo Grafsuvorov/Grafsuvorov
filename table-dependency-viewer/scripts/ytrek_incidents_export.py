@@ -23,6 +23,10 @@ ACTIVITY_FIELDS_DEFAULT = os.getenv(
     "YOUTRACK_ACTIVITY_FIELDS",
     "author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
 )
+ACTIVITY_CATEGORIES_DEFAULT = os.getenv(
+    "YOUTRACK_ACTIVITY_CATEGORIES",
+    "IssueCustomFieldHistoryCategory,IssueHistoryCategory,CommentsCategory,WorkItemCategory",
+)
 
 if not TOKEN:
     raise SystemExit("YOUTRACK_TOKEN is required")
@@ -46,12 +50,15 @@ def fmt_ts(value):
 
 def fetch_issue_activities(issue_id):
     url = f"{YOUTRACK_URL}/api/issues/{issue_id}/activities"
-    params = {"fields": ACTIVITY_FIELDS_DEFAULT}
+    params = {"fields": ACTIVITY_FIELDS_DEFAULT, "categories": ACTIVITY_CATEGORIES_DEFAULT}
     resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
     if resp.status_code == 200:
         return resp.json()
     # fallback
-    params = {"fields": "author(name,login),timestamp,field(name),added(name),removed(name),to(name)"}
+    params = {
+        "fields": "author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
+        "categories": ACTIVITY_CATEGORIES_DEFAULT,
+    }
     resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
     if resp.status_code != 200:
         return []
@@ -217,13 +224,25 @@ def main():
 
         for act in activities:
             field = (act.get("field") or {}).get("name")
+            added = act.get("added") or act.get("to") or ""
+            removed = act.get("removed") or ""
+            if isinstance(added, list):
+                added = ", ".join([a.get("name", str(a)) if isinstance(a, dict) else str(a) for a in added])
+            elif isinstance(added, dict):
+                added = added.get("name", str(added))
+            if isinstance(removed, list):
+                removed = ", ".join([r.get("name", str(r)) if isinstance(r, dict) else str(r) for r in removed])
+            elif isinstance(removed, dict):
+                removed = removed.get("name", str(removed))
+
             activities_rows.append({
                 "Issue_ID": issue.get("idReadable", "N/A"),
+                "Activity_Type": act.get("$type") or "N/A",
                 "Field": field or "N/A",
                 "Author": (act.get("author") or {}).get("login") or (act.get("author") or {}).get("name") or "N/A",
                 "Timestamp": fmt_ts(act.get("timestamp")),
-                "Added": (act.get("added") or act.get("to") or ""),
-                "Removed": act.get("removed") or "",
+                "Added": added,
+                "Removed": removed,
             })
 
         for wi in workitems:

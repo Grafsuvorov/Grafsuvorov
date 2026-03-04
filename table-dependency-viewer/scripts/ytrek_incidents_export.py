@@ -21,11 +21,11 @@ ISSUE_FIELDS_DEFAULT = os.getenv(
 )
 ACTIVITY_FIELDS_DEFAULT = os.getenv(
     "YOUTRACK_ACTIVITY_FIELDS",
-    "author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
+    "author(name,login),timestamp,field(name),added(name),removed(name),to(name),target(customFields(name,value(name)))",
 )
 ACTIVITY_CATEGORIES_DEFAULT = os.getenv(
     "YOUTRACK_ACTIVITY_CATEGORIES",
-    "IssueCustomFieldHistoryCategory,IssueHistoryCategory,CommentsCategory,WorkItemCategory",
+    "IssueCustomFieldHistoryCategory,IssueHistoryCategory,ProjectCategory,CommentsCategory,WorkItemCategory",
 )
 
 if not TOKEN:
@@ -46,6 +46,37 @@ def fmt_ts(value):
         return dt.astimezone().strftime("%Y-%m-%d %H:%M")
     except Exception:
         return str(value)
+
+
+def fmt_period_value(value):
+    if not isinstance(value, dict):
+        return value
+    if value.get("$type") != "PeriodValue":
+        return value.get("name", value)
+    raw = value.get("id") or ""
+    if not raw.startswith("PT"):
+        return raw or "N/A"
+    hours = 0
+    minutes = 0
+    chunk = raw[2:]
+    if "H" in chunk:
+        h_part, chunk = chunk.split("H", 1)
+        try:
+            hours = int(h_part)
+        except Exception:
+            hours = 0
+    if "M" in chunk:
+        m_part = chunk.split("M", 1)[0]
+        try:
+            minutes = int(m_part)
+        except Exception:
+            minutes = 0
+    parts = []
+    if hours:
+        parts.append(f"{hours}ч")
+    if minutes:
+        parts.append(f"{minutes}м")
+    return " ".join(parts) if parts else raw
 
 
 def fetch_issue_activities(issue_id):
@@ -191,7 +222,10 @@ def main():
             if isinstance(value, list):
                 value = ", ".join([v.get("name", str(v)) if isinstance(v, dict) else str(v) for v in value])
             elif isinstance(value, dict):
-                value = value.get("name", str(value))
+                if value.get("$type") == "PeriodValue":
+                    value = fmt_period_value(value)
+                else:
+                    value = value.get("name", str(value))
             elif isinstance(value, int):
                 # heuristic for timestamps in ms
                 if value > 1_000_000_000_000:

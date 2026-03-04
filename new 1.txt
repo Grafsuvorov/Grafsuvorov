@@ -1,3 +1,30 @@
-params={
-    "fields":"$type,author(name),timestamp,field(name),added(name),removed(name),to(name)"
+import os
+import requests
+
+issue_id = "2-56109"
+
+url = f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
+
+headers = {
+    "Authorization": f"Bearer {os.environ['YOUTRACK_TOKEN']}",
+    "Accept": "application/json"
+}
+
+params = {
+    "fields": "id,timestamp,author(name)"
+}
+
+r = requests.get(url, headers=headers, params=params, verify=False)
+
+print("status:", r.status_code)
+print(r.text)
+
+params = {
+    "fields": "id,$type,timestamp,author(name,login),targetMember(name),added(name,login),removed(name,login)"
+}
+
+url = f"https://yt.rusal.ru/api/issues/{issue_id}"
+
+params = {
+    "fields": "idReadable,updated,assignee(name),activities(id,timestamp,author(name),targetMember(name),added(name),removed(name))"
 }

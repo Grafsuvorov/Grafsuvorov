@@ -1,7 +1,8 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrek_load_to_gp.py
 Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 463, in <module>
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 464, in <module>
     main()
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 429, in main
-    ISSUE_IDS[:] = fetch_release_tasks(engine)
-UnboundLocalError: local variable 'engine' referenced before assignment
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 458, in main
+    load_issue(engine, issue_id)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 321, in load_issue
+    ev["value_to"] = fmt_minutes(ev.get("value_to"))
+NameError: name 'fmt_minutes' is not defined

@@ -102,6 +102,8 @@ CREATE TABLE IF NOT EXISTS tech_etl.yt_issue_comment (
 def api_get(url, params):
     headers = {"Authorization": f"Bearer {YOUTRACK_TOKEN}", "Accept": "application/json"}
     resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
+    if resp.status_code == 404:
+        return None
     if resp.status_code != 200:
         raise SystemExit(f"API error {resp.status_code}: {resp.text}")
     return resp.json()
@@ -146,6 +148,16 @@ def fmt_period_value(value):
     if minutes:
         parts.append(f"{minutes}м")
     return " ".join(parts) if parts else raw
+
+
+def fmt_minutes(value):
+    try:
+        minutes = int(value)
+    except Exception:
+        return value
+    if minutes % 60 == 0:
+        return f"{minutes // 60}ч"
+    return f"{minutes} мин"
 
 
 def clean_text(value):
@@ -219,6 +231,9 @@ def get_current_state(custom_fields):
 
 def load_issue(engine, issue_readable):
     issue = api_get(f"{YOUTRACK_URL}/api/issues/{issue_readable}", {"fields": ISSUE_FIELDS})
+    if not issue:
+        print(f"[WARN] Issue not found: {issue_readable}")
+        return
     issue_id = issue.get("id")
     project = issue.get("project", {})
     reporter = issue.get("reporter") or {}
@@ -227,15 +242,15 @@ def load_issue(engine, issue_readable):
     activities = api_get(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/activities",
         {"fields": ACTIVITY_FIELDS, "categories": ACTIVITY_CATEGORIES},
-    )
+    ) or []
     workitems = api_get(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/timeTracking/workItems",
         {"fields": WORKITEM_FIELDS},
-    )
+    ) or []
     comments = api_get(
         f"{YOUTRACK_URL}/api/issues/{issue_id}/comments",
         {"fields": COMMENT_FIELDS},
-    )
+    ) or []
 
     # snapshot
     snapshot_row = {
@@ -424,12 +439,12 @@ def main():
         raise SystemExit("Set YOUTRACK_TOKEN in script or env")
     if "user:pass" in PG_DSN:
         raise SystemExit("Set PG_DSN in script or env")
+    engine = create_engine(PG_DSN)
+
     if ONLY_RELEASE_TASKS:
         ISSUE_IDS[:] = fetch_release_tasks(engine)
     if not ISSUE_IDS:
         raise SystemExit("No ISSUE_IDS found")
-
-    engine = create_engine(PG_DSN)
 
     with engine.begin() as conn:
         for stmt in DDL.strip().split(";"):

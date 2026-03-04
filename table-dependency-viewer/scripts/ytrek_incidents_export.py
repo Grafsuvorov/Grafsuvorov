@@ -127,6 +127,7 @@ def main():
         raise SystemExit("Укажи задачи в аргументах, например: DWH-10841 DWH-10842")
 
     issues_data = []
+    all_custom_names = set()
     raw_dump = len(issue_ids) == 1
     for issue_readable in issue_ids:
         issue = fetch_issue_by_readable(issue_readable)
@@ -150,6 +151,21 @@ def main():
             with open(act_path, "w", encoding="utf-8") as f:
                 json.dump(activities, f, ensure_ascii=False, indent=2)
 
+        custom_fields_map = {}
+        for cf in issue.get("customFields") or []:
+            name = cf.get("name") or cf.get("id") or "custom"
+            value = cf.get("value")
+            if isinstance(value, list):
+                value = ", ".join([v.get("name", str(v)) if isinstance(v, dict) else str(v) for v in value])
+            elif isinstance(value, dict):
+                value = value.get("name", str(value))
+            elif isinstance(value, int):
+                # heuristic for timestamps in ms
+                if value > 1_000_000_000_000:
+                    value = fmt_ts(value)
+            custom_fields_map[name] = value if value is not None else "N/A"
+            all_custom_names.add(name)
+
         issues_data.append({
             "ID": issue.get("idReadable", "N/A"),
             "Summary": issue.get("summary", "N/A"),
@@ -170,12 +186,35 @@ def main():
             "Last_Assignee_Changed_By": last_assignee_author or "N/A",
             "Last_Assignee_Changed_At": fmt_ts(last_assignee_ts),
             "Last_Assignee_Set": last_assignee_name or "N/A",
+            **custom_fields_map,
         })
 
     filename = f"issues_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     out_path = os.path.join(os.path.dirname(__file__), filename)
 
-    fieldnames = list(issues_data[0].keys())
+    base_fields = [
+        "ID",
+        "Summary",
+        "Description",
+        "Project_Name",
+        "Project_Key",
+        "Created_By",
+        "Assignee",
+        "Created_At",
+        "Updated_At",
+        "Resolved_At",
+        "Last_State_Changed_By",
+        "Last_State_Changed_At",
+        "Current_State",
+        "Last_Updated_By",
+        "Last_Updated_At",
+        "Last_Updated_Field",
+        "Last_Assignee_Changed_By",
+        "Last_Assignee_Changed_At",
+        "Last_Assignee_Set",
+    ]
+    custom_fields_sorted = sorted(all_custom_names)
+    fieldnames = base_fields + [name for name in custom_fields_sorted if name not in base_fields]
     with open(out_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()

@@ -58,6 +58,17 @@ def fetch_issue_activities(issue_id):
     return resp.json()
 
 
+def fetch_issue_workitems(issue_id):
+    url = f"{YOUTRACK_URL}/api/issues/{issue_id}/timeTracking/workItems"
+    params = {
+        "fields": "author(name,login),creator(name,login),date,duration(minutes),text,workType(name)"
+    }
+    resp = requests.get(url, headers=headers, params=params, verify=False, timeout=60)
+    if resp.status_code != 200:
+        return []
+    return resp.json()
+
+
 def find_last_state_transition(activities):
     state_changes = []
     for a in activities:
@@ -137,6 +148,8 @@ def main():
     issues_data = []
     all_custom_names = set()
     raw_dump = len(issue_ids) == 1
+    activities_rows = []
+    worklog_rows = []
     for issue_readable in issue_ids:
         issue = fetch_issue_by_readable(issue_readable)
 
@@ -144,11 +157,13 @@ def main():
         reporter = issue.get("reporter") or {}
         assignee = issue.get("assignee") or {}
 
-        activities = fetch_issue_activities(issue.get("id"))
+        issue_id = issue.get("id")
+        activities = fetch_issue_activities(issue_id)
         last_state_author, last_state_ts = find_last_state_transition(activities)
         last_activity_author, last_activity_ts, last_activity_field = find_last_activity(activities)
         last_assignee_author, last_assignee_ts, last_assignee_name = find_last_assignee_change(activities)
         current_state = get_current_state(issue.get("customFields"))
+        workitems = fetch_issue_workitems(issue_id)
 
         if raw_dump:
             out_dir = os.path.dirname(__file__)
@@ -158,6 +173,9 @@ def main():
                 json.dump(issue, f, ensure_ascii=False, indent=2)
             with open(act_path, "w", encoding="utf-8") as f:
                 json.dump(activities, f, ensure_ascii=False, indent=2)
+            work_path = os.path.join(out_dir, f"ytrek_issue_workitems_{issue_readable}.json")
+            with open(work_path, "w", encoding="utf-8") as f:
+                json.dump(workitems, f, ensure_ascii=False, indent=2)
 
         custom_fields_map = {}
         for cf in issue.get("customFields") or []:
@@ -197,6 +215,28 @@ def main():
             **custom_fields_map,
         })
 
+        for act in activities:
+            field = (act.get("field") or {}).get("name")
+            activities_rows.append({
+                "Issue_ID": issue.get("idReadable", "N/A"),
+                "Field": field or "N/A",
+                "Author": (act.get("author") or {}).get("login") or (act.get("author") or {}).get("name") or "N/A",
+                "Timestamp": fmt_ts(act.get("timestamp")),
+                "Added": (act.get("added") or act.get("to") or ""),
+                "Removed": act.get("removed") or "",
+            })
+
+        for wi in workitems:
+            worklog_rows.append({
+                "Issue_ID": issue.get("idReadable", "N/A"),
+                "Author": (wi.get("author") or {}).get("login") or (wi.get("author") or {}).get("name") or "N/A",
+                "Creator": (wi.get("creator") or {}).get("login") or (wi.get("creator") or {}).get("name") or "N/A",
+                "Date": fmt_ts(wi.get("date")),
+                "Minutes": (wi.get("duration") or {}).get("minutes") if isinstance(wi.get("duration"), dict) else "N/A",
+                "Type": (wi.get("workType") or {}).get("name") if isinstance(wi.get("workType"), dict) else "N/A",
+                "Text": wi.get("text") or "",
+            })
+
     filename = f"issues_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     out_path = os.path.join(os.path.dirname(__file__), filename)
 
@@ -231,7 +271,25 @@ def main():
 
     print(f"✓ Данные сохранены: {out_path}")
     if raw_dump:
-        print("✓ Raw JSON сохранен рядом со скриптом (ytrek_issue_raw_*.json, ytrek_issue_activities_*.json)")
+        print("✓ Raw JSON сохранен рядом со скриптом (ytrek_issue_raw_*.json, ytrek_issue_activities_*.json, ytrek_issue_workitems_*.json)")
+
+    if activities_rows:
+        act_path = os.path.join(os.path.dirname(__file__), f"issues_activity_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        with open(act_path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=list(activities_rows[0].keys()))
+            writer.writeheader()
+            for row in activities_rows:
+                writer.writerow(row)
+        print(f"✓ История изменений: {act_path}")
+
+    if worklog_rows:
+        wl_path = os.path.join(os.path.dirname(__file__), f"issues_worklog_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        with open(wl_path, "w", newline="", encoding="utf-8") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=list(worklog_rows[0].keys()))
+            writer.writeheader()
+            for row in worklog_rows:
+                writer.writerow(row)
+        print(f"✓ Списания времени: {wl_path}")
 
 
 if __name__ == "__main__":

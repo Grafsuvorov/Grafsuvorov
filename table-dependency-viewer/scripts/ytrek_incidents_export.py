@@ -13,8 +13,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 YOUTRACK_URL = os.getenv("YOUTRACK_URL", "https://yt.rusal.ru")
 TOKEN = os.getenv("YOUTRACK_TOKEN", "")
 PAGE_SIZE = int(os.getenv("YOUTRACK_PAGE_SIZE", "50"))
-ISSUE_FIELDS_DEFAULT = os.getenv("YOUTRACK_ISSUE_FIELDS", "$all")
-ACTIVITY_FIELDS_DEFAULT = os.getenv("YOUTRACK_ACTIVITY_FIELDS", "$all")
+ISSUE_FIELDS_DEFAULT = os.getenv(
+    "YOUTRACK_ISSUE_FIELDS",
+    "id,idReadable,summary,description,project(name,key),"
+    "customFields(name,value(id,name)),reporter(login,name),assignee(login,name),"
+    "created,updated,resolved",
+)
+ACTIVITY_FIELDS_DEFAULT = os.getenv(
+    "YOUTRACK_ACTIVITY_FIELDS",
+    "author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
+)
 
 if not TOKEN:
     raise SystemExit("YOUTRACK_TOKEN is required")

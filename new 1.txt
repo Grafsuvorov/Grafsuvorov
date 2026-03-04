@@ -1,7 +1,55 @@
-import os, requests
-  url="https://yt.rusal.ru/api/issues/2-56109/activities"
-  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
-  params={"fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
-          "categories":"IssueCustomFieldHistoryCategory"}
-  r=requests.get(url,headers=headers,params=params,verify=False)
-  print(r.status_code, r.text[:1000])
+import os, requests, json
+
+  YOUTRACK_URL = "https://yt.rusal.ru"
+  TOKEN = os.getenv("YOUTRACK_TOKEN", "perm:ВАШ_ТОКЕН")
+  ISSUE_ID = "2-56109"  # внутренний id
+
+  headers = {
+      "Authorization": f"Bearer {TOKEN}",
+      "Accept": "application/json"
+  }
+
+  def call(name, url, params=None):
+      print(f"\n=== {name} ===")
+      r = requests.get(url, headers=headers, params=params, verify=False)
+      print("status:", r.status_code)
+      print("body:", r.text[:2000])
+      return r
+
+  # 1) базовые поля issue
+  call(
+      "issue",
+      f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}",
+      {"fields": "idReadable,summary,description,project(name),reporter(login,name),customFields(name,value(name))"}
+  )
+
+  # 2) activities
+  call(
+      "activities",
+      f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}/activities",
+      {
+          "fields": "author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
+          "categories": "IssueCustomFieldHistoryCategory,IssueHistoryCategory"
+      }
+  )
+
+  # 3) comments
+  call(
+      "comments",
+      f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}/comments",
+      {"fields": "author(name,login),created,text"}
+  )
+
+  # 4) work items
+  call(
+      "workItems",
+      f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}/timeTracking/workItems",
+      {"fields": "author(name,login),creator(name,login),date,duration(minutes),text,workType(name)"}
+  )
+
+  Запуск:
+
+  YOUTRACK_TOKEN="perm:ВАШ_ТОКЕН" python scripts/ytrek_check_access.py
+
+  Если activities и comments возвращают [] при status 200 — это не токен, это права на историю/комментарии.
+

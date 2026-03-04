@@ -12,7 +12,8 @@ headers = {
 
 params = {
     "categories": "IssueUpdatedCategory,IssueCustomFieldHistoryCategory",
-    "fields": "id,timestamp,author(name,login),added(name,login),removed(name,login),field(name)"
+    "fields": "id,$type,timestamp,author(name,login),added(name,login),removed(name,login),field(name)",
+    "$top": 100
 }
 
 r = requests.get(url, headers=headers, params=params, verify=False)

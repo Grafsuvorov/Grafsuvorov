@@ -1,259 +1,84 @@
-{
-  "customFields": [
-    {
-      "value": {
-        "name": "Task",
-        "id": "114-147",
-        "$type": "EnumBundleElement"
-      },
-      "name": "Тип карточки",
-      "$type": "SingleEnumIssueCustomField"
+ID,Summary,Description,Project_Name,Project_Key,Created_By,Assignee,Created_At,Updated_At,Resolved_At,Last_State_Changed_By,Last_State_Changed_At,Current_State,Last_Updated_By,Last_Updated_At,Last_Updated_Field,Last_Assignee_Changed_By,Last_Assignee_Changed_At,Last_Assignee_Set,Due Date,Priority,Spent time,State,Subsystem,Дата релиза,Дашборд LE,Дашборд КХД,Затраченное время,Направление,Оценка (чел./час.),Оценка трудозатрат,Тип карточки,Фактические трудозатраты,Экономия за счет ИИ
+DWH-10667,"Изменить ods.""/rusal/perp_ral"", dds.transportation_service_invoice_position, dm.transportation_service_invoice_approvement_history_pivot, dm_view.transportation_service_invoice_approvement_history_pivot, dm.transportation_service_invoices_and_payments, dm_view.transportation_service_invoices_and_payments, dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated, dm.transportation_service_invoice_approvement_history, dm_view.consolidated_docu","**Предметная область:** LE;
+
+**Сущность**: не менять;
+
+**Ссылка на гит:** [Andrey.Gusev4_DWH-10079 (!1442) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1442);
+**Название таблицы Greenplum:**  1. ods.""/rusal/perp_ral"",
+
+2\. dds.transportation_service_invoice_position,
+
+3\. dm_calc.accounting_document_and_purchase_contract_relation
+
+4\. dm.transportation_service_invoice_approvement_history_pivot,
+
+5\. dm_view.transportation_service_invoice_approvement_history_pivot,
+
+6\. dm.transportation_service_invoices_and_payments,
+
+7\. dm_view.transportation_service_invoices_and_payments,
+
+8\. dm.transportation_service_invoices_and_payments_aggregated,
+
+9\. dm_view.transportation_service_invoices_and_payments_aggregated,
+
+10\. dm.transportation_service_invoice_approvement_history,
+
+11\. dm_view.consolidated_document_workflow_approval_performance;
+**Способ обновления:** Полный/Инкремент (инкремент у dm.transportation_service_invoices_and_payments_aggregated);
+**Стенд:** DEV/PROD;
+**Ссылка на статью релиза:** [Статусы по задачам (2026-02-25) LE+MM+FI \| База знаний](https://yt.rusal.ru/articles/DWH-A-1325)
+
+**Зависимые представления:** dm_view.transportation_service_invoices_and_payments_agr_dkp, dm_view.transportation_service_invoice_approvement_history
+
+
+
+Шаги прогрузки для dm.transportation_service_invoices_and_payments_aggregated:
+
+1. Прогнать скрипт из приложенного скрипта [Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql](Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql)
+2. Прогнать инкрементальную загрузку из гита
+
+
+
+
+**Важно!** В таблицы/вьюшки dm.transportation_service_invoice_approvement_history_pivot,
+
+dm_view.transportation_service_invoice_approvement_history_pivot,
+
+dm.transportation_service_invoices_and_payments,
+
+dm_view.transportation_service_invoices_and_payments,
+
+dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated,
+
+dm.transportation_service_invoice_approvement_history,
+
+dm_view.consolidated_document_workflow_approval_performance
+
+добавляются новые поля - нужно обновить выгрузку в клик",КХД,N/A,GusevAS4,Staroverova Anastasiya,2026-02-20 17:12,2026-02-26 13:49,2026-02-26 13:49,N/A,—,Завершена,N/A,—,N/A,N/A,—,N/A,N/A,Normal,N/A,Завершена,DE (Data Engineer),2026-02-25 15:00,,N/A,N/A,Транспортировка,0,N/A,Task,"{'id': 'PT4H', '$type': 'PeriodValue'}",N/A
+
+
+Issue_ID,Author,Creator,Date,Minutes,Type,Text
+DWH-10667,StaroverovaAA,StaroverovaAA,2026-02-24 03:00,240,N/A,"загрузка на гп, загрузка в клик, оформление в гите"
+
+[
+  {
+    "duration": {
+      "minutes": 240,
+      "$type": "DurationValue"
     },
-    {
-      "value": {
-        "name": "Normal",
-        "id": "114-141",
-        "$type": "EnumBundleElement"
-      },
-      "name": "Priority",
-      "$type": "SingleEnumIssueCustomField"
+    "date": 1771891200000,
+    "creator": {
+      "login": "StaroverovaAA",
+      "name": "Staroverova Anastasiya",
+      "$type": "User"
     },
-    {
-      "value": {
-        "name": "Завершена",
-        "id": "116-733",
-        "$type": "StateBundleElement"
-      },
-      "name": "State",
-      "$type": "StateMachineIssueCustomField"
+    "author": {
+      "login": "StaroverovaAA",
+      "name": "Staroverova Anastasiya",
+      "$type": "User"
     },
-    {
-      "value": [
-        {
-          "name": "Staroverova Anastasiya",
-          "id": "1-185",
-          "$type": "User"
-        }
-      ],
-      "name": "Assignee",
-      "$type": "MultiUserIssueCustomField"
-    },
-    {
-      "value": {
-        "name": "DE (Data Engineer)",
-        "id": "142-29",
-        "$type": "OwnedBundleElement"
-      },
-      "name": "Subsystem",
-      "$type": "SingleOwnedIssueCustomField"
-    },
-    {
-      "value": 0,
-      "name": "Оценка (чел./час.)",
-      "$type": "SimpleIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Due Date",
-      "$type": "SimpleIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Затраченное время",
-      "$type": "PeriodIssueCustomField"
-    },
-    {
-      "value": {
-        "name": "Транспортировка",
-        "id": "142-71",
-        "$type": "OwnedBundleElement"
-      },
-      "name": "Направление",
-      "$type": "SingleOwnedIssueCustomField"
-    },
-    {
-      "value": [],
-      "name": "Дашборд LE",
-      "$type": "MultiEnumIssueCustomField"
-    },
-    {
-      "value": 1772020800000,
-      "name": "Дата релиза",
-      "$type": "DateIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Spent time",
-      "$type": "PeriodIssueCustomField"
-    },
-    {
-      "value": {
-        "id": "PT4H",
-        "$type": "PeriodValue"
-      },
-      "name": "Фактические трудозатраты",
-      "$type": "PeriodIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Дашборд КХД",
-      "$type": "SimpleIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Экономия за счет ИИ",
-      "$type": "PeriodIssueCustomField"
-    },
-    {
-      "value": null,
-      "name": "Оценка трудозатрат",
-      "$type": "PeriodIssueCustomField"
-    }
-  ],
-  "idReadable": "DWH-10667",
-  "summary": "Изменить ods.\"/rusal/perp_ral\", dds.transportation_service_invoice_position, dm.transportation_service_invoice_approvement_history_pivot, dm_view.transportation_service_invoice_approvement_history_pivot, dm.transportation_service_invoices_and_payments, dm_view.transportation_service_invoices_and_payments, dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated, dm.transportation_service_invoice_approvement_history, dm_view.consolidated_docu",
-  "updated": 1772102974488,
-  "resolved": 1772102974470,
-  "reporter": {
-    "login": "GusevAS4",
-    "name": "Andrey Gusev",
-    "$type": "User"
-  },
-  "created": 1771596744045,
-  "project": {
-    "name": "КХД",
-    "$type": "Project"
-  },
-  "description": "**Предметная область:** LE;\n\n**Сущность**: не менять;\n\n**Ссылка на гит:** [Andrey.Gusev4_DWH-10079 (!1442) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1442);\n**Название таблицы Greenplum:**  1. ods.\"/rusal/perp_ral\",\n\n2\\. dds.transportation_service_invoice_position,\n\n3\\. dm_calc.accounting_document_and_purchase_contract_relation\n\n4\\. dm.transportation_service_invoice_approvement_history_pivot,\n\n5\\. dm_view.transportation_service_invoice_approvement_history_pivot,\n\n6\\. dm.transportation_service_invoices_and_payments,\n\n7\\. dm_view.transportation_service_invoices_and_payments,\n\n8\\. dm.transportation_service_invoices_and_payments_aggregated,\n\n9\\. dm_view.transportation_service_invoices_and_payments_aggregated,\n\n10\\. dm.transportation_service_invoice_approvement_history,\n\n11\\. dm_view.consolidated_document_workflow_approval_performance;\n**Способ обновления:** Полный/Инкремент (инкремент у dm.transportation_service_invoices_and_payments_aggregated);\n**Стенд:** DEV/PROD;\n**Ссылка на статью релиза:** [Статусы по задачам (2026-02-25) LE+MM+FI \\| База знаний](https://yt.rusal.ru/articles/DWH-A-1325)\n\n**Зависимые представления:** dm_view.transportation_service_invoices_and_payments_agr_dkp, dm_view.transportation_service_invoice_approvement_history\n\n\n\nШаги прогрузки для dm.transportation_service_invoices_and_payments_aggregated:\n\n1. Прогнать скрипт из приложенного скрипта [Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql](Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql)\n2. Прогнать инкрементальную загрузку из гита\n\n\n\n\n**Важно!** В таблицы/вьюшки dm.transportation_service_invoice_approvement_history_pivot,\n\ndm_view.transportation_service_invoice_approvement_history_pivot,\n\ndm.transportation_service_invoices_and_payments,\n\ndm_view.transportation_service_invoices_and_payments,\n\ndm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated,\n\ndm.transportation_service_invoice_approvement_history,\n\ndm_view.consolidated_document_workflow_approval_performance\n\nдобавляются новые поля - нужно обновить выгрузку в клик",
-  "id": "2-56109",
-  "$type": "Issue"
-}
-
-
-
-то что я вижу в вэбе 
-Проект
-
-КХД
-User avatar
-Тип карточки
-
-Task⁠
-T
-Приоритет
-
-Normal⁠
-N
-Состояние
-
-Завершена
-З
-Исполнитель
-
-Staroverova Anastasiya
-User avatar
-Команда (Подсистема)
-
-DE (Data Engineer)⁠
-D
-Оценка (чел./час.)
-
-0
-Срок
-Нет: срок
-Затраченное время
-
-?
-Направление
-
-Транспортировка
-Т
-Дашборд LE
-
-Нет
-Дата релиза
-25 фев. 2026
-Spent time
-
-?
-Фактические трудозатраты
-
-4ч
-Дашборд КХД
-
-Нет: дашборд
-Экономия за счет ИИ
-
-?
-Оценка трудозатрат
-
-?
-Доски
-
-КХД
-
-
-КХД-копия
-
-
-Доска DE
-
-
-КХД-копия.1
-
-Andrey Gusev
-Обновлено 12 дней назад
-
-Изменено описание:Подробнее
-Обновлено 12 дней назад
-Изменено описание:Подробнее
-Обновлено 12 дней назад
-Связана с:DWH-10306Релиз LE (2026-02-25)  
-Исполнитель:Andrey Gusev → Suvorov Nikita
-Suvorov Nikita
-Обновлено 8 дней назад
-Исполнитель:Staroverova Anastasiya
-Обновлено 8 дней назад
-Исполнитель:Suvorov Nikita
-Staroverova Anastasiya
-Обновлено 8 дней назад
-Состояние:Зарегистрирована → В работе
-User avatar
-Staroverova Anastasiya
-Прокомментировал(а) 8 дней назад
-@Andrey Gusev таблица dm.transportation_service_invoices_and_payments_aggregated - инкрементальная и в нее добавляется поле, подскажи пж, как ее правильно обновить?
-
-User avatar
-Andrey Gusev
-Прокомментировал(а) 8 дней назад
-@Staroverova Anastasiya Добавил описание прогрузки dm.transportation_service_invoices_and_payments_aggregated. Сори, забыл
-
-вложения:Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql
-Изменено описание:Подробнее
-User avatar
-Staroverova Anastasiya
-Прокомментировал(а) 8 дней назад
-@Andrey Gusev готово на дев, просьба проверить
-
-Staroverova Anastasiya
-Обновлено 8 дней назад
-4ч00м
-24 фев. 2026
-Реализация
-загрузка на гп, загрузка в клик, оформление в гите
-
-Фактические трудозатраты:? → 4ч
-Исполнитель:Staroverova Anastasiya → Andrey Gusev
-User avatar
-Andrey Gusev
-Прокомментировал(а) 8 дней назад
-@Staroverova Anastasiya на дев все ок
-
-Исполнитель:Andrey Gusev → Staroverova Anastasiya
-Staroverova Anastasiya
-Обновлено 8 дней назад
-Состояние:В работе → Ожидание релиза
-Обновлено 6 дней назад
-дата завершения:26 Feb 2026
-Состояние:Ожидание релиза → Завершена
-User avatar
+    "text": "загрузка на гп, загрузка в клик, оформление в гите",
+    "$type": "IssueWorkItem"
+  }
+]

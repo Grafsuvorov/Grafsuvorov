@@ -1,7 +1,15 @@
 import os, requests, json
-  url="https://yt.rusal.ru/api/issues/2-56109/activities"
-  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
-  params={"fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name)"}
-  r=requests.get(url,headers=headers,params=params,verify=False)
-  print("status", r.status_code)
-  print(r.text[:2000])
+url="https://yt.rusal.ru/api/issues/2-56109/activities"
+headers={"Authorization":f"Bearer perm:VmVraG92TlY=.NTktMTQ=.wgZOARnuvxVRh8n3AXAkorT0NqtxzK", "Accept":"application/json"}
+params={"fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name)"}
+r=requests.get(url,headers=headers,params=params,verify=False)
+print("status", r.status_code)
+print(r.text[:2000])
+
+
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status 400
+{"error":"Bad Request","error_description":"No requested categories specified as a filter parameter"}
+

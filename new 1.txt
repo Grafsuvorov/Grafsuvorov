@@ -1,129 +1,26 @@
-Issue_ID,Activity_Type,Field,Author,Timestamp,Added,Removed
-DWH-10667,CommentActivityItem,комментарии,StaroverovaAA,2026-02-24 12:33,{'$type': 'IssueComment'},
-DWH-10667,CommentActivityItem,комментарии,GusevAS4,2026-02-24 13:00,{'$type': 'IssueComment'},
-DWH-10667,CommentActivityItem,комментарии,StaroverovaAA,2026-02-24 15:19,{'$type': 'IssueComment'},
-DWH-10667,WorkItemActivityItem,работа,StaroverovaAA,2026-02-24 15:19,{'$type': 'IssueWorkItem'},
-DWH-10667,CommentActivityItem,комментарии,GusevAS4,2026-02-24 17:54,{'$type': 'IssueComment'},
+python3 - <<'PY'
+  import os, requests, json
+  base="https://yt.rusal.ru"
+  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
+  r=requests.get(f"{base}/api/issueActivityCategories", headers=headers, verify=False)
+  print("status", r.status_code)
+  print(r.text[:2000])
+  PY
 
+  Если вернёт список — пришли его, я подставлю точные названия категорий в скрипт.
 
-ID,Summary,Description,Project_Name,Project_Key,Created_By,Assignee,Created_At,Updated_At,Resolved_At,Last_State_Changed_By,Last_State_Changed_At,Current_State,Last_Updated_By,Last_Updated_At,Last_Updated_Field,Last_Assignee_Changed_By,Last_Assignee_Changed_At,Last_Assignee_Set,Due Date,Priority,Spent time,State,Subsystem,Дата релиза,Дашборд LE,Дашборд КХД,Затраченное время,Направление,Оценка (чел./час.),Оценка трудозатрат,Тип карточки,Фактические трудозатраты,Экономия за счет ИИ
-DWH-10667,"Изменить ods.""/rusal/perp_ral"", dds.transportation_service_invoice_position, dm.transportation_service_invoice_approvement_history_pivot, dm_view.transportation_service_invoice_approvement_history_pivot, dm.transportation_service_invoices_and_payments, dm_view.transportation_service_invoices_and_payments, dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated, dm.transportation_service_invoice_approvement_history, dm_view.consolidated_docu","**Предметная область:** LE;
+  Также можно запросить все активности без фильтра категорий, если сервер позволяет:
 
-**Сущность**: не менять;
+  python3 - <<'PY'
+  import os, requests
+  base="https://yt.rusal.ru"
+  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
+  url=f"{base}/api/issues/2-56109/activities"
+  params={"fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name),target(customFields(name,value(name)))"}
+  r=requests.get(url,headers=headers,params=params,verify=False)
+  print(r.status_code, r.text[:2000])
+  PY
 
-**Ссылка на гит:** [Andrey.Gusev4_DWH-10079 (!1442) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1442);
-**Название таблицы Greenplum:**  1. ods.""/rusal/perp_ral"",
+  Если сервер всё равно отдаёт только комментарии/работы — значит историю статусов API не отдаёт на уровне сервера. Тогда вариант только через UI или админскую
+  настройку.
 
-2\. dds.transportation_service_invoice_position,
-
-3\. dm_calc.accounting_document_and_purchase_contract_relation
-
-4\. dm.transportation_service_invoice_approvement_history_pivot,
-
-5\. dm_view.transportation_service_invoice_approvement_history_pivot,
-
-6\. dm.transportation_service_invoices_and_payments,
-
-7\. dm_view.transportation_service_invoices_and_payments,
-
-8\. dm.transportation_service_invoices_and_payments_aggregated,
-
-9\. dm_view.transportation_service_invoices_and_payments_aggregated,
-
-10\. dm.transportation_service_invoice_approvement_history,
-
-11\. dm_view.consolidated_document_workflow_approval_performance;
-**Способ обновления:** Полный/Инкремент (инкремент у dm.transportation_service_invoices_and_payments_aggregated);
-**Стенд:** DEV/PROD;
-**Ссылка на статью релиза:** [Статусы по задачам (2026-02-25) LE+MM+FI \| База знаний](https://yt.rusal.ru/articles/DWH-A-1325)
-
-**Зависимые представления:** dm_view.transportation_service_invoices_and_payments_agr_dkp, dm_view.transportation_service_invoice_approvement_history
-
-
-
-Шаги прогрузки для dm.transportation_service_invoices_and_payments_aggregated:
-
-1. Прогнать скрипт из приложенного скрипта [Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql](Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql)
-2. Прогнать инкрементальную загрузку из гита
-
-
-
-
-**Важно!** В таблицы/вьюшки dm.transportation_service_invoice_approvement_history_pivot,
-
-dm_view.transportation_service_invoice_approvement_history_pivot,
-
-dm.transportation_service_invoices_and_payments,
-
-dm_view.transportation_service_invoices_and_payments,
-
-dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated,
-
-dm.transportation_service_invoice_approvement_history,
-
-dm_view.consolidated_document_workflow_approval_performance
-
-добавляются новые поля - нужно обновить выгрузку в клик",КХД,N/A,GusevAS4,Staroverova Anastasiya,2026-02-20 17:12,2026-02-26 13:49,2026-02-26 13:49,N/A,—,Завершена,GusevAS4,2026-02-24 17:54,комментарии,N/A,—,N/A,N/A,Normal,N/A,Завершена,DE (Data Engineer),2026-02-25 15:00,,N/A,N/A,Транспортировка,0,N/A,Task,"{'id': 'PT4H', '$type': 'PeriodValue'}",N/A
-
-
-Issue_ID,Author,Creator,Date,Minutes,Type,Text
-DWH-10667,StaroverovaAA,StaroverovaAA,2026-02-24 03:00,240,N/A,"загрузка на гп, загрузка в клик, оформление в гите"
-
-
-
-а вот реально что в задаче это под ней в блоке комментариев
-Andrey Gusev
-Обновлено 12 дней назад
-
-Изменено описание:Подробнее
-Обновлено 12 дней назад
-Изменено описание:Подробнее
-Обновлено 12 дней назад
-Связана с:DWH-10306Релиз LE (2026-02-25)  
-Исполнитель:Andrey Gusev → Suvorov Nikita
-Suvorov Nikita
-Обновлено 8 дней назад
-Исполнитель:Staroverova Anastasiya
-Обновлено 8 дней назад
-Исполнитель:Suvorov Nikita
-Staroverova Anastasiya
-Обновлено 8 дней назад
-Состояние:Зарегистрирована → В работе
-User avatar
-Staroverova Anastasiya
-Прокомментировал(а) 8 дней назад
-@Andrey Gusev таблица dm.transportation_service_invoices_and_payments_aggregated - инкрементальная и в нее добавляется поле, подскажи пж, как ее правильно обновить?
-
-User avatar
-Andrey Gusev
-Прокомментировал(а) 8 дней назад
-@Staroverova Anastasiya Добавил описание прогрузки dm.transportation_service_invoices_and_payments_aggregated. Сори, забыл
-
-вложения:Разовая прогрузка dm.transportation_service_invoices_and_payments_aggregated.sql
-Изменено описание:Подробнее
-User avatar
-Staroverova Anastasiya
-Прокомментировал(а) 8 дней назад
-@Andrey Gusev готово на дев, просьба проверить
-
-Staroverova Anastasiya
-Обновлено 8 дней назад
-4ч00м
-24 фев. 2026
-Реализация
-загрузка на гп, загрузка в клик, оформление в гите
-
-Фактические трудозатраты:? → 4ч
-Исполнитель:Staroverova Anastasiya → Andrey Gusev
-User avatar
-Andrey Gusev
-Прокомментировал(а) 8 дней назад
-@Staroverova Anastasiya на дев все ок
-
-Исполнитель:Andrey Gusev → Staroverova Anastasiya
-Staroverova Anastasiya
-Обновлено 8 дней назад
-Состояние:В работе → Ожидание релиза
-Обновлено 6 дней назад
-дата завершения:26 Feb 2026
-Состояние:Ожидание релиза → Завершена

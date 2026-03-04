@@ -1,47 +1,20 @@
-python3 - <<'PY'
-  import os, requests
-  issue_id="2-56109"
-  url=f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
-  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
-  params={
-    "fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name),target(customFields(name,value(name)))",
-    "categories":"IssueCustomFieldHistoryCategory,IssueHistoryCategory,CommentsCategory,WorkItemCategory,ProjectCategory"
-  }
-  r=requests.get(url,headers=headers,params=params,verify=False)
-  print("status", r.status_code)
-  print(r.text[:2000])
-  PY
-
-  Если там всё равно только комментарии/работа, значит ваш сервер не отдаёт историю статусов/ассайнов через REST, даже с правами. Такое бывает — в API история может
-  быть ограничена. (jetbrains.com (https://www.jetbrains.com/help/youtrack/devportal/resource-api-issues-issueID-activities.html?utm_source=openai))
-
-  ———
-
-  ### Альтернативный эндпоинт (иногда работает)
-
-  python3 - <<'PY'
-  import os, requests
-  issue_id="2-56109"
-  url=f"https://yt.rusal.ru/api/issues/{issue_id}/activitiesPage"
-  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
-  params={
-    "fields":"activities(author(name,login),timestamp,field(name),added(name),removed(name),to(name),target(customFields(name,value(name))))",
-    "categories":"IssueCustomFieldHistoryCategory,IssueHistoryCategory,CommentsCategory,WorkItemCategory",
-    "reverse":"true"
-  }
-  r=requests.get(url,headers=headers,params=params,verify=False)
-  print("status", r.status_code)
-  print(r.text[:2000])
-  PY
-
-  ———
-
-  Если после этого нет State/Assignee — значит API не отдаёт историю. Тогда можно только:
-
-  - current state/assignee из customFields
-  - комментарии
-  - work items
-
-  Если хочешь, я обновлю скрипт, чтобы ещё и activitiesPage пробовал, а потом писал в отчёт:
-  “history недоступна”.
-
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status 200
+[{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"}
+,"timestamp":1771925608359,"$type":"CommentActivityItem"},{"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilte
+rField"},"target":{"$type":"IssueComment"},"timestamp":1771927232660,"$type":"CommentActivityItem"},{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"
+}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},"timestamp":1771935564209,"$type":"CommentActivityItem"},{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$ty
+pe":"User"},"removed":[],"added":[{"$type":"IssueWorkItem"}],"field":{"name":"работа","$type":"WorkItemFilterField"},"target":{"$type":"IssueWorkItem"},"timestamp":1771935597317,"$type":"WorkItemActivityItem"},{"author":{"login"
+:"GusevAS4","name":"Andrey Gusev","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},"timestamp":1771944862189,"$type":"CommentActivityItem"}]
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status 200
+{"activities":[{"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},
+"timestamp":1771944862189,"$type":"CommentActivityItem"},{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"removed":[],"added":[{"$type":"IssueWorkItem"}],"field":{"name":"работа","$type":"WorkI
+temFilterField"},"target":{"$type":"IssueWorkItem"},"timestamp":1771935597317,"$type":"WorkItemActivityItem"},{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"removed":[],"added":[{"$type":"Iss
+ueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},"timestamp":1771935564209,"$type":"CommentActivityItem"},{"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"
+User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},"timestamp":1771927232660,"$type":"CommentActivityItem"},{"author":{"login":
+"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"removed":[],"added":[{"$type":"IssueComment"}],"field":{"name":"комментарии","$type":"PredefinedFilterField"},"target":{"$type":"IssueComment"},"timestamp":1771925608359,"$type":"CommentActivityItem"}],"$type":"ActivityCursorPage"}

@@ -1,5 +1,28 @@
-params = {
-    "categories": "IssueUpdatedCategory",
-    "fields": "id,timestamp,author(name),targetMember(name,login),removed(name,login),added(name,login)",
-    "$top": 100
+import os, requests
+
+issue_id = "DWH-10667"
+url = f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
+headers = {
+    "Authorization": f"Bearer {os.environ['YOUTRACK_TOKEN']}",
+    "Accept": "application/json",
 }
+params = {
+    "categories": "CustomFieldCategory",
+    "fields": "timestamp,author(name,login),field(name),added(name,login),removed(name,login),to(name,login)"
+}
+
+r = requests.get(url, headers=headers, params=params, verify=False)
+print("status:", r.status_code)
+print(r.text[:4000])
+
+Если хочешь сразу шире (и комментарии/ссылки тоже), то:
+
+params = {
+    "categories": "CustomFieldCategory,SummaryCategory,DescriptionCategory,CommentsCategory,LinksCategory",
+    "fields": "timestamp,author(name,login),field(name),added(name,login),removed(name,login),to(name,login)"
+}
+Как вытащить именно “переводы” (статус) из ответа
+
+В ответе фильтруй элементы, где:
+
+field.name == "State" (или как у вас называется поле статуса — иногда “Статус”, “State”, “Stage”)

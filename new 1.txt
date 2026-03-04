@@ -1,30 +1,10 @@
-import os
-import requests
-
-issue_id = "2-56109"
-
-url = f"https://yt.rusal.ru/api/issues/{issue_id}/activities"
-
-headers = {
-    "Authorization": f"Bearer {os.environ['YOUTRACK_TOKEN']}",
-    "Accept": "application/json"
-}
-
-params = {
-    "fields": "id,timestamp,author(name)"
-}
-
-r = requests.get(url, headers=headers, params=params, verify=False)
-
-print("status:", r.status_code)
-print(r.text)
-
-params = {
-    "fields": "id,$type,timestamp,author(name,login),targetMember(name),added(name,login),removed(name,login)"
-}
-
-url = f"https://yt.rusal.ru/api/issues/{issue_id}"
-
-params = {
-    "fields": "idReadable,updated,assignee(name),activities(id,timestamp,author(name),targetMember(name),added(name),removed(name))"
-}
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status: 400
+{"error":"Bad Request","error_description":"No requested categories specified as a filter parameter"}
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+status: 200
+{"idReadable":"DWH-10667","updated":1772102974488,"$type":"Issue"}

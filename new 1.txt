@@ -1,68 +1,9 @@
-Проект
-
-КХД
-User avatar
-Тип карточки
-
-Task⁠
-T
-Приоритет
-
-Normal⁠
-N
-Состояние
-
-Зарегистрирована
-З
-Исполнитель
-
-Ermolenko Sergey
-User avatar
-Команда (Подсистема)
-
-DE (Data Engineer)⁠
-D
-Оценка (чел./час.)
-
-0
-Срок
-4 мар. 2026, 18:00
-Затраченное время
-
-?
-Направление
-
-ТОРО
-Т
-Дата релиза
-5 мар. 2026
-Spent time
-
-?
-Фактические трудозатраты
-
-?
-Дашборд КХД
-
-Нет: дашборд
-Экономия за счет ИИ
-
-?
-Оценка трудозатрат
-
-?
-Доски
-
-КХД
-
-
-КХД-копия
-
-
-Доска DE
-
-
-КХД-копия.1
-
-
-Тестовая доска релизов
+YOUTRACK_TOKEN="perm:ВАШ_ТОКЕН" \
+  python3 - <<'PY'
+  import os, requests, json
+  url="https://yt.rusal.ru/api/issues/DWH-10841"
+  headers={"Authorization":f"Bearer {os.environ['YOUTRACK_TOKEN']}", "Accept":"application/json"}
+  params={"fields":"idReadable,summary,description,project(name),customFields(name,value(name))"}
+  r=requests.get(url,headers=headers,params=params,verify=False)
+  print("status", r.status_code)
+  print(r

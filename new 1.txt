@@ -1,10 +1,4 @@
-import os, requests
-  url="https://yt.rusal.ru/api/issues/2-56109/activities"
-  headers={"Authorization":"Bearer perm:YOUR_TOKEN", "Accept":"application/json"}
-  params={
-    "fields":"author(name,login),timestamp,field(name),added(name),removed(name),to(name)",
-    "categories":"IssueCustomFieldHistoryCategory,IssueHistoryCategory"
-  }
-  r=requests.get(url,headers=headers,params=params,verify=False)
-  print(r.status_code)
-  print(r.text[:2000])
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+200
+[]

@@ -1,34 +1,77 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\check.py
-
-=== issue ===
-C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
-  warnings.warn(
-status: 200
-body: {"customFields":[{"value":{"name":"Task","$type":"EnumBundleElement"},"name":"Тип карточки","$type":"SingleEnumIssueCustomField"},{"value":{"name":"Normal","$type":"EnumBundleElement"},"name":"Priority","$type":"SingleEnum
-IssueCustomField"},{"value":{"name":"Завершена","$type":"StateBundleElement"},"name":"State","$type":"StateMachineIssueCustomField"},{"value":[{"name":"Staroverova Anastasiya","$type":"User"}],"name":"Assignee","$type":"MultiUse
-rIssueCustomField"},{"value":{"name":"DE (Data Engineer)","$type":"OwnedBundleElement"},"name":"Subsystem","$type":"SingleOwnedIssueCustomField"},{"value":0,"name":"Оценка (чел./час.)","$type":"SimpleIssueCustomField"},{"value":
-null,"name":"Due Date","$type":"SimpleIssueCustomField"},{"value":null,"name":"Затраченное время","$type":"PeriodIssueCustomField"},{"value":{"name":"Транспортировка","$type":"OwnedBundleElement"},"name":"Направление","$type":"S
-ingleOwnedIssueCustomField"},{"value":[],"name":"Дашборд LE","$type":"MultiEnumIssueCustomField"},{"value":1772020800000,"name":"Дата релиза","$type":"DateIssueCustomField"},{"value":null,"name":"Spent time","$type":"PeriodIssue
-CustomField"},{"value":{"$type":"PeriodValue"},"name":"Фактические трудозатраты","$type":"PeriodIssueCustomField"},{"value":null,"name":"Дашборд КХД","$type":"SimpleIssueCustomField"},{"value":null,"name":"Экономия за счет ИИ","
-$type":"PeriodIssueCustomField"},{"value":null,"name":"Оценка трудозатрат","$type":"PeriodIssueCustomField"}],"idReadable":"DWH-10667","summary":"Изменить ods.\"/rusal/perp_ral\", dds.transportation_service_invoice_position, dm.
-transportation_service_invoice_approvement_history_pivot, dm_view.transportation_service_invoice_approvement_history_pivot, dm.transportation_service_invoices_and_payments, dm_view.transportation_service_invoices_and_payments, dm.transportation_service_invoices_and_payments_aggregated, dm_view.transportation_service_invoices_and_payments_aggregated, dm.transportation_service_invoice_approvement_history, dm_
-
-=== activities ===
-C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
-  warnings.warn(
-status: 200
-body: []
-
-=== comments ===
-C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
-  warnings.warn(
-status: 200
-body: [{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"text":"@GusevAS4 таблица dm.transportation_service_invoices_and_payments_aggregated - инкрементальная и в нее добавляется поле, подскажи 
-пж, как ее правильно обновить?","created":1771925608359,"$type":"IssueComment"},{"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"text":"@StaroverovaAA Добавил описание прогрузки dm.transportation_service_invo
-ices_and_payments_aggregated. Сори, забыл","created":1771927232660,"$type":"IssueComment"},{"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"text":"@GusevAS4 готово на дев, просьба проверить","created":1771935564209,"$type":"IssueComment"},{"author":{"login":"GusevAS4","name":"Andrey Gusev","$type":"User"},"text":"@StaroverovaAA на дев все ок","created":1771944862189,"$type":"IssueComment"}]
-
-=== workItems ===
-C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'yt.rusal.ru'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
-  warnings.warn(
-status: 200
-body: [{"duration":{"minutes":240,"$type":"DurationValue"},"date":1771891200000,"creator":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"author":{"login":"StaroverovaAA","name":"Staroverova Anastasiya","$type":"User"},"text":"загрузка на гп, загрузка в клик, оформление в гите","$type":"IssueWorkItem"}]
+Низкоуровневое администрирование: записьглобальное	
+Низкоуровневое администрирование: чтениеглобальное	
+Attachment	
+Добавление вложения	
+Обновление вложения	
+Удаление вложения	
+Comment	
+Обновление комментария к задаче	
+Обновление комментария к статье	
+Обновление чужого комментария к задаче	
+Создание комментария к задаче	
+Создание комментария к статье	
+Удаление комментария к задаче	
+Удаление комментария к статье	
+Удаление чужого комментария и окончательное удаление комментария	
+Чтение комментария к задаче	
+Чтение комментария к статье	
+Issue Work Item	
+Обновление единицы работы	
+Обновление единицы работы другого пользователя	
+Создание единицы работы	
+Создание единицы работы другого пользователя	
+Чтение единицы работы	
+Watch Folder	
+Изменение тега или сохраненного поиска	
+Поделиться представлениемглобальное	
+Создание тега или сохраненного поиска	
+Удаление тега или сохраненного поиска	
+Видимость	
+Подавление ограничений видимости	
+Группа	
+Обновление группыглобальное	
+Создание группыглобальное	
+Удаление группыглобальное	
+Чтение группыглобальное	
+Задача	
+Обновление задачи	
+Обновление закрытых полей задачи	
+Обновление списка наблюдателей	
+Применять команды без уведомлений	
+Просмотр списка наблюдателей	
+Просмотр списка проголосовавших пользователей	
+Создание задачи	
+Создание связей задач	
+Удаление задачи	
+Чтение задачи	
+Чтение закрытых полей задач	
+Организация	
+Обновлять организациюглобальное	
+Создать организациюглобальное	
+Удалить организациюглобальное	
+Чтение организацииглобальное	
+Отчет	
+Поделиться отчетом	
+Создание отчета	
+Чтение отчета	
+Пользователь	
+Обновление пользователяглобальное	
+Обновление себяглобальное	
+Создание пользователяглобальное	
+Удаление пользователяглобальное	
+Чтение пользователя, базовоеглобальное	
+Чтение пользователя, полноеглобальное	
+Проект	
+Обновление проекта	
+Создание проектаглобальное	
+Удаление проекта	
+Чтение проекта, базовое	
+Чтение проекта, полное	
+Роль	
+Управление ролямиглобальное	
+Чтение ролиглобальное	
+Статья	
+Обновление статьи	
+Создание статьи	
+Удаление статьи	
+Чтение статьи	

@@ -41,6 +41,11 @@ from .config import (
     TABLE_DATA_QUALITY,
     TABLE_RELEASE_LOG,
     TABLE_RELEASE_OBJECTS,
+    TABLE_YT_ISSUE_SNAPSHOT,
+    TABLE_YT_ISSUE_CUSTOM,
+    TABLE_YT_ISSUE_TIMELINE,
+    TABLE_YT_ISSUE_WORKLOG,
+    TABLE_YT_ISSUE_COMMENT,
     TABLE_CLICK_LOAD_RUN,
     TABLE_CLICK_LOAD_STAGE,
     CLICK_META_DIR,
@@ -5867,6 +5872,242 @@ def get_table_releases(
         print("❌ /api/releases/table error:", e)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить релизы по объекту")
+
+
+@router.get("/api/ytrek/table/{schema}/{table}")
+def get_ytrek_table_info(schema: str, table: str):
+    try:
+        with engine.connect() as conn:
+            task_rows = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT task_id
+                    FROM {TABLE_RELEASE_OBJECTS}
+                    WHERE schema_name = :schema
+                      AND table_name = :table
+                      AND task_id IS NOT NULL
+                    """
+                ),
+                {"schema": schema, "table": table},
+            ).fetchall()
+            task_ids = [r[0] for r in task_rows if r[0]]
+            if not task_ids:
+                return {"tasks": [], "timeline": [], "worklog": [], "stats": {}}
+
+            snapshots = conn.execute(
+                text(
+                    f"""
+                    SELECT issue_id, summary, project_name, project_key, created_by, assignee,
+                           created_at, updated_at, resolved_at, current_state
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                    WHERE issue_id = ANY(:ids)
+                    ORDER BY updated_at DESC NULLS LAST
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+
+            worklog = conn.execute(
+                text(
+                    f"""
+                    SELECT issue_id,
+                           COALESCE(SUM(minutes), 0) AS minutes,
+                           COUNT(*) AS entries
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    WHERE issue_id = ANY(:ids)
+                    GROUP BY issue_id
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            worklog_map = {r["issue_id"]: r for r in worklog}
+
+            timeline = conn.execute(
+                text(
+                    f"""
+                    SELECT issue_id, ts, author, event_type, field_name, value_from, value_to
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id = ANY(:ids)
+                    ORDER BY ts DESC NULLS LAST
+                    LIMIT 200
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+
+            last_assignee = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, ts, author, value_from, value_to
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id = ANY(:ids)
+                      AND event_type = 'Assignee change'
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            last_assignee_map = {r["issue_id"]: r for r in last_assignee}
+
+            last_state = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, ts, author, value_from, value_to
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id = ANY(:ids)
+                      AND event_type = 'State change'
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            last_state_map = {r["issue_id"]: r for r in last_state}
+
+            custom = conn.execute(
+                text(
+                    f"""
+                    SELECT issue_id, field_name, field_value
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE issue_id = ANY(:ids)
+                      AND field_name IN ('Направление', 'Тип карточки', 'Дата релиза')
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            custom_map = {}
+            for row in custom:
+                custom_map.setdefault(row["issue_id"], {})[row["field_name"]] = row["field_value"]
+
+            tasks_payload = []
+            for s in snapshots:
+                issue_id = s["issue_id"]
+                wl = worklog_map.get(issue_id, {})
+                tasks_payload.append(
+                    {
+                        **s,
+                        "work_minutes": wl.get("minutes", 0),
+                        "work_entries": wl.get("entries", 0),
+                        "last_assignee_change": last_assignee_map.get(issue_id),
+                        "last_state_change": last_state_map.get(issue_id),
+                        "custom": custom_map.get(issue_id, {}),
+                    }
+                )
+
+            stats = {
+                "tasks_count": len(task_ids),
+                "work_minutes_total": sum(r.get("minutes", 0) for r in worklog_map.values()),
+            }
+
+            return {
+                "tasks": tasks_payload,
+                "timeline": [
+                    {
+                        "issue_id": r["issue_id"],
+                        "ts": serialize_datetime(r["ts"]),
+                        "author": r["author"],
+                        "event_type": r["event_type"],
+                        "field_name": r["field_name"],
+                        "value_from": r["value_from"],
+                        "value_to": r["value_to"],
+                    }
+                    for r in timeline
+                ],
+                "stats": stats,
+            }
+    except Exception as e:
+        print("❌ /api/ytrek/table error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить данные YouTrack")
+
+
+@router.get("/api/ytrek/analytics")
+def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
+    try:
+        with engine.connect() as conn:
+            base = f"""
+                WITH tasks AS (
+                    SELECT DISTINCT ro.task_id
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    WHERE ro.task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                    WHERE s.created_at >= (now() - (:days || ' days')::interval)
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                )
+            """
+
+            by_direction = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT d.direction,
+                           COUNT(*) AS tasks_count,
+                           COALESCE(SUM(w.minutes), 0) AS minutes
+                    FROM snap s
+                    LEFT JOIN work w ON w.issue_id = s.issue_id
+                    LEFT JOIN direction d ON d.issue_id = s.issue_id
+                    GROUP BY d.direction
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+
+            by_creator = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT s.created_by AS creator,
+                           COUNT(*) AS tasks_count,
+                           COALESCE(SUM(w.minutes), 0) AS minutes
+                    FROM snap s
+                    LEFT JOIN work w ON w.issue_id = s.issue_id
+                    GROUP BY s.created_by
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+
+            by_assignee = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT s.assignee,
+                           COUNT(*) AS tasks_count,
+                           COALESCE(SUM(w.minutes), 0) AS minutes
+                    FROM snap s
+                    LEFT JOIN work w ON w.issue_id = s.issue_id
+                    GROUP BY s.assignee
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+
+            return {
+                "by_direction": by_direction,
+                "by_creator": by_creator,
+                "by_assignee": by_assignee,
+            }
+    except Exception as e:
+        print("❌ /api/ytrek/analytics error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить аналитику YouTrack")
 
 
 app.include_router(router)

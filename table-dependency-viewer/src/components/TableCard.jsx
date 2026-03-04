@@ -62,6 +62,9 @@ export default function TableCard({
   const [releaseItems, setReleaseItems] = useState([]);
   const [releaseLoading, setReleaseLoading] = useState(false);
   const [releaseError, setReleaseError] = useState(null);
+  const [ytData, setYtData] = useState(null);
+  const [ytLoading, setYtLoading] = useState(false);
+  const [ytError, setYtError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -216,6 +219,20 @@ export default function TableCard({
       .finally(() => setReleaseLoading(false));
   }, [schema, tableName]);
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setYtLoading(true);
+    setYtError(null);
+    fetch(`${API_BASE}/api/ytrek/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить данные YouTrack")))
+      .then((data) => setYtData(data || null))
+      .catch((err) => {
+        console.error(err);
+        setYtError(typeof err === "string" ? err : "Не удалось загрузить данные YouTrack");
+      })
+      .finally(() => setYtLoading(false));
+  }, [schema, tableName]);
+
   const status = useMemo(() => {
     if (!meta) return "ok";
     const avg = meta.avg_duration_minutes;
@@ -322,6 +339,7 @@ export default function TableCard({
     if (match) return `${match[1]} ${match[2]}`;
     return normalized;
   };
+  const ytLink = (id) => (id ? `https://yt.rusal.ru/issue/${id}` : "#");
 
   const copySql = (sql) => {
     if (!sql) return;
@@ -835,6 +853,96 @@ export default function TableCard({
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">YouTrack: задачи по таблице</div>
+        <div className="card">
+          {ytLoading && <div className="muted">Загрузка задач...</div>}
+          {ytError && <div className="dep-error-title">{ytError}</div>}
+          {!ytLoading && !ytError && (!ytData || !ytData.tasks || ytData.tasks.length === 0) && (
+            <div className="muted">Задачи не найдены.</div>
+          )}
+          {!ytLoading && !ytError && ytData?.tasks?.length > 0 && (
+            <>
+              <div className="yt-summary">
+                <div>
+                  <div className="yt-label">Задач</div>
+                  <div className="yt-value">{ytData.stats?.tasks_count ?? ytData.tasks.length}</div>
+                </div>
+                <div>
+                  <div className="yt-label">Трудозатраты</div>
+                  <div className="yt-value">
+                    {ytData.stats?.work_minutes_total
+                      ? `${Math.round(ytData.stats.work_minutes_total / 60)} ч`
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="yt-task-table">
+                <div className="yt-task-head">
+                  <span>Задача</span>
+                  <span>Постановщик</span>
+                  <span>Исполнитель</span>
+                  <span>Статус</span>
+                  <span>Направление</span>
+                  <span>Трудозатраты</span>
+                  <span>Последняя смена исполнителя</span>
+                  <span>Последняя смена статуса</span>
+                </div>
+                {ytData.tasks.map((t) => (
+                  <div key={t.issue_id} className="yt-task-row">
+                    <a className="yt-link" href={ytLink(t.issue_id)} target="_blank" rel="noreferrer">
+                      {t.issue_id}
+                    </a>
+                    <span>{t.created_by || "—"}</span>
+                    <span>{t.assignee || "—"}</span>
+                    <span>{t.current_state || "—"}</span>
+                    <span>{t.custom?.["Направление"] || "—"}</span>
+                    <span>
+                      {t.work_minutes ? `${Math.round(t.work_minutes / 60)} ч` : "—"}
+                    </span>
+                    <span className="muted">
+                      {t.last_assignee_change?.author
+                        ? `${t.last_assignee_change.author} → ${t.last_assignee_change.value_to || "—"}`
+                        : "—"}
+                    </span>
+                    <span className="muted">
+                      {t.last_state_change?.author
+                        ? `${t.last_state_change.author} → ${t.last_state_change.value_to || "—"}`
+                        : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {ytData.timeline?.length > 0 && (
+                <div className="yt-timeline">
+                  <div className="section-subtitle">Последние изменения</div>
+                  <div className="yt-timeline-head">
+                    <span>Дата</span>
+                    <span>Автор</span>
+                    <span>Событие</span>
+                    <span>Поле</span>
+                    <span>Было</span>
+                    <span>Стало</span>
+                  </div>
+                  {ytData.timeline.slice(0, 20).map((row, idx) => (
+                    <div key={`${row.issue_id}-${idx}`} className="yt-timeline-row">
+                      <span>{row.ts || "—"}</span>
+                      <span>{row.author || "—"}</span>
+                      <span>{row.event_type || "—"}</span>
+                      <span>{row.field_name || "—"}</span>
+                      <span>{row.value_from || "—"}</span>
+                      <span>{row.value_to || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -13,6 +13,9 @@ export default function ReleasesPage() {
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
+  const [ytStats, setYtStats] = useState(null);
+  const [ytStatsLoading, setYtStatsLoading] = useState(false);
+  const [ytStatsError, setYtStatsError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -22,6 +25,16 @@ export default function ReleasesPage() {
       .then((data) => setItems(Array.isArray(data?.items) ? data.items : []))
       .catch((err) => setError(typeof err === "string" ? err : "Не удалось загрузить релизы"))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    setYtStatsLoading(true);
+    setYtStatsError(null);
+    fetch(`${API_BASE}/api/ytrek/analytics?days=365`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить аналитику YouTrack")))
+      .then((data) => setYtStats(data || null))
+      .catch((err) => setYtStatsError(typeof err === "string" ? err : "Не удалось загрузить аналитику YouTrack"))
+      .finally(() => setYtStatsLoading(false));
   }, []);
 
   const openDetails = (releaseId) => {
@@ -127,6 +140,69 @@ export default function ReleasesPage() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      <section className="card release-analytics">
+        <div className="section-title">Трудозатраты и частота изменений</div>
+        {ytStatsLoading && <div className="muted">Загрузка аналитики...</div>}
+        {ytStatsError && <div className="dep-error-title">{ytStatsError}</div>}
+        {!ytStatsLoading && !ytStatsError && ytStats && (
+          <div className="yt-analytics-grid">
+            <div className="yt-analytics-block">
+              <div className="section-subtitle">По направлениям</div>
+              <div className="yt-analytics-table">
+                <div className="yt-analytics-head">
+                  <span>Направление</span>
+                  <span>Задач</span>
+                  <span>Часы</span>
+                </div>
+                {(ytStats.by_direction || []).map((row, idx) => (
+                  <div key={`dir-${idx}`} className="yt-analytics-row">
+                    <span>{row.direction || "—"}</span>
+                    <span>{row.tasks_count || 0}</span>
+                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="yt-analytics-block">
+              <div className="section-subtitle">По постановщикам</div>
+              <div className="yt-analytics-table">
+                <div className="yt-analytics-head">
+                  <span>Постановщик</span>
+                  <span>Задач</span>
+                  <span>Часы</span>
+                </div>
+                {(ytStats.by_creator || []).map((row, idx) => (
+                  <div key={`creator-${idx}`} className="yt-analytics-row">
+                    <span>{row.creator || "—"}</span>
+                    <span>{row.tasks_count || 0}</span>
+                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="yt-analytics-block">
+              <div className="section-subtitle">По исполнителям</div>
+              <div className="yt-analytics-table">
+                <div className="yt-analytics-head">
+                  <span>Исполнитель</span>
+                  <span>Задач</span>
+                  <span>Часы</span>
+                </div>
+                {(ytStats.by_assignee || []).map((row, idx) => (
+                  <div key={`assignee-${idx}`} className="yt-analytics-row">
+                    <span>{row.assignee || "—"}</span>
+                    <span>{row.tasks_count || 0}</span>
+                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </section>

@@ -4632,6 +4632,89 @@ main.content {
   text-align: center;
 }
 
+/* YouTrack table section */
+.yt-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.yt-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.yt-value {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.yt-task-table,
+.yt-timeline {
+  display: grid;
+  gap: 8px;
+}
+
+.yt-task-head,
+.yt-task-row {
+  display: grid;
+  grid-template-columns: 0.7fr 0.9fr 0.9fr 0.8fr 0.9fr 0.7fr 1.2fr 1.2fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.yt-timeline-head,
+.yt-timeline-row {
+  display: grid;
+  grid-template-columns: 0.9fr 0.8fr 0.9fr 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.yt-task-head,
+.yt-timeline-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.yt-task-row,
+.yt-timeline-row {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 13px;
+}
+
+.yt-task-row:last-child,
+.yt-timeline-row:last-child {
+  border-bottom: none;
+}
+
+.yt-task-row span,
+.yt-task-row a,
+.yt-timeline-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+  .yt-task-head,
+  .yt-task-row,
+  .yt-timeline-head,
+  .yt-timeline-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .release-details {
   margin-top: 16px;
 }
@@ -4643,6 +4726,63 @@ main.content {
   .release-objects-row {
     grid-template-columns: 1fr;
   }
+}
+
+.release-analytics {
+  margin-top: 18px;
+}
+
+.yt-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.yt-analytics-block {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.yt-analytics-table {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.yt-analytics-head,
+.yt-analytics-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.6fr 0.6fr;
+  gap: 10px;
+  align-items: center;
+}
+
+.yt-analytics-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.yt-analytics-row {
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.yt-analytics-row:last-child {
+  border-bottom: none;
+}
+
+.yt-analytics-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .entity-meta-grid {

@@ -1,8 +1,5 @@
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 464, in <module>
-    main()
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 458, in main
-    load_issue(engine, issue_id)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ytrek_load_to_gp.py", line 321, in load_issue
-    ev["value_to"] = fmt_minutes(ev.get("value_to"))
-NameError: name 'fmt_minutes' is not defined
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+index-CgOhYNSs.js:129  Не удалось загрузить варианты таблицы
+(anonymous) @ index-CgOhYNSs.js:129
+:5312/api/click/meta/ods/ral_rusal_sd2882m_7:1   Failed to load resource: the server responded with a status of 404 (Not Found)
+:5312/api/click/meta/dm/sales_shipment_to_china_plan_vs_actual:1   Failed to load resource: the server responded with a status of 404 (Not Found)

@@ -1,32 +1,84 @@
-
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52604 - "GET /api/dq/alerts?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52601 - "GET /api/incidents/active HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52603 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52652 - "OPTIONS /api/incident?table_fqn=dm_calc.kpi_raw_warehouse_stock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52652 - "GET /api/incident?table_fqn=dm_calc.kpi_raw_warehouse_stock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "OPTIONS /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "GET /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "OPTIONS /api/releases/manual__2026-03-04T12%3A50%3A23%2B03%3A00?limit=400 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "GET /api/releases/manual__2026-03-04T12%3A50%3A23%2B03%3A00?limit=400 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "OPTIONS /api/card/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "OPTIONS /api/table-history/dm/sales_shipment_to_china_plan_vs_actual?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "OPTIONS /api/table-variants/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "OPTIONS /api/dq/table/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52675 - "OPTIONS /api/dq/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52679 - "OPTIONS /api/click/table/dm/sales_shipment_to_china_plan_vs_actual?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "OPTIONS /api/click/meta/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "OPTIONS /api/click/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "OPTIONS /api/click/view/search?schema=dm&table=sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "OPTIONS /api/releases/table/dm/sales_shipment_to_china_plan_vs_actual?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "GET /api/click/table/dm/sales_shipment_to_china_plan_vs_actual?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "GET /api/dq/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "GET /api/table-variants/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "GET /api/dq/table/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "GET /api/click/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "GET /api/releases/table/dm/sales_shipment_to_china_plan_vs_actual?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52679 - "GET /api/table-history/dm/sales_shipment_to_china_plan_vs_actual?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52675 - "GET /api/card/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "GET /api/click/meta/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 404 Not Found
-table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "GET /api/click/view/search?schema=dm&table=sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api /bin/sh -c "ls -la /app/config_files/meta/ods | head"
-ls: cannot access '/app/config_files/meta/ods': No such file or directory
+Задач
+2
+Трудозатраты
+7 ч
+Задача
+Постановщик
+Исполнитель
+Статус
+Направление
+Трудозатраты
+Последняя смена исполнителя
+Последняя смена статуса
+DWH-10799
+SimonovaEN
+—
+Ожидание релиза
+—
+7 ч
+KornienkoAV → Aleksandr Kornienko
+KornienkoAV → Ожидание релиза
+Последние изменения
+Дата
+Автор
+Событие
+Поле
+Было
+Стало
+2026-03-03 12:47:00
+KornienkoAV
+Assignee change
+Исполнитель
+Simonova Ekaterina
+Aleksandr Kornienko
+2026-03-03 12:47:00
+KornienkoAV
+Work logged
+Фактические трудозатраты
+30 мин
+390 мин
+2026-03-03 12:47:00
+KornienkoAV
+State change
+Состояние
+Проверка / Тест
+Ожидание релиза
+2026-03-03 05:20:00
+SimonovaEN
+Work logged
+Фактические трудозатраты
+—
+30 мин
+2026-03-02 18:52:00
+KornienkoAV
+Assignee change
+Исполнитель
+Aleksandr Kornienko
+Simonova Ekaterina
+2026-03-02 10:18:00
+KornienkoAV
+State change
+Состояние
+Зарегистрирована
+В работе
+2026-03-02 09:02:00
+SuvorovND
+Assignee change
+Исполнитель
+Suvorov Nikita
+Aleksandr Kornienko
+2026-03-02 06:22:00
+SimonovaEN
+Assignee change
+Исполнитель
+—
+Suvorov Nikita
+SQL-скрипты
+SQL: insert
+99 строк · 7213 символов
+Открыть
+SQL: recreate
+44 строк · 5950 символов
+Открыть
+SQL: truncate
+1 строк · 63 символов

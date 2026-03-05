@@ -899,7 +899,12 @@ export default function TableCard({
                       {t.issue_id}
                     </a>
                     <span>{t.created_by || "—"}</span>
-                    <span>{t.assignee || "—"}</span>
+                    <span>
+                      {t.effective_assignee || "—"}
+                      {t.effective_assignee_reason ? (
+                        <span className="muted"> · {t.effective_assignee_reason}</span>
+                      ) : null}
+                    </span>
                     <span>{t.current_state || "—"}</span>
                     <span>{t.custom?.["Направление"] || "—"}</span>
                     <span>

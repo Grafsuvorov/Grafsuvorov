@@ -4754,7 +4754,7 @@ main.content {
 .yt-analytics-head,
 .yt-analytics-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.6fr 0.6fr;
+  grid-template-columns: 1.2fr 0.6fr 0.6fr 0.8fr;
   gap: 10px;
   align-items: center;
 }
@@ -4779,6 +4779,29 @@ main.content {
 }
 
 .yt-analytics-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yt-analytics-tasks {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.yt-analytics-task-row {
+  display: grid;
+  grid-template-columns: 0.7fr 0.9fr 0.9fr 0.9fr 0.6fr;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.yt-analytics-task-row span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -5965,6 +5965,38 @@ def get_ytrek_table_info(schema: str, table: str):
             ).mappings().all()
             last_state_map = {r["issue_id"]: r for r in last_state}
 
+            last_wait = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, ts, author, value_from, value_to
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id = ANY(:ids)
+                      AND event_type = 'State change'
+                      AND value_to = 'Ожидание релиза'
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            last_wait_map = {r["issue_id"]: r for r in last_wait}
+
+            last_work = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, ts, author, value_from, value_to
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE issue_id = ANY(:ids)
+                      AND event_type = 'State change'
+                      AND value_to = 'В работе'
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                    """
+                ),
+                {"ids": task_ids},
+            ).mappings().all()
+            last_work_map = {r["issue_id"]: r for r in last_work}
+
             custom = conn.execute(
                 text(
                     f"""
@@ -5984,6 +6016,17 @@ def get_ytrek_table_info(schema: str, table: str):
             for s in snapshots:
                 issue_id = s["issue_id"]
                 wl = worklog_map.get(issue_id, {})
+                effective_assignee = None
+                effective_reason = None
+                if issue_id in last_wait_map:
+                    effective_assignee = last_wait_map[issue_id].get("author")
+                    effective_reason = "Ожидание релиза"
+                elif issue_id in last_work_map:
+                    effective_assignee = last_work_map[issue_id].get("author")
+                    effective_reason = "В работе"
+                else:
+                    effective_assignee = s.get("assignee")
+                    effective_reason = "Текущий"
                 tasks_payload.append(
                     {
                         **s,
@@ -5992,6 +6035,8 @@ def get_ytrek_table_info(schema: str, table: str):
                         "last_assignee_change": last_assignee_map.get(issue_id),
                         "last_state_change": last_state_map.get(issue_id),
                         "custom": custom_map.get(issue_id, {}),
+                        "effective_assignee": effective_assignee,
+                        "effective_assignee_reason": effective_reason,
                     }
                 )
 
@@ -6054,7 +6099,7 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                 text(
                     base
                     + """
-                    SELECT d.direction,
+                    SELECT COALESCE(d.direction, 'Не указан') AS direction,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s
@@ -6071,7 +6116,7 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                 text(
                     base
                     + """
-                    SELECT s.created_by AS creator,
+                    SELECT COALESCE(s.created_by, 'Не указан') AS creator,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s
@@ -6087,7 +6132,7 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                 text(
                     base
                     + """
-                    SELECT s.assignee,
+                    SELECT COALESCE(s.assignee, 'Не указан') AS assignee,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s
@@ -6108,6 +6153,55 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
         print("❌ /api/ytrek/analytics error:", e)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить аналитику YouTrack")
+
+
+@router.get("/api/ytrek/tasks")
+def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    WITH tasks AS (
+                        SELECT DISTINCT ro.task_id
+                        FROM {TABLE_RELEASE_OBJECTS} ro
+                        WHERE ro.task_id IS NOT NULL
+                    ),
+                    snap AS (
+                        SELECT s.*
+                        FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                        JOIN tasks t ON t.task_id = s.issue_id
+                        WHERE s.created_at >= (now() - (:days || ' days')::interval)
+                    ),
+                    work AS (
+                        SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                        FROM {TABLE_YT_ISSUE_WORKLOG}
+                        GROUP BY issue_id
+                    ),
+                    direction AS (
+                        SELECT issue_id, field_value AS direction
+                        FROM {TABLE_YT_ISSUE_CUSTOM}
+                        WHERE field_name = 'Направление'
+                    )
+                    SELECT s.issue_id,
+                           COALESCE(s.created_by, 'Не указан') AS created_by,
+                           COALESCE(s.assignee, 'Не указан') AS assignee,
+                           s.current_state,
+                           COALESCE(d.direction, 'Не указан') AS direction,
+                           COALESCE(w.minutes, 0) AS minutes
+                    FROM snap s
+                    LEFT JOIN work w ON w.issue_id = s.issue_id
+                    LEFT JOIN direction d ON d.issue_id = s.issue_id
+                    ORDER BY w.minutes DESC NULLS LAST
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+            return rows
+    except Exception as e:
+        print("❌ /api/ytrek/tasks error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить задачи YouTrack")
 
 
 app.include_router(router)

@@ -65,6 +65,9 @@ export default function TableCard({
   const [ytData, setYtData] = useState(null);
   const [ytLoading, setYtLoading] = useState(false);
   const [ytError, setYtError] = useState(null);
+  const [analyticsSummary, setAnalyticsSummary] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -187,6 +190,20 @@ export default function TableCard({
       .finally(() => setClickHistoryLoading(false));
   }, [schema, tableName]);
 
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    fetch(`${API_BASE}/api/analytics/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?days=90`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить аналитику таблицы")))
+      .then((data) => setAnalyticsSummary(data?.summary || null))
+      .catch((err) => {
+        console.error(err);
+        setAnalyticsError(typeof err === "string" ? err : "Не удалось загрузить аналитику таблицы");
+      })
+      .finally(() => setAnalyticsLoading(false));
+  }, [schema, tableName]);
+
   const handleViewSearch = () => {
     setViewSearchLoading(true);
     setViewSearchError(null);
@@ -269,7 +286,7 @@ export default function TableCard({
 
   const metrics = useMemo(() => {
     if (!meta) return [];
-    return [
+    const base = [
       {
         label: "Последняя успешная загрузка",
         value: meta.last_success_time || "—",
@@ -297,7 +314,22 @@ export default function TableCard({
         hint: "оценка БД",
       },
     ];
-  }, [meta]);
+    if (analyticsSummary) {
+      base.push(
+        {
+          label: "Изменений за 90 дней",
+          value: analyticsSummary.changes ?? "—",
+          hint: "release_objects",
+        },
+        {
+          label: "Часы за 90 дней",
+          value: analyticsSummary.hours ?? "—",
+          hint: "YouTrack worklog",
+        }
+      );
+    }
+    return base;
+  }, [meta, analyticsSummary]);
 
   const sqlSections = useMemo(() => {
     if (!meta) return [];

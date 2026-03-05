@@ -6,6 +6,7 @@ import "./style/app.css";
 
 import Sidebar from "./components/Sidebar.jsx";
 import HomePage from "./components/HomePage.jsx";
+import DashboardPage from "./components/DashboardPage.jsx";
 import IncidentsPage from "./components/IncidentsPage.jsx";
 import TableSearch from "./components/TableSearch.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
@@ -23,6 +24,7 @@ import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
+import AnalyticsPage from "./components/AnalyticsPage.jsx";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -143,6 +145,10 @@ export default function App() {
         navigate("/releases");
         return;
       }
+      if (target === "analytics") {
+        navigate("/analytics");
+        return;
+      }
 
       if (typeof target === "object" && target.view) {
         if (target.view === "incident") {
@@ -162,6 +168,12 @@ export default function App() {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
             navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
+          }
+          return;
+        }
+        if (target.view === "release_details") {
+          if (target.release_id) {
+            navigate("/releases", { state: { releaseId: target.release_id } });
           }
           return;
         }
@@ -276,6 +288,16 @@ export default function App() {
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
             ) : (
+              <DashboardPage onSelectTable={openView} />
+            )
+          }
+        />
+        <Route
+          path="/overview"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
               <HomePage onSelectTable={openView} />
             )
           }
@@ -343,6 +365,10 @@ export default function App() {
           <Route
             path="/releases"
             element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <ReleasesPage />}
+          />
+          <Route
+            path="/analytics"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <AnalyticsPage />}
           />
         <Route
           path="/onboarding"

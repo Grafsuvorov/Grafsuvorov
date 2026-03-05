@@ -5462,6 +5462,7 @@ def get_clickhouse_summary(
 def get_clickhouse_table_runs(
     schema: str,
     table: str,
+    table_id: Optional[int] = None,
     limit: int = Query(6, ge=1, le=50),
 ):
     try:
@@ -5471,23 +5472,26 @@ def get_clickhouse_table_runs(
             rows = conn.execute(
                 text(
                     f"""
-                    SELECT
-                        run_uuid,
-                        dag_name,
-                        dag_run,
-                        start_dttm,
-                        end_dttm,
-                        duration,
-                        status,
-                        error_text
-                    FROM {TABLE_CLICK_LOAD_RUN}
-                    WHERE schema_name = :schema
-                      AND table_name = :table
-                    ORDER BY start_dttm DESC
+                    SELECT DISTINCT
+                        r.run_uuid,
+                        r.dag_name,
+                        r.dag_run,
+                        r.start_dttm,
+                        r.end_dttm,
+                        r.duration,
+                        r.status,
+                        r.error_text
+                    FROM {TABLE_CLICK_LOAD_RUN} r
+                    JOIN {TABLE_CLICK_LOAD_STAGE} s
+                      ON s.run_uuid = r.run_uuid
+                    WHERE r.schema_name = :schema
+                      AND s.table_name = :table
+                      AND (:table_id IS NULL OR s.table_id = :table_id)
+                    ORDER BY r.start_dttm DESC
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_id": table_id, "limit": limit},
             ).mappings().all()
 
             runs = [
@@ -5618,7 +5622,7 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
                     JOIN {TABLE_CLICK_LOAD_RUN} r
                       ON r.run_uuid = s.run_uuid
                     WHERE r.schema_name = :schema
-                      AND r.table_name = :table
+                      AND s.table_name = :table
                     ORDER BY s.start_dttm DESC NULLS LAST
                     LIMIT :limit
                     """
@@ -5705,6 +5709,19 @@ def _build_ytrack_link(task_id: Optional[str]) -> Optional[str]:
     return base.replace("{task_id}", task_id).replace("{id}", task_id)
 
 
+def _resolve_date_window(date_from: Optional[str], date_to: Optional[str], days: int):
+    # date_from/date_to are expected as YYYY-MM-DD; fallback to last N days
+    params = {"days": days}
+    clause = "r.started_at >= (now() - (:days || ' days')::interval)"
+    if date_from:
+        clause = "r.started_at >= :date_from"
+        params = {"date_from": date_from, "days": days}
+    if date_to:
+        clause = clause + " AND r.started_at <= :date_to"
+        params["date_to"] = date_to
+    return clause, params
+
+
 @router.get("/api/releases")
 def get_releases(days: int = Query(30, ge=1, le=365), limit: int = Query(50, ge=1, le=200)):
     try:
@@ -5725,7 +5742,8 @@ def get_releases(days: int = Query(30, ge=1, le=365), limit: int = Query(50, ge=
                         COALESCE(o.objects_count, 0) AS objects_count,
                         COALESCE(o.failed_count, 0) AS failed_count,
                         COALESCE(o.failed_any, false) AS failed_any,
-                        COALESCE(o.task_ids, ARRAY[]::text[]) AS task_ids
+                        COALESCE(o.task_ids, ARRAY[]::text[]) AS task_ids,
+                        COALESCE(w.hours_total, 0) AS hours_total
                     FROM {TABLE_RELEASE_LOG} l
                     LEFT JOIN (
                         SELECT
@@ -5737,6 +5755,21 @@ def get_releases(days: int = Query(30, ge=1, le=365), limit: int = Query(50, ge=
                         FROM {TABLE_RELEASE_OBJECTS}
                         GROUP BY release_id
                     ) o ON o.release_id = l.release_id
+                    LEFT JOIN (
+                        SELECT ro.release_id,
+                               COALESCE(SUM(w.minutes), 0) / 60.0 AS hours_total
+                        FROM (
+                            SELECT DISTINCT release_id, task_id
+                            FROM {TABLE_RELEASE_OBJECTS}
+                            WHERE task_id IS NOT NULL AND task_id <> ''
+                        ) ro
+                        LEFT JOIN (
+                            SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                            FROM {TABLE_YT_ISSUE_WORKLOG}
+                            GROUP BY issue_id
+                        ) w ON w.issue_id = ro.task_id
+                        GROUP BY ro.release_id
+                    ) w ON w.release_id = l.release_id
                     WHERE l.started_at >= (now() - (:days || ' days')::interval)
                     ORDER BY l.started_at DESC
                     LIMIT :limit
@@ -6202,6 +6235,581 @@ def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
         print("❌ /api/ytrek/tasks error:", e)
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось получить задачи YouTrack")
+
+
+@router.get("/api/analytics/dashboard")
+def get_analytics_dashboard(
+    days: int = Query(30, ge=1, le=3650),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    try:
+        date_clause, params = _resolve_date_window(date_from, date_to, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id
+                    FROM ro
+                    WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                )
+            """
+
+            summary = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        (SELECT COUNT(*) FROM rel) AS releases,
+                        (SELECT COUNT(*) FROM tasks) AS tasks,
+                        (SELECT COUNT(*) FROM ro) AS objects,
+                        (SELECT COALESCE(SUM(minutes), 0) FROM work) AS minutes,
+                        (SELECT COUNT(DISTINCT COALESCE(exec.executor, snap.assignee, snap.created_by))
+                         FROM snap
+                         LEFT JOIN exec ON exec.issue_id = snap.issue_id) AS executors
+                    """
+                ),
+                params,
+            ).mappings().first()
+
+            by_executor = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+                           COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                           COUNT(ro.table_name) AS tables_count,
+                           COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    GROUP BY executor
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            by_creator = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT COALESCE(snap.created_by, 'Не указан') AS creator,
+                           COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                           COUNT(ro.table_name) AS tables_count,
+                           COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM snap
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    GROUP BY creator
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            by_direction = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT COALESCE(direction.direction, 'Не указан') AS direction,
+                           COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                           COUNT(ro.table_name) AS tables_count,
+                           COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM snap
+                    LEFT JOIN direction ON direction.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    GROUP BY direction
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_tables = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT ro.schema_name, ro.table_name,
+                           COUNT(*) AS changes,
+                           COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM ro
+                    LEFT JOIN work ON work.issue_id = ro.task_id
+                    GROUP BY ro.schema_name, ro.table_name
+                    ORDER BY changes DESC, minutes DESC
+                    LIMIT 20
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            return {
+                "summary": summary,
+                "by_executor": by_executor,
+                "by_creator": by_creator,
+                "by_direction": by_direction,
+                "top_tables": top_tables,
+            }
+    except Exception as e:
+        print("❌ /api/analytics/dashboard error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить дашборд")
+
+
+@router.get("/api/analytics/release/{release_id}")
+def get_analytics_release(release_id: str):
+    try:
+        with engine.connect() as conn:
+            rel = conn.execute(
+                text(
+                    f"""
+                    SELECT release_id, started_at, finished_at, initiated_by, status, total_objects
+                    FROM {TABLE_RELEASE_LOG}
+                    WHERE release_id = :release_id
+                    """
+                ),
+                {"release_id": release_id},
+            ).mappings().first()
+            if not rel:
+                raise HTTPException(status_code=404, detail="Релиз не найден")
+
+            base = f"""
+                WITH ro AS (
+                    SELECT * FROM {TABLE_RELEASE_OBJECTS}
+                    WHERE release_id = :release_id
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id FROM ro WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                )
+            """
+
+            tasks_list = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT snap.issue_id AS task_id,
+                           snap.created_by AS creator,
+                           COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+                           COALESCE(direction.direction, 'Не указан') AS direction,
+                           COUNT(ro.table_name) AS tables_count,
+                           COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN direction ON direction.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    GROUP BY snap.issue_id, snap.created_by, exec.executor, snap.assignee, direction.direction
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                {"release_id": release_id},
+            ).mappings().all()
+
+            tables_list = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT ro.schema_name, ro.table_name, ro.change_type, ro.task_id,
+                           COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+                           ro.final_status
+                    FROM ro
+                    LEFT JOIN snap ON snap.issue_id = ro.task_id
+                    LEFT JOIN exec ON exec.issue_id = ro.task_id
+                    ORDER BY ro.schema_name, ro.table_name
+                    """
+                ),
+                {"release_id": release_id},
+            ).mappings().all()
+
+            summary = {
+                "release_id": rel["release_id"],
+                "status": rel["status"],
+                "started_at": rel["started_at"],
+                "finished_at": rel["finished_at"],
+                "initiated_by": rel["initiated_by"],
+                "tasks": len({t["task_id"] for t in tasks_list}),
+                "tables": len(tables_list),
+                "hours": round(sum(t["minutes"] for t in tasks_list) / 60, 2),
+            }
+
+            return {"summary": summary, "tasks": tasks_list, "tables": tables_list}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print("❌ /api/analytics/release error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить релиз")
+
+
+@router.get("/api/analytics/table/{schema}/{table}")
+def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le=3650)):
+    try:
+        date_clause, params = _resolve_date_window(None, None, days)
+        params.update({"schema": schema, "table": table})
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                    WHERE ro.schema_name = :schema AND ro.table_name = :table
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id FROM ro WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                )
+            """
+
+            history = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT ro.schema_name, ro.table_name, ro.task_id, ro.release_id,
+                           COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+                           snap.created_by AS creator,
+                           COALESCE(direction.direction, 'Не указан') AS direction,
+                           COALESCE(work.minutes, 0) AS minutes,
+                           rel.started_at AS changed_at
+                    FROM ro
+                    LEFT JOIN snap ON snap.issue_id = ro.task_id
+                    LEFT JOIN exec ON exec.issue_id = ro.task_id
+                    LEFT JOIN work ON work.issue_id = ro.task_id
+                    LEFT JOIN direction ON direction.issue_id = ro.task_id
+                    LEFT JOIN rel ON rel.release_id = ro.release_id
+                    ORDER BY rel.started_at DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            summary = {
+                "schema": schema,
+                "table": table,
+                "changes": len(history),
+                "hours": round(sum(r["minutes"] for r in history) / 60, 2) if history else 0,
+                "last_change": history[0]["changed_at"] if history else None,
+            }
+
+            return {"summary": summary, "history": history}
+    except Exception as e:
+        print("❌ /api/analytics/table error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить аналитику таблицы")
+
+
+@router.get("/api/analytics/workload")
+def get_analytics_workload(
+    days: int = Query(30, ge=1, le=3650),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    group_by: str = "executor",
+):
+    try:
+        date_clause, params = _resolve_date_window(date_from, date_to, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id
+                    FROM ro
+                    WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                )
+            """
+
+            summary = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                        COUNT(DISTINCT ro.schema_name || '.' || ro.table_name) AS tables_count,
+                        COUNT(DISTINCT COALESCE(exec.executor, snap.assignee, snap.created_by)) AS executors_count,
+                        COALESCE(SUM(work.minutes), 0) AS minutes
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN direction ON direction.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    """
+                ),
+                params,
+            ).mappings().first()
+
+            group_expr = "COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан')"
+            label = "executor"
+            if group_by == "creator":
+                group_expr = "COALESCE(snap.created_by, 'Не указан')"
+                label = "creator"
+            elif group_by == "direction":
+                group_expr = "COALESCE(direction.direction, 'Не указан')"
+                label = "direction"
+
+            rows = conn.execute(
+                text(
+                    base
+                    + f"""
+                    SELECT {group_expr} AS {label},
+                           COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                           COUNT(ro.table_name) AS tables_count,
+                           COALESCE(SUM(work.minutes), 0) AS minutes,
+                           MAX(COALESCE(exec.ts, snap.updated_at, snap.created_at)) AS last_activity
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN direction ON direction.issue_id = snap.issue_id
+                    LEFT JOIN ro ON ro.task_id = snap.issue_id
+                    GROUP BY {label}
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+            return {"group_by": group_by, "summary": summary, "items": rows}
+    except Exception as e:
+        print("❌ /api/analytics/workload error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить нагрузку")
+
+
+@router.get("/api/analytics/hot-tables")
+def get_analytics_hot_tables(
+    days: int = Query(90, ge=1, le=3650),
+    min_changes: int = Query(3, ge=1, le=1000),
+):
+    try:
+        date_clause, params = _resolve_date_window(None, None, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                last_change AS (
+                    SELECT DISTINCT ON (ro.schema_name, ro.table_name)
+                           ro.schema_name, ro.table_name, ro.task_id, rel.started_at AS changed_at
+                    FROM ro
+                    JOIN rel ON rel.release_id = ro.release_id
+                    ORDER BY ro.schema_name, ro.table_name, rel.started_at DESC NULLS LAST
+                )
+            """
+
+            rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT ro.schema_name, ro.table_name,
+                           COUNT(*) AS changes,
+                           COALESCE(SUM(work.minutes), 0) AS minutes,
+                           MAX(rel.started_at) AS last_change_at,
+                           COALESCE(exec.executor, 'Не указан') AS last_executor
+                    FROM ro
+                    JOIN rel ON rel.release_id = ro.release_id
+                    LEFT JOIN work ON work.issue_id = ro.task_id
+                    LEFT JOIN last_change lc ON lc.schema_name = ro.schema_name AND lc.table_name = ro.table_name
+                    LEFT JOIN exec ON exec.issue_id = lc.task_id
+                    GROUP BY ro.schema_name, ro.table_name, exec.executor
+                    HAVING COUNT(*) >= :min_changes
+                    ORDER BY changes DESC, minutes DESC
+                    LIMIT 50
+                    """
+                ),
+                {"days": days, "min_changes": min_changes},
+            ).mappings().all()
+            return {"items": rows}
+    except Exception as e:
+        print("❌ /api/analytics/hot-tables error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить hot tables")
+
+
+@router.get("/api/search")
+def search_entities(q: str):
+    try:
+        q = (q or "").strip()
+        if not q:
+            return {"releases": [], "tasks": [], "tables": []}
+        like = f"%{q}%"
+        with engine.connect() as conn:
+            releases = conn.execute(
+                text(
+                    f"""
+                    SELECT release_id, started_at, status
+                    FROM {TABLE_RELEASE_LOG}
+                    WHERE release_id ILIKE :q
+                    ORDER BY started_at DESC NULLS LAST
+                    LIMIT 20
+                    """
+                ),
+                {"q": like},
+            ).mappings().all()
+
+            tasks = conn.execute(
+                text(
+                    f"""
+                    SELECT issue_id, summary, created_by, updated_at, current_state
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                    WHERE issue_id ILIKE :q OR summary ILIKE :q
+                    ORDER BY updated_at DESC NULLS LAST
+                    LIMIT 20
+                    """
+                ),
+                {"q": like},
+            ).mappings().all()
+
+            tables = conn.execute(
+                text(
+                    f"""
+                    SELECT DISTINCT schema_name, table_name
+                    FROM {TABLE_RELEASE_OBJECTS}
+                    WHERE (schema_name || '.' || table_name) ILIKE :q
+                       OR table_name ILIKE :q
+                    ORDER BY schema_name, table_name
+                    LIMIT 40
+                    """
+                ),
+                {"q": like},
+            ).mappings().all()
+
+            return {"releases": releases, "tasks": tasks, "tables": tables}
+    except Exception as e:
+        print("❌ /api/search error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось выполнить поиск")
 
 
 app.include_router(router)

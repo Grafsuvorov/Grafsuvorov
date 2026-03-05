@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function ReleasesPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -33,6 +34,13 @@ export default function ReleasesPage() {
       .catch((err) => setError(typeof err === "string" ? err : "Не удалось загрузить релизы"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const releaseId = location.state?.releaseId;
+    if (releaseId) {
+      openDetails(releaseId);
+    }
+  }, [location.state]);
 
   useEffect(() => {
     setYtStatsLoading(true);

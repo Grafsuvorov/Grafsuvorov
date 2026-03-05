@@ -6173,7 +6173,7 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                 text(
                     base
                     + """
-                    SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS assignee,
+                    SELECT COALESCE(exec.executor, s.assignee, s.created_by, 'Не указан') AS assignee,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s

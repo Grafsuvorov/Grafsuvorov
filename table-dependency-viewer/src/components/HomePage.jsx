@@ -29,7 +29,6 @@ export default function HomePage({ onSelectTable }) {
   const [clickSummary, setClickSummary] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
   const [clickSlow, setClickSlow] = useState([]);
-  const [hotTables, setHotTables] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +57,6 @@ export default function HomePage({ onSelectTable }) {
             setClickSummary(cached.clickSummary || null);
             setClickFailures(Array.isArray(cached.clickFailures) ? cached.clickFailures : []);
             setClickSlow(Array.isArray(cached.clickSlow) ? cached.clickSlow : []);
-            setHotTables(Array.isArray(cached.hotTables) ? cached.hotTables : []);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -76,8 +74,7 @@ export default function HomePage({ onSelectTable }) {
           dqSummaryResp,
           dqAlertsResp,
           clickResp,
-          clickSlowResp,
-          hotTablesResp
+          clickSlowResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
@@ -89,8 +86,7 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
           fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`),
           fetch(`${API_BASE}/api/click/summary?days=7&limit=6`),
-          fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=6`),
-          fetch(`${API_BASE}/api/analytics/hot-tables?days=90&min_changes=3`)
+          fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=6`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -104,7 +100,6 @@ export default function HomePage({ onSelectTable }) {
         const dqAlertsJson = await dqAlertsResp.json();
         const clickJson = await clickResp.json();
         const clickSlowJson = await clickSlowResp.json();
-        const hotTablesJson = await hotTablesResp.json();
 
         if (!cancelled) {
           const now = new Date();
@@ -129,7 +124,6 @@ export default function HomePage({ onSelectTable }) {
           setClickSummary(clickJson?.summary || null);
           setClickFailures(Array.isArray(clickJson?.failures) ? clickJson.failures : []);
           setClickSlow(Array.isArray(clickSlowJson) ? clickSlowJson : []);
-          setHotTables(Array.isArray(hotTablesJson?.items) ? hotTablesJson.items : []);
           setNightLoading(false);
           localStorage.setItem(
             "home:payload",
@@ -150,7 +144,6 @@ export default function HomePage({ onSelectTable }) {
               clickSummary: clickJson?.summary || null,
               clickFailures: Array.isArray(clickJson?.failures) ? clickJson.failures : [],
               clickSlow: Array.isArray(clickSlowJson) ? clickSlowJson : [],
-              hotTables: Array.isArray(hotTablesJson?.items) ? hotTablesJson.items : [],
             })
           );
         }
@@ -570,42 +563,6 @@ export default function HomePage({ onSelectTable }) {
             <span className="overview-value">{metrics.active_entities}</span>
             <span className="overview-label">Сущностей</span>
           </div>
-        </section>
-      )}
-
-      {!loading && (
-        <section className="cc-surface">
-          <div className="section-title">Часто изменяемые таблицы (90 дней)</div>
-          {!hotTables.length && <div className="muted">Данных пока нет.</div>}
-          {hotTables.length > 0 && (
-            <div className="hot-table-list">
-              <div className="hot-table-head">
-                <span>Таблица</span>
-                <span>Изменения</span>
-                <span>Часы</span>
-                <span>Последний исполнитель</span>
-              </div>
-              {hotTables.slice(0, 10).map((row, idx) => (
-                <button
-                  key={`${row.schema_name}.${row.table_name}-${idx}`}
-                  className="hot-table-row"
-                  onClick={() =>
-                    onSelectTable(
-                      { view: "table_info", table: `${row.schema_name}.${row.table_name}` },
-                      "home"
-                    )
-                  }
-                >
-                  <span className="mono">
-                    {row.schema_name}.{row.table_name}
-                  </span>
-                  <span>{row.changes ?? 0}</span>
-                  <span>{row.minutes ? Math.round(row.minutes / 60) : 0} ч</span>
-                  <span>{row.last_executor || "—"}</span>
-                </button>
-              ))}
-            </div>
-          )}
         </section>
       )}
 

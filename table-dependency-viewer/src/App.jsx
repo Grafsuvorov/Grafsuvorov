@@ -6,7 +6,6 @@ import "./style/app.css";
 
 import Sidebar from "./components/Sidebar.jsx";
 import HomePage from "./components/HomePage.jsx";
-import DashboardPage from "./components/DashboardPage.jsx";
 import IncidentsPage from "./components/IncidentsPage.jsx";
 import TableSearch from "./components/TableSearch.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
@@ -284,16 +283,6 @@ export default function App() {
         />
         <Route
           path="/"
-          element={
-            AUTH_ENABLED && !authToken ? (
-              <Navigate to="/login" replace />
-            ) : (
-              <DashboardPage onSelectTable={openView} />
-            )
-          }
-        />
-        <Route
-          path="/overview"
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />

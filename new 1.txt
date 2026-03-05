@@ -1,84 +1,493 @@
-Задач
-2
-Трудозатраты
-7 ч
-Задача
-Постановщик
-Исполнитель
-Статус
-Направление
-Трудозатраты
-Последняя смена исполнителя
-Последняя смена статуса
-DWH-10799
-SimonovaEN
-—
-Ожидание релиза
-—
-7 ч
-KornienkoAV → Aleksandr Kornienko
-KornienkoAV → Ожидание релиза
-Последние изменения
-Дата
-Автор
-Событие
-Поле
-Было
-Стало
-2026-03-03 12:47:00
-KornienkoAV
-Assignee change
-Исполнитель
-Simonova Ekaterina
-Aleksandr Kornienko
-2026-03-03 12:47:00
-KornienkoAV
-Work logged
-Фактические трудозатраты
-30 мин
-390 мин
-2026-03-03 12:47:00
-KornienkoAV
-State change
-Состояние
-Проверка / Тест
-Ожидание релиза
-2026-03-03 05:20:00
-SimonovaEN
-Work logged
-Фактические трудозатраты
-—
-30 мин
-2026-03-02 18:52:00
-KornienkoAV
-Assignee change
-Исполнитель
-Aleksandr Kornienko
-Simonova Ekaterina
-2026-03-02 10:18:00
-KornienkoAV
-State change
-Состояние
-Зарегистрирована
-В работе
-2026-03-02 09:02:00
-SuvorovND
-Assignee change
-Исполнитель
-Suvorov Nikita
-Aleksandr Kornienko
-2026-03-02 06:22:00
-SimonovaEN
-Assignee change
-Исполнитель
-—
-Suvorov Nikita
-SQL-скрипты
-SQL: insert
-99 строк · 7213 символов
-Открыть
-SQL: recreate
-44 строк · 5950 символов
-Открыть
-SQL: truncate
-1 строк · 63 символов
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10314', 'Greenplum', 'dm_calc', 'sales_delivery_scenario', 35, 'BI_SB_WUC', 'Расчёт объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10425', 'Greenplum', 'dm_view', 'dq_sd0001', 64, 'DQ', 'Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10425', 'Greenplum', 'dm_view', 'dq_sd0002', 64, 'DQ', 'Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10425', 'Greenplum', 'dm_view', 'dq_sd0003', 64, 'DQ', 'Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10398', 'Greenplum', 'dm', 'transportation_external_location_metal_stock', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10398', 'Greenplum', 'dm_calc', 'storage_sales_bundles_amount', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10398', 'Greenplum', 'dm_calc', 'storage_sales_bundles_weight', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10398', 'Greenplum', 'dm_view', 'transportation_external_location_metal_stock', 35, 'BI_SB_WUC', 'Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10479', 'Greenplum', 'dm', 'sb_wuc', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10479', 'Greenplum', 'dm_calc', 'sd_sales_stock_by_date', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10479', 'Greenplum', 'dm_calc', 'sd_sales_stock_calculation', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10479', 'Greenplum', 'dm_calc', 'sd_sales_svh_stock_by_date', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10476', 'Greenplum', 'dm', 'sales_shipment_from_plant', 47, 'SALES_SHIPMENT_FROM_PLANT_1', 'Расчёт объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10476', 'Greenplum', 'ods', 'lips_ral_mr', 47, 'SALES_SHIPMENT_FROM_PLANT_1', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10464', 'Greenplum', 'stg', 'LIPS_MR', 47, 'SALES_SHIPMENT_FROM_PLANT_1', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10472', 'Greenplum', 'dm_calc', 'sales_stock_realised', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+INSERT INTO tech_etl.release_objects
+(release_id, task_id, target_system, schema_name, table_name, entity_id, entity_name, change_type, final_status, attempts_count, created_at, failed_objects, attempt_no, error_message, error_stacktrace)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'DWH-10472', 'Greenplum', 'dm_calc', 'sales_stock_realised_by_date', 35, 'BI_SB_WUC', 'Расчёт объекта, Структура объекта', 'in queued', 0, '2026-02-18 13:53:24.043', false, 0, NULL, NULL);
+
+INSERT INTO tech_etl.release_log
+(release_id, release_type, initiated_by, started_at, finished_at, status, total_objects, created_at, ready_to_release)
+VALUES('manual__2026-02-18T12:21:15+03:00', 'release', 'ReutskiyAS', '2026-02-18 13:53:24.043', NULL, 'running', 33, '2026-02-18 13:53:24.043', true);
+
+
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10570', 'Доработка витрины salesaccountreceivablesandcustomsclearancerset', 'Направление: BISBWUC;
+ Названия таблиц в GP: dm.salesaccountreceivablesandcustomsclearancerset;
+ Ссылка на гит: slabozhanovalvDWH-10108v2 (!1477) · Запросы на слияние · dwhanalyst / Sql Queries Storage · GitLab
+ Способ обновления: инкрементальный (удаление и запись в dm.salesaccountreceivablesandcustomsclearancerset только за последние 2 месяца);
+ Историчность: не нужна;
+ Стенд: DEV и PROD;
+ Время обновления: 5 сек;
+ Ссылка на статью релиза: Статусы по задачам (2026-03-04) SD \| База знаний
+ Зависимые представления: dmview.salesaccountreceivablesandcustomsclearancerset;
+ Ключевые поля для загрузки в ClickHouse: dtreport, unitbalancecode, customercode, salesinvoicecode;', 'КХД', NULL, 'SlabozhanovaLV', NULL, '2026-02-18 15:36:00.000', '2026-03-04 19:07:00.000', '2026-03-04 19:07:00.000', 'Завершена', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:13.335');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10150', 'DQ. Изменить таблицу dqerror на слое dictstg: перевести тех. поля в верхний регистр', '## Технические поля dttminserted, dttmupdated, jobname, deletedflag на слое stg должны быть в верхнем регистре, прошу перевести их в верхний регистр для таблиц, указанных в задаче
+
+ Предметная область: DQ
+ Сущность загрузки: DICTLOADER (таблицы относятся к DQ)
+ Ссылка на гит:<https://prod.gitlab.dwh.rusal.com/dwhanalyst/sqlqueriesstorage/-/mergerequests/1456>
+ Название таблицы Greenplum:
+   dictstg.dqerror
+ Стенд: DEV и PROD
+ Ссылка на статью релиза:Статусы по задачам (2026-02-18) SD \| База знаний
+
+## Прошу изменить поля таблицы и вернуть задачу обратно на @VaskovAS с ссылками на коммит задачи и статью релиза', 'КХД', NULL, 'VaskovAS', NULL, '2026-02-04 16:06:00.000', '2026-02-19 16:39:00.000', '2026-02-19 16:39:00.000', 'Завершена', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:14.000');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10367', 'Изменения в витрине "Собственные контейнеры"', 'Направление: не менять;
+ Ссылка на гит: SlabozhanovaLV-DWH-10192 (!1454) · Запросы на слияние · dwhanalyst / Sql Queries Storage · GitLab
+ Название таблиц:
+  1. dm.transportationowncontainermovement - GP, Click
+  2. dmview.transportationowncontainerinformationcard - GP, Click
+ Способ обновления: Полный
+ Стенд: DEV, PROD
+ Ссылка на статью релиза: Статусы по задачам (2026-02-25) LE+MM+FI \| База знаний', 'КХД', NULL, 'SlabozhanovaLV', NULL, '2026-02-12 17:55:00.000', '2026-02-25 17:56:00.000', '2026-02-25 17:56:00.000', 'Завершена', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:14.741');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10428', 'Добавление поля сумма usd в dm.accountingbankstatements', 'Предметная область: Финансы;
+ Сущность загрузки: BIFI
+ Ссылка на гит: BulgakovAA2DWH-10279 (!1445) · Merge requests · dwhanalyst / Sql Queries Storage · GitLab
+ Название таблицы Greenplum:
+
+  dm.accountingbankstatements
+ Способ обновления: полный;
+ Стенд: DEV и PROD;
+ Время работы скрипта: менее 20 сек;
+ Ссылка на статью релиза: Релиз FI (2026-02-25) : DWH-10316
+ Бизнес-ключ для проверки на дубли: не меняется
+ Зависимые представление: dmview.accountingbankstatements;
+ Ключевые поля для загрузки в ClickHouse: не меняются
+
+Пересоздать dm.accountingbankstatements и dmview.accountingbankstatements в связи с расширением структуры таблиц. Выполнить выгрузку в ClickHouse (изменилась структура)
+
+Прошу на DEV реализовать в ближайшее время, на данную доработку завязана реализация дашбордов в ClickHouse.', 'КХД', NULL, 'BulgakovAA2', NULL, '2026-02-13 16:45:00.000', '2026-02-25 16:41:00.000', NULL, 'Ожидание релиза', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:15.409');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10425', 'DQ. Добавления полей', 'Направление: не менять
+ Ссылка на гит: SlabozhanovaLV-DWH-10377 (!1460) · Запросы на слияние · dwhanalyst / Sql Queries Storage · GitLab
+ Название таблиц:
+  1. dm.dqsd0001 - GP, ClickHouse
+  2. dm.dqsd0002 - GP, ClickHouse
+  3. dm.dqsd0003 - GP, ClickHouse
+  4. dmview.dqsd0001 - GP, ClickHouse
+  5. dmview.dqsd0002 - GP, ClickHouse
+  6. dmview.dqsd0003 - GP, ClickHouse
+ Способ обновления: инкрементальный
+ Стенд: DEV, PROD
+ Ссылка на статью релиза: Статусы по задачам (2026-02-18) SD \| База знаний', 'КХД', NULL, 'SlabozhanovaLV', NULL, '2026-02-13 16:40:00.000', '2026-02-19 10:09:00.000', '2026-02-19 10:09:00.000', 'Завершена', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:16.086');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10746', 'затащить на dictstg справочники T012,BNKA', 'Направление: dictionary;
+ Источник: oraclesaperpprod;
+ Название схемы на источнике: SAPSR3;
+ Название таблицы на источнике: "T012","BNKA";
+ Название таблицы в таргете: dictstg."RALT012",dictstg."BNKA";
+ Ключ распределения: REPLICATED;
+ Условие при загрузке: Без условий;
+ Расписание загрузки :Стандартно;
+ Стенд: DEV и PROD;
+ Доступ к таблице на источнике: Предоставлен;
+ Ссылка на статью релиза: Статусы по задачам (2026-03-04) SD \| База знаний
+ vpk=''MANDT'',''BUKRS'','''',''HBKID'' для T012
+ ''MANDT'',''BANKS'','''',''BANKL''', 'КХД', NULL, 'KarimovaDF', NULL, '2026-02-26 15:42:00.000', '2026-03-04 12:04:00.000', NULL, 'Ожидание релиза', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:16.776');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10663', 'Создать и выгрузить на клик dm.transportationrailcaratplantnormativevsactual, dmview.transportationrailcaratplantnormativevsactual, dmview.exptransportationrailcaratplantnormativevsactual', 'Работа в ГП:
+
+Предметная область: LE;
+
+Сущность:
+
+1. SALESSHIPMENTFROMPLANT1
+2. SALESSHIPMENTFROMPLANT2
+3. SALESSHIPMENTFROMPLANT3
+4. SALESSHIPMENTFROMPLANT4;
+
+Ссылка на гит: Andrey.Gusev4DWH-93852 (!1427) · Merge requests · dwhanalyst / Sql Queries Storage · GitLab;
+Название таблицы Greenplum: dm.transportationrailcaratplantnormativevsactual, dmview.transportationrailcaratplantnormativevsactual, dmview.exptransportationrailcaratplantnormativevsactual;
+Способ обновления: Полный;
+Стенд: DEV/PROD;
+Ссылка на статью релиза: Статусы по задачам (2026-03-04) SD \| База знаний
+
+Выгрузка в клик:
+
+ Предметная область: LE;
+ Сущность загрузки:
+  1. SALESSHIPMENTFROMPLANT1
+  2. SALESSHIPMENTFROMPLANT2
+  3. SALESSHIPMENTFROMPLANT3
+  4. SALESSHIPMENTFROMPLANT4;
+ Название таблицы на источнике: dm.transportationrailcaratplantnormativevsactual;
+ Метод обновления: полный;
+ Ключевые поля: dtreport;
+ Стенд: DEV/PROD;
+ Ссылка на статью релиза: Статусы по задачам (2026-03-04) SD \| База знаний
+
+Важно! Вьюшки dmview.transportationrailcaratplantnormativevsactual, dmview.exptransportationrailcaratplantnormativevsactual на клике тоже нужны.
+
+Делать на проде после DWH-10566 и DWH-10532', 'КХД', NULL, 'GusevAS4', NULL, '2026-02-20 15:43:00.000', '2026-03-03 16:20:00.000', NULL, 'Ожидание релиза', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:17.428');
+INSERT INTO tech_etl.yt_issue_snapshot
+(issue_id, summary, description, project_name, project_key, created_by, assignee, created_at, updated_at, resolved_at, current_state, last_state_changed_by, last_state_changed_at, last_updated_by, last_updated_at, last_updated_field, last_assignee_changed_by, last_assignee_changed_at, last_assignee_set, dttm_loaded)
+VALUES('DWH-10397', 'Изменения dm.ligatureconsumption и dmview.ligatureconsumption', 'Предметная область: MM;
+
+Сущность: Не менять;
+
+Ссылка на гит: Karimovadf dwh 10103 (!1459) · Merge requests · dwhanalyst / Sql Queries Storage · GitLab;
+Название таблицы Greenplum: dm.ligatureconsumption, dmview.ligatureconsumption ;
+Способ обновления: Полный;
+Стенд: DEV/PROD;
+Ссылка на статью релиза:Статусы по задачам (2026-02-25) LE+MM+FI \| База знаний', 'КХД', NULL, 'KarimovaDF', NULL, '2026-02-13 11:52:00.000', '2026-03-02 09:57:00.000', '2026-03-02 09:57:00.000', 'Завершена', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-03-04 20:26:23.806');
+
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Тип карточки', 'Task', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Priority', 'Normal', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'State', 'Завершена', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Assignee', 'Larionov Konstantin', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Subsystem', 'DE (Data Engineer)', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Оценка (чел./час.)', '0', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Due Date', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Затраченное время', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Направление', 'ТОРО', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Дата релиза', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Spent time', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Фактические трудозатраты', '3ч', '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Дашборд КХД', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Экономия за счет ИИ', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10302', 'Оценка трудозатрат', NULL, '2026-03-04 20:26:10.755');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Тип карточки', 'Task', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Priority', 'Normal', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'State', 'Завершена', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Assignee', 'Larionov Konstantin', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Subsystem', NULL, '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Оценка (чел./час.)', '0', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Due Date', '2026-02-19 12:00', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Затраченное время', NULL, '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Направление', 'Производство', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Дата релиза', '2026-02-19 15:00', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Spent time', NULL, '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Фактические трудозатраты', '4ч', '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Дашборд КХД', NULL, '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Экономия за счет ИИ', NULL, '2026-03-04 20:26:11.384');
+INSERT INTO tech_etl.yt_issue_custom_field
+(issue_id, field_name, field_value, dttm_loaded)
+VALUES('DWH-10409', 'Оценка трудозатрат', NULL, '2026-03-04 20:26:11.384');
+
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-16 17:32:00.000', 'KraykoLA', 'Assignee change', 'Исполнитель', 'Zernov Aleksandr', 'Krayko Lidiya', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-16 18:25:00.000', 'KraykoLA', 'Assignee change', 'Исполнитель', 'Krayko Lidiya', 'Suvorov Nikita', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-16 18:26:00.000', 'KraykoLA', 'Work logged', 'Фактические трудозатраты', NULL, '30 мин', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 09:17:00.000', 'SuvorovND', 'Assignee change', 'Исполнитель', 'Suvorov Nikita', 'Staroverova Anastasiya', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 10:40:00.000', 'StaroverovaAA', 'State change', 'Состояние', 'Зарегистрирована', 'В работе', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 11:08:00.000', 'KraykoLA', 'Work logged', 'Фактические трудозатраты', '30 мин', '35 мин', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 17:35:00.000', 'StaroverovaAA', 'Work logged', 'Фактические трудозатраты', '35 мин', '425 мин', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 17:36:00.000', 'StaroverovaAA', 'Assignee change', 'Исполнитель', 'Staroverova Anastasiya', 'Krayko Lidiya', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 19:01:00.000', 'KraykoLA', 'Assignee change', 'Исполнитель', 'Krayko Lidiya', 'Staroverova Anastasiya', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-17 19:02:00.000', 'KraykoLA', 'Work logged', 'Фактические трудозатраты', '425 мин', '465 мин', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-18 09:10:00.000', 'StaroverovaAA', 'State change', 'Состояние', 'В работе', 'Проверка / Тест', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-18 09:11:00.000', 'StaroverovaAA', 'State change', 'Состояние', 'Проверка / Тест', 'Ожидание релиза', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_timeline
+(issue_id, ts, author, event_type, field_name, value_from, value_to, dttm_loaded)
+VALUES('DWH-10479', '2026-02-20 17:49:00.000', 'StaroverovaAA', 'State change', 'Состояние', 'Ожидание релиза', 'Завершена', '2026-03-04 20:26:05.456');
+
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10479', 'KraykoLA', 'KraykoLA', '2026-02-16 03:00:00.000', 30, NULL, 'Постановка задачи. Проверка скрипта', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10479', 'KraykoLA', 'KraykoLA', '2026-02-17 03:00:00.000', 5, NULL, 'Ответ Никите', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10479', 'StaroverovaAA', 'StaroverovaAA', '2026-02-17 03:00:00.000', 390, NULL, '', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10479', 'KraykoLA', 'KraykoLA', '2026-02-17 03:00:00.000', 40, NULL, 'Тестирование', '2026-03-04 20:26:05.456');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10434', 'ChernyshevaMV', 'ChernyshevaMV', '2026-02-14 03:00:00.000', 20, NULL, 'проверка скрипта', '2026-03-04 20:26:06.181');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10434', 'ChernyshevaMV', 'ChernyshevaMV', '2026-02-24 03:00:00.000', 15, NULL, 'тест DEV', '2026-03-04 20:26:06.181');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10434', 'KornienkoAV', 'KornienkoAV', '2026-02-24 03:00:00.000', 120, NULL, '', '2026-03-04 20:26:06.181');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10434', 'ChernyshevaMV', 'ChernyshevaMV', '2026-02-27 03:00:00.000', 20, NULL, 'тест PROD', '2026-03-04 20:26:06.181');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10040', 'KornienkoAV', 'KornienkoAV', '2026-02-02 03:00:00.000', 120, NULL, '', '2026-03-04 20:26:06.844');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10294', 'ShkretovDV', 'ShkretovDV', '2026-02-18 03:00:00.000', 60, NULL, 'Реализация, проверка, минорные правки, оформление', '2026-03-04 20:26:07.566');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10833', 'ZernovAV', 'ZernovAV', '2026-03-03 03:00:00.000', 120, NULL, 'оформление, проверки, тесты', '2026-03-04 20:26:08.233');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10475', 'ShkretovDV', 'ShkretovDV', '2026-02-17 03:00:00.000', 120, NULL, 'Реализация, проверка, оформление', '2026-03-04 20:26:08.846');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10209', 'ErmolenkoSS', 'ErmolenkoSS', '2026-02-17 03:00:00.000', 240, NULL, 'Разработка', '2026-03-04 20:26:09.515');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10823', 'ChernyshevaMV', 'ChernyshevaMV', '2026-03-02 03:00:00.000', 30, NULL, 'передача в релиз', '2026-03-04 20:26:10.146');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10823', 'ChernyshevaMV', 'ChernyshevaMV', '2026-03-03 03:00:00.000', 30, NULL, 'тест DEV', '2026-03-04 20:26:10.146');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10823', 'KornienkoAV', 'KornienkoAV', '2026-03-03 03:00:00.000', 120, NULL, '', '2026-03-04 20:26:10.146');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10510', 'KarimovaDF', 'KarimovaDF', '2026-02-24 03:00:00.000', 20, NULL, 'все ок', '2026-03-04 20:26:36.171');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10510', 'VekhovNV', 'VekhovNV', '2026-02-24 03:00:00.000', 60, NULL, '', '2026-03-04 20:26:36.171');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10510', 'VekhovNV', 'VekhovNV', '2026-02-25 03:00:00.000', 30, NULL, '', '2026-03-04 20:26:36.171');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10151', 'KarimovaDF', 'KarimovaDF', '2026-02-11 03:00:00.000', 30, NULL, 'Разработка, гит', '2026-03-04 20:26:36.806');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10151', 'VaskovAS', 'VaskovAS', '2026-02-17 03:00:00.000', 90, NULL, 'дев + git', '2026-03-04 20:26:36.806');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10312', 'ErmolenkoSS', 'ErmolenkoSS', '2026-02-13 03:00:00.000', 60, NULL, '', '2026-03-04 20:26:37.457');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10312', 'ErmolenkoSS', 'ErmolenkoSS', '2026-02-16 03:00:00.000', 180, NULL, '', '2026-03-04 20:26:37.457');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10474', 'ErmolenkoSS', 'ErmolenkoSS', '2026-02-18 03:00:00.000', 195, NULL, '', '2026-03-04 20:26:38.167');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10598', 'ShkretovDV', 'ShkretovDV', '2026-02-19 03:00:00.000', 120, NULL, 'Реализация, проверка, оформление', '2026-03-04 20:26:38.815');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10666', 'VekhovNV', 'VekhovNV', '2026-02-25 03:00:00.000', 30, NULL, '', '2026-03-04 20:26:39.449');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10666', 'GeraskinGV', 'GeraskinGV', '2026-02-25 03:00:00.000', 120, NULL, 'тестирование дев и прод', '2026-03-04 20:26:39.449');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10472', 'KraykoLA', 'KraykoLA', '2026-02-16 03:00:00.000', 30, NULL, 'Постановка задачи. Проверка скриптов', '2026-03-04 20:26:40.102');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10472', 'ZernovAV', 'ZernovAV', '2026-02-17 03:00:00.000', 210, NULL, 'разработка, тесты + оптимизация', '2026-03-04 20:26:40.102');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10472', 'KraykoLA', 'KraykoLA', '2026-02-18 03:00:00.000', 15, NULL, 'Ответ Саше', '2026-03-04 20:26:40.102');
+INSERT INTO tech_etl.yt_issue_worklog
+(issue_id, author, creator, work_date, minutes, work_type, work_text, dttm_loaded)
+VALUES('DWH-10472', 'ZernovAV', 'ZernovAV', '2026-02-18 03:00:00.000', 60, NULL, 'проработка алгоритма для дельты', '2026-03-04 20:26:40.102');
+
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10839', 'KornienkoAV', '2026-03-03 17:08:00.000', '@GusevAS4  на дев создана', '2026-03-04 20:26:29.258');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10839', 'GusevAS4', '2026-03-03 17:11:00.000', '@KornienkoAV На дев ок', '2026-03-04 20:26:29.258');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10153', 'SuvorovND', '2026-02-05 15:26:00.000', 'Согласовано', '2026-03-04 20:26:29.925');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10153', 'KhaustovaMG', '2026-02-12 20:57:00.000', '[KhaustovaMG_DWH-10153 (!1455) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab](https://prod.gitlab.dwh.rusal.com/dwh_analyst/sql_queries_storage/-/merge_requests/1455/diffs)
+
+Поменяла на верхний регистр в 
+
+dict_stg.currency_rates_source_ext
+
+dict_stg.currency_rates_source_cbr
+
+В dict_stg.paydox_credit_limit_reason_texts
+
+dict_stg.paydox_credit_limit_status_texts
+
+технические поля уже были в верхнем регистре', '2026-03-04 20:26:29.925');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10153', 'FeoktistovaAE', '2026-02-13 08:37:00.000', '@KhaustovaMG Маша, проверь, пожалуйста, в проде в мете тоже в верхнем регистре для dict_stg.paydox_credit_limit_reason_texts
+
+dict_stg.paydox_credit_limit_status_texts? 
+
+
+
+Если нет - добавь в MR скрипты тоже. Если да, уточни у @VaskovAS почему они в задачу попали', '2026-03-04 20:26:29.925');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10153', 'VaskovAS', '2026-02-17 19:55:00.000', 'Выполнил на DEV, проверь, пожалуйста @KhaustovaMG ', '2026-03-04 20:26:29.925');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10476', 'Larionov_Konstantin', '2026-02-17 10:55:00.000', '@GusevAS4 прогнал на дев, прошу проверить данные', '2026-03-04 20:26:30.682');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10476', 'GusevAS4', '2026-02-17 11:25:00.000', '@Larionov_Konstantin На дев ок', '2026-03-04 20:26:30.682');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10483', 'DanishchenkoAA', '2026-02-17 06:24:00.000', '@SuvorovND @Larionov_Konstantin Коллеги, доброе утро. Прошу взять в работу.', '2026-03-04 20:26:31.516');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10819', 'KornienkoAV', '2026-03-02 13:02:00.000', '@GusevAS4  на дев созданы', '2026-03-04 20:26:32.156');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10819', 'GusevAS4', '2026-03-02 14:32:00.000', '@KornienkoAV На дев ок', '2026-03-04 20:26:32.156');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10182', 'VaskovAS', '2026-02-11 10:43:00.000', '@KarimovaDF прогнал исправленные скрипты на DEV, проверь, пожалуйста', '2026-03-04 20:26:32.758');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10182', 'VaskovAS', '2026-02-11 10:45:00.000', '[Commits · feature/DWH-10182 · dwh / etl · GitLab](https://prod.gitlab.dwh.rusal.com/dwh/etl/-/commits/feature/DWH-10182)
+
+
+', '2026-03-04 20:26:32.758');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10182', 'VaskovAS', '2026-02-20 05:08:00.000', '[DWH-10182 (!1843) · Merge requests · dwh / etl · GitLab](https://prod.gitlab.dwh.rusal.com/dwh/etl/-/merge_requests/1843)
+
+
+', '2026-03-04 20:26:32.758');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10655', 'KornienkoAV', '2026-02-24 14:48:00.000', '@ChernyshevaMV  проверь, пожалуйста
+
+
+', '2026-03-04 20:26:33.413');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10655', 'ChernyshevaMV', '2026-02-24 15:08:00.000', NULL, '2026-03-04 20:26:33.413');
+INSERT INTO tech_etl.yt_issue_comment
+(issue_id, author, created_at, comment_text, dttm_loaded)
+VALUES('DWH-10655', 'ChernyshevaMV', '2026-02-24 15:34:00.000', '@KornienkoAV в дев ок, можно нести в прод.
+
+спасибо за обновление источников :)', '2026-03-04 20:26:33.413');

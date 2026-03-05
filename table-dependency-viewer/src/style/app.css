@@ -5356,9 +5356,13 @@ main.content {
 
 /* --- Analytics page --- */
 .analytics-page {
-  max-width: 1200px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 28px 20px 56px;
+  padding: 24px 28px 56px;
+}
+
+.analytics-page.compact {
+  padding: 20px 28px 48px;
 }
 
 .analytics-page .analytics-toolbar {
@@ -5373,6 +5377,10 @@ main.content {
   padding: 12px 16px;
 }
 
+.analytics-toolbar.compact {
+  padding: 10px 12px;
+}
+
 .analytics-range {
   display: flex;
   flex-wrap: wrap;
@@ -5384,6 +5392,10 @@ main.content {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.analytics-custom.compact {
+  min-width: 140px;
 }
 
 .analytics-range .btn.btn-ghost {

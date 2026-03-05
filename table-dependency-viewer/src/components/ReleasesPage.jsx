@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const YT_BASE = "https://yt.rusal.ru/issue/";
 
 export default function ReleasesPage() {
   const navigate = useNavigate();
@@ -14,16 +15,6 @@ export default function ReleasesPage() {
   const [details, setDetails] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
-  const [ytStats, setYtStats] = useState(null);
-  const [ytStatsLoading, setYtStatsLoading] = useState(false);
-  const [ytStatsError, setYtStatsError] = useState(null);
-  const [ytTasks, setYtTasks] = useState([]);
-  const [ytTasksLoading, setYtTasksLoading] = useState(false);
-  const [ytTasksError, setYtTasksError] = useState(null);
-  const analyticsDays = 30;
-  const [selectedDirection, setSelectedDirection] = useState(null);
-  const [selectedCreator, setSelectedCreator] = useState(null);
-  const [selectedAssignee, setSelectedAssignee] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -41,24 +32,6 @@ export default function ReleasesPage() {
       openDetails(releaseId);
     }
   }, [location.state]);
-
-  useEffect(() => {
-    setYtStatsLoading(true);
-    setYtStatsError(null);
-    fetch(`${API_BASE}/api/ytrek/analytics?days=${analyticsDays}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить аналитику YouTrack")))
-      .then((data) => setYtStats(data || null))
-      .catch((err) => setYtStatsError(typeof err === "string" ? err : "Не удалось загрузить аналитику YouTrack"))
-      .finally(() => setYtStatsLoading(false));
-
-    setYtTasksLoading(true);
-    setYtTasksError(null);
-    fetch(`${API_BASE}/api/ytrek/tasks?days=${analyticsDays}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить задачи YouTrack")))
-      .then((data) => setYtTasks(Array.isArray(data) ? data : []))
-      .catch((err) => setYtTasksError(typeof err === "string" ? err : "Не удалось загрузить задачи YouTrack"))
-      .finally(() => setYtTasksLoading(false));
-  }, [analyticsDays]);
 
   const openDetails = (releaseId) => {
     if (!releaseId) return;
@@ -152,9 +125,15 @@ export default function ReleasesPage() {
                 <span className="release-task-links">
                   {Array.isArray(row.task_ids) && row.task_ids.length > 0
                     ? row.task_ids.slice(0, 3).map((task, idx) => (
-                        <span key={`${row.release_id}-${task}-${idx}`} className="mono">
+                        <a
+                          key={`${row.release_id}-${task}-${idx}`}
+                          className="yt-link mono"
+                          href={`${YT_BASE}${task}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
                           {task}
-                        </span>
+                        </a>
                       ))
                     : "—"}
                 </span>
@@ -163,164 +142,6 @@ export default function ReleasesPage() {
                 </button>
               </div>
             ))}
-          </div>
-        )}
-      </section>
-
-      <section className="card release-analytics">
-        <div className="section-title">Трудозатраты и частота изменений</div>
-        {(ytStatsLoading || ytTasksLoading) && <div className="muted">Загрузка аналитики...</div>}
-        {(ytStatsError || ytTasksError) && (
-          <div className="dep-error-title">{ytStatsError || ytTasksError}</div>
-        )}
-        {!ytStatsLoading && !ytStatsError && ytStats && (
-          <div className="yt-analytics-grid">
-            <div className="yt-analytics-block">
-              <div className="section-subtitle">По направлениям</div>
-              <div className="yt-analytics-table">
-                <div className="yt-analytics-head">
-                  <span>Направление</span>
-                  <span>Задач</span>
-                  <span>Часы</span>
-                  <span></span>
-                </div>
-                {(ytStats.by_direction || []).map((row, idx) => (
-                  <div key={`dir-${idx}`} className="yt-analytics-row">
-                    <span>{row.direction || "—"}</span>
-                    <span>{row.tasks_count || 0}</span>
-                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() =>
-                        setSelectedDirection((prev) => (prev === row.direction ? null : row.direction))
-                      }
-                    >
-                      {selectedDirection === row.direction ? "Скрыть" : "Задачи"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {selectedDirection && (
-                <div className="yt-analytics-tasks">
-                  <div className="yt-analytics-task-head">
-                    <span>Задача</span>
-                    <span>Направление</span>
-                    <span>Постановщик</span>
-                    <span>Исполнитель</span>
-                    <span>Часы</span>
-                  </div>
-                  {(ytTasks || [])
-                    .filter((t) => (t.direction || "Не указан") === selectedDirection)
-                    .map((t, idx) => (
-                    <div key={`dir-task-${idx}`} className="yt-analytics-task-row">
-                      <span className="mono">{t.issue_id}</span>
-                      <span>{t.direction || "—"}</span>
-                      <span>{t.created_by || "—"}</span>
-                      <span>{t.assignee || "—"}</span>
-                      <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="yt-analytics-block">
-              <div className="section-subtitle">По постановщикам</div>
-              <div className="yt-analytics-table">
-                <div className="yt-analytics-head">
-                  <span>Постановщик</span>
-                  <span>Задач</span>
-                  <span>Часы</span>
-                  <span></span>
-                </div>
-                {(ytStats.by_creator || []).map((row, idx) => (
-                  <div key={`creator-${idx}`} className="yt-analytics-row">
-                    <span>{row.creator || "—"}</span>
-                    <span>{row.tasks_count || 0}</span>
-                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() =>
-                        setSelectedCreator((prev) => (prev === row.creator ? null : row.creator))
-                      }
-                    >
-                      {selectedCreator === row.creator ? "Скрыть" : "Задачи"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {selectedCreator && (
-                <div className="yt-analytics-tasks">
-                  <div className="yt-analytics-task-head">
-                    <span>Задача</span>
-                    <span>Постановщик</span>
-                    <span>Исполнитель</span>
-                    <span>Направление</span>
-                    <span>Часы</span>
-                  </div>
-                  {(ytTasks || [])
-                    .filter((t) => (t.created_by || "Не указан") === selectedCreator)
-                    .map((t, idx) => (
-                    <div key={`creator-task-${idx}`} className="yt-analytics-task-row">
-                      <span className="mono">{t.issue_id}</span>
-                      <span>{t.created_by || "—"}</span>
-                      <span>{t.assignee || "—"}</span>
-                      <span>{t.direction || "—"}</span>
-                      <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="yt-analytics-block">
-              <div className="section-subtitle">По исполнителям</div>
-              <div className="yt-analytics-table">
-                <div className="yt-analytics-head">
-                  <span>Исполнитель</span>
-                  <span>Задач</span>
-                  <span>Часы</span>
-                  <span></span>
-                </div>
-                {(ytStats.by_assignee || []).map((row, idx) => (
-                  <div key={`assignee-${idx}`} className="yt-analytics-row">
-                    <span>{row.assignee || "—"}</span>
-                    <span>{row.tasks_count || 0}</span>
-                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() =>
-                        setSelectedAssignee((prev) => (prev === row.assignee ? null : row.assignee))
-                      }
-                    >
-                      {selectedAssignee === row.assignee ? "Скрыть" : "Задачи"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {selectedAssignee && (
-                <div className="yt-analytics-tasks">
-                  <div className="yt-analytics-task-head">
-                    <span>Задача</span>
-                    <span>Исполнитель</span>
-                    <span>Постановщик</span>
-                    <span>Направление</span>
-                    <span>Часы</span>
-                  </div>
-                  {(ytTasks || [])
-                    .filter((t) => (t.assignee || "Не указан") === selectedAssignee)
-                    .map((t, idx) => (
-                    <div key={`assignee-task-${idx}`} className="yt-analytics-task-row">
-                      <span className="mono">{t.issue_id}</span>
-                      <span>{t.assignee || "—"}</span>
-                      <span>{t.created_by || "—"}</span>
-                      <span>{t.direction || "—"}</span>
-                      <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
       </section>

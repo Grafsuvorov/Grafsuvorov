@@ -5700,6 +5700,99 @@ def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = 
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/api/window-runs")
+def get_window_runs(
+    date: str,
+    time_from: str = Query(..., alias="from"),
+    time_to: str = Query(..., alias="to"),
+    source: str = "both",
+):
+    """
+    Returns runs for GP and/or ClickHouse inside a local-time window.
+    date: YYYY-MM-DD
+    from/to: HH:MM (local)
+    source: gp | click | both
+    """
+    try:
+        window_start = f"{date} {time_from}:00"
+        window_end = f"{date} {time_to}:00"
+        payload = {"window_start": window_start, "window_end": window_end, "timezone": "local"}
+
+        with engine.connect() as conn:
+            if source in ("gp", "both"):
+                gp_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT
+                            t.table_schema AS schema_name,
+                            l.object_name AS table_name,
+                            e.entity_name,
+                            l.loading_start_dttm AS start_dttm,
+                            l.loading_finish_dttm AS end_dttm,
+                            l.loading_state AS status,
+                            EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_min
+                        FROM {TABLE_LOADING_HISTORY} l
+                        LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                        LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                        WHERE l.object_type = 'table'
+                          AND l.loading_start_dttm >= :window_start
+                          AND l.loading_start_dttm <= :window_end
+                        ORDER BY l.loading_start_dttm ASC
+                        """
+                    ),
+                    {"window_start": window_start, "window_end": window_end},
+                ).mappings().all()
+                payload["gp"] = [
+                    {
+                        "schema_name": row.get("schema_name"),
+                        "table_name": row.get("table_name"),
+                        "entity_name": row.get("entity_name"),
+                        "start_dttm": serialize_datetime(row.get("start_dttm")),
+                        "end_dttm": serialize_datetime(row.get("end_dttm")),
+                        "duration_min": round(float(row.get("duration_min") or 0), 2) if row.get("duration_min") is not None else None,
+                        "status": row.get("status"),
+                    }
+                    for row in gp_rows
+                ]
+
+            if source in ("click", "both"):
+                click_rows = conn.execute(
+                    text(
+                        f"""
+                        SELECT
+                            r.schema_name,
+                            r.table_name,
+                            r.start_dttm,
+                            r.end_dttm,
+                            r.status,
+                            r.duration
+                        FROM {TABLE_CLICK_LOAD_RUN} r
+                        WHERE r.start_dttm >= :window_start
+                          AND r.start_dttm <= :window_end
+                        ORDER BY r.start_dttm ASC
+                        """
+                    ),
+                    {"window_start": window_start, "window_end": window_end},
+                ).mappings().all()
+                payload["click"] = [
+                    {
+                        "schema_name": row.get("schema_name"),
+                        "table_name": row.get("table_name"),
+                        "start_dttm": serialize_datetime(row.get("start_dttm")),
+                        "end_dttm": serialize_datetime(row.get("end_dttm")),
+                        "duration_min": _duration_minutes(row.get("duration")),
+                        "status": row.get("status"),
+                    }
+                    for row in click_rows
+                ]
+
+        return payload
+    except Exception as e:
+        print("❌ /api/window-runs error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 def _build_ytrack_link(task_id: Optional[str]) -> Optional[str]:
     if not task_id:
         return None

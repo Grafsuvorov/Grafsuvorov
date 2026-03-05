@@ -1,28 +1,32 @@
-500 на /api/table-variants
-     Это не связано с YouTrack. Нужно посмотреть лог API контейнера.
 
-  Команда на сервере:
-
-  docker compose logs --tail=200 api
-
-  И отдельно:
-
-  curl -i http://localhost:5312/api/table-variants/ods/ral_rusal_sd2882m_7
-
-  Чаще всего 500 тут из‑за:
-
-  - проблемы с подключением к БД (DATABASE_URL)
-  - SQL ошибка в запросе variants
-  - таблицы нет/имена отличаются
-
-  2. 404 на /api/click/meta/...
-     Это нормально, если в CLICK_META_DIR нет мета для этих объектов.
-     У тебя путь /app/config_files/meta — туда попадает meta из git.
-     Если меты для ods/ral_rusal_sd2882m_7 или dm/sales_shipment_to_china_plan_vs_actual нет — будет 404.
-
-  Проверь внутри контейнера:
-
-  docker compose exec api /bin/sh -c "ls -la /app/config_files/meta/ods | head"
-  docker compose exec api /bin/sh -c "ls -la /app/config_files/meta/dm | head"
-
-  Если меты есть, но всё равно 404 — значит имена в метах другие (например _ral/_view). Тогда UI корректно показывает, что меты нет.
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52604 - "GET /api/dq/alerts?days=7&delta=10&limit=8 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52601 - "GET /api/incidents/active HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52603 - "GET /api/night-summary?days=30&limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52652 - "OPTIONS /api/incident?table_fqn=dm_calc.kpi_raw_warehouse_stock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52652 - "GET /api/incident?table_fqn=dm_calc.kpi_raw_warehouse_stock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "OPTIONS /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "GET /api/releases?days=60&limit=80 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "OPTIONS /api/releases/manual__2026-03-04T12%3A50%3A23%2B03%3A00?limit=400 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52662 - "GET /api/releases/manual__2026-03-04T12%3A50%3A23%2B03%3A00?limit=400 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "OPTIONS /api/card/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "OPTIONS /api/table-history/dm/sales_shipment_to_china_plan_vs_actual?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "OPTIONS /api/table-variants/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "OPTIONS /api/dq/table/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52675 - "OPTIONS /api/dq/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52679 - "OPTIONS /api/click/table/dm/sales_shipment_to_china_plan_vs_actual?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "OPTIONS /api/click/meta/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "OPTIONS /api/click/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "OPTIONS /api/click/view/search?schema=dm&table=sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "OPTIONS /api/releases/table/dm/sales_shipment_to_china_plan_vs_actual?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "GET /api/click/table/dm/sales_shipment_to_china_plan_vs_actual?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "GET /api/dq/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "GET /api/table-variants/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "GET /api/dq/table/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52676 - "GET /api/click/history/dm/sales_shipment_to_china_plan_vs_actual?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52678 - "GET /api/releases/table/dm/sales_shipment_to_china_plan_vs_actual?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52679 - "GET /api/table-history/dm/sales_shipment_to_china_plan_vs_actual?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52675 - "GET /api/card/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52677 - "GET /api/click/meta/dm/sales_shipment_to_china_plan_vs_actual HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:52680 - "GET /api/click/view/search?schema=dm&table=sales_shipment_to_china_plan_vs_actual HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api /bin/sh -c "ls -la /app/config_files/meta/ods | head"
+ls: cannot access '/app/config_files/meta/ods': No such file or directory

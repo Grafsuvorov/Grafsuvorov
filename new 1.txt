@@ -1,6 +1,4 @@
-5312/api/analytics/workload?days=30&group_by=executor:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)
-:5312/api/analytics/workload?days=30&group_by=executor:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+:5312/api/ytrek/analytics?days=30:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)
 
-:5312/api/analytics/workload?days=30&group_by=executor:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)
-:5312/api/analytics/workload?days=30&group_by=executor:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)
-index-DcOP4wVx.js:135   GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/analytics/workload?group_by=executor&days=30 500 (Internal Server Error)
+Трудозатраты и частота изменений
+Не удалось загрузить аналитику YouTrack

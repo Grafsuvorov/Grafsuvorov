@@ -6116,6 +6116,14 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                     JOIN tasks t ON t.task_id = s.issue_id
                     WHERE s.created_at >= (now() - (:days || ' days')::interval)
                 ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
                 work AS (
                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
                     FROM {TABLE_YT_ISSUE_WORKLOG}
@@ -6165,12 +6173,13 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                 text(
                     base
                     + """
-                    SELECT COALESCE(s.assignee, 'Не указан') AS assignee,
+                    SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS assignee,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s
+                    LEFT JOIN exec ON exec.issue_id = s.issue_id
                     LEFT JOIN work w ON w.issue_id = s.issue_id
-                    GROUP BY s.assignee
+                    GROUP BY 1
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -6206,6 +6215,14 @@ def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
                         JOIN tasks t ON t.task_id = s.issue_id
                         WHERE s.created_at >= (now() - (:days || ' days')::interval)
                     ),
+                    exec AS (
+                        SELECT DISTINCT ON (issue_id)
+                               issue_id, author AS executor, ts
+                        FROM {TABLE_YT_ISSUE_TIMELINE}
+                        WHERE event_type = 'State change'
+                          AND value_to IN ('Ожидание релиза', 'В работе')
+                        ORDER BY issue_id, ts DESC NULLS LAST
+                    ),
                     work AS (
                         SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
                         FROM {TABLE_YT_ISSUE_WORKLOG}
@@ -6218,11 +6235,12 @@ def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
                     )
                     SELECT s.issue_id,
                            COALESCE(s.created_by, 'Не указан') AS created_by,
-                           COALESCE(s.assignee, 'Не указан') AS assignee,
+                           COALESCE(exec.executor, s.assignee, s.created_by, 'Не указан') AS assignee,
                            s.current_state,
                            COALESCE(d.direction, 'Не указан') AS direction,
                            COALESCE(w.minutes, 0) AS minutes
                     FROM snap s
+                    LEFT JOIN exec ON exec.issue_id = s.issue_id
                     LEFT JOIN work w ON w.issue_id = s.issue_id
                     LEFT JOIN direction d ON d.issue_id = s.issue_id
                     ORDER BY w.minutes DESC NULLS LAST
@@ -6674,7 +6692,7 @@ def get_analytics_workload(
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN direction ON direction.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY {label}
+                    GROUP BY 1
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),

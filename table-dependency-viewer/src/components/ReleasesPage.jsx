@@ -20,7 +20,7 @@ export default function ReleasesPage() {
   const [ytTasks, setYtTasks] = useState([]);
   const [ytTasksLoading, setYtTasksLoading] = useState(false);
   const [ytTasksError, setYtTasksError] = useState(null);
-  const [analyticsDays, setAnalyticsDays] = useState(365);
+  const analyticsDays = 30;
   const [selectedDirection, setSelectedDirection] = useState(null);
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
@@ -169,17 +169,6 @@ export default function ReleasesPage() {
 
       <section className="card release-analytics">
         <div className="section-title">Трудозатраты и частота изменений</div>
-        <div className="analytics-controls">
-          {[30, 90, 180, 365].map((d) => (
-            <button
-              key={d}
-              className={`btn btn-ghost ${analyticsDays === d ? "active" : ""}`}
-              onClick={() => setAnalyticsDays(d)}
-            >
-              {d} дней
-            </button>
-          ))}
-        </div>
         {(ytStatsLoading || ytTasksLoading) && <div className="muted">Загрузка аналитики...</div>}
         {(ytStatsError || ytTasksError) && (
           <div className="dep-error-title">{ytStatsError || ytTasksError}</div>
@@ -213,6 +202,13 @@ export default function ReleasesPage() {
               </div>
               {selectedDirection && (
                 <div className="yt-analytics-tasks">
+                  <div className="yt-analytics-task-head">
+                    <span>Задача</span>
+                    <span>Направление</span>
+                    <span>Постановщик</span>
+                    <span>Исполнитель</span>
+                    <span>Часы</span>
+                  </div>
                   {(ytTasks || [])
                     .filter((t) => (t.direction || "Не указан") === selectedDirection)
                     .map((t, idx) => (
@@ -255,6 +251,13 @@ export default function ReleasesPage() {
               </div>
               {selectedCreator && (
                 <div className="yt-analytics-tasks">
+                  <div className="yt-analytics-task-head">
+                    <span>Задача</span>
+                    <span>Постановщик</span>
+                    <span>Исполнитель</span>
+                    <span>Направление</span>
+                    <span>Часы</span>
+                  </div>
                   {(ytTasks || [])
                     .filter((t) => (t.created_by || "Не указан") === selectedCreator)
                     .map((t, idx) => (
@@ -297,6 +300,13 @@ export default function ReleasesPage() {
               </div>
               {selectedAssignee && (
                 <div className="yt-analytics-tasks">
+                  <div className="yt-analytics-task-head">
+                    <span>Задача</span>
+                    <span>Исполнитель</span>
+                    <span>Постановщик</span>
+                    <span>Направление</span>
+                    <span>Часы</span>
+                  </div>
                   {(ytTasks || [])
                     .filter((t) => (t.assignee || "Не указан") === selectedAssignee)
                     .map((t, idx) => (

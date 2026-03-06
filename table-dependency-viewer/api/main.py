@@ -5821,19 +5821,19 @@ def get_window_runs(
                             GROUP BY r.run_uuid, r.schema_name, r.table_name, r.status
                         )
                         SELECT
-                            schema_name,
-                            table_name,
-                            t.entity_name,
-                            start_dttm,
-                            end_dttm,
-                            status,
-                            duration_seconds
-                        FROM run_agg
-                        LEFT JOIN {TABLE_TABLES_META} t
-                          ON t.table_id = run_agg.table_id
-                        WHERE start_dttm >= :window_start
-                          AND start_dttm <= :window_end
-                        ORDER BY start_dttm ASC
+                            ra.schema_name,
+                            ra.table_name,
+                            tm.entity_name,
+                            ra.start_dttm,
+                            ra.end_dttm,
+                            ra.status,
+                            ra.duration_seconds
+                        FROM run_agg ra
+                        LEFT JOIN {TABLE_TABLES_META} tm
+                          ON tm.table_id = ra.table_id
+                        WHERE ra.start_dttm >= :window_start
+                          AND ra.start_dttm <= :window_end
+                        ORDER BY ra.start_dttm ASC
                         """
                     ),
                     {"window_start": window_start, "window_end": window_end},

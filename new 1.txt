@@ -1,12 +1,27 @@
-index-DRK19gHP.js:135 
- 
- GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/window-runs?date=2026-03-06&from=04%3A30&to=05%3A00&source=both 500 (Internal Server Error)
-window.fetch	@	index-DRK19gHP.js:135
-A	@	index-DRK19gHP.js:135
-eS	@	index-DRK19gHP.js:48
-(anonymous)	@	index-DRK19gHP.js:48
-o1	@	index-DRK19gHP.js:48
-Ov	@	index-DRK19gHP.js:48
-Bv	@	index-DRK19gHP.js:49
-W$	@	index-DRK19gHP.js:49
-﻿
+SELECT run_uuid, start_dttm, end_dttm, status
+  FROM click_fact_table_load_run
+  WHERE schema_name = 'dm'
+    AND table_name = 'otif_daily'
+  ORDER BY start_dttm DESC
+  LIMIT 5;
+
+  -- 2) есть ли нужные стадии?
+  SELECT run_uuid, stage_name, start_dttm, end_dttm, status
+  FROM click_fact_table_load_stage
+  WHERE run_uuid IN (
+    SELECT run_uuid FROM click_fact_table_load_run
+    WHERE schema_name = 'dm' AND table_name = 'otif_daily'
+  )
+  ORDER BY start_dttm DESC
+  LIMIT 20;
+
+  -- 3) попадание в окно (пример)
+  SELECT run_uuid, stage_name, start_dttm, end_dttm
+  FROM click_fact_table_load_stage
+  WHERE stage_name IN ('UPLOAD_TO_S3','CLICKHOUSE_LOAD')
+    AND start_dttm BETWEEN '2026-03-06 04:30:00' AND '2026-03-06 05:00:00'
+    AND run_uuid IN (
+      SELECT run_uuid FROM click_fact_table_load_run
+      WHERE schema_name='dm' AND table_name='otif_daily'
+    )
+  ORDER BY start_dttm;

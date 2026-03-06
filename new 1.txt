@@ -1,168 +1,191 @@
-Всего XML строк: 791022
-
------------------------------------------
-Обработано XML: 5000/791022 (0.63%)
-Скорость: 1580.7 строк/сек
-Записано строк: 37000
-Осталось: 786022
-ETA: 8.3 минут
------------------------------------------
-
-
------------------------------------------
-Обработано XML: 10000/791022 (1.26%)
-Скорость: 1531.6 строк/сек
-Записано строк: 74196
-Осталось: 781022
-ETA: 8.5 минут
------------------------------------------
-
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\pars.py", line 46, in <module>
-    for uuid, xml in cur:
-psycopg2.ProgrammingError: named cursor isn't valid anymore
-
-
 import psycopg2
 import time
 import io
-from lxml import etree
 import csv
+from lxml import etree
 
 # ---------------------------
 # параметры подключения
 # ---------------------------
 
-conn = psycopg2.connect(
-    host="",
-    dbname="",
-    user="",
-    password="",
-    port=
-)
+DB_CONFIG = {
+    "host": "",
+    "dbname": "",
+    "user": "",
+    "password": "",
+    "port": 5432
+}
 
-cur = conn.cursor()
+SOURCE_TABLE = "stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2"
+TARGET_TABLE = "stg.ral_is2_toro2_opr_xml"
+BATCH_SIZE = 20000
+FETCH_SIZE = 5000
 
-cur.execute("""
-select count(*)
-from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2
-""")
 
-total_rows = cur.fetchone()[0]
+def norm_text(val: str):
+    if val is None:
+        return None
+    val = val.strip()
+    return val if val != "" else None
 
-print(f"Всего XML строк: {total_rows}")
 
-cur = conn.cursor(name="xml_cursor")
-cur.itersize = 5000
+def norm_ts(val: str):
+    """Преобразует 2026-01-04T08:54:17Z -> 2026-01-04 08:54:17"""
+    val = norm_text(val)
+    if val is None:
+        return None
+    return val.replace("T", " ").replace("Z", "")
 
-cur.execute("""
-select uuid, xml_item
-from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2
-""")
 
-start_time = time.time()
+def flush_buffer(conn_write, buffer):
+    buffer.seek(0)
+    with conn_write.cursor() as cur_copy:
+        cur_copy.copy_expert(
+            f"""
+            COPY {TARGET_TABLE}
+            FROM STDIN
+            WITH (
+                FORMAT CSV,
+                NULL ''
+            )
+            """,
+            buffer
+        )
+    conn_write.commit()
 
-processed = 0
-written_rows = 0
 
-buffer = io.StringIO()
-batch_size = 20000
+def make_buffer_and_writer():
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    return buffer, writer
 
-for uuid, xml in cur:
 
-    processed += 1
+def main():
+    # отдельное соединение на чтение
+    conn_read = psycopg2.connect(**DB_CONFIG)
+    # отдельное соединение на запись
+    conn_write = psycopg2.connect(**DB_CONFIG)
 
-    root = etree.fromstring(xml)
+    try:
+        # ---------------------------
+        # узнаем сколько строк всего
+        # ---------------------------
+        with conn_read.cursor() as cur_count:
+            cur_count.execute(f"select count(*) from {SOURCE_TABLE}")
+            total_rows = cur_count.fetchone()[0]
 
-    for opr in root.xpath("//ORDER_OPR"):
+        print(f"Всего XML строк: {total_rows}")
 
-        row = [
-            uuid,
-            opr.findtext("VORNR"),
-            opr.findtext("KTSCH"),
-            opr.findtext("ARBPL"),
-            opr.findtext("WERKS"),
+        # ---------------------------
+        # курсор потоковый
+        # ---------------------------
+        cur = conn_read.cursor(name="xml_cursor")
+        cur.itersize = FETCH_SIZE
 
-            opr.findtext("NTANF_DT"),
-            opr.findtext("NTEND_DT"),
-            opr.findtext("FSAVD_DT"),
-            opr.findtext("FSEDD_DT"),
+        cur.execute(f"""
+            select uuid, xml_item
+            from {SOURCE_TABLE}
+        """)
 
-            opr.findtext("EQUNR"),
-            opr.findtext("TPLNR"),
+        start_time = time.time()
+        processed = 0
+        written_rows = 0
+        xml_errors = 0
 
-            opr.findtext("ARBEI"),
-            opr.findtext("ANZZL"),
-            opr.findtext("ISMNW"),
-            opr.findtext("DAUNO"),
+        buffer, writer = make_buffer_and_writer()
 
-            opr.findtext("DAUNE"),
-            opr.findtext("ARBEH"),
-            opr.findtext("LTXA1"),
+        for uuid, xml in cur:
+            processed += 1
 
-            opr.findtext("ZOP_STTXT"),
-            opr.findtext("ZOP_ASTXT"),
-            opr.findtext("PLNNR"),
+            try:
+                root = etree.fromstring(xml)
+            except Exception as e:
+                xml_errors += 1
+                if xml_errors <= 10:
+                    print(f"[WARN] Ошибка парсинга XML для uuid={uuid}: {e}")
+                continue
 
-            opr.find("USR10") is not None,
-            opr.find("ZREJECT_OPR") is not None
-        ]
+            for opr in root.xpath("//ORDER_OPR"):
+                row = [
+                    uuid,
+                    norm_text(opr.findtext("VORNR")),
+                    norm_text(opr.findtext("KTSCH")),
+                    norm_text(opr.findtext("ARBPL")),
+                    norm_text(opr.findtext("WERKS")),
 
-        writer = csv.writer(buffer)
-        writer.writerow(row)
+                    norm_ts(opr.findtext("NTANF_DT")),
+                    norm_ts(opr.findtext("NTEND_DT")),
+                    norm_ts(opr.findtext("FSAVD_DT")),
+                    norm_ts(opr.findtext("FSEDD_DT")),
 
-        written_rows += 1
+                    norm_text(opr.findtext("EQUNR")),
+                    norm_text(opr.findtext("TPLNR")),
 
-    # batch insert
-    if written_rows % batch_size == 0:
+                    norm_text(opr.findtext("ARBEI")),
+                    norm_text(opr.findtext("ANZZL")),
+                    norm_text(opr.findtext("ISMNW")),
+                    norm_text(opr.findtext("DAUNO")),
 
-        buffer.seek(0)
+                    norm_text(opr.findtext("DAUNE")),
+                    norm_text(opr.findtext("ARBEH")),
+                    norm_text(opr.findtext("LTXA1")),
 
-        copy_sql = """
-        COPY stg.ral_is2_toro2_opr_xml
-        FROM STDIN
-        WITH CSV
-        """
+                    norm_text(opr.findtext("ZOP_STTXT")),
+                    norm_text(opr.findtext("ZOP_ASTXT")),
+                    norm_text(opr.findtext("PLNNR")),
 
-        cur_copy = conn.cursor()
-        cur_copy.copy_expert(copy_sql, buffer)
-        conn.commit()
+                    opr.find("USR10") is not None,
+                    opr.find("ZREJECT_OPR") is not None
+                ]
 
-        buffer = io.StringIO()
+                writer.writerow(row)
+                written_rows += 1
 
-    # progress
-    if processed % 5000 == 0:
+                # batch insert
+                if written_rows % BATCH_SIZE == 0:
+                    flush_buffer(conn_write, buffer)
+                    buffer, writer = make_buffer_and_writer()
 
-        elapsed = time.time() - start_time
-        speed = processed / elapsed
+            # progress
+            if processed % FETCH_SIZE == 0:
+                elapsed = time.time() - start_time
+                speed = processed / elapsed if elapsed > 0 else 0
 
-        remaining = total_rows - processed
-        eta = remaining / speed if speed > 0 else 0
+                remaining = total_rows - processed
+                eta = remaining / speed if speed > 0 else 0
+                percent = processed / total_rows * 100 if total_rows > 0 else 0
 
-        percent = processed / total_rows * 100
-
-        print(f"""
+                print(f"""
 -----------------------------------------
 Обработано XML: {processed}/{total_rows} ({percent:.2f}%)
 Скорость: {speed:.1f} строк/сек
-Записано строк: {written_rows}
-Осталось: {remaining}
+Записано строк ORDER_OPR: {written_rows}
+Ошибок XML: {xml_errors}
+Осталось XML: {remaining}
 ETA: {eta/60:.1f} минут
 -----------------------------------------
 """)
 
-# вставить остаток
-buffer.seek(0)
+        # вставить остаток
+        if buffer.tell() > 0:
+            flush_buffer(conn_write, buffer)
 
-cur_copy = conn.cursor()
-cur_copy.copy_expert("""
-COPY stg.ral_is2_toro2_opr_xml
-FROM STDIN
-WITH CSV
-""", buffer)
+        total_time = time.time() - start_time
 
-conn.commit()
+        print("\nINIT завершен")
+        print(f"Всего XML: {processed}")
+        print(f"Всего ORDER_OPR строк: {written_rows}")
+        print(f"Ошибок XML: {xml_errors}")
+        print(f"Время: {total_time/60:.2f} минут")
 
-print("\nINIT завершен")
-print(f"Всего XML: {processed}")
-print(f"Всего ORDER_OPR строк: {written_rows}")
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        conn_read.close()
+        conn_write.close()
+
+
+if __name__ == "__main__":
+    main()

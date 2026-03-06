@@ -8,6 +8,7 @@ export default function AnalyticsPage() {
   const [timeFrom, setTimeFrom] = useState("04:30");
   const [timeTo, setTimeTo] = useState("05:00");
   const [source, setSource] = useState("both");
+  const [entityFilter, setEntityFilter] = useState("all");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -50,19 +51,54 @@ export default function AnalyticsPage() {
         (data.click || []).forEach((row) => merged.push({ ...row, source: "ClickHouse" }));
         merged.sort((a, b) => (a.start_dttm || "").localeCompare(b.start_dttm || ""));
         setRows(merged);
+        setEntityFilter("all");
       })
       .catch((err) => setError(typeof err === "string" ? err : "Не удалось загрузить окно"))
       .finally(() => setLoading(false));
   };
 
   const maxDuration = useMemo(() => {
-    if (!rows.length) return 0;
-    return Math.max(...rows.map((r) => Number(r.duration_min || 0)));
-  }, [rows]);
+    if (!rowsFiltered.length) return 0;
+    return Math.max(...rowsFiltered.map((r) => Number(r.duration_min || 0)));
+  }, [rowsFiltered]);
 
   const rowsByDuration = useMemo(() => {
     return [...rows].sort((a, b) => (Number(b.duration_min || 0) - Number(a.duration_min || 0)));
   }, [rows]);
+
+  const entityOptions = useMemo(() => {
+    const set = new Set();
+    rows.forEach((row) => {
+      if (row.entity_name) set.add(row.entity_name);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "ru"));
+  }, [rows]);
+
+  const rowsFiltered = useMemo(() => {
+    if (!rows.length) return [];
+    if (entityFilter === "all") return rowsByDuration;
+    return rowsByDuration.filter((row) => row.entity_name === entityFilter);
+  }, [rowsByDuration, entityFilter]);
+
+  const entitySummary = useMemo(() => {
+    const map = new Map();
+    rowsFiltered.forEach((row) => {
+      const key = row.entity_name || "—";
+      const item = map.get(key) || { entity: key, tables: new Set(), runs: 0, minutes: 0 };
+      item.runs += 1;
+      item.minutes += Number(row.duration_min || 0);
+      item.tables.add(`${row.schema_name}.${row.table_name}`);
+      map.set(key, item);
+    });
+    return Array.from(map.values())
+      .map((item) => ({
+        entity: item.entity,
+        tables_count: item.tables.size,
+        runs_count: item.runs,
+        minutes: Math.round(item.minutes * 100) / 100,
+      }))
+      .sort((a, b) => (b.tables_count - a.tables_count) || (b.minutes - a.minutes));
+  }, [rowsFiltered]);
 
   return (
     <div className="page analytics-page compact">
@@ -114,6 +150,21 @@ export default function AnalyticsPage() {
               <option value="click">Только Click</option>
             </select>
           </div>
+          <div className="analytics-custom compact">
+            <label className="muted">Сущность</label>
+            <select
+              className="input"
+              value={entityFilter}
+              onChange={(e) => setEntityFilter(e.target.value)}
+            >
+              <option value="all">Все сущности</option>
+              {entityOptions.map((entity) => (
+                <option key={entity} value={entity}>
+                  {entity}
+                </option>
+              ))}
+            </select>
+          </div>
           <button className="btn btn-primary analytics-action" onClick={loadWindowRuns}>
             Найти
           </button>
@@ -127,16 +178,17 @@ export default function AnalyticsPage() {
         <div className="analytics-grid">
           <section className="card analytics-block">
             <div className="section-title">График длительности</div>
-            {rows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
-            {rows.length > 0 && (
+            {rowsFiltered.length === 0 && <div className="muted">Нет запусков в окне.</div>}
+            {rowsFiltered.length > 0 && (
               <div className="analytics-bars">
-                {rowsByDuration.slice(0, 30).map((row, idx) => {
+                {rowsFiltered.slice(0, 30).map((row, idx) => {
                   const width = maxDuration ? Math.max(8, (Number(row.duration_min || 0) / maxDuration) * 100) : 0;
                   const label = `${row.schema_name}.${row.table_name}`;
                   return (
                     <div key={`${label}-${idx}`} className="analytics-bar-row">
                       <div className="analytics-bar-label mono" title={label}>
-                        {shortenName(label, 44)}
+                        <span>{shortenName(label, 44)}</span>
+                        <span className="analytics-pill analytics-pill-inline">{row.source}</span>
                       </div>
                       <div className="analytics-bar-track">
                         <div className="analytics-bar-fill" style={{ width: `${width}%` }} />
@@ -150,9 +202,32 @@ export default function AnalyticsPage() {
           </section>
 
           <section className="card analytics-block">
+            <div className="section-title">Сущности в окне</div>
+            {entitySummary.length === 0 && <div className="muted">Нет данных.</div>}
+            {entitySummary.length > 0 && (
+              <div className="analytics-table">
+                <div className="analytics-head analytics-entity">
+                  <span>Сущность</span>
+                  <span>Таблиц</span>
+                  <span>Запусков</span>
+                  <span>Минут</span>
+                </div>
+                {entitySummary.slice(0, 20).map((item) => (
+                  <div key={item.entity} className="analytics-row analytics-entity">
+                    <span className="mono analytics-cell-entity" title={item.entity}>{shortenName(item.entity, 28)}</span>
+                    <span>{item.tables_count}</span>
+                    <span>{item.runs_count}</span>
+                    <span>{item.minutes}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card analytics-block">
             <div className="section-title">Список загрузок</div>
-            {rows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
-            {rows.length > 0 && (
+            {rowsFiltered.length === 0 && <div className="muted">Нет запусков в окне.</div>}
+            {rowsFiltered.length > 0 && (
               <div className="analytics-table">
                 <div className="analytics-head analytics-window">
                   <span>Таблица</span>
@@ -163,7 +238,7 @@ export default function AnalyticsPage() {
                   <span>Длит.</span>
                   <span>Статус</span>
                 </div>
-                {rowsByDuration.map((row, idx) => {
+                {rowsFiltered.map((row, idx) => {
                   const fullName = `${row.schema_name}.${row.table_name}`;
                   return (
                   <div key={`${row.schema_name}.${row.table_name}-${idx}`} className="analytics-row analytics-window">

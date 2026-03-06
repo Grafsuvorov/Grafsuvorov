@@ -5810,6 +5810,7 @@ def get_window_runs(
                                 r.schema_name,
                                 r.table_name,
                                 r.status,
+                                MAX(s.table_id) AS table_id,
                                 MIN(s.start_dttm) AS start_dttm,
                                 MAX(s.end_dttm) AS end_dttm,
                                 SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
@@ -5822,11 +5823,14 @@ def get_window_runs(
                         SELECT
                             schema_name,
                             table_name,
+                            t.entity_name,
                             start_dttm,
                             end_dttm,
                             status,
                             duration_seconds
                         FROM run_agg
+                        LEFT JOIN {TABLE_TABLES_META} t
+                          ON t.table_id = run_agg.table_id
                         WHERE start_dttm >= :window_start
                           AND start_dttm <= :window_end
                         ORDER BY start_dttm ASC
@@ -5838,6 +5842,7 @@ def get_window_runs(
                     {
                         "schema_name": row.get("schema_name"),
                         "table_name": row.get("table_name"),
+                        "entity_name": row.get("entity_name"),
                         "start_dttm": serialize_datetime(row.get("start_dttm")),
                         "end_dttm": serialize_datetime(row.get("end_dttm")),
                         "duration_min": round((row.get("duration_seconds") or 0) / 60.0, 2),

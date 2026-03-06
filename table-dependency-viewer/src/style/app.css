@@ -5494,6 +5494,9 @@ main.content {
 }
 
 .analytics-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
   color: #e2e8f0;
   overflow: hidden;
@@ -5535,6 +5538,19 @@ main.content {
   background: rgba(59, 130, 246, 0.18);
   color: #93c5fd;
   width: fit-content;
+}
+
+.analytics-pill-inline {
+  padding: 2px 8px;
+  font-size: 10px;
+  background: rgba(15, 23, 42, 0.7);
+  color: #cbd5f5;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.analytics-head.analytics-entity,
+.analytics-row.analytics-entity {
+  grid-template-columns: minmax(200px, 2fr) minmax(90px, 0.6fr) minmax(90px, 0.6fr) minmax(90px, 0.8fr);
 }
 
 .analytics-cell-name,

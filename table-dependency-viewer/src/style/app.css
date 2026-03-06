@@ -1224,6 +1224,60 @@ main.content {
   word-break: break-word;
 }
 
+.night-window-table {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.night-window-head,
+.night-window-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1.2fr) minmax(110px, 0.7fr)
+    minmax(140px, 1fr) minmax(140px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.night-window-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #94a3b8;
+}
+
+.night-window-row {
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(2, 6, 23, 0.55);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.night-window-row:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.night-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  width: fit-content;
+}
+
+@media (max-width: 1024px) {
+  .night-window-head,
+  .night-window-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .night-row-meta {
   display: flex;
   flex-wrap: wrap;

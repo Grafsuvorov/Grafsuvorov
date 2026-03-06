@@ -57,11 +57,6 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false));
   };
 
-  const maxDuration = useMemo(() => {
-    if (!rowsFiltered.length) return 0;
-    return Math.max(...rowsFiltered.map((r) => Number(r.duration_min || 0)));
-  }, [rowsFiltered]);
-
   const rowsByDuration = useMemo(() => {
     return [...rows].sort((a, b) => (Number(b.duration_min || 0) - Number(a.duration_min || 0)));
   }, [rows]);
@@ -79,6 +74,11 @@ export default function AnalyticsPage() {
     if (entityFilter === "all") return rowsByDuration;
     return rowsByDuration.filter((row) => row.entity_name === entityFilter);
   }, [rowsByDuration, entityFilter]);
+
+  const maxDuration = useMemo(() => {
+    if (!rowsFiltered.length) return 0;
+    return Math.max(...rowsFiltered.map((r) => Number(r.duration_min || 0)));
+  }, [rowsFiltered]);
 
   const entitySummary = useMemo(() => {
     const map = new Map();

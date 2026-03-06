@@ -2,23 +2,167 @@
 
 -----------------------------------------
 Обработано XML: 5000/791022 (0.63%)
-Скорость: 1613.9 строк/сек
-Записано строк: 35903
+Скорость: 1580.7 строк/сек
+Записано строк: 37000
 Осталось: 786022
-ETA: 8.1 минут
+ETA: 8.3 минут
 -----------------------------------------
 
 
 -----------------------------------------
 Обработано XML: 10000/791022 (1.26%)
-Скорость: 1629.2 строк/сек
-Записано строк: 72102
+Скорость: 1531.6 строк/сек
+Записано строк: 74196
 Осталось: 781022
-ETA: 8.0 минут
+ETA: 8.5 минут
 -----------------------------------------
 
 Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\pars.py", line 102, in <module>
-    cur_copy.copy_expert(copy_sql, buffer)
-psycopg2.errors.BadCopyFileFormat: extra data after last expected column
-CONTEXT:  COPY ral_is2_toro2_opr_xml, line 504: "00505601-0f27-1fe1-81da-cf925139f4dc,0240,,25S90720,2520,2026-01-04T08:54:17Z,2026-01-04T08:57:55Z,2..."
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\pars.py", line 46, in <module>
+    for uuid, xml in cur:
+psycopg2.ProgrammingError: named cursor isn't valid anymore
+
+
+import psycopg2
+import time
+import io
+from lxml import etree
+import csv
+
+# ---------------------------
+# параметры подключения
+# ---------------------------
+
+conn = psycopg2.connect(
+    host="",
+    dbname="",
+    user="",
+    password="",
+    port=
+)
+
+cur = conn.cursor()
+
+cur.execute("""
+select count(*)
+from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2
+""")
+
+total_rows = cur.fetchone()[0]
+
+print(f"Всего XML строк: {total_rows}")
+
+cur = conn.cursor(name="xml_cursor")
+cur.itersize = 5000
+
+cur.execute("""
+select uuid, xml_item
+from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2
+""")
+
+start_time = time.time()
+
+processed = 0
+written_rows = 0
+
+buffer = io.StringIO()
+batch_size = 20000
+
+for uuid, xml in cur:
+
+    processed += 1
+
+    root = etree.fromstring(xml)
+
+    for opr in root.xpath("//ORDER_OPR"):
+
+        row = [
+            uuid,
+            opr.findtext("VORNR"),
+            opr.findtext("KTSCH"),
+            opr.findtext("ARBPL"),
+            opr.findtext("WERKS"),
+
+            opr.findtext("NTANF_DT"),
+            opr.findtext("NTEND_DT"),
+            opr.findtext("FSAVD_DT"),
+            opr.findtext("FSEDD_DT"),
+
+            opr.findtext("EQUNR"),
+            opr.findtext("TPLNR"),
+
+            opr.findtext("ARBEI"),
+            opr.findtext("ANZZL"),
+            opr.findtext("ISMNW"),
+            opr.findtext("DAUNO"),
+
+            opr.findtext("DAUNE"),
+            opr.findtext("ARBEH"),
+            opr.findtext("LTXA1"),
+
+            opr.findtext("ZOP_STTXT"),
+            opr.findtext("ZOP_ASTXT"),
+            opr.findtext("PLNNR"),
+
+            opr.find("USR10") is not None,
+            opr.find("ZREJECT_OPR") is not None
+        ]
+
+        writer = csv.writer(buffer)
+        writer.writerow(row)
+
+        written_rows += 1
+
+    # batch insert
+    if written_rows % batch_size == 0:
+
+        buffer.seek(0)
+
+        copy_sql = """
+        COPY stg.ral_is2_toro2_opr_xml
+        FROM STDIN
+        WITH CSV
+        """
+
+        cur_copy = conn.cursor()
+        cur_copy.copy_expert(copy_sql, buffer)
+        conn.commit()
+
+        buffer = io.StringIO()
+
+    # progress
+    if processed % 5000 == 0:
+
+        elapsed = time.time() - start_time
+        speed = processed / elapsed
+
+        remaining = total_rows - processed
+        eta = remaining / speed if speed > 0 else 0
+
+        percent = processed / total_rows * 100
+
+        print(f"""
+-----------------------------------------
+Обработано XML: {processed}/{total_rows} ({percent:.2f}%)
+Скорость: {speed:.1f} строк/сек
+Записано строк: {written_rows}
+Осталось: {remaining}
+ETA: {eta/60:.1f} минут
+-----------------------------------------
+""")
+
+# вставить остаток
+buffer.seek(0)
+
+cur_copy = conn.cursor()
+cur_copy.copy_expert("""
+COPY stg.ral_is2_toro2_opr_xml
+FROM STDIN
+WITH CSV
+""", buffer)
+
+conn.commit()
+
+print("\nINIT завершен")
+print(f"Всего XML: {processed}")
+print(f"Всего ORDER_OPR строк: {written_rows}")

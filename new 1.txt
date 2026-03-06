@@ -1,12 +1,43 @@
-import psycopg2
-import gzip
-import csv
-import time
-from lxml import etree
+CREATE TABLE stg.ral_is2_toro2_opr_xml
+(
+    uuid text,
 
-# ---------------------------
-# параметры подключения
-# ---------------------------
+    vornr varchar(10),
+    ktsch varchar(20),
+    arbpl_opr varchar(20),
+    werks varchar(10),
+
+    ntanf_dt timestamp,
+    ntend_dt timestamp,
+    fsavd_dt timestamp,
+    fsedd_dt timestamp,
+
+    equnr_opr varchar(30),
+    tplnr_opr varchar(30),
+
+    arbei numeric(11,2),
+    anzzl integer,
+    ismnw numeric(11,2),
+    dauno numeric(10,2),
+
+    daune varchar(10),
+    arbeh varchar(10),
+    ltxa1 text,
+
+    zop_sttxt text,
+    zop_astxt text,
+    plnnr_opr varchar(30),
+
+    usr10 boolean,
+    zreject_opr boolean
+)
+DISTRIBUTED BY (uuid);
+
+
+import psycopg2
+import time
+import io
+from lxml import etree
 
 conn = psycopg2.connect(
     host="HOST",
@@ -16,11 +47,8 @@ conn = psycopg2.connect(
     port=5432
 )
 
-# ---------------------------
-# узнаем сколько строк всего
-# ---------------------------
-
 cur = conn.cursor()
+
 cur.execute("""
 select count(*)
 from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
@@ -30,12 +58,7 @@ total_rows = cur.fetchone()[0]
 
 print(f"Всего XML строк: {total_rows}")
 
-# ---------------------------
-# курсор потоковый
-# ---------------------------
-
 cur = conn.cursor(name="xml_cursor")
-
 cur.itersize = 5000
 
 cur.execute("""
@@ -43,32 +66,13 @@ select uuid, xml_item
 from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
 """)
 
-# ---------------------------
-# файл
-# ---------------------------
-
-outfile = "parsed_init.csv.gz"
-
-f = gzip.open(outfile, "wt", newline="", encoding="utf8")
-writer = csv.writer(f)
-
-writer.writerow([
-    "uuid",
-    "VORNR",
-    "KTSCH",
-    "ARBPL",
-    "WERKS",
-    "NTANF_DT"
-])
-
-# ---------------------------
-# обработка
-# ---------------------------
-
 start_time = time.time()
 
 processed = 0
 written_rows = 0
+
+buffer = io.StringIO()
+batch_size = 20000
 
 for uuid, xml in cur:
 
@@ -78,18 +82,61 @@ for uuid, xml in cur:
 
     for opr in root.xpath("//ORDER_OPR"):
 
-        writer.writerow([
+        row = [
             uuid,
             opr.findtext("VORNR"),
             opr.findtext("KTSCH"),
             opr.findtext("ARBPL"),
             opr.findtext("WERKS"),
-            opr.findtext("NTANF_DT")
-        ])
+
+            opr.findtext("NTANF_DT"),
+            opr.findtext("NTEND_DT"),
+            opr.findtext("FSAVD_DT"),
+            opr.findtext("FSEDD_DT"),
+
+            opr.findtext("EQUNR"),
+            opr.findtext("TPLNR"),
+
+            opr.findtext("ARBEI"),
+            opr.findtext("ANZZL"),
+            opr.findtext("ISMNW"),
+            opr.findtext("DAUNO"),
+
+            opr.findtext("DAUNE"),
+            opr.findtext("ARBEH"),
+            opr.findtext("LTXA1"),
+
+            opr.findtext("ZOP_STTXT"),
+            opr.findtext("ZOP_ASTXT"),
+            opr.findtext("PLNNR"),
+
+            opr.find("USR10") is not None,
+            opr.find("ZREJECT_OPR") is not None
+        ]
+
+        buffer.write(",".join("" if v is None else str(v) for v in row))
+        buffer.write("\n")
 
         written_rows += 1
 
-    # каждые 5000 строк выводим прогресс
+    # batch insert
+    if written_rows % batch_size == 0:
+
+        buffer.seek(0)
+
+        copy_sql = """
+        COPY stg.ral_is2_toro2_opr_xml
+        FROM STDIN
+        WITH CSV
+        """
+
+        cur_copy = conn.cursor()
+        cur_copy.copy_expert(copy_sql, buffer)
+        conn.commit()
+
+        buffer = io.StringIO()
+
+    # progress
     if processed % 5000 == 0:
 
         elapsed = time.time() - start_time
@@ -100,8 +147,7 @@ for uuid, xml in cur:
 
         percent = processed / total_rows * 100
 
-        print(
-            f"""
+        print(f"""
 -----------------------------------------
 Обработано XML: {processed}/{total_rows} ({percent:.2f}%)
 Скорость: {speed:.1f} строк/сек
@@ -109,15 +155,20 @@ for uuid, xml in cur:
 Осталось: {remaining}
 ETA: {eta/60:.1f} минут
 -----------------------------------------
-"""
-        )
+""")
 
-f.close()
+# вставить остаток
+buffer.seek(0)
 
-total_time = time.time() - start_time
+cur_copy = conn.cursor()
+cur_copy.copy_expert("""
+COPY stg.ral_is2_toro2_opr_xml
+FROM STDIN
+WITH CSV
+""", buffer)
+
+conn.commit()
 
 print("\nINIT завершен")
 print(f"Всего XML: {processed}")
-print(f"Всего записано строк: {written_rows}")
-print(f"Файл: {outfile}")
-print(f"Время: {total_time/60:.2f} минут")
+print(f"Всего ORDER_OPR строк: {written_rows}")

@@ -1,11 +1,12 @@
-Uncaught ReferenceError: Cannot access 'P' before initialization
-    at Hte (index-B_CwKDno.js:135:52048)
-    at Mp (index-B_CwKDno.js:48:34206)
-    at Fp (index-B_CwKDno.js:48:62794)
-    at u_ (index-B_CwKDno.js:48:73361)
-    at L_ (index-B_CwKDno.js:48:107497)
-    at f$ (index-B_CwKDno.js:48:106556)
-    at bv (index-B_CwKDno.js:48:106386)
-    at k_ (index-B_CwKDno.js:48:103477)
-    at Z_ (index-B_CwKDno.js:48:114990)
-    at MessagePort.V (index-B_CwKDno.js:25:1583)
+index-DRK19gHP.js:135 
+ 
+ GET http://rgm-s-dwhapp01.hq.root.ad:5312/api/window-runs?date=2026-03-06&from=04%3A30&to=05%3A00&source=both 500 (Internal Server Error)
+window.fetch	@	index-DRK19gHP.js:135
+A	@	index-DRK19gHP.js:135
+eS	@	index-DRK19gHP.js:48
+(anonymous)	@	index-DRK19gHP.js:48
+o1	@	index-DRK19gHP.js:48
+Ov	@	index-DRK19gHP.js:48
+Bv	@	index-DRK19gHP.js:49
+W$	@	index-DRK19gHP.js:49
+﻿

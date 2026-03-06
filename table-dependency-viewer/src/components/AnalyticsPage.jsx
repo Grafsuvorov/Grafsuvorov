@@ -4,68 +4,18 @@ import "../style/app.css";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function AnalyticsPage() {
-  const [days, setDays] = useState(30);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [windowDate, setWindowDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [timeFrom, setTimeFrom] = useState("04:30");
+  const [timeTo, setTimeTo] = useState("05:00");
+  const [source, setSource] = useState("both");
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [byExecutor, setByExecutor] = useState([]);
-  const [byCreator, setByCreator] = useState([]);
-  const [byDirection, setByDirection] = useState([]);
-
-  const hasCustomRange = Boolean(dateFrom || dateTo);
-
-  const buildParams = (groupBy) => {
-    const params = new URLSearchParams();
-    params.set("group_by", groupBy);
-    if (hasCustomRange) {
-      if (dateFrom) params.set("date_from", dateFrom);
-      if (dateTo) params.set("date_to", dateTo);
-    } else {
-      params.set("days", String(days));
-    }
-    return params.toString();
-  };
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-
-    Promise.all([
-      fetch(`${API_BASE}/api/analytics/workload?${buildParams("executor")}`),
-      fetch(`${API_BASE}/api/analytics/workload?${buildParams("creator")}`),
-      fetch(`${API_BASE}/api/analytics/workload?${buildParams("direction")}`),
-    ])
-      .then(async ([execRes, creatorRes, dirRes]) => {
-        if (!execRes.ok || !creatorRes.ok || !dirRes.ok) {
-          throw new Error("Не удалось загрузить аналитику");
-        }
-        const execJson = await execRes.json();
-        const creatorJson = await creatorRes.json();
-        const dirJson = await dirRes.json();
-        if (!cancelled) {
-          setByExecutor(Array.isArray(execJson?.items) ? execJson.items : []);
-          setByCreator(Array.isArray(creatorJson?.items) ? creatorJson.items : []);
-          setByDirection(Array.isArray(dirJson?.items) ? dirJson.items : []);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message || "Не удалось загрузить аналитику");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [days, dateFrom, dateTo]);
-
-  const formatHours = (minutes) => {
-    const value = Number(minutes || 0);
-    return `${(value / 60).toFixed(1)} ч`;
-  };
+    loadWindowRuns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatDateTime = (value) => {
     if (!value) return "—";
@@ -75,70 +25,87 @@ export default function AnalyticsPage() {
     return str;
   };
 
-  const rangeLabel = useMemo(() => {
-    if (hasCustomRange) {
-      const from = dateFrom || "…";
-      const to = dateTo || "…";
-      return `${from} — ${to}`;
-    }
-    return `Последние ${days} дней`;
-  }, [days, dateFrom, dateTo, hasCustomRange]);
+  const loadWindowRuns = () => {
+    setLoading(true);
+    setError(null);
+    const params = new URLSearchParams({
+      date: windowDate,
+      from: timeFrom,
+      to: timeTo,
+      source,
+    });
+    fetch(`${API_BASE}/api/window-runs?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить окно")))
+      .then((data) => {
+        const merged = [];
+        (data.gp || []).forEach((row) => merged.push({ ...row, source: "GP" }));
+        (data.click || []).forEach((row) => merged.push({ ...row, source: "ClickHouse" }));
+        merged.sort((a, b) => (a.start_dttm || "").localeCompare(b.start_dttm || ""));
+        setRows(merged);
+      })
+      .catch((err) => setError(typeof err === "string" ? err : "Не удалось загрузить окно"))
+      .finally(() => setLoading(false));
+  };
+
+  const maxDuration = useMemo(() => {
+    if (!rows.length) return 0;
+    return Math.max(...rows.map((r) => Number(r.duration_min || 0)));
+  }, [rows]);
 
   return (
-    <div className="page analytics-page">
+    <div className="page analytics-page compact">
       <div className="page-header">
         <div>
           <h1>Аналитика</h1>
-          <div className="muted">Нагрузка команды и структура задач.</div>
+          <div className="muted">Окно загрузок по времени (GP + Click).</div>
         </div>
       </div>
 
-      <div className="analytics-toolbar">
+      <div className="analytics-toolbar compact">
         <div className="analytics-range">
-          {[30, 90].map((d) => (
-            <button
-              key={d}
-              className={`btn btn-ghost ${!hasCustomRange && days === d ? "active" : ""}`}
-              onClick={() => {
-                setDays(d);
-                setDateFrom("");
-                setDateTo("");
-              }}
-            >
-              {d} дней
-            </button>
-          ))}
-          <div className="analytics-custom">
-            <label className="muted">С даты</label>
+          <div className="analytics-custom compact">
+            <label className="muted">Дата</label>
             <input
               type="date"
               className="input"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              value={windowDate}
+              onChange={(e) => setWindowDate(e.target.value)}
             />
           </div>
-          <div className="analytics-custom">
-            <label className="muted">По дату</label>
+          <div className="analytics-custom compact">
+            <label className="muted">С</label>
             <input
-              type="date"
+              type="time"
               className="input"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              value={timeFrom}
+              onChange={(e) => setTimeFrom(e.target.value)}
             />
           </div>
-          {hasCustomRange && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                setDateFrom("");
-                setDateTo("");
-              }}
+          <div className="analytics-custom compact">
+            <label className="muted">По</label>
+            <input
+              type="time"
+              className="input"
+              value={timeTo}
+              onChange={(e) => setTimeTo(e.target.value)}
+            />
+          </div>
+          <div className="analytics-custom compact">
+            <label className="muted">Источник</label>
+            <select
+              className="input"
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
             >
-              Сбросить
-            </button>
-          )}
+              <option value="both">GP + Click</option>
+              <option value="gp">Только GP</option>
+              <option value="click">Только Click</option>
+            </select>
+          </div>
+          <button className="btn btn-secondary" onClick={loadWindowRuns}>
+            Найти
+          </button>
         </div>
-        <div className="analytics-range-label muted">{rangeLabel}</div>
       </div>
 
       {loading && <div className="muted">Загрузка аналитики...</div>}
@@ -147,72 +114,56 @@ export default function AnalyticsPage() {
       {!loading && !error && (
         <div className="analytics-grid">
           <section className="card analytics-block">
-            <div className="section-title">Нагрузка команды</div>
-            <div className="analytics-table">
-              <div className="analytics-head">
-                <span>Инженер</span>
-                <span>Задач</span>
-                <span>Таблиц</span>
-                <span>Часы</span>
-                <span>Последняя активность</span>
+            <div className="section-title">График длительности</div>
+            {rows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
+            {rows.length > 0 && (
+              <div className="analytics-bars">
+                {rows.slice(0, 30).map((row, idx) => {
+                  const width = maxDuration ? Math.max(8, (Number(row.duration_min || 0) / maxDuration) * 100) : 0;
+                  const label = `${row.schema_name}.${row.table_name}`;
+                  return (
+                    <div key={`${label}-${idx}`} className="analytics-bar-row">
+                      <div className="analytics-bar-label mono">{label}</div>
+                      <div className="analytics-bar-track">
+                        <div className="analytics-bar-fill" style={{ width: `${width}%` }} />
+                      </div>
+                      <div className="analytics-bar-value">{row.duration_min ?? 0} мин</div>
+                    </div>
+                  );
+                })}
               </div>
-              {byExecutor.map((row, idx) => (
-                <div key={`exec-${idx}`} className="analytics-row">
-                  <span>{row.executor || "—"}</span>
-                  <span>{row.tasks_count || 0}</span>
-                  <span>{row.tables_count || 0}</span>
-                  <span>{formatHours(row.minutes)}</span>
-                  <span>{formatDateTime(row.last_activity)}</span>
-                </div>
-              ))}
-              {byExecutor.length === 0 && <div className="muted">Данных нет.</div>}
-            </div>
+            )}
           </section>
 
           <section className="card analytics-block">
-            <div className="section-title">Постановщики</div>
-            <div className="analytics-table">
-              <div className="analytics-head">
-                <span>Постановщик</span>
-                <span>Задач</span>
-                <span>Таблиц</span>
-                <span>Часы</span>
-                <span>Последняя активность</span>
-              </div>
-              {byCreator.map((row, idx) => (
-                <div key={`creator-${idx}`} className="analytics-row">
-                  <span>{row.creator || "—"}</span>
-                  <span>{row.tasks_count || 0}</span>
-                  <span>{row.tables_count || 0}</span>
-                  <span>{formatHours(row.minutes)}</span>
-                  <span>{formatDateTime(row.last_activity)}</span>
+            <div className="section-title">Список загрузок</div>
+            {rows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
+            {rows.length > 0 && (
+              <div className="analytics-table">
+                <div className="analytics-head analytics-window">
+                  <span>Таблица</span>
+                  <span>Сущность</span>
+                  <span>Источник</span>
+                  <span>Старт</span>
+                  <span>Финиш</span>
+                  <span>Длит.</span>
+                  <span>Статус</span>
                 </div>
-              ))}
-              {byCreator.length === 0 && <div className="muted">Данных нет.</div>}
-            </div>
-          </section>
-
-          <section className="card analytics-block">
-            <div className="section-title">Направления</div>
-            <div className="analytics-table">
-              <div className="analytics-head">
-                <span>Направление</span>
-                <span>Задач</span>
-                <span>Таблиц</span>
-                <span>Часы</span>
-                <span>Последняя активность</span>
+                {rows.map((row, idx) => (
+                  <div key={`${row.schema_name}.${row.table_name}-${idx}`} className="analytics-row analytics-window">
+                    <span className="mono">{row.schema_name}.{row.table_name}</span>
+                    <span className="muted">{row.entity_name || "—"}</span>
+                    <span className="analytics-pill">{row.source}</span>
+                    <span>{formatDateTime(row.start_dttm)}</span>
+                    <span>{formatDateTime(row.end_dttm)}</span>
+                    <span>{row.duration_min ?? 0} мин</span>
+                    <span className={`status-pill status-${String(row.status || "").toLowerCase()}`}>
+                      {row.status || "—"}
+                    </span>
+                  </div>
+                ))}
               </div>
-              {byDirection.map((row, idx) => (
-                <div key={`direction-${idx}`} className="analytics-row">
-                  <span>{row.direction || "—"}</span>
-                  <span>{row.tasks_count || 0}</span>
-                  <span>{row.tables_count || 0}</span>
-                  <span>{formatHours(row.minutes)}</span>
-                  <span>{formatDateTime(row.last_activity)}</span>
-                </div>
-              ))}
-              {byDirection.length === 0 && <div className="muted">Данных нет.</div>}
-            </div>
+            )}
           </section>
         </div>
       )}

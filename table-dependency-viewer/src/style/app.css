@@ -5466,6 +5466,70 @@ main.content {
   min-width: 160px;
 }
 
+.analytics-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.analytics-bar-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(200px, 3fr) minmax(80px, 0.6fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.analytics-bar-label {
+  font-size: 12px;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-bar-track {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  height: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.analytics-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa, #38bdf8);
+  border-radius: 999px;
+}
+
+.analytics-bar-value {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.analytics-head.analytics-window,
+.analytics-row.analytics-window {
+  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(110px, 0.7fr)
+    minmax(140px, 1fr) minmax(140px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr);
+}
+
+.analytics-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  width: fit-content;
+}
+
+@media (max-width: 1024px) {
+  .analytics-bar-row,
+  .analytics-head.analytics-window,
+  .analytics-row.analytics-window {
+    grid-template-columns: 1fr;
+  }
+}
+
 .analytics-range-label {
   margin-left: auto;
   color: #94a3b8;

@@ -5344,6 +5344,22 @@ def get_clickhouse_summary(
             summary_row = conn.execute(
                 text(
                     f"""
+                    WITH run_agg AS (
+                        SELECT
+                            r.run_uuid,
+                            r.schema_name,
+                            r.table_name,
+                            r.status,
+                            MIN(s.start_dttm) AS start_dttm,
+                            MAX(s.end_dttm) AS end_dttm,
+                            SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
+                        FROM {TABLE_CLICK_LOAD_RUN} r
+                        JOIN {TABLE_CLICK_LOAD_STAGE} s
+                          ON s.run_uuid = r.run_uuid
+                        WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                          AND r.start_dttm >= now() - (:days || ' days')::interval
+                        GROUP BY r.run_uuid, r.schema_name, r.table_name, r.status
+                    )
                     SELECT
                         COUNT(*) AS total_runs,
                         COUNT(DISTINCT schema_name || '.' || table_name) AS total_tables,
@@ -5352,11 +5368,10 @@ def get_clickhouse_summary(
                         SUM(CASE WHEN status = 'FAILED' THEN 1 ELSE 0 END) AS failed_runs,
                         SUM(CASE WHEN status = 'RUNNING' THEN 1 ELSE 0 END) AS running_runs,
                         SUM(CASE WHEN status = 'UP_FOR_RETRY' THEN 1 ELSE 0 END) AS retry_runs,
-                        AVG(EXTRACT(EPOCH FROM duration)) AS avg_seconds,
-                        MAX(EXTRACT(EPOCH FROM duration)) AS max_seconds,
+                        AVG(duration_seconds) AS avg_seconds,
+                        MAX(duration_seconds) AS max_seconds,
                         MAX(end_dttm) AS last_finish
-                    FROM {TABLE_CLICK_LOAD_RUN}
-                    WHERE start_dttm >= now() - (:days || ' days')::interval
+                    FROM run_agg
                     """
                 ),
                 {"days": days},
@@ -5365,6 +5380,35 @@ def get_clickhouse_summary(
             failures = conn.execute(
                 text(
                     f"""
+                    WITH run_agg AS (
+                        SELECT
+                            r.run_uuid,
+                            r.schema_name,
+                            r.table_name,
+                            r.dag_name,
+                            r.dag_run,
+                            r.status,
+                            r.error_text,
+                            MIN(s.start_dttm) AS start_dttm,
+                            MAX(s.end_dttm) AS end_dttm,
+                            SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
+                        FROM {TABLE_CLICK_LOAD_RUN} r
+                        JOIN {TABLE_CLICK_LOAD_STAGE} s
+                          ON s.run_uuid = r.run_uuid
+                        WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                          AND r.start_dttm >= now() - (:days || ' days')::interval
+                        GROUP BY r.run_uuid, r.schema_name, r.table_name, r.dag_name, r.dag_run, r.status, r.error_text
+                    ),
+                    last_stage AS (
+                        SELECT DISTINCT ON (s.run_uuid)
+                            s.run_uuid,
+                            s.stage_name,
+                            s.status AS stage_status,
+                            s.error_text AS stage_error
+                        FROM {TABLE_CLICK_LOAD_STAGE} s
+                        WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                        ORDER BY s.run_uuid, s.start_dttm DESC NULLS LAST
+                    )
                     SELECT
                         r.run_uuid,
                         r.schema_name,
@@ -5373,25 +5417,15 @@ def get_clickhouse_summary(
                         r.dag_run,
                         r.start_dttm,
                         r.end_dttm,
-                        r.duration,
+                        r.duration_seconds,
                         r.status,
                         r.error_text,
                         st.stage_name,
                         st.stage_status,
                         st.stage_error
-                    FROM {TABLE_CLICK_LOAD_RUN} r
-                    LEFT JOIN LATERAL (
-                        SELECT
-                            stage_name,
-                            status AS stage_status,
-                            error_text AS stage_error
-                        FROM {TABLE_CLICK_LOAD_STAGE} s
-                        WHERE s.run_uuid = r.run_uuid
-                        ORDER BY s.start_dttm DESC NULLS LAST
-                        LIMIT 1
-                    ) st ON true
-                    WHERE r.start_dttm >= now() - (:days || ' days')::interval
-                      AND r.status IN ('FAILED', 'UP_FOR_RETRY')
+                    FROM run_agg r
+                    LEFT JOIN last_stage st ON st.run_uuid = r.run_uuid
+                    WHERE r.status IN ('FAILED', 'UP_FOR_RETRY')
                     ORDER BY r.start_dttm DESC
                     LIMIT :limit
                     """
@@ -5441,7 +5475,7 @@ def get_clickhouse_summary(
                     "dag_run": row.get("dag_run"),
                     "start_dttm": serialize_datetime(row.get("start_dttm")),
                     "end_dttm": serialize_datetime(row.get("end_dttm")),
-                    "duration_min": _duration_minutes(row.get("duration")),
+                    "duration_min": round((row.get("duration_seconds") or 0) / 60.0, 2),
                     "status": row.get("status"),
                     "error_text": row.get("error_text"),
                     "stage_name": stage_name,
@@ -5472,22 +5506,28 @@ def get_clickhouse_table_runs(
             rows = conn.execute(
                 text(
                     f"""
-                    SELECT DISTINCT
-                        r.run_uuid,
-                        r.dag_name,
-                        r.dag_run,
-                        r.start_dttm,
-                        r.end_dttm,
-                        r.duration,
-                        r.status,
-                        r.error_text
-                    FROM {TABLE_CLICK_LOAD_RUN} r
-                    JOIN {TABLE_CLICK_LOAD_STAGE} s
-                      ON s.run_uuid = r.run_uuid
-                    WHERE r.schema_name = :schema
-                      AND s.table_name = :table
-                      AND (:table_id IS NULL OR s.table_id = :table_id)
-                    ORDER BY r.start_dttm DESC
+                    WITH run_agg AS (
+                        SELECT
+                            r.run_uuid,
+                            r.dag_name,
+                            r.dag_run,
+                            r.status,
+                            r.error_text,
+                            MIN(s.start_dttm) AS start_dttm,
+                            MAX(s.end_dttm) AS end_dttm,
+                            SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
+                        FROM {TABLE_CLICK_LOAD_RUN} r
+                        JOIN {TABLE_CLICK_LOAD_STAGE} s
+                          ON s.run_uuid = r.run_uuid
+                        WHERE r.schema_name = :schema
+                          AND s.table_name = :table
+                          AND (:table_id IS NULL OR s.table_id = :table_id)
+                          AND s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                        GROUP BY r.run_uuid, r.dag_name, r.dag_run, r.status, r.error_text
+                    )
+                    SELECT *
+                    FROM run_agg
+                    ORDER BY start_dttm DESC
                     LIMIT :limit
                     """
                 ),
@@ -5501,7 +5541,7 @@ def get_clickhouse_table_runs(
                     "dag_run": row.get("dag_run"),
                     "start_dttm": serialize_datetime(row.get("start_dttm")),
                     "end_dttm": serialize_datetime(row.get("end_dttm")),
-                    "duration_min": _duration_minutes(row.get("duration")),
+                    "duration_min": round((row.get("duration_seconds") or 0) / 60.0, 2),
                     "status": row.get("status"),
                     "error_text": row.get("error_text"),
                 }
@@ -5523,6 +5563,7 @@ def get_clickhouse_table_runs(
                             error_text
                         FROM {TABLE_CLICK_LOAD_STAGE}
                         WHERE run_uuid = :run_uuid
+                          AND stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
                         ORDER BY start_dttm
                         """
                     ),
@@ -5608,22 +5649,26 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
             rows = conn.execute(
                 text(
                     f"""
-                    SELECT
-                        s.run_uuid,
-                        s.stage_name,
-                        s.start_dttm,
-                        s.end_dttm,
-                        s.duration,
-                        s.status,
-                        s.error_text,
-                        r.dag_name,
-                        r.dag_run
-                    FROM {TABLE_CLICK_LOAD_STAGE} s
-                    JOIN {TABLE_CLICK_LOAD_RUN} r
-                      ON r.run_uuid = s.run_uuid
-                    WHERE r.schema_name = :schema
-                      AND s.table_name = :table
-                    ORDER BY s.start_dttm DESC NULLS LAST
+                    WITH run_agg AS (
+                        SELECT
+                            r.run_uuid,
+                            r.dag_name,
+                            r.dag_run,
+                            r.status,
+                            MIN(s.start_dttm) AS start_dttm,
+                            MAX(s.end_dttm) AS end_dttm,
+                            SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
+                        FROM {TABLE_CLICK_LOAD_RUN} r
+                        JOIN {TABLE_CLICK_LOAD_STAGE} s
+                          ON r.run_uuid = s.run_uuid
+                        WHERE r.schema_name = :schema
+                          AND s.table_name = :table
+                          AND s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                        GROUP BY r.run_uuid, r.dag_name, r.dag_run, r.status
+                    )
+                    SELECT *
+                    FROM run_agg
+                    ORDER BY start_dttm DESC NULLS LAST
                     LIMIT :limit
                     """
                 ),
@@ -5633,12 +5678,11 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
         history = [
             {
                 "run_uuid": row.get("run_uuid"),
-                "stage_name": row.get("stage_name"),
+                "stage_name": "TOTAL",
                 "start_dttm": serialize_datetime(row.get("start_dttm")),
                 "end_dttm": serialize_datetime(row.get("end_dttm")),
-                "duration_min": _duration_minutes(row.get("duration")),
+                "duration_min": round((row.get("duration_seconds") or 0) / 60.0, 2),
                 "status": row.get("status"),
-                "error_text": row.get("error_text"),
                 "dag_name": row.get("dag_name"),
                 "dag_run": row.get("dag_run"),
             }
@@ -5672,6 +5716,7 @@ def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = 
                     JOIN {TABLE_CLICK_LOAD_RUN} r
                       ON r.run_uuid = s.run_uuid
                     WHERE s.start_dttm >= now() - (:days || ' days')::interval
+                      AND s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
                     ORDER BY s.duration DESC NULLS LAST
                     LIMIT :limit
                     """
@@ -5759,17 +5804,32 @@ def get_window_runs(
                 click_rows = conn.execute(
                     text(
                         f"""
+                        WITH run_agg AS (
+                            SELECT
+                                r.run_uuid,
+                                r.schema_name,
+                                r.table_name,
+                                r.status,
+                                MIN(s.start_dttm) AS start_dttm,
+                                MAX(s.end_dttm) AS end_dttm,
+                                SUM(EXTRACT(EPOCH FROM s.duration)) AS duration_seconds
+                            FROM {TABLE_CLICK_LOAD_RUN} r
+                            JOIN {TABLE_CLICK_LOAD_STAGE} s
+                              ON s.run_uuid = r.run_uuid
+                            WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+                            GROUP BY r.run_uuid, r.schema_name, r.table_name, r.status
+                        )
                         SELECT
-                            r.schema_name,
-                            r.table_name,
-                            r.start_dttm,
-                            r.end_dttm,
-                            r.status,
-                            r.duration
-                        FROM {TABLE_CLICK_LOAD_RUN} r
-                        WHERE r.start_dttm >= :window_start
-                          AND r.start_dttm <= :window_end
-                        ORDER BY r.start_dttm ASC
+                            schema_name,
+                            table_name,
+                            start_dttm,
+                            end_dttm,
+                            status,
+                            duration_seconds
+                        FROM run_agg
+                        WHERE start_dttm >= :window_start
+                          AND start_dttm <= :window_end
+                        ORDER BY start_dttm ASC
                         """
                     ),
                     {"window_start": window_start, "window_end": window_end},
@@ -5780,7 +5840,7 @@ def get_window_runs(
                         "table_name": row.get("table_name"),
                         "start_dttm": serialize_datetime(row.get("start_dttm")),
                         "end_dttm": serialize_datetime(row.get("end_dttm")),
-                        "duration_min": _duration_minutes(row.get("duration")),
+                        "duration_min": round((row.get("duration_seconds") or 0) / 60.0, 2),
                         "status": row.get("status"),
                     }
                     for row in click_rows

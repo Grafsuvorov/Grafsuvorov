@@ -1,72 +1,104 @@
-select
-     ---------- бизнес‑атрибуты-заголовок ---------- /
-    "AUFNR",        	-- Заказ (код)
-    "EQUNR_HDR",      	-- Единица оборудования (код)
-    "TPLNR_HDR",       -- Техническое место (код)
-    "AUART",        	-- Вид заказа (код)
-    "ILART",        	-- Вид работ (код)
-    "GSTRP_DT",     	-- Базисный срок начала (Дата + Время)
-    "GLTRP_DT",     	-- Базисный срок окончания  (Дата + Время)
-    "ARBPL_HDR",      	-- Выполняющее рабочее место (код)
-    "ZZSWERK",      	-- Завод владелец (код)
-    "IWERK",        	-- Завод, планирующий выполнение (код)
-    "ZZDIVISION",   	-- Участок (код)
-    "BUKRS",       	-- Балансовая единица (код)
-    "PLNNR_HDR",       -- Группа технологических карт (код)
-    "STTXT",        	-- Системные статусы
-    "ASTXT",        	-- Пользовательские статусы
-    "WARPL",        	-- План предупредительного (код)
-    "ABNUM",        	-- Отзыв к плану предупредительного (код)
-    "ZERNAM_TXT",  	-- ФИО создавшего
-    "GSTRI_DT",    	-- Фактический срок начала (Дата + Время)
-    "GETRI_DT",
--- Фактический срок окончания (Дата + Время)
-    "KTEXT",        	-- Краткое описание
-    "ZZDRAW",       	-- Входящий чертеж (код)
-    "ZZDRAWM",      	-- Исходящий чертеж (код)
-    "ANLZU",        	-- Состояние производственной установки (код)
-    "VAWRK",        	-- Завод ответственного рабочего места (код)
-    "AUTYP",        	-- Тип заказа (код)
-    "VBELN",        	-- Документ продажи (код)
-    "PLNTY",        	-- Тип технологической карты (код)
-    "PLNAL",        	-- Счётчик группы технологических карт (код)
-    "ZREJECT_HDR",  	-- Отклонённая операция (признак)
-    "PSPEL",        	-- СПП‑элемент (код)
-   
-    (xpath('VORNR/text()', attr_node))[1]::VARCHAR                                          as "VORNR",
-    (xpath('KTSCH/text()', attr_node))[1]::VARCHAR                                          as "KTSCH",
-    (xpath('ARBPL/text()', attr_node))[1]::VARCHAR                                          as "ARBPL_OPR",
-    (xpath('WERKS/text()', attr_node))[1]::VARCHAR                                          as "WERKS",
-    (xpath('NTANF_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTANF_DT",
-    (xpath('NTEND_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "NTEND_DT",
-    (xpath('FSAVD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSAVD_DT",
-    (xpath('FSEDD_DT/text()', attr_node))[1]::VARCHAR::TIMESTAMP                            as "FSEDD_DT",
-    (xpath('EQUNR/text()', attr_node))[1]::VARCHAR                                          as "EQUNR_OPR",
-    (xpath('TPLNR/text()', attr_node))[1]::VARCHAR                                          as "TPLNR_OPR",
-    (xpath('ARBEI/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ARBEI",
-    (xpath('ANZZL/text()', attr_node))[1]::VARCHAR::INTEGER                                 as "ANZZL",
-    (xpath('ISMNW/text()', attr_node))[1]::VARCHAR::NUMERIC(11, 2)                          as "ISMNW",
-    (xpath('DAUNO/text()', attr_node))[1]::VARCHAR::NUMERIC(10, 2)                          as "DAUNO",
-    (xpath('DAUNE/text()', attr_node))[1]::VARCHAR                                          as "DAUNE",
-    (xpath('ARBEH/text()', attr_node))[1]::VARCHAR                                          as "ARBEH",
-    (xpath('LTXA1/text()', attr_node))[1]::VARCHAR                                          as "LTXA1",
-    (xpath('ZOP_STTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_STTXT",
-    (xpath('ZOP_ASTXT/text()', attr_node))[1]::VARCHAR                                      as "ZOP_ASTXT",
-    (xpath('PLNNR/text()', attr_node))[1]::VARCHAR                                          as "PLNNR_OPR",
-    not coalesce((xpath('USR10/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL       as "USR10",
-    not coalesce((xpath('ZREJECT_OPR/text()', attr_node))[1]::VARCHAR is NULL, false)::BOOL as "ZREJECT_OPR",
-    
-    flow_id,
-    source_system,
-    record_id,
-    uuid,
-    dt_insert
-from
-    stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr as items_attr
-    cross join lateral unnest(xpath('ORDER_OPR', xml_item))                                            as attr_node;
+SELECT
+    -- бизнес атрибуты
+    items_attr."AUFNR",
+    items_attr."EQUNR_HDR",
+    items_attr."TPLNR_HDR",
+    items_attr."AUART",
+    items_attr."ILART",
+    items_attr."GSTRP_DT",
+    items_attr."GLTRP_DT",
+    items_attr."ARBPL_HDR",
+    items_attr."ZZSWERK",
+    items_attr."IWERK",
+    items_attr."ZZDIVISION",
+    items_attr."BUKRS",
+    items_attr."PLNNR_HDR",
+    items_attr."STTXT",
+    items_attr."ASTXT",
+    items_attr."WARPL",
+    items_attr."ABNUM",
+    items_attr."ZERNAM_TXT",
+    items_attr."GSTRI_DT",
+    items_attr."GETRI_DT",
+    items_attr."KTEXT",
+    items_attr."ZZDRAW",
+    items_attr."ZZDRAWM",
+    items_attr."ANLZU",
+    items_attr."VAWRK",
+    items_attr."AUTYP",
+    items_attr."VBELN",
+    items_attr."PLNTY",
+    items_attr."PLNAL",
+    items_attr."ZREJECT_HDR",
+    items_attr."PSPEL",
 
-Gather Motion 8:1  (slice1; segments: 8)  (cost=10000000000.00..10113747577.50 rows=926407500 width=515)
-  ->  Nested Loop  (cost=10000000000.00..10113747577.50 rows=115800938 width=515)
-        ->  Seq Scan on ral_is2_toro2_ord_hdr_opr_items_attr items_attr  (cost=0.00..262658.75 rows=1158010 width=1261)
-        ->  Function Scan on unnest attr_node  (cost=0.01..1.00 rows=13 width=32)
-Optimizer: Postgres query optimizer
+    -- xml поля
+    x.vornr,
+    x.ktsch,
+    x.arbpl_opr,
+    x.werks,
+    x.ntanf_dt,
+    x.ntend_dt,
+    x.fsavd_dt,
+    x.fsedd_dt,
+    x.equnr_opr,
+    x.tplnr_opr,
+    x.arbei,
+    x.anzzl,
+    x.ismnw,
+    x.dauno,
+    x.daune,
+    x.arbeh,
+    x.ltxa1,
+    x.zop_sttxt,
+    x.zop_astxt,
+    x.plnnr_opr,
+    x.usr10,
+    x.zreject_opr,
+
+    items_attr.flow_id,
+    items_attr.source_system,
+    items_attr.record_id,
+    items_attr.uuid,
+    items_attr.dt_insert
+
+FROM stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr items_attr
+
+-- разворачиваем ORDER_OPR
+CROSS JOIN LATERAL
+    unnest(xpath('//ORDER_OPR', items_attr.xml_item)) AS attr_node
+
+-- извлекаем поля из XML
+CROSS JOIN LATERAL (
+
+    SELECT
+        (xpath('VORNR/text()', attr_node))[1]::varchar                       AS vornr,
+        (xpath('KTSCH/text()', attr_node))[1]::varchar                       AS ktsch,
+        (xpath('ARBPL/text()', attr_node))[1]::varchar                       AS arbpl_opr,
+        (xpath('WERKS/text()', attr_node))[1]::varchar                       AS werks,
+
+        (xpath('NTANF_DT/text()', attr_node))[1]::varchar::timestamp         AS ntanf_dt,
+        (xpath('NTEND_DT/text()', attr_node))[1]::varchar::timestamp         AS ntend_dt,
+        (xpath('FSAVD_DT/text()', attr_node))[1]::varchar::timestamp         AS fsavd_dt,
+        (xpath('FSEDD_DT/text()', attr_node))[1]::varchar::timestamp         AS fsedd_dt,
+
+        (xpath('EQUNR/text()', attr_node))[1]::varchar                       AS equnr_opr,
+        (xpath('TPLNR/text()', attr_node))[1]::varchar                       AS tplnr_opr,
+
+        (xpath('ARBEI/text()', attr_node))[1]::varchar::numeric(11,2)        AS arbei,
+        (xpath('ANZZL/text()', attr_node))[1]::varchar::integer              AS anzzl,
+        (xpath('ISMNW/text()', attr_node))[1]::varchar::numeric(11,2)        AS ismnw,
+        (xpath('DAUNO/text()', attr_node))[1]::varchar::numeric(10,2)        AS dauno,
+
+        (xpath('DAUNE/text()', attr_node))[1]::varchar                       AS daune,
+        (xpath('ARBEH/text()', attr_node))[1]::varchar                       AS arbeh,
+        (xpath('LTXA1/text()', attr_node))[1]::varchar                       AS ltxa1,
+
+        (xpath('ZOP_STTXT/text()', attr_node))[1]::varchar                   AS zop_sttxt,
+        (xpath('ZOP_ASTXT/text()', attr_node))[1]::varchar                   AS zop_astxt,
+        (xpath('PLNNR/text()', attr_node))[1]::varchar                       AS plnnr_opr,
+
+        (xpath('USR10/text()', attr_node))[1] IS NOT NULL                    AS usr10,
+        (xpath('ZREJECT_OPR/text()', attr_node))[1] IS NOT NULL              AS zreject_opr
+
+) x;

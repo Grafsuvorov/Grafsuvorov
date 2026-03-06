@@ -1,104 +1,123 @@
-SELECT
-    -- бизнес атрибуты
-    items_attr."AUFNR",
-    items_attr."EQUNR_HDR",
-    items_attr."TPLNR_HDR",
-    items_attr."AUART",
-    items_attr."ILART",
-    items_attr."GSTRP_DT",
-    items_attr."GLTRP_DT",
-    items_attr."ARBPL_HDR",
-    items_attr."ZZSWERK",
-    items_attr."IWERK",
-    items_attr."ZZDIVISION",
-    items_attr."BUKRS",
-    items_attr."PLNNR_HDR",
-    items_attr."STTXT",
-    items_attr."ASTXT",
-    items_attr."WARPL",
-    items_attr."ABNUM",
-    items_attr."ZERNAM_TXT",
-    items_attr."GSTRI_DT",
-    items_attr."GETRI_DT",
-    items_attr."KTEXT",
-    items_attr."ZZDRAW",
-    items_attr."ZZDRAWM",
-    items_attr."ANLZU",
-    items_attr."VAWRK",
-    items_attr."AUTYP",
-    items_attr."VBELN",
-    items_attr."PLNTY",
-    items_attr."PLNAL",
-    items_attr."ZREJECT_HDR",
-    items_attr."PSPEL",
+import psycopg2
+import gzip
+import csv
+import time
+from lxml import etree
 
-    -- xml поля
-    x.vornr,
-    x.ktsch,
-    x.arbpl_opr,
-    x.werks,
-    x.ntanf_dt,
-    x.ntend_dt,
-    x.fsavd_dt,
-    x.fsedd_dt,
-    x.equnr_opr,
-    x.tplnr_opr,
-    x.arbei,
-    x.anzzl,
-    x.ismnw,
-    x.dauno,
-    x.daune,
-    x.arbeh,
-    x.ltxa1,
-    x.zop_sttxt,
-    x.zop_astxt,
-    x.plnnr_opr,
-    x.usr10,
-    x.zreject_opr,
+# ---------------------------
+# параметры подключения
+# ---------------------------
 
-    items_attr.flow_id,
-    items_attr.source_system,
-    items_attr.record_id,
-    items_attr.uuid,
-    items_attr.dt_insert
+conn = psycopg2.connect(
+    host="HOST",
+    dbname="DB",
+    user="USER",
+    password="PASSWORD",
+    port=5432
+)
 
-FROM stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr items_attr
+# ---------------------------
+# узнаем сколько строк всего
+# ---------------------------
 
--- разворачиваем ORDER_OPR
-CROSS JOIN LATERAL
-    unnest(xpath('//ORDER_OPR', items_attr.xml_item)) AS attr_node
+cur = conn.cursor()
+cur.execute("""
+select count(*)
+from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
+""")
 
--- извлекаем поля из XML
-CROSS JOIN LATERAL (
+total_rows = cur.fetchone()[0]
 
-    SELECT
-        (xpath('VORNR/text()', attr_node))[1]::varchar                       AS vornr,
-        (xpath('KTSCH/text()', attr_node))[1]::varchar                       AS ktsch,
-        (xpath('ARBPL/text()', attr_node))[1]::varchar                       AS arbpl_opr,
-        (xpath('WERKS/text()', attr_node))[1]::varchar                       AS werks,
+print(f"Всего XML строк: {total_rows}")
 
-        (xpath('NTANF_DT/text()', attr_node))[1]::varchar::timestamp         AS ntanf_dt,
-        (xpath('NTEND_DT/text()', attr_node))[1]::varchar::timestamp         AS ntend_dt,
-        (xpath('FSAVD_DT/text()', attr_node))[1]::varchar::timestamp         AS fsavd_dt,
-        (xpath('FSEDD_DT/text()', attr_node))[1]::varchar::timestamp         AS fsedd_dt,
+# ---------------------------
+# курсор потоковый
+# ---------------------------
 
-        (xpath('EQUNR/text()', attr_node))[1]::varchar                       AS equnr_opr,
-        (xpath('TPLNR/text()', attr_node))[1]::varchar                       AS tplnr_opr,
+cur = conn.cursor(name="xml_cursor")
 
-        (xpath('ARBEI/text()', attr_node))[1]::varchar::numeric(11,2)        AS arbei,
-        (xpath('ANZZL/text()', attr_node))[1]::varchar::integer              AS anzzl,
-        (xpath('ISMNW/text()', attr_node))[1]::varchar::numeric(11,2)        AS ismnw,
-        (xpath('DAUNO/text()', attr_node))[1]::varchar::numeric(10,2)        AS dauno,
+cur.itersize = 5000
 
-        (xpath('DAUNE/text()', attr_node))[1]::varchar                       AS daune,
-        (xpath('ARBEH/text()', attr_node))[1]::varchar                       AS arbeh,
-        (xpath('LTXA1/text()', attr_node))[1]::varchar                       AS ltxa1,
+cur.execute("""
+select uuid, xml_item
+from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
+""")
 
-        (xpath('ZOP_STTXT/text()', attr_node))[1]::varchar                   AS zop_sttxt,
-        (xpath('ZOP_ASTXT/text()', attr_node))[1]::varchar                   AS zop_astxt,
-        (xpath('PLNNR/text()', attr_node))[1]::varchar                       AS plnnr_opr,
+# ---------------------------
+# файл
+# ---------------------------
 
-        (xpath('USR10/text()', attr_node))[1] IS NOT NULL                    AS usr10,
-        (xpath('ZREJECT_OPR/text()', attr_node))[1] IS NOT NULL              AS zreject_opr
+outfile = "parsed_init.csv.gz"
 
-) x;
+f = gzip.open(outfile, "wt", newline="", encoding="utf8")
+writer = csv.writer(f)
+
+writer.writerow([
+    "uuid",
+    "VORNR",
+    "KTSCH",
+    "ARBPL",
+    "WERKS",
+    "NTANF_DT"
+])
+
+# ---------------------------
+# обработка
+# ---------------------------
+
+start_time = time.time()
+
+processed = 0
+written_rows = 0
+
+for uuid, xml in cur:
+
+    processed += 1
+
+    root = etree.fromstring(xml)
+
+    for opr in root.xpath("//ORDER_OPR"):
+
+        writer.writerow([
+            uuid,
+            opr.findtext("VORNR"),
+            opr.findtext("KTSCH"),
+            opr.findtext("ARBPL"),
+            opr.findtext("WERKS"),
+            opr.findtext("NTANF_DT")
+        ])
+
+        written_rows += 1
+
+    # каждые 5000 строк выводим прогресс
+    if processed % 5000 == 0:
+
+        elapsed = time.time() - start_time
+        speed = processed / elapsed
+
+        remaining = total_rows - processed
+        eta = remaining / speed if speed > 0 else 0
+
+        percent = processed / total_rows * 100
+
+        print(
+            f"""
+-----------------------------------------
+Обработано XML: {processed}/{total_rows} ({percent:.2f}%)
+Скорость: {speed:.1f} строк/сек
+Записано строк: {written_rows}
+Осталось: {remaining}
+ETA: {eta/60:.1f} минут
+-----------------------------------------
+"""
+        )
+
+f.close()
+
+total_time = time.time() - start_time
+
+print("\nINIT завершен")
+print(f"Всего XML: {processed}")
+print(f"Всего записано строк: {written_rows}")
+print(f"Файл: {outfile}")
+print(f"Время: {total_time/60:.2f} минут")

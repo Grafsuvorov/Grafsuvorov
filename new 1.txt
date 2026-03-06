@@ -1,174 +1,24 @@
-CREATE TABLE stg.ral_is2_toro2_opr_xml
-(
-    uuid text,
+Всего XML строк: 791022
 
-    vornr varchar(10),
-    ktsch varchar(20),
-    arbpl_opr varchar(20),
-    werks varchar(10),
-
-    ntanf_dt timestamp,
-    ntend_dt timestamp,
-    fsavd_dt timestamp,
-    fsedd_dt timestamp,
-
-    equnr_opr varchar(30),
-    tplnr_opr varchar(30),
-
-    arbei numeric(11,2),
-    anzzl integer,
-    ismnw numeric(11,2),
-    dauno numeric(10,2),
-
-    daune varchar(10),
-    arbeh varchar(10),
-    ltxa1 text,
-
-    zop_sttxt text,
-    zop_astxt text,
-    plnnr_opr varchar(30),
-
-    usr10 boolean,
-    zreject_opr boolean
-)
-DISTRIBUTED BY (uuid);
-
-
-import psycopg2
-import time
-import io
-from lxml import etree
-
-conn = psycopg2.connect(
-    host="HOST",
-    dbname="DB",
-    user="USER",
-    password="PASSWORD",
-    port=5432
-)
-
-cur = conn.cursor()
-
-cur.execute("""
-select count(*)
-from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
-""")
-
-total_rows = cur.fetchone()[0]
-
-print(f"Всего XML строк: {total_rows}")
-
-cur = conn.cursor(name="xml_cursor")
-cur.itersize = 5000
-
-cur.execute("""
-select uuid, xml_item
-from stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr
-""")
-
-start_time = time.time()
-
-processed = 0
-written_rows = 0
-
-buffer = io.StringIO()
-batch_size = 20000
-
-for uuid, xml in cur:
-
-    processed += 1
-
-    root = etree.fromstring(xml)
-
-    for opr in root.xpath("//ORDER_OPR"):
-
-        row = [
-            uuid,
-            opr.findtext("VORNR"),
-            opr.findtext("KTSCH"),
-            opr.findtext("ARBPL"),
-            opr.findtext("WERKS"),
-
-            opr.findtext("NTANF_DT"),
-            opr.findtext("NTEND_DT"),
-            opr.findtext("FSAVD_DT"),
-            opr.findtext("FSEDD_DT"),
-
-            opr.findtext("EQUNR"),
-            opr.findtext("TPLNR"),
-
-            opr.findtext("ARBEI"),
-            opr.findtext("ANZZL"),
-            opr.findtext("ISMNW"),
-            opr.findtext("DAUNO"),
-
-            opr.findtext("DAUNE"),
-            opr.findtext("ARBEH"),
-            opr.findtext("LTXA1"),
-
-            opr.findtext("ZOP_STTXT"),
-            opr.findtext("ZOP_ASTXT"),
-            opr.findtext("PLNNR"),
-
-            opr.find("USR10") is not None,
-            opr.find("ZREJECT_OPR") is not None
-        ]
-
-        buffer.write(",".join("" if v is None else str(v) for v in row))
-        buffer.write("\n")
-
-        written_rows += 1
-
-    # batch insert
-    if written_rows % batch_size == 0:
-
-        buffer.seek(0)
-
-        copy_sql = """
-        COPY stg.ral_is2_toro2_opr_xml
-        FROM STDIN
-        WITH CSV
-        """
-
-        cur_copy = conn.cursor()
-        cur_copy.copy_expert(copy_sql, buffer)
-        conn.commit()
-
-        buffer = io.StringIO()
-
-    # progress
-    if processed % 5000 == 0:
-
-        elapsed = time.time() - start_time
-        speed = processed / elapsed
-
-        remaining = total_rows - processed
-        eta = remaining / speed if speed > 0 else 0
-
-        percent = processed / total_rows * 100
-
-        print(f"""
 -----------------------------------------
-Обработано XML: {processed}/{total_rows} ({percent:.2f}%)
-Скорость: {speed:.1f} строк/сек
-Записано строк: {written_rows}
-Осталось: {remaining}
-ETA: {eta/60:.1f} минут
+Обработано XML: 5000/791022 (0.63%)
+Скорость: 1613.9 строк/сек
+Записано строк: 35903
+Осталось: 786022
+ETA: 8.1 минут
 -----------------------------------------
-""")
 
-# вставить остаток
-buffer.seek(0)
 
-cur_copy = conn.cursor()
-cur_copy.copy_expert("""
-COPY stg.ral_is2_toro2_opr_xml
-FROM STDIN
-WITH CSV
-""", buffer)
+-----------------------------------------
+Обработано XML: 10000/791022 (1.26%)
+Скорость: 1629.2 строк/сек
+Записано строк: 72102
+Осталось: 781022
+ETA: 8.0 минут
+-----------------------------------------
 
-conn.commit()
-
-print("\nINIT завершен")
-print(f"Всего XML: {processed}")
-print(f"Всего ORDER_OPR строк: {written_rows}")
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\pars.py", line 102, in <module>
+    cur_copy.copy_expert(copy_sql, buffer)
+psycopg2.errors.BadCopyFileFormat: extra data after last expected column
+CONTEXT:  COPY ral_is2_toro2_opr_xml, line 504: "00505601-0f27-1fe1-81da-cf925139f4dc,0240,,25S90720,2520,2026-01-04T08:54:17Z,2026-01-04T08:57:55Z,2..."

@@ -5410,13 +5410,17 @@ main.content {
 
 /* --- Analytics page --- */
 .analytics-page {
-  max-width: 1160px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 24px 28px 56px;
+  padding: 16px 24px 52px;
 }
 
 .analytics-page.compact {
-  padding: 20px 28px 48px;
+  padding: 14px 24px 44px;
+}
+
+.analytics-header {
+  margin-bottom: 8px;
 }
 
 .analytics-page .analytics-toolbar {
@@ -5425,14 +5429,15 @@ main.content {
   gap: 12px;
   align-items: center;
   margin-bottom: 18px;
+  margin-top: 6px;
   background: rgba(15, 23, 42, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 14px;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
 .analytics-toolbar.compact {
-  padding: 10px 12px;
+  padding: 10px 14px;
 }
 
 .analytics-range {
@@ -5440,6 +5445,11 @@ main.content {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+}
+
+.analytics-subtitle {
+  margin-top: 0;
+  margin-bottom: 6px;
 }
 
 .analytics-custom {
@@ -5463,7 +5473,12 @@ main.content {
 }
 
 .analytics-custom .input {
-  min-width: 160px;
+  min-width: 150px;
+}
+
+.analytics-action {
+  align-self: flex-end;
+  height: 36px;
 }
 
 .analytics-bars {
@@ -5473,7 +5488,7 @@ main.content {
 
 .analytics-bar-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) minmax(200px, 3fr) minmax(80px, 0.6fr);
+  grid-template-columns: minmax(240px, 1.8fr) minmax(240px, 3fr) minmax(80px, 0.6fr);
   gap: 12px;
   align-items: center;
 }
@@ -5507,8 +5522,8 @@ main.content {
 
 .analytics-head.analytics-window,
 .analytics-row.analytics-window {
-  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 1fr) minmax(110px, 0.7fr)
-    minmax(140px, 1fr) minmax(140px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr);
+  grid-template-columns: minmax(240px, 1.8fr) minmax(160px, 1.1fr) minmax(110px, 0.7fr)
+    minmax(150px, 1fr) minmax(150px, 1fr) minmax(90px, 0.6fr) minmax(110px, 0.7fr);
 }
 
 .analytics-pill {
@@ -5520,6 +5535,13 @@ main.content {
   background: rgba(59, 130, 246, 0.18);
   color: #93c5fd;
   width: fit-content;
+}
+
+.analytics-cell-name,
+.analytics-cell-entity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 1024px) {

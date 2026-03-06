@@ -52,11 +52,6 @@ export default function NightOpsPage() {
   const [clickFailures, setClickFailures] = useState([]);
   const [clickFailuresLoading, setClickFailuresLoading] = useState(false);
   const [clickFailuresError, setClickFailuresError] = useState(null);
-  const [windowDate, setWindowDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [windowSource, setWindowSource] = useState("both");
-  const [windowRows, setWindowRows] = useState([]);
-  const [windowLoading, setWindowLoading] = useState(false);
-  const [windowError, setWindowError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,38 +162,9 @@ export default function NightOpsPage() {
     }
   }, [heavyWindowStart, heavyWindowEnd, heavyLimit]);
 
-  const loadWindowRuns = useCallback(async () => {
-    setWindowLoading(true);
-    setWindowError(null);
-    try {
-      const params = new URLSearchParams({
-        date: windowDate,
-        from: heavyWindowStart,
-        to: heavyWindowEnd,
-        source: windowSource,
-      });
-      const resp = await fetch(`${API_BASE}/api/window-runs?${params.toString()}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const payload = await resp.json();
-      const rows = [];
-      (payload.gp || []).forEach((row) => rows.push({ ...row, source: "GP" }));
-      (payload.click || []).forEach((row) => rows.push({ ...row, source: "ClickHouse" }));
-      rows.sort((a, b) => (a.start_dttm || "").localeCompare(b.start_dttm || ""));
-      setWindowRows(rows);
-    } catch (err) {
-      setWindowError(typeof err === "string" ? err : "Не удалось загрузить окно");
-    } finally {
-      setWindowLoading(false);
-    }
-  }, [windowDate, heavyWindowStart, heavyWindowEnd, windowSource]);
-
   useEffect(() => {
     loadHeavyTables();
   }, [loadHeavyTables]);
-
-  useEffect(() => {
-    loadWindowRuns();
-  }, [loadWindowRuns]);
 
   const applyWindow = () => {
     const match = heavyWindowRange.trim().match(RANGE_RE);
@@ -208,11 +174,9 @@ export default function NightOpsPage() {
       setHeavyWindowStart(start);
       setHeavyWindowEnd(end);
       loadHeavyTables({ start, end });
-      loadWindowRuns();
       return;
     }
     loadHeavyTables();
-    loadWindowRuns();
   };
 
   const applyPeakPreset = () => {
@@ -289,15 +253,6 @@ export default function NightOpsPage() {
             <div className="section-title">Фокус на пиковое окно</div>
             <div className="night-window-controls">
               <label className="night-window-label">
-                Дата
-                <input
-                  className="night-window-input"
-                  type="date"
-                  value={windowDate}
-                  onChange={(e) => setWindowDate(e.target.value)}
-                />
-              </label>
-              <label className="night-window-label">
                 Начало
                 <input
                   className="night-window-input"
@@ -329,18 +284,6 @@ export default function NightOpsPage() {
                   onChange={(e) => setHeavyWindowRange(e.target.value)}
                   placeholder="04:30-05:20"
                 />
-              </label>
-              <label className="night-window-label">
-                Источник
-                <select
-                  className="night-window-select"
-                  value={windowSource}
-                  onChange={(e) => setWindowSource(e.target.value)}
-                >
-                  <option value="both">GP + Click</option>
-                  <option value="gp">Только GP</option>
-                  <option value="click">Только Click</option>
-                </select>
               </label>
               <label className="night-window-label">
                 TOP
@@ -413,46 +356,27 @@ export default function NightOpsPage() {
             <div className="night-columns">
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Окно загрузок (GP/Click)</div>
+                  <div className="night-panel-title">Тяжелые таблицы в окне</div>
                   <div className="night-panel-sub muted">
-                    {windowDate} · {heavyWindowStart}–{heavyWindowEnd} · {windowSource}
+                    {heavyData ? `${heavyData.window?.start}–${heavyData.window?.end}` : "Окно не загружено"}
                   </div>
-                  <div className="night-window-table">
-                    <div className="night-window-head">
-                      <span>Таблица</span>
-                      <span>Сущность</span>
-                      <span>Источник</span>
-                      <span>Старт</span>
-                      <span>Финиш</span>
-                      <span>Длит.</span>
-                      <span>Статус</span>
-                    </div>
-                    {windowLoading && <div className="muted">Загрузка...</div>}
-                    {windowError && <div className="dep-error-title">{windowError}</div>}
-                    {!windowLoading && !windowError && windowRows.length === 0 && (
-                      <div className="muted">Таблиц нет.</div>
-                    )}
-                    {!windowLoading && !windowError && windowRows.map((row, idx) => (
+                  <div className="night-list">
+                    {heavyRows.map((row) => (
                       <button
-                        key={`${row.schema_name}.${row.table_name}-${row.start_dttm}-${idx}`}
-                        className="night-window-row"
+                        key={`${row.table_fqn}-${row.total_duration_minutes}-${row.runs_count}`}
+                        className="night-row"
                         onClick={() => {
-                          const fqn = `${row.schema_name}.${row.table_name}`;
-                          const path = toTablePath(fqn);
+                          const path = toTablePath(row.table_fqn);
                           if (path) navigate(path);
                         }}
                       >
-                        <span className="mono">{row.schema_name}.{row.table_name}</span>
-                        <span className="muted">{row.entity_name || "—"}</span>
-                        <span className="night-pill">{row.source}</span>
-                        <span>{row.start_dttm || "—"}</span>
-                        <span>{row.end_dttm || "—"}</span>
-                        <span>{row.duration_min ?? 0} мин</span>
-                        <span className={`status-pill status-${String(row.status || "").toLowerCase()}`}>
-                          {row.status || "—"}
+                        <span className="mono">{row.table_fqn}</span>
+                        <span className="muted">
+                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} мин · max {row.max_duration_minutes ?? "—"} мин · запусков {row.runs_count ?? 0}
                         </span>
                       </button>
                     ))}
+                    {!heavyLoading && !heavyRows.length && <div className="muted">Тяжелых таблиц нет.</div>}
                   </div>
                 </div>
               )}

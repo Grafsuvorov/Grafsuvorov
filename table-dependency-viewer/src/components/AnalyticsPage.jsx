@@ -12,6 +12,14 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const shortenName = (value, max = 38) => {
+    if (!value) return "—";
+    if (value.length <= max) return value;
+    const head = value.slice(0, Math.max(12, Math.floor(max * 0.6)));
+    const tail = value.slice(-Math.max(8, Math.floor(max * 0.3)));
+    return `${head}…${tail}`;
+  };
+
   useEffect(() => {
     loadWindowRuns();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -52,12 +60,16 @@ export default function AnalyticsPage() {
     return Math.max(...rows.map((r) => Number(r.duration_min || 0)));
   }, [rows]);
 
+  const rowsByDuration = useMemo(() => {
+    return [...rows].sort((a, b) => (Number(b.duration_min || 0) - Number(a.duration_min || 0)));
+  }, [rows]);
+
   return (
     <div className="page analytics-page compact">
-      <div className="page-header">
+      <div className="page-header analytics-header">
         <div>
-          <h1>Аналитика</h1>
-          <div className="muted">Окно загрузок по времени (GP + Click).</div>
+          <h1>Загрузки</h1>
+          <div className="muted analytics-subtitle">Окно загрузок по времени (GP + Click).</div>
         </div>
       </div>
 
@@ -102,7 +114,7 @@ export default function AnalyticsPage() {
               <option value="click">Только Click</option>
             </select>
           </div>
-          <button className="btn btn-secondary" onClick={loadWindowRuns}>
+          <button className="btn btn-primary analytics-action" onClick={loadWindowRuns}>
             Найти
           </button>
         </div>
@@ -118,12 +130,14 @@ export default function AnalyticsPage() {
             {rows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
             {rows.length > 0 && (
               <div className="analytics-bars">
-                {rows.slice(0, 30).map((row, idx) => {
+                {rowsByDuration.slice(0, 30).map((row, idx) => {
                   const width = maxDuration ? Math.max(8, (Number(row.duration_min || 0) / maxDuration) * 100) : 0;
                   const label = `${row.schema_name}.${row.table_name}`;
                   return (
                     <div key={`${label}-${idx}`} className="analytics-bar-row">
-                      <div className="analytics-bar-label mono">{label}</div>
+                      <div className="analytics-bar-label mono" title={label}>
+                        {shortenName(label, 44)}
+                      </div>
                       <div className="analytics-bar-track">
                         <div className="analytics-bar-fill" style={{ width: `${width}%` }} />
                       </div>
@@ -149,10 +163,16 @@ export default function AnalyticsPage() {
                   <span>Длит.</span>
                   <span>Статус</span>
                 </div>
-                {rows.map((row, idx) => (
+                {rowsByDuration.map((row, idx) => {
+                  const fullName = `${row.schema_name}.${row.table_name}`;
+                  return (
                   <div key={`${row.schema_name}.${row.table_name}-${idx}`} className="analytics-row analytics-window">
-                    <span className="mono">{row.schema_name}.{row.table_name}</span>
-                    <span className="muted">{row.entity_name || "—"}</span>
+                    <span className="mono analytics-cell-name" title={fullName}>
+                      {shortenName(fullName)}
+                    </span>
+                    <span className="muted analytics-cell-entity" title={row.entity_name || ""}>
+                      {shortenName(row.entity_name || "—", 28)}
+                    </span>
                     <span className="analytics-pill">{row.source}</span>
                     <span>{formatDateTime(row.start_dttm)}</span>
                     <span>{formatDateTime(row.end_dttm)}</span>
@@ -161,7 +181,8 @@ export default function AnalyticsPage() {
                       {row.status || "—"}
                     </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>

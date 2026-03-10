@@ -1,26 +1,28 @@
-docker exec -it table-dependency-viewer-api-1 sh
+ docker exec -it table-dependency-viewer-api-1 sh -c "python - <<'PY'
+>   from api.main import app
+>   for r in app.routes:
+>       if 'auth' in r.path:
+>           print(r.path, sorted(r.methods))
+>   PY"
+  File "<stdin>", line 1
+    from api.main import app
+IndentationError: unexpected indent
+
+
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh
   grep -n "include_router(auth_router)" /app/api/main.py
-  grep -n "@router.post(\"/login\"" /app/api/auth.py
+  grep -n "@router.post(\"/login\"" /app/api/auth.py# #
+445:@router.post("/login", response_model=TokenResponse)
 
-  И еще:
 
-  docker exec -it table-dependency-viewer-api-1 sh -c "python - <<'PY'
-  from api.main import app
-  for r in app.routes:
-      if 'auth' in r.path:
-          print(r.path, sorted(r.methods))
-  PY"
-
-1. Пересобрать api из актуального кода:
-
-  docker compose build --no-cache api
-  docker compose up -d api
-
-  2. Пересобрать frontend из актуального production env, чтобы он перестал бить в /h/auth/login:
-
-  docker compose build --no-cache frontend
-  docker compose up -d frontend
-
-  Но сначала лучше выполнить 3 команды выше внутри API-контейнера.
-  Они сразу покажут: маршрут вообще есть в запущенном приложении или нет.
+POST http://rgm-s-dwhapp01.hq.root.ad:15312/h/auth/login 405 (Not Allowed)
+window.fetch @ index-BDovko37.js:135
+v @ index-BDovko37.js:135
+nS @ index-BDovko37.js:48
+(anonymous) @ index-BDovko37.js:48
+uj @ index-BDovko37.js:48
+Tv @ index-BDovko37.js:48
+Hv @ index-BDovko37.js:49
+Q$ @ index-BDovko37.js:49
 

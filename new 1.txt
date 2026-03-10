@@ -1,12 +1,31 @@
 SELECT
-  d.id as dashboard_id,
-  d.dashboard_title,
+    d.id AS dashboard_id,
+    d.dashboard_title,
+    EXTRACT(HOUR FROM l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow') AS hour,
+    COUNT(DISTINCT l.user_id) AS users_count,
+    COUNT(*) AS opens_count
 FROM dashboards d
-JOIN logs l ON d.id = l.dashboard_id
+JOIN logs l 
+    ON d.id = l.dashboard_id
 WHERE l.action = 'dashboard'
 GROUP BY
-  d.id,
-  d.dashboard_title
-HAVING
-  MIN(EXTRACT(HOUR FROM l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')) >= 9
-10:39
+    d.id,
+    d.dashboard_title,
+    hour
+ORDER BY
+    d.id,
+    hour;
+
+SELECT
+    d.dashboard_title,
+    EXTRACT(HOUR FROM l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow') AS hour,
+    COUNT(DISTINCT l.user_id) AS users
+FROM logs l
+JOIN dashboards d ON d.id = l.dashboard_id
+WHERE l.action = 'dashboard'
+GROUP BY
+    d.dashboard_title,
+    hour
+ORDER BY
+    d.dashboard_title,
+    hour;

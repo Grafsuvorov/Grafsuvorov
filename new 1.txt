@@ -1,8 +1,137 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i http://rgm-s-dwhapp01.hq.root.ad:5312/auth/login
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
+server {
+  listen 80;
+  server_name _;
 
-<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -s http://rgm-s-dwhapp01.hq.root.ad:5312/openapi.json | grep auth/login
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -s http://rgm-s-dwhapp01.hq.root.ad:5312/openapi.json | grep auth/login
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # SPA routing
+  location / {
+    try_files $uri /index.html;
+  }
+
+  # Cache static assets for a week
+  location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$ {
+    expires 7d;
+    add_header Cache-Control "public";
+  }
+}
+
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "15312:80"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/meta_info:/app/meta_info
+      - /root/table-dependency-viewer/config_files:/app/config_files
+      - /root/git_dir:/root/git_dir
+    ports:
+      - "5312:8000"
+    env_file:
+      - ./api/.env
+    environment:
+      - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - CLICK_META_DIR=/app/config_files/meta
+      - ADMIN_CICD_SCRIPT=/app/scripts/ci_cd.sh
+
+
+FROM node:20-alpine AS build
+
+ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+
+WORKDIR /app
+COPY package*.json ./
+
+RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm ci --include=dev
+
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+# stage: node + dagre
+FROM node:20-slim AS node
+ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm install -g dagre
+
+# stage: python
+FROM python:3.11-slim
+WORKDIR /app
+
+ENV PYTHONPATH=/app/api
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# proxy for apt only
+ENV http_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+ENV https_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+
+# install git
+RUN apt-get update \
+&& apt-get install -y git \
+&& rm -rf /var/lib/apt/lists/*
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+ENV PATH="/usr/local/bin:${PATH}"
+ENV NODE_PATH=/usr/local/lib/node_modules
+
+COPY api/ /app/api/
+
+# disable proxy for pip (internal pypi)
+RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= \
+  pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+  --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+  --retries 100 --timeout 600000 --no-cache-dir \
+  fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
+
+EXPOSE 8000
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+TABLE_LOADING_HISTORY=tech_etl.log_objects_loading_history
+TABLE_ENTITIES_META=tech_etl.entities_meta
+TABLE_TABLES_META=tech_etl.tables_meta
+TABLE_TABLE_COMPARE=tech_monitoring.vw_table_compare
+TABLE_YT_SLA=tech_etl.yt_sla
+TABLE_TABLES_META_CLICK=tech_etl.tables_meta_clickhouse_upload
+DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.201:5432/dwh
+TABLE_YTREK_INCIDENTS=tech_etl.YTREK_INCIDENTS
+VITE_AUTH_ENABLED=true
+AUTH_ENABLED=true
+AUTH_SECRET_KEY=change_me_please
+AUTH_ACCESS_TTL_MIN=7200
+AUTH_ALLOW_REGISTER=false
+AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
+AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
+
+
+VITE_API_BASE_URL=http://rgm-s-dwhapp01.hq.root.ad:5312
+VITE_AUTH_ENABLED=true
+
+
+CONTAINER ID   IMAGE                              COMMAND                  CREATED          STATUS          PORTS                     NAMES
+1acb03686e0f   table-dependency-viewer_api        "uvicorn api.main:ap…"   21 minutes ago   Up 21 minutes   0.0.0.0:5312->8000/tcp    table-dependency-viewer-api-1
+fcc73bfd97f7   table-dependency-viewer_frontend   "/docker-entrypoint.…"   21 minutes ago   Up 21 minutes   0.0.0.0:15312->80/tcp     table-dependency-viewer-frontend-1
+0aa81160a8c9   n3r7a2c7_v2.1                      "uvicorn app.main:ap…"   12 days ago      Up 4 days       0.0.0.0:18002->8000/tcp   n3r7a2c7_v2.1
+0e4fc8222d4f   n3r7a2c7_v2                        "uvicorn app.main:ap…"   2 weeks ago      Up 2 weeks      0.0.0.0:18001->8000/tcp   n3r7a2c7-container-8000

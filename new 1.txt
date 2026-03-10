@@ -1,30 +1,4 @@
-Выполни:
-
-  cd /root/table-dependency-viewer
-  grep -n "include_router(auth_router)" api/main.py
-  grep -n "from api.auth import router as auth_router\|from \\.auth import router as auth_router" api/main.py
-  grep -n "@router.post(\"/login\"" api/auth.py
-  git branch --show-current
-  git log --oneline -5
-
-  Если в api/main.py нет include_router(auth_router), то все просто:
-
-  - на сервере старая версия кода
-  - нужно подтянуть именно ветку feature_night_ops_window_onboarding_local
-
-  Еще полезно показать .dockerignore, потому что размер context для API слишком маленький:
-
-  cat .dockerignore
-
-  Мой текущий вывод:
-
-  - frontend уже собрался правильно
-  - backend на сервере все еще собирается из старого api/main.py
-  - пока серверная папка не обновлена до актуальной ветки, /auth/login не появится
-
-  Если пришлешь вывод этих 6 команд, я скажу точную следующую команду без гадания.
-
-
-› Explain this codebase
-
-  gpt-5.4 default · 5
+root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "include_router(auth_router)" api/main.py
+[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "from api.auth import router as auth_router\|from \\.auth import router as auth_router" api/main.py
+[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "@router.post(\"/login\"" api/auth.py
+445:@router.post("/login", response_model=TokenResponse)

@@ -2270,12 +2270,12 @@ def _clickhouse_run_agg_cte(
             SELECT
                 r.run_uuid,
                 r.schema_name,
-                r.table_name,
+                s.table_name,
                 r.dag_name,
                 r.dag_run,
                 r.status,
                 r.error_text,
-                MAX(s.table_id) AS table_id,
+                s.table_id,
                 MIN(s.start_dttm) AS start_dttm,
                 MAX(s.end_dttm) AS end_dttm,
                 SUM(EXTRACT(EPOCH FROM s.duration)) AS actual_duration_seconds,
@@ -2289,7 +2289,8 @@ def _clickhouse_run_agg_cte(
             GROUP BY
                 r.run_uuid,
                 r.schema_name,
-                r.table_name,
+                s.table_name,
+                s.table_id,
                 r.dag_name,
                 r.dag_run,
                 r.status,
@@ -5432,14 +5433,16 @@ def get_clickhouse_summary(
                     )
                     + f""",
                     last_stage AS (
-                        SELECT DISTINCT ON (s.run_uuid)
+                        SELECT DISTINCT ON (s.run_uuid, s.table_id, s.table_name)
                             s.run_uuid,
+                            s.table_id,
+                            s.table_name,
                             s.stage_name,
                             s.status AS stage_status,
                             s.error_text AS stage_error
                         FROM {TABLE_CLICK_LOAD_STAGE} s
                         WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
-                        ORDER BY s.run_uuid, s.start_dttm DESC NULLS LAST
+                        ORDER BY s.run_uuid, s.table_id, s.table_name, s.start_dttm DESC NULLS LAST
                     )
                     SELECT
                         r.run_uuid,
@@ -5457,7 +5460,10 @@ def get_clickhouse_summary(
                         st.stage_status,
                         st.stage_error
                     FROM run_agg r
-                    LEFT JOIN last_stage st ON st.run_uuid = r.run_uuid
+                    LEFT JOIN last_stage st
+                      ON st.run_uuid = r.run_uuid
+                     AND st.table_id = r.table_id
+                     AND st.table_name = r.table_name
                     WHERE r.status IN ('FAILED', 'UP_FOR_RETRY')
                     ORDER BY r.start_dttm DESC
                     LIMIT :limit
@@ -5571,10 +5577,13 @@ def get_clickhouse_table_runs(
             stages = []
             if runs:
                 run_uuid = runs[0].get("run_uuid")
+                run_table_name = table_norm
                 stages_rows = conn.execute(
                     text(
                         f"""
                         SELECT
+                            table_id,
+                            table_name,
                             stage_name,
                             start_dttm,
                             end_dttm,
@@ -5583,14 +5592,17 @@ def get_clickhouse_table_runs(
                             error_text
                         FROM {TABLE_CLICK_LOAD_STAGE}
                         WHERE run_uuid = :run_uuid
+                          AND table_name = :table_name
                           AND stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
                         ORDER BY start_dttm
                         """
                     ),
-                    {"run_uuid": run_uuid},
+                    {"run_uuid": run_uuid, "table_name": run_table_name},
                 ).mappings().all()
                 stages = [
                     {
+                        "table_id": row.get("table_id"),
+                        "table_name": row.get("table_name"),
                         "stage_name": row.get("stage_name"),
                         "start_dttm": serialize_datetime(row.get("start_dttm")),
                         "end_dttm": serialize_datetime(row.get("end_dttm")),

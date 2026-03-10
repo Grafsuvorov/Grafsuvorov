@@ -1,65 +1,12 @@
 SELECT
-    items_attr."AUFNR",
-    items_attr."EQUNR_HDR",
-    items_attr."TPLNR_HDR",
-    items_attr."AUART",
-    items_attr."ILART",
-    items_attr."GSTRP_DT",
-    items_attr."GLTRP_DT",
-    items_attr."ARBPL_HDR",
-    items_attr."ZZSWERK",
-    items_attr."IWERK",
-    items_attr."ZZDIVISION",
-    items_attr."BUKRS",
-    items_attr."PLNNR_HDR",
-    items_attr."STTXT",
-    items_attr."ASTXT",
-    items_attr."WARPL",
-    items_attr."ABNUM",
-    items_attr."ZERNAM_TXT",
-    items_attr."GSTRI_DT",
-    items_attr."GETRI_DT",
-    items_attr."KTEXT",
-    items_attr."ZZDRAW",
-    items_attr."ZZDRAWM",
-    items_attr."ANLZU",
-    items_attr."VAWRK",
-    items_attr."AUTYP",
-    items_attr."VBELN",
-    items_attr."PLNTY",
-    items_attr."PLNAL",
-    items_attr."ZREJECT_HDR",
-    items_attr."PSPEL",
-
-    x.vornr,
-    x.ktsch,
-    x.arbpl_opr,
-    x.werks,
-    x.ntanf_dt,
-    x.ntend_dt,
-    x.fsavd_dt,
-    x.fsedd_dt,
-    x.equnr_opr,
-    x.tplnr_opr,
-    x.arbei,
-    x.anzzl,
-    x.ismnw,
-    x.dauno,
-    x.daune,
-    x.arbeh,
-    x.ltxa1,
-    x.zop_sttxt,
-    x.zop_astxt,
-    x.plnnr_opr,
-    x.usr10,
-    x.zreject_opr,
-
-    items_attr.flow_id,
-    items_attr.source_system,
-    items_attr.record_id,
-    items_attr.uuid,
-    items_attr.dt_insert
-
-FROM stg.RAL_IS2_TORO2_ORD_HDR_OPR_items_attr_v2 items_attr
-JOIN stg.ral_is2_toro2_opr_xml x
-  ON items_attr.uuid = x.uuid;
+  d.id as dashboard_id,
+  d.dashboard_title,
+FROM dashboards d
+JOIN logs l ON d.id = l.dashboard_id
+WHERE l.action = 'dashboard'
+GROUP BY
+  d.id,
+  d.dashboard_title
+HAVING
+  MIN(EXTRACT(HOUR FROM l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')) >= 9
+10:39

@@ -1,16 +1,32 @@
 SELECT
     d.id AS dashboard_id,
     d.dashboard_title,
-    MIN(l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow') AS first_open_time,
     EXTRACT(HOUR FROM MIN(l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')) AS first_open_hour,
     COUNT(DISTINCT l.user_id) AS users_count
 FROM dashboards d
 JOIN logs l 
     ON d.id = l.dashboard_id
 WHERE l.action = 'dashboard'
+AND (l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date = CURRENT_DATE
 GROUP BY
     d.id,
     d.dashboard_title
 ORDER BY
-    first_open_hour,
-    users_count;
+    first_open_hour;
+
+
+SELECT
+    d.id AS dashboard_id,
+    d.dashboard_title,
+    EXTRACT(HOUR FROM MIN(l.dttm AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')) AS first_open_hour,
+    COUNT(DISTINCT l.user_id) AS users_count
+FROM dashboards d
+JOIN logs l 
+    ON d.id = l.dashboard_id
+WHERE l.action = 'dashboard'
+AND l.dttm >= NOW() - INTERVAL '7 days'
+GROUP BY
+    d.id,
+    d.dashboard_title
+ORDER BY
+    first_open_hour;

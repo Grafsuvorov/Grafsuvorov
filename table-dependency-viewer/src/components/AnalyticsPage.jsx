@@ -249,6 +249,7 @@ export default function AnalyticsPage() {
               <div className="analytics-table">
                 <div className="analytics-head analytics-window">
                   <span>Таблица</span>
+                  <span>Run UUID</span>
                   <span>Сущность</span>
                   <span>Источник</span>
                   <span>Старт</span>
@@ -260,9 +261,12 @@ export default function AnalyticsPage() {
                 {rowsFiltered.map((row, idx) => {
                   const fullName = `${row.schema_name}.${row.table_name}`;
                   return (
-                  <div key={`${row.schema_name}.${row.table_name}-${idx}`} className="analytics-row analytics-window">
+                  <div key={`${row.schema_name}.${row.table_name}-${row.run_uuid || idx}`} className="analytics-row analytics-window">
                     <span className="mono analytics-cell-name" title={fullName}>
                       {shortenName(fullName)}
+                    </span>
+                    <span className="mono" title={row.run_uuid || ""}>
+                      {shortenName(row.run_uuid || "—", 18)}
                     </span>
                     <span className="muted analytics-cell-entity" title={row.entity_name || ""}>
                       {shortenName(row.entity_name || "—", 28)}

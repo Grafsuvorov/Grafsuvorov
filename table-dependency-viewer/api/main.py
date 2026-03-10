@@ -5822,6 +5822,7 @@ def get_window_runs(
                         _clickhouse_run_agg_cte()
                         + f"""
                         SELECT
+                            ra.run_uuid,
                             ra.schema_name,
                             ra.table_name,
                             tm.entity_name,
@@ -5842,6 +5843,7 @@ def get_window_runs(
                 ).mappings().all()
                 payload["click"] = [
                     {
+                        "run_uuid": row.get("run_uuid"),
                         "schema_name": row.get("schema_name"),
                         "table_name": row.get("table_name"),
                         "entity_name": row.get("entity_name"),

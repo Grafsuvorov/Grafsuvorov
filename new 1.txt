@@ -1,34 +1,22 @@
-server {
-  listen 80;
-  server_name _;
+curl -i -X POST 'http://rgm-s-dwhapp01.hq.root.ad:15312/auth/login' \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
 
-  root /usr/share/nginx/html;
-  index index.html;
+  Варианты:
 
-  location /api/ {
-    proxy_pass http://api:8000/api/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
+  - 200 -> auth работает, проблема уже во frontend/browser
+  - 401 -> маршрут работает, но неверный логин/пароль
+  - 422 -> маршрут работает, но не то тело запроса
+  - 405 -> frontend реально шлет не POST, что странно и надо смотреть Network
 
-  location /auth/ {
-    proxy_pass http://api:8000/auth/;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-  }
+  И еще покажи из браузера в DevTools -> Network одну строку запроса логина:
 
-  location / {
-    try_files $uri /index.html;
-  }
+  - Request URL
+  - Request Method
+  - Status Code
 
-  location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$ {
-    expires 7d;
-    add_header Cache-Control "public";
-  }
-}
+  Сейчас ключевой вопрос один:
+  шлет ли браузер именно POST на :15312/auth/login.
+
+  Если хочешь, после твоего curl -X POST ...:15312/auth/login я скажу уже точно, где остаточная проблема.
+

@@ -1,9 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function HomePage({ onSelectTable }) {
+  const navigate = useNavigate();
   const [activeIncidents, setActiveIncidents] = useState([]);
   const [orderBreaches, setOrderBreaches] = useState([]);
   const [history, setHistory] = useState([]);
@@ -18,13 +20,51 @@ export default function HomePage({ onSelectTable }) {
   const [impactEntityOpen, setImpactEntityOpen] = useState({});
   const [entityLinkOpen, setEntityLinkOpen] = useState({});
   const [entityLinkDetails, setEntityLinkDetails] = useState({});
+  const [cycleOpen, setCycleOpen] = useState({});
+  const [cycleDetails, setCycleDetails] = useState({});
   const [nightSummary, setNightSummary] = useState(null);
   const [nightLoading, setNightLoading] = useState(false);
   const [nightError, setNightError] = useState(null);
   const [incidentTimeline, setIncidentTimeline] = useState([]);
   const [dqSummary, setDqSummary] = useState(null);
   const [dqAlerts, setDqAlerts] = useState([]);
-  const [nextRefreshAt, setNextRefreshAt] = useState(null);
+  const [clickSummary, setClickSummary] = useState(null);
+  const [clickFailures, setClickFailures] = useState([]);
+  const [clickSlow, setClickSlow] = useState([]);
+
+  const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
+  const quickRouteCards = [
+    {
+      title: "Мониторинг ночи",
+      desc: "Последнее ночное окно, тяжелые таблицы, аномалии и падения.",
+      action: "Открыть Night Ops",
+      onClick: () => navigate("/night-ops"),
+    },
+    {
+      title: "Аналитика лагов",
+      desc: "Понять, где реальная работа, а где ожидание в очереди и лаг Airflow.",
+      action: "Открыть аналитику",
+      onClick: () => navigate("/analytics"),
+    },
+    {
+      title: "Каталог таблиц",
+      desc: "Поиск таблиц, карточка объекта, история запусков и связанные релизы.",
+      action: "Открыть каталог",
+      onClick: () => navigate("/tables"),
+    },
+    {
+      title: "Ландшафт сущностей",
+      desc: "Зависимости между сущностями, покрытие до DM и проблемные связки.",
+      action: "Открыть сущности",
+      onClick: () => navigate("/entities"),
+    },
+    {
+      title: "Изменения и релизы",
+      desc: "Кто менял объекты, по каким задачам и где высокая частота изменений.",
+      action: "Открыть релизы",
+      onClick: () => navigate("/releases"),
+    },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +90,9 @@ export default function HomePage({ onSelectTable }) {
             setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
             setDqSummary(cached.dqSummary || null);
             setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
-            setNextRefreshAt(cached.expiresAt || null);
+            setClickSummary(cached.clickSummary || null);
+            setClickFailures(Array.isArray(cached.clickFailures) ? cached.clickFailures : []);
+            setClickSlow(Array.isArray(cached.clickSlow) ? cached.clickSlow : []);
             setNightLoading(false);
             setLoading(false);
             return;
@@ -66,7 +108,9 @@ export default function HomePage({ onSelectTable }) {
           nightResp,
           timelineResp,
           dqSummaryResp,
-          dqAlertsResp
+          dqAlertsResp,
+          clickResp,
+          clickSlowResp
         ] = await Promise.all([
           fetch(`${API_BASE}/api/incidents/active`),
           fetch(`${API_BASE}/api/orderbreaches`),
@@ -76,7 +120,9 @@ export default function HomePage({ onSelectTable }) {
           fetch(`${API_BASE}/api/night-summary?days=30&limit=10`),
           fetch(`${API_BASE}/api/incidents/timeline?days=7`),
           fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
-          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`)
+          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`),
+          fetch(`${API_BASE}/api/click/summary?days=7&limit=6`),
+          fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=6`)
         ]);
 
         const activeJson = await activeResp.json();
@@ -88,6 +134,8 @@ export default function HomePage({ onSelectTable }) {
         const timelineJson = await timelineResp.json();
         const dqSummaryJson = await dqSummaryResp.json();
         const dqAlertsJson = await dqAlertsResp.json();
+        const clickJson = await clickResp.json();
+        const clickSlowJson = await clickSlowResp.json();
 
         if (!cancelled) {
           const now = new Date();
@@ -109,8 +157,10 @@ export default function HomePage({ onSelectTable }) {
           setIncidentTimeline(Array.isArray(timelineJson) ? timelineJson : []);
           setDqSummary(dqSummaryJson || null);
           setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
+          setClickSummary(clickJson?.summary || null);
+          setClickFailures(Array.isArray(clickJson?.failures) ? clickJson.failures : []);
+          setClickSlow(Array.isArray(clickSlowJson) ? clickSlowJson : []);
           setNightLoading(false);
-          setNextRefreshAt(expiresAt);
           localStorage.setItem(
             "home:payload",
             JSON.stringify({
@@ -127,12 +177,15 @@ export default function HomePage({ onSelectTable }) {
               incidentTimeline: Array.isArray(timelineJson) ? timelineJson : [],
               dqSummary: dqSummaryJson || null,
               dqAlerts: Array.isArray(dqAlertsJson) ? dqAlertsJson : [],
+              clickSummary: clickJson?.summary || null,
+              clickFailures: Array.isArray(clickJson?.failures) ? clickJson.failures : [],
+              clickSlow: Array.isArray(clickSlowJson) ? clickSlowJson : [],
             })
           );
         }
       } catch (e) {
         console.error("HomePage load error:", e);
-        setNightError("Failed to load night summary.");
+        setNightError("Не удалось загрузить ночное окно.");
         setNightLoading(false);
       } finally {
         if (!cancelled) setLoading(false);
@@ -161,21 +214,181 @@ export default function HomePage({ onSelectTable }) {
   const impactLimit = 8;
   const entityLimit = 6;
   const dqLimit = 8;
+  const isLocal =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
+  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("ru-RU") : "—");
   const fmtPct = (value) =>
     Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—";
 
-  const refreshNow = () => {
-    localStorage.removeItem("home:payload");
-    window.location.reload();
+  const lastRefreshLabel = useMemo(() => {
+    const cachedRaw = localStorage.getItem("home:payload");
+    if (!cachedRaw) return "—";
+    try {
+      const cached = JSON.parse(cachedRaw);
+      if (!cached?.ts) return "—";
+      return new Date(cached.ts).toLocaleString("ru-RU");
+    } catch {
+      return "—";
+    }
+  }, [loading]);
+
+  const demoActiveIncidents = useMemo(() => {
+    if (!isLocal || loading || activeIncidents.length) return activeIncidents;
+    return [
+      {
+        entity: "DEMO_ENTITY",
+        failed_tables: 2,
+        last_failure_time: "2026-02-24 04:52",
+        root_tables: ["dm.demo_sales"]
+      }
+    ];
+  }, [isLocal, loading, activeIncidents]);
+
+  const demoDqSummary = useMemo(() => {
+    if (!isLocal || dqSummary) return dqSummary;
+    return { duplicate_tables: 4, row_count_tables: 6, row_count_checked: 42 };
+  }, [isLocal, dqSummary]);
+
+  const clickStatusLabel = (status) => {
+    switch (status) {
+      case "SUCCESS":
+        return "Успешно";
+      case "FAILED":
+        return "Ошибка";
+      case "RUNNING":
+        return "В процессе";
+      case "UP_FOR_RETRY":
+        return "Повтор";
+      default:
+        return status || "—";
+    }
   };
 
-  const nextRefreshLabel = useMemo(() => {
-    if (!nextRefreshAt) return "—";
-    const dt = new Date(nextRefreshAt);
-    return dt.toLocaleString();
-  }, [nextRefreshAt]);
+  const demoDqAlerts = useMemo(() => {
+    if (!isLocal || dqAlerts.length) return dqAlerts;
+    return [
+      {
+        table_schema: "dm",
+        table_name: "demo_sales",
+        entity_name: "DEMO_ENTITY",
+        type: "row_count",
+        delta_pct: 18.4,
+        metric_value: 0,
+        dt: "2026-02-24"
+      }
+    ];
+  }, [isLocal, dqAlerts]);
+
+  const toggleCycleDetails = async (cycle, key) => {
+    setCycleOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    if (cycleDetails[key]?.state || cycleOpen[key]) return;
+
+    const entities = Array.isArray(cycle?.nodes) ? cycle.nodes : [];
+    if (!entities.length) return;
+
+    const maxEntities = 6;
+    const limitedEntities = entities.slice(0, maxEntities);
+    setCycleDetails((prev) => ({ ...prev, [key]: { state: "loading" } }));
+
+    try {
+      const responses = await Promise.all(
+        limitedEntities.map((name) =>
+          fetch(`${API_BASE}/api/graph/entity/${encodeURIComponent(name)}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((payload) => ({ name, payload }))
+        )
+      );
+
+      const entityTables = responses.map(({ name, payload }) => {
+        const lower = (name || "").toLowerCase();
+        const nodes = payload?.nodes || [];
+        const tables = nodes
+          .filter((node) => {
+            const entities = node.entities || [];
+            const entityMatch = entities.some((e) => String(e).toLowerCase() === lower);
+            const singleMatch = String(node.entity || "").toLowerCase() === lower;
+            return entityMatch || singleMatch;
+          })
+          .map((node) => node.id)
+          .filter(Boolean);
+        const uniqueTables = Array.from(new Set(tables));
+        return { name, tables: uniqueTables };
+      });
+
+      setCycleDetails((prev) => ({
+        ...prev,
+        [key]: {
+          state: "ready",
+          entities: entityTables,
+          hiddenCount: Math.max(entities.length - maxEntities, 0),
+        },
+      }));
+    } catch (err) {
+      setCycleDetails((prev) => ({ ...prev, [key]: { state: "error" } }));
+    }
+  };
+
+  const demoNightSummary = useMemo(() => {
+    if (!isLocal || nightSummary) return nightSummary;
+    return {
+      summary: { runs_count: 124, tables_count: 86, entities_count: 14, total_duration_minutes: 612 },
+      failed_summary: { runs_count: 3 },
+      top_runs: [
+        { table_fqn: "dm.demo_sales", duration_minutes: 38.2, entity_name: "DEMO_ENTITY", table_id: 101 }
+      ],
+      anomalies: [
+        { table_fqn: "ods.demo_orders", duration_minutes: 12.1, ratio: 1.7, entity_name: "DEMO_ENTITY", table_id: 55 }
+      ],
+      failed_runs: [
+        { table_fqn: "dds.demo_fail", entity_name: "DEMO_ENTITY", table_id: 88, message: "Timeout" }
+      ],
+      hourly: [{ hour: 4, total_duration_minutes: 106 }]
+    };
+  }, [isLocal, nightSummary]);
+
+  const demoOrderBreaches = useMemo(() => {
+    if (!isLocal || orderBreaches.length) return orderBreaches;
+    return [
+      {
+        target_fqn: "dm.demo_sales",
+        worst_upstream: "dds.demo_source",
+        worst_upstream_time: "2026-02-24 04:48",
+        target_last_load: "2026-02-24 04:30",
+        gap_minutes: 18,
+        severity: "MAJOR"
+      }
+    ];
+  }, [isLocal, orderBreaches]);
+
+  const demoEntityMutual = useMemo(() => {
+    if (!isLocal || entityMutual.length) return entityMutual;
+    return [
+      { a: "SALES", b: "FINANCE", edges_ab_count: 2, edges_ba_count: 1, edges_ab_sample: [], edges_ba_sample: [] }
+    ];
+  }, [isLocal, entityMutual]);
+
+  const demoHistory = useMemo(() => {
+    if (!isLocal || history.length) return history;
+    return [
+      { table: "dm.demo_sales", count: 3, last_incident: "2026-02-23 06:10" },
+      { table: "ods.demo_orders", count: 2, last_incident: "2026-02-22 04:58" }
+    ];
+  }, [isLocal, history]);
+
+  const demoTimeline = useMemo(() => {
+    if (!isLocal || incidentTimeline.length) return incidentTimeline;
+    return [
+      { day: "2026-02-18", count: 1 },
+      { day: "2026-02-19", count: 0 },
+      { day: "2026-02-20", count: 2 },
+      { day: "2026-02-21", count: 1 },
+      { day: "2026-02-22", count: 1 },
+      { day: "2026-02-23", count: 2 },
+      { day: "2026-02-24", count: 1 }
+    ];
+  }, [isLocal, incidentTimeline]);
 
   const sortLayers = (a, b) => {
     const aIndex = layerOrder.indexOf(a);
@@ -211,7 +424,7 @@ export default function HomePage({ onSelectTable }) {
       console.error("Impact load error:", err);
       setImpactMap((prev) => ({
         ...prev,
-        [target]: { state: "error", rows: [], error: "Failed to load impact list." },
+        [target]: { state: "error", rows: [], error: "Не удалось загрузить список влияния." },
       }));
     }
   };
@@ -247,7 +460,7 @@ export default function HomePage({ onSelectTable }) {
     fetch(
       `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=true`
     )
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load edges")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить связи")))
       .then((data) => {
         setEntityLinkDetails((prev) => ({
           ...prev,
@@ -292,69 +505,72 @@ export default function HomePage({ onSelectTable }) {
   }, [history]);
 
   const nightPeakHour = useMemo(() => {
-    if (!nightSummary?.hourly?.length) return null;
-    const sorted = [...nightSummary.hourly].sort(
+    if (!demoNightSummary?.hourly?.length) return null;
+    const sorted = [...demoNightSummary.hourly].sort(
       (a, b) => (b.total_duration_minutes || 0) - (a.total_duration_minutes || 0)
     );
     return sorted[0];
-  }, [nightSummary]);
+  }, [demoNightSummary]);
 
   const timelineMax = useMemo(() => {
-    if (!incidentTimeline.length) return 0;
-    return Math.max(...incidentTimeline.map((d) => d.count || 0));
-  }, [incidentTimeline]);
+    if (!demoTimeline.length) return 0;
+    return Math.max(...demoTimeline.map((d) => d.count || 0));
+  }, [demoTimeline]);
 
   const healthScore = useMemo(() => {
     const base = 100;
-    const incidentPenalty = Math.min(activeIncidents.length * 15, 45);
+    const incidentPenalty = Math.min(demoActiveIncidents.length * 15, 45);
     const errorPenalty = metrics?.error_count ? Math.min(metrics.error_count * 2, 30) : 0;
-    const breachPenalty = Math.min(orderBreaches.length * 3, 25);
+    const breachPenalty = Math.min(demoOrderBreaches.length * 3, 25);
     const score = Math.max(0, Math.round(base - incidentPenalty - errorPenalty - breachPenalty));
-    let level = "Healthy";
-    if (score < 65) level = "Critical";
-    else if (score < 85) level = "Degraded";
-    return { score, level };
-  }, [activeIncidents.length, metrics?.error_count, orderBreaches.length]);
+    let level = "Норма";
+    let levelKey = "healthy";
+    if (score < 65) {
+      level = "Критично";
+      levelKey = "critical";
+    } else if (score < 85) {
+      level = "Риск";
+      levelKey = "degraded";
+    }
+    return { score, level, levelKey };
+  }, [demoActiveIncidents.length, metrics?.error_count, demoOrderBreaches.length]);
 
   return (
     <div className="container cc-page">
       <section className="cc-hero">
         <div className="cc-hero-main">
-          <div className="cc-hero-title">DWH Control Center</div>
+          <div className="cc-hero-title">Операционный обзор DWH</div>
           <div className="cc-hero-subtitle">
-            Operational overview of incidents, load reliability, and dependency risks.
+            Инциденты, качество данных, надежность загрузок и риски зависимостей.
           </div>
           <div className="cc-hero-status">
-            <span className={`status-dot ${activeIncidents.length ? "degraded" : ""}`} />
+            <span className={`status-dot ${demoActiveIncidents.length ? "degraded" : ""}`} />
             <span className="status-text">
-              {activeIncidents.length ? "Active incidents detected" : "System is operating normally"}
+              {demoActiveIncidents.length ? "Есть активные инциденты" : "Система работает стабильно"}
             </span>
             {incidentTrend && (
               <span className="status-meta">
-                Incident trend:&nbsp;
-                {incidentTrend === "up" && "up ↑"}
-                {incidentTrend === "down" && "down ↓"}
-                {incidentTrend === "stable" && "stable"}
+                Тренд инцидентов:&nbsp;
+                {incidentTrend === "up" && "рост ↑"}
+                {incidentTrend === "down" && "снижение ↓"}
+                {incidentTrend === "stable" && "стабильно"}
               </span>
             )}
           </div>
           <div className="cc-hero-refresh">
-            <span className="muted">Next refresh at 09:00</span>
-            <span className="muted">{nextRefreshLabel}</span>
-            <button className="btn btn-secondary" onClick={refreshNow}>
-              Refresh now
-            </button>
+            <span className="muted">Последнее обновление</span>
+            <span className="muted">{lastRefreshLabel}</span>
           </div>
         </div>
         <div className="cc-hero-health">
           <div className="health-card">
-            <div className="health-label">DWH health</div>
+            <div className="health-label">Здоровье DWH</div>
             <div className="health-score">{healthScore.score}</div>
-            <div className={`health-badge health-${healthScore.level.toLowerCase()}`}>
+            <div className={`health-badge health-${healthScore.levelKey}`}>
               {healthScore.level}
             </div>
             <div className="health-meta">
-              Based on active incidents, failed loads, and order breaches.
+              На основе инцидентов, сбоев и нарушений порядка загрузки.
             </div>
           </div>
         </div>
@@ -364,181 +580,73 @@ export default function HomePage({ onSelectTable }) {
         <section className="cc-overview-bar">
           <div className="overview-item">
             <span className="overview-value">{metrics.total_tables}</span>
-            <span className="overview-label">Tables</span>
+            <span className="overview-label">Таблиц</span>
           </div>
 
           <div className="overview-item danger">
             <span className="overview-value">{metrics.error_count}</span>
-            <span className="overview-label">Load failures (24h)</span>
+            <span className="overview-label">Сбоев загрузки (24ч)</span>
           </div>
 
           <div className="overview-item">
             <span className="overview-value">
               {metrics.avg_duration_minutes ?? "—"}
             </span>
-            <span className="overview-label">Avg duration (24h), min</span>
+            <span className="overview-label">Средняя длит. (24ч), мин</span>
           </div>
 
           <div className="overview-item">
             <span className="overview-value">{metrics.active_entities}</span>
-            <span className="overview-label">Entities</span>
+            <span className="overview-label">Сущностей</span>
           </div>
         </section>
       )}
 
-      <section className="cc-surface">
-        <div className="section-title">Why this matters</div>
-        <div className="cc-hero-copy">
-          Use this page to identify incidents that block analytics, spot late upstream loads,
-          and prioritize entities at risk. The health score summarizes operational stability at a glance.
+      <section className="cc-surface home-guide-surface">
+        <div className="section-title">Куда идти дальше</div>
+        <div className="muted home-guide-copy">
+          Главная страница теперь отвечает на вопрос "что важно прямо сейчас", а детали вынесены в профильные экраны.
+        </div>
+        <div className="home-route-grid">
+          {quickRouteCards.map((card) => (
+            <button key={card.title} className="home-route-card" onClick={card.onClick}>
+              <div className="home-route-title">{card.title}</div>
+              <div className="home-route-desc">{card.desc}</div>
+              <div className="home-route-action">{card.action} →</div>
+            </button>
+          ))}
         </div>
       </section>
-
-      {/* ===== ACTIVE INCIDENTS ===== */}
-      {loading && <div className="muted">Loading...</div>}
-
-      {!loading && activeIncidents.length === 0 && (
-        <section className="cc-surface">
-          <div className="system-ok system-ok-compact">
-            <div className="system-ok-icon">✓</div>
-            <div>
-              <div className="system-ok-title">No active incidents</div>
-              <div className="system-ok-sub">
-                No failures in the last 24 hours
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {!loading && activeIncidents.length > 0 && (
-        <section className="cc-surface">
-          <div className="section-title">
-            Active incidents
-            <span className="section-meta">{activeIncidents.length}</span>
-          </div>
-
-          <div className="entity-grid">
-            {activeIncidents.map((i, idx) => (
-              <div
-                key={idx}
-                className="entity-card critical clickable"
-                onClick={() =>
-                  onSelectTable(
-                    { view: "incident", table: i.root_tables[0] },
-                    "home"
-                  )
-                }
-              >
-                <div className="entity-card-head">
-                  <div className="entity-name">{i.entity}</div>
-                  <span className="pill pill-critical">CRITICAL</span>
-                </div>
-
-                <div className="entity-meta">
-                  Failed tables: {i.failed_tables}
-                </div>
-
-                <div className="entity-meta">
-                  Last failure: {i.last_failure_time}
-                </div>
-
-                <div className="incident-hint">
-                  Click to review incident →
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* ===== DATA QUALITY ===== */}
-      {!loading && (
-        <section className="cc-surface">
-          <div className="section-title">
-            Data quality (last 7 days)
-            <span className="section-meta">{dqAlerts.length}</span>
-          </div>
-          {dqSummary && (
-            <div className="dq-summary-grid">
-              <div className="dq-summary-card">
-                <div className="dq-summary-label">Tables with duplicates</div>
-                <div className="dq-summary-value">{dqSummary.duplicate_tables ?? 0}</div>
-              </div>
-              <div className="dq-summary-card">
-                <div className="dq-summary-label">Row count deviations (median of last 7 checks)</div>
-                <div className="dq-summary-value">{dqSummary.row_count_tables ?? 0}</div>
-                <div className="dq-summary-hint muted">
-                  Checked: {dqSummary.row_count_checked ?? 0}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {dqAlerts.length === 0 && (
-            <div className="muted">No data quality alerts detected.</div>
-          )}
-          {dqAlerts.length > 0 && (
-            <div className="dq-alerts-list">
-              {dqAlerts.slice(0, dqLimit).map((row, idx) => {
-                const fqn = `${row.table_schema}.${row.table_name}`;
-                return (
-                  <button
-                    key={`${fqn}-${idx}`}
-                    className="dq-alert-row"
-                    onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
-                  >
-                    <div className="dq-alert-main">
-                      <div className="dq-alert-title mono">{fqn}</div>
-                      <div className="dq-alert-sub muted">
-                        {row.entity_name || "—"} · {row.type === "duplicate_check" ? "Duplicate" : "Row count"}
-                      </div>
-                    </div>
-                    <div className="dq-alert-meta">
-                      <span className="dq-alert-pill">
-                        {row.type === "duplicate_check"
-                          ? `${fmtInt(row.metric_value)} dupes`
-                          : `Δ ${fmtPct(row.delta_pct)}`}
-                      </span>
-                      <span className="dq-alert-date muted">{row.dt || "—"}</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
 
       {/* ===== NIGHT SUMMARY ===== */}
       {!loading && (
         <section className="cc-surface">
-          <div className="section-title">Night summary (last window)</div>
-          {nightLoading && <div className="muted">Loading night summary...</div>}
+          <div className="section-title">Ночное окно (последний запуск)</div>
+          {nightLoading && <div className="muted">Загрузка ночного окна...</div>}
           {nightError && <div className="dep-error-title">{nightError}</div>}
-          {!nightLoading && !nightError && nightSummary && (
+          {!nightLoading && !nightError && demoNightSummary && (
             <>
               <div className="night-kpis">
                 <div className="night-kpi-card">
-                  <div className="night-kpi-label">Runs</div>
-                  <div className="night-kpi-value">{nightSummary?.summary?.runs_count ?? 0}</div>
+                  <div className="night-kpi-label">Запусков</div>
+                  <div className="night-kpi-value">{demoNightSummary?.summary?.runs_count ?? 0}</div>
                 </div>
                 <div className="night-kpi-card">
-                  <div className="night-kpi-label">Tables</div>
-                  <div className="night-kpi-value">{nightSummary?.summary?.tables_count ?? 0}</div>
+                  <div className="night-kpi-label">Таблиц</div>
+                  <div className="night-kpi-value">{demoNightSummary?.summary?.tables_count ?? 0}</div>
                 </div>
                 <div className="night-kpi-card">
-                  <div className="night-kpi-label">Entities</div>
-                  <div className="night-kpi-value">{nightSummary?.summary?.entities_count ?? 0}</div>
+                  <div className="night-kpi-label">Сущностей</div>
+                  <div className="night-kpi-value">{demoNightSummary?.summary?.entities_count ?? 0}</div>
                 </div>
                 <div className="night-kpi-card">
-                  <div className="night-kpi-label">Total duration</div>
+                  <div className="night-kpi-label">Суммарно</div>
                   <div className="night-kpi-value">
-                    {nightSummary?.summary?.total_duration_minutes ?? 0} min
+                    {demoNightSummary?.summary?.total_duration_minutes ?? 0} мин
                   </div>
                 </div>
                 <div className="night-kpi-card">
-                  <div className="night-kpi-label">Peak hour</div>
+                  <div className="night-kpi-label">Пик</div>
                   <div className="night-kpi-value">
                     {nightPeakHour ? String(nightPeakHour.hour).padStart(2, "0") + ":00" : "—"}
                   </div>
@@ -546,10 +654,10 @@ export default function HomePage({ onSelectTable }) {
               </div>
               <div className="night-columns">
                 <div className="night-panel">
-                  <div className="night-panel-title">Longest runs</div>
-                  <div className="night-panel-sub muted">Top 5 by duration</div>
+                  <div className="night-panel-title">Самые долгие</div>
+                  <div className="night-panel-sub muted">Топ-5 по длительности</div>
                   <div className="night-list">
-                    {(nightSummary.top_runs || []).slice(0, 5).map((row) => (
+                    {(demoNightSummary.top_runs || []).slice(0, 5).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -558,24 +666,24 @@ export default function HomePage({ onSelectTable }) {
                         <div className="night-row-main">
                           <div className="night-row-title mono">{row.table_fqn}</div>
                           <div className="night-row-sub muted">
-                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                            Сущность: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
                           </div>
                         </div>
                         <div className="night-row-meta">
-                          <span className="night-row-badge">{row.duration_minutes ?? "—"} min</span>
+                          <span className="night-row-badge">{row.duration_minutes ?? "—"} мин</span>
                         </div>
                       </button>
                     ))}
-                    {!nightSummary?.top_runs?.length && (
-                      <div className="muted">No runs found.</div>
+                    {!demoNightSummary?.top_runs?.length && (
+                      <div className="muted">Запусков не найдено.</div>
                     )}
                   </div>
                 </div>
                 <div className="night-panel">
-                  <div className="night-panel-title">Anomalies vs p95</div>
-                  <div className="night-panel-sub muted">Runs &gt; 1.5x p95</div>
+                  <div className="night-panel-title">Аномалии vs p95</div>
+                  <div className="night-panel-sub muted">Запуски &gt; 1.5× p95</div>
                   <div className="night-list">
-                    {(nightSummary.anomalies || []).slice(0, 5).map((row) => (
+                    {(demoNightSummary.anomalies || []).slice(0, 5).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -584,27 +692,27 @@ export default function HomePage({ onSelectTable }) {
                         <div className="night-row-main">
                           <div className="night-row-title mono">{row.table_fqn}</div>
                           <div className="night-row-sub muted">
-                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                            Сущность: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
                           </div>
                         </div>
                         <div className="night-row-meta">
-                          <span className="night-row-badge">{row.duration_minutes ?? "—"} min</span>
+                          <span className="night-row-badge">{row.duration_minutes ?? "—"} мин</span>
                           <span className="night-row-badge night-row-badge-warn">{row.ratio ?? "—"}x</span>
                         </div>
                       </button>
                     ))}
-                    {!nightSummary?.anomalies?.length && (
-                      <div className="muted">No anomalies.</div>
+                    {!demoNightSummary?.anomalies?.length && (
+                      <div className="muted">Аномалий нет.</div>
                     )}
                   </div>
                 </div>
                 <div className="night-panel">
-                  <div className="night-panel-title">Failed runs</div>
+                  <div className="night-panel-title">Падения</div>
                   <div className="night-panel-sub muted">
-                    {nightSummary?.failed_summary?.runs_count ?? 0} failures
+                    {demoNightSummary?.failed_summary?.runs_count ?? 0} ошибок
                   </div>
                   <div className="night-list">
-                    {(nightSummary.failed_runs || []).slice(0, 5).map((row) => (
+                    {(demoNightSummary.failed_runs || []).slice(0, 5).map((row) => (
                       <button
                         key={`${row.table_fqn}-${row.start}`}
                         className="night-row"
@@ -613,7 +721,7 @@ export default function HomePage({ onSelectTable }) {
                         <div className="night-row-main">
                           <div className="night-row-title mono">{row.table_fqn}</div>
                           <div className="night-row-sub muted">
-                            Entity: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
+                            Сущность: {row.entity_name || "—"} · ID {row.table_id ?? "—"}
                           </div>
                           <div className="night-row-message">
                             {row.message || "FAILED"}
@@ -621,35 +729,35 @@ export default function HomePage({ onSelectTable }) {
                         </div>
                       </button>
                     ))}
-                    {!nightSummary?.failed_runs?.length && (
-                      <div className="muted">No failed runs.</div>
+                    {!demoNightSummary?.failed_runs?.length && (
+                      <div className="muted">Сбоев нет.</div>
                     )}
                   </div>
                 </div>
               </div>
             </>
           )}
-          {!nightLoading && !nightError && !nightSummary && (
-            <div className="muted">Night summary is unavailable.</div>
+          {!nightLoading && !nightError && !demoNightSummary && (
+            <div className="muted">Ночное окно недоступно.</div>
           )}
         </section>
       )}
 
       {/* ===== ORDER BREACHES ===== */}
-      {!loading && orderBreaches.length > 0 && (
+      {!loading && demoOrderBreaches.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Load order breaches
-            <span className="section-meta">{orderBreaches.length}</span>
+            Нарушения порядка загрузки
+            <span className="section-meta">{demoOrderBreaches.length}</span>
           </div>
           <div className="order-list">
-            {orderBreaches.slice(0, 4).map((breach) => (
+            {demoOrderBreaches.slice(0, 4).map((breach) => (
               <article key={breach.target_fqn} className="order-row">
                 <header className="order-row-header">
                   <div>
                     <div className="order-row-target mono" title={breach.target_fqn}>{breach.target_fqn}</div>
                     <div className="order-row-meta">
-                      Upstream started later: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
+                      Источник стартовал позже: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
                     </div>
                   </div>
                   <div className={`order-pill order-pill-${breach.severity?.toLowerCase() || "warning"}`}>
@@ -664,9 +772,9 @@ export default function HomePage({ onSelectTable }) {
 
                 </div>
                 <p className="order-row-text">
-                  {breach.worst_upstream} finished at {formatTime(breach.worst_upstream_time)}, while {breach.target_fqn} started
+                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} стартовала
                   {" "}
-                  {formatTime(breach.target_last_load)}. Delay +{breach.gap_minutes} min.
+                  {formatTime(breach.target_last_load)}. Разрыв +{breach.gap_minutes} мин.
                 </p>
 
 
@@ -675,22 +783,22 @@ export default function HomePage({ onSelectTable }) {
                     className="btn btn-secondary"
                     onClick={() => onSelectTable({ view: "table_info", table: breach.target_fqn }, "home")}
                   >
-                    Table card
+                    Карточка
                   </button>
                   <button
                     className="btn btn-ghost"
                     onClick={() => toggleImpact(breach.target_fqn)}
                   >
-                    {impactOpen[breach.target_fqn] ? "Hide impact" : "Show impact"}
+                    {impactOpen[breach.target_fqn] ? "Скрыть влияние" : "Показать влияние"}
                   </button>
                 </div>
                 {impactOpen[breach.target_fqn] && (
                   <div className="order-impact">
                     <div className="order-impact-header">
                       <div>
-                        <div className="order-impact-title">Affected tables</div>
+                        <div className="order-impact-title">Зависимые таблицы</div>
                         <div className="muted">
-                          Built from dependencies of {breach.target_fqn}
+                          Построено по зависимостям {breach.target_fqn}
                         </div>
                       </div>
                       <div className="order-impact-count">
@@ -698,17 +806,17 @@ export default function HomePage({ onSelectTable }) {
                       </div>
                     </div>
                     {impactMap[breach.target_fqn]?.state === "loading" && (
-                      <div className="muted">Loading impact...</div>
+                      <div className="muted">Загрузка влияния...</div>
                     )}
                     {impactMap[breach.target_fqn]?.state === "error" && (
                       <div className="card dep-error">
-                        <div className="dep-error-title">Load error</div>
+                        <div className="dep-error-title">Ошибка загрузки</div>
                         <div className="muted">{impactMap[breach.target_fqn]?.error}</div>
                       </div>
                     )}
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length === 0 && (
-                        <div className="card muted">No dependent tables.</div>
+                        <div className="card muted">Нет зависимых таблиц.</div>
                       )}
                     {impactMap[breach.target_fqn]?.state === "ready" &&
                       impactMap[breach.target_fqn]?.rows?.length > 0 && (() => {
@@ -717,7 +825,7 @@ export default function HomePage({ onSelectTable }) {
                           const fqn = `${row.schema}.${row.table_name}`;
                           const label = layerLabel(fqn);
                           const entityKey = row.entity_id ? `id:${row.entity_id}` : `name:${row.entity_name || fqn}`;
-                          const entityName = row.entity_name || (row.entity_id ? `Entity ${row.entity_id}` : fqn);
+                          const entityName = row.entity_name || (row.entity_id ? `Сущность ${row.entity_id}` : fqn);
                           const entry = acc[entityKey] ??= {
                             key: entityKey,
                             name: entityName,
@@ -790,9 +898,9 @@ export default function HomePage({ onSelectTable }) {
                                       <span className="muted">{item.entity || "—"}</span>
                                       <span className="order-impact-path">
                                         {item.path && item.path.length > 2
-                                          ? `via ${item.path.slice(1, -1).join(" → ")}`
+                                          ? `через ${item.path.slice(1, -1).join(" → ")}`
                                           : item.path
-                                            ? "direct dependency"
+                                            ? "прямая зависимость"
                                             : "—"}
                                       </span>
                                     </div>
@@ -803,7 +911,7 @@ export default function HomePage({ onSelectTable }) {
                                     className="order-impact-more"
                                     onClick={() => toggleImpactGroup(breach.target_fqn, label)}
                                   >
-                                    {isOpen ? "Collapse list" : `Show all (${filteredItems.length})`}
+                                    {isOpen ? "Свернуть список" : `Показать все (${filteredItems.length})`}
                                   </button>
                                 )}
                               </div>
@@ -812,12 +920,12 @@ export default function HomePage({ onSelectTable }) {
                         return (
                           <>
                             <div className="order-impact-note muted">
-                              The list includes indirect dependencies. Each table shows the path from the source.
+                              Есть косвенные зависимости — в пути показаны промежуточные таблицы.
                             </div>
                             <div className="order-runbook">
-                              <div className="order-runbook-title">Entity rerun order</div>
+                              <div className="order-runbook-title">Порядок пересчета сущностей</div>
                               <div className="muted order-runbook-sub">
-                                Recommended recalculation order after {breach.target_fqn}
+                                Рекомендуемый порядок пересчета после {breach.target_fqn}
                               </div>
                               <ol className="order-runbook-list">
                                 {visibleEntities.map((entity, idx) => (
@@ -836,7 +944,7 @@ export default function HomePage({ onSelectTable }) {
                                       </span>
                                     </div>
                                     <div className="order-runbook-meta">
-                                      Tables: {entity.tables.length} · nearest dependency: {entity.minDepth} step
+                                      Таблиц: {entity.tables.length} · ближайшая зависимость: {entity.minDepth} шаг
                                     </div>
                                     <div className="order-runbook-tables">
                                       {entity.tables.slice(0, 3).map((table) => (
@@ -859,8 +967,8 @@ export default function HomePage({ onSelectTable }) {
                                   onClick={() => toggleImpactEntities(breach.target_fqn)}
                                 >
                                   {showAllEntities
-                                    ? "Collapse list"
-                                    : `Show all entities (${entityList.length})`}
+                                    ? "Свернуть список"
+                                    : `Показать все сущности (${entityList.length})`}
                                 </button>
                               )}
                             </div>
@@ -878,191 +986,269 @@ export default function HomePage({ onSelectTable }) {
         </section>
       )}
 
-      {/* ===== ENTITY CYCLES ===== */}
-      {!loading && (entityCycles.length > 0 || entityMutual.length > 0) && (
+      {/* ===== CLICKHOUSE LOADS ===== */}
+      {!loading && clickSummary && (
         <section className="cc-surface">
           <div className="section-title">
-            Entity cycles
-            <span className="section-meta">
-              {entityCycles.length + entityMutual.length}
-            </span>
+            ClickHouse загрузки (7 дней)
+            <span className="section-meta">{clickSummary.total_runs || 0}</span>
           </div>
-          <div className="order-list">
-            {entityCycles.slice(0, 4).map((cycle, idx) => (
-              <article key={`cycle-${idx}`} className="order-row">
-                <header className="order-row-header">
-                  <div>
-                    <div className="order-row-target mono">Cycle</div>
-                    <div className="order-row-meta">
-                      Entities: {cycle.size}
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Источник: ClickHouse (этапы S3 и загрузка в ClickHouse).
+          </div>
+          <div className="entity-grid">
+            <div className="entity-card">
+              <div className="entity-name">Объектов</div>
+              <div className="entity-meta">{clickSummary.total_tables || 0}</div>
+            </div>
+            <div className="entity-card critical">
+              <div className="entity-name">Ошибки</div>
+              <div className="entity-meta">{clickSummary.failed_runs || 0} запусков</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Успешных объектов</div>
+              <div className="entity-meta">{clickSummary.ok_tables || 0}</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Запусков</div>
+              <div className="entity-meta">{clickSummary.total_runs || 0}</div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Средняя длительность</div>
+              <div className="entity-meta">
+                {Number.isFinite(clickSummary.avg_duration_min) ? `${clickSummary.avg_duration_min} мин` : "—"}
+              </div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Средний лаг</div>
+              <div className="entity-meta">
+                {Number.isFinite(clickSummary.avg_lag_min) ? `${clickSummary.avg_lag_min} мин` : "—"}
+              </div>
+            </div>
+            <div className="entity-card">
+              <div className="entity-name">Последняя выгрузка</div>
+              <div className="entity-meta">{clickSummary.last_finish || "—"}</div>
+            </div>
+          </div>
+          <div className="muted" style={{ marginTop: 10 }}>
+            В процессе: {clickSummary.running_runs || 0} · Повторы: {clickSummary.retry_runs || 0}
+          </div>
+
+          {clickFailures.length > 0 && (
+            <div className="order-list" style={{ marginTop: 12 }}>
+              {clickFailures.map((row, idx) => {
+                const fqn = `${row.schema_name}.${row.table_name}`;
+                return (
+                  <article key={`${fqn}-${idx}`} className="order-row">
+                    <header className="order-row-header">
+                      <div>
+                        <div className="order-row-target mono">{fqn}</div>
+                        <div className="order-row-meta">
+                          {row.dag_name || "—"} · {row.dag_run || "—"}
+                        </div>
+                      </div>
+                      <div className={`order-pill order-pill-warning status-${String(row.status || "").toLowerCase()}`}>
+                        {clickStatusLabel(row.status)}
+                      </div>
+                    </header>
+                    <div className="order-row-text">
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} · Работа {formatMinutes(row.actual_duration_min ?? row.duration_min)} · Лаг {formatMinutes(row.lag_duration_min ?? 0)}
                     </div>
-                  </div>
-                  <div className="order-pill order-pill-warning">CYCLE</div>
-                </header>
-                <div className="order-row-chain">
-                  {cycle.nodes.slice(0, 6).map((node, i) => (
-                    <span key={`${node}-${i}`} className="order-node mono">{node}</span>
-                  ))}
-                  {cycle.nodes.length > 6 && <span className="order-node">…</span>}
-                </div>
-              </article>
-            ))}
-            {entityMutual.slice(0, 4).map((pair, idx) => {
-              const key = `${pair.a}::${pair.b}`;
-              const details = entityLinkDetails[key];
-              return (
-              <article key={`mutual-${idx}`} className="order-row">
-                <header className="order-row-header">
-                  <div>
-                    <div className="order-row-target mono">Mutual dependency</div>
-                    <div className="order-row-meta">
-                      {pair.a} ↔ {pair.b}
-                    </div>
-                  </div>
-                  <div className="order-pill order-pill-warning">MUTUAL</div>
-                </header>
-                <div className="order-row-chain">
-                  <span className="order-node mono">{pair.a}</span>
-                  <span className="order-arrow">↔</span>
-                  <span className="order-node mono">{pair.b}</span>
-                </div>
-                <div className="order-row-actions">
-                  <button className="btn btn-ghost" onClick={() => toggleEntityLink(pair, key)}>
-                    {entityLinkOpen[key] ? "Hide tables" : "Show tables"}
-                  </button>
-                  <div className="muted">
-                    {pair.edges_ab_count || 0} → {pair.edges_ba_count || 0}
-                  </div>
-                </div>
-                {entityLinkOpen[key] && (
-                  <div className="order-impact">
-                    <div className="order-impact-title">Connecting tables</div>
-                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
-                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
-                      <span className="order-arrow">→</span>
-                      <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
-                    </div>
-                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                      {(details?.edges_ab || pair.edges_ab_sample || []).map((edge, edgeIdx) => (
-                        <span key={`ab-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}
-                          >
-                            {edge.source}
-                          </button>
-                          {edge.source_entities && edge.source_entities.length > 0 && (
-                            <span className="muted">[{edge.source_entities.join(", ")}]</span>
-                          )}
-                          <span className="order-arrow">→</span>
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}
-                          >
-                            {edge.target}
-                          </button>
-                          {edge.target_entities && edge.target_entities.length > 0 && (
-                            <span className="muted">[{edge.target_entities.join(", ")}]</span>
-                          )}
-                        </span>
-                      ))}
-                      {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
-                        <span className="muted">No examples for {pair.a} → {pair.b}</span>
-                      )}
-                    </div>
-                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                      <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
-                      <span className="order-arrow">→</span>
-                      <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
-                    </div>
-                    <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                      {(details?.edges_ba || pair.edges_ba_sample || []).map((edge, edgeIdx) => (
-                        <span key={`ba-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}
-                          >
-                            {edge.source}
-                          </button>
-                          {edge.source_entities && edge.source_entities.length > 0 && (
-                            <span className="muted">[{edge.source_entities.join(", ")}]</span>
-                          )}
-                          <span className="order-arrow">→</span>
-                          <button
-                            className="btn btn-ghost"
-                            onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}
-                          >
-                            {edge.target}
-                          </button>
-                          {edge.target_entities && edge.target_entities.length > 0 && (
-                            <span className="muted">[{edge.target_entities.join(", ")}]</span>
-                          )}
-                        </span>
-                      ))}
-                      {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (
-                        <span className="muted">No examples for {pair.b} → {pair.a}</span>
-                      )}
-                    </div>
-                    <div className="order-row-actions" style={{ marginTop: 8 }}>
+                    {(row.problem_area || row.stage_name) && (
+                      <div className="order-row-meta" style={{ marginTop: 6 }}>
+                        {row.problem_area ? `Проблема: ${row.problem_area}` : "Проблема: —"}
+                        {row.stage_name ? ` · Этап: ${row.stage_name}` : ""}
+                      </div>
+                    )}
+                    {row.error_text && (
+                      <div className="order-row-meta" style={{ marginTop: 6 }}>
+                        {row.error_text}
+                      </div>
+                    )}
+                    <div className="order-row-actions">
                       <button
                         className="btn btn-secondary"
-                        onClick={() => loadEntityLinkDetails(pair, key)}
+                        onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
                       >
-                        Show all tables
+                        Карточка
                       </button>
-                      {details?.state === "loading" && <span className="muted">Loading...</span>}
-                      {details?.state === "error" && <span className="muted">Load error</span>}
                     </div>
-                  </div>
-                )}
-              </article>
-            )})}
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+          {clickSlow.length > 0 && (
+            <div className="order-list" style={{ marginTop: 16 }}>
+              <div className="section-subtitle">Долгие выгрузки (топ 6)</div>
+              {clickSlow.map((row, idx) => {
+                const fqn = `${row.schema_name}.${row.table_name}`;
+                return (
+                  <article key={`${fqn}-${idx}`} className="order-row">
+                    <header className="order-row-header">
+                      <div>
+                        <div className="order-row-target mono">{fqn}</div>
+                        <div className="order-row-meta">
+                          {row.stage_name} · {row.dag_name || "—"}
+                        </div>
+                      </div>
+                      <div className={`order-pill status-${String(row.status || "").toLowerCase()}`}>
+                        {clickStatusLabel(row.status)}
+                      </div>
+                    </header>
+                    <div className="order-row-text">
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} ·{" "}
+                      {row.duration_min !== null && row.duration_min !== undefined ? `${row.duration_min} мин` : "—"}
+                    </div>
+                    <div className="order-row-actions">
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                      >
+                        Карточка
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ===== ACTIVE INCIDENTS ===== */}
+      {loading && <div className="muted">Загрузка...</div>}
+
+      {!loading && demoActiveIncidents.length === 0 && (
+        <section className="cc-surface">
+          <div className="system-ok system-ok-compact">
+            <div className="system-ok-icon">✓</div>
+            <div>
+              <div className="system-ok-title">Активных инцидентов нет</div>
+              <div className="system-ok-sub">
+                За последние 24 часа сбоев не было
+              </div>
+            </div>
           </div>
+        </section>
+      )}
+
+      {!loading && demoActiveIncidents.length > 0 && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Активные инциденты
+            <span className="section-meta">{demoActiveIncidents.length}</span>
+          </div>
+
+          <div className="entity-grid">
+            {demoActiveIncidents.map((i, idx) => (
+              <div
+                key={idx}
+                className="entity-card critical clickable"
+                onClick={() =>
+                  onSelectTable(
+                    { view: "incident", table: i.root_tables[0] },
+                    "home"
+                  )
+                }
+              >
+                <div className="entity-card-head">
+                  <div className="entity-name">{i.entity}</div>
+                  <span className="pill pill-critical">КРИТИЧНО</span>
+                </div>
+
+                <div className="entity-meta">
+                  Ошибочных таблиц: {i.failed_tables}
+                </div>
+
+                <div className="entity-meta">
+                  Последняя ошибка: {i.last_failure_time}
+                </div>
+
+                <div className="incident-hint">
+                  Открыть инцидент →
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ===== DATA QUALITY ===== */}
+      {!loading && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Качество данных (7 дней)
+            <span className="section-meta">{demoDqAlerts.length}</span>
+          </div>
+          {demoDqSummary && (
+            <div className="dq-summary-grid">
+              <div className="dq-summary-card">
+                <div className="dq-summary-label">Таблиц с дублями</div>
+                <div className="dq-summary-value">{demoDqSummary.duplicate_tables ?? 0}</div>
+              </div>
+              <div className="dq-summary-card">
+                <div className="dq-summary-label">Отклонения по строкам (медиана)</div>
+                <div className="dq-summary-value">{demoDqSummary.row_count_tables ?? 0}</div>
+                <div className="dq-summary-hint muted">
+                  Проверено: {demoDqSummary.row_count_checked ?? 0}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {demoDqAlerts.length === 0 && (
+            <div className="muted">Алертов качества данных нет.</div>
+          )}
+          {demoDqAlerts.length > 0 && (
+            <div className="dq-alerts-list">
+              {demoDqAlerts.slice(0, dqLimit).map((row, idx) => {
+                const fqn = `${row.table_schema}.${row.table_name}`;
+                return (
+                  <button
+                    key={`${fqn}-${idx}`}
+                    className="dq-alert-row"
+                    onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}
+                  >
+                    <div className="dq-alert-main">
+                      <div className="dq-alert-title mono">{fqn}</div>
+                      <div className="dq-alert-sub muted">
+                        {row.entity_name || "—"} · {row.type === "duplicate_check" ? "Дубли" : "Кол-во строк"}
+                      </div>
+                    </div>
+                    <div className="dq-alert-meta">
+                      <span className="dq-alert-pill">
+                        {row.type === "duplicate_check"
+                          ? `${fmtInt(row.metric_value)} дублей`
+                          : `Δ ${fmtPct(row.delta_pct)}`}
+                      </span>
+                      <span className="dq-alert-date muted">{row.dt || "—"}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
       {/* ===== TABLE CYCLES ===== */}
-      {!loading && tableCycles.length > 0 && (
-        <section className="cc-surface">
-          <div className="section-title">
-            Table cycles
-            <span className="section-meta">{tableCycles.length}</span>
-          </div>
-          <div className="order-list">
-            {tableCycles.slice(0, 4).map((cycle, idx) => (
-              <article key={`table-cycle-${idx}`} className="order-row">
-                <header className="order-row-header">
-                  <div>
-                    <div className="order-row-target mono">Table cycle</div>
-                    <div className="order-row-meta">Tables: {cycle.size}</div>
-                  </div>
-                  <div className="order-pill order-pill-warning">CYCLE</div>
-                </header>
-                <div className="order-row-chain">
-                  {cycle.nodes.map((node) => (
-                    <span key={node} className="order-node mono">{node}</span>
-                  ))}
-                  {cycle.size > cycle.nodes.length && <span className="order-node">…</span>}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* table cycles hidden on homepage to reduce noise */}
 
       {/* ===== INCIDENT HISTORY ===== */}
-      {!loading && history.length > 0 && (
+      {!loading && demoHistory.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Incident highlights (7 days)
-            <span className="section-meta">top problematic tables</span>
+            Инциденты: топ проблем (7 дней)
+            <span className="section-meta">по частоте ошибок</span>
           </div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            Shows tables with the most failures in the last 7 days.
+            Таблицы с наибольшим числом сбоев за 7 дней.
           </div>
-          {incidentTimeline.length > 0 && (
+          {demoTimeline.length > 0 && (
             <div className="incident-mini">
-              {incidentTimeline.map((row) => {
+              {demoTimeline.map((row) => {
                 const height = timelineMax ? Math.max(6, (row.count / timelineMax) * 48) : 6;
                 return (
                   <div key={row.day} className="incident-mini-day" title={`${row.day}: ${row.count}`}>
@@ -1076,11 +1262,11 @@ export default function HomePage({ onSelectTable }) {
           <div className="history-board">
             <div className="history-board-head">
               <span>#</span>
-              <span>Table</span>
-              <span>Incidents</span>
-              <span>Last occurrence</span>
+              <span>Таблица</span>
+              <span>Инцидентов</span>
+              <span>Последний раз</span>
             </div>
-            {history.map((h, idx) => (
+            {demoHistory.slice(0, 8).map((h, idx) => (
               <button
                 key={h.table}
                 className="history-board-row"
@@ -1093,10 +1279,191 @@ export default function HomePage({ onSelectTable }) {
               </button>
             ))}
           </div>
-          <div className="order-row-actions" style={{ marginTop: 12 }}>
-            <button className="btn btn-secondary" onClick={() => onSelectTable("__show_errors__", "home")}>
-              Open full incident history
+        </section>
+      )}
+
+      {!loading && (entityCycles.length > 0 || demoEntityMutual.length > 0) && (
+        <section className="cc-surface">
+          <div className="section-title">
+            Архитектура и риски зависимостей
+            <span className="section-meta">{entityCycles.length + demoEntityMutual.length}</span>
+          </div>
+          <div className="muted home-guide-copy">
+            Здесь собраны проблемы ландшафта: взаимные зависимости между сущностями и циклы, которые мешают строить корректный порядок загрузки.
+          </div>
+          <div className="home-architecture-summary">
+            <div className="home-architecture-card">
+              <div className="home-architecture-value">{demoEntityMutual.length}</div>
+              <div className="home-architecture-label">Взаимных связок сущностей</div>
+            </div>
+            <div className="home-architecture-card">
+              <div className="home-architecture-value">{entityCycles.length}</div>
+              <div className="home-architecture-label">Циклов сущностей</div>
+            </div>
+            <button className="home-architecture-card home-architecture-link" onClick={() => navigate("/entities")}>
+              <div className="home-architecture-value">Открыть</div>
+              <div className="home-architecture-label">Справочник сущностей и покрытие</div>
             </button>
+          </div>
+
+          <div className="home-architecture-grid">
+            <div className="home-architecture-panel">
+              <div className="section-subtitle">Взаимные зависимости</div>
+              <div className="muted">Сущности зависят друг от друга в обе стороны и создают неоднозначный порядок пересчета.</div>
+              <div className="order-list" style={{ marginTop: 12 }}>
+                {demoEntityMutual.slice(0, 4).map((pair, idx) => {
+                  const key = `${pair.a}::${pair.b}`;
+                  const details = entityLinkDetails[key];
+                  return (
+                    <article key={`mutual-${idx}`} className="order-row">
+                      <header className="order-row-header">
+                        <div>
+                          <div className="order-row-target mono">Взаимная зависимость</div>
+                          <div className="order-row-meta">{pair.a} ↔ {pair.b}</div>
+                        </div>
+                        <div className="order-pill order-pill-warning">ВЗАИМНО</div>
+                      </header>
+                      <div className="order-row-chain">
+                        <span className="order-node mono">{pair.a}</span>
+                        <span className="order-arrow">↔</span>
+                        <span className="order-node mono">{pair.b}</span>
+                      </div>
+                      <div className="order-row-actions">
+                        <button className="btn btn-ghost" onClick={() => toggleEntityLink(pair, key)}>
+                          {entityLinkOpen[key] ? "Скрыть таблицы" : "Показать таблицы"}
+                        </button>
+                        <div className="muted">{pair.edges_ab_count || 0} → {pair.edges_ba_count || 0}</div>
+                      </div>
+                      {entityLinkOpen[key] && (
+                        <div className="order-impact">
+                          <div className="order-impact-title">Связующие таблицы</div>
+                          <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8 }}>
+                            <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
+                            <span className="order-arrow">→</span>
+                            <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
+                          </div>
+                          <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                            {(details?.edges_ab || pair.edges_ab_sample || []).map((edge, edgeIdx) => (
+                              <span key={`ab-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
+                                <button className="btn btn-ghost" onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}>
+                                  {edge.source}
+                                </button>
+                                {edge.source_entities && edge.source_entities.length > 0 && (
+                                  <span className="muted">[{edge.source_entities.join(", ")}]</span>
+                                )}
+                                <span className="order-arrow">→</span>
+                                <button className="btn btn-ghost" onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}>
+                                  {edge.target}
+                                </button>
+                                {edge.target_entities && edge.target_entities.length > 0 && (
+                                  <span className="muted">[{edge.target_entities.join(", ")}]</span>
+                                )}
+                              </span>
+                            ))}
+                            {!details?.edges_ab?.length && !pair.edges_ab_sample?.length && (
+                              <span className="muted">Нет примеров для {pair.a} → {pair.b}</span>
+                            )}
+                          </div>
+                          <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                            <span className="order-node mono" style={{ borderColor: "#f97316" }}>{pair.b}</span>
+                            <span className="order-arrow">→</span>
+                            <span className="order-node mono" style={{ borderColor: "#38bdf8" }}>{pair.a}</span>
+                          </div>
+                          <div className="order-row-chain" style={{ flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+                            {(details?.edges_ba || pair.edges_ba_sample || []).map((edge, edgeIdx) => (
+                              <span key={`ba-${edge.source}-${edge.target}-${edgeIdx}`} className="order-node mono">
+                                <button className="btn btn-ghost" onClick={() => onSelectTable({ view: "table_info", table: edge.source }, "home")}>
+                                  {edge.source}
+                                </button>
+                                {edge.source_entities && edge.source_entities.length > 0 && (
+                                  <span className="muted">[{edge.source_entities.join(", ")}]</span>
+                                )}
+                                <span className="order-arrow">→</span>
+                                <button className="btn btn-ghost" onClick={() => onSelectTable({ view: "table_info", table: edge.target }, "home")}>
+                                  {edge.target}
+                                </button>
+                                {edge.target_entities && edge.target_entities.length > 0 && (
+                                  <span className="muted">[{edge.target_entities.join(", ")}]</span>
+                                )}
+                              </span>
+                            ))}
+                            {!details?.edges_ba?.length && !pair.edges_ba_sample?.length && (
+                              <span className="muted">Нет примеров для {pair.b} → {pair.a}</span>
+                            )}
+                          </div>
+                          <div className="order-row-actions" style={{ marginTop: 8 }}>
+                            <button className="btn btn-secondary" onClick={() => loadEntityLinkDetails(pair, key)}>
+                              Обновить список
+                            </button>
+                            {details?.state === "loading" && <span className="muted">Загрузка...</span>}
+                            {details?.state === "error" && <span className="muted">Ошибка</span>}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+                {!demoEntityMutual.length && <div className="muted">Взаимных связей не найдено.</div>}
+              </div>
+            </div>
+
+            <div className="home-architecture-panel">
+              <div className="section-subtitle">Циклы сущностей</div>
+              <div className="muted">Замкнутые контуры, которые требуют проверки логики и ручного разрыва порядка расчета.</div>
+              <div className="order-list" style={{ marginTop: 12 }}>
+                {entityCycles.slice(0, 4).map((cycle, idx) => (
+                  <article key={`cycle-${idx}`} className="order-row">
+                    <header className="order-row-header">
+                      <div>
+                        <div className="order-row-target mono">Цикл сущностей</div>
+                        <div className="order-row-meta">Сущностей: {cycle.size}</div>
+                      </div>
+                      <div className="order-pill order-pill-warning">ЦИКЛ</div>
+                    </header>
+                    <div className="order-row-chain">
+                      {cycle.nodes.slice(0, 6).map((node, i) => (
+                        <span key={`${node}-${i}`} className="order-node mono">{node}</span>
+                      ))}
+                      {cycle.nodes.length > 6 && <span className="order-node">…</span>}
+                    </div>
+                    <div className="order-row-actions">
+                      <button className="btn btn-ghost" onClick={() => toggleCycleDetails(cycle, `cycle-${idx}`)}>
+                        {cycleOpen[`cycle-${idx}`] ? "Скрыть таблицы цикла" : "Показать таблицы цикла"}
+                      </button>
+                      {cycleDetails[`cycle-${idx}`]?.state === "loading" && <span className="muted">Загрузка...</span>}
+                      {cycleDetails[`cycle-${idx}`]?.state === "error" && <span className="muted">Ошибка</span>}
+                    </div>
+                    {cycleOpen[`cycle-${idx}`] && cycleDetails[`cycle-${idx}`]?.state === "ready" && (
+                      <div className="order-impact">
+                        <div className="order-impact-title">Таблицы в цикле</div>
+                        {cycleDetails[`cycle-${idx}`]?.entities?.map((entity) => (
+                          <div key={entity.name} className="order-impact-group">
+                            <div className="order-impact-group-title">
+                              <span>{entity.name}</span>
+                              <span className="order-impact-badge">{entity.tables.length}</span>
+                            </div>
+                            <div className="order-impact-list">
+                              {(entity.tables || []).slice(0, 10).map((fqn) => (
+                                <button key={fqn} className="btn btn-ghost" onClick={() => onSelectTable({ view: "table_info", table: fqn }, "home")}>
+                                  {fqn}
+                                </button>
+                              ))}
+                              {(entity.tables || []).length > 10 && <span className="muted">… ещё {entity.tables.length - 10}</span>}
+                            </div>
+                          </div>
+                        ))}
+                        {cycleDetails[`cycle-${idx}`]?.hiddenCount > 0 && (
+                          <div className="muted" style={{ marginTop: 8 }}>
+                            Ещё сущностей: {cycleDetails[`cycle-${idx}`].hiddenCount}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                ))}
+                {!entityCycles.length && <div className="muted">Циклов не найдено.</div>}
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -1107,7 +1474,7 @@ export default function HomePage({ onSelectTable }) {
     if (!value) return "—";
     const dt = new Date(value.replace(" ", "T"));
     if (Number.isNaN(dt.getTime())) return value;
-    return dt.toLocaleString("en-GB", {
+    return dt.toLocaleString("ru-RU", {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",
@@ -1118,10 +1485,10 @@ export default function HomePage({ onSelectTable }) {
   const severityLabel = (sev) => {
     switch (sev) {
       case "CRITICAL":
-        return "Critical";
+        return "Критично";
       case "MAJOR":
-        return "Major";
+        return "Серьезно";
       default:
-        return "Warning";
+        return "Внимание";
     }
   };

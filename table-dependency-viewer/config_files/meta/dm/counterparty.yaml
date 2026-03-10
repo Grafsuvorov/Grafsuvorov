@@ -1,0 +1,426 @@
+schema_name_gp: dict_dds
+schema_name_click: dm
+object_name: counterparty
+object_type: table
+clickhouse_cluster: '{cluster}'
+engine: ReplicatedMergeTree
+order_by:
+  - counterparty_code
+distributed:
+  - REPLICATED
+partitions: null
+table_settings: index_granularity = 8192
+table_comment: null
+settings_external_table:
+  max_threads: 20
+  max_insert_threads: 20
+  input_format_parallel_parsing: 0
+load_type: full
+recreate_mode: drop_create
+truncate_mode_on: true
+postgres_conn_id: gp_connection
+clickhouse_conn_id: clickhouse
+dag_name: null
+dag_schedule_interval:
+  PROD: 0 22 * * *
+  DEV: null
+dag_tags: []
+task_pool: dm_pool
+task_pool_slots: 1
+attributes:
+  - column_name_click: counterparty_code
+    column_name_gp: counterparty_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: NOT NULL
+    description: Комментария нет
+  - column_name_click: counterparty_truncated_code
+    column_name_gp: counterparty_truncated_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_search_name
+    column_name_gp: counterparty_search_name
+    data_type_click: String
+    data_type_gp: varchar(311)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_short_name
+    column_name_gp: counterparty_short_name
+    data_type_click: String
+    data_type_gp: varchar(35)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_full_name
+    column_name_gp: counterparty_full_name
+    data_type_click: String
+    data_type_gp: varchar(300)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_extended_name
+    column_name_gp: counterparty_extended_name
+    data_type_click: String
+    data_type_gp: varchar(300)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: address_code
+    column_name_gp: address_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_order_locked_for_customer
+    column_name_gp: is_order_locked_for_customer
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: industry_code
+    column_name_gp: industry_code
+    data_type_click: String
+    data_type_gp: varchar(4)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dt_created
+    column_name_gp: tech_etl.validate_date("dt_created")
+    data_type_click: Date32
+    data_type_gp: date
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: created_by
+    column_name_gp: created_by
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_billing_locked_for_customer
+    column_name_gp: is_billing_locked_for_customer
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_group_code
+    column_name_gp: counterparty_group_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_account_group_code
+    column_name_gp: counterparty_account_group_code
+    data_type_click: String
+    data_type_gp: varchar(4)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_delivery_locked_for_customer
+    column_name_gp: is_delivery_locked_for_customer
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: city_location_code
+    column_name_gp: city_location_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_deleted
+    column_name_gp: is_deleted
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_posting_locked
+    column_name_gp: is_posting_locked
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: language_code
+    column_name_gp: language_code
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_tin_code
+    column_name_gp: counterparty_tin_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: okpo_code
+    column_name_gp: okpo_code
+    data_type_click: String
+    data_type_gp: varchar(11)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_liable_for_vat
+    column_name_gp: is_liable_for_vat
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: transport_zone_for_delivery_code
+    column_name_gp: transport_zone_for_delivery_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_alternative_payer_allowed
+    column_name_gp: is_alternative_payer_allowed
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_tin_nonresident_code
+    column_name_gp: counterparty_tin_nonresident_code
+    data_type_click: String
+    data_type_gp: varchar(20)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: industry_second_code
+    column_name_gp: industry_second_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_person
+    column_name_gp: is_person
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_none_military_used
+    column_name_gp: is_none_military_used
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: term_group_3_code
+    column_name_gp: term_group_3_code
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_alternative_payer_account_allowed
+    column_name_gp: is_alternative_payer_account_allowed
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: kpp_code
+    column_name_gp: kpp_code
+    data_type_click: String
+    data_type_gp: varchar(18)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: ogrn_code
+    column_name_gp: ogrn_code
+    data_type_click: String
+    data_type_gp: varchar(18)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: almer_bank_code
+    column_name_gp: almer_bank_code
+    data_type_click: String
+    data_type_gp: varchar(60)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_sales_locked_for_customer
+    column_name_gp: is_sales_locked_for_customer
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_blocked_for_delete
+    column_name_gp: is_blocked_for_delete
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_mdm_code
+    column_name_gp: counterparty_mdm_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: person_passport_number
+    column_name_gp: person_passport_number
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: person_snils_code
+    column_name_gp: person_snils_code
+    data_type_click: String
+    data_type_gp: varchar(14)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dt_person_date_of_birth
+    column_name_gp: tech_etl.validate_date("dt_person_date_of_birth")
+    data_type_click: Date32
+    data_type_gp: date
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: ifns_code
+    column_name_gp: ifns_code
+    data_type_click: String
+    data_type_gp: varchar(6)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dt_updated
+    column_name_gp: tech_etl.validate_date("dt_updated")
+    data_type_click: Date32
+    data_type_gp: date
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: customer_crm_code
+    column_name_gp: customer_crm_code
+    data_type_click: String
+    data_type_gp: varchar(37)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_category_code
+    column_name_gp: counterparty_category_code
+    data_type_click: String
+    data_type_gp: varchar(3)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: market_in_sales_order_code
+    column_name_gp: market_in_sales_order_code
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_used_in_eits
+    column_name_gp: is_used_in_eits
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_status_code
+    column_name_gp: counterparty_status_code
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_bankrupt_status_code
+    column_name_gp: counterparty_bankrupt_status_code
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_house_program_participant
+    column_name_gp: is_house_program_participant
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_purchase_locked_for_supplier
+    column_name_gp: is_purchase_locked_for_supplier
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_functionality_locked
+    column_name_gp: is_functionality_locked
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_alternative_payee_account
+    column_name_gp: is_alternative_payee_account
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: service_agent_scheme_group_code
+    column_name_gp: service_agent_scheme_group_code
+    data_type_click: String
+    data_type_gp: varchar(4)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: producer_external_code
+    column_name_gp: producer_external_code
+    data_type_click: String
+    data_type_gp: varchar(10)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_hfm_code
+    column_name_gp: counterparty_hfm_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_related_party_tco
+    column_name_gp: is_related_party_tco
+    data_type_click: String
+    data_type_gp: varchar(3)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_group_company_affiliated
+    column_name_gp: is_group_company_affiliated
+    data_type_click: String
+    data_type_gp: varchar(3)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_related_party_rsbo
+    column_name_gp: is_related_party_rsbo
+    data_type_click: String
+    data_type_gp: varchar(3)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_bankrupt
+    column_name_gp: is_bankrupt
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_lawsuit_exist
+    column_name_gp: is_lawsuit_exist
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: is_fns_restriction_list_exist
+    column_name_gp: is_fns_restriction_list_exist
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: relation_type_code
+    column_name_gp: relation_type_code
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: counterparty_kra_code
+    column_name_gp: counterparty_kra_code
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dttm_inserted
+    column_name_gp: dttm_inserted
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dttm_updated
+    column_name_gp: dttm_updated
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: job_name
+    column_name_gp: job_name
+    data_type_click: String
+    data_type_gp: varchar(50)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: deleted_flag
+    column_name_gp: deleted_flag
+    data_type_click: UInt8
+    data_type_gp: bool
+    is_nullable: 'NULL'
+    description: Комментария нет

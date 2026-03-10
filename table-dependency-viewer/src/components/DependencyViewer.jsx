@@ -32,7 +32,7 @@ export default function DependencyViewer({ table, onBack }) {
       })
       .catch((err) => {
         if (err.name === "AbortError") return;
-        setError("Failed to load dependencies. Try again later.");
+        setError("Не удалось загрузить зависимости. Попробуйте позже.");
         console.error("DependencyViewer error", err);
       })
       .finally(() => setLoading(false));
@@ -45,39 +45,39 @@ export default function DependencyViewer({ table, onBack }) {
   return (
     <div className="incident-page">
       <div className="dep-header">
-        <button className="btn" onClick={onBack}>← Back</button>
+        <button className="btn" onClick={onBack}>← Назад</button>
         <div>
-          <div className="dep-title">What it blocks</div>
+          <div className="dep-title">Что блокируется</div>
           <div className="dep-subtitle mono">{table || "—"}</div>
         </div>
 
         <div className="dep-summary">
           <div className="dep-summary-value">{total}</div>
-          <div className="dep-summary-label">tables</div>
+          <div className="dep-summary-label">таблиц</div>
         </div>
       </div>
 
-      {loading && <div className="card muted">Loading dependencies...</div>}
+      {loading && <div className="card muted">Загрузка зависимостей...</div>}
 
       {error && (
         <div className="card dep-error">
-          <div className="dep-error-title">Load error</div>
+          <div className="dep-error-title">Ошибка загрузки</div>
           <div className="muted">{error}</div>
         </div>
       )}
 
       {!loading && !error && total === 0 && (
         <div className="card dep-empty">
-          <div className="dep-empty-title">No blocked tables yet</div>
+          <div className="dep-empty-title">Нет зависимых таблиц</div>
           <div className="dep-empty-text muted">
-            No dependent tables found for this table.
+            Для этой таблицы зависимости не найдены.
           </div>
         </div>
       )}
 
       {!loading && !error && total > 0 && (
         <>
-          <div className="section-title">Dependent tables</div>
+          <div className="section-title">Зависимые таблицы</div>
           <div className="dep-grid dep-grid-detailed">
             {rows.map((r) => {
               const fqn = `${r.schema}.${r.table_name}`;
@@ -86,7 +86,7 @@ export default function DependencyViewer({ table, onBack }) {
                   <div className="dep-card-title mono">{fqn}</div>
                   <div className="dep-card-meta">
                     <span>{r.entity_name || "—"}</span>
-                    <span>Avg: {r.avg_duration_minutes ?? "—"} min</span>
+                    <span>Среднее: {r.avg_duration_minutes ?? "—"} мин</span>
                   </div>
                 </div>
               );

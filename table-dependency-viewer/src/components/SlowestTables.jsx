@@ -43,7 +43,7 @@ export default function SlowestTables({ onSelectTable }) {
           setMeta(data?.meta || null);
         }
       })
-      .catch(() => setError("Failed to load data"))
+      .catch(() => setError("Не удалось загрузить данные"))
       .finally(() => setLoading(false));
   }, [windowDays, limit]);
 
@@ -69,7 +69,7 @@ export default function SlowestTables({ onSelectTable }) {
     fetch(`${API_BASE}/api/night-summary?days=${windowDays}&limit=50`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
       .then((data) => setNightSummary(data))
-      .catch(() => setNightError("Failed to load night summary"))
+      .catch(() => setNightError("Не удалось загрузить ночное окно"))
       .finally(() => setNightLoading(false));
   }, [windowDays]);
 
@@ -188,53 +188,53 @@ export default function SlowestTables({ onSelectTable }) {
   return (
     <div className="container cc-page slow-page">
       <section className="cc-header-zone">
-        <h1>Slow & Unstable Tables</h1>
+        <h1>Медленные и нестабильные таблицы</h1>
         <div className="cc-subtitle">
-          Monitoring long and unstable runs for SUCCESS loads.
+          Мониторинг длительных и нестабильных запусков (успешные).
         </div>
       </section>
 
       {periodLabel && (
         <div className="cc-header-meta">
-          <span className="period-pill">Period: {periodLabel}</span>
-          <span className="period-note">log-based window</span>
+          <span className="period-pill">Период: {periodLabel}</span>
+          <span className="period-note">по логам</span>
         </div>
       )}
 
       <section className="slow-summary">
         <div className="slow-summary-card">
-          <div className="label">Tables in sample</div>
+          <div className="label">Таблиц в выборке</div>
           <div className="value">{summary.total}</div>
           {meta?.candidates !== undefined && (
-            <div className="hint muted">{meta.candidates} candidates</div>
+            <div className="hint muted">{meta.candidates} кандидатов</div>
           )}
         </div>
         <div className="slow-summary-card danger">
-          <div className="label">Slow (p95)</div>
+          <div className="label">Медленные (p95)</div>
           <div className="value">{summary.slowCount}</div>
         </div>
         <div className="slow-summary-card warn">
-          <div className="label">Unstable (CV)</div>
+          <div className="label">Нестабильные (CV)</div>
           <div className="value">{summary.unstableCount}</div>
         </div>
         <div className="slow-summary-card">
-          <div className="label">Avg runs</div>
+          <div className="label">Среднее запусков</div>
           <div className="value">{summary.avgRuns}</div>
         </div>
       </section>
 
       <section className="slow-controls">
-        <div className="section-title">Window parameters</div>
+        <div className="section-title">Параметры окна</div>
         <div className="slow-controls-row">
           <div className="slow-select-group">
-            <span className="slow-select-label">Window</span>
+            <span className="slow-select-label">Окно</span>
             {[7, 14, 30].map((d) => (
               <button
                 key={d}
                 className={d === windowDays ? "active" : ""}
                 onClick={() => setWindowDays(d)}
               >
-                {d} days
+                {d} дней
               </button>
             ))}
           </div>
@@ -254,22 +254,22 @@ export default function SlowestTables({ onSelectTable }) {
       </section>
 
       <section className="slow-criteria">
-        <div className="section-title">Criteria</div>
+        <div className="section-title">Критерии</div>
         <div className="slow-criteria-grid">
           <div className="slow-criteria-card">
-            <div className="slow-criteria-title">Slow load</div>
+            <div className="slow-criteria-title">Медленная загрузка</div>
             <div className="muted">
-              p95 &gt; {SLA_MINUTES} min or p95 &gt; {SLOW_P95_MINUTES} min
+              p95 &gt; {SLA_MINUTES} мин или p95 &gt; {SLOW_P95_MINUTES} мин
             </div>
           </div>
           <div className="slow-criteria-card">
-            <div className="slow-criteria-title">Unstable</div>
+            <div className="slow-criteria-title">Нестабильность</div>
             <div className="muted">
-              CV &lt; {UNSTABLE_WARN} — stable · {UNSTABLE_WARN}–{UNSTABLE_CRIT} — unstable · &gt; {UNSTABLE_CRIT} — critical
+              CV &lt; {UNSTABLE_WARN} — стабильно · {UNSTABLE_WARN}–{UNSTABLE_CRIT} — нестабильно · &gt; {UNSTABLE_CRIT} — критично
             </div>
           </div>
           <div className="slow-criteria-card">
-            <div className="slow-criteria-title">Red flag</div>
+            <div className="slow-criteria-title">Красный флаг</div>
             <div className="muted">p95 / avg &gt; 2</div>
           </div>
         </div>
@@ -277,7 +277,7 @@ export default function SlowestTables({ onSelectTable }) {
 
       <section className="slow-profile">
         <div className="section-title">
-          Total hourly load (SUCCESS, period)
+          Суммарная нагрузка по часам (SUCCESS)
           <span
             className="load-info"
             title="Aggregated across all SUCCESS loads for the selected period. Used to find peak system hours."
@@ -286,11 +286,11 @@ export default function SlowestTables({ onSelectTable }) {
           </span>
         </div>
         <div className="slow-profile-sub muted">
-          Color shows total duration across the window, not a single day.
+          Цвет — суммарная длительность по окну, а не за день.
         </div>
-        {loadingProfile && <div className="muted">Loading profile...</div>}
+        {loadingProfile && <div className="muted">Загрузка профиля...</div>}
         {!loadingProfile && loadProfile.length === 0 && (
-          <div className="card muted">No data for load profile.</div>
+          <div className="card muted">Нет данных профиля нагрузки.</div>
         )}
         {!loadingProfile && loadProfile.length > 0 && (
           <div className="load-heatmap">
@@ -305,8 +305,8 @@ export default function SlowestTables({ onSelectTable }) {
                 const totalMinutes = slot.total_duration_minutes || 0;
                 const hours = Math.floor(totalMinutes / 60);
                 const minutes = Math.round(totalMinutes % 60);
-                const durationLabel = hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
-                const title = `Hour: ${hourLabel}\nRuns: ${slot.runs_count}\nTotal duration: ${durationLabel}\nWindow: ${windowDays} days`;
+                const durationLabel = hours > 0 ? `${hours} ч ${minutes} мин` : `${minutes} мин`;
+                const title = `Час: ${hourLabel}\nЗапуски: ${slot.runs_count}\nСуммарно: ${durationLabel}\nОкно: ${windowDays} дней`;
                 return (
                   <div
                     key={slot.hour}
@@ -333,40 +333,40 @@ export default function SlowestTables({ onSelectTable }) {
       </section>
 
       <section className="slow-night">
-        <div className="section-title">Night load (21:00–08:00)</div>
-        {nightLoading && <div className="muted">Loading night summary...</div>}
+        <div className="section-title">Ночное окно (21:00–08:00)</div>
+        {nightLoading && <div className="muted">Загрузка ночного окна...</div>}
         {nightError && <div className="card muted">{nightError}</div>}
         {!nightLoading && !nightError && (
           <>
             <div className="slow-summary slow-night-summary">
               <div className="slow-summary-card">
-                <div className="label">Runs</div>
+                <div className="label">Запусков</div>
                 <div className="value">{nightSummary?.summary?.runs_count ?? 0}</div>
               </div>
               <div className="slow-summary-card">
-                <div className="label">Tables</div>
+                <div className="label">Таблиц</div>
                 <div className="value">{nightSummary?.summary?.tables_count ?? 0}</div>
               </div>
               <div className="slow-summary-card">
-                <div className="label">Entities</div>
+                <div className="label">Сущностей</div>
                 <div className="value">{nightSummary?.summary?.entities_count ?? 0}</div>
               </div>
               <div className="slow-summary-card">
-                <div className="label">Total</div>
+                <div className="label">Сумма</div>
                 <div className="value">{formatMinutes(nightSummary?.summary?.total_duration_minutes)}</div>
-                <div className="hint muted">load minutes</div>
+                <div className="hint muted">минут загрузки</div>
               </div>
               <div className="slow-summary-card danger">
-                <div className="label">Max</div>
+                <div className="label">Макс</div>
                 <div className="value">{formatMinutes(nightSummary?.summary?.max_duration_minutes)}</div>
               </div>
             </div>
 
             <div className="slow-night-grid">
               <div className="slow-night-panel">
-                <div className="slow-night-title">Hourly peaks</div>
+                <div className="slow-night-title">Пики по часам</div>
                 <div className="slow-night-sub muted">
-                  Hover an hour to see up to 50 tables.
+                  Наведите на час — до 50 таблиц.
                 </div>
                 <div className="load-heatmap">
                   <div className="load-heatmap-grid load-heatmap-night">
@@ -380,13 +380,13 @@ export default function SlowestTables({ onSelectTable }) {
                       const totalMinutes = slot?.total_duration_minutes || 0;
                       const hours = Math.floor(totalMinutes / 60);
                       const minutes = Math.round(totalMinutes % 60);
-                      const durationLabel = hours > 0 ? `${hours} h ${minutes} min` : `${minutes} min`;
+                      const durationLabel = hours > 0 ? `${hours} ч ${minutes} мин` : `${minutes} мин`;
                       const tables = (slot?.top_tables || []).map((t) => `${t.table_fqn} (${formatMinutes(t.duration_minutes)} min)`);
                       const title = [
-                        `Hour: ${String(hour).padStart(2, "0")}:00`,
-                        `Runs: ${slot?.runs_count || 0}`,
-                        `Total: ${durationLabel}`,
-                        tables.length ? "Top tables:" : "Top tables: none",
+                        `Час: ${String(hour).padStart(2, "0")}:00`,
+                        `Запуски: ${slot?.runs_count || 0}`,
+                        `Суммарно: ${durationLabel}`,
+                        tables.length ? "Топ таблиц:" : "Топ таблиц: нет",
                         ...tables,
                       ].join("\n");
                       return (
@@ -412,7 +412,7 @@ export default function SlowestTables({ onSelectTable }) {
               </div>
 
               <div className="slow-night-panel">
-                <div className="slow-night-title">Longest runs tonight</div>
+                <div className="slow-night-title">Самые долгие за ночь</div>
                 {nightSummary?.top_runs?.length ? (
                   <div className="slow-night-list">
                     {nightSummary.top_runs.map((row, idx) => (
@@ -420,20 +420,20 @@ export default function SlowestTables({ onSelectTable }) {
                         <div className="mono slow-night-table" title={row.table_fqn}>{row.table_fqn}</div>
                         <div className="slow-night-meta">
                           <span>{row.entity_name || "—"}</span>
-                          <span>{formatMinutes(row.duration_minutes)} min</span>
+                          <span>{formatMinutes(row.duration_minutes)} мин</span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="card muted">No night load data.</div>
+                  <div className="card muted">Нет данных ночной загрузки.</div>
                 )}
               </div>
 
               <div className="slow-night-panel">
-                <div className="slow-night-title">Anomalies vs p95</div>
+                <div className="slow-night-title">Аномалии vs p95</div>
                 <div className="slow-night-sub muted">
-                  Shows runs exceeding p95 by more than 1.5x.
+                  Показывает превышения p95 более чем в 1.5×.
                 </div>
                 {nightSummary?.anomalies?.length ? (
                   <div className="slow-night-list">
@@ -443,14 +443,14 @@ export default function SlowestTables({ onSelectTable }) {
                         <div className="slow-night-meta">
                           <span>{row.entity_name || "—"}</span>
                           <span>
-                            {formatMinutes(row.duration_minutes)} min / p95 {formatMinutes(row.p95_minutes)} ({row.ratio ?? "—"}x)
+                            {formatMinutes(row.duration_minutes)} мин / p95 {formatMinutes(row.p95_minutes)} ({row.ratio ?? "—"}x)
                           </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="card muted">No anomalies.</div>
+                  <div className="card muted">Аномалий нет.</div>
                 )}
               </div>
             </div>
@@ -459,25 +459,25 @@ export default function SlowestTables({ onSelectTable }) {
       </section>
 
       <section className="slow-entity">
-        <div className="section-title">Entity analysis</div>
+        <div className="section-title">Анализ по сущности</div>
         <div className="slow-controls-row slow-entity-controls">
           <div className="slow-select-group">
-            <span className="slow-select-label">Entity</span>
+            <span className="slow-select-label">Сущность</span>
             <select
               className="slow-entity-select"
               value={entityId}
               onChange={(event) => setEntityId(event.target.value)}
             >
-              {!entities.length && <option value="">No entities</option>}
+              {!entities.length && <option value="">Нет сущностей</option>}
               {entities.map((e) => (
                 <option key={e.entity_id} value={e.entity_id}>
-                  {e.entity_name || `Entity ${e.entity_id}`}
+                  {e.entity_name || `Сущность ${e.entity_id}`}
                 </option>
               ))}
             </select>
           </div>
           <div className="slow-select-group">
-            <span className="slow-select-label">Schema</span>
+            <span className="slow-select-label">Схема</span>
             <select
               className="slow-entity-select"
               value={entitySchema}
@@ -485,7 +485,7 @@ export default function SlowestTables({ onSelectTable }) {
             >
               {entitySchemas.map((schema) => (
                 <option key={schema} value={schema}>
-                  {schema === "all" ? "All" : schema}
+                  {schema === "all" ? "Все" : schema}
                 </option>
               ))}
             </select>
@@ -503,9 +503,9 @@ export default function SlowestTables({ onSelectTable }) {
             ))}
           </div>
         </div>
-        {entityLoading && <div className="muted">Loading entity data...</div>}
+        {entityLoading && <div className="muted">Загрузка данных сущности...</div>}
         {!entityLoading && filteredEntityLoads.length === 0 && (
-          <div className="card muted">No data for selected entity.</div>
+          <div className="card muted">Нет данных для выбранной сущности.</div>
         )}
         {!entityLoading && filteredEntityLoads.length > 0 && (
           <div className="table-wrapper">
@@ -517,7 +517,7 @@ export default function SlowestTables({ onSelectTable }) {
                   <th>P95</th>
                   <th>MAX</th>
                   <th>RUNS</th>
-                  <th>Last</th>
+                  <th>Последний</th>
                 </tr>
               </thead>
               <tbody>
@@ -543,17 +543,17 @@ export default function SlowestTables({ onSelectTable }) {
         )}
       </section>
 
-      {loading && <div className="page-loading">Loading metrics...</div>}
+      {loading && <div className="page-loading">Загрузка метрик...</div>}
       {error && <div className="page-error">{error}</div>}
 
       {!loading && !error && sorted.length === 0 && (
-        <div className="card muted">No data for successful loads.</div>
+        <div className="card muted">Нет данных по успешным загрузкам.</div>
       )}
 
       {!loading && !error && sorted.length > 0 && (
         <section className="cc-surface">
           <div className="section-title">
-            Tables by risk
+            Таблицы по риску
             <span className="section-meta">{sorted.length}</span>
           </div>
           <div className="table-wrapper">
@@ -561,14 +561,14 @@ export default function SlowestTables({ onSelectTable }) {
               <thead>
                 <tr>
                   <th>Table</th>
-                  <th>Entity</th>
+                  <th>Сущность</th>
                   <th>AVG</th>
                   <th>P95</th>
                   <th>MAX</th>
-                  <th title="Used to compute stability (CV)">RUNS</th>
+                  <th title="Используется для CV">RUNS</th>
                   <th>CV</th>
                   <th>P95/AVG</th>
-                  <th>Status</th>
+                  <th>Статус</th>
                 </tr>
               </thead>
               <tbody>
@@ -609,14 +609,14 @@ export default function SlowestTables({ onSelectTable }) {
                             className="slow-pill low-sample"
                             title="Not enough runs to assess stability"
                           >
-                            Low Sample <span className="slow-pill-info">ℹ️</span>
+                            Мало запусков <span className="slow-pill-info">ℹ️</span>
                           </span>
                         )}
-                        {row.status === "slow_unstable" && <span className="slow-pill danger">Slow &amp; Unstable</span>}
-                        {row.status === "slow" && <span className="slow-pill danger">Slow</span>}
+                        {row.status === "slow_unstable" && <span className="slow-pill danger">Медленно и нестабильно</span>}
+                        {row.status === "slow" && <span className="slow-pill danger">Медленно</span>}
                         {row.status === "unstable" && (
                           <span className={`slow-pill ${row.critical_unstable ? "danger" : "warn"}`}>
-                            Unstable
+                            Нестабильно
                           </span>
                         )}
                       </div>

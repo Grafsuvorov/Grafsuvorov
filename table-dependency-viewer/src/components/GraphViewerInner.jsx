@@ -18,6 +18,8 @@ const LAYER_ORDER = [
   "landing",
   "raw_ext",
   "dict_stg",
+  "dict_ods",
+  "dict_dds",
   "stg",
   "ods",
   "dds",
@@ -65,6 +67,16 @@ const NODE_STYLE_BY_LAYER = {
     background: "#020617",
     color: "#9ca3af",
     border: "1px dashed rgba(255,255,255,.35)",
+  },
+  dict_ods: {
+    background: "#082f49",
+    color: "#bae6fd",
+    border: "1px dashed rgba(186,230,253,.45)",
+  },
+  dict_dds: {
+    background: "#1e1b4b",
+    color: "#c7d2fe",
+    border: "1px dashed rgba(129,140,248,.4)",
   },
 };
 

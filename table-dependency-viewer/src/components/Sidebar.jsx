@@ -1,13 +1,20 @@
 import "../style/app.css";
 
-export default function Sidebar({ currentPath, onChangeView }) {
+export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
   const isActive = (path) => currentPath === path;
+  const roleLabel = userProfile?.role === "admin"
+    ? "Админ"
+    : userProfile?.role === "engineer"
+      ? "Инженер"
+      : userProfile?.role === "analyst"
+        ? "Аналитик"
+        : userProfile?.role;
   return (
     <header className="topnav">
       <div className="topnav-inner">
         {/* LEFT */}
         <div className="topnav-left">
-          <div className="topnav-brand">Data Control</div>
+          <div className="topnav-brand">DWH Контроль</div>
 
           <nav className="topnav-nav">
             <div className="nav-primary">
@@ -15,47 +22,85 @@ export default function Sidebar({ currentPath, onChangeView }) {
                 className={isActive("/") ? "active" : ""}
                 onClick={() => onChangeView(null)}
               >
-                Dashboard
-              </button>
-
-              <button
-                className={isActive("/errors") ? "active" : ""}
-                onClick={() => onChangeView("__show_errors__")}
-              >
-                Errors
+                Обзор
               </button>
 
               <button
                 className={isActive("/tables") ? "active" : ""}
                 onClick={() => onChangeView("table_search")}
               >
-                Tables
+                Каталог
               </button>
             </div>
 
             <div className="nav-secondary">
               <button onClick={() => onChangeView("__slowest_tables__")}>
-                Slow Tables
+                Производительность
               </button>
               <button onClick={() => onChangeView("night_ops")}>
-                Night Ops
+                Мониторинг
               </button>
               <button onClick={() => onChangeView("__entity_schedule__")}>
-                Entities
+                Ландшафт
+              </button>
+              <button
+                className={isActive("/releases") ? "active" : ""}
+                onClick={() => onChangeView("releases")}
+              >
+                Релизы
+              </button>
+              <button
+                className={isActive("/analytics") ? "active" : ""}
+                onClick={() => onChangeView("analytics")}
+              >
+                Аналитика
+              </button>
+              <button
+                className={isActive("/logic-audit") ? "active" : ""}
+                onClick={() => onChangeView("logic_audit")}
+              >
+                Аудит логики
+              </button>
+              {authEnabled && userProfile && (
+                <button
+                  className={isActive("/account") ? "active" : ""}
+                  onClick={() => onChangeView("/account")}
+                >
+                  Профиль
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  className={isActive("/admin/users") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/users")}
+                >
+                  Админка
+                </button>
+              )}
+              <button
+                className={isActive("/onboarding") ? "active" : ""}
+                onClick={() => onChangeView("onboarding")}
+              >
+                Гид
               </button>
             </div>
           </nav>
         </div>
 
         {/* RIGHT */}
-        <div className="topnav-right">
-          <div className="topnav-status">
-            <span className="sla-dot degraded" />
-            <span className="topnav-status-text">
-              Partial degradation
-            </span>
+        {authEnabled && userProfile && (
+          <div className="topnav-right">
+            <div className="auth-pill">
+              <div className="auth-user">
+                {userProfile?.username || userProfile?.email || "Пользователь"}
+              </div>
+              <div className="auth-role">{roleLabel}</div>
+            </div>
+            <button className="auth-logout" onClick={onLogout}>
+              Выйти
+            </button>
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

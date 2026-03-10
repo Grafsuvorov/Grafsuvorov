@@ -1,0 +1,66 @@
+table_name: transportation_services_purchase_price_agreement
+table_schema: dm
+table_id: 2062
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 34
+entity_name: TRANSPORTATION
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 23:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_services_purchase_price_agreement/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_services_purchase_price_agreement/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_services_purchase_price_agreement/sql_query_truncate.sql
+depends_on:
+  dds:
+  - purchase_contract_header
+  - purchase_contract_position
+  - purchase_contract_price_conditions
+  - purchase_document_counterparty_role
+  dict_dds:
+  - address
+  - boolean_texts
+  - budget_type_texts
+  - container_length_type_texts
+  - container_ownership_type_texts
+  - cost_region_texts
+  - counterparty
+  - employee_main_data
+  - etsng
+  - export_method_texts
+  - freight_movement_method_texts
+  - import_method_texts
+  - incoterms
+  - material_shape_texts
+  - material_texts
+  - movement_scheme_texts
+  - package_subtype_texts
+  - package_type_texts
+  - paydox_contract_type_texts
+  - paydox_document_status_texts
+  - payment_date_calculation_rule_texts
+  - plant_and_subsidiary
+  - price_scale_basis_texts
+  - purchase_document_type_texts
+  - purchase_group
+  - railway_platform_completeness_type_texts
+  - redirection_type_texts
+  - service_assessment_class_dsc
+  - service_type_texts
+  - tariff_calculation_weekday_type_texts
+  - transport_hub
+  - transport_route
+  - transport_transfer_type
+  - vehicle_length_type_texts
+  - vessel_crane_texts
+  - vessel_port_call_texts

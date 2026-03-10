@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
@@ -14,6 +14,7 @@ export default function TableCard({
   autoShowGraph = false,
   tableContext = null,
 }) {
+  const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState(null);
@@ -45,6 +46,29 @@ export default function TableCard({
   const [dqHistoryLoading, setDqHistoryLoading] = useState(false);
   const [dqHistoryError, setDqHistoryError] = useState(null);
   const [showDqHistory, setShowDqHistory] = useState(false);
+  const [clickRuns, setClickRuns] = useState([]);
+  const [clickStages, setClickStages] = useState([]);
+  const [clickLoading, setClickLoading] = useState(false);
+  const [clickError, setClickError] = useState(null);
+  const [clickMeta, setClickMeta] = useState(null);
+  const [clickMetaLoading, setClickMetaLoading] = useState(false);
+  const [clickMetaError, setClickMetaError] = useState(null);
+  const [clickHistory, setClickHistory] = useState([]);
+  const [clickHistoryLoading, setClickHistoryLoading] = useState(false);
+  const [clickHistoryError, setClickHistoryError] = useState(null);
+  const [historyMode, setHistoryMode] = useState("gp");
+  const [viewMatches, setViewMatches] = useState([]);
+  const [viewSearchLoading, setViewSearchLoading] = useState(false);
+  const [viewSearchError, setViewSearchError] = useState(null);
+  const [releaseItems, setReleaseItems] = useState([]);
+  const [releaseLoading, setReleaseLoading] = useState(false);
+  const [releaseError, setReleaseError] = useState(null);
+  const [ytData, setYtData] = useState(null);
+  const [ytLoading, setYtLoading] = useState(false);
+  const [ytError, setYtError] = useState(null);
+  const [analyticsSummary, setAnalyticsSummary] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -54,7 +78,7 @@ export default function TableCard({
 
     fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
       .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch table metadata");
+        if (!res.ok) throw new Error("Не удалось загрузить карточку таблицы");
         return res.json();
       })
       .then(setMeta)
@@ -67,11 +91,11 @@ export default function TableCard({
     setHistoryLoading(true);
     setHistoryError(null);
     fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=10`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table history")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
       .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setHistoryError(typeof err === "string" ? err : "Failed to load table history");
+        setHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю запусков");
       })
       .finally(() => setHistoryLoading(false));
   }, [schema, tableName]);
@@ -81,11 +105,11 @@ export default function TableCard({
     setVariantsLoading(true);
     setVariantsError(null);
     fetch(`${API_BASE}/api/table-variants/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load table variants")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить варианты таблицы")))
       .then((data) => setVariants(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setVariantsError(typeof err === "string" ? err : "Failed to load table variants");
+        setVariantsError(typeof err === "string" ? err : "Не удалось загрузить варианты таблицы");
       })
       .finally(() => setVariantsLoading(false));
   }, [schema, tableName]);
@@ -95,11 +119,11 @@ export default function TableCard({
     setDqLoading(true);
     setDqError(null);
     fetch(`${API_BASE}/api/dq/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить качество данных")))
       .then((data) => setDqData(data))
       .catch((err) => {
         console.error(err);
-        setDqError(typeof err === "string" ? err : "Failed to load data quality");
+        setDqError(typeof err === "string" ? err : "Не удалось загрузить качество данных");
       })
       .finally(() => setDqLoading(false));
   }, [schema, tableName]);
@@ -109,13 +133,122 @@ export default function TableCard({
     setDqHistoryLoading(true);
     setDqHistoryError(null);
     fetch(`${API_BASE}/api/dq/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Failed to load data quality history")))
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю качества данных")))
       .then((data) => setDqHistory(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
-        setDqHistoryError(typeof err === "string" ? err : "Failed to load data quality history");
+        setDqHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю качества данных");
       })
       .finally(() => setDqHistoryLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickLoading(true);
+    setClickError(null);
+    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=6`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
+      .then((data) => {
+        setClickRuns(Array.isArray(data?.runs) ? data.runs : []);
+        setClickStages(Array.isArray(data?.stages) ? data.stages : []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setClickError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-логи");
+      })
+      .finally(() => setClickLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickMetaLoading(true);
+    setClickMetaError(null);
+    fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => {
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error("Не удалось загрузить ClickHouse-метаданные");
+        return res.json();
+      })
+      .then((data) => setClickMeta(data || null))
+      .catch((err) => {
+        console.error(err);
+        setClickMetaError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-метаданные");
+      })
+      .finally(() => setClickMetaLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setClickHistoryLoading(true);
+    setClickHistoryError(null);
+    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
+      .then((data) => setClickHistory(Array.isArray(data) ? data : []))
+      .catch((err) => {
+        console.error(err);
+        setClickHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю ClickHouse");
+      })
+      .finally(() => setClickHistoryLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    fetch(`${API_BASE}/api/analytics/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?days=90`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить аналитику таблицы")))
+      .then((data) => setAnalyticsSummary(data?.summary || null))
+      .catch((err) => {
+        console.error(err);
+        setAnalyticsError(typeof err === "string" ? err : "Не удалось загрузить аналитику таблицы");
+      })
+      .finally(() => setAnalyticsLoading(false));
+  }, [schema, tableName]);
+
+  const handleViewSearch = () => {
+    setViewSearchLoading(true);
+    setViewSearchError(null);
+    fetch(`${API_BASE}/api/click/view/search?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось найти view-скрипты")))
+      .then((data) => setViewMatches(Array.isArray(data?.matches) ? data.matches : []))
+      .catch((err) => {
+        console.error(err);
+        setViewSearchError(typeof err === "string" ? err : "Не удалось найти view-скрипты");
+      })
+      .finally(() => setViewSearchLoading(false));
+  };
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    handleViewSearch();
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setReleaseLoading(true);
+    setReleaseError(null);
+    fetch(`${API_BASE}/api/releases/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=12`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить релизы по объекту")))
+      .then((data) => setReleaseItems(Array.isArray(data?.items) ? data.items : []))
+      .catch((err) => {
+        console.error(err);
+        setReleaseError(typeof err === "string" ? err : "Не удалось загрузить релизы по объекту");
+      })
+      .finally(() => setReleaseLoading(false));
+  }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!schema || !tableName) return;
+    setYtLoading(true);
+    setYtError(null);
+    fetch(`${API_BASE}/api/ytrek/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить данные YouTrack")))
+      .then((data) => setYtData(data || null))
+      .catch((err) => {
+        console.error(err);
+        setYtError(typeof err === "string" ? err : "Не удалось загрузить данные YouTrack");
+      })
+      .finally(() => setYtLoading(false));
   }, [schema, tableName]);
 
   const status = useMemo(() => {
@@ -130,20 +263,20 @@ export default function TableCard({
     if (!tableContext?.status) return null;
     switch (tableContext.status) {
       case "slow_unstable":
-        return { label: "Slow & Unstable", tone: "danger" };
+        return { label: "Медленно и нестабильно", tone: "danger" };
       case "slow":
-        return { label: "Slow", tone: "danger" };
+        return { label: "Медленно", tone: "danger" };
       case "unstable":
-        return { label: "Unstable", tone: "warn" };
+        return { label: "Нестабильно", tone: "warn" };
       case "low_sample":
-        return { label: "Low Sample", tone: "muted" };
+        return { label: "Мало запусков", tone: "muted" };
       default:
         return { label: "OK", tone: "ok" };
     }
   }, [tableContext]);
 
   const fmt = (value) => (Number.isFinite(value) ? value.toFixed(2) : "—");
-  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("en-US") : "—");
+  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("ru-RU") : "—");
   const fmtPct = (value) => (Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—");
 
   const tableFqn = meta
@@ -154,35 +287,50 @@ export default function TableCard({
 
   const metrics = useMemo(() => {
     if (!meta) return [];
-    return [
+    const base = [
       {
-        label: "Last successful load",
+        label: "Последняя успешная загрузка",
         value: meta.last_success_time || "—",
-        hint: "log-based",
+        hint: "по логам",
       },
       {
-        label: "Average duration",
+        label: "Средняя длительность",
         value:
           meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
-            ? `${meta.avg_duration_minutes} min`
+            ? `${meta.avg_duration_minutes} мин`
             : "—",
-        hint: "successful runs only",
+        hint: "только успешные",
       },
       {
-        label: "Load mode",
+        label: "Режим загрузки",
         value: meta.table_load_mode || "—",
-        hint: "ETL configuration",
+        hint: "настройка ETL",
       },
       {
-        label: "Table size",
+        label: "Размер таблицы",
         value:
           meta.table_size_mb !== null && meta.table_size_mb !== undefined
             ? `${meta.table_size_mb} MB`
             : "—",
-        hint: "PostgreSQL estimate",
+        hint: "оценка БД",
       },
     ];
-  }, [meta]);
+    if (analyticsSummary) {
+      base.push(
+        {
+          label: "Изменений за 90 дней",
+          value: analyticsSummary.changes ?? "—",
+          hint: "release_objects",
+        },
+        {
+          label: "Часы за 90 дней",
+          value: analyticsSummary.hours ?? "—",
+          hint: "YouTrack worklog",
+        }
+      );
+    }
+    return base;
+  }, [meta, analyticsSummary]);
 
   const sqlSections = useMemo(() => {
     if (!meta) return [];
@@ -192,6 +340,39 @@ export default function TableCard({
       { title: "SQL: truncate", sql: meta.sql_query_truncate_sql },
     ];
   }, [meta]);
+
+  const clickLastRun = clickRuns[0] || null;
+  const clickStatusLabel = (status) => {
+    switch (status) {
+      case "SUCCESS":
+        return "Успешно";
+      case "FAILED":
+        return "Ошибка";
+      case "RUNNING":
+        return "В процессе";
+      case "UP_FOR_RETRY":
+        return "Повтор";
+      default:
+        return status || "—";
+    }
+  };
+  const releaseStatusClass = (status) => {
+    const value = String(status || "").toLowerCase();
+    if (!value) return "status-unknown";
+    if (value.includes("success")) return "status-success";
+    if (value.includes("fail") || value.includes("error")) return "status-failed";
+    if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
+    return "status-unknown";
+  };
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const str = String(value);
+    const normalized = str.replace("T", " ").replace("Z", "");
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    if (match) return `${match[1]} ${match[2]}`;
+    return normalized;
+  };
+  const ytLink = (id) => (id ? `https://yt.rusal.ru/issue/${id}` : "#");
 
   const copySql = (sql) => {
     if (!sql) return;
@@ -242,7 +423,7 @@ export default function TableCard({
 
     fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Failed to build dependency graph"),
+        res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
       .then((data) => {
         const nodes = Array.isArray(data.nodes) ? data.nodes : [];
@@ -261,7 +442,7 @@ export default function TableCard({
       })
       .catch((err) => {
         console.error(err);
-        setDepsError(typeof err === "string" ? err : "Failed to load graph");
+        setDepsError(typeof err === "string" ? err : "Не удалось загрузить граф");
       })
       .finally(() => setLoadingDeps(false));
   };
@@ -287,7 +468,7 @@ export default function TableCard({
   const copyList = () => {
     if (!tableList.length) return;
     navigator.clipboard.writeText(tableList.join("\n"));
-    alert("Table list copied");
+    alert("Список таблиц скопирован");
   };
 
   const handleNodeClick = (newSchema, newTable) => {
@@ -309,11 +490,11 @@ export default function TableCard({
     return (
       <div className="table-page">
         <div className="card dep-error">
-          <div className="dep-error-title">Failed to load table card</div>
+          <div className="dep-error-title">Не удалось загрузить карточку</div>
           <div className="muted">{error}</div>
           <div style={{ marginTop: 12 }}>
             <button className="btn" onClick={onBack}>
-              ← Back
+              ← Назад
             </button>
           </div>
         </div>
@@ -324,7 +505,7 @@ export default function TableCard({
   if (loadingMeta || !meta) {
     return (
       <div className="table-page">
-        <div className="card muted">Loading table card...</div>
+        <div className="card muted">Загрузка карточки...</div>
       </div>
     );
   }
@@ -333,10 +514,10 @@ export default function TableCard({
     <div className="table-page">
       <div className="table-header">
         <button className="btn" onClick={onBack}>
-          ← Back
+          ← Назад
         </button>
         <div className="table-head-main">
-          <div className="table-head-label">Table</div>
+          <div className="table-head-label">Таблица</div>
           <div className="table-title">{tableFqn}</div>
           <div className="table-head-meta">
             <span>{meta.entity_name || "—"}</span>
@@ -345,16 +526,16 @@ export default function TableCard({
         </div>
         <div className="table-status-wrap">
           <div className={`table-status ${status}`}>
-            {status === "risk" ? "RISK" : status === "warn" ? "WARN" : "OK"}
+            {status === "risk" ? "Риск" : status === "warn" ? "Внимание" : "OK"}
           </div>
           <button
             className="status-help"
             title={
               status === "risk"
-                ? "RISK: avg duration > 20 min based on recent SUCCESS runs."
+                ? "Риск: средняя длительность > 20 мин по успешным загрузкам."
                 : status === "warn"
-                ? "WARN: avg duration > 10 min based on recent SUCCESS runs."
-                : "OK: avg duration <= 10 min based on recent SUCCESS runs."
+                ? "Внимание: средняя длительность > 10 мин по успешным загрузкам."
+                : "OK: средняя длительность ≤ 10 мин по успешным загрузкам."
             }
           >
             ?
@@ -366,9 +547,9 @@ export default function TableCard({
         <div className="table-health-card">
           <div className="table-health-header">
             <div>
-              <div className="table-health-title">Load health</div>
+              <div className="table-health-title">Стабильность загрузки</div>
               <div className="table-health-subtitle muted">
-                Based on successful runs in Slow/Unstable.
+                На основе успешных запусков (Slow/Unstable).
               </div>
             </div>
             {healthBadge && (
@@ -379,21 +560,21 @@ export default function TableCard({
           </div>
           <div className="table-health-legend">
             <span className="table-health-legend-item">
-              Slow &amp; Unstable: p95 &gt; 10 min and CV &gt; 0.6
+              Медленно и нестабильно: p95 &gt; 10 мин и CV &gt; 0.6
             </span>
             <span className="table-health-legend-item">
-              Slow: p95 &gt; 10 min
+              Медленно: p95 &gt; 10 мин
             </span>
             <span className="table-health-legend-item">
-              Unstable: CV &gt; 0.3
+              Нестабильно: CV &gt; 0.3
             </span>
             <span className="table-health-legend-item">
-              Low Sample: not enough runs
+              Мало запусков: недостаточно данных
             </span>
           </div>
           <div className="table-health-metrics">
             <div>
-              <div className="table-health-label">Runs</div>
+              <div className="table-health-label">Запусков</div>
               <div className="table-health-value">{tableContext.runs_count ?? "—"}</div>
             </div>
             <div>
@@ -411,7 +592,7 @@ export default function TableCard({
           </div>
           {tableContext.low_sample && (
             <div className="table-health-note">
-              Not enough runs for stable assessment — use with caution.
+              Недостаточно запусков для уверенной оценки.
             </div>
           )}
         </div>
@@ -427,67 +608,67 @@ export default function TableCard({
         ))}
 
         <div className="table-info-card table-actions">
-          <div className="table-card-label">Actions</div>
+          <div className="table-card-label">Действия</div>
           <div className="table-action-buttons">
             <button className="btn btn-secondary" onClick={loadDependencies}>
-              Show dependency graph
+              Граф зависимостей
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => onOpenImpact?.(schema, tableName)}
             >
-              Open impact graph
+              Граф влияния
             </button>
             <button
               className="btn btn-secondary"
               onClick={() => setShowGantt(!showGantt)}
             >
-              {showGantt ? "Hide timeline" : "Load timeline"}
+              {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
             </button>
             <button
               className="btn btn-secondary"
               onClick={copyList}
               disabled={!tableList.length}
             >
-              Copy dependency list
+              Скопировать список
             </button>
             <button className="btn" onClick={onBack}>
-              Return
+              Назад
             </button>
           </div>
         </div>
       </div>
 
       <div className="table-section">
-        <div className="section-title">Data quality</div>
+        <div className="section-title">Качество данных</div>
         <div className="card">
-          {dqLoading && <div className="muted">Loading data quality...</div>}
+          {dqLoading && <div className="muted">Загрузка качества данных...</div>}
           {dqError && <div className="dep-error-title">{dqError}</div>}
           {!dqLoading && !dqError && !dqData && (
-            <div className="muted">No data quality checks found.</div>
+            <div className="muted">Проверки качества не найдены.</div>
           )}
           {!dqLoading && !dqError && dqData && (
             <div className="dq-grid">
               <div className="dq-card">
-                <div className="dq-label">Duplicate check</div>
+                <div className="dq-label">Проверка дублей</div>
                 <div className="dq-value">
                   {dqData.duplicate?.count !== null && dqData.duplicate?.count !== undefined
                     ? fmtInt(dqData.duplicate.count)
                     : "—"}
                 </div>
                 <div className="dq-hint muted">
-                  Last check: {dqData.duplicate?.last_check || "—"}
+                  Последняя проверка: {dqData.duplicate?.last_check || "—"}
                 </div>
               </div>
               <div className="dq-card">
-                <div className="dq-label">Row count</div>
+                <div className="dq-label">Кол-во строк</div>
                 <div className="dq-value">
                   {dqData.row_count?.count !== null && dqData.row_count?.count !== undefined
                     ? fmtInt(dqData.row_count.count)
                     : "—"}
                 </div>
                 <div className="dq-hint muted">
-                  Baseline median (last 7 checks):{" "}
+                  Базовая медиана (7 проверок):{" "}
                   {dqData.row_count?.baseline_median !== null && dqData.row_count?.baseline_median !== undefined
                     ? fmtInt(dqData.row_count.baseline_median)
                     : "—"}
@@ -496,7 +677,7 @@ export default function TableCard({
                 </div>
                 {Number.isFinite(dqData.row_count?.delta_pct) &&
                   Math.abs(dqData.row_count.delta_pct) >= 10 && (
-                    <div className="dq-alert">Deviation exceeds 10%</div>
+                    <div className="dq-alert">Отклонение больше 10%</div>
                   )}
               </div>
             </div>
@@ -506,21 +687,21 @@ export default function TableCard({
               className="btn btn-secondary"
               onClick={() => setShowDqHistory((prev) => !prev)}
             >
-              {showDqHistory ? "Hide history" : "Show history"}
+              {showDqHistory ? "Скрыть историю" : "Показать историю"}
             </button>
             {showDqHistory && (
               <>
-                {dqHistoryLoading && <div className="muted">Loading data quality history...</div>}
+                {dqHistoryLoading && <div className="muted">Загрузка истории качества...</div>}
                 {dqHistoryError && <div className="dep-error-title">{dqHistoryError}</div>}
                 {!dqHistoryLoading && !dqHistoryError && dqHistory.length === 0 && (
-                  <div className="muted">No data quality history yet.</div>
+                  <div className="muted">Истории качества пока нет.</div>
                 )}
                 {!dqHistoryLoading && !dqHistoryError && dqHistory.length > 0 && (
                   <div className="dq-history-table">
                     <div className="dq-history-head">
-                      <span>Check</span>
-                      <span>Value</span>
-                      <span>Date</span>
+                      <span>Проверка</span>
+                      <span>Значение</span>
+                      <span>Дата</span>
                     </div>
                     {dqHistory.map((row, idx) => (
                       <div key={`${row.dt || "row"}-${idx}`} className="dq-history-row">
@@ -538,7 +719,278 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">SQL scripts</div>
+        <div className="section-title">Загрузка в ClickHouse</div>
+        <div className="card">
+          {clickLoading && <div className="muted">Загрузка ClickHouse-логов...</div>}
+          {clickError && <div className="dep-error-title">{clickError}</div>}
+          {!clickLoading && !clickError && clickRuns.length === 0 && (
+            <div className="muted">Запусков ClickHouse не найдено.</div>
+          )}
+          {!clickLoading && !clickError && clickRuns.length > 0 && (
+            <>
+              <div className="click-run-head">
+                <div>
+                  <div className="click-run-title">Последний запуск</div>
+                  <div className="muted">
+                    {clickLastRun?.dag_name || "—"} · {clickLastRun?.dag_run || "—"}
+                  </div>
+                </div>
+                <div className={`click-run-status status-${String(clickLastRun?.status || "").toLowerCase()}`}>
+                  {clickStatusLabel(clickLastRun?.status)}
+                </div>
+              </div>
+              <div className="click-run-meta">
+                <div>
+                  <div className="click-label">Старт</div>
+                  <div className="click-value">{clickLastRun?.start_dttm || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Финиш</div>
+                  <div className="click-value">{clickLastRun?.end_dttm || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Работа</div>
+                  <div className="click-value">
+                    {formatMinutes(clickLastRun?.actual_duration_min ?? clickLastRun?.duration_min)}
+                  </div>
+                </div>
+                <div>
+                  <div className="click-label">Лаг</div>
+                  <div className="click-value">
+                    {formatMinutes(clickLastRun?.lag_duration_min ?? 0)}
+                  </div>
+                </div>
+              </div>
+              {clickLastRun?.error_text && (
+                <div className="click-run-error">
+                  {clickLastRun.error_text}
+                </div>
+              )}
+
+              <div className="click-meta-block">
+                <div className="section-subtitle">ClickHouse метаданные</div>
+                {clickMetaLoading && <div className="muted">Загрузка метаданных...</div>}
+                {clickMetaError && <div className="dep-error-title">{clickMetaError}</div>}
+                {!clickMetaLoading && !clickMetaError && !clickMeta?.meta && !clickMeta?.view_sql && (
+                  <div className="muted">Метаданные не найдены.</div>
+                )}
+                {!clickMetaLoading && !clickMetaError && (clickMeta?.meta || clickMeta?.view_sql) && (
+                  <>
+                    {clickMeta?.meta && (
+                      <div className="click-meta-grid">
+                        <div>
+                          <div className="click-label">Схема GP</div>
+                          <div className="click-value">{clickMeta.meta.schema_name_gp || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Схема ClickHouse</div>
+                          <div className="click-value">{clickMeta.meta.schema_name_click || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Тип загрузки</div>
+                          <div className="click-value">{clickMeta.meta.load_type || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Recreate</div>
+                          <div className="click-value">{clickMeta.meta.recreate_mode || "—"}</div>
+                        </div>
+                        <div>
+                          <div className="click-label">Truncate</div>
+                          <div className="click-value">
+                            {clickMeta.meta.truncate_mode_on !== undefined ? String(clickMeta.meta.truncate_mode_on) : "—"}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="click-label">Колонки</div>
+                          <div className="click-value">
+                            {Array.isArray(clickMeta.meta.attributes) ? clickMeta.meta.attributes.length : "—"}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {viewSearchLoading && <div className="muted">Ищем view-скрипты...</div>}
+                    {viewSearchError && <div className="dep-error-title">{viewSearchError}</div>}
+                    {!viewSearchLoading && !viewSearchError && (
+                      <>
+                        {viewMatches.length > 0 ? (
+                          <div className="click-view-list">
+                            {viewMatches.map((item, idx) => (
+                              <div key={`${item.view_name}-${idx}`} className="click-view-row">
+                                <div className="mono">{item.view_schema}.{item.view_name}</div>
+                                <div className="muted">Используется в view</div>
+                                <button
+                                  className="btn btn-secondary"
+                                  onClick={() =>
+                                    fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(item.view_schema)}/${encodeURIComponent(item.view_name)}`)
+                                      .then((res) => (res.ok ? res.json() : Promise.reject()))
+                                      .then((data) => {
+                                        if (data?.view_sql) {
+                                          openSqlModal({ title: `ClickHouse VIEW: ${item.view_name}`, sql: data.view_sql });
+                                        }
+                                      })
+                                      .catch(() => {})
+                                  }
+                                >
+                                  Открыть
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="muted">View-скрипты не найдены.</div>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">Релизы объекта</div>
+        <div className="card">
+          {releaseLoading && <div className="muted">Загрузка релизов...</div>}
+          {releaseError && <div className="dep-error-title">{releaseError}</div>}
+          {!releaseLoading && !releaseError && releaseItems.length === 0 && (
+            <div className="muted">Релизы по объекту не найдены.</div>
+          )}
+          {!releaseLoading && !releaseError && releaseItems.length > 0 && (
+            <div className="release-table">
+              <div className="release-head">
+                <span>Релиз</span>
+                <span>Задача</span>
+                <span>БД</span>
+                <span>Автор</span>
+                <span>Статус</span>
+                <span>Изменения</span>
+                <span>Дата</span>
+              </div>
+              {releaseItems.map((item, idx) => (
+                <div key={`${item.release_id}-${idx}`} className="release-row">
+                  <span className="mono">{item.release_id}</span>
+                  {item.task_link ? (
+                    <a className="yt-link" href={item.task_link} target="_blank" rel="noreferrer">
+                      {item.task_id || "—"}
+                    </a>
+                  ) : (
+                    <span className="mono">{item.task_id || "—"}</span>
+                  )}
+                  <span>{item.target_system || "—"}</span>
+                  <span>{item.initiated_by || "—"}</span>
+                  <span className={`status-pill ${releaseStatusClass(item.final_status)}`}>
+                    {item.final_status || "—"}
+                  </span>
+                  <span className="muted" title={item.change_type || ""}>
+                    {item.change_type || "—"}
+                  </span>
+                  <span>{formatDateTime(item.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">YouTrack: задачи по таблице</div>
+        <div className="card">
+          {ytLoading && <div className="muted">Загрузка задач...</div>}
+          {ytError && <div className="dep-error-title">{ytError}</div>}
+          {!ytLoading && !ytError && (!ytData || !ytData.tasks || ytData.tasks.length === 0) && (
+            <div className="muted">Задачи не найдены.</div>
+          )}
+          {!ytLoading && !ytError && ytData?.tasks?.length > 0 && (
+            <>
+              <div className="yt-summary">
+                <div>
+                  <div className="yt-label">Задач</div>
+                  <div className="yt-value">{ytData.stats?.tasks_count ?? ytData.tasks.length}</div>
+                </div>
+                <div>
+                  <div className="yt-label">Трудозатраты</div>
+                  <div className="yt-value">
+                    {ytData.stats?.work_minutes_total
+                      ? `${Math.round(ytData.stats.work_minutes_total / 60)} ч`
+                      : "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="yt-task-table">
+                <div className="yt-task-head">
+                  <span>Задача</span>
+                  <span>Постановщик</span>
+                  <span>Исполнитель</span>
+                  <span>Статус</span>
+                  <span>Направление</span>
+                  <span>Трудозатраты</span>
+                  <span>Последняя смена исполнителя</span>
+                  <span>Последняя смена статуса</span>
+                </div>
+                {ytData.tasks.map((t) => (
+                  <div key={t.issue_id} className="yt-task-row">
+                    <a className="yt-link" href={ytLink(t.issue_id)} target="_blank" rel="noreferrer">
+                      {t.issue_id}
+                    </a>
+                    <span>{t.created_by || "—"}</span>
+                    <span>
+                      {t.effective_assignee || "—"}
+                      {t.effective_assignee_reason ? (
+                        <span className="muted"> · {t.effective_assignee_reason}</span>
+                      ) : null}
+                    </span>
+                    <span>{t.current_state || "—"}</span>
+                    <span>{t.custom?.["Направление"] || "—"}</span>
+                    <span>
+                      {t.work_minutes ? `${Math.round(t.work_minutes / 60)} ч` : "—"}
+                    </span>
+                    <span className="muted">
+                      {t.last_assignee_change?.author
+                        ? `${t.last_assignee_change.author} → ${t.last_assignee_change.value_to || "—"}`
+                        : "—"}
+                    </span>
+                    <span className="muted">
+                      {t.last_state_change?.author
+                        ? `${t.last_state_change.author} → ${t.last_state_change.value_to || "—"}`
+                        : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {ytData.timeline?.length > 0 && (
+                <div className="yt-timeline">
+                  <div className="section-subtitle">Последние изменения</div>
+                  <div className="yt-timeline-head">
+                    <span>Дата</span>
+                    <span>Автор</span>
+                    <span>Событие</span>
+                    <span>Поле</span>
+                    <span>Было</span>
+                    <span>Стало</span>
+                  </div>
+                  {ytData.timeline.slice(0, 20).map((row, idx) => (
+                    <div key={`${row.issue_id}-${idx}`} className="yt-timeline-row">
+                      <span>{row.ts || "—"}</span>
+                      <span>{row.author || "—"}</span>
+                      <span>{row.event_type || "—"}</span>
+                      <span>{row.field_name || "—"}</span>
+                      <span>{row.value_from || "—"}</span>
+                      <span>{row.value_to || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="table-section">
+        <div className="section-title">SQL-скрипты</div>
         <div className="table-sql-grid">
           {sqlSections.map((block) => {
             const hasSql = Boolean(block.sql && block.sql.length);
@@ -549,7 +1001,7 @@ export default function TableCard({
                   <div className="table-sql-type-block">
                     <div className="table-sql-type mono">{block.title}</div>
                     <div className="table-sql-meta muted">
-                      {hasSql ? `${lines.length} lines · ${block.sql.length} characters` : "Script not available"}
+                      {hasSql ? `${lines.length} строк · ${block.sql.length} символов` : "Скрипт недоступен"}
                     </div>
                   </div>
                   <div className="table-sql-actions">
@@ -558,7 +1010,7 @@ export default function TableCard({
                       onClick={() => openSqlModal(block)}
                       disabled={!hasSql}
                     >
-                      Open
+                      Открыть
                     </button>
                   </div>
                 </div>
@@ -569,52 +1021,107 @@ export default function TableCard({
       </div>
 
       <div className="table-section">
-        <div className="section-title">Recent runs (last 10)</div>
+        <div className="section-title">Последние запуски</div>
         <div className="card">
-          {historyLoading && <div className="muted">Loading recent runs...</div>}
-          {historyError && <div className="dep-error-title">{historyError}</div>}
-          {!historyLoading && !historyError && historyRows.length === 0 && (
-            <div className="muted">No recent runs found.</div>
-          )}
-          {!historyLoading && !historyError && historyRows.length > 0 && (
-            <div className="history-table">
-              <div className="history-table-head">
-                <span>Status</span>
-                <span>Start</span>
-                <span>Finish</span>
-                <span>Duration</span>
-                <span>Message</span>
-              </div>
-              {historyRows.map((row, idx) => (
-                <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
-                  <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
-                    {row.state || "UNKNOWN"}
-                  </span>
-                  <span>{row.start || "—"}</span>
-                  <span>{row.finish || "—"}</span>
-                  <span>{row.duration_minutes ?? "—"} min</span>
-                  <span className="history-message">{row.message || "—"}</span>
+          <div className="history-toggle">
+            <button
+              className={`btn btn-ghost ${historyMode === "gp" ? "active" : ""}`}
+              onClick={() => setHistoryMode("gp")}
+            >
+              GP (основная загрузка)
+            </button>
+            <button
+              className={`btn btn-ghost ${historyMode === "click" ? "active" : ""}`}
+              onClick={() => setHistoryMode("click")}
+            >
+              ClickHouse (S3/CH)
+            </button>
+          </div>
+
+          {historyMode === "gp" && (
+            <>
+              {historyLoading && <div className="muted">Загрузка запусков...</div>}
+              {historyError && <div className="dep-error-title">{historyError}</div>}
+              {!historyLoading && !historyError && historyRows.length === 0 && (
+                <div className="muted">Запусков не найдено.</div>
+              )}
+              {!historyLoading && !historyError && historyRows.length > 0 && (
+                <div className="history-table gp">
+                  <div className="history-table-head">
+                    <span>Статус</span>
+                    <span>Старт</span>
+                    <span>Финиш</span>
+                    <span>Длит.</span>
+                    <span>Комментарий</span>
+                  </div>
+                  {historyRows.map((row, idx) => (
+                    <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
+                      <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
+                        {row.state || "UNKNOWN"}
+                      </span>
+                      <span>{row.start || "—"}</span>
+                      <span>{row.finish || "—"}</span>
+                      <span>{row.duration_minutes ?? "—"} мин</span>
+                      <span className="history-message">
+                        {row.message ? (
+                          <span className="history-note" title={row.message}>ℹ︎</span>
+                        ) : "—"}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
+          )}
+
+          {historyMode === "click" && (
+            <>
+              {clickHistoryLoading && <div className="muted">Загрузка ClickHouse...</div>}
+              {clickHistoryError && <div className="dep-error-title">{clickHistoryError}</div>}
+              {!clickHistoryLoading && !clickHistoryError && clickHistory.length === 0 && (
+                <div className="muted">Запусков ClickHouse не найдено.</div>
+              )}
+              {!clickHistoryLoading && !clickHistoryError && clickHistory.length > 0 && (
+                <div className="history-table click">
+                  <div className="history-table-head">
+                    <span>Этап</span>
+                    <span>Старт</span>
+                    <span>Финиш</span>
+                    <span>Работа</span>
+                    <span>Лаг</span>
+                    <span>Статус</span>
+                  </div>
+                  {clickHistory.map((row, idx) => (
+                    <div key={`${row.run_uuid}-${idx}`} className={`history-table-row status-${String(row.status || "").toLowerCase()}`}>
+                      <span>{row.stage_name}</span>
+                      <span>{row.start_dttm || "—"}</span>
+                      <span>{row.end_dttm || "—"}</span>
+                      <span>{formatMinutes(row.actual_duration_min ?? row.duration_min)}</span>
+                      <span>{formatMinutes(row.lag_duration_min ?? 0)}</span>
+                      <span>{clickStatusLabel(row.status)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
       <div className="table-section">
-        <div className="section-title">Table variants (other entities)</div>
+        <div className="section-title">Варианты таблицы (другие сущности)</div>
         <div className="card">
-          {variantsLoading && <div className="muted">Loading variants...</div>}
+          {variantsLoading && <div className="muted">Загрузка вариантов...</div>}
           {variantsError && <div className="dep-error-title">{variantsError}</div>}
           {!variantsLoading && !variantsError && variants.length <= 1 && (
-            <div className="muted">No other entity variants found.</div>
+            <div className="muted">Других вариантов нет.</div>
           )}
           {!variantsLoading && !variantsError && variants.length > 1 && (
             <div className="variants-table">
               <div className="variants-table-head">
-                <span>Entity</span>
-                <span>Table ID</span>
-                <span>Last load</span>
+                <span>Сущность</span>
+                <span>ID таблицы</span>
+                <span>Последняя загрузка</span>
               </div>
               {variants.map((row) => (
                 <div key={`${row.entity_id}-${row.table_id}`} className="variants-table-row">
@@ -630,7 +1137,7 @@ export default function TableCard({
 
       {Array.isArray(meta.key_attributes) && meta.key_attributes.length > 0 && (
         <div className="table-section">
-          <div className="section-title">Key attributes</div>
+          <div className="section-title">Ключевые поля</div>
           <div className="card">
             <div className="table-key-list">
               {meta.key_attributes.map((key) => (
@@ -644,35 +1151,35 @@ export default function TableCard({
       )}
 
       <div className="table-section">
-        <div className="section-title">Dependency graph</div>
+        <div className="section-title">Граф зависимостей</div>
         <div className="card">
-          {loadingDeps && <div className="muted">Building graph...</div>}
+          {loadingDeps && <div className="muted">Построение графа...</div>}
           {depsError && (
             <div className="dep-error-title">{depsError}</div>
           )}
           {!loadingDeps && !depsError && !showGraph && (
-            <div className="muted">Click “Show dependency graph” to render.</div>
+            <div className="muted">Нажмите «Граф зависимостей», чтобы построить.</div>
           )}
           {!loadingDeps && !depsError && graphTruncated && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Truncated graph shown</div>
+              <div className="dep-error-title">Граф усечён</div>
               <div className="muted">
-                Depth-limited. Use the entity graph for full coverage.
+                Ограничение глубины. Для полного обзора используйте граф сущности.
               </div>
             </div>
           )}
           {!loadingDeps && !depsError && graphTooLarge && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Graph is too large</div>
+              <div className="dep-error-title">Слишком большой граф</div>
               <div className="muted">
-                Nodes: {graphStats.nodes}, edges: {graphStats.edges}. This may hang in production.
+                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. Может подвисать.
               </div>
               <div className="table-graph-actions" style={{ marginTop: 10 }}>
                 <button className="btn btn-secondary" onClick={() => setShowGraph(true)}>
-                  Render anyway
+                  Отрисовать
                 </button>
                 <button className="btn" onClick={() => setShowList(true)}>
-                  Show list
+                  Показать список
                 </button>
               </div>
             </div>
@@ -691,13 +1198,13 @@ export default function TableCard({
           {(showGraph || showList) && (
             <div className="table-graph-actions">
               <button className="btn" onClick={() => setShowList(!showList)}>
-                {showList ? "Hide list" : "Show list"}
+                {showList ? "Скрыть список" : "Показать список"}
               </button>
               {showList && (
                 <div style={{ width: "100%" }}>
                   {graphTruncated && (
                     <div className="muted" style={{ marginTop: 10 }}>
-                      Depth-limited graph; list shows current slice only.
+                      Глубина ограничена — список показывает текущий срез.
                     </div>
                   )}
                   <pre className="table-code" style={{ marginTop: 12 }}>
@@ -712,7 +1219,7 @@ export default function TableCard({
 
       {showGantt && (
         <div className="table-section">
-          <div className="section-title">Load timeline</div>
+          <div className="section-title">Таймлайн загрузок</div>
           <div className="card">
             <GanttChart schema={schema} table={tableName} />
           </div>
@@ -726,16 +1233,16 @@ export default function TableCard({
               <div>
                 <div className="sql-modal-type">{activeSqlBlock.title}</div>
                 <div className="sql-modal-meta">
-                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} lines
+                  {tableFqn} · {activeSqlBlock.sql?.split("\n").length || 0} строк
                 </div>
               </div>
               <div className="sql-modal-actions">
-                <span className="sql-modal-hint">Use Ctrl+F to search</span>
+                <span className="sql-modal-hint">Ctrl+F для поиска</span>
                 <button
                   className="btn btn-secondary"
                   onClick={() => copySql(activeSqlBlock.sql)}
                 >
-                  Copy
+                  Копировать
                 </button>
                 <button className="btn btn-ghost" onClick={closeSqlModal}>
                   ✕

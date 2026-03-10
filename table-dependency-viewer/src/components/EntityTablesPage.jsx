@@ -44,7 +44,7 @@ export default function EntityTablesPage() {
       .then((data) => setRows(Array.isArray(data) ? data : []))
       .catch((e) => {
         console.error(e);
-        setErr("Failed to load entity tables");
+        setErr("Не удалось загрузить таблицы сущности");
       })
       .finally(() => setLoading(false));
   }, [entityId]);
@@ -187,47 +187,47 @@ export default function EntityTablesPage() {
       <div className="entity-hero">
         <div>
           <div className="entity-title">
-            {entityName ? `Entity ${entityName}` : "Entity tables"}
+            {entityName ? `Сущность ${entityName}` : "Таблицы сущности"}
           </div>
           <div className="entity-subtitle">
-            {entityId ? `ID: ${entityId}` : "Tables and recent loads"}
+            {entityId ? `ID: ${entityId}` : "Таблицы и последние загрузки"}
           </div>
         </div>
         <div className="entity-toolbar">
           <button className="btn btn-ghost" onClick={() => navigate("/entity_schedule")}>
-            Back to entities →
+            Назад к сущностям →
           </button>
         </div>
       </div>
 
       <section className="cc-surface">
-        <div className="section-title">Summary</div>
+        <div className="section-title">Сводка</div>
         <div className="entity-kpis">
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Tables</div>
+            <div className="entity-kpi-label">Таблицы</div>
             <div className="entity-kpi-value">{summary.total}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Stale</div>
+            <div className="entity-kpi-label">Просрочены</div>
             <div className="entity-kpi-value">{summary.staleCount}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Schemas</div>
+            <div className="entity-kpi-label">Схемы</div>
             <div className="entity-kpi-value">{summary.schemas}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Latest load</div>
+            <div className="entity-kpi-label">Последняя загрузка</div>
             <div className="entity-kpi-value">{summary.latest ? summary.latest.toISOString().slice(0, 19).replace("T", " ") : "—"}</div>
           </div>
         </div>
       </section>
 
       <section className="cc-surface">
-        <div className="section-title">Search & filters</div>
+        <div className="section-title">Поиск и фильтры</div>
         <div className="entity-filter-grid">
           <input
             className="entity-search"
-            placeholder="Filter by table"
+            placeholder="Фильтр по таблице"
             value={tableQuery}
             onChange={(e) => setTableQuery(e.target.value)}
           />
@@ -236,7 +236,7 @@ export default function EntityTablesPage() {
               ref={inputRef}
               type="text"
               className="entity-search"
-              placeholder="Filter by schema"
+              placeholder="Фильтр по схеме"
               value={schemaQuery}
               onChange={(e) => { setSchemaQuery(e.target.value); setShowSug(true); setActiveIdx(-1); }}
               onFocus={() => setShowSug(true)}
@@ -247,7 +247,7 @@ export default function EntityTablesPage() {
                 type="button"
                 onClick={clearFilter}
                 className="entity-filter-clear"
-                title="Clear"
+                title="Очистить"
               >
                 ×
               </button>
@@ -271,7 +271,7 @@ export default function EntityTablesPage() {
               className={`pill ${staleOnly ? "pill-active" : ""}`}
               onClick={() => setStaleOnly((prev) => !prev)}
             >
-              Stale only
+              Только просроченные
             </button>
           </div>
         </div>
@@ -280,14 +280,14 @@ export default function EntityTablesPage() {
         {err && <div className="dep-error-title">{err}</div>}
 
         {grouped.length === 0 && !loading && (
-          <div className="muted">No tables match the filters</div>
+          <div className="muted">Ничего не найдено</div>
         )}
 
         {grouped.map((group) => (
           <div key={group.schema} className="entity-schema-block">
             <div className="entity-schema-header">
               <div className="entity-schema-title">{group.schema}</div>
-              <div className="entity-schema-count">{group.rows.length} tables</div>
+              <div className="entity-schema-count">{group.rows.length} таблиц</div>
             </div>
             <div className="entity-table-list">
               {group.rows.map((r) => (
@@ -298,17 +298,17 @@ export default function EntityTablesPage() {
                   </div>
                   <div className="entity-table-meta">
                     {r.stale ? (
-                      <span className="stale-pill">Stale</span>
+                      <span className="stale-pill">Просрочена</span>
                     ) : (
                       <span className="ok-pill">OK</span>
                     )}
-                    <span className="muted">{r.ageHours !== null ? `${r.ageHours} h` : "no data"}</span>
+                    <span className="muted">{r.ageHours !== null ? `${r.ageHours} ч` : "нет данных"}</span>
                   </div>
                   <button
                     className="btn btn-ghost entity-table-action"
                     onClick={() => navigate(`/table/${r.schema}/${r.table}`)}
                   >
-                    Table Card
+                    Карточка
                   </button>
                 </div>
               ))}

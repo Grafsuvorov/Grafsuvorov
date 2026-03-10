@@ -1,57 +1,47 @@
-select
-      run_uuid,
-      stage_name,
-      start_dttm,
-      end_dttm,
-      duration,
-      extract(epoch from duration) as duration_sec,
-      status
-  from tech_etl.click_fact_table_load_stage
-  where run_uuid = 'ТВОЙ_RUN_UUID'
-    and stage_name in ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
-  order by stage_name, start_dttm;
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	18	1326.5169919999998	437.064648	2026-03-10 01:50:21.999	2026-03-10 05:35:27.090
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	18	281.70179700000006	131.342496	2026-03-10 01:50:32.726	2026-03-10 05:36:23.576
 
-  И еще сразу сводку:
 
-  select
-      run_uuid,
-      stage_name,
-      count(*) as rows_cnt,
-      sum(extract(epoch from duration)) as sum_duration_sec,
-      max(extract(epoch from duration)) as max_duration_sec,
-      min(start_dttm) as min_start,
-      max(end_dttm) as max_end
-  from tech_etl.click_fact_table_load_stage
-  where run_uuid = 'ТВОЙ_RUN_UUID'
-    and stage_name in ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
-  group by run_uuid, stage_name;
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 01:50:32.726	2026-03-10 01:50:33.161	00:00:00.43588	0.43588	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 01:50:33.060	2026-03-10 01:50:33.161	00:00:00.101852	0.101852	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 04:17:40.824	2026-03-10 04:17:41.393	00:00:00.568763	0.568763	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 04:34:57.101	2026-03-10 04:36:46.788	00:01:49.687068	109.687068	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:23:55.961	2026-03-10 05:23:56.400	00:00:00.438669	0.438669	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:06.518	2026-03-10 05:24:07.623	00:00:01.104795	1.104795	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:07.144	2026-03-10 05:24:07.623	00:00:00.479596	0.479596	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:19.785	2026-03-10 05:24:20.812	00:00:01.027333	1.027333	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:31.564	2026-03-10 05:24:47.584	00:00:16.020421	16.020421	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:31.710	2026-03-10 05:24:47.584	00:00:15.874048	15.874048	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:24:58.299	2026-03-10 05:27:09.642	00:02:11.342496	131.342496	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:27:31.917	2026-03-10 05:27:32.927	00:00:01.010041	1.010041	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:27:32.128	2026-03-10 05:27:32.927	00:00:00.799045	0.799045	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:27:39.901	2026-03-10 05:27:40.001	00:00:00.100344	0.100344	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:27:43.345	2026-03-10 05:27:43.790	00:00:00.444892	0.444892	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:35:59.939	2026-03-10 05:36:00.542	00:00:00.602929	0.602929	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:36:11.769	2026-03-10 05:36:12.646	00:00:00.87627	0.87627	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	CLICKHOUSE_LOAD	2026-03-10 05:36:22.789	2026-03-10 05:36:23.576	00:00:00.787355	0.787355	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 01:50:21.999	2026-03-10 01:50:23.078	00:00:01.07962	1.07962	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 01:50:22.014	2026-03-10 01:50:23.078	00:00:01.064537	1.064537	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 04:12:47.621	2026-03-10 04:17:29.481	00:04:41.860488	281.860488	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 04:17:28.052	2026-03-10 04:17:29.481	00:00:01.429053	1.429053	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 04:54:56.465	2026-03-10 05:01:48.232	00:06:51.767476	411.767476	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:01:44.114	2026-03-10 05:01:48.232	00:00:04.118144	4.118144	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:05:17.075	2026-03-10 05:12:34.140	00:07:17.064648	437.064648	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:18:09.162	2026-03-10 05:18:18.870	00:00:09.708	9.708	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:18:28.751	2026-03-10 05:20:07.161	00:01:38.409296	98.409296	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:20:59.012	2026-03-10 05:21:00.864	00:00:01.851464	1.851464	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:21:11.823	2026-03-10 05:21:13.296	00:00:01.47283	1.47283	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:21:24.425	2026-03-10 05:21:25.610	00:00:01.184962	1.184962	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:21:36.478	2026-03-10 05:21:39.730	00:00:03.251448	3.251448	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:21:51.291	2026-03-10 05:21:53.117	00:00:01.825968	1.825968	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:26:15.299	2026-03-10 05:27:21.104	00:01:05.805733	65.805733	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:35:02.571	2026-03-10 05:35:04.248	00:00:01.677164	1.677164	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:35:13.977	2026-03-10 05:35:15.785	00:00:01.808297	1.808297	SUCCESS
+93be2a79-83fa-52c3-8c4f-7c92dde50aa3	UPLOAD_TO_S3	2026-03-10 05:35:25.952	2026-03-10 05:35:27.090	00:00:01.137864	1.137864	SUCCESS
 
-  Если увидишь:
 
-  - rows_cnt > 1 хотя stage по смыслу один,
-    то текущая логика действительно неверна для вашей модели данных.
 
-  Тогда варианты фикса на backend такие:
-
-  1. Брать только последнюю запись по каждому stage внутри run_uuid
-     Это обычно самый правильный вариант, если stage переобновляется несколько раз.
-  2. Брать MAX(duration) по каждому stage, а потом суммировать
-     Подходит, если дубли технические и нужен один итог на stage.
-  3. Оставить SUM(duration), только если реально stage может дробиться на несколько независимых кусков
-     Но по твоему описанию это не ваш случай.
-
-  Я бы правил так:
-
-  - внутри run_uuid
-  - сначала схлопывать до одной строки на stage_name
-  - потом считать:
-      - work = sum(stage_duration)
-      - waiting = (max(end) - min(start)) - work
-
-  То есть не суммировать сырые stage-строки напрямую.
-
-  Если хочешь, я сразу подготовлю точный SQL/патч для api/main.py, где run_agg будет считать через stage_dedup CTE:
-
-  - по одному UPLOAD_TO_S3
-  - по одному CLICKHOUSE_LOAD
-  - и аналитика станет корректной.
+это вижу на фронте 
+dm.counterparty_profile
+ClickHouse
+26.8 работа / 199.22 ожидание

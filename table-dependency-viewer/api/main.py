@@ -5811,7 +5811,7 @@ def get_window_runs(
                 click_rows = conn.execute(
                     text(
                         _clickhouse_run_agg_cte()
-                        + """
+                        + f"""
                         SELECT
                             ra.schema_name,
                             ra.table_name,

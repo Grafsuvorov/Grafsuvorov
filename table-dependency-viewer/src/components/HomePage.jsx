@@ -42,7 +42,7 @@ export default function HomePage({ onSelectTable }) {
     },
     {
       title: "Аналитика лагов",
-      desc: "Понять, где реальная работа, а где ожидание в очереди и лаг Airflow.",
+      desc: "Понять, где реальная работа, а где ожидание в очереди или пауза между stage.",
       action: "Открыть аналитику",
       onClick: () => navigate("/analytics"),
     },
@@ -53,8 +53,8 @@ export default function HomePage({ onSelectTable }) {
       onClick: () => navigate("/tables"),
     },
     {
-      title: "Ландшафт сущностей",
-      desc: "Зависимости между сущностями, покрытие до DM и проблемные связки.",
+      title: "Сущности и направления",
+      desc: "Структура бизнес-сущностей, покрытие до DM и проблемные связки между блоками.",
       action: "Открыть сущности",
       onClick: () => navigate("/entities"),
     },
@@ -1020,7 +1020,7 @@ export default function HomePage({ onSelectTable }) {
               </div>
             </div>
             <div className="entity-card">
-              <div className="entity-name">Средний лаг</div>
+              <div className="entity-name">Среднее ожидание</div>
               <div className="entity-meta">
                 {Number.isFinite(clickSummary.avg_lag_min) ? `${clickSummary.avg_lag_min} мин` : "—"}
               </div>
@@ -1052,7 +1052,7 @@ export default function HomePage({ onSelectTable }) {
                       </div>
                     </header>
                     <div className="order-row-text">
-                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} · Работа {formatMinutes(row.actual_duration_min ?? row.duration_min)} · Лаг {formatMinutes(row.lag_duration_min ?? 0)}
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} · Работа {formatMinutes(row.actual_duration_min ?? row.duration_min)} · Ожидание/пауза {formatMinutes(row.lag_duration_min ?? 0)}
                     </div>
                     {(row.problem_area || row.stage_name) && (
                       <div className="order-row-meta" style={{ marginTop: 6 }}>

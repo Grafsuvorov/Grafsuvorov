@@ -184,7 +184,7 @@ export default function AnalyticsPage() {
       {!loading && !error && (
         <div className="analytics-grid">
           <section className="card analytics-block">
-            <div className="section-title">График длительности</div>
+            <div className="section-title">Работа и ожидание</div>
             {rowsFiltered.length === 0 && <div className="muted">Нет запусков в окне.</div>}
             {rowsFiltered.length > 0 && (
               <div className="analytics-bars">
@@ -201,14 +201,14 @@ export default function AnalyticsPage() {
                         <span>{shortenName(label, 44)}</span>
                         <span className="analytics-pill analytics-pill-inline">{row.source}</span>
                       </div>
-                      <div className="analytics-bar-track" title={row.source === "ClickHouse" ? `Работа ${actual} мин, лаг ${lag} мин, окно ${total} мин` : `Работа ${actual} мин`}>
+                      <div className="analytics-bar-track" title={row.source === "ClickHouse" ? `Работа ${actual} мин, ожидание ${lag} мин, окно ${total} мин` : `Работа ${actual} мин`}>
                         <div className="analytics-bar-fill" style={{ width: `${actualWidth}%` }} />
                         {row.source === "ClickHouse" && lag > 0 && (
                           <div className="analytics-bar-lag" style={{ left: `${actualWidth}%`, width: `${lagWidth}%` }} />
                         )}
                       </div>
                       <div className="analytics-bar-value">
-                        {row.source === "ClickHouse" ? `${actual} / ${lag} мин` : formatMinutes(actual)}
+                        {row.source === "ClickHouse" ? `${actual} работа / ${lag} ожидание` : formatMinutes(actual)}
                       </div>
                     </div>
                   );
@@ -227,7 +227,7 @@ export default function AnalyticsPage() {
                   <span>Таблиц</span>
                   <span>Запусков</span>
                   <span>Работа</span>
-                  <span>Лаг</span>
+                  <span>Ожидание</span>
                 </div>
                 {entitySummary.slice(0, 20).map((item) => (
                   <div key={item.entity} className="analytics-row analytics-entity">
@@ -254,7 +254,7 @@ export default function AnalyticsPage() {
                   <span>Старт</span>
                   <span>Финиш</span>
                   <span>Работа</span>
-                  <span>Лаг</span>
+                  <span>Ожидание</span>
                   <span>Статус</span>
                 </div>
                 {rowsFiltered.map((row, idx) => {

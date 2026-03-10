@@ -755,7 +755,7 @@ export default function TableCard({
                   </div>
                 </div>
                 <div>
-                  <div className="click-label">Лаг</div>
+                  <div className="click-label">Ожидание / пауза</div>
                   <div className="click-value">
                     {formatMinutes(clickLastRun?.lag_duration_min ?? 0)}
                   </div>
@@ -1088,7 +1088,7 @@ export default function TableCard({
                     <span>Старт</span>
                     <span>Финиш</span>
                     <span>Работа</span>
-                    <span>Лаг</span>
+                    <span>Ожидание</span>
                     <span>Статус</span>
                   </div>
                   {clickHistory.map((row, idx) => (

@@ -1,3 +1,57 @@
-init_auth()
-  app.middleware("http")(auth_middleware)
-  app.include_router(auth_router)
+select
+      run_uuid,
+      stage_name,
+      start_dttm,
+      end_dttm,
+      duration,
+      extract(epoch from duration) as duration_sec,
+      status
+  from tech_etl.click_fact_table_load_stage
+  where run_uuid = 'ТВОЙ_RUN_UUID'
+    and stage_name in ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+  order by stage_name, start_dttm;
+
+  И еще сразу сводку:
+
+  select
+      run_uuid,
+      stage_name,
+      count(*) as rows_cnt,
+      sum(extract(epoch from duration)) as sum_duration_sec,
+      max(extract(epoch from duration)) as max_duration_sec,
+      min(start_dttm) as min_start,
+      max(end_dttm) as max_end
+  from tech_etl.click_fact_table_load_stage
+  where run_uuid = 'ТВОЙ_RUN_UUID'
+    and stage_name in ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+  group by run_uuid, stage_name;
+
+  Если увидишь:
+
+  - rows_cnt > 1 хотя stage по смыслу один,
+    то текущая логика действительно неверна для вашей модели данных.
+
+  Тогда варианты фикса на backend такие:
+
+  1. Брать только последнюю запись по каждому stage внутри run_uuid
+     Это обычно самый правильный вариант, если stage переобновляется несколько раз.
+  2. Брать MAX(duration) по каждому stage, а потом суммировать
+     Подходит, если дубли технические и нужен один итог на stage.
+  3. Оставить SUM(duration), только если реально stage может дробиться на несколько независимых кусков
+     Но по твоему описанию это не ваш случай.
+
+  Я бы правил так:
+
+  - внутри run_uuid
+  - сначала схлопывать до одной строки на stage_name
+  - потом считать:
+      - work = sum(stage_duration)
+      - waiting = (max(end) - min(start)) - work
+
+  То есть не суммировать сырые stage-строки напрямую.
+
+  Если хочешь, я сразу подготовлю точный SQL/патч для api/main.py, где run_agg будет считать через stage_dedup CTE:
+
+  - по одному UPLOAD_TO_S3
+  - по одному CLICKHOUSE_LOAD
+  - и аналитика станет корректной.

@@ -2283,6 +2283,7 @@ def _clickhouse_run_agg_cte(
             FROM {TABLE_CLICK_LOAD_RUN} r
             JOIN {TABLE_CLICK_LOAD_STAGE} s
               ON s.run_uuid = r.run_uuid
+             AND s.table_id = r.table_id
             WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
               {run_filter_sql}
               {stage_filter_sql}

@@ -1,22 +1,6 @@
-curl -i -X POST 'http://rgm-s-dwhapp01.hq.root.ad:15312/auth/login' \
-    -H 'Content-Type: application/json' \
-    -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
-
-  Варианты:
-
-  - 200 -> auth работает, проблема уже во frontend/browser
-  - 401 -> маршрут работает, но неверный логин/пароль
-  - 422 -> маршрут работает, но не то тело запроса
-  - 405 -> frontend реально шлет не POST, что странно и надо смотреть Network
-
-  И еще покажи из браузера в DevTools -> Network одну строку запроса логина:
-
-  - Request URL
-  - Request Method
-  - Status Code
-
-  Сейчас ключевой вопрос один:
-  шлет ли браузер именно POST на :15312/auth/login.
-
-  Если хочешь, после твоего curl -X POST ...:15312/auth/login я скажу уже точно, где остаточная проблема.
-
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i -X POST 'http://rgm-s-dwhapp01.hq.root.ad:15312/auth/login' \
+>     -H 'Content-Type: application/json' \
+>     -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
+HTTP/1.1 403 Forbidden
+Content-Type: text/html; charset=utf-8
+Content-Length: 99

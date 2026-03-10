@@ -1,1 +1,187 @@
-https://github.com/Grafsuvorov/Grafsuvorov/pull/new/feature_night_ops_window_onboarding_local
+table-dependency-viewer-api-1  |                 r.error_text,
+table-dependency-viewer-api-1  |                 MAX(s.table_id) AS table_id,
+table-dependency-viewer-api-1  |                 MIN(s.start_dttm) AS start_dttm,
+table-dependency-viewer-api-1  |                 MAX(s.end_dttm) AS end_dttm,
+table-dependency-viewer-api-1  |                 SUM(EXTRACT(EPOCH FROM s.duration)) AS actual_duration_seconds,
+table-dependency-viewer-api-1  |                 EXTRACT(EPOCH FROM (MAX(s.end_dttm) - MIN(s.start_dttm))) AS elapsed_duration_seconds
+table-dependency-viewer-api-1  |             FROM tech_etl.click_fact_table_load_run r
+table-dependency-viewer-api-1  |             JOIN tech_etl.click_fact_table_load_stage s
+table-dependency-viewer-api-1  |               ON s.run_uuid = r.run_uuid
+table-dependency-viewer-api-1  |             WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |             GROUP BY
+table-dependency-viewer-api-1  |                 r.run_uuid,
+table-dependency-viewer-api-1  |                 r.schema_name,
+table-dependency-viewer-api-1  |                 r.table_name,
+table-dependency-viewer-api-1  |                 r.dag_name,
+table-dependency-viewer-api-1  |                 r.dag_run,
+table-dependency-viewer-api-1  |                 r.status,
+table-dependency-viewer-api-1  |                 r.error_text
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                         SELECT
+table-dependency-viewer-api-1  |                             ra.schema_name,
+table-dependency-viewer-api-1  |                             ra.table_name,
+table-dependency-viewer-api-1  |                             tm.entity_name,
+table-dependency-viewer-api-1  |                             ra.start_dttm,
+table-dependency-viewer-api-1  |                             ra.end_dttm,
+table-dependency-viewer-api-1  |                             ra.status,
+table-dependency-viewer-api-1  |                             ra.actual_duration_seconds,
+table-dependency-viewer-api-1  |                             ra.elapsed_duration_seconds
+table-dependency-viewer-api-1  |                         FROM run_agg ra
+table-dependency-viewer-api-1  |                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                           ON tm.table_id = ra.table_id
+table-dependency-viewer-api-1  |                         WHERE ra.start_dttm >= %(window_start)s
+table-dependency-viewer-api-1  |                           AND ra.start_dttm <= %(window_end)s
+table-dependency-viewer-api-1  |                         ORDER BY ra.start_dttm ASC
+table-dependency-viewer-api-1  |                         ]
+table-dependency-viewer-api-1  | [parameters: {'window_start': '2026-03-10 04:30:00', 'window_end': '2026-03-10 05:00:00'}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:60097 - "GET /api/window-runs?date=2026-03-10&from=04%3A30&to=05%3A00&source=both HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:60103 - "OPTIONS /api/window-runs?date=2026-03-09&from=04%3A30&to=05%3A00&source=both HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ❌ /api/window-runs error: (psycopg2.errors.SyntaxError) syntax error at or near "{"
+table-dependency-viewer-api-1  | LINE 42:                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                                            ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |         WITH run_agg AS (
+table-dependency-viewer-api-1  |             SELECT
+table-dependency-viewer-api-1  |                 r.run_uuid,
+table-dependency-viewer-api-1  |                 r.schema_name,
+table-dependency-viewer-api-1  |                 r.table_name,
+table-dependency-viewer-api-1  |                 r.dag_name,
+table-dependency-viewer-api-1  |                 r.dag_run,
+table-dependency-viewer-api-1  |                 r.status,
+table-dependency-viewer-api-1  |                 r.error_text,
+table-dependency-viewer-api-1  |                 MAX(s.table_id) AS table_id,
+table-dependency-viewer-api-1  |                 MIN(s.start_dttm) AS start_dttm,
+table-dependency-viewer-api-1  |                 MAX(s.end_dttm) AS end_dttm,
+table-dependency-viewer-api-1  |                 SUM(EXTRACT(EPOCH FROM s.duration)) AS actual_duration_seconds,
+table-dependency-viewer-api-1  |                 EXTRACT(EPOCH FROM (MAX(s.end_dttm) - MIN(s.start_dttm))) AS elapsed_duration_seconds
+table-dependency-viewer-api-1  |             FROM tech_etl.click_fact_table_load_run r
+table-dependency-viewer-api-1  |             JOIN tech_etl.click_fact_table_load_stage s
+table-dependency-viewer-api-1  |               ON s.run_uuid = r.run_uuid
+table-dependency-viewer-api-1  |             WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |             GROUP BY
+table-dependency-viewer-api-1  |                 r.run_uuid,
+table-dependency-viewer-api-1  |                 r.schema_name,
+table-dependency-viewer-api-1  |                 r.table_name,
+table-dependency-viewer-api-1  |                 r.dag_name,
+table-dependency-viewer-api-1  |                 r.dag_run,
+table-dependency-viewer-api-1  |                 r.status,
+table-dependency-viewer-api-1  |                 r.error_text
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                         SELECT
+table-dependency-viewer-api-1  |                             ra.schema_name,
+table-dependency-viewer-api-1  |                             ra.table_name,
+table-dependency-viewer-api-1  |                             tm.entity_name,
+table-dependency-viewer-api-1  |                             ra.start_dttm,
+table-dependency-viewer-api-1  |                             ra.end_dttm,
+table-dependency-viewer-api-1  |                             ra.status,
+table-dependency-viewer-api-1  |                             ra.actual_duration_seconds,
+table-dependency-viewer-api-1  |                             ra.elapsed_duration_seconds
+table-dependency-viewer-api-1  |                         FROM run_agg ra
+table-dependency-viewer-api-1  |                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                           ON tm.table_id = ra.table_id
+table-dependency-viewer-api-1  |                         WHERE ra.start_dttm >= %(window_start)s
+table-dependency-viewer-api-1  |                           AND ra.start_dttm <= %(window_end)s
+table-dependency-viewer-api-1  |                         ORDER BY ra.start_dttm ASC
+table-dependency-viewer-api-1  |                         ]
+table-dependency-viewer-api-1  | [parameters: {'window_start': '2026-03-09 04:30:00', 'window_end': '2026-03-09 05:00:00'}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | psycopg2.errors.SyntaxError: syntax error at or near "{"
+table-dependency-viewer-api-1  | LINE 42:                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                                            ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 5814, in get_window_runs
+table-dependency-viewer-api-1  |     click_rows = conn.execute(
+table-dependency-viewer-api-1  |                  ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+table-dependency-viewer-api-1  |     return meth(
+table-dependency-viewer-api-1  |            ^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.SyntaxError) syntax error at or near "{"
+table-dependency-viewer-api-1  | LINE 42:                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                                            ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |         WITH run_agg AS (
+table-dependency-viewer-api-1  |             SELECT
+table-dependency-viewer-api-1  |                 r.run_uuid,
+table-dependency-viewer-api-1  |                 r.schema_name,
+table-dependency-viewer-api-1  |                 r.table_name,
+table-dependency-viewer-api-1  |                 r.dag_name,
+table-dependency-viewer-api-1  |                 r.dag_run,
+table-dependency-viewer-api-1  |                 r.status,
+table-dependency-viewer-api-1  |                 r.error_text,
+table-dependency-viewer-api-1  |                 MAX(s.table_id) AS table_id,
+table-dependency-viewer-api-1  |                 MIN(s.start_dttm) AS start_dttm,
+table-dependency-viewer-api-1  |                 MAX(s.end_dttm) AS end_dttm,
+table-dependency-viewer-api-1  |                 SUM(EXTRACT(EPOCH FROM s.duration)) AS actual_duration_seconds,
+table-dependency-viewer-api-1  |                 EXTRACT(EPOCH FROM (MAX(s.end_dttm) - MIN(s.start_dttm))) AS elapsed_duration_seconds
+table-dependency-viewer-api-1  |             FROM tech_etl.click_fact_table_load_run r
+table-dependency-viewer-api-1  |             JOIN tech_etl.click_fact_table_load_stage s
+table-dependency-viewer-api-1  |               ON s.run_uuid = r.run_uuid
+table-dependency-viewer-api-1  |             WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |             GROUP BY
+table-dependency-viewer-api-1  |                 r.run_uuid,
+table-dependency-viewer-api-1  |                 r.schema_name,
+table-dependency-viewer-api-1  |                 r.table_name,
+table-dependency-viewer-api-1  |                 r.dag_name,
+table-dependency-viewer-api-1  |                 r.dag_run,
+table-dependency-viewer-api-1  |                 r.status,
+table-dependency-viewer-api-1  |                 r.error_text
+table-dependency-viewer-api-1  |         )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                         SELECT
+table-dependency-viewer-api-1  |                             ra.schema_name,
+table-dependency-viewer-api-1  |                             ra.table_name,
+table-dependency-viewer-api-1  |                             tm.entity_name,
+table-dependency-viewer-api-1  |                             ra.start_dttm,
+table-dependency-viewer-api-1  |                             ra.end_dttm,
+table-dependency-viewer-api-1  |                             ra.status,
+table-dependency-viewer-api-1  |                             ra.actual_duration_seconds,
+table-dependency-viewer-api-1  |                             ra.elapsed_duration_seconds
+table-dependency-viewer-api-1  |                         FROM run_agg ra
+table-dependency-viewer-api-1  |                         LEFT JOIN {TABLE_TABLES_META} tm
+table-dependency-viewer-api-1  |                           ON tm.table_id = ra.table_id
+table-dependency-viewer-api-1  |                         WHERE ra.start_dttm >= %(window_start)s
+table-dependency-viewer-api-1  |                           AND ra.start_dttm <= %(window_end)s
+table-dependency-viewer-api-1  |                         ORDER BY ra.start_dttm ASC
+table-dependency-viewer-api-1  |                         ]
+table-dependency-viewer-api-1  | [parameters: {'window_start': '2026-03-09 04:30:00', 'window_end': '2026-03-09 05:00:00'}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     10.13.144.106:60103 - "GET /api/window-runs?date=2026-03-09&from=04%3A30&to=05%3A00&source=both HTTP/1.1" 500 Internal Server Error

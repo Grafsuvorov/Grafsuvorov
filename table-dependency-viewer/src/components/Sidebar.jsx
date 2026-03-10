@@ -41,7 +41,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                 Мониторинг
               </button>
               <button onClick={() => onChangeView("__entity_schedule__")}>
-                Ландшафт
+                Сущности
               </button>
               <button
                 className={isActive("/releases") ? "active" : ""}

@@ -1,18 +1,24 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]#   ss -ltnp | grep 15312
-LISTEN     0      1024         *:15312                    *:*                   users:(("docker-proxy",pid=94748,fd=4))
-[root@rgm-s-dwhapp01 table-dependency-viewer]# ss -ltnp | grep 5312
-LISTEN     0      1024         *:15312                    *:*                   users:(("docker-proxy",pid=94748,fd=4))
-LISTEN     0      1024         *:5312                     *:*                   users:(("docker-proxy",pid=85510,fd=4))
+curl --noproxy '*' -i -X POST 'http://127.0.0.1:15312/auth/login' \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
 
+  И еще сразу:
 
-<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i -X POST 'http://127.0.0.1:15312/auth/login' \
->     -H 'Content-Type: application/json' \
->     -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
+  env | grep -i proxy
 
-<html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>[root@rgm-s-dwhapp01 table-dependency-viewer]#
+  Если после --noproxy '*' будет:
 
+  - 200 или 401 -> приложение работает, а раньше отвечал именно внешний proxy
+  - 405 -> nginx/маршрут уже живые, просто проверяли не тем методом
+  - 403 с тем же HTML -> тогда уже надо смотреть сам frontend container и его nginx
+
+  Следующий точный тест, если хочешь добить до конца:
+
+  docker exec -it table-dependency-viewer-frontend-1 sh -c "cat /etc/nginx/conf.d/default.conf"
+  docker exec -it table-dependency-viewer-frontend-1 sh -c "wget -S -O - --post-data='{\"email\":\"Nikita.Suvorov@rusal.com\",\"password\":\"admin\"}' --header='Conte
+  nt-Type: application/json' http://127.0.0.1/auth/login"
+  docker logs table-dependency-viewer-frontend-1 --tail 100
+  docker logs table-dependency-viewer-api-1 --tail 100
+
+  Но сначала лучше сделать именно curl --noproxy '*', потому что это самый вероятный корень проблемы.
 

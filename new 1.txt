@@ -1,6 +1,30 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -i -X POST 'http://rgm-s-dwhapp01.hq.root.ad:15312/auth/login' \
->     -H 'Content-Type: application/json' \
->     -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
-HTTP/1.1 403 Forbidden
-Content-Type: text/html; charset=utf-8
-Content-Length: 99
+curl -i -X POST 'http://127.0.0.1:15312/auth/login' \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
+
+  И еще:
+
+  docker logs table-dependency-viewer-frontend-1 --tail 50
+  docker logs table-dependency-viewer-api-1 --tail 50
+
+  Как читать результат:
+
+  - Если 127.0.0.1:15312/auth/login даст 200 или 401
+    Значит контейнеры настроены правильно, а 403 дает внешний слой по адресу rgm-s-dwhapp01...:15312.
+  - Если и 127.0.0.1:15312 даст 403
+    Тогда уже надо смотреть, что реально слушает порт 15312 на хосте.
+
+  Еще полезно:
+
+  ss -ltnp | grep 15312
+  ss -ltnp | grep 5312
+
+  Мой текущий вывод:
+  проблема почти наверняка вне docker-приложения.
+  То есть:
+
+  - либо хостовый reverse proxy
+  - либо корпоративный фильтр/ACL на POST к этому порту
+  - либо доступ по FQDN идет не туда, куда 127.0.0.1
+
+  Пришли результат именно команды на 127.0.0.1:15312/auth/login. Это будет решающая проверка.

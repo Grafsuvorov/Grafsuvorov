@@ -2,12 +2,14 @@
 import { useEffect, useState } from 'react';
 import '../style/app.css';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export default function ErrorDashboard({ onSelectTable }) {
   const [errors, setErrors] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/failures")
+    fetch(`${API_BASE}/api/failures`)
       .then((res) => res.json())
       .then((data) => {
         setErrors(data);

@@ -8,6 +8,8 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 /* =========================================================
    CONFIG
    ========================================================= */
@@ -15,6 +17,7 @@ import {
 const schemaColorMap = {
   stg: "#64748b",
   dict_stg: "#4c6b9b",
+  dict_ods: "#2563eb",
   dict_dds: "#3d4d82",
   ods: "#0d9488",
   dds: "#0891b2",
@@ -25,13 +28,14 @@ const schemaColorMap = {
 
 const SCHEMA_PRIORITY = {
   dict_stg: 0,
-  dict_dds: 1,
-  stg: 2,
-  ods: 3,
-  dds: 4,
-  dm_calc: 5,
-  dm: 6,
-  dm_view: 7,
+  dict_ods: 1,
+  dict_dds: 2,
+  stg: 3,
+  ods: 4,
+  dds: 5,
+  dm_calc: 6,
+  dm: 7,
+  dm_view: 8,
   default: 50,
 };
 
@@ -54,9 +58,9 @@ export default function GanttChart({ schema, table }) {
   useEffect(() => {
     if (!schema || !table) return;
 
-    fetch(`http://localhost:8000/api/gantt/${schema}/${table}`)
+    fetch(`${API_BASE}/api/gantt/${schema}/${table}`)
       .then((res) =>
-        res.ok ? res.json() : Promise.reject("Failed to load data")
+        res.ok ? res.json() : Promise.reject("Не удалось загрузить данные")
       )
       .then((raw) => {
         const latestByTable = Object.values(
@@ -83,11 +87,11 @@ export default function GanttChart({ schema, table }) {
   }, [schema, table]);
 
   if (error) {
-    return <div className="card-error">Error: {error}</div>;
+    return <div className="card-error">Ошибка: {error}</div>;
   }
 
   if (!data.length) {
-    return <div className="card-muted">No data</div>;
+    return <div className="card-muted">Нет данных</div>;
   }
 
   /* ----------------------------------------------------- */
@@ -149,7 +153,7 @@ export default function GanttChart({ schema, table }) {
           color: "#e5e7eb",
         }}
       >
-        Dependency load timeline
+        Таймлайн загрузки зависимостей
       </div>
 
       {/* CHART */}
@@ -173,7 +177,7 @@ export default function GanttChart({ schema, table }) {
               type="number"
               domain={[0, maxX]}
               tickFormatter={(v) =>
-                new Date(minStart + v * 1000).toLocaleTimeString("en-GB")
+                new Date(minStart + v * 1000).toLocaleTimeString("ru-RU")
               }
               tick={{ fill: "#9ca3af", fontSize: 11 }}
               axisLine={{ stroke: "rgba(255,255,255,.1)" }}

@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+
 export default function InconsistencyPage({ onBack }) {
   const [violations, setViolations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/inconsistencies')
+    fetch(`${API_BASE}/api/inconsistencies`)
       .then(res => {
-        if (!res.ok) throw new Error("Failed to load data");
+        if (!res.ok) throw new Error("Не удалось загрузить данные");
         return res.json();
       })
       .then(data => setViolations(data))
@@ -18,24 +20,24 @@ export default function InconsistencyPage({ onBack }) {
 
   return (
     <div className="inconsistency-page">
-      <button onClick={onBack} style={{ marginBottom: 10 }}>← Back</button>
-      <h2 className="center">🔁 Load order violations</h2>
+      <button onClick={onBack} style={{ marginBottom: 10 }}>← Назад</button>
+      <h2 className="center">🔁 Нарушения порядка загрузки</h2>
 
-      {loading && <p className="center muted">Loading...</p>}
-      {error && <p className="center error">Error: {error}</p>}
+      {loading && <p className="center muted">Загрузка...</p>}
+      {error && <p className="center error">Ошибка: {error}</p>}
 
       {violations.length === 0 && !loading && (
-        <p className="center">✅ No violations found</p>
+        <p className="center">✅ Нарушений нет</p>
       )}
 
       {violations.length > 0 && (
         <table>
           <thead>
             <tr>
-              <th>Source</th>
-              <th>⏱ Source last load</th>
-              <th>Dependent table</th>
-              <th>⏱ Dependent last load</th>
+              <th>Источник</th>
+              <th>⏱ Последняя загрузка источника</th>
+              <th>Зависимая таблица</th>
+              <th>⏱ Последняя загрузка зависимой</th>
             </tr>
           </thead>
           <tbody>

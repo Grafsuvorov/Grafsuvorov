@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import "./index.css";
@@ -17,16 +17,69 @@ import EntityTablesPage from "./components/EntityTablesPage.jsx";
 import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
 import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 import NightOpsPage from "./components/NightOpsPage.jsx";
+import OnboardingPage from "./components/OnboardingPage.jsx";
+import LogicAuditPage from "./components/LogicAuditPage.jsx";
+import LoginPage from "./components/LoginPage.jsx";
+import AdminUsersPage from "./components/AdminUsersPage.jsx";
+import AccountPage from "./components/AccountPage.jsx";
+import ReleasesPage from "./components/ReleasesPage.jsx";
+import AnalyticsPage from "./components/AnalyticsPage.jsx";
+
+const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const TOKEN_KEY = "tdv_access_token";
+const USER_KEY = "tdv_user_profile";
 
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [authToken, setAuthToken] = useState(
+    () => localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY)
+  );
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem(USER_KEY) || "null") ||
+        JSON.parse(sessionStorage.getItem(USER_KEY) || "null")
+      );
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!AUTH_ENABLED) return;
+    setAuthToken(localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY));
+    try {
+      setUserProfile(
+        JSON.parse(localStorage.getItem(USER_KEY) || "null") ||
+          JSON.parse(sessionStorage.getItem(USER_KEY) || "null")
+      );
+    } catch {
+      setUserProfile(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!AUTH_ENABLED || !authToken || userProfile) return;
+    fetch(`${API_BASE}/auth/me`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((profile) => {
+        if (profile) {
+          setUserProfile(profile);
+          const storage =
+            localStorage.getItem(TOKEN_KEY) ? localStorage : sessionStorage;
+          storage.setItem(USER_KEY, JSON.stringify(profile));
+        }
+      })
+      .catch(() => {});
+  }, [authToken, userProfile]);
 
   const normalizeFqn = useCallback((value) => {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();
     if (!trimmed.includes(".")) return null;
-    const clean = trimmed.replaceAll("/", "").replaceAll("-", "");
+    const clean = trimmed.replaceAll("\"", "").replaceAll("`", "");
     const [schema, table] = clean.split(".", 2);
     if (!schema || !table) return null;
     return { schema, table, fqn: `${schema}.${table}` };
@@ -71,6 +124,30 @@ export default function App() {
         navigate("/night-ops");
         return;
       }
+      if (target === "onboarding") {
+        navigate("/onboarding");
+        return;
+      }
+      if (target === "logic_audit") {
+        navigate("/logic-audit");
+        return;
+      }
+      if (target === "/admin/users") {
+        navigate("/admin/users");
+        return;
+      }
+      if (target === "/account") {
+        navigate("/account");
+        return;
+      }
+      if (target === "releases") {
+        navigate("/releases");
+        return;
+      }
+      if (target === "analytics") {
+        navigate("/analytics");
+        return;
+      }
 
       if (typeof target === "object" && target.view) {
         if (target.view === "incident") {
@@ -80,7 +157,7 @@ export default function App() {
         if (target.view === "table_info") {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
-            navigate(`/table/${parsed.schema}/${parsed.table}`, {
+            navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}`, {
               state: { from: location.pathname + location.search },
             });
           }
@@ -90,6 +167,12 @@ export default function App() {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
             navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
+          }
+          return;
+        }
+        if (target.view === "release_details") {
+          if (target.release_id) {
+            navigate("/releases", { state: { releaseId: target.release_id } });
           }
           return;
         }
@@ -144,24 +227,150 @@ export default function App() {
     );
   };
 
+  const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
+
   return (
     <div className="app">
-      <Sidebar currentPath={location.pathname} onChangeView={openView} />
-      <Routes>
-        <Route path="/" element={<HomePage onSelectTable={openView} />} />
-        <Route path="/errors" element={<IncidentsPage onSelectTable={openView} />} />
+      <Sidebar
+        currentPath={location.pathname}
+        onChangeView={openView}
+        authEnabled={AUTH_ENABLED}
+        userProfile={userProfile}
+        onLogout={() => {
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem(USER_KEY);
+          sessionStorage.removeItem(TOKEN_KEY);
+          sessionStorage.removeItem(USER_KEY);
+          setAuthToken(null);
+          setUserProfile(null);
+          navigate("/login");
+        }}
+      />
+        <Routes>
+        <Route
+          path="/login"
+          element={
+            <LoginPage
+              onLogin={({ token, profile }) => {
+                if (token) setAuthToken(token);
+                if (profile) setUserProfile(profile);
+                navigate("/", { replace: true });
+              }}
+            />
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminUsersPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <AccountPage userProfile={userProfile} />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <HomePage onSelectTable={openView} />
+            )
+          }
+        />
+        <Route
+          path="/errors"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <IncidentsPage onSelectTable={openView} />
+            )
+          }
+        />
         <Route path="/dependency-search" element={<Navigate to="/" replace />} />
-        <Route path="/tables" element={<TableSearch onSelectTable={(name) => openView({ view: "table_info", table: name })} />} />
+        <Route
+          path="/tables"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <TableSearch onSelectTable={(name) => openView({ view: "table_info", table: name })} />
+            )
+          }
+        />
         <Route path="/dependency-issues" element={<Navigate to="/" replace />} />
-        <Route path="/slow-tables" element={<SlowestTables onSelectTable={openView} />} />
-        <Route path="/entities" element={<EntityShedule />} />
-        <Route path="/entity/:id/tables" element={<EntityTablesPage />} />
-        <Route path="/sla" element={<SlaPage />} />
-        <Route path="/table/:schema/:table" element={<TableRoute />} />
-        <Route path="/impact/:schema/:table" element={<ImpactGraphPage />} />
-        <Route path="/night-ops" element={<NightOpsPage />} />
-        <Route path="/dependencies" element={<DependenciesRoute />} />
-        <Route path="/incident" element={<IncidentRoute />} />
+        <Route
+          path="/slow-tables"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <SlowestTables onSelectTable={openView} />
+            )
+          }
+        />
+        <Route
+          path="/entities"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <EntityShedule />}
+        />
+        <Route
+          path="/entity/:id/tables"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <EntityTablesPage />}
+        />
+        <Route
+          path="/sla"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <SlaPage />}
+        />
+        <Route
+          path="/table/:schema/:table"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <TableRoute />}
+        />
+        <Route
+          path="/impact/:schema/:table"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <ImpactGraphPage />}
+        />
+        <Route
+          path="/night-ops"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <NightOpsPage />}
+        />
+          <Route
+            path="/logic-audit"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <LogicAuditPage />}
+          />
+          <Route
+            path="/releases"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <ReleasesPage />}
+          />
+          <Route
+            path="/analytics"
+            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <AnalyticsPage />}
+          />
+        <Route
+          path="/onboarding"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage />}
+        />
+        <Route
+          path="/dependencies"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <DependenciesRoute />}
+        />
+        <Route
+          path="/incident"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <IncidentRoute />}
+        />
         <Route path="/entity_schedule" element={<Navigate to="/entities" replace />} />
         <Route path="*" element={<div className="page-error">Page not found</div>} />
       </Routes>

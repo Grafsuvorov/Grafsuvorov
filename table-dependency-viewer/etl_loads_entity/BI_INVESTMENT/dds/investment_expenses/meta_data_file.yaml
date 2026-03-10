@@ -1,0 +1,52 @@
+table_name: investment_expenses
+table_schema: dds
+table_id: 2203
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 46
+entity_name: BI_INVESTMENT
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_INVESTMENT/dds/investment_expenses/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_INVESTMENT/dds/investment_expenses/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_INVESTMENT/dds/investment_expenses/sql_query_truncate.sql
+depends_on:
+  ods:
+  - investment_expenses
+verification:
+- duplicate_check
+key_attributes:
+- unit_budget_code
+- measure_type_code
+- investment_budget_section_code
+- investment_budget_subsection_code
+- version_code
+- fiscal_year
+- division_code
+- is_additional_finance_code
+- unit_budget_partner_code
+- investment_activity_code
+- investment_area_code
+- purchase_document_code
+- investment_budget_adjustment_number
+- investment_activity_status_code
+- financing_status_code
+- budget_group_code
+- amount_currency_code
+- dt_report
+- dt_investment_expense_or_payment
+- dt_created
+- created_by
+- counterparty_code
+- unit_budget_payer_code

@@ -1,28 +1,52 @@
- docker exec -it table-dependency-viewer-api-1 sh -c "python - <<'PY'
->   from api.main import app
->   for r in app.routes:
->       if 'auth' in r.path:
->           print(r.path, sorted(r.methods))
->   PY"
-  File "<stdin>", line 1
-    from api.main import app
-IndentationError: unexpected indent
+1. Внутри frontend-контейнера найди, откуда взялся /h:
 
+  docker exec -it table-dependency-viewer-frontend-1 sh -c "grep -R \"\\/h\\/auth\\/login\\|\\/h\\/auth\\|VITE_API_BASE_URL\\|auth/login\" /usr/share/nginx/html/assets
+  | head -50"
 
+  2. Посмотри, какой build реально лежит в контейнере:
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh
-  grep -n "include_router(auth_router)" /app/api/main.py
-  grep -n "@router.post(\"/login\"" /app/api/auth.py# #
-445:@router.post("/login", response_model=TokenResponse)
+  docker exec -it table-dependency-viewer-frontend-1 sh -c "ls -lah /usr/share/nginx/html/assets"
 
+  3. Проверь API routes без отступов:
 
-POST http://rgm-s-dwhapp01.hq.root.ad:15312/h/auth/login 405 (Not Allowed)
-window.fetch @ index-BDovko37.js:135
-v @ index-BDovko37.js:135
-nS @ index-BDovko37.js:48
-(anonymous) @ index-BDovko37.js:48
-uj @ index-BDovko37.js:48
-Tv @ index-BDovko37.js:48
-Hv @ index-BDovko37.js:49
-Q$ @ index-BDovko37.js:49
+  docker exec -it table-dependency-viewer-api-1 sh -c "python - <<'PY'
+  from api.main import app
+  for r in app.routes:
+      if '/auth' in r.path:
+          print(r.path, sorted(r.methods))
+  PY"
+
+  4. Проверь прямо в браузере, какой js-файл грузится.
+     У тебя уже видно:
+
+  - index-BDovko37.js
+
+  Значит браузер/сервер сейчас отдает конкретный старый bundle. Нужно понять, есть ли в контейнере уже новый hash или все еще старый.
+
+  Что я думаю сейчас
+
+  - backend auth, скорее всего, уже есть
+  - но frontend отдает старый bundle, в котором base URL = /h
+  - поэтому запрос идет в /h/auth/login
+
+  Почему это могло “сломаться само”
+
+  - старый dist/старый image
+  - браузерный cache
+  - frontend не пересобрался из актуального кода/env
+  - nginx отдает не тот build
+
+  Что сделать почти наверняка
+
+  После проверки выше, если в assets найдется /h/auth/login, пересобери frontend совсем с нуля:
+
+  docker compose build --no-cache frontend
+  docker compose up -d frontend
+  docker image prune -f
+
+  И потом открой страницу в браузере через hard refresh:
+
+  - Ctrl+F5 / Shift+Reload
+
+  Если хочешь, после вывода grep по assets я скажу уже точно, откуда берется /h.
 

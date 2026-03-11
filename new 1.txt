@@ -1,3 +1,8 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s -X POST http://127.0.0.1:15312/api/admin/refresh-cache \ -H                      "Authorization: Bearer $TOKEN"
-{"detail":"Authentication required"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312/a                     : Bearer $TOKEN" \ -H "Authorization
-{"detail":"Authentication required"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s -X POST http://127.0.0.1                     Authorization: Bearer $TOKEN"e \-H "
+curl --noproxy '*' -s -X POST http://127.0.0.1:15312/api/admin/refresh-cache -H "Authorization: Bearer $TOKEN"
+
+  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches -H "Authorization: Bearer $TOKEN"
+
+  И еще можно сразу проверить cache в контейнере без HTTP:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c "python -c \"from api.main import get_cached_order_breaches; rows=get_cached_order_breaches(); hits=[r for r in
+  rows if r['target_fqn']=='dm_calc.statement_purchase_3_person']; print('CACHED:', len(hits)); print(hits[:3])\""

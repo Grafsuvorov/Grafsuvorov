@@ -1,17 +1,29 @@
-Uncaught ReferenceError: Cannot access 'ed' before initialization
-    at xte (index-B_ADXSLQ.js:129:23888)
-    at Rp (index-B_ADXSLQ.js:48:34202)
-    at Jp (index-B_ADXSLQ.js:48:62961)
-    at h1 (index-B_ADXSLQ.js:48:73526)
-    at B1 (index-B_ADXSLQ.js:48:107660)
-    at m$ (index-B_ADXSLQ.js:48:106719)
-    at Sv (index-B_ADXSLQ.js:48:106549)
-    at R1 (index-B_ADXSLQ.js:48:103640)
-    at J1 (index-B_ADXSLQ.js:48:115158)
-    at MessagePort.G (index-B_ADXSLQ.js:25:1579)
+curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches | jq 'length'
+  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches | jq '.[0:10]'
 
+  Напрямую в API:
 
-Нарушения порядка загрузки0
-Нарушений порядка загрузки не найдено. но они точно есть
+  curl --noproxy '*' -s http://127.0.0.1:5312/api/orderbreaches | jq 'length'
+  curl --noproxy '*' -s http://127.0.0.1:5312/api/orderbreaches | jq '.[0:10]'
 
-это просто убрать надпись Здесь собраны проблемы ландшафта: взаимные зависимости между сущностями и циклы, которые мешают строить корректный порядок загрузки.
+  Проверка карточки конкретной таблицы:
+
+  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" | jq
+
+  Проверка истории и ClickHouse для карточки:
+
+  curl --noproxy '*' -s "http://127.0.0.1:15312/api/table-history/dm/account_turnover_by_counterparty?limit=3" | jq
+  curl --noproxy '*' -s "http://127.0.0.1:15312/api/click/table/dm/account_turnover_by_counterparty?limit=3" | jq
+
+  Если jq нет, то без него:
+
+  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches
+
+  Нужно прислать мне:
+
+  - результат length для /api/orderbreaches
+  - первые 1-2 объекта из /api/orderbreaches
+  - и ответ /api/card/...
+
+  Если orderbreaches уже пустой в curl, значит проблема в backend/данных.
+  Если в curl данные есть, а на главной 0, значит это фронт/кэш/bundle.

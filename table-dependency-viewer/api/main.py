@@ -3665,7 +3665,7 @@ def get_dependency_violations():
         all_tables.add(src)
         all_tables.add(dep)
 
-    # Load last N successful runs per table to avoid false positives when tables run multiple times (e.g. sales1..4).
+    # Load last N successful runs per table so we can compare the latest source and target refreshes.
     last_loads = {}
     with engine.connect() as conn:
         tables_by_schema = {}
@@ -3729,20 +3729,15 @@ def get_dependency_violations():
         if not dep_times or not src_times:
             continue
         dep_time = dep_times[0]
-        src_before = None
-        for t in src_times:
-            if t and t <= dep_time:
-                src_before = t
-                break
-        # If there is any source run before dependent run, it's OK.
-        if src_before:
+        src_time = src_times[0]
+        # Violation when the latest upstream refresh finished after the latest dependent refresh.
+        if not src_time or src_time <= dep_time:
             continue
-        # Violation only when all source runs are after dependent run.
         problems.append(
             {
                 "source_schema": src_schema,
                 "source_table": src_table,
-                "source_last_load": src_times[0].strftime("%Y-%m-%d %H:%M:%S"),
+                "source_last_load": src_time.strftime("%Y-%m-%d %H:%M:%S"),
                 "dependent_schema": dep_schema,
                 "dependent_table": dep_table,
                 "dependent_last_load": dep_time.strftime("%Y-%m-%d %H:%M:%S"),

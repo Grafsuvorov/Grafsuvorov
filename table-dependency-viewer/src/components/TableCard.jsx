@@ -287,54 +287,101 @@ export default function TableCard({
     : schema && tableName
     ? `${schema}.${tableName}`
     : "";
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const str = String(value);
+    const normalized = str.replace("T", " ").replace("Z", "");
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+    if (match) return `${match[1]} ${match[2]}`;
+    return normalized;
+  };
+  const ytLink = (id) => (id ? `https://yt.rusal.ru/issue/${id}` : "#");
+  const topGpTooltip = (() => {
+    if (!historyRows?.length) return "Нет успешных GP-запусков.";
+    const top = [...historyRows]
+      .filter((row) => row.duration_minutes !== null && row.duration_minutes !== undefined)
+      .sort((a, b) => Number(b.duration_minutes || 0) - Number(a.duration_minutes || 0))
+      .slice(0, 6);
+    if (!top.length) return "Нет успешных GP-запусков.";
+    return top
+      .map((row, idx) => `${idx + 1}. ${formatDateTime(row.finish || row.start)} · ${row.duration_minutes} мин`)
+      .join("\n");
+  })();
+  const topClickTooltip = (() => {
+    if (!clickHistory?.length) return "Нет ClickHouse-запусков.";
+    const top = [...clickHistory]
+      .filter(
+        (row) =>
+          (row.actual_duration_min ?? row.duration_min) !== null &&
+          (row.actual_duration_min ?? row.duration_min) !== undefined,
+      )
+      .sort(
+        (a, b) =>
+          Number(b.actual_duration_min ?? b.duration_min ?? 0) -
+          Number(a.actual_duration_min ?? a.duration_min ?? 0),
+      )
+      .slice(0, 6);
+    if (!top.length) return "Нет ClickHouse-запусков.";
+    return top
+      .map(
+        (row, idx) =>
+          `${idx + 1}. ${formatDateTime(row.end_dttm || row.start_dttm)} · ${row.actual_duration_min ?? row.duration_min} мин`,
+      )
+      .join("\n");
+  })();
+  const ytTaskMap = new Map();
+  (ytData?.tasks || []).forEach((task) => {
+    ytTaskMap.set(task.issue_id, task);
+  });
+  const visibleReleases = showAllReleases ? releaseItems : releaseItems.slice(0, 3);
+  const visibleTasks = showAllTasks ? (ytData?.tasks || []) : (ytData?.tasks || []).slice(0, 3);
+  const visibleTimeline = showAllTimeline ? (ytData?.timeline || []) : (ytData?.timeline || []).slice(0, 3);
 
-  const metrics = useMemo(() => {
-    if (!meta) return [];
-    const base = [
-      {
-        label: "Последняя успешная загрузка",
-        value: meta.last_success_time || "—",
-        hint: "по логам",
-      },
-      {
-        label: "Средняя длительность",
-        value:
-          meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
-            ? `${meta.avg_duration_minutes} мин`
-            : "—",
-        hint: "только успешные · top-6 GP в tooltip",
-        title: topGpTooltip,
-      },
-      {
-        label: "Режим загрузки",
-        value: meta.table_load_mode || "—",
-        hint: "настройка ETL",
-      },
-      {
-        label: "Размер таблицы",
-        value:
-          meta.table_size_mb !== null && meta.table_size_mb !== undefined
-            ? `${meta.table_size_mb} MB`
-            : "—",
-        hint: "оценка БД",
-      },
-    ];
-    if (analyticsSummary) {
-      base.push(
+  const metrics = !meta
+    ? []
+    : [
         {
-          label: "Изменений за 90 дней",
-          value: analyticsSummary.changes ?? "—",
-          hint: "release_objects",
+          label: "Последняя успешная загрузка",
+          value: meta.last_success_time || "—",
+          hint: "по логам",
         },
         {
-          label: "Часы за 90 дней",
-          value: analyticsSummary.hours ?? "—",
-          hint: "YouTrack worklog",
-        }
-      );
-    }
-    return base;
-  }, [meta, analyticsSummary, topGpTooltip]);
+          label: "Средняя длительность",
+          value:
+            meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
+              ? `${meta.avg_duration_minutes} мин`
+              : "—",
+          hint: "только успешные · top-6 GP в tooltip",
+          title: topGpTooltip,
+        },
+        {
+          label: "Режим загрузки",
+          value: meta.table_load_mode || "—",
+          hint: "настройка ETL",
+        },
+        {
+          label: "Размер таблицы",
+          value:
+            meta.table_size_mb !== null && meta.table_size_mb !== undefined
+              ? `${meta.table_size_mb} MB`
+              : "—",
+          hint: "оценка БД",
+        },
+        ...(analyticsSummary
+          ? [
+              {
+                label: "Изменений за 90 дней",
+                value: analyticsSummary.changes ?? "—",
+                hint: "release_objects",
+              },
+              {
+                label: "Часы за 90 дней",
+                value: analyticsSummary.hours ?? "—",
+                hint: "YouTrack worklog",
+              },
+            ]
+          : []),
+      ];
 
   const sqlSections = useMemo(() => {
     if (!meta) return [];
@@ -368,48 +415,6 @@ export default function TableCard({
     if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
     return "status-unknown";
   };
-  const formatDateTime = (value) => {
-    if (!value) return "—";
-    const str = String(value);
-    const normalized = str.replace("T", " ").replace("Z", "");
-    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-    if (match) return `${match[1]} ${match[2]}`;
-    return normalized;
-  };
-  const ytLink = (id) => (id ? `https://yt.rusal.ru/issue/${id}` : "#");
-  const topGpTooltip = useMemo(() => {
-    if (!historyRows?.length) return "Нет успешных GP-запусков.";
-    const top = [...historyRows]
-      .filter((row) => row.duration_minutes !== null && row.duration_minutes !== undefined)
-      .sort((a, b) => Number(b.duration_minutes || 0) - Number(a.duration_minutes || 0))
-      .slice(0, 6);
-    if (!top.length) return "Нет успешных GP-запусков.";
-    return top
-      .map((row, idx) => `${idx + 1}. ${formatDateTime(row.finish || row.start)} · ${row.duration_minutes} мин`)
-      .join("\n");
-  }, [historyRows]);
-  const topClickTooltip = useMemo(() => {
-    if (!clickHistory?.length) return "Нет ClickHouse-запусков.";
-    const top = [...clickHistory]
-      .filter((row) => (row.actual_duration_min ?? row.duration_min) !== null && (row.actual_duration_min ?? row.duration_min) !== undefined)
-      .sort((a, b) => Number(b.actual_duration_min ?? b.duration_min ?? 0) - Number(a.actual_duration_min ?? a.duration_min ?? 0))
-      .slice(0, 6);
-    if (!top.length) return "Нет ClickHouse-запусков.";
-    return top
-      .map((row, idx) => `${idx + 1}. ${formatDateTime(row.end_dttm || row.start_dttm)} · ${row.actual_duration_min ?? row.duration_min} мин`)
-      .join("\n");
-  }, [clickHistory]);
-  const ytTaskMap = useMemo(() => {
-    const map = new Map();
-    (ytData?.tasks || []).forEach((task) => {
-      map.set(task.issue_id, task);
-    });
-    return map;
-  }, [ytData]);
-  const visibleReleases = showAllReleases ? releaseItems : releaseItems.slice(0, 3);
-  const visibleTasks = showAllTasks ? (ytData?.tasks || []) : (ytData?.tasks || []).slice(0, 3);
-  const visibleTimeline = showAllTimeline ? (ytData?.timeline || []) : (ytData?.timeline || []).slice(0, 3);
-
   const copySql = (sql) => {
     if (!sql) return;
     navigator.clipboard.writeText(sql).catch(() => {});

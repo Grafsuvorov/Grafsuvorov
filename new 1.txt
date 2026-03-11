@@ -1,10 +1,17 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s -X POST http://127.0.0.1:15312/auth/lo                      gin \
->     -H 'Content-Type: application/json' \
->     -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
-{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJyb2xlI                      joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIecKRHJ                      Ec","token_type":"bearer","role":"admin","email":"Nikita.Suvorov@rusal.com","username":"admin"}[root@rgm-s-                      [root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches \
->     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJy            b2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIe            cKRHJ          Ec"
-{"detail":"Invalid token"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312            /api/orderbreaches \
->     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJy            b2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIe            cKRHJEc"
-[root@rgm-s-dwhapp01 table-dependency-viewer]#  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" \
->     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJyb2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIecKRHJEc"
-{"detail":"Invalid token"}[root@rgm-s-dwhapp01 table-dependency-viewer]#
+TOKEN=$(curl --noproxy '*' -s -X POST http://127.0.0.1:15312/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}' | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+  echo "$TOKEN"
+
+  Потом сразу запросы:
+
+  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches \
+    -H "Authorization: Bearer $TOKEN"
+
+  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" \
+    -H "Authorization: Bearer $TOKEN"
+
+  Если хочешь еще проверить, что token валидный:
+
+  curl --noproxy '*' -s http://127.0.0.1:15312/auth/me \
+    -H "Authorization: Bearer $TOKEN"

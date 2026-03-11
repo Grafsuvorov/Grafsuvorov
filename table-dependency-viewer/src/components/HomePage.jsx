@@ -5,6 +5,17 @@ import "../style/app.css";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const HOME_CACHE_KEY = "home:payload:v3";
 
+function asArray(value) {
+  if (Array.isArray(value)) return value;
+  if (typeof value !== "string") return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function HomePage({ onSelectTable }) {
   const navigate = useNavigate();
   const [activeIncidents, setActiveIncidents] = useState([]);
@@ -47,23 +58,22 @@ export default function HomePage({ onSelectTable }) {
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
           if (cached?.expiresAt && Date.now() < cached.expiresAt) {
-            setActiveIncidents(Array.isArray(cached.activeIncidents) ? cached.activeIncidents : []);
-            setOrderBreaches(Array.isArray(cached.orderBreaches) ? cached.orderBreaches : []);
-            setHistory(Array.isArray(cached.history) ? cached.history : []);
+            setActiveIncidents(asArray(cached.activeIncidents));
+            setOrderBreaches(asArray(cached.orderBreaches));
+            setHistory(asArray(cached.history));
             setMetrics(cached.metrics || null);
-            setEntityCycles(Array.isArray(cached.entityCycles) ? cached.entityCycles : []);
-            setEntityMutual(Array.isArray(cached.entityMutual) ? cached.entityMutual : []);
-            setTableCycles(Array.isArray(cached.tableCycles) ? cached.tableCycles : []);
+            setEntityCycles(asArray(cached.entityCycles));
+            setEntityMutual(asArray(cached.entityMutual));
+            setTableCycles(asArray(cached.tableCycles));
             setNightSummary(cached.nightSummary || null);
-            setIncidentTimeline(Array.isArray(cached.incidentTimeline) ? cached.incidentTimeline : []);
+            setIncidentTimeline(asArray(cached.incidentTimeline));
             setDqSummary(cached.dqSummary || null);
-            setDqAlerts(Array.isArray(cached.dqAlerts) ? cached.dqAlerts : []);
+            setDqAlerts(asArray(cached.dqAlerts));
             setClickSummary(cached.clickSummary || null);
-            setClickFailures(Array.isArray(cached.clickFailures) ? cached.clickFailures : []);
-            setClickSlow(Array.isArray(cached.clickSlow) ? cached.clickSlow : []);
+            setClickFailures(asArray(cached.clickFailures));
+            setClickSlow(asArray(cached.clickSlow));
             setNightLoading(false);
             setLoading(false);
-            return;
           }
         }
 
@@ -114,40 +124,51 @@ export default function HomePage({ onSelectTable }) {
           }
           const expiresAt = nextRefresh.getTime();
 
-          setActiveIncidents(Array.isArray(activeJson) ? activeJson : []);
-          setOrderBreaches(Array.isArray(orderJson) ? orderJson : []);
-          setHistory(Array.isArray(historyJson) ? historyJson : []);
+          const activeRows = asArray(activeJson);
+          const orderRows = asArray(orderJson);
+          const historyRows = asArray(historyJson);
+          const entityCyclesRows = asArray(diagJson?.entity_cycles);
+          const entityMutualRows = asArray(diagJson?.entity_mutual);
+          const tableCyclesRows = asArray(diagJson?.table_cycles);
+          const timelineRows = asArray(timelineJson);
+          const dqAlertRows = asArray(dqAlertsJson);
+          const clickFailureRows = asArray(clickJson?.failures);
+          const clickSlowRows = asArray(clickSlowJson);
+
+          setActiveIncidents(activeRows);
+          setOrderBreaches(orderRows);
+          setHistory(historyRows);
           setMetrics(metricsJson);
-          setEntityCycles(Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : []);
-          setEntityMutual(Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : []);
-          setTableCycles(Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : []);
+          setEntityCycles(entityCyclesRows);
+          setEntityMutual(entityMutualRows);
+          setTableCycles(tableCyclesRows);
           setNightSummary(nightJson || null);
-          setIncidentTimeline(Array.isArray(timelineJson) ? timelineJson : []);
+          setIncidentTimeline(timelineRows);
           setDqSummary(dqSummaryJson || null);
-          setDqAlerts(Array.isArray(dqAlertsJson) ? dqAlertsJson : []);
+          setDqAlerts(dqAlertRows);
           setClickSummary(clickJson?.summary || null);
-          setClickFailures(Array.isArray(clickJson?.failures) ? clickJson.failures : []);
-          setClickSlow(Array.isArray(clickSlowJson) ? clickSlowJson : []);
+          setClickFailures(clickFailureRows);
+          setClickSlow(clickSlowRows);
           setNightLoading(false);
           localStorage.setItem(
             HOME_CACHE_KEY,
             JSON.stringify({
               ts: Date.now(),
               expiresAt,
-              activeIncidents: Array.isArray(activeJson) ? activeJson : [],
-              orderBreaches: Array.isArray(orderJson) ? orderJson : [],
-              history: Array.isArray(historyJson) ? historyJson : [],
+              activeIncidents: activeRows,
+              orderBreaches: orderRows,
+              history: historyRows,
               metrics: metricsJson || null,
-              entityCycles: Array.isArray(diagJson?.entity_cycles) ? diagJson.entity_cycles : [],
-              entityMutual: Array.isArray(diagJson?.entity_mutual) ? diagJson.entity_mutual : [],
-              tableCycles: Array.isArray(diagJson?.table_cycles) ? diagJson.table_cycles : [],
+              entityCycles: entityCyclesRows,
+              entityMutual: entityMutualRows,
+              tableCycles: tableCyclesRows,
               nightSummary: nightJson || null,
-              incidentTimeline: Array.isArray(timelineJson) ? timelineJson : [],
+              incidentTimeline: timelineRows,
               dqSummary: dqSummaryJson || null,
-              dqAlerts: Array.isArray(dqAlertsJson) ? dqAlertsJson : [],
+              dqAlerts: dqAlertRows,
               clickSummary: clickJson?.summary || null,
-              clickFailures: Array.isArray(clickJson?.failures) ? clickJson.failures : [],
-              clickSlow: Array.isArray(clickSlowJson) ? clickSlowJson : [],
+              clickFailures: clickFailureRows,
+              clickSlow: clickSlowRows,
             })
           );
         }

@@ -11,6 +11,7 @@ export default function TableCard({
   onBack,
   onNavigateTable,
   onOpenImpact,
+  onOpenLogicAudit,
   autoShowGraph = false,
   tableContext = null,
 }) {
@@ -665,6 +666,12 @@ export default function TableCard({
               onClick={() => setShowGantt(!showGantt)}
             >
               {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => onOpenLogicAudit?.(tableFqn)}
+            >
+              Аудит логики
             </button>
             <button
               className="btn btn-secondary"

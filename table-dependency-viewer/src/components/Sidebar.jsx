@@ -34,13 +34,22 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
             </div>
 
             <div className="nav-secondary">
-              <button onClick={() => onChangeView("__slowest_tables__")}>
+              <button
+                className={isActive("/slow-tables") ? "active" : ""}
+                onClick={() => onChangeView("__slowest_tables__")}
+              >
                 Производительность
               </button>
-              <button onClick={() => onChangeView("night_ops")}>
+              <button
+                className={isActive("/night-ops") ? "active" : ""}
+                onClick={() => onChangeView("night_ops")}
+              >
                 Мониторинг
               </button>
-              <button onClick={() => onChangeView("__entity_schedule__")}>
+              <button
+                className={isActive("/entities") ? "active" : ""}
+                onClick={() => onChangeView("__entity_schedule__")}
+              >
                 Сущности
               </button>
               <button
@@ -48,18 +57,6 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                 onClick={() => onChangeView("releases")}
               >
                 Релизы
-              </button>
-              <button
-                className={isActive("/analytics") ? "active" : ""}
-                onClick={() => onChangeView("analytics")}
-              >
-                Аналитика
-              </button>
-              <button
-                className={isActive("/logic-audit") ? "active" : ""}
-                onClick={() => onChangeView("logic_audit")}
-              >
-                Аудит логики
               </button>
               {authEnabled && userProfile && (
                 <button

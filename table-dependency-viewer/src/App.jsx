@@ -23,7 +23,6 @@ import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
-import AnalyticsPage from "./components/AnalyticsPage.jsx";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -128,10 +127,6 @@ export default function App() {
         navigate("/onboarding");
         return;
       }
-      if (target === "logic_audit") {
-        navigate("/logic-audit");
-        return;
-      }
       if (target === "/admin/users") {
         navigate("/admin/users");
         return;
@@ -144,11 +139,6 @@ export default function App() {
         navigate("/releases");
         return;
       }
-      if (target === "analytics") {
-        navigate("/analytics");
-        return;
-      }
-
       if (typeof target === "object" && target.view) {
         if (target.view === "incident") {
           navigate(`/incident?table=${encodeURIComponent(target.table || "")}`);
@@ -173,6 +163,14 @@ export default function App() {
         if (target.view === "release_details") {
           if (target.release_id) {
             navigate("/releases", { state: { releaseId: target.release_id } });
+          }
+          return;
+        }
+        if (target.view === "logic_audit") {
+          if (target.table) {
+            navigate(`/logic-audit?table=${encodeURIComponent(target.table)}`);
+          } else {
+            navigate("/logic-audit");
           }
           return;
         }
@@ -203,6 +201,7 @@ export default function App() {
         onBack={handleBack}
         onNavigateTable={handleNavigateTable}
         onOpenImpact={(s, t) => navigate(`/impact/${s}/${t}`, { state: { from: location.pathname + location.search } })}
+        onOpenLogicAudit={(table) => openView({ view: "logic_audit", table })}
       />
     );
   };
@@ -355,10 +354,7 @@ export default function App() {
             path="/releases"
             element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <ReleasesPage />}
           />
-          <Route
-            path="/analytics"
-            element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <AnalyticsPage />}
-          />
+          <Route path="/analytics" element={<Navigate to="/slow-tables" replace />} />
         <Route
           path="/onboarding"
           element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage />}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -16,6 +16,11 @@ function splitFqn(fqn) {
 
 export default function LogicAuditPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialTable = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("table") || "";
+  }, [location.search]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -23,7 +28,7 @@ export default function LogicAuditPage() {
   const [issueType, setIssueType] = useState("all");
   const [mode, setMode] = useState("standard");
   const [minScore, setMinScore] = useState(0.72);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialTable);
 
   const [selectedPairId, setSelectedPairId] = useState(null);
   const [pairDetails, setPairDetails] = useState(null);
@@ -157,6 +162,10 @@ export default function LogicAuditPage() {
   const shownPairs = useMemo(() => pairs.slice(0, DISPLAY_LIMIT), [pairs]);
   const isTruncated = pairs.length > DISPLAY_LIMIT;
 
+  useEffect(() => {
+    setSearch(initialTable);
+  }, [initialTable]);
+
   const openTable = (fqn) => {
     const parsed = splitFqn(fqn);
     if (!parsed) return;
@@ -168,7 +177,10 @@ export default function LogicAuditPage() {
       <section className="cc-header-zone">
         <button className="btn" onClick={() => navigate("/")}>← Назад</button>
         <h1>Аудит логики</h1>
-        <div className="cc-subtitle">Поиск дублирующейся и слишком похожей SQL-логики между объектами.</div>
+        <div className="cc-subtitle">
+          Поиск дублирующейся и слишком похожей SQL-логики между объектами.
+          {initialTable ? ` Фокус на ${initialTable}.` : ""}
+        </div>
       </section>
 
       <section className="cc-surface">

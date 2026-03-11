@@ -1,174 +1,20 @@
-{"status":"ok"}[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s -X POST http://127.0.0.1:15312/api/admin/refresh-cache -H "Authorization: Bearer $TOKEN"
-{"status":"ok"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches -H "Authorization: Bearer $TOKEN"
-[{"target_fqn":"dm_calc.statement_base_full_calc","target_last_load":"2026-03-11 03:10:15","worst_upstream":"ods.ral_konv","worst_upstream_time":"2026-03-11 14:15:48","worst_gap_sec":39933.0,"violations":[{"source_fqn":"dm_calc.accounting_document_header","gap_sec":3442.0,"source_last_load":"2026-03-11 04:07:37","dependent_last_load":"2026-03-11 03:10:15"},{"source_fqn":"ods.ral_konv","gap_sec":39933.0,"source_last_load":"2026-03-11 14:15:48","dependent_last_load":"2026-03-11 03:10:15"}],"severity":"CRITICAL","gap_minutes":665.5,"violations_count":2},{"target_fqn":"dm.production_baked_anodes_and_mass","target_last_load":"2026-03-11 05:28:33","worst_upstream":"ods.kpi_account_list","worst_upstream_time":"2026-03-11 08:34:59","worst_gap_sec":11186.0,"violations":[{"source_fqn":"dict_dds.map_kpi_report_account_to_entity","gap_sec":10986.0,"source_last_load":"2026-03-11 08:31:39","dependent_last_load":"2026-03-11 05:28:33"},{"source_fqn":"ods.kpi_account_list","gap_sec":11186.0,"source_last_load":"2026-03-11 08:34:59","dependent_last_load":"2026-03-11 05:28:33"}],"severity":"CRITICAL","gap_minutes":186.4,"violations_count":2},{"target_fqn":"dm_calc.production_baked_anodes_and_mass","target_last_load":"2026-03-11 05:25:50","worst_upstream":"dict_dds.map_kpi_report_account_to_entity","worst_upstream_time":"2026-03-11 08:31:39","worst_gap_sec":11149.0,"violations":[{"source_fqn":"dict_dds.map_kpi_report_account_to_entity","gap_sec":11149.0,"source_last_load":"2026-03-11 08:31:39","dependent_last_load":"2026-03-11 05:25:50"}],"severity":"CRITICAL","gap_minutes":185.8,"violations_count":1},{"target_fqn":"dm_calc.sb_wuc_backup","target_last_load":"2026-03-11 02:07:35","worst_upstream":"dm.sb_wuc","worst_upstream_time":"2026-03-11 05:02:07","worst_gap_sec":10472.0,"violations":[{"source_fqn":"dm.sb_wuc","gap_sec":10472.0,"source_last_load":"2026-03-11 05:02:07","dependent_last_load":"2026-03-11 02:07:35"}],"severity":"CRITICAL","gap_minutes":174.5,"violations_count":1},{"target_fqn":"dds.material_movement_document","target_last_load":"2026-03-10 23:48:39","worst_upstream":"ods.mkpf_ral","worst_upstream_time":"2026-03-11 01:48:34","worst_gap_sec":7195.0,"violations":[{"source_fqn":"ods.mkpf_ral","gap_sec":7195.0,"source_last_load":"2026-03-11 01:48:34","dependent_last_load":"2026-03-10 23:48:39"}],"severity":"CRITICAL","gap_minutes":119.9,"violations_count":1},{"target_fqn":"dm.transportation_vehicle_capacity_average_utilization","target_last_load":"2026-03-11 00:03:38","worst_upstream":"dds.logistics_document_and_delivery_relationship","worst_upstream_time":"2026-03-11 02:02:59","worst_gap_sec":7161.0,"violations":[{"source_fqn":"dds.logistics_document_and_delivery_relationship","gap_sec":7161.0,"source_last_load":"2026-03-11 02:02:59","dependent_last_load":"2026-03-11 00:03:38"}],"severity":"CRITICAL","gap_minutes":119.3,"violations_count":1},{"target_fqn":"dds.invoice_realization","target_last_load":"2026-03-10 23:47:20","worst_upstream":"ods.vbss_ral","worst_upstream_time":"2026-03-11 01:45:35","worst_gap_sec":7095.0,"violations":[{"source_fqn":"ods.vbss_ral","gap_sec":7095.0,"source_last_load":"2026-03-11 01:45:35","dependent_last_load":"2026-03-10 23:47:20"}],"severity":"CRITICAL","gap_minutes":118.2,"violations_count":1},{"target_fqn":"dm.fixed_asset_non_liquid_analysis","target_last_load":"2026-03-11 01:56:29","worst_upstream":"dm_calc.unit_balance_operating_periods","worst_upstream_time":"2026-03-11 03:49:32","worst_gap_sec":6783.0,"violations":[{"source_fqn":"dm_calc.unit_balance_operating_periods","gap_sec":6783.0,"source_last_load":"2026-03-11 03:49:32","dependent_last_load":"2026-03-11 01:56:29"}],"severity":"CRITICAL","gap_minutes":113.0,"violations_count":1},{"target_fqn":"dm.fixed_asset_cost_and_depreciation","target_last_load":"2026-03-11 01:59:16","worst_upstream":"dm_calc.unit_balance_operating_periods","worst_upstream_time":"2026-03-11 03:49:32","worst_gap_sec":6616.0,"violations":[{"source_fqn":"dm_calc.unit_balance_operating_periods","gap_sec":6616.0,"source_last_load":"2026-03-11 03:49:32","dependent_last_load":"2026-03-11 01:59:16"}],"severity":"CRITICAL","gap_minutes":110.3,"violations_count":1},{"target_fqn":"dm_calc.statement_base_sd_sales_main","target_last_load":"2026-03-11 02:54:52","worst_upstream":"dm_calc.accounting_document_header","worst_upstream_time":"2026-03-11 04:07:37","worst_gap_sec":4365.0,"violations":[{"source_fqn":"dm_calc.accounting_document_header","gap_sec":4365.0,"source_last_load":"2026-03-11 04:07:37","dependent_last_load":"2026-03-11 02:54:52"}],"severity":"CRITICAL","gap_minutes":72.8,"violations_count":1},{"target_fqn":"dm_calc.statement_additional_services","target_last_load":"2026-03-11 02:55:32","worst_upstream":"dm_calc.accounting_document_header","worst_upstream_time":"2026-03-11 04:07:37","worst_gap_sec":4325.0,"violations":[{"source_fqn":"dm_calc.accounting_document_header","gap_sec":4325.0,"source_last_load":"2026-03-11 04:07:37","dependent_last_load":"2026-03-11 02:55:32"}],"severity":"CRITICAL","gap_minutes":72.1,"violations_count":1},{"target_fqn":"dm_calc.statement_prepayment","target_last_load":"2026-03-11 02:56:13","worst_upstream":"dm_calc.accounting_document_header","worst_upstream_time":"2026-03-11 04:07:37","worst_gap_sec":4284.0,"violations":[{"source_fqn":"dm_calc.accounting_document_header","gap_sec":4284.0,"source_last_load":"2026-03-11 04:07:37","dependent_last_load":"2026-03-11 02:56:13"}],"severity":"CRITICAL","gap_minutes":71.4,"violations_count":1},{"target_fqn":"dds.transport_bill","target_last_load":"2026-03-10 23:59:56","worst_upstream":"ods.asugdc_arrived_cargo","worst_upstream_time":"2026-03-11 00:35:53","worst_gap_sec":2157.0,"violations":[{"source_fqn":"ods.asugdc_arrived_cargo","gap_sec":2157.0,"source_last_load":"2026-03-11 00:35:53","dependent_last_load":"2026-03-10 23:59:56"}],"severity":"CRITICAL","gap_minutes":36.0,"violations_count":1},{"target_fqn":"dm_calc.transportation_own_container_movement","target_last_load":"2026-03-11 00:00:18","worst_upstream":"ods.asugdc_arrived_cargo","worst_upstream_time":"2026-03-11 00:35:53","worst_gap_sec":2135.0,"violations":[{"source_fqn":"ods.asugdc_arrived_cargo","gap_sec":2135.0,"source_last_load":"2026-03-11 00:35:53","dependent_last_load":"2026-03-11 00:00:18"}],"severity":"CRITICAL","gap_minutes":35.6,"violations_count":1},{"target_fqn":"dm.payment_request_approvement_history","target_last_load":"2026-03-11 05:02:28","worst_upstream":"dds.earmarked_funds_documents","worst_upstream_time":"2026-03-11 05:33:20","worst_gap_sec":1852.0,"violations":[{"source_fqn":"dds.earmarked_funds_documents","gap_sec":1852.0,"source_last_load":"2026-03-11 05:33:20","dependent_last_load":"2026-03-11 05:02:28"}],"severity":"CRITICAL","gap_minutes":30.9,"violations_count":1},{"target_fqn":"dm_view.dq_sd0005","target_last_load":"2026-03-11 05:39:51","worst_upstream":"dm.dq_sd0005","worst_upstream_time":"2026-03-11 06:05:45","worst_gap_sec":1554.0,"violations":[{"source_fqn":"dm.dq_sd0005","gap_sec":1554.0,"source_last_load":"2026-03-11 06:05:45","dependent_last_load":"2026-03-11 05:39:51"}],"severity":"MAJOR","gap_minutes":25.9,"violations_count":1},{"target_fqn":"dm.dq_sd0007","target_last_load":"2026-03-11 06:02:16","worst_upstream":"dm.sales_margin","worst_upstream_time":"2026-03-11 06:27:16","worst_gap_sec":1500.0,"violations":[{"source_fqn":"ods.zsd324k_bi_ral","gap_sec":1036.0,"source_last_load":"2026-03-11 06:19:32","dependent_last_load":"2026-03-11 06:02:16"},{"source_fqn":"dm.sales_margin","gap_sec":1500.0,"source_last_load":"2026-03-11 06:27:16","dependent_last_load":"2026-03-11 06:02:16"}],"severity":"MAJOR","gap_minutes":25.0,"violations_count":2},{"target_fqn":"dm.dq_sd0008","target_last_load":"2026-03-11 06:02:20","worst_upstream":"dm.sales_margin","worst_upstream_time":"2026-03-11 06:27:16","worst_gap_sec":1496.0,"violations":[{"source_fqn":"ods.zsd324k_bi_ral","gap_sec":1032.0,"source_last_load":"2026-03-11 06:19:32","dependent_last_load":"2026-03-11 06:02:20"},{"source_fqn":"dm.sales_margin","gap_sec":1496.0,"source_last_load":"2026-03-11 06:27:16","dependent_last_load":"2026-03-11 06:02:20"}],"severity":"MAJOR","gap_minutes":24.9,"violations_count":2},{"target_fqn":"dm_view.consolidated_document_workflow_approval_performance","target_last_load":"2026-03-11 04:41:26","worst_upstream":"dm.payment_request_approvement_history_dob_dtil","worst_upstream_time":"2026-03-11 05:03:20","worst_gap_sec":1314.0,"violations":[{"source_fqn":"dm.material_purchase_document_approvement_history_dob_dtil","gap_sec":737.0,"source_last_load":"2026-03-11 04:53:43","dependent_last_load":"2026-03-11 04:41:26"},{"source_fqn":"dm.payment_request_approvement_history_dob_dtil","gap_sec":1314.0,"source_last_load":"2026-03-11 05:03:20","dependent_last_load":"2026-03-11 04:41:26"}],"severity":"MAJOR","gap_minutes":21.9,"violations_count":2},{"target_fqn":"dm_calc.statement_purchase_3_person","target_last_load":"2026-03-11 02:55:07","worst_upstream":"dds.invoice_purchase_document_position","worst_upstream_time":"2026-03-11 03:08:36","worst_gap_sec":809.0,"violations":[{"source_fqn":"dds.invoice_purchase_document_header","gap_sec":796.0,"source_last_load":"2026-03-11 03:08:23","dependent_last_load":"2026-03-11 02:55:07"},{"source_fqn":"dds.invoice_purchase_document_position","gap_sec":809.0,"source_last_load":"2026-03-11 03:08:36","dependent_last_load":"2026-03-11 02:55:07"},{"source_fqn":"ods.ekbe_ral","gap_sec":309.0,"source_last_load":"2026-03-11 03:00:16","dependent_last_load":"2026-03-11 02:55:07"}],"severity":"MAJOR","gap_minutes":13.5,"violations_count":3},{"target_fqn":"dm_calc.accounting_document_header_for_purchase_documents","target_last_load":"2026-03-11 03:40:19","worst_upstream":"dds.accounting_documents","worst_upstream_time":"2026-03-11 03:49:01","worst_gap_sec":522.0,"violations":[{"source_fqn":"dds.accounting_documents","gap_sec":522.0,"source_last_load":"2026-03-11 03:49:01","dependent_last_load":"2026-03-11 03:40:19"}],"severity":"MAJOR","gap_minutes":8.7,"violations_count":1},{"target_fqn":"dm_view.account_debt_for_working_capital_final","target_last_load":"2026-03-11 05:00:55","worst_upstream":"dm_view.account_debt_for_working_capital","worst_upstream_time":"2026-03-11 05:08:11","worst_gap_sec":436.0,"violations":[{"source_fqn":"dm_view.account_debt_for_working_capital","gap_sec":436.0,"source_last_load":"2026-03-11 05:08:11","dependent_last_load":"2026-03-11 05:00:55"}],"severity":"MAJOR","gap_minutes":7.3,"violations_count":1},{"target_fqn":"dm.fixed_asset_operations_and_lend_lease","target_last_load":"2026-03-11 02:00:03","worst_upstream":"dds.sales_contract_header","worst_upstream_time":"2026-03-11 02:03:07","worst_gap_sec":184.0,"violations":[{"source_fqn":"dds.sales_contract_header","gap_sec":184.0,"source_last_load":"2026-03-11 02:03:07","dependent_last_load":"2026-03-11 02:00:03"},{"source_fqn":"dds.sales_document_counterparty_role","gap_sec":163.0,"source_last_load":"2026-03-11 02:02:46","dependent_last_load":"2026-03-11 02:00:03"},{"source_fqn":"dds.sales_order_header","gap_sec":151.0,"source_last_load":"2026-03-11 02:02:34","dependent_last_load":"2026-03-11 02:00:03"},{"source_fqn":"dds.sales_proposal_header","gap_sec":176.0,"source_last_load":"2026-03-11 02:02:59","dependent_last_load":"2026-03-11 02:00:03"}],"severity":"WARNING","gap_minutes":3.1,"violations_count":4},{"target_fqn":"dm.alumina_balance","target_last_load":"2026-03-11 00:51:23","worst_upstream":"dm.asugdc_dislocation_cargo","worst_upstream_time":"2026-03-11 00:51:29","worst_gap_sec":6.0,"violations":[{"source_fqn":"dm.asugdc_dislocation_cargo","gap_sec":6.0,"source_last_load":"2026-03-11 00:51:29","dependent_last_load":"2026-03-11 00:51:23"}],"severity":"WARNING","gap_minutes":0.1,"violations_count":1},{"target_fqn":"dds.toro_equipment_downtime_plan","target_last_load":"2026-03-11 08:37:08","worst_upstream":"dds.toro_equipment_downtime_actual","worst_upstream_time":"2026-03-11 08:37:09","worst_gap_sec":1.0,"violations":[{"source_fqn":"dds.toro_equipment_downtime_actual","gap_sec":1.0,"source_last_load":"2026-03-11 08:37:09","dependent_last_load":"2026-03-11 08:37:08"}],"severity":"WARNING","gap_minutes":0.0,"violations_count":1}][root@rgm-s-dwhapp01 table-dependency-viewer]# docker breaches; rows=get_cached_order_breaches(); hits=[r for r in rows if r['target_fqn']=='dm_calc.statement_purchase_3_person']; print('CACHED:', len(hits)); print(hits[:3])\""
-BOOT FILE: /app/api/main.py
-/app/api/main.py:193: UserWarning: Field name "schema" in "DependencyItem" shadows an attribute in parent "BaseModel"
-  class DependencyItem(BaseModel):
-Reg
-⚠️ rebuilding orderbreaches cache
-META COUNT: 2498
-META SAMPLE: ['dds.accidents', 'dds.accounting_balance', 'dds.accounting_document_clearing_relations', 'dds.accounting_document_partner_mirror_relation', 'dds.accounting_document_position_correspondence', 'dds.accounting_documents', 'dds.accounting_documents_texts', 'dds.accounting_turnover_counterparty', 'dds.adjustment_request_position', 'dds.advance_payment_requirements_by_purchase_orders', 'dds.aldor_edm_document', 'dds.aldor_scan_copy_link_to_multiple_sap_document', 'dds.aldor_scan_copy_link_to_single_sap_document', 'dds.bank_statement_documents', 'dds.bank_statement_position_clearing_record', 'dds.bill_of_lading', 'dds.controlling_documents_to_cost_centers', 'dds.controlling_documents_to_orders', 'dds.controlling_documents_to_wbs_elements', 'dds.controlling_object_distribution_settlement_rules', 'dds.customs_declaration_header', 'dds.customs_declaration_position', 'dds.delivery_document_header', 'dds.delivery_document_position', 'dds.delivery_number_deleted', 'dds.earmarked_funds_documents', 'dds.financial_loan_terms', 'dds.fixed_asset_depreciation', 'dds.fixed_asset_operations', 'dds.forwarder_instruction']
-❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dds.settlement_documents_from_project_to_receiver depends on ods.auas_ral BUT META NOT FOUND
-❌ BROKEN DEP: dds.settlement_documents_from_project_to_receiver depends on ods.auak_ral BUT META NOT FOUND
-❌ BROKEN DEP: dds.settlement_documents_from_project_to_receiver depends on ods.auaa_ral BUT META NOT FOUND
-❌ BROKEN DEP: ods.zsd2921m_sc_ral depends on stg.zsd2921m_sc BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.statement_base_full_calc depends on ods.ral/rusal/sd2882m_7 BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.statement_base_full_calc depends on ods.ral_konv BUT META NOT FOUND
-❌ BROKEN DEP: stg.paydox_credit_limits depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_web_kaizen_performers depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_web_kaizen_states depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_web_kaizens depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_web_kaizen_authors depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
-❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
-❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
-❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.easu_lp_kd_remelting_lom depends on stg.mes_kd_remelting_lom_ar BUT META NOT FOUND
-❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.si_restructuringofnoncoreassets_ao depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.si_balancesofnoncoreassets_ao depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
-❌ BROKEN DEP: ods.controlling_documents_to_cost_centers depends on stg.ral_zbw1690m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.settlement_documents_from_project_to_receiver depends on stg.ral_zbw1728m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.controlling_documents_to_orders depends on stg.ral_zbw1687m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.tax_accruals_and_payments_aggregated depends on stg.bip_zbw1699m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.accounting_document_position_correspondence depends on stg.ral_zbw1592m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.controlling_documents_to_wbs_elements depends on stg.ral_zbw1556m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.texts_from_sap_fm_read_text depends on stg.ral_zbw1583m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.accounting_documents depends on stg.ral_zbw1595m_odata_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.investment_expenses depends on stg.bip_zbw1642m_srv BUT META NOT FOUND
-❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
-❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
-❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
-❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.easu_lp_kd_remelting_lom depends on stg.mes_kd_remelting_lom_ar BUT META NOT FOUND
-❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dds.accounting_documents depends on stg.ral_zbw1595m_odata_srv BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.asuzdc_henter_home depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.counterparty_structure_1c_mdm_prod depends on landing.back_up_input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.counterparty_structure_1c_mdm_prod depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.sok_counterparty_parameters depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.map_forecast_transportation_scenario_to_business_location depends on stg.map_forecast_transportation_scenario_to_business_location BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.asuzdc_hrw_state depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.asuzdc_hst_local depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.asuzdc_hcarcnt_idle depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_date_control depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_location depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_rwcar_parts depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.asuzdc_docs_cars depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.material_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.plant_and_subsidiary_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dict_dds.warehouse_often_update BUT META NOT FOUND
-❌ BROKEN DEP: dm.exp_material_stock_balance_mr_ad depends on dm.material_stock_balance_often_update BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on dict_stg.ohd_is2_usr02 BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_roles BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_users BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on rls.rls_roles_mask BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on stg.ohd_is2_/rusal/usrfim BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on stg.ohd_is2_agr_1252 BUT META NOT FOUND
-❌ BROKEN DEP: rls.rls_t depends on stg.ohd_is2_agr_users BUT META NOT FOUND
-❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
-❌ BROKEN DEP: ods.easu_lp_kd_remelting_lom depends on stg.mes_kd_remelting_lom_ar BUT META NOT FOUND
-❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
-❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
-❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.toro2_eqp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dict_stg.toro2_flc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.ral_i2_toro2_ntf_hdr_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_flc_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_ord_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_ntf_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_ord_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.ral_is2_toro2_ord_hdr_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_ntf_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_eqp_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.toro2_ord_cst depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: ods.easu_lp_kd_remelting_lom depends on stg.mes_kd_remelting_lom_ar BUT META NOT FOUND
-❌ BROKEN DEP: ods.cast_sched depends on stg.cast_sched BUT META NOT FOUND
-❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
-❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
-❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
-❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
-❌ BROKEN DEP: stg.asugdc_arrived_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
-❌ BROKEN DEP: stg.asugdc_dislocation_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
-❌ BROKEN DEP: stg.s1c_debt_for_working_capital depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-CACHED: 1
-[{'target_fqn': 'dm_calc.statement_purchase_3_person', 'target_last_load': '2026-03-11 02:55:07', 'worst_upstream': 'dds.invoice_purchase_document_position', 'worst_upstream_time': '2026-03-11 03:08:36', 'worst_gap_sec': 809.0, 'violations': [{'source_fqn': 'dds.invoice_purchase_document_header', 'gap_sec': 796.0, 'source_last_load': '2026-03-11 03:08:23', 'dependent_last_load': '2026-03-11 02:55:07'}, {'source_fqn': 'dds.invoice_purchase_document_position', 'gap_sec': 809.0, 'source_last_load': '2026-03-11 03:08:36', 'dependent_last_load': '2026-03-11 02:55:07'}, {'source_fqn': 'ods.ekbe_ral', 'gap_sec': 309.0, 'source_last_load': '2026-03-11 03:00:16', 'dependent_last_load': '2026-03-11 02:55:07'}], 'severity': 'MAJOR', 'gap_minutes': 13.5, 'violations_count': 3}]
+docker exec -it table-dependency-viewer-frontend-1 sh -c "grep -R 'home:payload:v3\\|Нарушения порядка загрузки\\|Источник завершился позже' /usr/share/nginx/html/
+  assets | head -20"
+
+  Что нужно увидеть:
+
+  - home:payload:v3
+  - Источник завершился позже
+
+  Если там этого нет, значит в контейнер попал старый HomePage.jsx.
+
+  И еще проверь сам файл на сервере перед сборкой:
+
+  grep -n 'home:payload:v3' /root/table-dependency-viewer/src/components/HomePage.jsx
+  grep -n 'demoOrderBreaches.slice(0, 10)' /root/table-dependency-viewer/src/components/HomePage.jsx
+  grep -n 'Источник завершился позже' /root/table-dependency-viewer/src/components/HomePage.jsx
+
+  Если файл новый, но в контейнере старый bundle, значит надо пересобрать именно frontend после копирования файла:
+
+  docker compose build --no-cache frontend
+  docker compose up -d frontend

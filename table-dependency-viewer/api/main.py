@@ -5714,23 +5714,23 @@ def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = 
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    f"""
+                    _clickhouse_run_agg_cte(
+                        run_filter_sql="AND r.start_dttm >= now() - (:days || ' days')::interval"
+                    )
+                    + """
                     SELECT
-                        r.schema_name,
-                        r.table_name,
-                        s.stage_name,
-                        s.start_dttm,
-                        s.end_dttm,
-                        s.duration,
-                        s.status,
-                        r.dag_name,
-                        r.dag_run
-                    FROM {TABLE_CLICK_LOAD_STAGE} s
-                    JOIN {TABLE_CLICK_LOAD_RUN} r
-                      ON r.run_uuid = s.run_uuid
-                    WHERE s.start_dttm >= now() - (:days || ' days')::interval
-                      AND s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
-                    ORDER BY s.duration DESC NULLS LAST
+                        run_uuid,
+                        schema_name,
+                        table_name,
+                        dag_name,
+                        dag_run,
+                        start_dttm,
+                        end_dttm,
+                        status,
+                        actual_duration_seconds,
+                        elapsed_duration_seconds
+                    FROM run_agg
+                    ORDER BY actual_duration_seconds DESC NULLS LAST
                     LIMIT :limit
                     """
                 ),
@@ -5739,15 +5739,15 @@ def get_clickhouse_slow_stages(days: int = Query(7, ge=1, le=365), limit: int = 
 
         result = [
             {
+                "run_uuid": row.get("run_uuid"),
                 "schema_name": row.get("schema_name"),
                 "table_name": row.get("table_name"),
-                "stage_name": row.get("stage_name"),
                 "start_dttm": serialize_datetime(row.get("start_dttm")),
                 "end_dttm": serialize_datetime(row.get("end_dttm")),
-                "duration_min": _duration_minutes(row.get("duration")),
                 "status": row.get("status"),
                 "dag_name": row.get("dag_name"),
                 "dag_run": row.get("dag_run"),
+                **_clickhouse_run_metrics(row),
             }
             for row in rows
         ]

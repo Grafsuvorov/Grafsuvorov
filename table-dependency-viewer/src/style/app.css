@@ -4914,6 +4914,18 @@ main.content {
   white-space: nowrap;
 }
 
+.release-sub {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.table-expand-btn {
+  margin-top: 12px;
+}
+
 @media (max-width: 1100px) {
   .yt-task-head,
   .yt-task-row,

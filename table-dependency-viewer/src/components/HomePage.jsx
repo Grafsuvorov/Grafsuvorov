@@ -1047,7 +1047,7 @@ export default function HomePage({ onSelectTable }) {
                       <div>
                         <div className="order-row-target mono">{fqn}</div>
                         <div className="order-row-meta">
-                          {row.stage_name} · {row.dag_name || "—"}
+                          {row.dag_name || "—"} · {row.dag_run || "—"}
                         </div>
                       </div>
                       <div className={`order-pill status-${String(row.status || "").toLowerCase()}`}>
@@ -1055,8 +1055,7 @@ export default function HomePage({ onSelectTable }) {
                       </div>
                     </header>
                     <div className="order-row-text">
-                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} ·{" "}
-                      {row.duration_min !== null && row.duration_min !== undefined ? `${row.duration_min} мин` : "—"}
+                      Старт {formatTime(row.start_dttm)} · Финиш {formatTime(row.end_dttm)} · Работа {formatMinutes(row.actual_duration_min ?? row.duration_min)} · Ожидание/пауза {formatMinutes(row.lag_duration_min ?? 0)}
                     </div>
                     <div className="order-row-actions">
                       <button

@@ -66,6 +66,9 @@ export default function TableCard({
   const [ytData, setYtData] = useState(null);
   const [ytLoading, setYtLoading] = useState(false);
   const [ytError, setYtError] = useState(null);
+  const [showAllReleases, setShowAllReleases] = useState(false);
+  const [showAllTasks, setShowAllTasks] = useState(false);
+  const [showAllTimeline, setShowAllTimeline] = useState(false);
   const [analyticsSummary, setAnalyticsSummary] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(null);
@@ -299,7 +302,8 @@ export default function TableCard({
           meta.avg_duration_minutes !== null && meta.avg_duration_minutes !== undefined
             ? `${meta.avg_duration_minutes} мин`
             : "—",
-        hint: "только успешные",
+        hint: "только успешные · top-6 GP в tooltip",
+        title: topGpTooltip,
       },
       {
         label: "Режим загрузки",
@@ -330,7 +334,7 @@ export default function TableCard({
       );
     }
     return base;
-  }, [meta, analyticsSummary]);
+  }, [meta, analyticsSummary, topGpTooltip]);
 
   const sqlSections = useMemo(() => {
     if (!meta) return [];
@@ -373,6 +377,38 @@ export default function TableCard({
     return normalized;
   };
   const ytLink = (id) => (id ? `https://yt.rusal.ru/issue/${id}` : "#");
+  const topGpTooltip = useMemo(() => {
+    if (!historyRows?.length) return "Нет успешных GP-запусков.";
+    const top = [...historyRows]
+      .filter((row) => row.duration_minutes !== null && row.duration_minutes !== undefined)
+      .sort((a, b) => Number(b.duration_minutes || 0) - Number(a.duration_minutes || 0))
+      .slice(0, 6);
+    if (!top.length) return "Нет успешных GP-запусков.";
+    return top
+      .map((row, idx) => `${idx + 1}. ${formatDateTime(row.finish || row.start)} · ${row.duration_minutes} мин`)
+      .join("\n");
+  }, [historyRows]);
+  const topClickTooltip = useMemo(() => {
+    if (!clickHistory?.length) return "Нет ClickHouse-запусков.";
+    const top = [...clickHistory]
+      .filter((row) => (row.actual_duration_min ?? row.duration_min) !== null && (row.actual_duration_min ?? row.duration_min) !== undefined)
+      .sort((a, b) => Number(b.actual_duration_min ?? b.duration_min ?? 0) - Number(a.actual_duration_min ?? a.duration_min ?? 0))
+      .slice(0, 6);
+    if (!top.length) return "Нет ClickHouse-запусков.";
+    return top
+      .map((row, idx) => `${idx + 1}. ${formatDateTime(row.end_dttm || row.start_dttm)} · ${row.actual_duration_min ?? row.duration_min} мин`)
+      .join("\n");
+  }, [clickHistory]);
+  const ytTaskMap = useMemo(() => {
+    const map = new Map();
+    (ytData?.tasks || []).forEach((task) => {
+      map.set(task.issue_id, task);
+    });
+    return map;
+  }, [ytData]);
+  const visibleReleases = showAllReleases ? releaseItems : releaseItems.slice(0, 3);
+  const visibleTasks = showAllTasks ? (ytData?.tasks || []) : (ytData?.tasks || []).slice(0, 3);
+  const visibleTimeline = showAllTimeline ? (ytData?.timeline || []) : (ytData?.timeline || []).slice(0, 3);
 
   const copySql = (sql) => {
     if (!sql) return;
@@ -600,7 +636,7 @@ export default function TableCard({
 
       <div className="table-grid">
         {metrics.map((metric) => (
-          <div key={metric.label} className="table-info-card">
+          <div key={metric.label} className="table-info-card" title={metric.title || ""}>
             <div className="table-card-label">{metric.label}</div>
             <div className="table-card-value">{metric.value}</div>
             <div className="table-card-hint muted">{metric.hint}</div>
@@ -750,7 +786,7 @@ export default function TableCard({
                 </div>
                 <div>
                   <div className="click-label">Работа</div>
-                  <div className="click-value">
+                  <div className="click-value" title={topClickTooltip}>
                     {formatMinutes(clickLastRun?.actual_duration_min ?? clickLastRun?.duration_min)}
                   </div>
                 </div>
@@ -858,6 +894,7 @@ export default function TableCard({
             <div className="muted">Релизы по объекту не найдены.</div>
           )}
           {!releaseLoading && !releaseError && releaseItems.length > 0 && (
+            <>
             <div className="release-table">
               <div className="release-head">
                 <span>Релиз</span>
@@ -868,16 +905,21 @@ export default function TableCard({
                 <span>Изменения</span>
                 <span>Дата</span>
               </div>
-              {releaseItems.map((item, idx) => (
+              {visibleReleases.map((item, idx) => (
                 <div key={`${item.release_id}-${idx}`} className="release-row">
                   <span className="mono">{item.release_id}</span>
-                  {item.task_link ? (
-                    <a className="yt-link" href={item.task_link} target="_blank" rel="noreferrer">
-                      {item.task_id || "—"}
-                    </a>
-                  ) : (
-                    <span className="mono">{item.task_id || "—"}</span>
-                  )}
+                  <span>
+                    {item.task_link ? (
+                      <a className="yt-link" href={item.task_link} target="_blank" rel="noreferrer">
+                        {item.task_id || "—"}
+                      </a>
+                    ) : (
+                      <span className="mono">{item.task_id || "—"}</span>
+                    )}
+                    {ytTaskMap.get(item.task_id)?.summary ? (
+                      <span className="release-sub muted">{ytTaskMap.get(item.task_id)?.summary}</span>
+                    ) : null}
+                  </span>
                   <span>{item.target_system || "—"}</span>
                   <span>{item.initiated_by || "—"}</span>
                   <span className={`status-pill ${releaseStatusClass(item.final_status)}`}>
@@ -890,6 +932,12 @@ export default function TableCard({
                 </div>
               ))}
             </div>
+            {releaseItems.length > 3 && (
+              <button className="btn btn-ghost table-expand-btn" onClick={() => setShowAllReleases((v) => !v)}>
+                {showAllReleases ? "Свернуть релизы" : `Показать ещё релизы (${releaseItems.length - 3})`}
+              </button>
+            )}
+            </>
           )}
         </div>
       </div>
@@ -930,11 +978,14 @@ export default function TableCard({
                   <span>Последняя смена исполнителя</span>
                   <span>Последняя смена статуса</span>
                 </div>
-                {ytData.tasks.map((t) => (
+                {visibleTasks.map((t) => (
                   <div key={t.issue_id} className="yt-task-row">
-                    <a className="yt-link" href={ytLink(t.issue_id)} target="_blank" rel="noreferrer">
-                      {t.issue_id}
-                    </a>
+                    <span>
+                      <a className="yt-link" href={ytLink(t.issue_id)} target="_blank" rel="noreferrer">
+                        {t.issue_id}
+                      </a>
+                      {t.summary ? <span className="release-sub muted">{t.summary}</span> : null}
+                    </span>
                     <span>{t.created_by || "—"}</span>
                     <span>
                       {t.effective_assignee || "—"}
@@ -960,11 +1011,17 @@ export default function TableCard({
                   </div>
                 ))}
               </div>
+              {ytData.tasks.length > 3 && (
+                <button className="btn btn-ghost table-expand-btn" onClick={() => setShowAllTasks((v) => !v)}>
+                  {showAllTasks ? "Свернуть задачи" : `Показать ещё задачи (${ytData.tasks.length - 3})`}
+                </button>
+              )}
 
               {ytData.timeline?.length > 0 && (
                 <div className="yt-timeline">
                   <div className="section-subtitle">Последние изменения</div>
                   <div className="yt-timeline-head">
+                    <span>Задача</span>
                     <span>Дата</span>
                     <span>Автор</span>
                     <span>Событие</span>
@@ -972,8 +1029,16 @@ export default function TableCard({
                     <span>Было</span>
                     <span>Стало</span>
                   </div>
-                  {ytData.timeline.slice(0, 20).map((row, idx) => (
+                  {visibleTimeline.map((row, idx) => (
                     <div key={`${row.issue_id}-${idx}`} className="yt-timeline-row">
+                      <span>
+                        <a className="yt-link" href={ytLink(row.issue_id)} target="_blank" rel="noreferrer">
+                          {row.issue_id || "—"}
+                        </a>
+                        {ytTaskMap.get(row.issue_id)?.summary ? (
+                          <span className="release-sub muted">{ytTaskMap.get(row.issue_id)?.summary}</span>
+                        ) : null}
+                      </span>
                       <span>{row.ts || "—"}</span>
                       <span>{row.author || "—"}</span>
                       <span>{row.event_type || "—"}</span>
@@ -982,6 +1047,11 @@ export default function TableCard({
                       <span>{row.value_to || "—"}</span>
                     </div>
                   ))}
+                  {ytData.timeline.length > 3 && (
+                    <button className="btn btn-ghost table-expand-btn" onClick={() => setShowAllTimeline((v) => !v)}>
+                      {showAllTimeline ? "Свернуть изменения" : `Показать ещё изменения (${ytData.timeline.length - 3})`}
+                    </button>
+                  )}
                 </div>
               )}
             </>

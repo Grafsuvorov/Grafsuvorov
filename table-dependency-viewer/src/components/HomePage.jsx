@@ -43,6 +43,7 @@ export default function HomePage({ onSelectTable }) {
   const [clickSummary, setClickSummary] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
   const [clickSlow, setClickSlow] = useState([]);
+  const [showAllOrderBreaches, setShowAllOrderBreaches] = useState(false);
 
   const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
   useEffect(() => {
@@ -524,6 +525,10 @@ export default function HomePage({ onSelectTable }) {
     return { score, level, levelKey };
   }, [demoActiveIncidents.length, metrics?.error_count, demoOrderBreaches.length]);
 
+  const visibleOrderBreaches = useMemo(() => {
+    return showAllOrderBreaches ? demoOrderBreaches : demoOrderBreaches.slice(0, 10);
+  }, [demoOrderBreaches, showAllOrderBreaches]);
+
   return (
     <div className="container cc-page">
       <section className="cc-hero">
@@ -728,7 +733,7 @@ export default function HomePage({ onSelectTable }) {
           )}
           {demoOrderBreaches.length > 0 && (
           <div className="order-list">
-            {demoOrderBreaches.slice(0, 10).map((breach) => (
+            {visibleOrderBreaches.map((breach) => (
               <article key={breach.target_fqn} className="order-row">
                 <header className="order-row-header">
                   <div>
@@ -959,6 +964,18 @@ export default function HomePage({ onSelectTable }) {
                 )}
               </article>
             ))}
+            {demoOrderBreaches.length > 10 && (
+              <div className="order-row-actions">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setShowAllOrderBreaches((prev) => !prev)}
+                >
+                  {showAllOrderBreaches
+                    ? "Свернуть список"
+                    : `Показать все (${demoOrderBreaches.length})`}
+                </button>
+              </div>
+            )}
           </div>
           )}
         </section>

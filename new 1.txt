@@ -1,29 +1,14 @@
-curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches | jq 'length'
-  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches | jq '.[0:10]'
-
-  Напрямую в API:
-
-  curl --noproxy '*' -s http://127.0.0.1:5312/api/orderbreaches | jq 'length'
-  curl --noproxy '*' -s http://127.0.0.1:5312/api/orderbreaches | jq '.[0:10]'
-
-  Проверка карточки конкретной таблицы:
-
-  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" | jq
-
-  Проверка истории и ClickHouse для карточки:
-
-  curl --noproxy '*' -s "http://127.0.0.1:15312/api/table-history/dm/account_turnover_by_counterparty?limit=3" | jq
-  curl --noproxy '*' -s "http://127.0.0.1:15312/api/click/table/dm/account_turnover_by_counterparty?limit=3" | jq
-
-  Если jq нет, то без него:
-
-  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches
-
-  Нужно прислать мне:
-
-  - результат length для /api/orderbreaches
-  - первые 1-2 объекта из /api/orderbreaches
-  - и ответ /api/card/...
-
-  Если orderbreaches уже пустой в curl, значит проблема в backend/данных.
-  Если в curl данные есть, а на главной 0, значит это фронт/кэш/bundle.
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.                           0.0.1:15312/api/orderbreaches | jq 'length'
+-bash: jq: command not found
+(23) Failed writing body
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.                           0.0.1:15312/api/orderbreaches | jq '.[0:10]'
+-bash: jq: command not found
+(23) Failed writing body
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.                           0.0.1:5312/api/orderbreaches | jq 'length'
+-bash: jq: command not found
+(23) Failed writing body
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s "http://127                           .0.0.1:15312/api/card/dm/account_turnover_by_counterparty" | jq
+-bash: jq: command not found
+(23) Failed writing body
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.                           0.0.1:15312/api/orderbreaches
+{"detail":"Authentication required"}[root@rgm-s-dwhapp01 table-dependency-viewer        

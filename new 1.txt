@@ -1,33 +1,10 @@
-1. Получить token логином:
-
-  curl --noproxy '*' -s -X POST http://127.0.0.1:15312/auth/login \
-    -H 'Content-Type: application/json' \
-    -d '{"email":"ТВОЙ_EMAIL","password":"ТВОЙ_ПАРОЛЬ"}'
-
-  2. Скопировать из ответа access_token и подставить:
-
-  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches \
-    -H "Authorization: Bearer TOKEN"
-
-  3. Для карточки таблицы так же:
-
-  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" \
-    -H "Authorization: Bearer TOKEN"
-
-  Если хочешь без ручного копирования token, можно одной командой:
-
-  TOKEN=$(curl --noproxy '*' -s -X POST http://127.0.0.1:15312/auth/login \
-    -H 'Content-Type: application/json' \
-    -d '{"email":"ТВОЙ_EMAIL","password":"ТВОЙ_ПАРОЛЬ"}' | sed -n 's/.*"access_token":"\\([^"]*\\)".*/\\1/p') && \
-  curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches -H "Authorization: Bearer $TOKEN"
-
-  Пришли мне:
-
-  - ответ /api/orderbreaches с token
-  - ответ /api/card/dm/account_turnover_by_counterparty с token
-
-  Тогда станет ясно:
-
-  - backend реально отдает нарушения или нет
-  - и ломается ли карточка на данных, а не на роутинге.
-
+[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s -X POST http://127.0.0.1:15312/auth/lo                      gin \
+>     -H 'Content-Type: application/json' \
+>     -d '{"email":"Nikita.Suvorov@rusal.com","password":"admin"}'
+{"access_token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJyb2xlI                      joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIecKRHJ                      Ec","token_type":"bearer","role":"admin","email":"Nikita.Suvorov@rusal.com","username":"admin"}[root@rgm-s-                      [root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312/api/orderbreaches \
+>     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJy            b2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIe            cKRHJ          Ec"
+{"detail":"Invalid token"}[root@rgm-s-dwhapp01 table-dependency-viewer]# curl --noproxy '*' -s http://127.0.0.1:15312            /api/orderbreaches \
+>     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJy            b2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIe            cKRHJEc"
+[root@rgm-s-dwhapp01 table-dependency-viewer]#  curl --noproxy '*' -s "http://127.0.0.1:15312/api/card/dm/account_turnover_by_counterparty" \
+>     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJOaWtpdGEuU3V2b3JvdkBydXNhbC5jb20iLCJyb2xlI          joiYWRtaW4iLCJleHAiOjE3NzM2NTkyMDAsInRva2VuX3R5cGUiOiJhY2Nlc3MifQ.FTMvtEpiSoMPbcgQd6DvvLaPVu_Mv9b86AIecKRHJEc"
+{"detail":"Invalid token"}[root@rgm-s-dwhapp01 table-dependency-viewer]#

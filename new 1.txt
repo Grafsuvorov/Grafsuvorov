@@ -1,43 +1,17 @@
-WITH run_agg AS (
-      SELECT
-          r.run_uuid,
-          r.schema_name,
-          s.table_name,
-          r.dag_name,
-          r.dag_run,
-          r.status,
-          r.error_text,
-          MAX(s.table_id) AS table_id,
-          MIN(s.start_dttm) AS start_dttm,
-          MAX(s.end_dttm) AS end_dttm,
-          SUM(EXTRACT(EPOCH FROM s.duration)) AS actual_duration_seconds,
-          EXTRACT(EPOCH FROM (MAX(s.end_dttm) - MIN(s.start_dttm))) AS elapsed_duration_seconds
-      FROM tech_etl.click_fact_table_load_run r
-      JOIN tech_etl.click_fact_table_load_stage s
-        ON s.run_uuid = r.run_uuid
-      WHERE s.stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
-      GROUP BY
-          r.run_uuid,
-          r.schema_name,
-          s.table_name,
-          r.dag_name,
-          r.dag_run,
-          r.status,
-          r.error_text
-  )
-  SELECT
-      ra.run_uuid,
-      ra.schema_name,
-      ra.table_name,
-      tm.entity_name,
-      ra.start_dttm,
-      ra.end_dttm,
-      ra.status,
-      ra.actual_duration_seconds,
-      ra.elapsed_duration_seconds
-  FROM run_agg ra
-  LEFT JOIN tech_etl.tables_meta tm
-    ON tm.table_id = ra.table_id
-  WHERE ra.start_dttm >= '2026-03-10 04:30:00'
-    AND ra.start_dttm <= '2026-03-10 05:00:00'
-  ORDER BY ra.start_dttm ASC;
+Uncaught ReferenceError: Cannot access 'ed' before initialization
+    at xte (index-B_ADXSLQ.js:129:23888)
+    at Rp (index-B_ADXSLQ.js:48:34202)
+    at Jp (index-B_ADXSLQ.js:48:62961)
+    at h1 (index-B_ADXSLQ.js:48:73526)
+    at B1 (index-B_ADXSLQ.js:48:107660)
+    at m$ (index-B_ADXSLQ.js:48:106719)
+    at Sv (index-B_ADXSLQ.js:48:106549)
+    at R1 (index-B_ADXSLQ.js:48:103640)
+    at J1 (index-B_ADXSLQ.js:48:115158)
+    at MessagePort.G (index-B_ADXSLQ.js:25:1579)
+
+
+Нарушения порядка загрузки0
+Нарушений порядка загрузки не найдено. но они точно есть
+
+это просто убрать надпись Здесь собраны проблемы ландшафта: взаимные зависимости между сущностями и циклы, которые мешают строить корректный порядок загрузки.

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
-const HOME_CACHE_KEY = "home:payload:v2";
+const HOME_CACHE_KEY = "home:payload:v3";
 
 export default function HomePage({ onSelectTable }) {
   const navigate = useNavigate();
@@ -1243,9 +1243,6 @@ export default function HomePage({ onSelectTable }) {
           <div className="section-title">
             Архитектура и риски зависимостей
             <span className="section-meta">{entityCycles.length + demoEntityMutual.length}</span>
-          </div>
-          <div className="muted home-guide-copy">
-            Здесь собраны проблемы ландшафта: взаимные зависимости между сущностями и циклы, которые мешают строить корректный порядок загрузки.
           </div>
           <div className="home-architecture-summary">
             <div className="home-architecture-card">

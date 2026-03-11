@@ -1,34 +1,66 @@
-select
-    table_schema,
-    table_name,
-    entity_name,
-    depends_on
-  from tech_etl.tables_meta
-  where table_schema = 'dm_calc'
-    and table_name = 'ТВОЯ_TARGET_ТАБЛИЦА';
-
-  Проверка последних успешных загрузок source и target:
-
-  select
-    tm.table_schema,
-    tm.table_name,
-    max(l.loading_finish_dttm) as last_success_finish
-  from tech_etl.log_objects_loading_history l
-  join tech_etl.tables_meta tm
-    on tm.table_id = l.object_id
-  where l.object_type = 'table'
-    and l.loading_state = 'SUCCESS'
-    and (
-      (tm.table_schema = 'sales_mm' and tm.table_name = 'ТВОЯ_SOURCE_ТАБЛИЦА')
-      or
-      (tm.table_schema = 'dm_calc' and tm.table_name = 'ТВОЯ_TARGET_ТАБЛИЦА')
-    )
-  group by tm.table_schema, tm.table_name
-  order by tm.table_schema, tm.table_name;
-
-  Проверка обоих table_id:
-
-  select table_id, table_schema, table_name
-  from tech_etl.tables_meta
-  where (table_schema = 'sales_mm' and table_name = 'ТВОЯ_SOURCE_ТАБЛИЦА')
-     or (table_schema = 'dm_calc' and table_name = 'ТВОЯ_TARGET_ТАБЛИЦА');
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache frontend api
+[+] Building 12.0s (23/30)
+ => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                       0.0s
+ => => transferring dockerfile: 659B                                                                                        0.0s
+ => [table-dependency-viewer_api internal] load build definition from Dockerfile                                            0.0s
+ => => transferring dockerfile: 1.60kB                                                                                      0.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                             0.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                 1.7s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                            0.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                          0.0s
+ => [table-dependency-viewer_frontend internal] load .dockerignore                                                          0.0s
+ => => transferring context: 162B                                                                                           0.0s
+ => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine                                      0.0s
+ => [table-dependency-viewer_frontend internal] load build context                                                          0.5s
+ => => transferring context: 3.12MB                                                                                         0.4s
+ => CACHED [table-dependency-viewer_frontend stage-1 1/3] FROM docker.io/library/nginx:alpine                               0.0s
+ => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                                        0.0s
+ => [table-dependency-viewer_frontend stage-1 2/3] COPY nginx.conf /etc/nginx/conf.d/default.conf                           0.2s
+ => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                      0.4s
+ => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm   6.4s
+ => [table-dependency-viewer_api internal] load .dockerignore                                                               0.0s
+ => => transferring context: 162B                                                                                           0.0s
+ => [table-dependency-viewer_api stage-1 1/9] FROM docker.io/library/python:3.11-slim                                       0.0s
+ => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:a82f40540f5959e0003fb7b3c0f80  0.0s
+ => [table-dependency-viewer_api internal] load build context                                                               0.0s
+ => => transferring context: 274.20kB                                                                                       0.0s
+ => CACHED [table-dependency-viewer_api stage-1 2/9] WORKDIR /app                                                           0.0s
+ => ERROR [table-dependency-viewer_api stage-1 3/9] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/l  10.0s
+ => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config  2.9s
+ => [table-dependency-viewer_frontend build 5/6] COPY . .                                                                   1.7s
+ => CANCELED [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                 3.0s
+------
+ > [table-dependency-viewer_api stage-1 3/9] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*:
+#19 0.763 Hit:1 http://deb.debian.org/debian trixie InRelease
+#19 0.763 Err:1 http://deb.debian.org/debian trixie InRelease
+#19 0.763   Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
+#19 0.970 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#19 0.970 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+#19 1.235 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#19 1.235 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+#19 2.566 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#19 2.566 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+#19 2.816 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#19 2.816 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+#19 5.071 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#19 5.071 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+#19 5.324 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#19 5.324 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+#19 9.582 Get:3 http://deb.debian.org/debian-security trixie-security InRelease [43.4 kB]
+#19 9.582 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
+#19 9.582   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
+#19 9.790 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
+#19 9.790 Err:2 http://deb.debian.org/debian trixie-updates InRelease
+#19 9.790   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
+#19 9.794 Reading package lists...
+#19 9.803 W: An error occurred during the signature verification. The repository is not updated and the previous index files will be used. OpenPGP signature verification failed: http://deb.debian.org/debian trixie InRelease: Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
+#19 9.803 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Splitting up /var/lib/apt/lists/deb.debian.org_debian_dists_trixie_InRelease into data and signature failed
+#19 9.803 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
+#19 9.803 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
+#19 9.803 W: Some index files failed to download. They have been ignored, or old ones used instead.
+#19 9.813 Reading package lists...
+#19 9.823 Building dependency tree...
+#19 9.823 Reading state information...
+#19 9.825 E: Unable to locate package git
+------
+failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100

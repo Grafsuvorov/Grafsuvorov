@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const HOME_CACHE_KEY = "home:payload:v2";
 
 export default function HomePage({ onSelectTable }) {
   const navigate = useNavigate();
@@ -33,39 +34,6 @@ export default function HomePage({ onSelectTable }) {
   const [clickSlow, setClickSlow] = useState([]);
 
   const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
-  const quickRouteCards = [
-    {
-      title: "Мониторинг ночи",
-      desc: "Последнее ночное окно, тяжелые таблицы, аномалии и падения.",
-      action: "Открыть Night Ops",
-      onClick: () => navigate("/night-ops"),
-    },
-    {
-      title: "Аналитика лагов",
-      desc: "Понять, где реальная работа, а где ожидание в очереди или пауза между stage.",
-      action: "Открыть аналитику",
-      onClick: () => navigate("/analytics"),
-    },
-    {
-      title: "Каталог таблиц",
-      desc: "Поиск таблиц, карточка объекта, история запусков и связанные релизы.",
-      action: "Открыть каталог",
-      onClick: () => navigate("/tables"),
-    },
-    {
-      title: "Сущности и направления",
-      desc: "Структура бизнес-сущностей, покрытие до DM и проблемные связки между блоками.",
-      action: "Открыть сущности",
-      onClick: () => navigate("/entities"),
-    },
-    {
-      title: "Изменения и релизы",
-      desc: "Кто менял объекты, по каким задачам и где высокая частота изменений.",
-      action: "Открыть релизы",
-      onClick: () => navigate("/releases"),
-    },
-  ];
-
   useEffect(() => {
     let cancelled = false;
 
@@ -75,7 +43,7 @@ export default function HomePage({ onSelectTable }) {
     async function load() {
       try {
         setLoading(true);
-        const cachedRaw = localStorage.getItem("home:payload");
+        const cachedRaw = localStorage.getItem(HOME_CACHE_KEY);
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw);
           if (cached?.expiresAt && Date.now() < cached.expiresAt) {
@@ -162,7 +130,7 @@ export default function HomePage({ onSelectTable }) {
           setClickSlow(Array.isArray(clickSlowJson) ? clickSlowJson : []);
           setNightLoading(false);
           localStorage.setItem(
-            "home:payload",
+            HOME_CACHE_KEY,
             JSON.stringify({
               ts: Date.now(),
               expiresAt,
@@ -223,7 +191,7 @@ export default function HomePage({ onSelectTable }) {
     Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—";
 
   const lastRefreshLabel = useMemo(() => {
-    const cachedRaw = localStorage.getItem("home:payload");
+    const cachedRaw = localStorage.getItem(HOME_CACHE_KEY);
     if (!cachedRaw) return "—";
     try {
       const cached = JSON.parse(cachedRaw);
@@ -585,7 +553,7 @@ export default function HomePage({ onSelectTable }) {
 
           <div className="overview-item danger">
             <span className="overview-value">{metrics.error_count}</span>
-            <span className="overview-label">Сбоев загрузки (24ч)</span>
+            <span className="overview-label">Неуспешных запусков (24ч)</span>
           </div>
 
           <div className="overview-item">
@@ -601,22 +569,6 @@ export default function HomePage({ onSelectTable }) {
           </div>
         </section>
       )}
-
-      <section className="cc-surface home-guide-surface">
-        <div className="section-title">Куда идти дальше</div>
-        <div className="muted home-guide-copy">
-          Главная страница теперь отвечает на вопрос "что важно прямо сейчас", а детали вынесены в профильные экраны.
-        </div>
-        <div className="home-route-grid">
-          {quickRouteCards.map((card) => (
-            <button key={card.title} className="home-route-card" onClick={card.onClick}>
-              <div className="home-route-title">{card.title}</div>
-              <div className="home-route-desc">{card.desc}</div>
-              <div className="home-route-action">{card.action} →</div>
-            </button>
-          ))}
-        </div>
-      </section>
 
       {/* ===== NIGHT SUMMARY ===== */}
       {!loading && (
@@ -744,12 +696,16 @@ export default function HomePage({ onSelectTable }) {
       )}
 
       {/* ===== ORDER BREACHES ===== */}
-      {!loading && demoOrderBreaches.length > 0 && (
+      {!loading && (
         <section className="cc-surface">
           <div className="section-title">
             Нарушения порядка загрузки
             <span className="section-meta">{demoOrderBreaches.length}</span>
           </div>
+          {demoOrderBreaches.length === 0 && (
+            <div className="muted">Нарушений порядка загрузки не найдено.</div>
+          )}
+          {demoOrderBreaches.length > 0 && (
           <div className="order-list">
             {demoOrderBreaches.slice(0, 10).map((breach) => (
               <article key={breach.target_fqn} className="order-row">
@@ -983,6 +939,7 @@ export default function HomePage({ onSelectTable }) {
               </article>
             ))}
           </div>
+          )}
         </section>
       )}
 

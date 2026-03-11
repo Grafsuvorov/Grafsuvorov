@@ -751,13 +751,13 @@ export default function HomePage({ onSelectTable }) {
             <span className="section-meta">{demoOrderBreaches.length}</span>
           </div>
           <div className="order-list">
-            {demoOrderBreaches.slice(0, 4).map((breach) => (
+            {demoOrderBreaches.slice(0, 10).map((breach) => (
               <article key={breach.target_fqn} className="order-row">
                 <header className="order-row-header">
                   <div>
                     <div className="order-row-target mono" title={breach.target_fqn}>{breach.target_fqn}</div>
                     <div className="order-row-meta">
-                      Источник стартовал позже: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
+                      Источник завершился позже: <span title={breach.worst_upstream}>{breach.worst_upstream}</span>
                     </div>
                   </div>
                   <div className={`order-pill order-pill-${breach.severity?.toLowerCase() || "warning"}`}>
@@ -772,7 +772,7 @@ export default function HomePage({ onSelectTable }) {
 
                 </div>
                 <p className="order-row-text">
-                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} стартовала
+                  {breach.worst_upstream} завершилась {formatTime(breach.worst_upstream_time)}, а {breach.target_fqn} завершилась
                   {" "}
                   {formatTime(breach.target_last_load)}. Разрыв +{breach.gap_minutes} мин.
                 </p>

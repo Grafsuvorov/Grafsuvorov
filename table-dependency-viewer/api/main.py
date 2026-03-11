@@ -780,10 +780,6 @@ def compute_order_breaches():
     for r in rows:
         target = f"{r['dependent_schema']}.{r['dependent_table']}"
         source = f"{r['source_schema']}.{r['source_table']}"
-        src_entity = entity_map.get(source)
-        tgt_entity = entity_map.get(target)
-        if _normalize_entity_group(src_entity) == _normalize_entity_group(tgt_entity):
-            continue
 
         src_time = datetime.fromisoformat(r["source_last_load"])
         tgt_time = datetime.fromisoformat(r["dependent_last_load"])

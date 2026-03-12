@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
+import argparse
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 import urllib3
@@ -21,8 +22,8 @@ YOUTRACK_TOKEN = os.getenv("YOUTRACK_TOKEN", YOUTRACK_TOKEN)
 PG_DSN = os.getenv("YT_PG_DSN", PG_DSN)
 
 TRUNCATE_BEFORE_LOAD = False
-ONLY_NEW_ISSUES = True
 ONLY_RELEASE_TASKS = True
+RELEASE_LOOKBACK_DAYS = int(os.getenv("YT_RELEASE_LOOKBACK_DAYS", "14"))
 
 ISSUE_FIELDS = (
     "id,idReadable,summary,description,project(name,key),"
@@ -109,6 +110,35 @@ def api_get(url, params):
     return resp.json()
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Load or refresh YouTrack issues into tech_etl.yt_issue_* tables"
+    )
+    parser.add_argument(
+        "--days",
+        type=int,
+        default=RELEASE_LOOKBACK_DAYS,
+        help="Lookback window in days from the latest release point (default: 14)",
+    )
+    parser.add_argument(
+        "--issues",
+        type=str,
+        default="",
+        help="Comma-separated issue IDs to refresh explicitly, e.g. DWH-1,DWH-2",
+    )
+    parser.add_argument(
+        "--manual-only",
+        action="store_true",
+        help="Use only --issues or built-in ISSUE_IDS and do not derive task IDs from releases",
+    )
+    parser.add_argument(
+        "--truncate",
+        action="store_true",
+        help="Truncate yt_issue_* tables before load",
+    )
+    return parser.parse_args()
+
+
 def fmt_ts(value):
     if not value:
         return None
@@ -187,35 +217,84 @@ def normalize_value(value):
     return value
 
 
-def fetch_release_tasks(engine):
+def fetch_release_window(engine, lookback_days):
     with engine.connect() as conn:
-        rows = conn.execute(
+        latest_started = conn.execute(
             text(
                 """
-                SELECT DISTINCT task_id
-                FROM tech_etl.release_objects
-                WHERE task_id IS NOT NULL
+                SELECT MAX(started_at)
+                FROM tech_etl.release_log
                 """
             )
-        ).fetchall()
-    return [r[0] for r in rows if r[0]]
+        ).scalar()
+        if latest_started:
+            window_start = latest_started - timedelta(days=lookback_days)
+            return latest_started, window_start, "release_log"
 
-
-def existing_issues(engine, issue_ids):
-    if not issue_ids:
-        return set()
-    with engine.connect() as conn:
-        rows = conn.execute(
+        latest_created = conn.execute(
             text(
                 """
-                SELECT DISTINCT issue_id
-                FROM tech_etl.yt_issue_snapshot
-                WHERE issue_id = ANY(:ids)
+                SELECT MAX(created_at)
+                FROM tech_etl.release_objects
                 """
-            ),
-            {"ids": issue_ids},
-        ).fetchall()
-    return {r[0] for r in rows}
+            )
+        ).scalar()
+        if latest_created:
+            window_start = latest_created - timedelta(days=lookback_days)
+            return latest_created, window_start, "release_objects"
+
+    return None, None, None
+
+
+def fetch_release_tasks(engine, lookback_days):
+    latest_point, window_start, source = fetch_release_window(engine, lookback_days)
+    if not latest_point:
+        return [], None, None, None
+
+    with engine.connect() as conn:
+        if source == "release_log":
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT DISTINCT ro.task_id
+                    FROM tech_etl.release_objects ro
+                    JOIN tech_etl.release_log rl
+                      ON rl.release_id = ro.release_id
+                    WHERE ro.task_id IS NOT NULL
+                      AND rl.started_at >= :window_start
+                    """
+                ),
+                {"window_start": window_start},
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT DISTINCT task_id
+                    FROM tech_etl.release_objects
+                    WHERE task_id IS NOT NULL
+                      AND created_at >= :window_start
+                    """
+                ),
+                {"window_start": window_start},
+            ).fetchall()
+
+    issue_ids = sorted({r[0] for r in rows if r[0]})
+    return issue_ids, latest_point, window_start, source
+
+
+def parse_issue_ids(raw_value):
+    if not raw_value:
+        return []
+    return sorted({item.strip() for item in raw_value.split(",") if item.strip()})
+
+
+def delete_issue_payload(conn, issue_id):
+    conn.execute(text("DELETE FROM tech_etl.yt_issue_snapshot WHERE issue_id = :issue_id"), {"issue_id": issue_id})
+    conn.execute(text("DELETE FROM tech_etl.yt_issue_custom_field WHERE issue_id = :issue_id"), {"issue_id": issue_id})
+    conn.execute(text("DELETE FROM tech_etl.yt_issue_timeline WHERE issue_id = :issue_id"), {"issue_id": issue_id})
+    conn.execute(text("DELETE FROM tech_etl.yt_issue_worklog WHERE issue_id = :issue_id"), {"issue_id": issue_id})
+    conn.execute(text("DELETE FROM tech_etl.yt_issue_comment WHERE issue_id = :issue_id"), {"issue_id": issue_id})
 
 
 def get_current_state(custom_fields):
@@ -365,6 +444,7 @@ def load_issue(engine, issue_readable):
         )
 
     with engine.begin() as conn:
+        delete_issue_payload(conn, issue.get("idReadable"))
         conn.execute(
             text(
                 """
@@ -435,14 +515,31 @@ def load_issue(engine, issue_readable):
 
 
 def main():
+    args = parse_args()
     if "PASTE_TOKEN_HERE" in YOUTRACK_TOKEN:
         raise SystemExit("Set YOUTRACK_TOKEN in script or env")
     if "user:pass" in PG_DSN:
         raise SystemExit("Set PG_DSN in script or env")
     engine = create_engine(PG_DSN)
 
-    if ONLY_RELEASE_TASKS:
-        ISSUE_IDS[:] = fetch_release_tasks(engine)
+    manual_issue_ids = parse_issue_ids(args.issues) or list(ISSUE_IDS)
+    issue_ids = []
+
+    if not args.manual_only and ONLY_RELEASE_TASKS:
+        issue_ids, latest_point, window_start, source = fetch_release_tasks(engine, args.days)
+        if latest_point and window_start:
+            print(
+                f"Release sync window: {window_start:%Y-%m-%d %H:%M} -> {latest_point:%Y-%m-%d %H:%M} "
+                f"({source}, {len(issue_ids)} tasks)"
+            )
+
+    if args.manual_only:
+        issue_ids = manual_issue_ids
+    elif manual_issue_ids:
+        issue_ids = sorted(set(issue_ids) | set(manual_issue_ids))
+
+    ISSUE_IDS[:] = issue_ids
+
     if not ISSUE_IDS:
         raise SystemExit("No ISSUE_IDS found")
 
@@ -452,7 +549,7 @@ def main():
             if sql:
                 conn.execute(text(sql))
 
-    if TRUNCATE_BEFORE_LOAD:
+    if TRUNCATE_BEFORE_LOAD or args.truncate:
         with engine.begin() as conn:
             conn.execute(text("TRUNCATE tech_etl.yt_issue_snapshot"))
             conn.execute(text("TRUNCATE tech_etl.yt_issue_custom_field"))
@@ -460,17 +557,17 @@ def main():
             conn.execute(text("TRUNCATE tech_etl.yt_issue_worklog"))
             conn.execute(text("TRUNCATE tech_etl.yt_issue_comment"))
 
-    if ONLY_NEW_ISSUES:
-        existing = existing_issues(engine, ISSUE_IDS)
-    else:
-        existing = set()
-
+    loaded = 0
+    failed = 0
     for issue_id in ISSUE_IDS:
-        if ONLY_NEW_ISSUES and issue_id in existing:
-            continue
-        load_issue(engine, issue_id)
+        try:
+            load_issue(engine, issue_id)
+            loaded += 1
+        except Exception as exc:
+            failed += 1
+            print(f"[ERROR] {issue_id}: {exc}")
 
-    print("Done.")
+    print(f"Done. loaded={loaded}, failed={failed}, total={len(ISSUE_IDS)}")
 
 
 if __name__ == "__main__":

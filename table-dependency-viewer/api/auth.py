@@ -84,6 +84,15 @@ class UserActionResponse(BaseModel):
     status: str
 
 
+class AuditEventPayload(BaseModel):
+    event_type: str
+    page: Optional[str] = None
+    object_type: Optional[str] = None
+    object_id: Optional[str] = None
+    object_name: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+
+
 @dataclass
 class AuthUser:
     id: int
@@ -275,6 +284,164 @@ def _ensure_users_table() -> None:
         )
 
 
+def _ensure_audit_table() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE SEQUENCE IF NOT EXISTS public.app_user_event_id_seq
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.app_user_event (
+                    id BIGINT NOT NULL DEFAULT nextval('public.app_user_event_id_seq'),
+                    ts TIMESTAMP NOT NULL DEFAULT NOW(),
+                    user_email TEXT,
+                    user_role TEXT,
+                    event_type TEXT NOT NULL,
+                    status TEXT,
+                    page TEXT,
+                    object_type TEXT,
+                    object_id TEXT,
+                    object_name TEXT,
+                    details JSON,
+                    ip TEXT,
+                    user_agent TEXT
+                )
+                DISTRIBUTED BY (user_email)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_app_user_event_ts
+                ON public.app_user_event (ts)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_app_user_event_email_ts
+                ON public.app_user_event (user_email, ts DESC)
+                """
+            )
+        )
+        pk_exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'app_user_event_pk'
+                LIMIT 1
+                """
+            )
+        ).scalar()
+        if not pk_exists:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE public.app_user_event
+                    ADD CONSTRAINT app_user_event_pk PRIMARY KEY (id)
+                    """
+                )
+            )
+
+
+def _request_ip(request: Optional[Request]) -> Optional[str]:
+    if not request:
+        return None
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = getattr(request, "client", None)
+    return getattr(client, "host", None)
+
+
+def _request_user_agent(request: Optional[Request]) -> Optional[str]:
+    if not request:
+        return None
+    return request.headers.get("User-Agent")
+
+
+def _write_audit_event(
+    *,
+    event_type: str,
+    request: Optional[Request] = None,
+    user: Optional[AuthUser] = None,
+    user_email: Optional[str] = None,
+    user_role: Optional[str] = None,
+    status_value: Optional[str] = None,
+    page: Optional[str] = None,
+    object_type: Optional[str] = None,
+    object_id: Optional[str] = None,
+    object_name: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+) -> None:
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    DELETE FROM public.app_user_event
+                    WHERE ts < (NOW() - INTERVAL '30 days')
+                    """
+                )
+            )
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO public.app_user_event (
+                        user_email,
+                        user_role,
+                        event_type,
+                        status,
+                        page,
+                        object_type,
+                        object_id,
+                        object_name,
+                        details,
+                        ip,
+                        user_agent
+                    )
+                    VALUES (
+                        :user_email,
+                        :user_role,
+                        :event_type,
+                        :status,
+                        :page,
+                        :object_type,
+                        :object_id,
+                        :object_name,
+                        CAST(:details AS JSON),
+                        :ip,
+                        :user_agent
+                    )
+                    """
+                ),
+                {
+                    "user_email": user.email if user else user_email,
+                    "user_role": user.role if user else user_role,
+                    "event_type": event_type,
+                    "status": status_value,
+                    "page": page,
+                    "object_type": object_type,
+                    "object_id": object_id,
+                    "object_name": object_name,
+                    "details": json.dumps(details or {}),
+                    "ip": _request_ip(request),
+                    "user_agent": _request_user_agent(request),
+                },
+            )
+    except Exception:
+        # audit logging must not break app flows
+        return
+
+
 def _bootstrap_admin() -> None:
     if not AUTH_BOOTSTRAP_ADMIN_EMAIL or not AUTH_BOOTSTRAP_ADMIN_PASSWORD:
         return
@@ -292,6 +459,7 @@ def init_auth() -> None:
     if not AUTH_ENABLED:
         return
     _ensure_users_table()
+    _ensure_audit_table()
     _bootstrap_admin()
 
 
@@ -348,7 +516,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(payload: UserRegister):
+def register(payload: UserRegister, request: Request):
     if not AUTH_ALLOW_REGISTER:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     role = payload.role.lower()
@@ -358,6 +526,13 @@ def register(payload: UserRegister):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
     user = _create_user(payload.email, payload.username, payload.password, role)
     token = _create_access_token(user.email, user.role)
+    _write_audit_event(
+        event_type="register_success",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/register",
+    )
     return TokenResponse(access_token=token, role=user.role, email=user.email, username=user.username)
 
 
@@ -372,6 +547,17 @@ def create_user(payload: UserCreate, request: Request):
     if _get_user_by_email(payload.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
     user = _create_user(payload.email, payload.username, payload.password, role)
+    _write_audit_event(
+        event_type="admin_create_user",
+        request=request,
+        user=admin,
+        status_value="success",
+        page="/auth/users",
+        object_type="user",
+        object_id=str(user.id),
+        object_name=user.email,
+        details={"role": user.role},
+    )
     return UserMe(email=user.email, username=user.username, role=user.role)
 
 
@@ -410,6 +596,15 @@ def disable_user(user_id: int, request: Request):
     if admin.id == user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя отключить себя")
     _set_user_active(user_id, False)
+    _write_audit_event(
+        event_type="admin_disable_user",
+        request=request,
+        user=admin,
+        status_value="success",
+        page="/auth/users",
+        object_type="user",
+        object_id=str(user_id),
+    )
     return UserActionResponse(status="ok")
 
 
@@ -419,6 +614,15 @@ def enable_user(user_id: int, request: Request):
     if admin.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
     _set_user_active(user_id, True)
+    _write_audit_event(
+        event_type="admin_enable_user",
+        request=request,
+        user=admin,
+        status_value="success",
+        page="/auth/users",
+        object_type="user",
+        object_id=str(user_id),
+    )
     return UserActionResponse(status="ok")
 
 
@@ -430,6 +634,15 @@ def delete_user(user_id: int, request: Request):
     if admin.id == user_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Нельзя удалить себя")
     _delete_user(user_id)
+    _write_audit_event(
+        event_type="admin_delete_user",
+        request=request,
+        user=admin,
+        status_value="success",
+        page="/auth/users",
+        object_type="user",
+        object_id=str(user_id),
+    )
     return UserActionResponse(status="ok")
 
 
@@ -439,17 +652,45 @@ def change_password(payload: ChangePassword, request: Request):
     if not _verify_password(payload.current_password, user.password_hash, user.password_salt):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный текущий пароль")
     _update_user_password(user.id, payload.new_password)
+    _write_audit_event(
+        event_type="change_password",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/change-password",
+    )
     return {"status": "ok"}
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: UserLogin):
+def login(payload: UserLogin, request: Request):
     user = _get_user_by_email(payload.email)
     if not user or not user.is_active:
+        _write_audit_event(
+            event_type="login",
+            request=request,
+            user_email=payload.email,
+            status_value="failed",
+            page="/auth/login",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if not _verify_password(payload.password, user.password_hash, user.password_salt):
+        _write_audit_event(
+            event_type="login",
+            request=request,
+            user=user,
+            status_value="failed",
+            page="/auth/login",
+        )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     token = _create_access_token(user.email, user.role)
+    _write_audit_event(
+        event_type="login",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/login",
+    )
     return TokenResponse(access_token=token, role=user.role, email=user.email, username=user.username)
 
 
@@ -457,3 +698,141 @@ def login(payload: UserLogin):
 def me(request: Request):
     user = get_current_user_from_request(request)
     return UserMe(email=user.email, username=user.username, role=user.role)
+
+
+@router.post("/logout")
+def logout(request: Request):
+    user = get_current_user_from_request(request)
+    _write_audit_event(
+        event_type="logout",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/logout",
+    )
+    return {"status": "ok"}
+
+
+@router.post("/audit/event")
+def write_audit_event(payload: AuditEventPayload, request: Request):
+    user = get_current_user_from_request(request)
+    _write_audit_event(
+        event_type=payload.event_type,
+        request=request,
+        user=user,
+        status_value="success",
+        page=payload.page,
+        object_type=payload.object_type,
+        object_id=payload.object_id,
+        object_name=payload.object_name,
+        details=payload.details,
+    )
+    return {"status": "ok"}
+
+
+@router.get("/users/analytics")
+def users_analytics(request: Request, days: int = 30):
+    admin = get_current_user_from_request(request)
+    if admin.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+    params = {"days": max(1, min(days, 90))}
+    with engine.connect() as conn:
+        totals = conn.execute(
+            text(
+                """
+                SELECT
+                    COUNT(*) AS events_count,
+                    COUNT(DISTINCT user_email) AS users_count,
+                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'success') AS logins_count,
+                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'failed') AS failed_logins_count,
+                    COUNT(*) FILTER (WHERE event_type = 'page_view') AS page_views_count,
+                    COUNT(*) FILTER (WHERE event_type <> 'page_view') AS actions_count
+                FROM public.app_user_event
+                WHERE ts >= (NOW() - (:days || ' days')::interval)
+                """
+            ),
+            params,
+        ).mappings().first()
+
+        by_user = conn.execute(
+            text(
+                """
+                SELECT
+                    COALESCE(user_email, 'unknown') AS user_email,
+                    MAX(user_role) AS user_role,
+                    COUNT(*) AS events_count,
+                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'success') AS logins_count,
+                    COUNT(*) FILTER (WHERE event_type = 'page_view') AS page_views_count,
+                    COUNT(*) FILTER (WHERE event_type <> 'page_view') AS actions_count,
+                    MAX(ts) AS last_activity_at
+                FROM public.app_user_event
+                WHERE ts >= (NOW() - (:days || ' days')::interval)
+                GROUP BY COALESCE(user_email, 'unknown')
+                ORDER BY events_count DESC, last_activity_at DESC
+                LIMIT 50
+                """
+            ),
+            params,
+        ).mappings().all()
+
+        top_pages = conn.execute(
+            text(
+                """
+                SELECT page, COUNT(*) AS events_count
+                FROM public.app_user_event
+                WHERE ts >= (NOW() - (:days || ' days')::interval)
+                  AND event_type = 'page_view'
+                  AND page IS NOT NULL
+                GROUP BY page
+                ORDER BY events_count DESC, page
+                LIMIT 20
+                """
+            ),
+            params,
+        ).mappings().all()
+
+        top_actions = conn.execute(
+            text(
+                """
+                SELECT event_type, COUNT(*) AS events_count
+                FROM public.app_user_event
+                WHERE ts >= (NOW() - (:days || ' days')::interval)
+                  AND event_type <> 'page_view'
+                GROUP BY event_type
+                ORDER BY events_count DESC, event_type
+                LIMIT 20
+                """
+            ),
+            params,
+        ).mappings().all()
+
+        recent_events = conn.execute(
+            text(
+                """
+                SELECT
+                    ts,
+                    user_email,
+                    user_role,
+                    event_type,
+                    status,
+                    page,
+                    object_type,
+                    object_name
+                FROM public.app_user_event
+                WHERE ts >= (NOW() - (:days || ' days')::interval)
+                ORDER BY ts DESC
+                LIMIT 100
+                """
+            ),
+            params,
+        ).mappings().all()
+
+    return {
+        "summary": dict(totals or {}),
+        "users": [dict(row) for row in by_user],
+        "pages": [dict(row) for row in top_pages],
+        "actions": [dict(row) for row in top_actions],
+        "recent": [dict(row) for row in recent_events],
+        "days": params["days"],
+    }

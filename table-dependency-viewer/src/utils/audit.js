@@ -11,7 +11,10 @@ export function sendAuditEvent(payload) {
 
   fetch(`${API_BASE}/auth/audit/event`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify(payload),
     keepalive: true,
   }).catch(() => {});

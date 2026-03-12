@@ -311,7 +311,7 @@ def _ensure_audit_table() -> None:
                     ip TEXT,
                     user_agent TEXT
                 )
-                DISTRIBUTED BY (user_email)
+                DISTRIBUTED BY (id)
                 """
             )
         )
@@ -459,7 +459,11 @@ def init_auth() -> None:
     if not AUTH_ENABLED:
         return
     _ensure_users_table()
-    _ensure_audit_table()
+    try:
+        _ensure_audit_table()
+    except Exception as exc:
+        # Audit is optional; auth startup must not fail on Greenplum DDL quirks.
+        print(f"AUTH AUDIT INIT WARNING: {exc}")
     _bootstrap_admin()
 
 
@@ -737,96 +741,113 @@ def users_analytics(request: Request, days: int = 30):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     params = {"days": max(1, min(days, 90))}
-    with engine.connect() as conn:
-        totals = conn.execute(
-            text(
-                """
-                SELECT
-                    COUNT(*) AS events_count,
-                    COUNT(DISTINCT user_email) AS users_count,
-                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'success') AS logins_count,
-                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'failed') AS failed_logins_count,
-                    COUNT(*) FILTER (WHERE event_type = 'page_view') AS page_views_count,
-                    COUNT(*) FILTER (WHERE event_type <> 'page_view') AS actions_count
-                FROM public.app_user_event
-                WHERE ts >= (NOW() - (:days || ' days')::interval)
-                """
-            ),
-            params,
-        ).mappings().first()
+    try:
+        with engine.connect() as conn:
+            totals = conn.execute(
+                text(
+                    """
+                    SELECT
+                        COUNT(*) AS events_count,
+                        COUNT(DISTINCT user_email) AS users_count,
+                        SUM(CASE WHEN event_type = 'login' AND status = 'success' THEN 1 ELSE 0 END) AS logins_count,
+                        SUM(CASE WHEN event_type = 'login' AND status = 'failed' THEN 1 ELSE 0 END) AS failed_logins_count,
+                        SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_count,
+                        SUM(CASE WHEN event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_count
+                    FROM public.app_user_event
+                    WHERE ts >= (NOW() - (:days || ' days')::interval)
+                    """
+                ),
+                params,
+            ).mappings().first()
 
-        by_user = conn.execute(
-            text(
-                """
-                SELECT
-                    COALESCE(user_email, 'unknown') AS user_email,
-                    MAX(user_role) AS user_role,
-                    COUNT(*) AS events_count,
-                    COUNT(*) FILTER (WHERE event_type = 'login' AND status = 'success') AS logins_count,
-                    COUNT(*) FILTER (WHERE event_type = 'page_view') AS page_views_count,
-                    COUNT(*) FILTER (WHERE event_type <> 'page_view') AS actions_count,
-                    MAX(ts) AS last_activity_at
-                FROM public.app_user_event
-                WHERE ts >= (NOW() - (:days || ' days')::interval)
-                GROUP BY COALESCE(user_email, 'unknown')
-                ORDER BY events_count DESC, last_activity_at DESC
-                LIMIT 50
-                """
-            ),
-            params,
-        ).mappings().all()
+            by_user = conn.execute(
+                text(
+                    """
+                    SELECT
+                        COALESCE(user_email, 'unknown') AS user_email,
+                        MAX(user_role) AS user_role,
+                        COUNT(*) AS events_count,
+                        SUM(CASE WHEN event_type = 'login' AND status = 'success' THEN 1 ELSE 0 END) AS logins_count,
+                        SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_count,
+                        SUM(CASE WHEN event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_count,
+                        MAX(ts) AS last_activity_at
+                    FROM public.app_user_event
+                    WHERE ts >= (NOW() - (:days || ' days')::interval)
+                    GROUP BY COALESCE(user_email, 'unknown')
+                    ORDER BY events_count DESC, last_activity_at DESC
+                    LIMIT 50
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-        top_pages = conn.execute(
-            text(
-                """
-                SELECT page, COUNT(*) AS events_count
-                FROM public.app_user_event
-                WHERE ts >= (NOW() - (:days || ' days')::interval)
-                  AND event_type = 'page_view'
-                  AND page IS NOT NULL
-                GROUP BY page
-                ORDER BY events_count DESC, page
-                LIMIT 20
-                """
-            ),
-            params,
-        ).mappings().all()
+            top_pages = conn.execute(
+                text(
+                    """
+                    SELECT page, COUNT(*) AS events_count
+                    FROM public.app_user_event
+                    WHERE ts >= (NOW() - (:days || ' days')::interval)
+                      AND event_type = 'page_view'
+                      AND page IS NOT NULL
+                    GROUP BY page
+                    ORDER BY events_count DESC, page
+                    LIMIT 20
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-        top_actions = conn.execute(
-            text(
-                """
-                SELECT event_type, COUNT(*) AS events_count
-                FROM public.app_user_event
-                WHERE ts >= (NOW() - (:days || ' days')::interval)
-                  AND event_type <> 'page_view'
-                GROUP BY event_type
-                ORDER BY events_count DESC, event_type
-                LIMIT 20
-                """
-            ),
-            params,
-        ).mappings().all()
+            top_actions = conn.execute(
+                text(
+                    """
+                    SELECT event_type, COUNT(*) AS events_count
+                    FROM public.app_user_event
+                    WHERE ts >= (NOW() - (:days || ' days')::interval)
+                      AND event_type <> 'page_view'
+                    GROUP BY event_type
+                    ORDER BY events_count DESC, event_type
+                    LIMIT 20
+                    """
+                ),
+                params,
+            ).mappings().all()
 
-        recent_events = conn.execute(
-            text(
-                """
-                SELECT
-                    ts,
-                    user_email,
-                    user_role,
-                    event_type,
-                    status,
-                    page,
-                    object_type,
-                    object_name
-                FROM public.app_user_event
-                WHERE ts >= (NOW() - (:days || ' days')::interval)
-                ORDER BY ts DESC
-                LIMIT 100
-                """
-            ),
-            params,
-        ).mappings().all()
+            recent_events = conn.execute(
+                text(
+                    """
+                    SELECT
+                        ts,
+                        user_email,
+                        user_role,
+                        event_type,
+                        status,
+                        page,
+                        object_type,
+                        object_name
+                    FROM public.app_user_event
+                    WHERE ts >= (NOW() - (:days || ' days')::interval)
+                    ORDER BY ts DESC
+                    LIMIT 100
+                    """
+                ),
+                params,
+            ).mappings().all()
+    except Exception:
+        return {
+            "summary": {
+                "events_count": 0,
+                "users_count": 0,
+                "logins_count": 0,
+                "failed_logins_count": 0,
+                "page_views_count": 0,
+                "actions_count": 0,
+            },
+            "users": [],
+            "pages": [],
+            "actions": [],
+            "recent": [],
+            "days": params["days"],
+        }
 
     return {
         "summary": dict(totals or {}),

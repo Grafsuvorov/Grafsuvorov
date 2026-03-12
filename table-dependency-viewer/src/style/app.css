@@ -654,70 +654,23 @@ main.content {
   align-items: start;
 }
 
+.admin-analytics-columns-main {
+  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+}
+
+.admin-analytics-columns-secondary {
+  grid-template-columns: 1fr 1fr;
+}
+
 .admin-analytics-block {
   display: grid;
   gap: 10px;
   align-content: start;
 }
 
-.admin-analytics-block-wide {
-  grid-column: span 2;
-}
-
 .admin-analytics-table {
   display: grid;
   gap: 8px;
-}
-
-.admin-user-cards {
-  display: grid;
-  gap: 10px;
-}
-
-.admin-user-card {
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.07);
-  background: rgba(255,255,255,0.035);
-}
-
-.admin-user-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
-  margin-bottom: 10px;
-}
-
-.admin-user-card-total {
-  min-width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(59,130,246,0.16);
-  border: 1px solid rgba(59,130,246,0.24);
-  color: #dbeafe;
-  font-weight: 700;
-}
-
-.admin-user-card-metrics {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-
-.admin-user-card-metrics span {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.06);
-  color: rgba(229,231,235,0.8);
-  font-size: 12px;
 }
 
 .admin-row {
@@ -735,6 +688,12 @@ main.content {
 
 .admin-compact-row {
   grid-template-columns: 1.8fr 0.6fr;
+  align-items: center;
+}
+
+.admin-users-head,
+.admin-users-row {
+  grid-template-columns: 1.6fr 0.55fr 0.55fr 0.55fr 1fr;
   align-items: center;
 }
 
@@ -756,6 +715,10 @@ main.content {
   max-height: 620px;
   overflow: auto;
   padding-right: 4px;
+}
+
+.admin-activity-feed-tall {
+  min-height: 420px;
 }
 
 .admin-activity-item {
@@ -809,10 +772,6 @@ main.content {
   .admin-analytics-overview,
   .admin-analytics-columns {
     grid-template-columns: 1fr;
-  }
-
-  .admin-analytics-block-wide {
-    grid-column: auto;
   }
 }
 

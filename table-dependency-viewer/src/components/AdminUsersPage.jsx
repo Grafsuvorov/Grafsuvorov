@@ -95,12 +95,6 @@ export default function AdminUsersPage({ userProfile }) {
   const topUser = audit?.users?.[0] || null;
   const topPage = audit?.pages?.[0] || null;
   const topAction = audit?.actions?.[0] || null;
-  const topLogins = [...(audit?.users || [])]
-    .sort((a, b) => (b.logins_count ?? 0) - (a.logins_count ?? 0))
-    .slice(0, 6);
-  const topUsage = [...(audit?.users || [])]
-    .sort((a, b) => (b.events_count ?? 0) - (a.events_count ?? 0))
-    .slice(0, 6);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -493,49 +487,61 @@ export default function AdminUsersPage({ userProfile }) {
               </div>
             </div>
 
-            <div className="admin-analytics-columns">
+            <div className="admin-analytics-columns admin-analytics-columns-main">
               <div className="admin-analytics-block">
-                <div className="section-subtitle">Топ по использованию</div>
-                <div className="admin-user-cards">
-                  {topUsage.map((row) => (
-                    <div className="admin-user-card" key={`usage-${row.user_email}`}>
-                      <div className="admin-user-card-head">
-                        <div>
-                          <div className="admin-primary">{row.user_email}</div>
-                          <div className="muted">{formatRole(row.user_role)}</div>
-                        </div>
-                        <div className="admin-user-card-total">{row.events_count ?? 0}</div>
-                      </div>
-                      <div className="admin-user-card-metrics">
-                        <span>Входов: {row.logins_count ?? 0}</span>
-                        <span>Страниц: {row.page_views_count ?? 0}</span>
-                        <span>Действий: {row.actions_count ?? 0}</span>
-                      </div>
-                      <div className="muted">Последняя активность: {formatDateTime(row.last_activity_at)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="admin-analytics-block">
-                <div className="section-subtitle">Топ по входам</div>
+                <div className="section-subtitle">Пользователи</div>
                 <div className="admin-analytics-table">
-                  <div className="admin-row admin-header admin-compact-row">
+                  <div className="admin-row admin-header admin-users-head">
                     <div>Пользователь</div>
                     <div>Входов</div>
+                    <div>Страниц</div>
+                    <div>Действий</div>
+                    <div>Последняя активность</div>
                   </div>
-                  {topLogins.map((row) => (
-                    <div className="admin-row admin-compact-row" key={`login-${row.user_email}`}>
+                  {(audit.users || []).map((row) => (
+                    <div className="admin-row admin-users-row" key={`user-${row.user_email}`}>
                       <div>
                         <div className="admin-primary">{row.user_email}</div>
                         <div className="muted">{formatRole(row.user_role)}</div>
                       </div>
                       <div>{row.logins_count ?? 0}</div>
+                      <div>{row.page_views_count ?? 0}</div>
+                      <div>{row.actions_count ?? 0}</div>
+                      <div>{formatDateTime(row.last_activity_at)}</div>
                     </div>
                   ))}
                 </div>
               </div>
 
+              <div className="admin-analytics-block">
+                <div className="section-subtitle">Последние действия</div>
+                <div className="admin-activity-feed admin-activity-feed-tall">
+                  {(audit.recent || []).slice(0, 10).map((row, index) => (
+                    <div className="admin-activity-item" key={`${row.ts}-${row.user_email || "unknown"}-${index}`}>
+                      <div className="admin-activity-meta">
+                        <span className="admin-activity-time">{formatDateTime(row.ts)}</span>
+                        <span className={`admin-event-pill ${row.status === "failed" ? "danger" : ""}`}>
+                          {formatEvent(row.event_type)}
+                        </span>
+                      </div>
+                      <div className="admin-activity-main">
+                        <strong>{row.user_email || "unknown"}</strong>
+                        <span>{row.object_name || pageLabel(row.page) || "без объекта"}</span>
+                      </div>
+                      <div className="muted">
+                        {formatRole(row.user_role)}
+                        {row.page ? ` · ${pageLabel(row.page)}` : ""}
+                        {row.object_type ? ` · ${row.object_type}` : ""}
+                        {row.status ? ` · ${row.status}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                  {!audit.recent?.length && <div className="muted">Событий пока нет.</div>}
+                </div>
+              </div>
+            </div>
+
+            <div className="admin-analytics-columns admin-analytics-columns-secondary" style={{ marginTop: 18 }}>
               <div className="admin-analytics-block">
                 <div className="section-subtitle">Популярные страницы</div>
                 <div className="admin-analytics-table">
@@ -555,24 +561,6 @@ export default function AdminUsersPage({ userProfile }) {
               <div className="admin-analytics-block">
                 <div className="section-subtitle">Частые действия</div>
                 <div className="admin-analytics-table">
-                  <div className="admin-row admin-header">
-                    <div>Действие</div>
-                    <div>Событий</div>
-                  </div>
-                  {(audit.actions || []).map((row) => (
-                    <div className="admin-row admin-compact-row" key={row.event_type}>
-                      <div className="admin-primary">{formatEvent(row.event_type)}</div>
-                      <div>{row.events_count}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="admin-analytics-columns" style={{ marginTop: 18 }}>
-              <div className="admin-analytics-block">
-                <div className="section-subtitle">Частые действия</div>
-                <div className="admin-analytics-table">
                   <div className="admin-row admin-header admin-compact-row">
                     <div>Действие</div>
                     <div>Событий</div>
@@ -583,33 +571,6 @@ export default function AdminUsersPage({ userProfile }) {
                       <div>{row.events_count}</div>
                     </div>
                   ))}
-                </div>
-              </div>
-
-              <div className="admin-analytics-block admin-analytics-block-wide">
-                <div className="section-subtitle">Последние действия</div>
-                <div className="admin-activity-feed">
-                  {(audit.recent || []).slice(0, 10).map((row, index) => (
-                  <div className="admin-activity-item" key={`${row.ts}-${row.user_email || "unknown"}-${index}`}>
-                    <div className="admin-activity-meta">
-                      <span className="admin-activity-time">{formatDateTime(row.ts)}</span>
-                      <span className={`admin-event-pill ${row.status === "failed" ? "danger" : ""}`}>
-                        {formatEvent(row.event_type)}
-                      </span>
-                    </div>
-                    <div className="admin-activity-main">
-                      <strong>{row.user_email || "unknown"}</strong>
-                      <span>{row.object_name || row.page || "без объекта"}</span>
-                    </div>
-                    <div className="muted">
-                      {formatRole(row.user_role)}
-                      {row.page ? ` · ${pageLabel(row.page)}` : ""}
-                      {row.object_type ? ` · ${row.object_type}` : ""}
-                      {row.status ? ` · ${row.status}` : ""}
-                    </div>
-                  </div>
-                  ))}
-                  {!audit.recent?.length && <div className="muted">Событий пока нет.</div>}
                 </div>
               </div>
             </div>

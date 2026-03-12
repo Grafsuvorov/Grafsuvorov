@@ -23,6 +23,7 @@ import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
+import { sendAuditEvent } from "./utils/audit.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -73,6 +74,15 @@ export default function App() {
       })
       .catch(() => {});
   }, [authToken, userProfile]);
+
+  useEffect(() => {
+    if (!AUTH_ENABLED || !authToken) return;
+    sendAuditEvent({
+      event_type: "page_view",
+      page: location.pathname,
+      details: { search: location.search || "" },
+    });
+  }, [authToken, location.pathname, location.search]);
 
   const normalizeFqn = useCallback((value) => {
     if (typeof value !== "string") return null;
@@ -141,12 +151,24 @@ export default function App() {
       }
       if (typeof target === "object" && target.view) {
         if (target.view === "incident") {
+          sendAuditEvent({
+            event_type: "open_incident",
+            page: location.pathname,
+            object_type: "table",
+            object_name: target.table || "",
+          });
           navigate(`/incident?table=${encodeURIComponent(target.table || "")}`);
           return;
         }
         if (target.view === "table_info") {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
+            sendAuditEvent({
+              event_type: "open_table",
+              page: location.pathname,
+              object_type: "table",
+              object_name: parsed.fqn,
+            });
             navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}`, {
               state: { from: location.pathname + location.search },
             });
@@ -156,17 +178,36 @@ export default function App() {
         if (target.view === "dependency_graph") {
           const parsed = normalizeFqn(target.table);
           if (parsed) {
+            sendAuditEvent({
+              event_type: "open_dependency_graph",
+              page: location.pathname,
+              object_type: "table",
+              object_name: parsed.fqn,
+            });
             navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
           }
           return;
         }
         if (target.view === "release_details") {
           if (target.release_id) {
+            sendAuditEvent({
+              event_type: "open_release",
+              page: location.pathname,
+              object_type: "release",
+              object_id: String(target.release_id),
+              object_name: String(target.release_id),
+            });
             navigate("/releases", { state: { releaseId: target.release_id } });
           }
           return;
         }
         if (target.view === "logic_audit") {
+          sendAuditEvent({
+            event_type: "open_logic_audit",
+            page: location.pathname,
+            object_type: target.table ? "table" : "page",
+            object_name: target.table || null,
+          });
           if (target.table) {
             navigate(`/logic-audit?table=${encodeURIComponent(target.table)}`);
           } else {
@@ -236,6 +277,9 @@ export default function App() {
         authEnabled={AUTH_ENABLED}
         userProfile={userProfile}
         onLogout={() => {
+          if (AUTH_ENABLED && authToken) {
+            fetch(`${API_BASE}/auth/logout`, { method: "POST", keepalive: true }).catch(() => {});
+          }
           localStorage.removeItem(TOKEN_KEY);
           localStorage.removeItem(USER_KEY);
           sessionStorage.removeItem(TOKEN_KEY);

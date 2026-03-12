@@ -511,6 +511,50 @@ main.content {
   gap: 8px;
 }
 
+.admin-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.admin-analytics-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.admin-analytics-card .label {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.admin-analytics-card .value {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.admin-analytics-card.danger .value {
+  color: #b91c1c;
+}
+
+.admin-analytics-columns {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-analytics-block {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-analytics-table {
+  display: grid;
+  gap: 8px;
+}
+
 .admin-row {
   display: grid;
   grid-template-columns: 2fr 1.2fr 1fr 1fr;

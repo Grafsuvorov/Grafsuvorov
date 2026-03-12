@@ -2,6 +2,7 @@
 import "../style/app.css";
 import GraphViewer from "./GraphViewer.jsx";
 import GanttChart from "./GanttChart.jsx";
+import { sendAuditEvent } from "../utils/audit.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -652,24 +653,59 @@ export default function TableCard({
         <div className="table-info-card table-actions">
           <div className="table-card-label">Действия</div>
           <div className="table-action-buttons">
-            <button className="btn btn-secondary" onClick={loadDependencies}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                sendAuditEvent({
+                  event_type: "open_dependency_graph",
+                  page: `/table/${schema}/${tableName}`,
+                  object_type: "table",
+                  object_name: tableFqn,
+                });
+                loadDependencies();
+              }}
+            >
               Граф зависимостей
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => onOpenImpact?.(schema, tableName)}
+              onClick={() => {
+                sendAuditEvent({
+                  event_type: "open_impact_graph",
+                  page: `/table/${schema}/${tableName}`,
+                  object_type: "table",
+                  object_name: tableFqn,
+                });
+                onOpenImpact?.(schema, tableName);
+              }}
             >
               Граф влияния
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => setShowGantt(!showGantt)}
+              onClick={() => {
+                sendAuditEvent({
+                  event_type: showGantt ? "hide_timeline" : "show_timeline",
+                  page: `/table/${schema}/${tableName}`,
+                  object_type: "table",
+                  object_name: tableFqn,
+                });
+                setShowGantt(!showGantt);
+              }}
             >
               {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
             </button>
             <button
               className="btn btn-secondary"
-              onClick={() => onOpenLogicAudit?.(tableFqn)}
+              onClick={() => {
+                sendAuditEvent({
+                  event_type: "open_logic_audit",
+                  page: `/table/${schema}/${tableName}`,
+                  object_type: "table",
+                  object_name: tableFqn,
+                });
+                onOpenLogicAudit?.(tableFqn);
+              }}
             >
               Аудит логики
             </button>

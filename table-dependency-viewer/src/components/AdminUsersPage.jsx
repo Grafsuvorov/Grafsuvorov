@@ -10,6 +10,9 @@ const ROLE_OPTIONS = [
 
 export default function AdminUsersPage({ userProfile }) {
   const [users, setUsers] = useState([]);
+  const [auditDays, setAuditDays] = useState(30);
+  const [audit, setAudit] = useState(null);
+  const [auditLoading, setAuditLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +70,26 @@ export default function AdminUsersPage({ userProfile }) {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  useEffect(() => {
+    const loadAudit = async () => {
+      setAuditLoading(true);
+      try {
+        const resp = await fetch(`${API_BASE}/auth/users/analytics?days=${auditDays}`);
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.detail || "Не удалось загрузить аналитику пользователей");
+        }
+        const data = await resp.json();
+        setAudit(data || null);
+      } catch (err) {
+        setError(err.message || "Не удалось загрузить аналитику пользователей");
+      } finally {
+        setAuditLoading(false);
+      }
+    };
+    loadAudit();
+  }, [auditDays]);
 
   useEffect(() => {
     const loadStatus = async () => {
@@ -308,6 +331,110 @@ export default function AdminUsersPage({ userProfile }) {
         </form>
 
         {error && <div className="login-error">{normalizeError(error)}</div>}
+      </section>
+
+      <section className="cc-surface admin-users">
+        <div className="section-title">Активность пользователей</div>
+        <div className="section-subtitle">
+          Аудит входов, просмотров страниц и ключевых действий за последние 30 дней.
+        </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <label className="admin-field" style={{ maxWidth: 180 }}>
+            <span>Окно, дней</span>
+            <select value={auditDays} onChange={(e) => setAuditDays(Number(e.target.value))}>
+              {[7, 14, 30].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        {auditLoading && <div className="muted">Загрузка аудита...</div>}
+        {!auditLoading && audit?.summary && (
+          <>
+            <div className="admin-analytics-grid">
+              <div className="admin-analytics-card">
+                <div className="label">Пользователей</div>
+                <div className="value">{audit.summary.users_count ?? 0}</div>
+              </div>
+              <div className="admin-analytics-card">
+                <div className="label">Успешных входов</div>
+                <div className="value">{audit.summary.logins_count ?? 0}</div>
+              </div>
+              <div className="admin-analytics-card danger">
+                <div className="label">Неуспешных входов</div>
+                <div className="value">{audit.summary.failed_logins_count ?? 0}</div>
+              </div>
+              <div className="admin-analytics-card">
+                <div className="label">Просмотров страниц</div>
+                <div className="value">{audit.summary.page_views_count ?? 0}</div>
+              </div>
+              <div className="admin-analytics-card">
+                <div className="label">Действий</div>
+                <div className="value">{audit.summary.actions_count ?? 0}</div>
+              </div>
+            </div>
+
+            <div className="admin-analytics-columns">
+              <div className="admin-analytics-block">
+                <div className="section-subtitle">По пользователям</div>
+                <div className="admin-analytics-table">
+                  <div className="admin-row admin-header">
+                    <div>Email</div>
+                    <div>Роль</div>
+                    <div>Входов</div>
+                    <div>Просмотров</div>
+                    <div>Действий</div>
+                    <div>Последняя активность</div>
+                  </div>
+                  {(audit.users || []).map((row) => (
+                    <div className="admin-row" key={row.user_email}>
+                      <div>{row.user_email}</div>
+                      <div>{row.user_role || "—"}</div>
+                      <div>{row.logins_count ?? 0}</div>
+                      <div>{row.page_views_count ?? 0}</div>
+                      <div>{row.actions_count ?? 0}</div>
+                      <div>{row.last_activity_at || "—"}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-analytics-block">
+                <div className="section-subtitle">Популярные страницы</div>
+                <div className="admin-analytics-table">
+                  <div className="admin-row admin-header">
+                    <div>Страница</div>
+                    <div>Событий</div>
+                  </div>
+                  {(audit.pages || []).map((row) => (
+                    <div className="admin-row" key={row.page}>
+                      <div>{row.page}</div>
+                      <div>{row.events_count}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="admin-analytics-block">
+                <div className="section-subtitle">Типы действий</div>
+                <div className="admin-analytics-table">
+                  <div className="admin-row admin-header">
+                    <div>Действие</div>
+                    <div>Событий</div>
+                  </div>
+                  {(audit.actions || []).map((row) => (
+                    <div className="admin-row" key={row.event_type}>
+                      <div>{row.event_type}</div>
+                      <div>{row.events_count}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       <section className="cc-surface admin-users">

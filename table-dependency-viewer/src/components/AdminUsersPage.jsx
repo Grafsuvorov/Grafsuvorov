@@ -8,6 +8,26 @@ const ROLE_OPTIONS = [
   { value: "admin", label: "Админ" },
 ];
 
+const ROLE_LABELS = {
+  analyst: "Аналитик",
+  engineer: "Инженер",
+  admin: "Админ",
+};
+
+const EVENT_LABELS = {
+  login: "Вход",
+  logout: "Выход",
+  page_view: "Просмотр страницы",
+  open_table: "Открыл карточку таблицы",
+  open_dependency_graph: "Открыл граф зависимостей",
+  open_impact_graph: "Открыл граф влияния",
+  open_release: "Открыл релиз",
+  open_logic_audit: "Открыл аудит логики",
+  open_incident: "Открыл инцидент",
+  register_success: "Регистрация",
+  admin_create_user: "Создал пользователя",
+};
+
 export default function AdminUsersPage({ userProfile }) {
   const [users, setUsers] = useState([]);
   const [auditDays, setAuditDays] = useState(30);
@@ -48,6 +68,20 @@ export default function AdminUsersPage({ userProfile }) {
       return String(value);
     }
   };
+
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const dt = new Date(String(value).replace(" ", "T"));
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString("ru-RU");
+  };
+
+  const formatRole = (value) => ROLE_LABELS[value] || value || "—";
+  const formatEvent = (value) => EVENT_LABELS[value] || value || "—";
+  const pageLabel = (value) => value || "Не указана";
+  const topUser = audit?.users?.[0] || null;
+  const topPage = audit?.pages?.[0] || null;
+  const topAction = audit?.actions?.[0] || null;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -336,9 +370,9 @@ export default function AdminUsersPage({ userProfile }) {
       <section className="cc-surface admin-users">
         <div className="section-title">Активность пользователей</div>
         <div className="section-subtitle">
-          Аудит входов, просмотров страниц и ключевых действий за последние 30 дней.
+          Кто заходит в систему, какими разделами пользуется и какие действия совершает.
         </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16 }}>
+        <div className="admin-analytics-toolbar">
           <label className="admin-field" style={{ maxWidth: 180 }}>
             <span>Окно, дней</span>
             <select value={auditDays} onChange={(e) => setAuditDays(Number(e.target.value))}>
@@ -349,6 +383,9 @@ export default function AdminUsersPage({ userProfile }) {
               ))}
             </select>
           </label>
+          <div className="muted">
+            Данные аудита хранятся 30 дней. Основной фокус: логины, переходы по страницам и объектные действия.
+          </div>
         </div>
         {auditLoading && <div className="muted">Загрузка аудита...</div>}
         {!auditLoading && audit?.summary && (
@@ -357,28 +394,84 @@ export default function AdminUsersPage({ userProfile }) {
               <div className="admin-analytics-card">
                 <div className="label">Пользователей</div>
                 <div className="value">{audit.summary.users_count ?? 0}</div>
+                <div className="hint">Уникальные email за окно</div>
               </div>
               <div className="admin-analytics-card">
                 <div className="label">Успешных входов</div>
                 <div className="value">{audit.summary.logins_count ?? 0}</div>
+                <div className="hint">Рабочие входы в систему</div>
               </div>
               <div className="admin-analytics-card danger">
                 <div className="label">Неуспешных входов</div>
                 <div className="value">{audit.summary.failed_logins_count ?? 0}</div>
+                <div className="hint">Ошибки логина и токена</div>
               </div>
               <div className="admin-analytics-card">
                 <div className="label">Просмотров страниц</div>
                 <div className="value">{audit.summary.page_views_count ?? 0}</div>
+                <div className="hint">Навигация по разделам</div>
               </div>
               <div className="admin-analytics-card">
                 <div className="label">Действий</div>
                 <div className="value">{audit.summary.actions_count ?? 0}</div>
+                <div className="hint">Карточки, графы, релизы, аудит</div>
+              </div>
+            </div>
+
+            <div className="admin-analytics-overview">
+              <div className="admin-analytics-spotlight">
+                <div className="section-subtitle">Кто активнее всех</div>
+                {topUser ? (
+                  <div className="admin-spotlight-card">
+                    <div className="admin-spotlight-head">
+                      <div>
+                        <div className="admin-spotlight-title">{topUser.user_email}</div>
+                        <div className="muted">
+                          {formatRole(topUser.user_role)} · последняя активность {formatDateTime(topUser.last_activity_at)}
+                        </div>
+                      </div>
+                      <div className="admin-spotlight-badge">{topUser.events_count ?? 0} событий</div>
+                    </div>
+                    <div className="admin-spotlight-metrics">
+                      <div>
+                        <span>Входов</span>
+                        <strong>{topUser.logins_count ?? 0}</strong>
+                      </div>
+                      <div>
+                        <span>Просмотров</span>
+                        <strong>{topUser.page_views_count ?? 0}</strong>
+                      </div>
+                      <div>
+                        <span>Действий</span>
+                        <strong>{topUser.actions_count ?? 0}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="muted">Нет данных по пользователям.</div>
+                )}
+              </div>
+
+              <div className="admin-analytics-spotlight">
+                <div className="section-subtitle">Что открывают чаще всего</div>
+                <div className="admin-mini-cards">
+                  <div className="admin-mini-card">
+                    <div className="label">Топ страница</div>
+                    <div className="mini-title">{pageLabel(topPage?.page)}</div>
+                    <div className="muted">{topPage?.events_count ?? 0} просмотров</div>
+                  </div>
+                  <div className="admin-mini-card">
+                    <div className="label">Топ действие</div>
+                    <div className="mini-title">{formatEvent(topAction?.event_type)}</div>
+                    <div className="muted">{topAction?.events_count ?? 0} событий</div>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="admin-analytics-columns">
               <div className="admin-analytics-block">
-                <div className="section-subtitle">По пользователям</div>
+                <div className="section-subtitle">Пользователи</div>
                 <div className="admin-analytics-table">
                   <div className="admin-row admin-header">
                     <div>Email</div>
@@ -389,13 +482,16 @@ export default function AdminUsersPage({ userProfile }) {
                     <div>Последняя активность</div>
                   </div>
                   {(audit.users || []).map((row) => (
-                    <div className="admin-row" key={row.user_email}>
-                      <div>{row.user_email}</div>
-                      <div>{row.user_role || "—"}</div>
+                    <div className="admin-row admin-analytics-row" key={row.user_email}>
+                      <div>
+                        <div className="admin-primary">{row.user_email}</div>
+                        <div className="muted">Всего событий: {row.events_count ?? 0}</div>
+                      </div>
+                      <div>{formatRole(row.user_role)}</div>
                       <div>{row.logins_count ?? 0}</div>
                       <div>{row.page_views_count ?? 0}</div>
                       <div>{row.actions_count ?? 0}</div>
-                      <div>{row.last_activity_at || "—"}</div>
+                      <div>{formatDateTime(row.last_activity_at)}</div>
                     </div>
                   ))}
                 </div>
@@ -406,11 +502,11 @@ export default function AdminUsersPage({ userProfile }) {
                 <div className="admin-analytics-table">
                   <div className="admin-row admin-header">
                     <div>Страница</div>
-                    <div>Событий</div>
+                    <div>Просмотров</div>
                   </div>
                   {(audit.pages || []).map((row) => (
-                    <div className="admin-row" key={row.page}>
-                      <div>{row.page}</div>
+                    <div className="admin-row admin-compact-row" key={row.page}>
+                      <div className="admin-primary">{pageLabel(row.page)}</div>
                       <div>{row.events_count}</div>
                     </div>
                   ))}
@@ -418,19 +514,45 @@ export default function AdminUsersPage({ userProfile }) {
               </div>
 
               <div className="admin-analytics-block">
-                <div className="section-subtitle">Типы действий</div>
+                <div className="section-subtitle">Частые действия</div>
                 <div className="admin-analytics-table">
                   <div className="admin-row admin-header">
                     <div>Действие</div>
                     <div>Событий</div>
                   </div>
                   {(audit.actions || []).map((row) => (
-                    <div className="admin-row" key={row.event_type}>
-                      <div>{row.event_type}</div>
+                    <div className="admin-row admin-compact-row" key={row.event_type}>
+                      <div className="admin-primary">{formatEvent(row.event_type)}</div>
                       <div>{row.events_count}</div>
                     </div>
                   ))}
                 </div>
+              </div>
+            </div>
+
+            <div className="admin-analytics-block" style={{ marginTop: 18 }}>
+              <div className="section-subtitle">Последние действия</div>
+              <div className="admin-activity-feed">
+                {(audit.recent || []).slice(0, 16).map((row, index) => (
+                  <div className="admin-activity-item" key={`${row.ts}-${row.user_email || "unknown"}-${index}`}>
+                    <div className="admin-activity-meta">
+                      <span className="admin-activity-time">{formatDateTime(row.ts)}</span>
+                      <span className={`admin-event-pill ${row.status === "failed" ? "danger" : ""}`}>
+                        {formatEvent(row.event_type)}
+                      </span>
+                    </div>
+                    <div className="admin-activity-main">
+                      <strong>{row.user_email || "unknown"}</strong>
+                      <span>{row.object_name || row.page || "без объекта"}</span>
+                    </div>
+                    <div className="muted">
+                      {formatRole(row.user_role)}
+                      {row.object_type ? ` · ${row.object_type}` : ""}
+                      {row.status ? ` · ${row.status}` : ""}
+                    </div>
+                  </div>
+                ))}
+                {!audit.recent?.length && <div className="muted">Событий пока нет.</div>}
               </div>
             </div>
           </>

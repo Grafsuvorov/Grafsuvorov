@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -175,7 +176,7 @@ def _get_user_by_email(email: str) -> Optional[AuthUser]:
             text(
                 """
                 SELECT id, email, username, role, password_hash, password_salt, is_active
-                FROM public.app_users
+                FROM tech_etl.app_users
                 WHERE email = :email
                 """
             ),
@@ -200,7 +201,7 @@ def _create_user(email: str, username: str, password: str, role: str) -> AuthUse
         row = conn.execute(
             text(
                 """
-                INSERT INTO public.app_users (email, username, role, password_hash, password_salt, is_active)
+                INSERT INTO tech_etl.app_users (email, username, role, password_hash, password_salt, is_active)
                 VALUES (:email, :username, :role, :password_hash, :password_salt, true)
                 RETURNING id, email, username, role, password_hash, password_salt, is_active
                 """
@@ -230,7 +231,7 @@ def _update_user_password(user_id: int, new_password: str) -> None:
         conn.execute(
             text(
                 """
-                UPDATE public.app_users
+                UPDATE tech_etl.app_users
                 SET password_hash = :password_hash,
                     password_salt = :password_salt
                 WHERE id = :user_id
@@ -249,7 +250,7 @@ def _set_user_active(user_id: int, is_active: bool) -> None:
         conn.execute(
             text(
                 """
-                UPDATE public.app_users
+                UPDATE tech_etl.app_users
                 SET is_active = :is_active
                 WHERE id = :user_id
                 """
@@ -263,7 +264,7 @@ def _delete_user(user_id: int) -> None:
         conn.execute(
             text(
                 """
-                DELETE FROM public.app_users
+                DELETE FROM tech_etl.app_users
                 WHERE id = :user_id
                 """
             ),
@@ -276,7 +277,7 @@ def _ensure_users_table() -> None:
         conn.execute(
             text(
                 """
-                CREATE TABLE IF NOT EXISTS public.app_users (
+                CREATE TABLE IF NOT EXISTS tech_etl.app_users (
                     id SERIAL PRIMARY KEY,
                     email TEXT UNIQUE NOT NULL,
                     username TEXT UNIQUE NOT NULL,
@@ -296,15 +297,15 @@ def _ensure_audit_table() -> None:
         conn.execute(
             text(
                 """
-                CREATE SEQUENCE IF NOT EXISTS public.app_user_event_id_seq
+                CREATE SEQUENCE IF NOT EXISTS tech_etl.app_user_event_id_seq
                 """
             )
         )
         conn.execute(
             text(
                 """
-                CREATE TABLE IF NOT EXISTS public.app_user_event (
-                    id BIGINT NOT NULL DEFAULT nextval('public.app_user_event_id_seq'),
+                CREATE TABLE IF NOT EXISTS tech_etl.app_user_event (
+                    id serial NOT NULL ,
                     ts TIMESTAMP NOT NULL DEFAULT NOW(),
                     user_email TEXT,
                     user_role TEXT,
@@ -326,7 +327,7 @@ def _ensure_audit_table() -> None:
             text(
                 """
                 CREATE INDEX IF NOT EXISTS idx_app_user_event_ts
-                ON public.app_user_event (ts)
+                ON tech_etl.app_user_event (ts)
                 """
             )
         )
@@ -334,7 +335,7 @@ def _ensure_audit_table() -> None:
             text(
                 """
                 CREATE INDEX IF NOT EXISTS idx_app_user_event_email_ts
-                ON public.app_user_event (user_email, ts DESC)
+                ON tech_etl.app_user_event (user_email, ts DESC)
                 """
             )
         )
@@ -352,7 +353,7 @@ def _ensure_audit_table() -> None:
             conn.execute(
                 text(
                     """
-                    ALTER TABLE public.app_user_event
+                    ALTER TABLE tech_etl.app_user_event
                     ADD CONSTRAINT app_user_event_pk PRIMARY KEY (id)
                     """
                 )
@@ -364,15 +365,15 @@ def _ensure_favorites_table() -> None:
         conn.execute(
             text(
                 """
-                CREATE SEQUENCE IF NOT EXISTS public.app_user_favorite_id_seq
+                CREATE SEQUENCE IF NOT EXISTS tech_etl.app_user_favorite_id_seq
                 """
             )
         )
         conn.execute(
             text(
                 """
-                CREATE TABLE IF NOT EXISTS public.app_user_favorite (
-                    id BIGINT NOT NULL DEFAULT nextval('public.app_user_favorite_id_seq'),
+                CREATE TABLE IF NOT EXISTS tech_etl.app_user_favorite (
+                    id BIGINT NOT NULL DEFAULT nextval('tech_etl.app_user_favorite_id_seq'),
                     user_email TEXT NOT NULL,
                     object_type TEXT NOT NULL,
                     object_id BIGINT NOT NULL,
@@ -387,7 +388,7 @@ def _ensure_favorites_table() -> None:
             text(
                 """
                 CREATE INDEX IF NOT EXISTS idx_app_user_favorite_user_type
-                ON public.app_user_favorite (user_email, object_type)
+                ON tech_etl.app_user_favorite (user_email, object_type)
                 """
             )
         )
@@ -395,7 +396,7 @@ def _ensure_favorites_table() -> None:
             text(
                 """
                 CREATE INDEX IF NOT EXISTS idx_app_user_favorite_object
-                ON public.app_user_favorite (object_type, object_id)
+                ON tech_etl.app_user_favorite (object_type, object_id)
                 """
             )
         )
@@ -414,7 +415,7 @@ def _list_favorite_tables(user_email: str) -> list[dict[str, Any]]:
                     t.entity_name,
                     t.table_last_load,
                     f.created_at
-                FROM public.app_user_favorite f
+                FROM tech_etl.app_user_favorite f
                 LEFT JOIN tech_etl.tables_meta t
                   ON t.table_id = f.object_id
                 WHERE f.user_email = :user_email
@@ -447,7 +448,7 @@ def _is_favorite_table(user_email: str, table_id: int) -> bool:
             text(
                 """
                 SELECT 1
-                FROM public.app_user_favorite
+                FROM tech_etl.app_user_favorite
                 WHERE user_email = :user_email
                   AND object_type = 'table'
                   AND object_id = :table_id
@@ -460,12 +461,16 @@ def _is_favorite_table(user_email: str, table_id: int) -> bool:
 
 
 def _add_favorite_table(user_email: str, payload: FavoriteTablePayload) -> None:
-    object_name = payload.table_schema and payload.table_name and f"{payload.table_schema}.{payload.table_name}" or str(payload.table_id)
+    object_name = (
+        f"{payload.table_schema}.{payload.table_name}"
+        if payload.table_schema and payload.table_name
+        else str(payload.table_id)
+    )
     with engine.begin() as conn:
         conn.execute(
             text(
                 """
-                DELETE FROM public.app_user_favorite
+                DELETE FROM tech_etl.app_user_favorite
                 WHERE user_email = :user_email
                   AND object_type = 'table'
                   AND object_id = :table_id
@@ -476,7 +481,7 @@ def _add_favorite_table(user_email: str, payload: FavoriteTablePayload) -> None:
         conn.execute(
             text(
                 """
-                INSERT INTO public.app_user_favorite (
+                INSERT INTO tech_etl.app_user_favorite (
                     user_email,
                     object_type,
                     object_id,
@@ -503,7 +508,7 @@ def _remove_favorite_table(user_email: str, table_id: int) -> None:
         conn.execute(
             text(
                 """
-                DELETE FROM public.app_user_favorite
+                DELETE FROM tech_etl.app_user_favorite
                 WHERE user_email = :user_email
                   AND object_type = 'table'
                   AND object_id = :table_id
@@ -548,7 +553,7 @@ def _write_audit_event(
             conn.execute(
                 text(
                     """
-                    DELETE FROM public.app_user_event
+                    DELETE FROM tech_etl.app_user_event
                     WHERE ts < (NOW() - INTERVAL '30 days')
                     """
                 )
@@ -556,7 +561,7 @@ def _write_audit_event(
             conn.execute(
                 text(
                     """
-                    INSERT INTO public.app_user_event (
+                    INSERT INTO tech_etl.app_user_event (
                         user_email,
                         user_role,
                         event_type,
@@ -740,7 +745,7 @@ def list_users(request: Request):
             text(
                 """
                 SELECT id, email, username, role, is_active
-                FROM public.app_users
+                FROM tech_etl.app_users
                 ORDER BY created_at DESC
                 """
             )
@@ -923,7 +928,11 @@ def add_favorite_table(payload: FavoriteTablePayload, request: Request):
         page="/auth/favorites/tables",
         object_type="table",
         object_id=str(payload.table_id),
-        object_name=f"{payload.table_schema}.{payload.table_name}" if payload.table_schema and payload.table_name else str(payload.table_id),
+        object_name=(
+            f"{payload.table_schema}.{payload.table_name}"
+            if payload.table_schema and payload.table_name
+            else str(payload.table_id)
+        ),
     )
     return {"status": "ok"}
 
@@ -963,7 +972,7 @@ def users_analytics(request: Request, days: int = 30):
                         SUM(CASE WHEN event_type = 'login' AND status = 'failed' THEN 1 ELSE 0 END) AS failed_logins_count,
                         SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_count,
                         SUM(CASE WHEN event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_count
-                    FROM public.app_user_event
+                    FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                     """
                 ),
@@ -981,7 +990,7 @@ def users_analytics(request: Request, days: int = 30):
                         SUM(CASE WHEN event_type = 'page_view' THEN 1 ELSE 0 END) AS page_views_count,
                         SUM(CASE WHEN event_type <> 'page_view' THEN 1 ELSE 0 END) AS actions_count,
                         MAX(ts) AS last_activity_at
-                    FROM public.app_user_event
+                    FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                     GROUP BY COALESCE(user_email, 'unknown')
                     ORDER BY events_count DESC, last_activity_at DESC
@@ -995,7 +1004,7 @@ def users_analytics(request: Request, days: int = 30):
                 text(
                     """
                     SELECT page, COUNT(*) AS events_count
-                    FROM public.app_user_event
+                    FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                       AND event_type = 'page_view'
                       AND page IS NOT NULL
@@ -1011,7 +1020,7 @@ def users_analytics(request: Request, days: int = 30):
                 text(
                     """
                     SELECT event_type, COUNT(*) AS events_count
-                    FROM public.app_user_event
+                    FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                       AND event_type <> 'page_view'
                     GROUP BY event_type
@@ -1034,7 +1043,7 @@ def users_analytics(request: Request, days: int = 30):
                         page,
                         object_type,
                         object_name
-                    FROM public.app_user_event
+                    FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                     ORDER BY ts DESC
                     LIMIT 100

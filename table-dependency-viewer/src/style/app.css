@@ -170,6 +170,68 @@ main.content {
   color: #7ee0a8;
 }
 
+.account-favorites-empty {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(244, 247, 255, 0.72);
+}
+
+.account-favorites-list {
+  display: grid;
+  gap: 12px;
+}
+
+.account-favorite-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+}
+
+.account-favorite-main {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-favorite-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f4f7ff;
+  word-break: break-word;
+}
+
+.account-favorite-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  font-size: 12px;
+  color: rgba(244, 247, 255, 0.72);
+}
+
+.account-favorite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+@media (max-width: 880px) {
+  .account-favorite-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-favorite-actions {
+    justify-content: flex-start;
+  }
+}
+
 /* Admin ci_cd */
 .admin-ci-block {
   display: grid;

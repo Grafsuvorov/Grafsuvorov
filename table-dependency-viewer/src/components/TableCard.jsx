@@ -74,6 +74,8 @@ export default function TableCard({
   const [analyticsSummary, setAnalyticsSummary] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -90,6 +92,14 @@ export default function TableCard({
       .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoadingMeta(false));
   }, [schema, tableName]);
+
+  useEffect(() => {
+    if (!meta?.table_id) return;
+    fetch(`${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить статус избранного")))
+      .then((data) => setIsFavorite(!!data?.is_favorite))
+      .catch(() => setIsFavorite(false));
+  }, [meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -653,6 +663,49 @@ export default function TableCard({
         <div className="table-info-card table-actions">
           <div className="table-card-label">Действия</div>
           <div className="table-action-buttons">
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (!meta?.table_id || favoriteLoading) return;
+                setFavoriteLoading(true);
+                const method = isFavorite ? "DELETE" : "POST";
+                const url = isFavorite
+                  ? `${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`
+                  : `${API_BASE}/auth/favorites/tables`;
+                const init = isFavorite
+                  ? { method }
+                  : {
+                      method,
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        table_id: meta.table_id,
+                        table_schema: schema,
+                        table_name: tableName,
+                        entity_name: meta.entity_name || null,
+                      }),
+                    };
+                fetch(url, init)
+                  .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось обновить избранное")))
+                  .then(() => {
+                    setIsFavorite(!isFavorite);
+                    sendAuditEvent({
+                      event_type: isFavorite ? "remove_favorite_table" : "add_favorite_table",
+                      page: `/table/${schema}/${tableName}`,
+                      object_type: "table",
+                      object_id: String(meta.table_id),
+                      object_name: tableFqn,
+                    });
+                  })
+                  .catch(() => {})
+                  .finally(() => setFavoriteLoading(false));
+              }}
+            >
+              {favoriteLoading
+                ? "Сохраняем..."
+                : isFavorite
+                  ? "Убрать из избранного"
+                  : "В избранное"}
+            </button>
             <button
               className="btn btn-secondary"
               onClick={() => {

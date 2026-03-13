@@ -93,6 +93,13 @@ class AuditEventPayload(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
+class FavoriteTablePayload(BaseModel):
+    table_id: int
+    table_schema: Optional[str] = None
+    table_name: Optional[str] = None
+    entity_name: Optional[str] = None
+
+
 @dataclass
 class AuthUser:
     id: int
@@ -352,6 +359,160 @@ def _ensure_audit_table() -> None:
             )
 
 
+def _ensure_favorites_table() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE SEQUENCE IF NOT EXISTS public.app_user_favorite_id_seq
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS public.app_user_favorite (
+                    id BIGINT NOT NULL DEFAULT nextval('public.app_user_favorite_id_seq'),
+                    user_email TEXT NOT NULL,
+                    object_type TEXT NOT NULL,
+                    object_id BIGINT NOT NULL,
+                    object_name TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
+                DISTRIBUTED BY (id)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_app_user_favorite_user_type
+                ON public.app_user_favorite (user_email, object_type)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_app_user_favorite_object
+                ON public.app_user_favorite (object_type, object_id)
+                """
+            )
+        )
+
+
+def _list_favorite_tables(user_email: str) -> list[dict[str, Any]]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    f.object_id AS table_id,
+                    COALESCE(t.table_schema, split_part(f.object_name, '.', 1)) AS table_schema,
+                    COALESCE(t.table_name, split_part(f.object_name, '.', 2)) AS table_name,
+                    t.entity_id,
+                    t.entity_name,
+                    t.table_last_load,
+                    f.created_at
+                FROM public.app_user_favorite f
+                LEFT JOIN tech_etl.tables_meta t
+                  ON t.table_id = f.object_id
+                WHERE f.user_email = :user_email
+                  AND f.object_type = 'table'
+                ORDER BY f.created_at DESC
+                """
+            ),
+            {"user_email": user_email},
+        ).mappings().all()
+
+    result = []
+    seen = set()
+    for row in rows:
+        table_id = row.get("table_id")
+        if table_id in seen:
+            continue
+        seen.add(table_id)
+        item = dict(row)
+        if item.get("table_last_load"):
+            item["table_last_load"] = item["table_last_load"].strftime("%Y-%m-%d %H:%M:%S")
+        if item.get("created_at"):
+            item["created_at"] = item["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+        result.append(item)
+    return result
+
+
+def _is_favorite_table(user_email: str, table_id: int) -> bool:
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM public.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'table'
+                  AND object_id = :table_id
+                LIMIT 1
+                """
+            ),
+            {"user_email": user_email, "table_id": table_id},
+        ).scalar()
+    return bool(exists)
+
+
+def _add_favorite_table(user_email: str, payload: FavoriteTablePayload) -> None:
+    object_name = payload.table_schema and payload.table_name and f"{payload.table_schema}.{payload.table_name}" or str(payload.table_id)
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM public.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'table'
+                  AND object_id = :table_id
+                """
+            ),
+            {"user_email": user_email, "table_id": payload.table_id},
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO public.app_user_favorite (
+                    user_email,
+                    object_type,
+                    object_id,
+                    object_name
+                )
+                VALUES (
+                    :user_email,
+                    'table',
+                    :table_id,
+                    :object_name
+                )
+                """
+            ),
+            {
+                "user_email": user_email,
+                "table_id": payload.table_id,
+                "object_name": object_name,
+            },
+        )
+
+
+def _remove_favorite_table(user_email: str, table_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM public.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'table'
+                  AND object_id = :table_id
+                """
+            ),
+            {"user_email": user_email, "table_id": table_id},
+        )
+
+
 def _request_ip(request: Optional[Request]) -> Optional[str]:
     if not request:
         return None
@@ -464,6 +625,10 @@ def init_auth() -> None:
     except Exception as exc:
         # Audit is optional; auth startup must not fail on Greenplum DDL quirks.
         print(f"AUTH AUDIT INIT WARNING: {exc}")
+    try:
+        _ensure_favorites_table()
+    except Exception as exc:
+        print(f"AUTH FAVORITES INIT WARNING: {exc}")
     _bootstrap_admin()
 
 
@@ -730,6 +895,51 @@ def write_audit_event(payload: AuditEventPayload, request: Request):
         object_id=payload.object_id,
         object_name=payload.object_name,
         details=payload.details,
+    )
+    return {"status": "ok"}
+
+
+@router.get("/favorites/tables")
+def list_favorite_tables(request: Request):
+    user = get_current_user_from_request(request)
+    return {"items": _list_favorite_tables(user.email)}
+
+
+@router.get("/favorites/tables/{table_id}")
+def favorite_table_status(table_id: int, request: Request):
+    user = get_current_user_from_request(request)
+    return {"is_favorite": _is_favorite_table(user.email, table_id)}
+
+
+@router.post("/favorites/tables")
+def add_favorite_table(payload: FavoriteTablePayload, request: Request):
+    user = get_current_user_from_request(request)
+    _add_favorite_table(user.email, payload)
+    _write_audit_event(
+        event_type="add_favorite_table",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/favorites/tables",
+        object_type="table",
+        object_id=str(payload.table_id),
+        object_name=f"{payload.table_schema}.{payload.table_name}" if payload.table_schema and payload.table_name else str(payload.table_id),
+    )
+    return {"status": "ok"}
+
+
+@router.delete("/favorites/tables/{table_id}")
+def remove_favorite_table(table_id: int, request: Request):
+    user = get_current_user_from_request(request)
+    _remove_favorite_table(user.email, table_id)
+    _write_audit_event(
+        event_type="remove_favorite_table",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/favorites/tables",
+        object_type="table",
+        object_id=str(table_id),
     )
     return {"status": "ok"}
 

@@ -1502,17 +1502,39 @@ def _compute_orphan_tables(snapshot: dict, final_schemas: set[str], meta_only: b
 
 @router.get("/api/entities/shared")
 def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
-    snapshot = get_graph_snapshot()
-    table_entity_map = snapshot.get("table_entity_map") or {}
     shared_map = {}
-    for table_fqn, entities in table_entity_map.items():
-        if not entities or len(entities) < 2:
-            continue
-        for ent in entities:
-            entry = shared_map.setdefault(ent, {"count": 0, "tables": []})
-            entry["count"] += 1
-            if limit and len(entry["tables"]) < limit:
-                entry["tables"].append(table_fqn)
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    SELECT entity_id, table_schema, table_name
+                    FROM {TABLE_TABLES_META}
+                    WHERE entity_id IS NOT NULL
+                    """
+                )
+            ).mappings().all()
+
+        table_entity_map = {}
+        for row in rows:
+            entity_id = row.get("entity_id")
+            schema = row.get("table_schema")
+            table = row.get("table_name")
+            if entity_id is None or not schema or not table:
+                continue
+            fqn = f"{schema}.{table}"
+            table_entity_map.setdefault(fqn, set()).add(str(entity_id))
+
+        for table_fqn, entity_ids in table_entity_map.items():
+            if len(entity_ids) < 2:
+                continue
+            for entity_id in entity_ids:
+                entry = shared_map.setdefault(entity_id, {"count": 0, "tables": []})
+                entry["count"] += 1
+                if limit and len(entry["tables"]) < limit:
+                    entry["tables"].append(table_fqn)
+    except Exception:
+        shared_map = {}
 
     return JSONResponse(content=shared_map, media_type="application/json; charset=utf-8")
 
@@ -2511,11 +2533,37 @@ def get_failed_tables():
 @router.get("/api/entities")
 def get_entities():
     query = f"""
-     SELECT
-        entity_id,entity_name,entity_last_load,entity_load_interval::varchar
-        ,entity_load_status
-            FROM {TABLE_ENTITIES_META} AS l2
-            where flag_active order by entity_last_load, entity_name
+        WITH latest_table_runs AS (
+            SELECT
+                l.object_id,
+                l.loading_start_dttm,
+                l.loading_finish_dttm,
+                ROW_NUMBER() OVER (
+                    PARTITION BY l.object_id
+                    ORDER BY COALESCE(l.loading_finish_dttm, l.loading_start_dttm) DESC NULLS LAST
+                ) AS rn
+            FROM {TABLE_LOADING_HISTORY} l
+        )
+        SELECT
+            e.entity_id,
+            e.entity_name,
+            e.entity_load_interval::varchar AS entity_load_interval,
+            e.entity_load_status,
+            MIN(r.loading_start_dttm) AS entity_schedule_start,
+            MAX(COALESCE(r.loading_finish_dttm, r.loading_start_dttm)) AS entity_schedule_end
+        FROM {TABLE_ENTITIES_META} e
+        LEFT JOIN {TABLE_TABLES_META} t
+          ON t.entity_id = e.entity_id
+        LEFT JOIN latest_table_runs r
+          ON r.object_id = t.table_id
+         AND r.rn = 1
+        WHERE e.flag_active
+        GROUP BY
+            e.entity_id,
+            e.entity_name,
+            e.entity_load_interval,
+            e.entity_load_status
+        ORDER BY entity_schedule_start NULLS LAST, e.entity_name
     """
     try:
         with engine.connect() as conn:
@@ -2525,8 +2573,15 @@ def get_entities():
             for r in rows:
                 row = dict(r)
                 row["entity_id"] = row["entity_id"]
-                row["entity_last_load"] = (
-                    row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S") if row["entity_last_load"] else None
+                row["entity_schedule_start"] = (
+                    row["entity_schedule_start"].strftime("%Y-%m-%d %H:%M:%S")
+                    if row.get("entity_schedule_start")
+                    else None
+                )
+                row["entity_schedule_end"] = (
+                    row["entity_schedule_end"].strftime("%Y-%m-%d %H:%M:%S")
+                    if row.get("entity_schedule_end")
+                    else None
                 )
                 row["entity_name"] = row["entity_name"]
                 row["entity_load_interval"] = row["entity_load_interval"]

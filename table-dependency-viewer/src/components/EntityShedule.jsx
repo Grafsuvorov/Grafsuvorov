@@ -83,10 +83,12 @@ export default function EntityShedule() {
 
   const normalized = useMemo(() => {
     return entities.map((row) => {
-      const lastLoad = row.entity_last_load ? new Date(row.entity_last_load) : null;
+      const scheduleStart = row.entity_schedule_start ? new Date(row.entity_schedule_start) : null;
+      const scheduleEnd = row.entity_schedule_end ? new Date(row.entity_schedule_end) : null;
       return {
         ...row,
-        lastLoad,
+        scheduleStart,
+        scheduleEnd,
         status: (row.entity_load_status || "UNKNOWN").toUpperCase().replace("SUCCESS", "LOADED"),
       };
     });
@@ -114,12 +116,19 @@ export default function EntityShedule() {
       const name = normalize(row.entity_name);
       const id = normalize(row.entity_id);
       const status = normalize(row.status);
-      const shared = (sharedMap[row.entity_name]?.tables || [])
+      const shared = (sharedMap[String(row.entity_id)]?.tables || [])
         .map((t) => normalize(t))
         .join(" ");
       return name.includes(q) || id.includes(q) || status.includes(q) || shared.includes(q);
     });
   }, [normalized, query, statusFilter, sharedMap]);
+
+  const formatDateTime = (value) => {
+    if (!value) return "—";
+    const dt = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(dt.getTime())) return "—";
+    return dt.toISOString().slice(0, 19).replace("T", " ");
+  };
 
   const coverageFiltered = useMemo(() => {
     const normalize = (value) =>
@@ -362,8 +371,12 @@ export default function EntityShedule() {
               </div>
                 <div className="entity-meta-grid">
                   <div>
-                    <div className="entity-meta-label">Последняя загрузка</div>
-                    <div className="entity-meta-value">{row.entity_last_load || "—"}</div>
+                    <div className="entity-meta-label">Старт загрузки</div>
+                    <div className="entity-meta-value">{formatDateTime(row.scheduleStart)}</div>
+                  </div>
+                  <div>
+                    <div className="entity-meta-label">Финиш загрузки</div>
+                    <div className="entity-meta-value">{formatDateTime(row.scheduleEnd)}</div>
                   </div>
                   <div>
                     <div className="entity-meta-label">Интервал</div>
@@ -372,13 +385,13 @@ export default function EntityShedule() {
                   <div>
                     <div className="entity-meta-label">Общие таблицы</div>
                     <div className="entity-meta-value">
-                      {sharedMap[row.entity_name]?.count ?? 0}
+                      {sharedMap[String(row.entity_id)]?.count ?? 0}
                     </div>
                 </div>
               </div>
-              {sharedMap[row.entity_name]?.tables?.length > 0 && (
+              {sharedMap[String(row.entity_id)]?.tables?.length > 0 && (
                 <div className="entity-shared">
-                  {sharedMap[row.entity_name].tables.map((tbl) => (
+                  {sharedMap[String(row.entity_id)].tables.map((tbl) => (
                     <span key={tbl} className="entity-shared-pill mono">{tbl}</span>
                   ))}
                 </div>

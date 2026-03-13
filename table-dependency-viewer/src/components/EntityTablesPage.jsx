@@ -123,13 +123,9 @@ export default function EntityTablesPage() {
   const summary = useMemo(() => {
     const total = normalizedRows.length;
     const schemas = new Set(normalizedRows.map((r) => r.schema)).size;
-    const latest = normalizedRows.reduce((acc, r) => {
-      if (!r.lastDate) return acc;
-      if (!acc || r.lastDate > acc) return r.lastDate;
-      return acc;
-    }, null);
     const staleCount = normalizedRows.filter((r) => r.stale).length;
-    return { total, schemas, latest, staleCount };
+    const freshCount = total - staleCount;
+    return { total, schemas, staleCount, freshCount };
   }, [normalizedRows]);
 
   // Close suggestions on outside click
@@ -216,8 +212,8 @@ export default function EntityTablesPage() {
             <div className="entity-kpi-value">{summary.schemas}</div>
           </div>
           <div className="entity-kpi-card">
-            <div className="entity-kpi-label">Последняя загрузка</div>
-            <div className="entity-kpi-value">{summary.latest ? summary.latest.toISOString().slice(0, 19).replace("T", " ") : "—"}</div>
+            <div className="entity-kpi-label">Актуальны</div>
+            <div className="entity-kpi-value">{summary.freshCount}</div>
           </div>
         </div>
       </section>
@@ -294,7 +290,7 @@ export default function EntityTablesPage() {
                 <div key={r.fqn} className={`entity-table-row ${r.stale ? "entity-table-row-stale" : ""}`}>
                   <div className="entity-table-info">
                     <div className="entity-table-name mono">{r.fqn}</div>
-                    <div className="muted">{r.lastRaw || "—"}</div>
+                    <div className="muted">Загрузка: {r.lastRaw || "—"}</div>
                   </div>
                   <div className="entity-table-meta">
                     {r.stale ? (

@@ -106,33 +106,106 @@ main.content {
   background: rgba(255, 255, 255, 0.16);
 }
 
-.account-card {
+.account-shell {
   display: grid;
-  gap: 16px;
+  gap: 20px;
 }
 
-.account-meta {
+.account-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.account-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.account-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #f4f7ff;
+  background: linear-gradient(135deg, rgba(79, 124, 255, 0.9), rgba(56, 189, 248, 0.75));
+  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.18);
+}
+
+.account-hero-text {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-hero-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f4f7ff;
+  word-break: break-word;
+}
+
+.account-hero-email {
+  font-size: 13px;
+  color: rgba(244, 247, 255, 0.72);
+  word-break: break-word;
+}
+
+.account-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.account-role-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #dbe7ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.account-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
 }
 
-.account-meta > div {
-  padding: 12px 14px;
-  border-radius: 12px;
+.account-stat-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.025));
 }
 
+.account-stat-label,
 .account-label {
   font-size: 12px;
-  color: rgba(244, 247, 255, 0.7);
+  color: rgba(244, 247, 255, 0.68);
 }
 
-.account-value {
-  font-size: 16px;
-  font-weight: 600;
+.account-stat-value {
+  font-size: 20px;
+  font-weight: 700;
   color: #f4f7ff;
+}
+
+.account-stat-value-small {
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
 }
 
 .account-form {
@@ -141,11 +214,11 @@ main.content {
 }
 
 .account-form input {
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(255, 255, 255, 0.05);
   color: #f4f7ff;
-  padding: 10px 12px;
+  padding: 12px 14px;
 }
 
 .account-form input:focus {
@@ -155,9 +228,8 @@ main.content {
 }
 
 .account-submit {
-  margin-top: 8px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
   border: none;
   background: #4f7cff;
   color: #fff;
@@ -171,8 +243,8 @@ main.content {
 }
 
 .account-favorites-empty {
-  padding: 14px 16px;
-  border-radius: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.025);
   color: rgba(244, 247, 255, 0.72);
@@ -222,7 +294,53 @@ main.content {
   justify-content: flex-end;
 }
 
+.account-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(3, 7, 18, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.account-modal {
+  width: min(520px, 100%);
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(11, 15, 20, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+}
+
+.account-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.account-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
 @media (max-width: 880px) {
+  .account-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .account-hero-actions {
+    justify-content: flex-start;
+  }
+
   .account-favorite-row {
     grid-template-columns: 1fr;
   }

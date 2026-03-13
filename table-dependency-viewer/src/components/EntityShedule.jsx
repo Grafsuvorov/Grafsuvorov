@@ -379,7 +379,7 @@ export default function EntityShedule() {
                     <div className="entity-meta-value">{formatDateTime(row.scheduleEnd)}</div>
                   </div>
                   <div>
-                    <div className="entity-meta-label">Интервал</div>
+                    <div className="entity-meta-label">Расписание загрузки</div>
                     <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
                   </div>
                   <div>

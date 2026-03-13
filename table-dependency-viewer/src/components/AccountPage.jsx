@@ -21,10 +21,7 @@ export default function AccountPage({ userProfile }) {
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritesError, setFavoritesError] = useState(null);
   const [removingFavoriteId, setRemovingFavoriteId] = useState(null);
-  const rememberMode =
-    typeof window !== "undefined" && localStorage.getItem("tdv_access_token")
-      ? "С сохранением"
-      : "Только на сессию";
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   const loadFavorites = async () => {
     setFavoritesLoading(true);
@@ -46,6 +43,19 @@ export default function AccountPage({ userProfile }) {
   useEffect(() => {
     loadFavorites();
   }, []);
+
+  const resetPasswordForm = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setRepeatPassword("");
+    setError(null);
+    setSuccess(null);
+  };
+
+  const closePasswordModal = () => {
+    setPasswordModalOpen(false);
+    resetPasswordForm();
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -103,45 +113,62 @@ export default function AccountPage({ userProfile }) {
 
   return (
     <div className="container cc-page">
-      <section className="cc-surface account-card">
-        <div className="section-title">Профиль</div>
-        <div className="account-meta">
-          <div>
-            <div className="account-label">Пользователь</div>
-            <div className="account-value">
-              {userProfile?.username || userProfile?.email || "—"}
+      <section className="cc-surface account-shell">
+        <div className="account-hero">
+          <div className="account-hero-main">
+            <div className="account-avatar">
+              {(userProfile?.username || userProfile?.email || "U").slice(0, 1).toUpperCase()}
+            </div>
+            <div className="account-hero-text">
+              <div className="section-title">Профиль</div>
+              <div className="account-hero-name">
+                {userProfile?.username || userProfile?.email || "Пользователь"}
+              </div>
+              <div className="account-hero-email">{userProfile?.email || "—"}</div>
             </div>
           </div>
-          <div>
-            <div className="account-label">Email</div>
-            <div className="account-value">{userProfile?.email || "—"}</div>
+          <div className="account-hero-actions">
+            <span className="account-role-pill">
+              {ROLE_LABELS[userProfile?.role] || userProfile?.role || "—"}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                resetPasswordForm();
+                setPasswordModalOpen(true);
+              }}
+            >
+              Сменить пароль
+            </button>
           </div>
-          <div>
-            <div className="account-label">Роль</div>
-            <div className="account-value">
+        </div>
+
+        <div className="account-stats">
+          <div className="account-stat-card">
+            <div className="account-stat-label">Роль</div>
+            <div className="account-stat-value">
               {ROLE_LABELS[userProfile?.role] || userProfile?.role || "—"}
             </div>
           </div>
-          <div>
-            <div className="account-label">Сессия</div>
-            <div className="account-value">{rememberMode}</div>
+          <div className="account-stat-card">
+            <div className="account-stat-label">Избранных таблиц</div>
+            <div className="account-stat-value">{favorites.length}</div>
           </div>
-        </div>
-        <div className="muted">
-          Пароль хранится только в зашифрованном виде. Для смены используйте форму ниже.
+          <div className="account-stat-card">
+            <div className="account-stat-label">Email</div>
+            <div className="account-stat-value account-stat-value-small">{userProfile?.email || "—"}</div>
+          </div>
         </div>
       </section>
 
-      <section className="cc-surface account-card">
+      <section className="cc-surface account-shell">
         <div className="section-title">Избранные таблицы</div>
-        <div className="muted">
-          Персональный список объектов для быстрого возврата в карточку таблицы.
-        </div>
         {favoritesError && <div className="login-error">{favoritesError}</div>}
         {favoritesLoading && <div className="muted">Загрузка избранного...</div>}
         {!favoritesLoading && !favorites.length && (
           <div className="account-favorites-empty">
-            Пока нет избранных таблиц. Добавляй их прямо из карточки таблицы.
+            Пока нет избранных таблиц. Добавляй их из карточки таблицы.
           </div>
         )}
         {!favoritesLoading && favorites.length > 0 && (
@@ -155,7 +182,7 @@ export default function AccountPage({ userProfile }) {
                     <div className="account-favorite-meta">
                       <span>{item.entity_name || "Сущность не найдена"}</span>
                       <span>ID {item.table_id}</span>
-                      <span>Последняя загрузка: {item.table_last_load || "—"}</span>
+                      <span>Загрузка: {item.table_last_load || "—"}</span>
                     </div>
                   </div>
                   <div className="account-favorite-actions">
@@ -186,37 +213,55 @@ export default function AccountPage({ userProfile }) {
         )}
       </section>
 
-      <section className="cc-surface account-card">
-        <div className="section-title">Сменить пароль</div>
-        <form className="account-form" onSubmit={handleSubmit}>
-          <label className="account-label">Текущий пароль</label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-          <label className="account-label">Новый пароль</label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Новый пароль"
-          />
-          <label className="account-label">Повторить пароль</label>
-          <input
-            type="password"
-            value={repeatPassword}
-            onChange={(e) => setRepeatPassword(e.target.value)}
-            placeholder="Повторите пароль"
-          />
-          {error && <div className="login-error">{error}</div>}
-          {success && <div className="account-success">{success}</div>}
-          <button type="submit" className="account-submit" disabled={loading}>
-            {loading ? "Сохраняем..." : "Обновить пароль"}
-          </button>
-        </form>
-      </section>
+      {passwordModalOpen && (
+        <div className="account-modal-backdrop" onClick={closePasswordModal}>
+          <div className="account-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="account-modal-head">
+              <div>
+                <div className="section-title">Смена пароля</div>
+                <div className="muted">Обнови текущий пароль для своего аккаунта.</div>
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={closePasswordModal}>
+                Закрыть
+              </button>
+            </div>
+
+            <form className="account-form" onSubmit={handleSubmit}>
+              <label className="account-label">Текущий пароль</label>
+              <input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+              <label className="account-label">Новый пароль</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Новый пароль"
+              />
+              <label className="account-label">Повторите новый пароль</label>
+              <input
+                type="password"
+                value={repeatPassword}
+                onChange={(e) => setRepeatPassword(e.target.value)}
+                placeholder="Повторите пароль"
+              />
+              {error && <div className="login-error">{error}</div>}
+              {success && <div className="account-success">{success}</div>}
+              <div className="account-modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={closePasswordModal}>
+                  Отмена
+                </button>
+                <button type="submit" className="account-submit" disabled={loading}>
+                  {loading ? "Сохраняем..." : "Обновить пароль"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

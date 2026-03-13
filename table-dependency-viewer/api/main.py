@@ -2538,11 +2538,23 @@ def get_entities():
                 l.object_id,
                 l.loading_start_dttm,
                 l.loading_finish_dttm,
+                COALESCE(l.loading_finish_dttm, l.loading_start_dttm) AS run_dttm,
                 ROW_NUMBER() OVER (
                     PARTITION BY l.object_id
                     ORDER BY COALESCE(l.loading_finish_dttm, l.loading_start_dttm) DESC NULLS LAST
                 ) AS rn
             FROM {TABLE_LOADING_HISTORY} l
+        ),
+        entity_latest_day AS (
+            SELECT
+                t.entity_id,
+                MAX(DATE(r.run_dttm)) AS latest_run_day
+            FROM {TABLE_TABLES_META} t
+            JOIN latest_table_runs r
+              ON r.object_id = t.table_id
+             AND r.rn = 1
+            WHERE t.entity_id IS NOT NULL
+            GROUP BY t.entity_id
         )
         SELECT
             e.entity_id,
@@ -2552,11 +2564,14 @@ def get_entities():
             MIN(r.loading_start_dttm) AS entity_schedule_start,
             MAX(COALESCE(r.loading_finish_dttm, r.loading_start_dttm)) AS entity_schedule_end
         FROM {TABLE_ENTITIES_META} e
+        LEFT JOIN entity_latest_day d
+          ON d.entity_id = e.entity_id
         LEFT JOIN {TABLE_TABLES_META} t
           ON t.entity_id = e.entity_id
         LEFT JOIN latest_table_runs r
           ON r.object_id = t.table_id
          AND r.rn = 1
+         AND DATE(r.run_dttm) = d.latest_run_day
         WHERE e.flag_active
         GROUP BY
             e.entity_id,

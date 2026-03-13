@@ -1,20 +1,100 @@
-Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/metrics:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/incidents/history?days=7&limit=10:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/incidents/active:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/graph/diagnostics?include_any=true:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/orderbreaches:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/dq/summary?days=7&delta=10:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/click/summary?days=7&limit=6:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/dq/alerts?days=7&delta=10&limit=8:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/night-summary?days=30&limit=10:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/incidents/timeline?days=7:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/click/slow-stages?days=7&limit=6:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-index-Mg17v9WD.js:60  HomePage load error: SyntaxError: Failed to execute 'json' on 'Response': Unexpected token '<', "<html>
-<h"... is not valid JSON
-    at be (index-Mg17v9WD.js:60:26479)
-be @ index-Mg17v9WD.js:60
-:15312/auth/users:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/api/admin/ci-cd/status:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/auth/audit/event:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
-:15312/auth/users/analytics?days=30:1   Failed to load resource: the server responded with a status of 502 (Bad Gateway)
+Постановка
+  Нужно обернуть скрипт ytrek_load_to_gp.py в DAG и поставить на регулярное расписание.
+
+  Цель
+  Обеспечить регулярную синхронизацию данных из YouTrack в таблицы tech_etl.yt_issue_*, чтобы:
+
+  - в приложении были актуальные задачи, история изменений, worklog и комментарии;
+  - не накапливались дубли;
+  - обновлялись не только новые задачи, но и задачи из актуального релизного окна.
+
+  Что уже есть
+  Скрипт:
+
+  - берет задачи из релизного окна;
+  - по умолчанию использует:
+      - последний релиз;
+      - и еще 14 дней назад от него;
+  - поддерживает refresh задач без дублей через delete + insert;
+  - умеет работать с параметрами:
+
+  python3 scripts/ytrek_load_to_gp.py
+  python3 scripts/ytrek_load_to_gp.py --days 14
+  python3 scripts/ytrek_load_to_gp.py --issues DWH-1,DWH-2
+  python3 scripts/ytrek_load_to_gp.py --manual-only --issues DWH-1,DWH-2
+  python3 scripts/ytrek_load_to_gp.py --truncate
+
+  Что нужно сделать
+
+  1. Создать DAG для запуска скрипта.
+  2. Запускать скрипт по расписанию.
+  3. Использовать дефолтный режим без truncate:
+
+  python3 scripts/ytrek_load_to_gp.py
+
+  4. Передать в окружение DAG:
+
+  - YOUTRACK_URL
+  - YOUTRACK_TOKEN
+  - PG_DSN
+  - при необходимости YT_RELEASE_LOOKBACK_DAYS
+
+  Логика запуска
+  По умолчанию DAG должен:
+
+  - определять окно от последнего релиза;
+  - брать задачи из этого окна за последние 14 дней;
+  - по каждой задаче делать refresh:
+      - yt_issue_snapshot
+      - yt_issue_custom_field
+      - yt_issue_timeline
+      - yt_issue_worklog
+      - yt_issue_comment
+
+  Требования
+
+  - Не использовать --truncate в регулярном расписании.
+  - Логировать:
+      - старт DAG
+      - окно загрузки
+      - количество найденных задач
+      - количество успешно обновленных задач
+      - количество ошибок
+  - При падении одной задачи желательно не терять весь запуск, если это возможно в текущей реализации.
+  - Обеспечить понятный лог ошибки от YouTrack / БД.
+  - Сделать ручной запуск DAG с параметрами:
+      - days
+      - issues
+      - manual_only
+
+  Расписание
+  Базовый вариант:
+
+  - 1 раз в день, например утром после основных релизных процессов
+
+  Если нужен более частый refresh:
+
+  - каждые 4-6 часов
+
+  Рекомендуемый стартовый вариант:
+
+  - ежедневно в 08:30
+
+  Ожидаемый результат
+  После внедрения:
+
+  - DAG регулярно обновляет данные YouTrack в Greenplum;
+  - в приложении актуальны:
+      - задачи по таблицам
+      - история изменений
+      - worklog
+      - комментарии
+  - дубли по задачам не накапливаются.
+
+  Критерии приемки
+
+  - DAG успешно запускается вручную и по расписанию.
+  - После запуска в tech_etl.yt_issue_* появляются/обновляются данные по задачам из релизного окна.
+  - Повторный запуск не создает дубли.
+  - Ошибки видны в логах DAG.
+  - Можно вручную запустить DAG для конкретных задач через параметры.

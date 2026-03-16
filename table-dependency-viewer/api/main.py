@@ -2577,6 +2577,7 @@ def get_entities():
         GROUP BY
             e.entity_id,
             e.entity_name,
+            e.entity_last_load,
             e.entity_load_interval,
             e.entity_load_status
         ORDER BY entity_schedule_start NULLS LAST, e.entity_name

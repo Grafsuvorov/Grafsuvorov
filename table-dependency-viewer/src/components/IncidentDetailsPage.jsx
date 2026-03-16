@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import "../style/app.css";
+import { formatRuDateTime, parseLocalDateTime } from "../utils/datetime.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 function relTime(dtStr) {
   if (!dtStr) return "—";
-  const dt = new Date(String(dtStr).replace(" ", "T"));
-  if (Number.isNaN(dt.getTime())) return dtStr;
+  const dt = parseLocalDateTime(dtStr);
+  if (!dt) return dtStr;
   const diff = Math.floor((Date.now() - dt.getTime()) / 1000);
   if (diff < 60) return `${diff} сек назад`;
   if (diff < 3600) return `${Math.floor(diff / 60)} мин назад`;
@@ -16,8 +17,7 @@ function relTime(dtStr) {
 
 function fmtDateTime(value) {
   if (!value) return "—";
-  const dt = new Date(String(value).replace(" ", "T"));
-  return Number.isNaN(dt.getTime()) ? value : dt.toLocaleString("ru-RU");
+  return formatRuDateTime(value);
 }
 
 export default function IncidentDetailsPage({ tableFqn, onBack, onOpenTable }) {

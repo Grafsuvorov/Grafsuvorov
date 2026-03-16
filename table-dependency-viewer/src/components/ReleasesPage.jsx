@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
+import { formatLocalDateTime } from "../utils/datetime.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const YT_BASE = "https://yt.rusal.ru/issue/";
@@ -89,11 +90,7 @@ export default function ReleasesPage() {
 
   const formatDateTime = (value) => {
     if (!value) return "—";
-    const str = String(value);
-    const normalized = str.replace("T", " ").replace("Z", "");
-    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-    if (match) return `${match[1]} ${match[2]}`;
-    return normalized;
+    return formatLocalDateTime(value, { withSeconds: false });
   };
 
   const openTable = (schema, table) => {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../style/app.css";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { formatLocalDateTime, parseLocalDateTime } from "../utils/datetime.js";
+import { entitiesApi } from "../api/entities.js";
+import { accountApi } from "../api/account.js";
 
 export default function EntityShedule() {
   const [entities, setEntities] = useState([]);
@@ -30,27 +31,24 @@ export default function EntityShedule() {
 
   useEffect(() => {
     setLoadingEntities(true);
-    fetch(`${API_BASE}/api/entities`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    entitiesApi
+      .list()
       .then((data) => setEntities(Array.isArray(data) ? data : []))
       .catch(() => setError("Не удалось загрузить сущности"))
       .finally(() => setLoadingEntities(false));
   }, []);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/entities/shared?limit=3`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить общие таблицы")))
+    entitiesApi
+      .shared(3)
       .then((data) => setSharedMap(data || {}))
       .catch(() => setSharedMap({}));
   }, []);
 
   const loadCoverage = (offset = 0, append = false) => {
     setCoverageLoading(true);
-    fetch(`${API_BASE}/api/graph/orphans?limit=${COVERAGE_PAGE_SIZE}&offset=${offset}&meta_only=true`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить разрывы покрытия")))
+    entitiesApi
+      .coverage(COVERAGE_PAGE_SIZE, offset)
       .then((data) => {
         setCoverage(data || null);
         setCoverageHasMore(!!data?.has_more);
@@ -68,8 +66,8 @@ export default function EntityShedule() {
   useEffect(() => {
     setDqEntitiesLoading(true);
     setDqEntitiesError(null);
-    fetch(`${API_BASE}/api/dq/entity?days=7&delta=10&limit=12`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить DQ по сущностям")))
+    entitiesApi
+      .dq(7, 10, 12)
       .then((data) => setDqEntities(Array.isArray(data) ? data : []))
       .catch((err) => {
         console.error(err);
@@ -79,8 +77,8 @@ export default function EntityShedule() {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_BASE}/auth/favorites/entities`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить избранные сущности")))
+    accountApi
+      .favoriteEntities()
       .then((data) => {
         const ids = new Set((Array.isArray(data?.items) ? data.items : []).map((item) => item.entity_id));
         setFavoriteEntityIds(ids);
@@ -98,22 +96,14 @@ export default function EntityShedule() {
     const isFavorite = favoriteEntityIds.has(row.entity_id);
     setFavoriteEntityLoadingId(row.entity_id);
     try {
-      const resp = await fetch(
-        isFavorite
-          ? `${API_BASE}/auth/favorites/entities/${encodeURIComponent(row.entity_id)}`
-          : `${API_BASE}/auth/favorites/entities`,
-        isFavorite
-          ? { method: "DELETE" }
-          : {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                entity_id: row.entity_id,
-                entity_name: row.entity_name || null,
-              }),
-            },
-      );
-      if (!resp.ok) throw new Error("Не удалось обновить избранное");
+      if (isFavorite) {
+        await accountApi.removeFavoriteEntity(row.entity_id);
+      } else {
+        await accountApi.addFavoriteEntity({
+          entity_id: row.entity_id,
+          entity_name: row.entity_name || null,
+        });
+      }
       setFavoriteEntityIds((prev) => {
         const next = new Set(prev);
         if (isFavorite) next.delete(row.entity_id);
@@ -129,9 +119,9 @@ export default function EntityShedule() {
 
   const normalized = useMemo(() => {
     return entities.map((row) => {
-      const scheduleDate = row.entity_last_load ? new Date(row.entity_last_load) : null;
-      const scheduleStart = row.entity_schedule_start ? new Date(row.entity_schedule_start) : null;
-      const scheduleEnd = row.entity_schedule_end ? new Date(row.entity_schedule_end) : null;
+      const scheduleDate = parseLocalDateTime(row.entity_last_load);
+      const scheduleStart = parseLocalDateTime(row.entity_schedule_start);
+      const scheduleEnd = parseLocalDateTime(row.entity_schedule_end);
       return {
         ...row,
         scheduleDate,
@@ -173,9 +163,7 @@ export default function EntityShedule() {
 
   const formatDateTime = (value) => {
     if (!value) return "—";
-    const dt = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(dt.getTime())) return "—";
-    return dt.toISOString().slice(0, 19).replace("T", " ");
+    return formatLocalDateTime(value);
   };
 
   const coverageFiltered = useMemo(() => {

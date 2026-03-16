@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import "../style/app.css";
+import { formatDateInputValue, formatLocalDateTime, parseLocalDateTime } from "../utils/datetime.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const SLA_MINUTES = 10;
@@ -30,7 +31,7 @@ export default function SlowestTables({ onSelectTable }) {
   const [entityLimit, setEntityLimit] = useState(30);
   const [entityLoading, setEntityLoading] = useState(false);
   const [entitySchemaOptions, setEntitySchemaOptions] = useState(["all"]);
-  const [windowDate, setWindowDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [windowDate, setWindowDate] = useState(() => formatDateInputValue());
   const [timeFrom, setTimeFrom] = useState("04:30");
   const [timeTo, setTimeTo] = useState("05:00");
   const [windowSource, setWindowSource] = useState("both");
@@ -147,10 +148,7 @@ export default function SlowestTables({ onSelectTable }) {
 
   const formatDateTime = (value) => {
     if (!value) return "—";
-    const str = String(value).replace("T", " ").replace("Z", "");
-    const match = str.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-    if (match) return `${match[1]} ${match[2]}`;
-    return str;
+    return formatLocalDateTime(value, { withSeconds: false });
   };
 
   const loadWindowRuns = () => {
@@ -179,10 +177,10 @@ export default function SlowestTables({ onSelectTable }) {
   const periodLabel = useMemo(() => {
     if (meta?.period_from && meta?.period_to) {
       const fmt = (value) =>
-        new Date(value).toLocaleDateString("en-GB", {
+        parseLocalDateTime(value)?.toLocaleDateString("en-GB", {
           day: "2-digit",
           month: "2-digit",
-        });
+        }) || "—";
       return `${fmt(meta.period_from)} — ${fmt(meta.period_to)}`;
     }
     return null;

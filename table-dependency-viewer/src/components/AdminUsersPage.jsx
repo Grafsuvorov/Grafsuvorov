@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { formatRuDateTime } from "../utils/datetime.js";
+import { adminApi } from "../api/admin.js";
 
 const ROLE_OPTIONS = [
   { value: "analyst", label: "Аналитик" },
@@ -84,9 +84,7 @@ export default function AdminUsersPage({ userProfile }) {
 
   const formatDateTime = (value) => {
     if (!value) return "—";
-    const dt = new Date(String(value).replace(" ", "T"));
-    if (Number.isNaN(dt.getTime())) return value;
-    return dt.toLocaleString("ru-RU");
+    return formatRuDateTime(value);
   };
 
   const formatRole = (value) => ROLE_LABELS[value] || value || "—";
@@ -100,12 +98,7 @@ export default function AdminUsersPage({ userProfile }) {
     setLoading(true);
     setError(null);
     try {
-      const resp = await fetch(`${API_BASE}/auth/users`);
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось загрузить пользователей");
-      }
-      const data = await resp.json();
+      const data = await adminApi.users();
       setUsers(data);
     } catch (err) {
       setError(err.message || "Не удалось загрузить пользователей");
@@ -122,12 +115,7 @@ export default function AdminUsersPage({ userProfile }) {
     const loadAudit = async () => {
       setAuditLoading(true);
       try {
-        const resp = await fetch(`${API_BASE}/auth/users/analytics?days=${auditDays}`);
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}));
-          throw new Error(data.detail || "Не удалось загрузить аналитику пользователей");
-        }
-        const data = await resp.json();
+        const data = await adminApi.userAnalytics(auditDays);
         setAudit(data || null);
       } catch (err) {
         setError(err.message || "Не удалось загрузить аналитику пользователей");
@@ -141,12 +129,7 @@ export default function AdminUsersPage({ userProfile }) {
   useEffect(() => {
     const loadStatus = async () => {
       try {
-        const resp = await fetch(`${API_BASE}/api/admin/ci-cd/status`);
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}));
-          throw data;
-        }
-        const data = await resp.json();
+        const data = await adminApi.ciCdStatus();
         setLastDeployAt(data?.last_run_at || null);
         if (data?.stdout || data?.stderr) {
           setDeployOutput({
@@ -168,11 +151,7 @@ export default function AdminUsersPage({ userProfile }) {
     setRefreshMsg(null);
     setError(null);
     try {
-      const resp = await fetch(`${API_BASE}/api/admin/refresh-cache`, { method: "POST" });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось обновить кеш");
-      }
+      await adminApi.refreshCache();
       setRefreshMsg("Кеш обновлён");
     } catch (err) {
       setError(err.message || "Не удалось обновить кеш");
@@ -192,16 +171,7 @@ export default function AdminUsersPage({ userProfile }) {
     setDeployOutput(null);
     setError(null);
     try {
-      const resp = await fetch(`${API_BASE}/api/admin/run-ci-cd`, { method: "POST" });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        const detail = data.detail || data;
-        const errText = detail?.stderr || normalizeError(detail) || "Не удалось запустить ci_cd";
-        setDeployError(errText);
-        setDeployOutput(detail?.stdout || detail?.stderr ? detail : null);
-        throw new Error(errText);
-      }
-      const data = await resp.json().catch(() => ({}));
+      const data = await adminApi.runCiCd();
       setDeployMsg("Скрипт ci_cd выполнен");
       setDeployOutput(data);
       setLastDeployAt(data?.last_run_at || new Date().toLocaleString("ru-RU"));
@@ -217,15 +187,7 @@ export default function AdminUsersPage({ userProfile }) {
     event.preventDefault();
     setError(null);
     try {
-      const resp = await fetch(`${API_BASE}/auth/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось создать пользователя");
-      }
+      await adminApi.createUser(form);
       setForm({ email: "", username: "", password: "", role: "analyst" });
       await fetchUsers();
     } catch (err) {
@@ -239,14 +201,8 @@ export default function AdminUsersPage({ userProfile }) {
     setTogglingId(userId);
     setError(null);
     try {
-      const endpoint = isActive
-        ? `${API_BASE}/auth/users/${userId}/disable`
-        : `${API_BASE}/auth/users/${userId}/enable`;
-      const resp = await fetch(endpoint, { method: "POST" });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось изменить статус пользователя");
-      }
+      if (isActive) await adminApi.disableUser(userId);
+      else await adminApi.enableUser(userId);
       await fetchUsers();
     } catch (err) {
       setError(err.message || "Не удалось изменить статус пользователя");
@@ -260,11 +216,7 @@ export default function AdminUsersPage({ userProfile }) {
     setDeletingId(userId);
     setError(null);
     try {
-      const resp = await fetch(`${API_BASE}/auth/users/${userId}`, { method: "DELETE" });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось удалить пользователя");
-      }
+      await adminApi.deleteUser(userId);
       await fetchUsers();
     } catch (err) {
       setError(err.message || "Не удалось удалить пользователя");

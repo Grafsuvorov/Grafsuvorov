@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { accountApi } from "../api/account.js";
 
 const ROLE_LABELS = {
   analyst: "Аналитик",
@@ -29,17 +28,10 @@ export default function AccountPage({ userProfile }) {
     setFavoritesLoading(true);
     setFavoritesError(null);
     try {
-      const [tablesResp, entitiesResp] = await Promise.all([
-        fetch(`${API_BASE}/auth/favorites/tables`),
-        fetch(`${API_BASE}/auth/favorites/entities`),
+      const [tablesData, entitiesData] = await Promise.all([
+        accountApi.favoriteTables(),
+        accountApi.favoriteEntities(),
       ]);
-      if (!tablesResp.ok) {
-        throw new Error("Не удалось загрузить избранные таблицы");
-      }
-      if (!entitiesResp.ok) {
-        throw new Error("Не удалось загрузить избранные сущности");
-      }
-      const [tablesData, entitiesData] = await Promise.all([tablesResp.json(), entitiesResp.json()]);
       setFavorites(Array.isArray(tablesData?.items) ? tablesData.items : []);
       setFavoriteEntities(Array.isArray(entitiesData?.items) ? entitiesData.items : []);
     } catch (err) {
@@ -80,18 +72,10 @@ export default function AccountPage({ userProfile }) {
     }
     setLoading(true);
     try {
-      const resp = await fetch(`${API_BASE}/auth/change-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          current_password: currentPassword,
-          new_password: newPassword,
-        }),
+      await accountApi.changePassword({
+        current_password: currentPassword,
+        new_password: newPassword,
       });
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({}));
-        throw new Error(data.detail || "Не удалось сменить пароль");
-      }
       setSuccess("Пароль обновлён.");
       setCurrentPassword("");
       setNewPassword("");
@@ -106,12 +90,7 @@ export default function AccountPage({ userProfile }) {
   const handleRemoveFavorite = async (tableId) => {
     setRemovingFavoriteId(tableId);
     try {
-      const resp = await fetch(`${API_BASE}/auth/favorites/tables/${encodeURIComponent(tableId)}`, {
-        method: "DELETE",
-      });
-      if (!resp.ok) {
-        throw new Error("Не удалось убрать таблицу из избранного");
-      }
+      await accountApi.removeFavoriteTable(tableId);
       setFavorites((prev) => prev.filter((item) => item.table_id !== tableId));
     } catch (err) {
       setFavoritesError(err.message || "Не удалось убрать таблицу из избранного");
@@ -123,12 +102,7 @@ export default function AccountPage({ userProfile }) {
   const handleRemoveFavoriteEntity = async (entityId) => {
     setRemovingFavoriteEntityId(entityId);
     try {
-      const resp = await fetch(`${API_BASE}/auth/favorites/entities/${encodeURIComponent(entityId)}`, {
-        method: "DELETE",
-      });
-      if (!resp.ok) {
-        throw new Error("Не удалось убрать сущность из избранного");
-      }
+      await accountApi.removeFavoriteEntity(entityId);
       setFavoriteEntities((prev) => prev.filter((item) => item.entity_id !== entityId));
     } catch (err) {
       setFavoritesError(err.message || "Не удалось убрать сущность из избранного");

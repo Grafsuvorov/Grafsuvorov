@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import "../style/app.css";
+import { formatDateInputValue, formatLocalDateTime } from "../utils/datetime.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export default function AnalyticsPage() {
-  const [windowDate, setWindowDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [windowDate, setWindowDate] = useState(() => formatDateInputValue());
   const [timeFrom, setTimeFrom] = useState("04:30");
   const [timeTo, setTimeTo] = useState("05:00");
   const [source, setSource] = useState("both");
@@ -28,10 +29,7 @@ export default function AnalyticsPage() {
 
   const formatDateTime = (value) => {
     if (!value) return "—";
-    const str = String(value).replace("T", " ").replace("Z", "");
-    const match = str.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-    if (match) return `${match[1]} ${match[2]}`;
-    return str;
+    return formatLocalDateTime(value, { withSeconds: false });
   };
 
   const formatMinutes = (value) => {

@@ -1,8 +1,11 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import "../style/app.css";
+import { formatRuDateTime } from "../utils/datetime.js";
+import { fetchHomePayload } from "../api/home.js";
+import { apiClient } from "../api/client.js";
+import { formatInt, formatMinutes, formatPercent } from "../utils/format.js";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const HOME_CACHE_KEY = "home:payload:v3";
 
 function asArray(value) {
@@ -45,7 +48,6 @@ export default function HomePage({ onSelectTable }) {
   const [clickSlow, setClickSlow] = useState([]);
   const [showAllOrderBreaches, setShowAllOrderBreaches] = useState(false);
 
-  const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
   useEffect(() => {
     let cancelled = false;
 
@@ -78,43 +80,7 @@ export default function HomePage({ onSelectTable }) {
           }
         }
 
-        const [
-          activeResp,
-          orderResp,
-          historyResp,
-          metricsResp,
-          diagResp,
-          nightResp,
-          timelineResp,
-          dqSummaryResp,
-          dqAlertsResp,
-          clickResp,
-          clickSlowResp
-        ] = await Promise.all([
-          fetch(`${API_BASE}/api/incidents/active`),
-          fetch(`${API_BASE}/api/orderbreaches`),
-          fetch(`${API_BASE}/api/incidents/history?days=7&limit=10`),
-          fetch(`${API_BASE}/api/metrics`),
-          fetch(`${API_BASE}/api/graph/diagnostics?include_any=true`),
-          fetch(`${API_BASE}/api/night-summary?days=30&limit=10`),
-          fetch(`${API_BASE}/api/incidents/timeline?days=7`),
-          fetch(`${API_BASE}/api/dq/summary?days=7&delta=10`),
-          fetch(`${API_BASE}/api/dq/alerts?days=7&delta=10&limit=8`),
-          fetch(`${API_BASE}/api/click/summary?days=7&limit=6`),
-          fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=6`)
-        ]);
-
-        const activeJson = await activeResp.json();
-        const orderJson = await orderResp.json();
-        const historyJson = await historyResp.json();
-        const metricsJson = await metricsResp.json();
-        const diagJson = await diagResp.json();
-        const nightJson = await nightResp.json();
-        const timelineJson = await timelineResp.json();
-        const dqSummaryJson = await dqSummaryResp.json();
-        const dqAlertsJson = await dqAlertsResp.json();
-        const clickJson = await clickResp.json();
-        const clickSlowJson = await clickSlowResp.json();
+        const payload = await fetchHomePayload();
 
         if (!cancelled) {
           const now = new Date();
@@ -125,29 +91,29 @@ export default function HomePage({ onSelectTable }) {
           }
           const expiresAt = nextRefresh.getTime();
 
-          const activeRows = asArray(activeJson);
-          const orderRows = asArray(orderJson);
-          const historyRows = asArray(historyJson);
-          const entityCyclesRows = asArray(diagJson?.entity_cycles);
-          const entityMutualRows = asArray(diagJson?.entity_mutual);
-          const tableCyclesRows = asArray(diagJson?.table_cycles);
-          const timelineRows = asArray(timelineJson);
-          const dqAlertRows = asArray(dqAlertsJson);
-          const clickFailureRows = asArray(clickJson?.failures);
-          const clickSlowRows = asArray(clickSlowJson);
+          const activeRows = asArray(payload.activeIncidents);
+          const orderRows = asArray(payload.orderBreaches);
+          const historyRows = asArray(payload.history);
+          const entityCyclesRows = asArray(payload.diagnostics?.entity_cycles);
+          const entityMutualRows = asArray(payload.diagnostics?.entity_mutual);
+          const tableCyclesRows = asArray(payload.diagnostics?.table_cycles);
+          const timelineRows = asArray(payload.incidentTimeline);
+          const dqAlertRows = asArray(payload.dqAlerts);
+          const clickFailureRows = asArray(payload.clickFailures);
+          const clickSlowRows = asArray(payload.clickSlow);
 
           setActiveIncidents(activeRows);
           setOrderBreaches(orderRows);
           setHistory(historyRows);
-          setMetrics(metricsJson);
+          setMetrics(payload.metrics);
           setEntityCycles(entityCyclesRows);
           setEntityMutual(entityMutualRows);
           setTableCycles(tableCyclesRows);
-          setNightSummary(nightJson || null);
+          setNightSummary(payload.nightSummary || null);
           setIncidentTimeline(timelineRows);
-          setDqSummary(dqSummaryJson || null);
+          setDqSummary(payload.dqSummary || null);
           setDqAlerts(dqAlertRows);
-          setClickSummary(clickJson?.summary || null);
+          setClickSummary(payload.clickSummary || null);
           setClickFailures(clickFailureRows);
           setClickSlow(clickSlowRows);
           setNightLoading(false);
@@ -159,15 +125,15 @@ export default function HomePage({ onSelectTable }) {
               activeIncidents: activeRows,
               orderBreaches: orderRows,
               history: historyRows,
-              metrics: metricsJson || null,
+              metrics: payload.metrics || null,
               entityCycles: entityCyclesRows,
               entityMutual: entityMutualRows,
               tableCycles: tableCyclesRows,
-              nightSummary: nightJson || null,
+              nightSummary: payload.nightSummary || null,
               incidentTimeline: timelineRows,
-              dqSummary: dqSummaryJson || null,
+              dqSummary: payload.dqSummary || null,
               dqAlerts: dqAlertRows,
-              clickSummary: clickJson?.summary || null,
+              clickSummary: payload.clickSummary || null,
               clickFailures: clickFailureRows,
               clickSlow: clickSlowRows,
             })
@@ -208,9 +174,8 @@ export default function HomePage({ onSelectTable }) {
     typeof window !== "undefined" &&
     (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-  const fmtInt = (value) => (Number.isFinite(value) ? Math.round(value).toLocaleString("ru-RU") : "—");
-  const fmtPct = (value) =>
-    Number.isFinite(value) ? `${value > 0 ? "+" : ""}${value.toFixed(1)}%` : "—";
+  const fmtInt = formatInt;
+  const fmtPct = formatPercent;
 
   const lastRefreshLabel = useMemo(() => {
     const cachedRaw = localStorage.getItem(HOME_CACHE_KEY);
@@ -285,8 +250,9 @@ export default function HomePage({ onSelectTable }) {
     try {
       const responses = await Promise.all(
         limitedEntities.map((name) =>
-          fetch(`${API_BASE}/api/graph/entity/${encodeURIComponent(name)}`)
-            .then((res) => (res.ok ? res.json() : null))
+          apiClient
+            .get(`/api/graph/entity/${encodeURIComponent(name)}`)
+            .catch(() => null)
             .then((payload) => ({ name, payload }))
         )
       );
@@ -400,11 +366,7 @@ export default function HomePage({ onSelectTable }) {
     }));
 
     try {
-      const resp = await fetch(`${API_BASE}/api/dependencies?table=${encodeURIComponent(target)}`);
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const json = await resp.json();
+      const json = await apiClient.get("/api/dependencies", { params: { table: target } });
       const rows = Array.isArray(json) ? json : [];
       setImpactMap((prev) => ({
         ...prev,
@@ -447,10 +409,10 @@ export default function HomePage({ onSelectTable }) {
       ...prev,
       [key]: { state: "loading", edges_ab: [], edges_ba: [] },
     }));
-    fetch(
-      `${API_BASE}/api/graph/diagnostics/mutual?entity_a=${encodeURIComponent(pair.a)}&entity_b=${encodeURIComponent(pair.b)}&strict=true`
-    )
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить связи")))
+    apiClient
+      .get("/api/graph/diagnostics/mutual", {
+        params: { entity_a: pair.a, entity_b: pair.b, strict: true },
+      })
       .then((data) => {
         setEntityLinkDetails((prev) => ({
           ...prev,
@@ -1463,9 +1425,7 @@ export default function HomePage({ onSelectTable }) {
 }
   const formatTime = (value) => {
     if (!value) return "—";
-    const dt = new Date(value.replace(" ", "T"));
-    if (Number.isNaN(dt.getTime())) return value;
-    return dt.toLocaleString("ru-RU", {
+    return formatRuDateTime(value, {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",

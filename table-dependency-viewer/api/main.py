@@ -53,6 +53,8 @@ from .config import (
     YTRACK_ISSUE_URL,
     DATABASE_URL,
 )
+from .services.admin import refresh_application_caches, run_ci_cd_script
+from .services.entities import fetch_entities
 
 from .auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
 
@@ -99,30 +101,32 @@ def refresh_cache(request: Request):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
 
-    globals()["_cached_meta_index"] = None
-    globals()["_cache_timestamp"] = 0
-    globals()["_order_breaches_cache"] = None
-    globals()["_order_breaches_ts"] = 0
-    globals()["_graph_snapshot"] = None
-    globals()["_graph_snapshot_ts"] = 0
-    globals()["_graph_snapshot_hash"] = None
-    globals()["_graph_cache"].clear()
-    globals()["_graph_cache_ts"] = 0
-    globals()["_graph_cache_meta_ts"] = 0
-    globals()["_logic_audit_cache_payload"] = None
-    globals()["_logic_audit_cache_ts"] = 0
+    def reset_fn():
+        globals()["_cached_meta_index"] = None
+        globals()["_cache_timestamp"] = 0
+        globals()["_order_breaches_cache"] = None
+        globals()["_order_breaches_ts"] = 0
+        globals()["_graph_snapshot"] = None
+        globals()["_graph_snapshot_ts"] = 0
+        globals()["_graph_snapshot_hash"] = None
+        globals()["_graph_cache"].clear()
+        globals()["_graph_cache_ts"] = 0
+        globals()["_graph_cache_meta_ts"] = 0
+        globals()["_logic_audit_cache_payload"] = None
+        globals()["_logic_audit_cache_ts"] = 0
 
-    try:
+    def warmup_fn():
         get_cached_meta_and_index()
         get_cached_order_breaches()
         get_graph_snapshot()
         _build_logic_audit_cache()
-    except Exception as exc:
-        print("❌ refresh cache error:", exc)
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
 
-    return {"status": "ok"}
+    try:
+        return refresh_application_caches(reset_fn, warmup_fn)
+    except HTTPException:
+        print("❌ refresh cache error:")
+        print(traceback.format_exc())
+        raise
 
 
 @router.post("/api/admin/run-ci-cd")
@@ -140,41 +144,7 @@ def run_ci_cd(request: Request):
     if not script_path.is_file():
         raise HTTPException(status_code=400, detail="Путь скрипта должен указывать на файл")
 
-    _ci_cd_status.update(
-        {
-            "last_run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": "running",
-            "return_code": None,
-            "stdout": None,
-            "stderr": None,
-        }
-    )
-
-    try:
-        result = subprocess.run(
-            ["bash", str(script_path)],
-            capture_output=True,
-            text=True,
-            timeout=900,
-            cwd=str(script_path.parent),
-            env=os.environ.copy(),
-        )
-    except subprocess.TimeoutExpired:
-        raise HTTPException(status_code=500, detail="Скрипт выполняется слишком долго (timeout)")
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Не удалось запустить скрипт: {exc}")
-
-    response = {
-        "status": "ok" if result.returncode == 0 else "failed",
-        "return_code": result.returncode,
-        "stdout": (result.stdout or "").strip()[:2000],
-        "stderr": (result.stderr or "").strip()[:2000],
-        "last_run_at": _ci_cd_status.get("last_run_at"),
-    }
-    _ci_cd_status.update(response)
-    if result.returncode != 0:
-        raise HTTPException(status_code=500, detail=response)
-    return response
+    return run_ci_cd_script(script_path=script_path, status_state=_ci_cd_status)
 
 
 @router.get("/api/admin/ci-cd/status")
@@ -2532,85 +2502,14 @@ def get_failed_tables():
 
 @router.get("/api/entities")
 def get_entities():
-    query = f"""
-        WITH latest_table_runs AS (
-            SELECT
-                l.object_id,
-                l.loading_start_dttm,
-                l.loading_finish_dttm,
-                COALESCE(l.loading_finish_dttm, l.loading_start_dttm) AS run_dttm,
-                ROW_NUMBER() OVER (
-                    PARTITION BY l.object_id
-                    ORDER BY COALESCE(l.loading_finish_dttm, l.loading_start_dttm) DESC NULLS LAST
-                ) AS rn
-            FROM {TABLE_LOADING_HISTORY} l
-        ),
-        entity_latest_day AS (
-            SELECT
-                t.entity_id,
-                MAX(DATE(r.run_dttm)) AS latest_run_day
-            FROM {TABLE_TABLES_META} t
-            JOIN latest_table_runs r
-              ON r.object_id = t.table_id
-             AND r.rn = 1
-            WHERE t.entity_id IS NOT NULL
-            GROUP BY t.entity_id
-        )
-        SELECT
-            e.entity_id,
-            e.entity_name,
-            e.entity_last_load AS entity_last_load,
-            e.entity_load_interval::varchar AS entity_load_interval,
-            e.entity_load_status,
-            MIN(r.loading_start_dttm) AS entity_schedule_start,
-            MAX(COALESCE(r.loading_finish_dttm, r.loading_start_dttm)) AS entity_schedule_end
-        FROM {TABLE_ENTITIES_META} e
-        LEFT JOIN entity_latest_day d
-          ON d.entity_id = e.entity_id
-        LEFT JOIN {TABLE_TABLES_META} t
-          ON t.entity_id = e.entity_id
-        LEFT JOIN latest_table_runs r
-          ON r.object_id = t.table_id
-         AND r.rn = 1
-         AND DATE(r.run_dttm) = d.latest_run_day
-        WHERE e.flag_active
-        GROUP BY
-            e.entity_id,
-            e.entity_name,
-            e.entity_last_load,
-            e.entity_load_interval,
-            e.entity_load_status
-        ORDER BY entity_schedule_start NULLS LAST, e.entity_name
-    """
     try:
-        with engine.connect() as conn:
-            rows = conn.execute(text(query)).mappings().all()
-
-            cleaned = []
-            for r in rows:
-                row = dict(r)
-                row["entity_id"] = row["entity_id"]
-                row["entity_schedule_start"] = (
-                    row["entity_schedule_start"].strftime("%Y-%m-%d %H:%M:%S")
-                    if row.get("entity_schedule_start")
-                    else None
-                )
-                row["entity_last_load"] = (
-                    row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S")
-                    if row.get("entity_last_load")
-                    else None
-                )
-                row["entity_schedule_end"] = (
-                    row["entity_schedule_end"].strftime("%Y-%m-%d %H:%M:%S")
-                    if row.get("entity_schedule_end")
-                    else None
-                )
-                row["entity_name"] = row["entity_name"]
-                row["entity_load_interval"] = row["entity_load_interval"]
-                row["entity_load_status"] = row["entity_load_status"]
-                cleaned.append(row)
-
-            return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
+        cleaned = fetch_entities(
+            engine,
+            table_loading_history=TABLE_LOADING_HISTORY,
+            table_tables_meta=TABLE_TABLES_META,
+            table_entities_meta=TABLE_ENTITIES_META,
+        )
+        return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")
 
     except Exception as e:
         print("❌ Ошибка при получении данных об ошибках:", str(e))

@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { parseLocalDateTime } from "../utils/datetime.js";
+import { entitiesApi } from "../api/entities.js";
 
 export default function EntityTablesPage() {
   const location = useLocation();
@@ -36,11 +36,8 @@ export default function EntityTablesPage() {
     if (!entityId) return;
     setLoading(true);
     setErr(null);
-    fetch(`${API_BASE}/api/entities/${entityId}/table-info`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      })
+    entitiesApi
+      .tables(entityId)
       .then((data) => setRows(Array.isArray(data) ? data : []))
       .catch((e) => {
         console.error(e);
@@ -89,7 +86,7 @@ export default function EntityTablesPage() {
       const table = r.tables_name ?? r.table_name ?? "—";
       const fqn = `${schema}.${table}`;
       const lastRaw = r.last_load ?? r.table_last_load ?? null;
-      const lastDate = lastRaw ? new Date(lastRaw) : null;
+      const lastDate = parseLocalDateTime(lastRaw);
       const ageHours = lastDate ? Math.round((now - lastDate.getTime()) / 36e5) : null;
       const stale = ageHours !== null && ageHours > staleHours;
       return {

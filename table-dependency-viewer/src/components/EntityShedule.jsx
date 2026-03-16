@@ -23,6 +23,8 @@ export default function EntityShedule() {
   const [dqEntities, setDqEntities] = useState([]);
   const [dqEntitiesError, setDqEntitiesError] = useState(null);
   const [dqEntitiesLoading, setDqEntitiesLoading] = useState(false);
+  const [favoriteEntityIds, setFavoriteEntityIds] = useState(new Set());
+  const [favoriteEntityLoadingId, setFavoriteEntityLoadingId] = useState(null);
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -76,17 +78,63 @@ export default function EntityShedule() {
       .finally(() => setDqEntitiesLoading(false));
   }, []);
 
+  useEffect(() => {
+    fetch(`${API_BASE}/auth/favorites/entities`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить избранные сущности")))
+      .then((data) => {
+        const ids = new Set((Array.isArray(data?.items) ? data.items : []).map((item) => item.entity_id));
+        setFavoriteEntityIds(ids);
+      })
+      .catch(() => setFavoriteEntityIds(new Set()));
+  }, []);
+
   const openEntityTables = (row) => {
     const q = new URLSearchParams({ name: row.entity_name ?? '' }).toString();
     navigate(`/entity/${row.entity_id}/tables?${q}`);
   };
 
+  const toggleFavoriteEntity = async (row) => {
+    if (!row?.entity_id || favoriteEntityLoadingId) return;
+    const isFavorite = favoriteEntityIds.has(row.entity_id);
+    setFavoriteEntityLoadingId(row.entity_id);
+    try {
+      const resp = await fetch(
+        isFavorite
+          ? `${API_BASE}/auth/favorites/entities/${encodeURIComponent(row.entity_id)}`
+          : `${API_BASE}/auth/favorites/entities`,
+        isFavorite
+          ? { method: "DELETE" }
+          : {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                entity_id: row.entity_id,
+                entity_name: row.entity_name || null,
+              }),
+            },
+      );
+      if (!resp.ok) throw new Error("Не удалось обновить избранное");
+      setFavoriteEntityIds((prev) => {
+        const next = new Set(prev);
+        if (isFavorite) next.delete(row.entity_id);
+        else next.add(row.entity_id);
+        return next;
+      });
+    } catch {
+      // keep UI silent here; page is operational
+    } finally {
+      setFavoriteEntityLoadingId(null);
+    }
+  };
+
   const normalized = useMemo(() => {
     return entities.map((row) => {
+      const scheduleDate = row.entity_last_load ? new Date(row.entity_last_load) : null;
       const scheduleStart = row.entity_schedule_start ? new Date(row.entity_schedule_start) : null;
       const scheduleEnd = row.entity_schedule_end ? new Date(row.entity_schedule_end) : null;
       return {
         ...row,
+        scheduleDate,
         scheduleStart,
         scheduleEnd,
         status: (row.entity_load_status || "UNKNOWN").toUpperCase().replace("SUCCESS", "LOADED"),
@@ -369,34 +417,46 @@ export default function EntityShedule() {
                   {row.status}
                 </span>
               </div>
-                <div className="entity-meta-grid">
-                  <div>
-                    <div className="entity-meta-label">Старт загрузки</div>
-                    <div className="entity-meta-value">{formatDateTime(row.scheduleStart)}</div>
+              <div className="entity-meta-grid compact">
+                <div>
+                  <div className="entity-meta-label">Расписание загрузки</div>
+                  <div className="entity-meta-value">{formatDateTime(row.scheduleDate)}</div>
+                </div>
+                <div>
+                  <div className="entity-meta-label">Старт загрузки</div>
+                  <div className="entity-meta-value">{formatDateTime(row.scheduleStart)}</div>
+                </div>
+                <div>
+                  <div className="entity-meta-label">Финиш загрузки</div>
+                  <div className="entity-meta-value">{formatDateTime(row.scheduleEnd)}</div>
+                </div>
+                <div>
+                  <div className="entity-meta-label">Общие таблицы</div>
+                  <div className="entity-meta-value">
+                    {sharedMap[String(row.entity_id)]?.count ?? 0}
                   </div>
-                  <div>
-                    <div className="entity-meta-label">Финиш загрузки</div>
-                    <div className="entity-meta-value">{formatDateTime(row.scheduleEnd)}</div>
-                  </div>
-                  <div>
-                    <div className="entity-meta-label">Расписание загрузки</div>
-                    <div className="entity-meta-value">{row.entity_load_interval || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="entity-meta-label">Общие таблицы</div>
-                    <div className="entity-meta-value">
-                      {sharedMap[String(row.entity_id)]?.count ?? 0}
-                    </div>
                 </div>
               </div>
               {sharedMap[String(row.entity_id)]?.tables?.length > 0 && (
                 <div className="entity-shared">
-                  {sharedMap[String(row.entity_id)].tables.map((tbl) => (
+                  {sharedMap[String(row.entity_id)].tables.slice(0, 3).map((tbl) => (
                     <span key={tbl} className="entity-shared-pill mono">{tbl}</span>
                   ))}
+                  {sharedMap[String(row.entity_id)].tables.length > 3 && (
+                    <span className="entity-shared-pill entity-shared-more">
+                      +{sharedMap[String(row.entity_id)].tables.length - 3}
+                    </span>
+                  )}
                 </div>
               )}
               <div className="entity-actions">
+                <button className="btn btn-ghost" onClick={() => toggleFavoriteEntity(row)}>
+                  {favoriteEntityLoadingId === row.entity_id
+                    ? "Сохраняем..."
+                    : favoriteEntityIds.has(row.entity_id)
+                      ? "Убрать из избранного"
+                      : "В избранное"}
+                </button>
                 <button className="btn btn-secondary" onClick={() => openEntityTables(row)}>
                   Таблицы сущности
                 </button>

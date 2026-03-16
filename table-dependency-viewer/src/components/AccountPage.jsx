@@ -18,23 +18,32 @@ export default function AccountPage({ userProfile }) {
   const [success, setSuccess] = useState(null);
   const [loading, setLoading] = useState(false);
   const [favorites, setFavorites] = useState([]);
+  const [favoriteEntities, setFavoriteEntities] = useState([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [favoritesError, setFavoritesError] = useState(null);
   const [removingFavoriteId, setRemovingFavoriteId] = useState(null);
+  const [removingFavoriteEntityId, setRemovingFavoriteEntityId] = useState(null);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   const loadFavorites = async () => {
     setFavoritesLoading(true);
     setFavoritesError(null);
     try {
-      const resp = await fetch(`${API_BASE}/auth/favorites/tables`);
-      if (!resp.ok) {
+      const [tablesResp, entitiesResp] = await Promise.all([
+        fetch(`${API_BASE}/auth/favorites/tables`),
+        fetch(`${API_BASE}/auth/favorites/entities`),
+      ]);
+      if (!tablesResp.ok) {
         throw new Error("Не удалось загрузить избранные таблицы");
       }
-      const data = await resp.json();
-      setFavorites(Array.isArray(data?.items) ? data.items : []);
+      if (!entitiesResp.ok) {
+        throw new Error("Не удалось загрузить избранные сущности");
+      }
+      const [tablesData, entitiesData] = await Promise.all([tablesResp.json(), entitiesResp.json()]);
+      setFavorites(Array.isArray(tablesData?.items) ? tablesData.items : []);
+      setFavoriteEntities(Array.isArray(entitiesData?.items) ? entitiesData.items : []);
     } catch (err) {
-      setFavoritesError(err.message || "Не удалось загрузить избранные таблицы");
+      setFavoritesError(err.message || "Не удалось загрузить избранное");
     } finally {
       setFavoritesLoading(false);
     }
@@ -111,6 +120,23 @@ export default function AccountPage({ userProfile }) {
     }
   };
 
+  const handleRemoveFavoriteEntity = async (entityId) => {
+    setRemovingFavoriteEntityId(entityId);
+    try {
+      const resp = await fetch(`${API_BASE}/auth/favorites/entities/${encodeURIComponent(entityId)}`, {
+        method: "DELETE",
+      });
+      if (!resp.ok) {
+        throw new Error("Не удалось убрать сущность из избранного");
+      }
+      setFavoriteEntities((prev) => prev.filter((item) => item.entity_id !== entityId));
+    } catch (err) {
+      setFavoritesError(err.message || "Не удалось убрать сущность из избранного");
+    } finally {
+      setRemovingFavoriteEntityId(null);
+    }
+  };
+
   return (
     <div className="container cc-page">
       <section className="cc-surface account-shell">
@@ -154,6 +180,10 @@ export default function AccountPage({ userProfile }) {
           <div className="account-stat-card">
             <div className="account-stat-label">Избранных таблиц</div>
             <div className="account-stat-value">{favorites.length}</div>
+          </div>
+          <div className="account-stat-card">
+            <div className="account-stat-label">Избранных сущностей</div>
+            <div className="account-stat-value">{favoriteEntities.length}</div>
           </div>
           <div className="account-stat-card">
             <div className="account-stat-label">Email</div>
@@ -209,6 +239,52 @@ export default function AccountPage({ userProfile }) {
                 </div>
               );
             })}
+          </div>
+        )}
+      </section>
+
+      <section className="cc-surface account-shell">
+        <div className="section-title">Избранные сущности</div>
+        {favoritesError && <div className="login-error">{favoritesError}</div>}
+        {favoritesLoading && <div className="muted">Загрузка избранного...</div>}
+        {!favoritesLoading && !favoriteEntities.length && (
+          <div className="account-favorites-empty">
+            Пока нет избранных сущностей. Добавляй их со страницы сущностей.
+          </div>
+        )}
+        {!favoritesLoading && favoriteEntities.length > 0 && (
+          <div className="account-favorites-list">
+            {favoriteEntities.map((item) => (
+              <div key={item.entity_id} className="account-favorite-row">
+                <div className="account-favorite-main">
+                  <div className="account-favorite-title">{item.entity_name || `Сущность ${item.entity_id}`}</div>
+                  <div className="account-favorite-meta">
+                    <span>ID {item.entity_id}</span>
+                    <span>Расписание: {item.entity_last_load || "—"}</span>
+                    <span>Статус: {item.entity_load_status || "—"}</span>
+                  </div>
+                </div>
+                <div className="account-favorite-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      navigate(`/entity/${encodeURIComponent(item.entity_id)}/tables?name=${encodeURIComponent(item.entity_name || "")}`)
+                    }
+                  >
+                    Открыть
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    disabled={removingFavoriteEntityId === item.entity_id}
+                    onClick={() => handleRemoveFavoriteEntity(item.entity_id)}
+                  >
+                    {removingFavoriteEntityId === item.entity_id ? "Удаляем..." : "Убрать"}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>

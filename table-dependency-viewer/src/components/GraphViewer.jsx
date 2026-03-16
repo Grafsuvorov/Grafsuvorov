@@ -8,9 +8,9 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import "../style/app.css";
 
-const X_GAP = 520;
+const X_GAP = 560;
 const EXTRA_GAP = 320;
-const Y_GAP = 180;
+const Y_GAP = 210;
 const DEFAULT_DEPTH = 2;
 
 const NODE_WIDTH_BY_LAYER = {
@@ -73,38 +73,39 @@ const baseNodeStyle = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   cursor: "pointer",
-  boxShadow: "0 18px 40px rgba(3,7,18,0.45)",
+  backdropFilter: "blur(18px)",
+  boxShadow: "0 18px 40px rgba(3,7,18,0.24)",
 };
 
 const NODE_STYLE_BY_LAYER = {
-  landing: { background: "#0f766e", color: "#ecfeff" },
-  raw_ext: { background: "#155e75", color: "#ecfeff" },
+  landing: { background: "linear-gradient(160deg, rgba(15,118,110,0.82), rgba(13,148,136,0.62))", color: "#ecfeff" },
+  raw_ext: { background: "linear-gradient(160deg, rgba(8,145,178,0.8), rgba(14,116,144,0.62))", color: "#ecfeff" },
   dict_stg: {
-    background: "#0b3a44",
+    background: "linear-gradient(160deg, rgba(14,80,92,0.72), rgba(15,23,42,0.52))",
     color: "#e0f2fe",
     border: "1px dashed rgba(148,163,184,.5)",
   },
   dict_ods: {
-    background: "#123e66",
+    background: "linear-gradient(160deg, rgba(30,64,175,0.72), rgba(30,58,138,0.52))",
     color: "#e0f2fe",
     border: "1px dashed rgba(125, 211, 252, .45)",
   },
   dict_dds: {
-    background: "#1e1b4b",
+    background: "linear-gradient(160deg, rgba(79,70,229,0.72), rgba(49,46,129,0.52))",
     color: "#c7d2fe",
     border: "1px dashed rgba(129,140,248,.4)",
   },
-  stg: { background: "#334155", color: "#e5e7eb" },
-  ods: { background: "#0d9488", color: "#ecfeff" },
-  dds: { background: "#1d4ed8", color: "#e0f2fe" },
-  dm_calc: { background: "#1f2937", color: "#e5e7eb" },
-  dm: { background: "#f97316", color: "#0f172a" },
-  dm_view: { background: "#020617", color: "#e5e7eb" },
-  other: { background: "#475569", color: "#f8fafc" },
+  stg: { background: "linear-gradient(160deg, rgba(71,85,105,0.78), rgba(51,65,85,0.56))", color: "#e5e7eb" },
+  ods: { background: "linear-gradient(160deg, rgba(20,184,166,0.82), rgba(13,148,136,0.58))", color: "#ecfeff" },
+  dds: { background: "linear-gradient(160deg, rgba(37,99,235,0.82), rgba(29,78,216,0.58))", color: "#e0f2fe" },
+  dm_calc: { background: "linear-gradient(160deg, rgba(51,65,85,0.78), rgba(30,41,59,0.58))", color: "#e5e7eb" },
+  dm: { background: "linear-gradient(160deg, rgba(251,146,60,0.88), rgba(249,115,22,0.66))", color: "#0f172a" },
+  dm_view: { background: "linear-gradient(160deg, rgba(15,23,42,0.82), rgba(30,41,59,0.6))", color: "#e5e7eb" },
+  other: { background: "linear-gradient(160deg, rgba(100,116,139,0.82), rgba(71,85,105,0.58))", color: "#f8fafc" },
 };
 
 const CENTRAL_STYLE = {
-  background: "#1d4ed8",
+  background: "linear-gradient(160deg, rgba(37,99,235,0.92), rgba(59,130,246,0.72))",
   color: "#ffffff",
   border: "3px solid #93c5fd",
   width: 420,
@@ -195,9 +196,9 @@ function buildGraph(
         type: "smoothstep",
         markerEnd: { type: MarkerType.ArrowClosed },
         style: {
-          stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-          strokeWidth: 1.4,
-          opacity: 0.6,
+          stroke: e.target === centralNode ? "#60a5fa" : e.source === centralNode ? "#fb923c" : "#94a3b8",
+          strokeWidth: e.source === centralNode || e.target === centralNode ? 1.8 : 1.35,
+          opacity: 0.78,
           strokeDasharray:
             Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
         },
@@ -389,43 +390,9 @@ export default function GraphViewer({
   return (
     <div className="dep-graph-wrapper">
       <div className="dep-graph-zones">
-        <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Sources</span>
-        <span>Current table</span>
-        <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>Consumers</span>
-      </div>
-      <div className="dep-graph-controls">
-        <div className="dep-graph-count muted">
-          Showing {graph.visibleNodes}/{graph.totalNodes} nodes · {graph.visibleEdges}/{graph.totalEdges} edges
-        </div>
-        <div className="dep-graph-actions">
-          {!usePreset && !showAll && (
-            <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
-              +1 depth
-            </button>
-          )}
-          {!usePreset && !showAll && onRequestFull && (
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                if (onRequestFull) onRequestFull();
-                setShowAll(true);
-              }}
-            >
-              Show all
-            </button>
-          )}
-          {!usePreset && showAll && (
-            <button
-              className="btn btn-ghost"
-              onClick={() => {
-                setShowAll(false);
-                setDepthLimit(DEFAULT_DEPTH);
-              }}
-            >
-              Collapse
-            </button>
-          )}
-        </div>
+        <span className={!graph.hasUpstream ? "dep-zone-muted" : ""}>Источники →</span>
+        <span>Текущая таблица</span>
+        <span className={!graph.hasDownstream ? "dep-zone-muted" : ""}>→ Потребители</span>
       </div>
       <div className="dep-graph-controls">
         <div className="dep-graph-count muted">
@@ -473,7 +440,7 @@ export default function GraphViewer({
             </span>
           ))}
         </div>
-        <div className="dep-graph-hint">Click a node to open the card</div>
+        <div className="dep-graph-hint">Синие стрелки входят в текущую таблицу, оранжевые выходят из нее. Клик по узлу открывает карточку.</div>
       </div>
       <div className="dep-graph-canvas">
         <ReactFlow
@@ -497,7 +464,7 @@ export default function GraphViewer({
         >
           {!isLargeGraph && <MiniMap />}
           <Controls showInteractive={false} />
-          {!isLargeGraph && <Background gap={32} color="#0f172a" />}
+          {!isLargeGraph && <Background gap={32} color="rgba(148, 163, 184, 0.16)" />}
         </ReactFlow>
       </div>
     </div>

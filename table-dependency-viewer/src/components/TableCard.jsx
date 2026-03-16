@@ -76,6 +76,8 @@ export default function TableCard({
   const [analyticsError, setAnalyticsError] = useState(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [expandedGpErrors, setExpandedGpErrors] = useState({});
+  const [expandedClickErrors, setExpandedClickErrors] = useState({});
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -431,6 +433,12 @@ export default function TableCard({
     if (!sql) return;
     navigator.clipboard.writeText(sql).catch(() => {});
   };
+  const toggleGpError = (key) => {
+    setExpandedGpErrors((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+  const toggleClickError = (key) => {
+    setExpandedClickErrors((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const openSqlModal = (block) => {
     if (!block.sql) return;
@@ -651,6 +659,118 @@ export default function TableCard({
         </div>
       )}
 
+      <div className="table-action-bar">
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            if (!meta?.table_id || favoriteLoading) return;
+            setFavoriteLoading(true);
+            const method = isFavorite ? "DELETE" : "POST";
+            const url = isFavorite
+              ? `${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`
+              : `${API_BASE}/auth/favorites/tables`;
+            const init = isFavorite
+              ? { method }
+              : {
+                  method,
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    table_id: meta.table_id,
+                    table_schema: schema,
+                    table_name: tableName,
+                    entity_name: meta.entity_name || null,
+                  }),
+                };
+            fetch(url, init)
+              .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось обновить избранное")))
+              .then(() => {
+                setIsFavorite(!isFavorite);
+                sendAuditEvent({
+                  event_type: isFavorite ? "remove_favorite_table" : "add_favorite_table",
+                  page: `/table/${schema}/${tableName}`,
+                  object_type: "table",
+                  object_id: String(meta.table_id),
+                  object_name: tableFqn,
+                });
+              })
+              .catch(() => {})
+              .finally(() => setFavoriteLoading(false));
+          }}
+        >
+          {favoriteLoading
+            ? "Сохраняем..."
+            : isFavorite
+              ? "Убрать из избранного"
+              : "В избранное"}
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            sendAuditEvent({
+              event_type: "open_dependency_graph",
+              page: `/table/${schema}/${tableName}`,
+              object_type: "table",
+              object_name: tableFqn,
+            });
+            loadDependencies();
+          }}
+        >
+          Граф зависимостей
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            sendAuditEvent({
+              event_type: "open_impact_graph",
+              page: `/table/${schema}/${tableName}`,
+              object_type: "table",
+              object_name: tableFqn,
+            });
+            onOpenImpact?.(schema, tableName);
+          }}
+        >
+          Граф влияния
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            sendAuditEvent({
+              event_type: showGantt ? "hide_timeline" : "show_timeline",
+              page: `/table/${schema}/${tableName}`,
+              object_type: "table",
+              object_name: tableFqn,
+            });
+            setShowGantt(!showGantt);
+          }}
+        >
+          {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={() => {
+            sendAuditEvent({
+              event_type: "open_logic_audit",
+              page: `/table/${schema}/${tableName}`,
+              object_type: "table",
+              object_name: tableFqn,
+            });
+            onOpenLogicAudit?.(tableFqn);
+          }}
+        >
+          Аудит логики
+        </button>
+        <button
+          className="btn btn-secondary"
+          onClick={copyList}
+          disabled={!tableList.length}
+        >
+          Скопировать список
+        </button>
+        <button className="btn" onClick={onBack}>
+          Назад
+        </button>
+      </div>
+
       <div className="table-grid">
         {metrics.map((metric) => (
           <div key={metric.label} className="table-info-card" title={metric.title || ""}>
@@ -659,121 +779,6 @@ export default function TableCard({
             <div className="table-card-hint muted">{metric.hint}</div>
           </div>
         ))}
-
-        <div className="table-info-card table-actions">
-          <div className="table-card-label">Действия</div>
-          <div className="table-action-buttons">
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                if (!meta?.table_id || favoriteLoading) return;
-                setFavoriteLoading(true);
-                const method = isFavorite ? "DELETE" : "POST";
-                const url = isFavorite
-                  ? `${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`
-                  : `${API_BASE}/auth/favorites/tables`;
-                const init = isFavorite
-                  ? { method }
-                  : {
-                      method,
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        table_id: meta.table_id,
-                        table_schema: schema,
-                        table_name: tableName,
-                        entity_name: meta.entity_name || null,
-                      }),
-                    };
-                fetch(url, init)
-                  .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось обновить избранное")))
-                  .then(() => {
-                    setIsFavorite(!isFavorite);
-                    sendAuditEvent({
-                      event_type: isFavorite ? "remove_favorite_table" : "add_favorite_table",
-                      page: `/table/${schema}/${tableName}`,
-                      object_type: "table",
-                      object_id: String(meta.table_id),
-                      object_name: tableFqn,
-                    });
-                  })
-                  .catch(() => {})
-                  .finally(() => setFavoriteLoading(false));
-              }}
-            >
-              {favoriteLoading
-                ? "Сохраняем..."
-                : isFavorite
-                  ? "Убрать из избранного"
-                  : "В избранное"}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                sendAuditEvent({
-                  event_type: "open_dependency_graph",
-                  page: `/table/${schema}/${tableName}`,
-                  object_type: "table",
-                  object_name: tableFqn,
-                });
-                loadDependencies();
-              }}
-            >
-              Граф зависимостей
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                sendAuditEvent({
-                  event_type: "open_impact_graph",
-                  page: `/table/${schema}/${tableName}`,
-                  object_type: "table",
-                  object_name: tableFqn,
-                });
-                onOpenImpact?.(schema, tableName);
-              }}
-            >
-              Граф влияния
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                sendAuditEvent({
-                  event_type: showGantt ? "hide_timeline" : "show_timeline",
-                  page: `/table/${schema}/${tableName}`,
-                  object_type: "table",
-                  object_name: tableFqn,
-                });
-                setShowGantt(!showGantt);
-              }}
-            >
-              {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={() => {
-                sendAuditEvent({
-                  event_type: "open_logic_audit",
-                  page: `/table/${schema}/${tableName}`,
-                  object_type: "table",
-                  object_name: tableFqn,
-                });
-                onOpenLogicAudit?.(tableFqn);
-              }}
-            >
-              Аудит логики
-            </button>
-            <button
-              className="btn btn-secondary"
-              onClick={copyList}
-              disabled={!tableList.length}
-            >
-              Скопировать список
-            </button>
-            <button className="btn" onClick={onBack}>
-              Назад
-            </button>
-          </div>
-        </div>
       </div>
 
       <div className="table-section">
@@ -876,7 +881,7 @@ export default function TableCard({
                   {clickStatusLabel(clickLastRun?.status)}
                 </div>
               </div>
-              <div className="click-run-meta">
+              <div className="click-summary-grid">
                 <div>
                   <div className="click-label">Старт</div>
                   <div className="click-value">{clickLastRun?.start_dttm || "—"}</div>
@@ -899,12 +904,20 @@ export default function TableCard({
                 </div>
               </div>
               {clickLastRun?.error_text && (
-                <div className="click-run-error">
-                  {clickLastRun.error_text}
+                <div className="history-error-block">
+                  <button
+                    className="history-error-toggle"
+                    onClick={() => toggleClickError("click-last-run")}
+                  >
+                    {expandedClickErrors["click-last-run"] ? "Скрыть ошибку" : "Показать ошибку"}
+                  </button>
+                  {expandedClickErrors["click-last-run"] && (
+                    <pre className="history-error-body">{clickLastRun.error_text}</pre>
+                  )}
                 </div>
               )}
 
-              <div className="click-meta-block">
+              <div className="click-section-block">
                 <div className="section-subtitle">ClickHouse метаданные</div>
                 {clickMetaLoading && <div className="muted">Загрузка метаданных...</div>}
                 {clickMetaError && <div className="dep-error-title">{clickMetaError}</div>}
@@ -981,6 +994,23 @@ export default function TableCard({
                   </>
                 )}
               </div>
+
+              {clickStages.length > 0 && (
+                <div className="click-section-block">
+                  <div className="section-subtitle">Последние этапы</div>
+                  <div className="click-stage-list">
+                    {clickStages.slice(0, 6).map((stage, idx) => (
+                      <div key={`${stage.stage_name || "stage"}-${idx}`} className="click-stage-card">
+                        <div className="click-stage-name">{stage.stage_name || "—"}</div>
+                        <div className="click-stage-meta">
+                          <span>{stage.status || "—"}</span>
+                          <span>{formatMinutes(stage.duration_min)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -996,7 +1026,7 @@ export default function TableCard({
           )}
           {!releaseLoading && !releaseError && releaseItems.length > 0 && (
             <>
-            <div className="release-table">
+            <div className="release-table release-table-card">
               <div className="release-head">
                 <span>Релиз</span>
                 <span>Задача</span>
@@ -1068,7 +1098,9 @@ export default function TableCard({
                 </div>
               </div>
 
-              <div className="yt-task-table">
+              <div className="yt-section-block">
+                <div className="section-subtitle">Текущие задачи</div>
+                <div className="yt-task-table">
                 <div className="yt-task-head">
                   <span>Задача</span>
                   <span>Постановщик</span>
@@ -1111,6 +1143,7 @@ export default function TableCard({
                     </span>
                   </div>
                 ))}
+                </div>
               </div>
               {ytData.tasks.length > 3 && (
                 <button className="btn btn-ghost table-expand-btn" onClick={() => setShowAllTasks((v) => !v)}>
@@ -1119,7 +1152,7 @@ export default function TableCard({
               )}
 
               {ytData.timeline?.length > 0 && (
-                <div className="yt-timeline">
+                <div className="yt-section-block yt-timeline">
                   <div className="section-subtitle">Последние изменения</div>
                   <div className="yt-timeline-head">
                     <span>Задача</span>
@@ -1226,18 +1259,28 @@ export default function TableCard({
                     <span>Комментарий</span>
                   </div>
                   {historyRows.map((row, idx) => (
-                    <div key={`${row.finish || "row"}-${idx}`} className="history-table-row">
-                      <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
-                        {row.state || "UNKNOWN"}
-                      </span>
-                      <span>{row.start || "—"}</span>
-                      <span>{row.finish || "—"}</span>
-                      <span>{row.duration_minutes ?? "—"} мин</span>
-                      <span className="history-message">
-                        {row.message ? (
-                          <span className="history-note" title={row.message}>ℹ︎</span>
-                        ) : "—"}
-                      </span>
+                    <div key={`${row.finish || "row"}-${idx}`} className="history-row-block">
+                      <div className="history-table-row">
+                        <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
+                          {row.state || "UNKNOWN"}
+                        </span>
+                        <span>{row.start || "—"}</span>
+                        <span>{row.finish || "—"}</span>
+                        <span>{row.duration_minutes ?? "—"} мин</span>
+                        <span className="history-message">
+                          {row.message ? (
+                            <button
+                              className="history-error-toggle compact"
+                              onClick={() => toggleGpError(`gp-${idx}`)}
+                            >
+                              {expandedGpErrors[`gp-${idx}`] ? "Скрыть" : "Ошибка"}
+                            </button>
+                          ) : "—"}
+                        </span>
+                      </div>
+                      {row.message && expandedGpErrors[`gp-${idx}`] && (
+                        <pre className="history-error-body">{row.message}</pre>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1263,13 +1306,28 @@ export default function TableCard({
                     <span>Статус</span>
                   </div>
                   {clickHistory.map((row, idx) => (
-                    <div key={`${row.run_uuid}-${idx}`} className={`history-table-row status-${String(row.status || "").toLowerCase()}`}>
-                      <span>{row.stage_name}</span>
-                      <span>{row.start_dttm || "—"}</span>
-                      <span>{row.end_dttm || "—"}</span>
-                      <span>{formatMinutes(row.actual_duration_min ?? row.duration_min)}</span>
-                      <span>{formatMinutes(row.lag_duration_min ?? 0)}</span>
-                      <span>{clickStatusLabel(row.status)}</span>
+                    <div key={`${row.run_uuid}-${idx}`} className="history-row-block">
+                      <div className={`history-table-row status-${String(row.status || "").toLowerCase()}`}>
+                        <span>{row.stage_name}</span>
+                        <span>{row.start_dttm || "—"}</span>
+                        <span>{row.end_dttm || "—"}</span>
+                        <span>{formatMinutes(row.actual_duration_min ?? row.duration_min)}</span>
+                        <span>{formatMinutes(row.lag_duration_min ?? 0)}</span>
+                        <span className="history-click-status">
+                          {clickStatusLabel(row.status)}
+                          {row.error_text ? (
+                            <button
+                              className="history-error-toggle compact"
+                              onClick={() => toggleClickError(`click-${idx}`)}
+                            >
+                              {expandedClickErrors[`click-${idx}`] ? "Скрыть" : "Ошибка"}
+                            </button>
+                          ) : null}
+                        </span>
+                      </div>
+                      {row.error_text && expandedClickErrors[`click-${idx}`] && (
+                        <pre className="history-error-body">{row.error_text}</pre>
+                      )}
                     </div>
                   ))}
                 </div>

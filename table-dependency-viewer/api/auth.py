@@ -101,6 +101,11 @@ class FavoriteTablePayload(BaseModel):
     entity_name: Optional[str] = None
 
 
+class FavoriteEntityPayload(BaseModel):
+    entity_id: int
+    entity_name: Optional[str] = None
+
+
 @dataclass
 class AuthUser:
     id: int
@@ -460,6 +465,62 @@ def _is_favorite_table(user_email: str, table_id: int) -> bool:
     return bool(exists)
 
 
+def _list_favorite_entities(user_email: str) -> list[dict[str, Any]]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    f.object_id AS entity_id,
+                    COALESCE(e.entity_name, f.object_name) AS entity_name,
+                    e.entity_last_load,
+                    e.entity_load_status,
+                    f.created_at
+                FROM tech_etl.app_user_favorite f
+                LEFT JOIN tech_etl.entities_meta e
+                  ON e.entity_id = f.object_id
+                WHERE f.user_email = :user_email
+                  AND f.object_type = 'entity'
+                ORDER BY f.created_at DESC
+                """
+            ),
+            {"user_email": user_email},
+        ).mappings().all()
+
+    result = []
+    seen = set()
+    for row in rows:
+        entity_id = row.get("entity_id")
+        if entity_id in seen:
+            continue
+        seen.add(entity_id)
+        item = dict(row)
+        if item.get("entity_last_load"):
+            item["entity_last_load"] = item["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S")
+        if item.get("created_at"):
+            item["created_at"] = item["created_at"].strftime("%Y-%m-%d %H:%M:%S")
+        result.append(item)
+    return result
+
+
+def _is_favorite_entity(user_email: str, entity_id: int) -> bool:
+    with engine.connect() as conn:
+        exists = conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM tech_etl.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'entity'
+                  AND object_id = :entity_id
+                LIMIT 1
+                """
+            ),
+            {"user_email": user_email, "entity_id": entity_id},
+        ).scalar()
+    return bool(exists)
+
+
 def _add_favorite_table(user_email: str, payload: FavoriteTablePayload) -> None:
     object_name = (
         f"{payload.table_schema}.{payload.table_name}"
@@ -515,6 +576,59 @@ def _remove_favorite_table(user_email: str, table_id: int) -> None:
                 """
             ),
             {"user_email": user_email, "table_id": table_id},
+        )
+
+
+def _add_favorite_entity(user_email: str, payload: FavoriteEntityPayload) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM tech_etl.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'entity'
+                  AND object_id = :entity_id
+                """
+            ),
+            {"user_email": user_email, "entity_id": payload.entity_id},
+        )
+        conn.execute(
+            text(
+                """
+                INSERT INTO tech_etl.app_user_favorite (
+                    user_email,
+                    object_type,
+                    object_id,
+                    object_name
+                )
+                VALUES (
+                    :user_email,
+                    'entity',
+                    :entity_id,
+                    :object_name
+                )
+                """
+            ),
+            {
+                "user_email": user_email,
+                "entity_id": payload.entity_id,
+                "object_name": payload.entity_name or str(payload.entity_id),
+            },
+        )
+
+
+def _remove_favorite_entity(user_email: str, entity_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM tech_etl.app_user_favorite
+                WHERE user_email = :user_email
+                  AND object_type = 'entity'
+                  AND object_id = :entity_id
+                """
+            ),
+            {"user_email": user_email, "entity_id": entity_id},
         )
 
 
@@ -910,10 +1024,22 @@ def list_favorite_tables(request: Request):
     return {"items": _list_favorite_tables(user.email)}
 
 
+@router.get("/favorites/entities")
+def list_favorite_entities(request: Request):
+    user = get_current_user_from_request(request)
+    return {"items": _list_favorite_entities(user.email)}
+
+
 @router.get("/favorites/tables/{table_id}")
 def favorite_table_status(table_id: int, request: Request):
     user = get_current_user_from_request(request)
     return {"is_favorite": _is_favorite_table(user.email, table_id)}
+
+
+@router.get("/favorites/entities/{entity_id}")
+def favorite_entity_status(entity_id: int, request: Request):
+    user = get_current_user_from_request(request)
+    return {"is_favorite": _is_favorite_entity(user.email, entity_id)}
 
 
 @router.post("/favorites/tables")
@@ -949,6 +1075,39 @@ def remove_favorite_table(table_id: int, request: Request):
         page="/auth/favorites/tables",
         object_type="table",
         object_id=str(table_id),
+    )
+    return {"status": "ok"}
+
+
+@router.post("/favorites/entities")
+def add_favorite_entity(payload: FavoriteEntityPayload, request: Request):
+    user = get_current_user_from_request(request)
+    _add_favorite_entity(user.email, payload)
+    _write_audit_event(
+        event_type="add_favorite_entity",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/favorites/entities",
+        object_type="entity",
+        object_id=str(payload.entity_id),
+        object_name=payload.entity_name or str(payload.entity_id),
+    )
+    return {"status": "ok"}
+
+
+@router.delete("/favorites/entities/{entity_id}")
+def remove_favorite_entity(entity_id: int, request: Request):
+    user = get_current_user_from_request(request)
+    _remove_favorite_entity(user.email, entity_id)
+    _write_audit_event(
+        event_type="remove_favorite_entity",
+        request=request,
+        user=user,
+        status_value="success",
+        page="/auth/favorites/entities",
+        object_type="entity",
+        object_id=str(entity_id),
     )
     return {"status": "ok"}
 

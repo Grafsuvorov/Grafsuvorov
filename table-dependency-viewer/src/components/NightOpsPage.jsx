@@ -22,6 +22,14 @@ function parseMinutes(value) {
   return hour * 60 + minute;
 }
 
+function TableLinkRow({ children, fqn, onOpen }) {
+  return (
+    <button className="night-row" onClick={() => onOpen(fqn)}>
+      {children}
+    </button>
+  );
+}
+
 export default function NightOpsPage() {
   const navigate = useNavigate();
 
@@ -46,12 +54,18 @@ export default function NightOpsPage() {
   const [heavyData, setHeavyData] = useState(null);
   const [heavyLoading, setHeavyLoading] = useState(false);
   const [heavyError, setHeavyError] = useState(null);
+
   const [clickSlow, setClickSlow] = useState([]);
   const [clickSlowLoading, setClickSlowLoading] = useState(false);
   const [clickSlowError, setClickSlowError] = useState(null);
   const [clickFailures, setClickFailures] = useState([]);
   const [clickFailuresLoading, setClickFailuresLoading] = useState(false);
   const [clickFailuresError, setClickFailuresError] = useState(null);
+
+  const openTable = useCallback((fqn) => {
+    const path = toTablePath(fqn);
+    if (path) navigate(path);
+  }, [navigate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,10 +136,9 @@ export default function NightOpsPage() {
 
   const peakHour = useMemo(() => {
     if (!data?.hourly?.length) return null;
-    const sorted = [...data.hourly].sort(
-      (a, b) => (b.total_duration_minutes || 0) - (a.total_duration_minutes || 0)
-    );
-    return sorted[0];
+    return [...data.hourly].sort(
+      (a, b) => (b.total_duration_minutes || 0) - (a.total_duration_minutes || 0),
+    )[0];
   }, [data]);
 
   const peakTables = useMemo(() => peakHour?.top_tables || [], [peakHour]);
@@ -137,7 +150,7 @@ export default function NightOpsPage() {
     const startMinutes = parseMinutes(start);
     const endMinutes = parseMinutes(end);
     if (startMinutes === null || endMinutes === null) {
-      setHeavyError("Введите окно в формате HH:MM (например, 04:30)");
+      setHeavyError("Введите окно в формате HH:MM, например 04:30-05:20");
       return;
     }
 
@@ -156,7 +169,7 @@ export default function NightOpsPage() {
       const payload = await resp.json();
       setHeavyData(payload);
     } catch (err) {
-    setHeavyError(typeof err === "string" ? err : "Не удалось загрузить тяжелые таблицы");
+      setHeavyError(typeof err === "string" ? err : "Не удалось загрузить тяжелые таблицы");
     } finally {
       setHeavyLoading(false);
     }
@@ -182,9 +195,12 @@ export default function NightOpsPage() {
   const applyPeakPreset = () => {
     if (!peakHour) return;
     const hour = String(peakHour.hour).padStart(2, "0");
-    setHeavyWindowStart(`${hour}:00`);
-    setHeavyWindowEnd(`${hour}:59`);
-    setHeavyWindowRange(`${hour}:00-${hour}:59`);
+    const start = `${hour}:00`;
+    const end = `${hour}:59`;
+    setHeavyWindowStart(start);
+    setHeavyWindowEnd(end);
+    setHeavyWindowRange(`${start}-${end}`);
+    loadHeavyTables({ start, end });
   };
 
   const heavyRows = useMemo(() => {
@@ -201,8 +217,8 @@ export default function NightOpsPage() {
     <div className="container cc-page">
       <section className="cc-header-zone">
         <button className="btn" onClick={() => navigate("/")}>← Назад</button>
-        <h1>Ночное окно</h1>
-        <div className="cc-subtitle">Источник: GP · Сводка за последнее ночное окно (21:00–08:00)</div>
+        <h1>Мониторинг ночного окна</h1>
+        <div className="cc-subtitle">GP и ClickHouse в одном рабочем экране: пик, ошибки и самые тяжелые загрузки.</div>
       </section>
 
       {loading && <div className="muted">Загрузка ночного окна...</div>}
@@ -211,7 +227,7 @@ export default function NightOpsPage() {
       {!loading && !error && data && (
         <>
           <section className="cc-surface">
-            <div className="section-title">Ключевые показатели</div>
+            <div className="section-title">Сводка ночи</div>
             <div className="night-kpis">
               <div className="night-kpi-card">
                 <div className="night-kpi-label">Запусков</div>
@@ -231,12 +247,10 @@ export default function NightOpsPage() {
               <div className="night-kpi-card">
                 <div className="night-kpi-label">Суммарно</div>
                 <div className="night-kpi-value">{data.summary?.total_duration_minutes ?? 0} мин</div>
-                {prevData && (
-                  <div className="night-kpi-delta">Вчера: {prevData.summary?.total_duration_minutes ?? 0} мин</div>
-                )}
+                {prevData && <div className="night-kpi-delta">Вчера: {prevData.summary?.total_duration_minutes ?? 0} мин</div>}
               </div>
               <div className="night-kpi-card">
-                <div className="night-kpi-label">Пик</div>
+                <div className="night-kpi-label">Пиковый час</div>
                 <div className="night-kpi-value">
                   {peakHour ? `${String(peakHour.hour).padStart(2, "0")}:00` : "—"}
                 </div>
@@ -250,7 +264,10 @@ export default function NightOpsPage() {
           </section>
 
           <section className="cc-surface">
-            <div className="section-title">Фокус на пиковое окно</div>
+            <div className="section-title">Рабочее окно анализа</div>
+            <div className="muted" style={{ marginBottom: 12 }}>
+              Выбери интервал, в котором нужно понять, что заняло окно и какие таблицы стали узким местом.
+            </div>
             <div className="night-window-controls">
               <label className="night-window-label">
                 Начало
@@ -318,6 +335,7 @@ export default function NightOpsPage() {
                     setHeavyWindowStart(DEFAULT_WINDOW_START);
                     setHeavyWindowEnd(DEFAULT_WINDOW_END);
                     setHeavyWindowRange(`${DEFAULT_WINDOW_START}-${DEFAULT_WINDOW_END}`);
+                    loadHeavyTables({ start: DEFAULT_WINDOW_START, end: DEFAULT_WINDOW_END });
                   }}
                 >
                   04:30–05:20
@@ -338,11 +356,74 @@ export default function NightOpsPage() {
                 <span>Макс: <strong>{heavyData.summary?.max_duration_minutes ?? 0} мин</strong></span>
               </div>
             )}
+
+            <div className="night-monitor-grid" style={{ marginTop: 16 }}>
+              <div className="night-panel">
+                <div className="night-panel-title">Тяжелые таблицы в окне</div>
+                <div className="night-panel-sub muted">
+                  {heavyData ? `${heavyData.window?.start}–${heavyData.window?.end}` : "Окно не загружено"}
+                </div>
+                <div className="night-list">
+                  {heavyRows.map((row) => (
+                    <TableLinkRow
+                      key={`${row.table_fqn}-${row.total_duration_minutes}-${row.runs_count}`}
+                      fqn={row.table_fqn}
+                      onOpen={openTable}
+                    >
+                      <span className="mono">{row.table_fqn}</span>
+                      <span className="muted">
+                        {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} мин · max {row.max_duration_minutes ?? "—"} мин · запусков {row.runs_count ?? 0}
+                      </span>
+                    </TableLinkRow>
+                  ))}
+                  {!heavyLoading && !heavyRows.length && <div className="muted">Тяжелых таблиц нет.</div>}
+                </div>
+              </div>
+
+              <div className="night-panel">
+                <div className="night-panel-title">Пиковый час</div>
+                <div className="night-panel-sub muted">
+                  {peakHour ? `Пик в ${String(peakHour.hour).padStart(2, "0")}:00` : "Нет данных по пику"}
+                </div>
+                <div className="night-focus-cards">
+                  <div className="night-focus-card">
+                    <span className="night-focus-label">Запусков</span>
+                    <strong>{peakHour?.runs_count ?? 0}</strong>
+                  </div>
+                  <div className="night-focus-card">
+                    <span className="night-focus-label">Длительность</span>
+                    <strong>{peakHour?.total_duration_minutes ?? 0} мин</strong>
+                  </div>
+                </div>
+                <div className="night-list">
+                  {peakTables.slice(0, peakLimit).map((row) => (
+                    <TableLinkRow
+                      key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`}
+                      fqn={row.table_fqn}
+                      onOpen={openTable}
+                    >
+                      <span className="mono">{row.table_fqn}</span>
+                      <span className="muted">
+                        {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
+                      </span>
+                    </TableLinkRow>
+                  ))}
+                  {!peakTables.length && <div className="muted">Таблиц в пике нет.</div>}
+                </div>
+                {peakTables.length > 0 && (
+                  <div className="night-panel-actions">
+                    <button className="btn btn-secondary" onClick={() => setShowPeakDetails(true)}>
+                      Детали пика
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           </section>
 
           <section className="cc-surface">
             <div className="section-title night-controls">
-              <span>Детализация</span>
+              <span>Проблемные зоны</span>
               <label className="night-toggle">
                 <input
                   type="checkbox"
@@ -352,54 +433,19 @@ export default function NightOpsPage() {
                 Только ошибки
               </label>
             </div>
-
-            <div className="night-columns">
+            <div className="night-monitor-grid">
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Тяжелые таблицы в окне</div>
-                  <div className="night-panel-sub muted">
-                    {heavyData ? `${heavyData.window?.start}–${heavyData.window?.end}` : "Окно не загружено"}
-                  </div>
-                  <div className="night-list">
-                    {heavyRows.map((row) => (
-                      <button
-                        key={`${row.table_fqn}-${row.total_duration_minutes}-${row.runs_count}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(row.table_fqn);
-                          if (path) navigate(path);
-                        }}
-                      >
-                        <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · Σ {row.total_duration_minutes ?? "—"} мин · max {row.max_duration_minutes ?? "—"} мин · запусков {row.runs_count ?? 0}
-                        </span>
-                      </button>
-                    ))}
-                    {!heavyLoading && !heavyRows.length && <div className="muted">Тяжелых таблиц нет.</div>}
-                  </div>
-                </div>
-              )}
-
-              {!showFailuresOnly && (
-                <div className="night-panel">
-                  <div className="night-panel-title">Самые долгие</div>
-                  <div className="night-panel-sub muted">Топ-10 по длительности</div>
+                  <div className="night-panel-title">Самые долгие GP-загрузки</div>
+                  <div className="night-panel-sub muted">Топ за последние 30 дней</div>
                   <div className="night-list">
                     {(data.top_runs || []).slice(0, longestLimit).map((row) => (
-                      <button
-                        key={`${row.table_fqn}-${row.start}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(row.table_fqn);
-                          if (path) navigate(path);
-                        }}
-                      >
+                      <TableLinkRow key={`${row.table_fqn}-${row.start}`} fqn={row.table_fqn} onOpen={openTable}>
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
                           {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
                         </span>
-                      </button>
+                      </TableLinkRow>
                     ))}
                   </div>
                   {(data.top_runs || []).length > 10 && (
@@ -417,24 +463,18 @@ export default function NightOpsPage() {
 
               {!showFailuresOnly && (
                 <div className="night-panel">
-                  <div className="night-panel-title">Аномалии vs p95</div>
-                  <div className="night-panel-sub muted">Запуски &gt; 1.5× p95</div>
+                  <div className="night-panel-title">Аномалии относительно p95</div>
+                  <div className="night-panel-sub muted">Запуски выше 1.5× исторического p95</div>
                   <div className="night-list">
                     {(data.anomalies || []).slice(0, anomalyLimit).map((row) => (
-                      <button
-                        key={`${row.table_fqn}-${row.start}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(row.table_fqn);
-                          if (path) navigate(path);
-                        }}
-                      >
+                      <TableLinkRow key={`${row.table_fqn}-${row.start}`} fqn={row.table_fqn} onOpen={openTable}>
                         <span className="mono">{row.table_fqn}</span>
                         <span className="muted">
                           {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин · {row.ratio ?? "—"}x
                         </span>
-                      </button>
+                      </TableLinkRow>
                     ))}
+                    {!(data.anomalies || []).length && <div className="muted">Аномалий не найдено.</div>}
                   </div>
                   {(data.anomalies || []).length > 10 && (
                     <div className="night-panel-actions">
@@ -449,69 +489,19 @@ export default function NightOpsPage() {
                 </div>
               )}
 
-              {!showFailuresOnly && (
-                <div className="night-panel">
-                  <div className="night-panel-title">Таблицы пикового часа</div>
-                  <div className="night-panel-sub muted">
-                    {peakHour ? `Пик в ${String(peakHour.hour).padStart(2, "0")}:00` : "Нет данных по пику"}
-                  </div>
-                  <div className="night-list">
-                    {peakTables.slice(0, peakLimit).map((row) => (
-                      <button
-                        key={`${row.table_fqn}-${row.duration_minutes}-${row.entity_name}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(row.table_fqn);
-                          if (path) navigate(path);
-                        }}
-                      >
-                        <span className="mono">{row.table_fqn}</span>
-                        <span className="muted">
-                          {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.duration_minutes ?? "—"} мин
-                        </span>
-                      </button>
-                    ))}
-                    {!peakTables.length && <div className="muted">Таблиц в пике нет.</div>}
-                  </div>
-                  {peakTables.length > 10 && (
-                    <div className="night-panel-actions">
-                      <button className="btn btn-ghost" onClick={() => setPeakLimit((n) => Math.min(n + 10, peakTables.length))}>
-                        Показать +10
-                      </button>
-                      <button className="btn btn-ghost" onClick={() => setPeakLimit(10)}>
-                        Сброс
-                      </button>
-                    </div>
-                  )}
-                  {peakTables.length > 0 && (
-                    <div className="night-panel-actions">
-                      <button className="btn btn-secondary" onClick={() => setShowPeakDetails(true)}>
-                        Почему пик?
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <div className="night-panel">
-                <div className="night-panel-title">Ошибки</div>
-                <div className="night-panel-sub muted">Последние ошибки в окне</div>
+                <div className="night-panel-title">Ошибки GP</div>
+                <div className="night-panel-sub muted">Последние неуспешные загрузки</div>
                 <div className="night-list">
                   {(data.failed_runs || []).slice(0, failedLimit).map((row) => (
-                    <button
-                      key={`${row.table_fqn}-${row.start}`}
-                      className="night-row"
-                      onClick={() => {
-                        const path = toTablePath(row.table_fqn);
-                        if (path) navigate(path);
-                      }}
-                    >
+                    <TableLinkRow key={`${row.table_fqn}-${row.start}`} fqn={row.table_fqn} onOpen={openTable}>
                       <span className="mono">{row.table_fqn}</span>
                       <span className="muted">
                         {row.entity_name || "—"} · ID {row.table_id ?? "—"} · {row.message || "FAILED"}
                       </span>
-                    </button>
+                    </TableLinkRow>
                   ))}
+                  {!(data.failed_runs || []).length && <div className="muted">Ошибок GP нет.</div>}
                 </div>
                 {(data.failed_runs || []).length > 10 && (
                   <div className="night-panel-actions">
@@ -524,38 +514,6 @@ export default function NightOpsPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </section>
-
-          <section className="cc-surface">
-            <div className="section-title">ClickHouse (S3/Click) — 7 дней</div>
-            <div className="night-columns">
-              <div className="night-panel">
-                <div className="night-panel-title">Долгие этапы</div>
-                <div className="night-panel-sub muted">Топ-20 по длительности</div>
-                {clickSlowLoading && <div className="muted">Загрузка...</div>}
-                {clickSlowError && <div className="dep-error-title">{clickSlowError}</div>}
-                {!clickSlowLoading && !clickSlowError && (
-                  <div className="night-list">
-                    {clickSlow.map((row, idx) => (
-                      <button
-                        key={`${row.schema_name}.${row.table_name}-${idx}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(`${row.schema_name}.${row.table_name}`);
-                          if (path) navigate(path);
-                        }}
-                      >
-                        <span className="mono">{row.schema_name}.{row.table_name}</span>
-                        <span className="muted">
-                          {row.stage_name} · {row.duration_min ?? "—"} мин · {row.status || "—"}
-                        </span>
-                      </button>
-                    ))}
-                    {!clickSlow.length && <div className="muted">Долгих этапов нет.</div>}
-                  </div>
-                )}
-              </div>
 
               <div className="night-panel">
                 <div className="night-panel-title">Ошибки ClickHouse</div>
@@ -565,24 +523,41 @@ export default function NightOpsPage() {
                 {!clickFailuresLoading && !clickFailuresError && (
                   <div className="night-list">
                     {clickFailures.map((row, idx) => (
-                      <button
-                        key={`${row.schema_name}.${row.table_name}-${idx}`}
-                        className="night-row"
-                        onClick={() => {
-                          const path = toTablePath(`${row.schema_name}.${row.table_name}`);
-                          if (path) navigate(path);
-                        }}
-                      >
+                      <TableLinkRow key={`${row.schema_name}.${row.table_name}-${idx}`} fqn={`${row.schema_name}.${row.table_name}`} onOpen={openTable}>
                         <span className="mono">{row.schema_name}.{row.table_name}</span>
                         <span className="muted">
                           {row.problem_area ? `Проблема: ${row.problem_area}` : "Проблема: —"} · {row.status || "—"}
                         </span>
-                      </button>
+                      </TableLinkRow>
                     ))}
-                    {!clickFailures.length && <div className="muted">Ошибок нет.</div>}
+                    {!clickFailures.length && <div className="muted">Ошибок ClickHouse нет.</div>}
                   </div>
                 )}
               </div>
+            </div>
+          </section>
+
+          <section className="cc-surface">
+            <div className="section-title">ClickHouse: долгие этапы (7 дней)</div>
+            <div className="muted" style={{ marginBottom: 12 }}>
+              Этот блок нужен для разбора внутренних задержек в S3/ClickHouse, когда сама загрузка не упала, но окно все равно расползлось.
+            </div>
+            <div className="night-panel">
+              {clickSlowLoading && <div className="muted">Загрузка...</div>}
+              {clickSlowError && <div className="dep-error-title">{clickSlowError}</div>}
+              {!clickSlowLoading && !clickSlowError && (
+                <div className="night-list">
+                  {clickSlow.map((row, idx) => (
+                    <TableLinkRow key={`${row.schema_name}.${row.table_name}-${idx}`} fqn={`${row.schema_name}.${row.table_name}`} onOpen={openTable}>
+                      <span className="mono">{row.schema_name}.{row.table_name}</span>
+                      <span className="muted">
+                        {row.stage_name} · {row.duration_min ?? "—"} мин · {row.status || "—"}
+                      </span>
+                    </TableLinkRow>
+                  ))}
+                  {!clickSlow.length && <div className="muted">Долгих этапов нет.</div>}
+                </div>
+              )}
             </div>
           </section>
         </>

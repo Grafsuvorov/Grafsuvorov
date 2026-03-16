@@ -1183,10 +1183,10 @@ export default function HomePage({ onSelectTable }) {
                 <div className="dq-summary-value">{demoDqSummary.duplicate_tables ?? 0}</div>
               </div>
               <div className="dq-summary-card">
-                <div className="dq-summary-label">Отклонения по строкам (медиана)</div>
+                <div className="dq-summary-label">Таблиц с отклонением по строкам</div>
                 <div className="dq-summary-value">{demoDqSummary.row_count_tables ?? 0}</div>
                 <div className="dq-summary-hint muted">
-                  Проверено: {demoDqSummary.row_count_checked ?? 0}
+                  Проверено: {demoDqSummary.row_count_checked ?? 0} · порог отклонения от медианы: 10%
                 </div>
               </div>
             </div>
@@ -1238,7 +1238,7 @@ export default function HomePage({ onSelectTable }) {
             <span className="section-meta">по частоте ошибок</span>
           </div>
           <div className="muted" style={{ marginBottom: 12 }}>
-            Таблицы с наибольшим числом сбоев за 7 дней.
+            Таблицы с наибольшим числом сбоев за 7 дней. При открытии показывается история запусков и затронутая цепочка.
           </div>
           {demoTimeline.length > 0 && (
             <div className="incident-mini">

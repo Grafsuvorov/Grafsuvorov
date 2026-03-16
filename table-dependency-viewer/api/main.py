@@ -2559,6 +2559,7 @@ def get_entities():
         SELECT
             e.entity_id,
             e.entity_name,
+            e.entity_last_load AS entity_last_load,
             e.entity_load_interval::varchar AS entity_load_interval,
             e.entity_load_status,
             MIN(r.loading_start_dttm) AS entity_schedule_start,
@@ -2591,6 +2592,11 @@ def get_entities():
                 row["entity_schedule_start"] = (
                     row["entity_schedule_start"].strftime("%Y-%m-%d %H:%M:%S")
                     if row.get("entity_schedule_start")
+                    else None
+                )
+                row["entity_last_load"] = (
+                    row["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S")
+                    if row.get("entity_last_load")
                     else None
                 )
                 row["entity_schedule_end"] = (
@@ -5214,7 +5220,7 @@ def get_incident(table_fqn: str = Query(...)):
         "finish": r["loading_finish_dttm"].strftime("%Y-%m-%d %H:%M:%S"),
         "state": r["loading_state"],
         "duration_sec": float(r["dur"]) if r["dur"] else None,
-        "message": (r["message"] or "")[:180] or None
+        "message": (r["message"] or "") or None
     } for r in rows]
 
     return {

@@ -3,6 +3,14 @@ from __future__ import annotations
 from sqlalchemy import text
 
 
+def _stringify_dt(value):
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return str(value)
+
+
 def build_entities_query(table_loading_history: str, table_tables_meta: str, table_entities_meta: str) -> str:
     return f"""
         WITH latest_table_runs AS (
@@ -64,22 +72,9 @@ def fetch_entities(engine, *, table_loading_history: str, table_tables_meta: str
     cleaned = []
     for row in rows:
         payload = dict(row)
-        payload["entity_schedule_start"] = (
-            payload["entity_schedule_start"].strftime("%Y-%m-%d %H:%M:%S")
-            if payload.get("entity_schedule_start")
-            else None
-        )
-        payload["entity_last_load"] = (
-            payload["entity_last_load"].strftime("%Y-%m-%d %H:%M:%S")
-            if payload.get("entity_last_load")
-            else None
-        )
-        payload["entity_schedule_end"] = (
-            payload["entity_schedule_end"].strftime("%Y-%m-%d %H:%M:%S")
-            if payload.get("entity_schedule_end")
-            else None
-        )
+        payload["entity_schedule_start"] = _stringify_dt(payload.get("entity_schedule_start"))
+        payload["entity_last_load"] = _stringify_dt(payload.get("entity_last_load"))
+        payload["entity_schedule_end"] = _stringify_dt(payload.get("entity_schedule_end"))
         cleaned.append(payload)
 
     return cleaned
-

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../style/app.css";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { nightOpsApi } from "../api/nightOps.js";
 
 const DEFAULT_WINDOW_START = "04:30";
 const DEFAULT_WINDOW_END = "05:20";
@@ -61,6 +60,7 @@ export default function NightOpsPage() {
   const [clickFailures, setClickFailures] = useState([]);
   const [clickFailuresLoading, setClickFailuresLoading] = useState(false);
   const [clickFailuresError, setClickFailuresError] = useState(null);
+  const [extrasReady, setExtrasReady] = useState(false);
 
   const openTable = useCallback((fqn) => {
     const path = toTablePath(fqn);
@@ -73,16 +73,14 @@ export default function NightOpsPage() {
     setError(null);
 
     Promise.all([
-      fetch(`${API_BASE}/api/night-summary?days=30&limit=50`),
-      fetch(`${API_BASE}/api/night-summary?days=30&limit=50&shift_days=1`),
+      nightOpsApi.summary(30, 50, 0),
+      nightOpsApi.summary(30, 50, 1),
     ])
-      .then(async ([curr, prev]) => {
-        if (!curr.ok) throw new Error("Не удалось загрузить ночное окно");
-        const currJson = await curr.json();
-        const prevJson = prev.ok ? await prev.json() : null;
+      .then(([currJson, prevJson]) => {
         if (!cancelled) {
           setData(currJson);
           setPrevData(prevJson);
+          setExtrasReady(true);
         }
       })
       .catch((err) => {
@@ -99,40 +97,42 @@ export default function NightOpsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    if (!extrasReady) return () => {
+      cancelled = true;
+    };
+
     setClickSlowLoading(true);
     setClickSlowError(null);
     setClickFailuresLoading(true);
     setClickFailuresError(null);
 
-    Promise.all([
-      fetch(`${API_BASE}/api/click/slow-stages?days=7&limit=20`),
-      fetch(`${API_BASE}/api/click/summary?days=7&limit=10`),
-    ])
-      .then(async ([slowResp, failuresResp]) => {
-        const slowJson = slowResp.ok ? await slowResp.json() : [];
-        const failuresJson = failuresResp.ok ? await failuresResp.json() : {};
-        if (!cancelled) {
-          setClickSlow(Array.isArray(slowJson) ? slowJson : []);
-          setClickFailures(Array.isArray(failuresJson?.failures) ? failuresJson.failures : []);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setClickSlowError("Не удалось загрузить ClickHouse");
-          setClickFailuresError("Не удалось загрузить ClickHouse");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setClickSlowLoading(false);
-          setClickFailuresLoading(false);
-        }
-      });
+    const timer = window.setTimeout(() => {
+      Promise.all([nightOpsApi.clickSlowStages(7, 20), nightOpsApi.clickSummary(7, 10)])
+        .then(([slowJson, failuresJson]) => {
+          if (!cancelled) {
+            setClickSlow(Array.isArray(slowJson) ? slowJson : []);
+            setClickFailures(Array.isArray(failuresJson?.failures) ? failuresJson.failures : []);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setClickSlowError("Не удалось загрузить ClickHouse");
+            setClickFailuresError("Не удалось загрузить ClickHouse");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setClickSlowLoading(false);
+            setClickFailuresLoading(false);
+          }
+        });
+    }, 150);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, []);
+  }, [extrasReady]);
 
   const peakHour = useMemo(() => {
     if (!data?.hourly?.length) return null;
@@ -158,15 +158,12 @@ export default function NightOpsPage() {
     setHeavyError(null);
 
     try {
-      const params = new URLSearchParams({
-        days: "30",
-        limit: String(limit),
-        window_start: start,
-        window_end: end,
+      const payload = await nightOpsApi.heavyTables({
+        days: 30,
+        limit,
+        windowStart: start,
+        windowEnd: end,
       });
-      const resp = await fetch(`${API_BASE}/api/night/heavy-tables?${params.toString()}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const payload = await resp.json();
       setHeavyData(payload);
     } catch (err) {
       setHeavyError(typeof err === "string" ? err : "Не удалось загрузить тяжелые таблицы");
@@ -176,8 +173,12 @@ export default function NightOpsPage() {
   }, [heavyWindowStart, heavyWindowEnd, heavyLimit]);
 
   useEffect(() => {
-    loadHeavyTables();
-  }, [loadHeavyTables]);
+    if (!extrasReady) return;
+    const timer = window.setTimeout(() => {
+      loadHeavyTables();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [loadHeavyTables, extrasReady]);
 
   const applyWindow = () => {
     const match = heavyWindowRange.trim().match(RANGE_RE);

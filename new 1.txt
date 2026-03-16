@@ -1,2 +1,2 @@
 Failed to load resource: the server responded with a status of 500 (Internal Server Error)
-index-DV5rr2WO.js:137   GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/entities 500 (Internal Server Error)
+api/entities:1   Failed to load resource: the server responded with a status of 500 (Internal Server Error)

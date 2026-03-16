@@ -1042,10 +1042,10 @@ main.content {
 .card {
   padding: 14px 14px;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 16px 36px rgba(2, 6, 23, 0.12);
-  backdrop-filter: blur(18px);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.92));
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.2);
+  backdrop-filter: blur(14px);
   overflow: hidden; /*        */
 }
 
@@ -1425,7 +1425,9 @@ main.content {
 /* Home: sections */
 .cc-surface {
   margin-top: 56px;
-  background: var(--surface-soft);
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.68), rgba(2, 6, 23, 0.86));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.18);
   border-radius: 14px;
   padding: 24px 28px;
 }
@@ -3220,12 +3222,12 @@ main.content {
 }
 
 .table-info-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(2, 6, 23, 0.9));
   border-radius: 18px;
   padding: 18px;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.16);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.2);
+  backdrop-filter: blur(14px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -3237,10 +3239,10 @@ main.content {
   gap: 10px;
   padding: 16px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
-  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.14);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.66), rgba(2, 6, 23, 0.88));
+  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(12px);
   margin-bottom: 16px;
 }
 
@@ -5247,12 +5249,12 @@ main.content {
 }
 
 .entity-schedule-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035));
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(2, 6, 23, 0.9));
   border-radius: 18px;
   padding: 18px;
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.18);
-  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(14px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -5315,8 +5317,8 @@ main.content {
 .release-row {
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.62), rgba(2, 6, 23, 0.82));
   font-size: 13px;
 }
 
@@ -5524,8 +5526,8 @@ main.content {
   gap: 10px;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.58), rgba(2, 6, 23, 0.84));
 }
 
 .yt-task-head,
@@ -5558,8 +5560,8 @@ main.content {
 .yt-timeline-row {
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.56), rgba(2, 6, 23, 0.78));
   font-size: 13px;
 }
 

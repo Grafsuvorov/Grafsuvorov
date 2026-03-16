@@ -1042,10 +1042,10 @@ main.content {
 .card {
   padding: 14px 14px;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.92));
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.2);
-  backdrop-filter: blur(14px);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.62), rgba(2, 6, 23, 0.82));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(12px);
   overflow: hidden; /*        */
 }
 
@@ -1425,9 +1425,9 @@ main.content {
 /* Home: sections */
 .cc-surface {
   margin-top: 56px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.68), rgba(2, 6, 23, 0.86));
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.58), rgba(2, 6, 23, 0.8));
   border: 1px solid rgba(148, 163, 184, 0.12);
-  box-shadow: 0 16px 32px rgba(2, 6, 23, 0.18);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.16);
   border-radius: 14px;
   padding: 24px 28px;
 }
@@ -3222,12 +3222,12 @@ main.content {
 }
 
 .table-info-card {
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(2, 6, 23, 0.9));
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.62), rgba(2, 6, 23, 0.82));
   border-radius: 18px;
   padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.2);
-  backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 14px 30px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -3240,8 +3240,8 @@ main.content {
   padding: 16px 18px;
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.66), rgba(2, 6, 23, 0.88));
-  box-shadow: 0 14px 32px rgba(2, 6, 23, 0.18);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.6), rgba(2, 6, 23, 0.8));
+  box-shadow: 0 14px 28px rgba(2, 6, 23, 0.16);
   backdrop-filter: blur(12px);
   margin-bottom: 16px;
 }
@@ -5249,12 +5249,12 @@ main.content {
 }
 
 .entity-schedule-card {
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(2, 6, 23, 0.9));
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.62), rgba(2, 6, 23, 0.82));
   border-radius: 18px;
   padding: 18px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.22);
-  backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.18);
+  backdrop-filter: blur(12px);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -5526,8 +5526,8 @@ main.content {
   gap: 10px;
   padding: 14px;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: linear-gradient(180deg, rgba(30, 41, 59, 0.58), rgba(2, 6, 23, 0.84));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.54), rgba(2, 6, 23, 0.78));
 }
 
 .yt-task-head,
@@ -5735,6 +5735,10 @@ main.content {
 .entity-actions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 6px;
 }
 
 .entity-filter-grid {

@@ -456,6 +456,13 @@ export default function HomePage({ onSelectTable }) {
     return "stable";
   }, [history]);
 
+  const incidentTrendLabel = useMemo(() => {
+    if (incidentTrend === "up") return "Инцидентов становится больше";
+    if (incidentTrend === "down") return "Инцидентов становится меньше";
+    if (incidentTrend === "stable") return "Инциденты без заметного изменения";
+    return null;
+  }, [incidentTrend]);
+
   const nightPeakHour = useMemo(() => {
     if (!demoNightSummary?.hourly?.length) return null;
     const sorted = [...demoNightSummary.hourly].sort(
@@ -504,14 +511,6 @@ export default function HomePage({ onSelectTable }) {
             <span className="status-text">
               {demoActiveIncidents.length ? "Есть активные инциденты" : "Система работает стабильно"}
             </span>
-            {incidentTrend && (
-              <span className="status-meta">
-                Тренд инцидентов:&nbsp;
-                {incidentTrend === "up" && "рост ↑"}
-                {incidentTrend === "down" && "снижение ↓"}
-                {incidentTrend === "stable" && "стабильно"}
-              </span>
-            )}
           </div>
           <div className="cc-hero-refresh">
             <span className="muted">Последнее обновление</span>
@@ -528,6 +527,11 @@ export default function HomePage({ onSelectTable }) {
             <div className="health-meta">
               На основе инцидентов, сбоев и нарушений порядка загрузки.
             </div>
+            {incidentTrendLabel && (
+              <div className={`health-trend trend-${incidentTrend}`}>
+                {incidentTrendLabel}
+              </div>
+            )}
           </div>
         </div>
       </section>

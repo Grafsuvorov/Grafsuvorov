@@ -54,6 +54,7 @@ def build_entities_query(table_loading_history: str, table_tables_meta: str, tab
          AND r.rn = 1
          AND DATE(r.run_dttm) = d.latest_run_day
         WHERE e.flag_active
+          AND COALESCE(e.on_new_fraemwork, FALSE)
         GROUP BY
             e.entity_id,
             e.entity_name,

@@ -5305,7 +5305,8 @@ def get_incident_history(
 ):
     query = f"""
         SELECT
-            t.table_schema || '.' || l.object_name AS table_fqn,
+            COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) || '.' ||
+            COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_fqn,
             COUNT(*) AS incidents_count,
             MAX(l.loading_finish_dttm) AS last_incident
      FROM {TABLE_LOADING_HISTORY} l
@@ -5313,7 +5314,9 @@ def get_incident_history(
         WHERE l.loading_state = 'FAILED'
           AND l.object_type = 'table'
           AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
-        GROUP BY t.table_schema, l.object_name
+        GROUP BY
+            COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')),
+            COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name)
         ORDER BY incidents_count DESC
         LIMIT :limit
     """

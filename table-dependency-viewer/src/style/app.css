@@ -1530,6 +1530,32 @@ main.content {
   color: rgba(148, 163, 184, 0.8);
 }
 
+.health-trend {
+  margin-top: 10px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.health-trend.trend-up {
+  color: #fdba74;
+  background: rgba(249, 115, 22, 0.12);
+}
+
+.health-trend.trend-down {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.health-trend.trend-stable {
+  color: #cbd5e1;
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .cc-hero-copy {
   color: rgba(226, 232, 240, 0.78);
   font-size: 14px;
@@ -6337,7 +6363,8 @@ main.content {
 
 .analytics-action {
   align-self: flex-end;
-  height: 36px;
+  height: 34px;
+  padding: 0 14px;
 }
 
 .analytics-bars {

@@ -2536,8 +2536,16 @@ def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
                   AND l.loading_state = 'SUCCESS'
                   AND l.loading_start_dttm IS NOT NULL
                   AND (e.flag_active OR COALESCE(e.on_new_fraemwork, FALSE))
-                  AND COALESCE(l.loading_finish_dttm, l.loading_start_dttm) >= now() - (:days || ' days')::interval
                 GROUP BY t.entity_id, e.entity_name, DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm))
+            ),
+            ranked AS (
+                SELECT
+                    base.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY base.entity_id
+                        ORDER BY base.load_day DESC
+                    ) AS rn
+                FROM base
             )
             SELECT
                 entity_id,
@@ -2546,7 +2554,8 @@ def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
                 start_dttm,
                 end_dttm,
                 EXTRACT(EPOCH FROM (end_dttm - start_dttm)) / 60.0 AS duration_minutes
-            FROM base
+            FROM ranked
+            WHERE rn <= :days
             ORDER BY entity_name, load_day
         """
 

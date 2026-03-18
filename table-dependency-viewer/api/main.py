@@ -3841,8 +3841,8 @@ def get_slowest_tables(
         query = f"""
             WITH base AS (
                 SELECT
-                    COALESCE(t.table_schema, '') AS table_schema,
-                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                     e.entity_name,
                     EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration
                 FROM {TABLE_LOADING_HISTORY} l

@@ -6292,7 +6292,7 @@ main.content {
 }
 
 .analytics-toolbar.compact {
-  padding: 10px 14px;
+  padding: 10px 0 4px;
 }
 
 .analytics-block + .analytics-block {
@@ -6498,6 +6498,18 @@ main.content {
   background: rgba(9, 14, 27, 0.46);
 }
 
+.analytics-run-list-plain .analytics-run-row {
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0;
+  background: transparent;
+}
+
+.analytics-run-list-plain .analytics-run-row:last-child {
+  border-bottom: 0;
+}
+
 .analytics-run-main,
 .analytics-run-time,
 .analytics-run-metric {
@@ -6580,6 +6592,18 @@ main.content {
 
 .compare-summary {
   margin-top: 14px;
+}
+
+.analytics-plain-table .analytics-row {
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 0;
+  background: transparent;
+}
+
+.analytics-plain-table .analytics-row:last-child {
+  border-bottom: 0;
 }
 
 @media (max-width: 1024px) {

@@ -407,13 +407,152 @@ export default function SlowestTables({ onSelectTable }) {
             >
               Анализ окна
             </button>
+            <button
+              className={viewMode === "compare" ? "active" : ""}
+              onClick={() => setViewMode("compare")}
+            >
+              Сравнение дней
+            </button>
           </div>
         </div>
       </section>
 
+      {viewMode === "compare" && (
+        <>
+          <section className="analytics-block analytics-compare-block">
+            <div className="section-title">Сравнение загрузок по дням</div>
+            <div className="muted analytics-subtitle">
+              Сравнение последнего успешного запуска по двум датам. Сначала выберите базовый день, потом день сравнения.
+            </div>
+            <div className="analytics-toolbar compact">
+              <div className="analytics-range">
+                <div className="analytics-custom compact">
+                  <label className="muted">Базовый день</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={compareDateA}
+                    onChange={(e) => setCompareDateA(e.target.value)}
+                  />
+                </div>
+                <div className="analytics-custom compact">
+                  <label className="muted">Сравниваемый день</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={compareDateB}
+                    onChange={(e) => setCompareDateB(e.target.value)}
+                  />
+                </div>
+                <div className="analytics-custom compact">
+                  <label className="muted">Сущность</label>
+                  <select
+                    className="input"
+                    value={compareEntityId}
+                    onChange={(e) => setCompareEntityId(e.target.value)}
+                  >
+                    <option value="">Все сущности</option>
+                    {entities.map((entity) => (
+                      <option key={entity.entity_id} value={entity.entity_id}>
+                        {entity.entity_name || `Сущность ${entity.entity_id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button className="btn btn-primary analytics-action" onClick={loadCompare}>
+                  Сравнить
+                </button>
+              </div>
+            </div>
+            {!!compareSchemaOptions.length && (
+              <div className="analytics-chip-row">
+                <button
+                  className={`analytics-chip ${compareSchemaSelection.length === 0 ? "active" : ""}`}
+                  onClick={() => setCompareSchemaSelection([])}
+                >
+                  Все схемы
+                </button>
+                {compareSchemaOptions.map((schemaName) => (
+                  <button
+                    key={schemaName}
+                    className={`analytics-chip ${compareSchemaSelection.includes(schemaName) ? "active" : ""}`}
+                    onClick={() => toggleCompareSchema(schemaName)}
+                  >
+                    {schemaName}
+                  </button>
+                ))}
+              </div>
+            )}
+            {compareLoading && <div className="muted">Сравниваем загрузки...</div>}
+          {compareError && <div className="dep-error-title">{compareError}</div>}
+          {!compareLoading && !compareError && !!filteredCompareRows.length && (
+              <>
+                <div className="slow-summary compare-summary">
+                  <div className="slow-summary-card">
+                    <div className="label">Объектов</div>
+                    <div className="value">{filteredCompareRows.length}</div>
+                  </div>
+                  <div className="slow-summary-card success">
+                    <div className="label">Ускорились</div>
+                    <div className="value">{compareSummary.faster}</div>
+                  </div>
+                  <div className="slow-summary-card danger">
+                    <div className="label">Замедлились</div>
+                    <div className="value">{compareSummary.slower}</div>
+                  </div>
+                  <div className="slow-summary-card">
+                    <div className="label">Только в одном дне</div>
+                    <div className="value">{compareSummary.onlyOneDay}</div>
+                  </div>
+                </div>
+                <div className="analytics-compare-list">
+                  {filteredCompareRows.slice(0, 30).map((row) => {
+                    const delta = Number(row.delta_minutes || 0);
+                    const width = compareMaxDelta
+                      ? Math.max(8, (Math.abs(delta) / compareMaxDelta) * 100)
+                      : 0;
+                    return (
+                      <div key={row.table_fqn} className="analytics-compare-row">
+                        <button
+                          className="btn btn-ghost analytics-compare-name mono"
+                          title={row.table_fqn}
+                          onClick={() => openTable(row.table_schema, row.table_name, { compare: true })}
+                        >
+                          {shortenName(row.table_fqn, 42)}
+                        </button>
+                        <div className="analytics-compare-meta">
+                          <span>{row.entity_name || "—"}</span>
+                          <span>{`${row.duration_a ?? "—"} мин -> ${row.duration_b ?? "—"} мин`}</span>
+                        </div>
+                        <div className="analytics-compare-track">
+                          <div
+                            className={`analytics-compare-bar ${compareDeltaClass(delta)}`}
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                        <div className={`analytics-compare-delta ${compareDeltaClass(delta)}`}>
+                          {row.delta_minutes === null
+                            ? "только один день"
+                            : delta > 0
+                              ? `дольше на ${delta.toFixed(1)} мин`
+                              : delta < 0
+                                ? `быстрее на ${Math.abs(delta).toFixed(1)} мин`
+                                : "без изменений"}
+                          {row.delta_pct !== null ? ` · ${formatPercent(row.delta_pct)}` : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+        </>
+      )}
+
       {viewMode === "window" && (
         <>
-          <section className="card analytics-block">
+          <section className="analytics-block">
             <div className="section-title">Окно загрузок</div>
             <div className="muted analytics-subtitle">
               GP и ClickHouse в одном окне времени. Для ClickHouse отдельно показываются работа и ожидание.
@@ -481,135 +620,12 @@ export default function SlowestTables({ onSelectTable }) {
             </div>
           </section>
 
-          <section className="card analytics-block analytics-compare-block">
-            <div className="section-title">Сравнение дней загрузки</div>
-            <div className="muted analytics-subtitle">
-              Сравнение последнего успешного запуска по двум датам. Сначала можно выбрать сущность, потом сузить по схемам.
-            </div>
-            <div className="analytics-toolbar compact">
-              <div className="analytics-range">
-                <div className="analytics-custom compact">
-                  <label className="muted">День A</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={compareDateA}
-                    onChange={(e) => setCompareDateA(e.target.value)}
-                  />
-                </div>
-                <div className="analytics-custom compact">
-                  <label className="muted">День B</label>
-                  <input
-                    type="date"
-                    className="input"
-                    value={compareDateB}
-                    onChange={(e) => setCompareDateB(e.target.value)}
-                  />
-                </div>
-                <div className="analytics-custom compact">
-                  <label className="muted">Сущность</label>
-                  <select
-                    className="input"
-                    value={compareEntityId}
-                    onChange={(e) => setCompareEntityId(e.target.value)}
-                  >
-                    <option value="">Все сущности</option>
-                    {entities.map((entity) => (
-                      <option key={entity.entity_id} value={entity.entity_id}>
-                        {entity.entity_name || `Сущность ${entity.entity_id}`}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button className="btn btn-primary analytics-action" onClick={loadCompare}>
-                  Сравнить
-                </button>
-              </div>
-            </div>
-            {!!compareSchemaOptions.length && (
-              <div className="analytics-chip-row">
-                <button
-                  className={`analytics-chip ${compareSchemaSelection.length === 0 ? "active" : ""}`}
-                  onClick={() => setCompareSchemaSelection([])}
-                >
-                  Все схемы
-                </button>
-                {compareSchemaOptions.map((schemaName) => (
-                  <button
-                    key={schemaName}
-                    className={`analytics-chip ${compareSchemaSelection.includes(schemaName) ? "active" : ""}`}
-                    onClick={() => toggleCompareSchema(schemaName)}
-                  >
-                    {schemaName}
-                  </button>
-                ))}
-              </div>
-            )}
-            {compareLoading && <div className="muted">Сравниваем загрузки...</div>}
-            {compareError && <div className="dep-error-title">{compareError}</div>}
-            {!compareLoading && !compareError && !!filteredCompareRows.length && (
-              <>
-                <div className="slow-summary compare-summary">
-                  <div className="slow-summary-card">
-                    <div className="label">Объектов</div>
-                    <div className="value">{filteredCompareRows.length}</div>
-                  </div>
-                  <div className="slow-summary-card success">
-                    <div className="label">Быстрее в день B</div>
-                    <div className="value">{compareSummary.faster}</div>
-                  </div>
-                  <div className="slow-summary-card danger">
-                    <div className="label">Дольше в день B</div>
-                    <div className="value">{compareSummary.slower}</div>
-                  </div>
-                  <div className="slow-summary-card">
-                    <div className="label">Только в одном дне</div>
-                    <div className="value">{compareSummary.onlyOneDay}</div>
-                  </div>
-                </div>
-                <div className="analytics-compare-list">
-                  {filteredCompareRows.slice(0, 30).map((row) => {
-                    const delta = Number(row.delta_minutes || 0);
-                    const width = compareMaxDelta
-                      ? Math.max(8, (Math.abs(delta) / compareMaxDelta) * 100)
-                      : 0;
-                    return (
-                      <div key={row.table_fqn} className="analytics-compare-row">
-                        <button
-                          className="btn btn-ghost analytics-compare-name mono"
-                          title={row.table_fqn}
-                          onClick={() => openTable(row.table_schema, row.table_name, { compare: true })}
-                        >
-                          {shortenName(row.table_fqn, 42)}
-                        </button>
-                        <div className="analytics-compare-meta">
-                          <span>{row.entity_name || "—"}</span>
-                          <span>{`${row.duration_a ?? "—"} мин -> ${row.duration_b ?? "—"} мин`}</span>
-                        </div>
-                        <div className="analytics-compare-track">
-                          <div
-                            className={`analytics-compare-bar ${compareDeltaClass(delta)}`}
-                            style={{ width: `${width}%` }}
-                          />
-                        </div>
-                        <div className={`analytics-compare-delta ${compareDeltaClass(delta)}`}>
-                          {row.delta_minutes === null ? "только один день" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} мин`}
-                          {row.delta_pct !== null ? ` · ${formatPercent(row.delta_pct)}` : ""}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </section>
-
           {windowLoading && <div className="muted">Загрузка аналитики...</div>}
           {windowError && <div className="dep-error-title">{windowError}</div>}
 
           {!windowLoading && !windowError && (
             <div className="analytics-grid">
-              <section className="card analytics-block">
+              <section className="analytics-block">
                 <div className="section-title">Работа и ожидание</div>
                 {filteredWindowRows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
                 {filteredWindowRows.length > 0 && (
@@ -623,61 +639,61 @@ export default function SlowestTables({ onSelectTable }) {
                       )}
                     </div>
                     <div className="analytics-bars">
-                    {visibleWindowBars.map((row, idx) => {
-                      const actual = Number(row.actual_duration_min ?? row.duration_min ?? 0);
-                      const lag = Number(row.lag_duration_min || 0);
-                      const total = actual + lag;
-                      const actualWidth = windowMaxDuration
-                        ? Math.max(actual > 0 ? 8 : 0, (actual / windowMaxDuration) * 100)
-                        : 0;
-                      const lagWidth = windowMaxDuration ? (lag / windowMaxDuration) * 100 : 0;
-                      const label = formatObjectFqn(row.schema_name, row.table_name);
-                      return (
-                        <div key={`${label}-${row.run_uuid || idx}`} className="analytics-bar-row">
-                          <div className="analytics-bar-label mono">
-                            <button
-                              className="btn btn-ghost analytics-bar-link"
-                              title={label}
-                              onClick={() => openTable(row.schema_name, row.table_name)}
+                      {visibleWindowBars.map((row, idx) => {
+                        const actual = Number(row.actual_duration_min ?? row.duration_min ?? 0);
+                        const lag = Number(row.lag_duration_min || 0);
+                        const total = actual + lag;
+                        const actualWidth = windowMaxDuration
+                          ? Math.max(actual > 0 ? 8 : 0, (actual / windowMaxDuration) * 100)
+                          : 0;
+                        const lagWidth = windowMaxDuration ? (lag / windowMaxDuration) * 100 : 0;
+                        const label = formatObjectFqn(row.schema_name, row.table_name);
+                        return (
+                          <div key={`${label}-${row.run_uuid || idx}`} className="analytics-bar-row">
+                            <div className="analytics-bar-label mono">
+                              <button
+                                className="btn btn-ghost analytics-bar-link"
+                                title={label}
+                                onClick={() => openTable(row.schema_name, row.table_name)}
+                              >
+                                {shortenName(label, 44)}
+                              </button>
+                              <span className="analytics-pill analytics-pill-inline">{row.source}</span>
+                            </div>
+                            <div
+                              className="analytics-bar-track"
+                              title={
+                                row.source === "ClickHouse"
+                                  ? `Работа ${actual} мин, ожидание ${lag} мин, окно ${total} мин`
+                                  : `Работа ${actual} мин`
+                              }
                             >
-                              {shortenName(label, 44)}
-                            </button>
-                            <span className="analytics-pill analytics-pill-inline">{row.source}</span>
+                              <div className="analytics-bar-fill" style={{ width: `${actualWidth}%` }} />
+                              {row.source === "ClickHouse" && lag > 0 && (
+                                <div
+                                  className="analytics-bar-lag"
+                                  style={{ left: `${actualWidth}%`, width: `${lagWidth}%` }}
+                                />
+                              )}
+                            </div>
+                            <div className="analytics-bar-value">
+                              {row.source === "ClickHouse"
+                                ? `${actual} работа / ${lag} ожидание`
+                                : `${actual} мин`}
+                            </div>
                           </div>
-                          <div
-                            className="analytics-bar-track"
-                            title={
-                              row.source === "ClickHouse"
-                                ? `Работа ${actual} мин, ожидание ${lag} мин, окно ${total} мин`
-                                : `Работа ${actual} мин`
-                            }
-                          >
-                            <div className="analytics-bar-fill" style={{ width: `${actualWidth}%` }} />
-                            {row.source === "ClickHouse" && lag > 0 && (
-                              <div
-                                className="analytics-bar-lag"
-                                style={{ left: `${actualWidth}%`, width: `${lagWidth}%` }}
-                              />
-                            )}
-                          </div>
-                          <div className="analytics-bar-value">
-                            {row.source === "ClickHouse"
-                              ? `${actual} работа / ${lag} ожидание`
-                              : `${actual} мин`}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                     </div>
                   </>
                 )}
               </section>
 
-              <section className="card analytics-block">
+              <section className="analytics-block">
                 <div className="section-title">Сущности в окне</div>
                 {windowEntitySummary.length === 0 && <div className="muted">Нет данных.</div>}
                 {windowEntitySummary.length > 0 && (
-                  <div className="analytics-table">
+                  <div className="analytics-table analytics-plain-table">
                     <div className="analytics-head analytics-entity">
                       <span>Сущность</span>
                       <span>Таблиц</span>
@@ -700,11 +716,11 @@ export default function SlowestTables({ onSelectTable }) {
                 )}
               </section>
 
-              <section className="card analytics-block">
+              <section className="analytics-block">
                 <div className="section-title">Список запусков в окне</div>
                 {filteredWindowRows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
                 {filteredWindowRows.length > 0 && (
-                  <div className="analytics-run-list">
+                  <div className="analytics-run-list analytics-run-list-plain">
                     {filteredWindowRows.map((row, idx) => {
                       const fullName = formatObjectFqn(row.schema_name, row.table_name);
                       return (

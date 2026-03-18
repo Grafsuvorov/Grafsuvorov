@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import "../style/app.css";
 import { formatDateInputValue, formatLocalDateTime, parseLocalDateTime } from "../utils/datetime.js";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+import { formatPercent } from "../utils/format.js";
+import { entitiesApi } from "../api/entities.js";
+import { performanceApi } from "../api/performance.js";
 const SLA_MINUTES = 10;
 const SLOW_P95_MINUTES = 10;
 const UNSTABLE_WARN = 0.3;
@@ -39,11 +40,22 @@ export default function SlowestTables({ onSelectTable }) {
   const [windowRows, setWindowRows] = useState([]);
   const [windowLoading, setWindowLoading] = useState(false);
   const [windowError, setWindowError] = useState(null);
+  const [showAllWindowBars, setShowAllWindowBars] = useState(false);
+  const [compareDateA, setCompareDateA] = useState(() => formatDateInputValue());
+  const [compareDateB, setCompareDateB] = useState(() => {
+    const value = new Date();
+    value.setDate(value.getDate() - 1);
+    return formatDateInputValue(value);
+  });
+  const [compareEntityId, setCompareEntityId] = useState("");
+  const [compareRows, setCompareRows] = useState([]);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState(null);
+  const [compareSchemaSelection, setCompareSchemaSelection] = useState([]);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE}/api/slowest-tables?days=${windowDays}&limit=${limit}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    performanceApi.slowestTables(windowDays, limit)
       .then((data) => {
         if (Array.isArray(data)) {
           setTables(data);
@@ -59,13 +71,7 @@ export default function SlowestTables({ onSelectTable }) {
 
   useEffect(() => {
     setLoadingProfile(true);
-    fetch(`${API_BASE}/api/load-profile?days=${windowDays}`)
-      .then((res) => {
-        if (res.status === 404) {
-          return { profile: [] };
-        }
-        return res.ok ? res.json() : Promise.reject(res.status);
-      })
+    performanceApi.loadProfile(windowDays)
       .then((data) => {
         setLoadProfile(Array.isArray(data?.profile) ? data.profile : []);
       })
@@ -76,16 +82,14 @@ export default function SlowestTables({ onSelectTable }) {
   useEffect(() => {
     setNightLoading(true);
     setNightError(null);
-    fetch(`${API_BASE}/api/night-summary?days=${windowDays}&limit=50`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    performanceApi.nightSummary(windowDays, 50)
       .then((data) => setNightSummary(data))
       .catch(() => setNightError("Не удалось загрузить ночное окно"))
       .finally(() => setNightLoading(false));
   }, [windowDays]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/entities`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    entitiesApi.list()
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         const seen = new Set();
@@ -102,9 +106,12 @@ export default function SlowestTables({ onSelectTable }) {
         if (!entityId && uniq.length > 0) {
           setEntityId(String(uniq[0].entity_id));
         }
+        if (!compareEntityId && uniq.length > 0) {
+          setCompareEntityId(String(uniq[0].entity_id));
+        }
       })
       .catch(() => setEntities([]));
-  }, []);
+  }, [compareEntityId, entityId]);
 
   useEffect(() => {
     if (!entityId) {
@@ -112,9 +119,7 @@ export default function SlowestTables({ onSelectTable }) {
       return;
     }
     setEntityLoading(true);
-    const schemaParam = entitySchema !== "all" ? `&schema=${encodeURIComponent(entitySchema)}` : "";
-    fetch(`${API_BASE}/api/entity-loads?entity_id=${encodeURIComponent(entityId)}&days=${windowDays}&limit=${entityLimit}${schemaParam}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
+    performanceApi.entityLoads(entityId, windowDays, entityLimit, entitySchema)
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setEntityLoads(list);
@@ -154,14 +159,10 @@ export default function SlowestTables({ onSelectTable }) {
   const loadWindowRuns = () => {
     setWindowLoading(true);
     setWindowError(null);
-    const params = new URLSearchParams({
-      date: windowDate,
-      from: timeFrom,
-      to: timeTo,
-      source: windowSource,
-    });
-    fetch(`${API_BASE}/api/window-runs?${params.toString()}`)
-      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить окно")))
+    performanceApi.windowRuns(
+      { date: windowDate, from: timeFrom, to: timeTo, source: windowSource },
+      true,
+    )
       .then((data) => {
         const merged = [];
         (data.gp || []).forEach((row) => merged.push({ ...row, source: "GP" }));
@@ -169,9 +170,27 @@ export default function SlowestTables({ onSelectTable }) {
         merged.sort((a, b) => (a.start_dttm || "").localeCompare(b.start_dttm || ""));
         setWindowRows(merged);
         setWindowEntityFilter("all");
+        setShowAllWindowBars(false);
       })
       .catch((err) => setWindowError(typeof err === "string" ? err : "Не удалось загрузить окно"))
       .finally(() => setWindowLoading(false));
+  };
+
+  const loadCompare = () => {
+    setCompareLoading(true);
+    setCompareError(null);
+    performanceApi.loadCompare(
+      { dateA: compareDateA, dateB: compareDateB, entityId: compareEntityId },
+      true,
+    )
+      .then((data) => {
+        setCompareRows(Array.isArray(data?.rows) ? data.rows : []);
+        setCompareSchemaSelection([]);
+      })
+      .catch((err) =>
+        setCompareError(err instanceof Error ? err.message : "Не удалось сравнить загрузки"),
+      )
+      .finally(() => setCompareLoading(false));
   };
 
   const periodLabel = useMemo(() => {
@@ -221,6 +240,11 @@ export default function SlowestTables({ onSelectTable }) {
     return windowRowsByDuration.filter((row) => row.entity_name === windowEntityFilter);
   }, [windowRowsByDuration, windowEntityFilter, windowRows]);
 
+  const visibleWindowBars = useMemo(
+    () => (showAllWindowBars ? filteredWindowRows : filteredWindowRows.slice(0, 20)),
+    [filteredWindowRows, showAllWindowBars],
+  );
+
   const windowMaxDuration = useMemo(() => {
     if (!filteredWindowRows.length) return 0;
     return Math.max(
@@ -238,7 +262,7 @@ export default function SlowestTables({ onSelectTable }) {
       item.runs += 1;
       item.minutes += Number(row.actual_duration_min ?? row.duration_min ?? 0);
       item.lagMinutes += Number(row.lag_duration_min || 0);
-      item.tables.add(`${row.schema_name}.${row.table_name}`);
+      item.tables.add(formatObjectFqn(row.schema_name, row.table_name));
       map.set(key, item);
     });
     return Array.from(map.values())
@@ -277,9 +301,54 @@ export default function SlowestTables({ onSelectTable }) {
     return entityLoads.filter((row) => row.table_fqn?.startsWith(`${entitySchema}.`));
   }, [entityLoads, entitySchema]);
 
+  const compareSchemaOptions = useMemo(() => {
+    const schemas = new Set();
+    compareRows.forEach((row) => {
+      const [schemaName] = String(row.table_fqn || "").split(".");
+      if (schemaName) schemas.add(schemaName);
+    });
+    return Array.from(schemas).sort((a, b) => a.localeCompare(b, "ru"));
+  }, [compareRows]);
+
+  const filteredCompareRows = useMemo(() => {
+    if (!compareSchemaSelection.length) return compareRows;
+    return compareRows.filter((row) => {
+      const [schemaName] = String(row.table_fqn || "").split(".");
+      return compareSchemaSelection.includes(schemaName);
+    });
+  }, [compareRows, compareSchemaSelection]);
+
+  const compareMaxDelta = useMemo(() => {
+    if (!filteredCompareRows.length) return 0;
+    return Math.max(...filteredCompareRows.map((row) => Math.abs(Number(row.delta_minutes || 0))));
+  }, [filteredCompareRows]);
+
+  const compareSummary = useMemo(() => {
+    const stats = { faster: 0, slower: 0, onlyOneDay: 0 };
+    filteredCompareRows.forEach((row) => {
+      if (row.duration_a === null || row.duration_b === null) {
+        stats.onlyOneDay += 1;
+      } else if ((row.delta_minutes || 0) > 0) {
+        stats.slower += 1;
+      } else if ((row.delta_minutes || 0) < 0) {
+        stats.faster += 1;
+      }
+    });
+    return stats;
+  }, [filteredCompareRows]);
+
+  function formatObjectFqn(schema, table) {
+    const schemaText = String(schema || "").trim();
+    const tableText = String(table || "").trim();
+    if (!tableText) return schemaText || "";
+    if (tableText.includes(".")) return tableText;
+    return schemaText ? `${schemaText}.${tableText}` : tableText;
+  }
+
   const openTable = (schema, table, context) => {
-    if (!schema || !table) return;
-    onSelectTable?.({ view: "table_info", table: `${schema}.${table}`, context }, "slowest_tables");
+    const fqn = formatObjectFqn(schema, table);
+    if (!fqn || !fqn.includes(".")) return;
+    onSelectTable?.({ view: "table_info", table: fqn, context }, "slowest_tables");
   };
 
   const openTableFqn = (fqn, context) => {
@@ -287,6 +356,30 @@ export default function SlowestTables({ onSelectTable }) {
     const [schema, ...rest] = fqn.split(".");
     const table = rest.join(".");
     openTable(schema, table, context);
+  };
+
+  const toggleCompareSchema = (schemaName) => {
+    setCompareSchemaSelection((current) =>
+      current.includes(schemaName)
+        ? current.filter((value) => value !== schemaName)
+        : [...current, schemaName],
+    );
+  };
+
+  const statusLabel = (status) => {
+    const value = String(status || "").toUpperCase();
+    if (value === "SUCCESS") return "Успешно";
+    if (value === "FAILED") return "Ошибка";
+    if (value === "RUNNING") return "В работе";
+    if (value === "UP_FOR_RETRY") return "Повтор";
+    return value || "—";
+  };
+
+  const compareDeltaClass = (delta) => {
+    if (delta === null || delta === undefined) return "neutral";
+    if (delta > 0) return "worse";
+    if (delta < 0) return "better";
+    return "neutral";
   };
 
   return (
@@ -388,6 +481,129 @@ export default function SlowestTables({ onSelectTable }) {
             </div>
           </section>
 
+          <section className="card analytics-block analytics-compare-block">
+            <div className="section-title">Сравнение дней загрузки</div>
+            <div className="muted analytics-subtitle">
+              Сравнение последнего успешного запуска по двум датам. Сначала можно выбрать сущность, потом сузить по схемам.
+            </div>
+            <div className="analytics-toolbar compact">
+              <div className="analytics-range">
+                <div className="analytics-custom compact">
+                  <label className="muted">День A</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={compareDateA}
+                    onChange={(e) => setCompareDateA(e.target.value)}
+                  />
+                </div>
+                <div className="analytics-custom compact">
+                  <label className="muted">День B</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={compareDateB}
+                    onChange={(e) => setCompareDateB(e.target.value)}
+                  />
+                </div>
+                <div className="analytics-custom compact">
+                  <label className="muted">Сущность</label>
+                  <select
+                    className="input"
+                    value={compareEntityId}
+                    onChange={(e) => setCompareEntityId(e.target.value)}
+                  >
+                    <option value="">Все сущности</option>
+                    {entities.map((entity) => (
+                      <option key={entity.entity_id} value={entity.entity_id}>
+                        {entity.entity_name || `Сущность ${entity.entity_id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button className="btn btn-primary analytics-action" onClick={loadCompare}>
+                  Сравнить
+                </button>
+              </div>
+            </div>
+            {!!compareSchemaOptions.length && (
+              <div className="analytics-chip-row">
+                <button
+                  className={`analytics-chip ${compareSchemaSelection.length === 0 ? "active" : ""}`}
+                  onClick={() => setCompareSchemaSelection([])}
+                >
+                  Все схемы
+                </button>
+                {compareSchemaOptions.map((schemaName) => (
+                  <button
+                    key={schemaName}
+                    className={`analytics-chip ${compareSchemaSelection.includes(schemaName) ? "active" : ""}`}
+                    onClick={() => toggleCompareSchema(schemaName)}
+                  >
+                    {schemaName}
+                  </button>
+                ))}
+              </div>
+            )}
+            {compareLoading && <div className="muted">Сравниваем загрузки...</div>}
+            {compareError && <div className="dep-error-title">{compareError}</div>}
+            {!compareLoading && !compareError && !!filteredCompareRows.length && (
+              <>
+                <div className="slow-summary compare-summary">
+                  <div className="slow-summary-card">
+                    <div className="label">Объектов</div>
+                    <div className="value">{filteredCompareRows.length}</div>
+                  </div>
+                  <div className="slow-summary-card success">
+                    <div className="label">Быстрее в день B</div>
+                    <div className="value">{compareSummary.faster}</div>
+                  </div>
+                  <div className="slow-summary-card danger">
+                    <div className="label">Дольше в день B</div>
+                    <div className="value">{compareSummary.slower}</div>
+                  </div>
+                  <div className="slow-summary-card">
+                    <div className="label">Только в одном дне</div>
+                    <div className="value">{compareSummary.onlyOneDay}</div>
+                  </div>
+                </div>
+                <div className="analytics-compare-list">
+                  {filteredCompareRows.slice(0, 30).map((row) => {
+                    const delta = Number(row.delta_minutes || 0);
+                    const width = compareMaxDelta
+                      ? Math.max(8, (Math.abs(delta) / compareMaxDelta) * 100)
+                      : 0;
+                    return (
+                      <div key={row.table_fqn} className="analytics-compare-row">
+                        <button
+                          className="btn btn-ghost analytics-compare-name mono"
+                          title={row.table_fqn}
+                          onClick={() => openTable(row.table_schema, row.table_name, { compare: true })}
+                        >
+                          {shortenName(row.table_fqn, 42)}
+                        </button>
+                        <div className="analytics-compare-meta">
+                          <span>{row.entity_name || "—"}</span>
+                          <span>{`${row.duration_a ?? "—"} мин -> ${row.duration_b ?? "—"} мин`}</span>
+                        </div>
+                        <div className="analytics-compare-track">
+                          <div
+                            className={`analytics-compare-bar ${compareDeltaClass(delta)}`}
+                            style={{ width: `${width}%` }}
+                          />
+                        </div>
+                        <div className={`analytics-compare-delta ${compareDeltaClass(delta)}`}>
+                          {row.delta_minutes === null ? "только один день" : `${delta > 0 ? "+" : ""}${delta.toFixed(1)} мин`}
+                          {row.delta_pct !== null ? ` · ${formatPercent(row.delta_pct)}` : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+
           {windowLoading && <div className="muted">Загрузка аналитики...</div>}
           {windowError && <div className="dep-error-title">{windowError}</div>}
 
@@ -397,8 +613,17 @@ export default function SlowestTables({ onSelectTable }) {
                 <div className="section-title">Работа и ожидание</div>
                 {filteredWindowRows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
                 {filteredWindowRows.length > 0 && (
-                  <div className="analytics-bars">
-                    {filteredWindowRows.slice(0, 30).map((row, idx) => {
+                  <>
+                    <div className="analytics-block-actions">
+                      <span className="muted">Показано {visibleWindowBars.length} из {filteredWindowRows.length}</span>
+                      {filteredWindowRows.length > 20 && (
+                        <button className="btn btn-ghost" onClick={() => setShowAllWindowBars((v) => !v)}>
+                          {showAllWindowBars ? "Свернуть" : "Показать все"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="analytics-bars">
+                    {visibleWindowBars.map((row, idx) => {
                       const actual = Number(row.actual_duration_min ?? row.duration_min ?? 0);
                       const lag = Number(row.lag_duration_min || 0);
                       const total = actual + lag;
@@ -406,11 +631,17 @@ export default function SlowestTables({ onSelectTable }) {
                         ? Math.max(actual > 0 ? 8 : 0, (actual / windowMaxDuration) * 100)
                         : 0;
                       const lagWidth = windowMaxDuration ? (lag / windowMaxDuration) * 100 : 0;
-                      const label = `${row.schema_name}.${row.table_name}`;
+                      const label = formatObjectFqn(row.schema_name, row.table_name);
                       return (
                         <div key={`${label}-${row.run_uuid || idx}`} className="analytics-bar-row">
-                          <div className="analytics-bar-label mono" title={label}>
-                            <span>{shortenName(label, 44)}</span>
+                          <div className="analytics-bar-label mono">
+                            <button
+                              className="btn btn-ghost analytics-bar-link"
+                              title={label}
+                              onClick={() => openTable(row.schema_name, row.table_name)}
+                            >
+                              {shortenName(label, 44)}
+                            </button>
                             <span className="analytics-pill analytics-pill-inline">{row.source}</span>
                           </div>
                           <div
@@ -437,7 +668,8 @@ export default function SlowestTables({ onSelectTable }) {
                         </div>
                       );
                     })}
-                  </div>
+                    </div>
+                  </>
                 )}
               </section>
 
@@ -472,44 +704,45 @@ export default function SlowestTables({ onSelectTable }) {
                 <div className="section-title">Список запусков в окне</div>
                 {filteredWindowRows.length === 0 && <div className="muted">Нет запусков в окне.</div>}
                 {filteredWindowRows.length > 0 && (
-                  <div className="analytics-table">
-                    <div className="analytics-head analytics-window">
-                      <span>Таблица</span>
-                      <span>Run UUID</span>
-                      <span>Сущность</span>
-                      <span>Источник</span>
-                      <span>Старт</span>
-                      <span>Финиш</span>
-                      <span>Работа</span>
-                      <span>Ожидание</span>
-                      <span>Статус</span>
-                    </div>
+                  <div className="analytics-run-list">
                     {filteredWindowRows.map((row, idx) => {
-                      const fullName = `${row.schema_name}.${row.table_name}`;
+                      const fullName = formatObjectFqn(row.schema_name, row.table_name);
                       return (
-                        <div
-                          key={`${fullName}-${row.run_uuid || idx}`}
-                          className="analytics-row analytics-window"
-                        >
-                          <button
-                            className="mono analytics-cell-name btn btn-ghost"
-                            title={fullName}
-                            onClick={() => openTable(row.schema_name, row.table_name)}
-                          >
-                            {shortenName(fullName, 36)}
-                          </button>
-                          <span className="mono" title={row.run_uuid || "—"}>
-                            {shortenName(row.run_uuid || "—", 18)}
-                          </span>
-                          <span className="muted analytics-cell-entity" title={row.entity_name || ""}>
-                            {shortenName(row.entity_name || "—", 24)}
-                          </span>
-                          <span className="analytics-pill">{row.source}</span>
-                          <span>{formatDateTime(row.start_dttm)}</span>
-                          <span>{formatDateTime(row.end_dttm)}</span>
-                          <span>{formatMinutes(Number(row.actual_duration_min ?? row.duration_min ?? 0))}</span>
-                          <span>{formatMinutes(Number(row.lag_duration_min || 0))}</span>
-                          <span>{row.status || "—"}</span>
+                        <div key={`${fullName}-${row.run_uuid || idx}`} className="analytics-run-row">
+                          <div className="analytics-run-main">
+                            <button
+                              className="mono analytics-cell-name btn btn-ghost"
+                              title={fullName}
+                              onClick={() => openTable(row.schema_name, row.table_name)}
+                            >
+                              {shortenName(fullName, 40)}
+                            </button>
+                            <span className="muted analytics-cell-entity" title={row.entity_name || ""}>
+                              {shortenName(row.entity_name || "—", 28)}
+                            </span>
+                          </div>
+                          <div className="analytics-run-badges">
+                            <span className="analytics-pill">{row.source}</span>
+                            <span className={`analytics-pill analytics-pill-status status-${String(row.status || "").toLowerCase()}`}>
+                              {statusLabel(row.status)}
+                            </span>
+                          </div>
+                          <div className="analytics-run-time">
+                            <span className="muted">Старт</span>
+                            <span>{formatDateTime(row.start_dttm)}</span>
+                          </div>
+                          <div className="analytics-run-time">
+                            <span className="muted">Финиш</span>
+                            <span>{formatDateTime(row.end_dttm)}</span>
+                          </div>
+                          <div className="analytics-run-metric">
+                            <span className="muted">Работа</span>
+                            <strong>{formatMinutes(Number(row.actual_duration_min ?? row.duration_min ?? 0))}</strong>
+                          </div>
+                          <div className="analytics-run-metric">
+                            <span className="muted">Ожидание</span>
+                            <strong>{formatMinutes(Number(row.lag_duration_min || 0))}</strong>
+                          </div>
                         </div>
                       );
                     })}
@@ -744,7 +977,13 @@ export default function SlowestTables({ onSelectTable }) {
                   <div className="slow-night-list">
                     {nightSummary.top_runs.map((row, idx) => (
                       <div key={`${row.table_fqn}-${idx}`} className="slow-night-item">
-                        <div className="mono slow-night-table" title={row.table_fqn}>{row.table_fqn}</div>
+                        <button
+                          className="mono slow-night-table btn btn-ghost"
+                          title={row.table_fqn}
+                          onClick={() => openTableFqn(row.table_fqn)}
+                        >
+                          {row.table_fqn}
+                        </button>
                         <div className="slow-night-meta">
                           <span>{row.entity_name || "—"}</span>
                           <span>{formatMinutes(row.duration_minutes)} мин</span>
@@ -766,7 +1005,13 @@ export default function SlowestTables({ onSelectTable }) {
                   <div className="slow-night-list">
                     {nightSummary.anomalies.map((row, idx) => (
                       <div key={`${row.table_fqn}-${idx}`} className="slow-night-item">
-                        <div className="mono slow-night-table" title={row.table_fqn}>{row.table_fqn}</div>
+                        <button
+                          className="mono slow-night-table btn btn-ghost"
+                          title={row.table_fqn}
+                          onClick={() => openTableFqn(row.table_fqn)}
+                        >
+                          {row.table_fqn}
+                        </button>
                         <div className="slow-night-meta">
                           <span>{row.entity_name || "—"}</span>
                           <span>

@@ -117,9 +117,21 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(fh) or {}
 
 
+class _IndentedSafeDumper(yaml.SafeDumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow, False)
+
+
 def dump_yaml(path: Path, data: dict) -> None:
     with path.open("w", encoding="utf-8") as fh:
-        yaml.safe_dump(data, fh, sort_keys=False, allow_unicode=True)
+        yaml.dump(
+            data,
+            fh,
+            Dumper=_IndentedSafeDumper,
+            sort_keys=False,
+            allow_unicode=True,
+            indent=4,
+        )
 
 
 def collect_known_schemas(root: Path) -> Set[str]:

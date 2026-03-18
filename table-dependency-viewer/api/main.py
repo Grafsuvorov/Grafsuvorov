@@ -4030,8 +4030,8 @@ def get_night_summary(
             WITH night_runs AS (
                 SELECT
                     l.object_id AS table_id,
-                    COALESCE(t.table_schema, '') AS table_schema,
-                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                     e.entity_name,
                     l.loading_start_dttm,
                     l.loading_finish_dttm,
@@ -4052,8 +4052,8 @@ def get_night_summary(
             WITH failed_runs AS (
                 SELECT
                     l.object_id AS table_id,
-                    COALESCE(t.table_schema, '') AS table_schema,
-                    COALESCE(t.table_name, l.object_name) AS table_name,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                     e.entity_name,
                     l.loading_start_dttm,
                     l.loading_finish_dttm,
@@ -4163,8 +4163,8 @@ def get_night_summary(
                     night_runs AS (
                         SELECT
                             l.object_id AS table_id,
-                            COALESCE(t.table_schema, '') AS table_schema,
-                            COALESCE(t.table_name, l.object_name) AS table_name,
+                            COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                            COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                             e.entity_name,
                             l.loading_start_dttm,
                             l.loading_finish_dttm,
@@ -5753,8 +5753,8 @@ def get_window_runs(
                     text(
                         f"""
                         SELECT
-                            t.table_schema AS schema_name,
-                            l.object_name AS table_name,
+                            COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS schema_name,
+                            COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
                             e.entity_name,
                             l.loading_start_dttm AS start_dttm,
                             l.loading_finish_dttm AS end_dttm,
@@ -5826,6 +5826,143 @@ def get_window_runs(
         return payload
     except Exception as e:
         print("❌ /api/window-runs error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/load-compare")
+def get_load_compare(
+    date_a: str = Query(..., alias="date_a"),
+    date_b: str = Query(..., alias="date_b"),
+    entity_id: Optional[int] = Query(None, ge=1),
+):
+    try:
+        start_a = f"{date_a} 00:00:00"
+        end_a = f"{date_a} 23:59:59"
+        start_b = f"{date_b} 00:00:00"
+        end_b = f"{date_b} 23:59:59"
+
+        query = f"""
+            WITH base AS (
+                SELECT
+                    l.object_id AS table_id,
+                    COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                    COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+                    e.entity_id,
+                    COALESCE(e.entity_name, 'UNKNOWN') AS entity_name,
+                    l.loading_start_dttm,
+                    l.loading_finish_dttm,
+                    EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_minutes
+                FROM {TABLE_LOADING_HISTORY} l
+                LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+                LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                  AND (
+                    (l.loading_start_dttm >= :start_a AND l.loading_start_dttm <= :end_a)
+                    OR
+                    (l.loading_start_dttm >= :start_b AND l.loading_start_dttm <= :end_b)
+                  )
+                  AND (:entity_id IS NULL OR e.entity_id = :entity_id)
+            ),
+            ranked_a AS (
+                SELECT
+                    *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY table_schema, table_name
+                        ORDER BY loading_start_dttm DESC NULLS LAST
+                    ) AS rn
+                FROM base
+                WHERE loading_start_dttm >= :start_a AND loading_start_dttm <= :end_a
+            ),
+            ranked_b AS (
+                SELECT
+                    *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY table_schema, table_name
+                        ORDER BY loading_start_dttm DESC NULLS LAST
+                    ) AS rn
+                FROM base
+                WHERE loading_start_dttm >= :start_b AND loading_start_dttm <= :end_b
+            ),
+            latest_a AS (
+                SELECT * FROM ranked_a WHERE rn = 1
+            ),
+            latest_b AS (
+                SELECT * FROM ranked_b WHERE rn = 1
+            )
+            SELECT
+                COALESCE(a.table_id, b.table_id) AS table_id,
+                COALESCE(a.table_schema, b.table_schema) AS table_schema,
+                COALESCE(a.table_name, b.table_name) AS table_name,
+                COALESCE(a.entity_id, b.entity_id) AS entity_id,
+                COALESCE(a.entity_name, b.entity_name) AS entity_name,
+                a.duration_minutes AS duration_a,
+                a.loading_start_dttm AS start_a,
+                a.loading_finish_dttm AS end_a,
+                b.duration_minutes AS duration_b,
+                b.loading_start_dttm AS start_b,
+                b.loading_finish_dttm AS end_b
+            FROM latest_a a
+            FULL OUTER JOIN latest_b b
+              ON a.table_schema = b.table_schema
+             AND a.table_name = b.table_name
+            ORDER BY ABS(COALESCE(b.duration_minutes, 0) - COALESCE(a.duration_minutes, 0)) DESC NULLS LAST,
+                     COALESCE(a.table_schema, b.table_schema),
+                     COALESCE(a.table_name, b.table_name)
+        """
+
+        params = {
+            "start_a": start_a,
+            "end_a": end_a,
+            "start_b": start_b,
+            "end_b": end_b,
+            "entity_id": entity_id,
+        }
+
+        with engine.connect() as conn:
+            rows = conn.execute(text(query), params).mappings().all()
+
+        result_rows = []
+        for row in rows:
+            duration_a = float(row.get("duration_a")) if row.get("duration_a") is not None else None
+            duration_b = float(row.get("duration_b")) if row.get("duration_b") is not None else None
+            delta_minutes = None
+            delta_pct = None
+            if duration_a is not None and duration_b is not None:
+                delta_minutes = round(duration_b - duration_a, 2)
+                if duration_a:
+                    delta_pct = round(((duration_b - duration_a) / duration_a) * 100, 2)
+
+            result_rows.append(
+                {
+                    "table_id": row.get("table_id"),
+                    "table_fqn": f"{row.get('table_schema')}.{row.get('table_name')}".strip("."),
+                    "table_schema": row.get("table_schema"),
+                    "table_name": row.get("table_name"),
+                    "entity_id": row.get("entity_id"),
+                    "entity_name": row.get("entity_name"),
+                    "duration_a": round(duration_a, 2) if duration_a is not None else None,
+                    "duration_b": round(duration_b, 2) if duration_b is not None else None,
+                    "delta_minutes": delta_minutes,
+                    "delta_pct": delta_pct,
+                    "start_a": serialize_datetime(row.get("start_a")),
+                    "end_a": serialize_datetime(row.get("end_a")),
+                    "start_b": serialize_datetime(row.get("start_b")),
+                    "end_b": serialize_datetime(row.get("end_b")),
+                }
+            )
+
+        return {
+            "date_a": date_a,
+            "date_b": date_b,
+            "entity_id": entity_id,
+            "rows": result_rows,
+        }
+    except Exception as e:
+        print("❌ /api/load-compare error:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 

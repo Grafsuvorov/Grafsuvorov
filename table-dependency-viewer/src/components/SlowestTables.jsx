@@ -600,7 +600,7 @@ export default function SlowestTables({ onSelectTable }) {
                   </div>
                 </div>
                 <div className="analytics-compare-list">
-                  {filteredCompareRows.slice(0, 30).map((row) => {
+                  {filteredCompareRows.map((row) => {
                     const delta = Number(row.delta_minutes || 0);
                     const width = compareMaxDelta
                       ? Math.max(8, (Math.abs(delta) / compareMaxDelta) * 100)

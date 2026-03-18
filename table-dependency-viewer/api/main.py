@@ -2520,23 +2520,36 @@ def get_entities():
 def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
     try:
         query = f"""
-            WITH base AS (
+            WITH latest_table_day_runs AS (
+                SELECT
+                    l.object_id,
+                    DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm)) AS load_day,
+                    l.loading_start_dttm,
+                    COALESCE(l.loading_finish_dttm, l.loading_start_dttm) AS loading_finish_dttm,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY l.object_id, DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm))
+                        ORDER BY COALESCE(l.loading_finish_dttm, l.loading_start_dttm) DESC NULLS LAST
+                    ) AS rn
+                FROM {TABLE_LOADING_HISTORY} l
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+            ),
+            base AS (
                 SELECT
                     t.entity_id,
                     e.entity_name,
-                    DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm)) AS load_day,
+                    l.load_day,
                     MIN(l.loading_start_dttm) AS start_dttm,
-                    MAX(COALESCE(l.loading_finish_dttm, l.loading_start_dttm)) AS end_dttm
-                FROM {TABLE_LOADING_HISTORY} l
+                    MAX(l.loading_finish_dttm) AS end_dttm
+                FROM latest_table_day_runs l
                 JOIN {TABLE_TABLES_META} t
                   ON t.table_id = l.object_id
                 JOIN {TABLE_ENTITIES_META} e
                   ON e.entity_id = t.entity_id
-                WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
-                  AND l.loading_start_dttm IS NOT NULL
+                WHERE l.rn = 1
                   AND (e.flag_active OR COALESCE(e.on_new_fraemwork, FALSE))
-                GROUP BY t.entity_id, e.entity_name, DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm))
+                GROUP BY t.entity_id, e.entity_name, l.load_day
             ),
             ranked AS (
                 SELECT

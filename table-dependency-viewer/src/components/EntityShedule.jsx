@@ -27,6 +27,7 @@ export default function EntityShedule() {
   const [favoriteEntityIds, setFavoriteEntityIds] = useState(new Set());
   const [favoriteEntityLoadingId, setFavoriteEntityLoadingId] = useState(null);
   const [entityTimelineMap, setEntityTimelineMap] = useState({});
+  const [expandedEntityIds, setExpandedEntityIds] = useState(new Set());
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -125,6 +126,15 @@ export default function EntityShedule() {
     }
   };
 
+  const toggleEntityExpand = (entityId) => {
+    setExpandedEntityIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  };
+
   const normalized = useMemo(() => {
     return entities.map((row) => {
       const scheduleDate = parseLocalDateTime(row.entity_last_load);
@@ -180,6 +190,17 @@ export default function EntityShedule() {
     );
     return values.length ? Math.max(...values) : 0;
   }, [entityTimelineMap]);
+
+  const formatDuration = (value) => {
+    const minutes = Number(value || 0);
+    if (!Number.isFinite(minutes) || minutes <= 0) return "—";
+    if (minutes >= 60) {
+      const hours = Math.floor(minutes / 60);
+      const rest = Math.round(minutes % 60);
+      return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+    }
+    return `${Math.round(minutes)} мин`;
+  };
 
   const coverageFiltered = useMemo(() => {
     const normalize = (value) =>
@@ -440,28 +461,6 @@ export default function EntityShedule() {
                   </div>
                 </div>
               </div>
-              <div className="entity-trend-block">
-                <div className="entity-meta-label">Загрузка за 7 дней</div>
-                <div className="entity-trend-bars">
-                  {(entityTimelineMap[String(row.entity_id)] || []).map((item) => {
-                    const ratio = timelineMax ? Number(item.duration_minutes || 0) / timelineMax : 0;
-                    const height = `${Math.max(14, ratio * 56)}px`;
-                    return (
-                      <div
-                        key={`${row.entity_id}-${item.day}`}
-                        className="entity-trend-day"
-                        title={`${item.day}: ${item.duration_minutes ?? "—"} мин\n${item.start_dttm || "—"} -> ${item.end_dttm || "—"}`}
-                      >
-                        <span className="entity-trend-bar" style={{ height }} />
-                        <span className="entity-trend-label">{String(item.day || "").slice(5)}</span>
-                      </div>
-                    );
-                  })}
-                  {!(entityTimelineMap[String(row.entity_id)] || []).length && (
-                    <span className="muted">Нет истории за 7 дней</span>
-                  )}
-                </div>
-              </div>
               {sharedMap[String(row.entity_id)]?.tables?.length > 0 && (
                 <div className="entity-shared">
                   {sharedMap[String(row.entity_id)].tables.slice(0, 3).map((tbl) => (
@@ -475,6 +474,9 @@ export default function EntityShedule() {
                 </div>
               )}
               <div className="entity-actions">
+                <button className="btn btn-ghost entity-expand-toggle" onClick={() => toggleEntityExpand(row.entity_id)}>
+                  {expandedEntityIds.has(row.entity_id) ? "Скрыть историю загрузки" : "История загрузки за 7 дней"}
+                </button>
                 <button className="btn btn-ghost" onClick={() => toggleFavoriteEntity(row)}>
                   {favoriteEntityLoadingId === row.entity_id
                     ? "Сохраняем..."
@@ -486,6 +488,41 @@ export default function EntityShedule() {
                   Таблицы сущности
                 </button>
               </div>
+              {expandedEntityIds.has(row.entity_id) && (
+                <div className="entity-expanded-panel">
+                  <div className="entity-expanded-head">
+                    <div>
+                      <div className="entity-expanded-title">История загрузки за 7 дней</div>
+                      <div className="muted">Старт, финиш и длительность окна по сущности за каждый день.</div>
+                    </div>
+                  </div>
+                  {(entityTimelineMap[String(row.entity_id)] || []).length > 0 ? (
+                    <div className="entity-history-chart">
+                      {(entityTimelineMap[String(row.entity_id)] || []).map((item) => {
+                        const ratio = timelineMax ? Number(item.duration_minutes || 0) / timelineMax : 0;
+                        const width = `${Math.max(16, ratio * 100)}%`;
+                        return (
+                          <div key={`${row.entity_id}-${item.day}`} className="entity-history-row">
+                            <div className="entity-history-day">{String(item.day || "").slice(5)}</div>
+                            <div className="entity-history-main">
+                              <div className="entity-history-meta">
+                                <span>Старт: {formatDateTime(item.start_dttm)}</span>
+                                <span>Финиш: {formatDateTime(item.end_dttm)}</span>
+                                <span>Шла: {formatDuration(item.duration_minutes)}</span>
+                              </div>
+                              <div className="entity-history-track">
+                                <div className="entity-history-bar" style={{ width }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="muted">Нет истории за 7 дней</div>
+                  )}
+                </div>
+              )}
             </article>
           ))}
         </div>

@@ -340,24 +340,38 @@ export default function SlowestTables({ onSelectTable }) {
   const compareOverview = useMemo(() => {
     if (!filteredCompareRows.length) return null;
     const aggregate = (suffix) => {
-      const durations = filteredCompareRows
-        .map((row) => row[`duration_${suffix}`])
-        .filter((value) => Number.isFinite(Number(value)))
-        .map(Number);
+      const startValues = filteredCompareRows
+        .map((row) => row[`start_${suffix}`])
+        .filter(Boolean)
+        .sort((a, b) => String(a).localeCompare(String(b)));
       const endValues = filteredCompareRows
         .map((row) => row[`end_${suffix}`])
         .filter(Boolean)
         .sort((a, b) => String(a).localeCompare(String(b)));
+      const start = startValues.length ? startValues[0] : null;
+      const end = endValues.length ? endValues[endValues.length - 1] : null;
+      const startDt = parseLocalDateTime(start);
+      const endDt = parseLocalDateTime(end);
       return {
-        totalMinutes: durations.reduce((sum, value) => sum + value, 0),
-        end: endValues.length ? endValues[endValues.length - 1] : null,
+        start,
+        end,
+        spanMinutes:
+          startDt && endDt ? Math.round(((endDt.getTime() - startDt.getTime()) / 60000) * 10) / 10 : null,
       };
     };
     const base = aggregate("a");
     const compare = aggregate("b");
-    const deltaMinutes = compare.totalMinutes - base.totalMinutes;
+    const deltaMinutes =
+      base.spanMinutes !== null && compare.spanMinutes !== null
+        ? compare.spanMinutes - base.spanMinutes
+        : null;
     return { base, compare, deltaMinutes };
   }, [filteredCompareRows]);
+
+  const compareOverviewMaxSpan = useMemo(() => {
+    if (!compareOverview) return 0;
+    return Math.max(compareOverview.base.spanMinutes || 0, compareOverview.compare.spanMinutes || 0, 0);
+  }, [compareOverview]);
 
   function formatObjectFqn(schema, table) {
     const schemaText = String(schema || "").trim();
@@ -512,10 +526,10 @@ export default function SlowestTables({ onSelectTable }) {
                 {compareOverview && (
                   <div className="entity-compare-overview">
                     <div className="entity-compare-card">
-                      <div className="entity-compare-label">Суммарная длительность</div>
+                      <div className="entity-compare-label">Старт окна сущности</div>
                       <div className="entity-compare-values">
-                        <span>{compareDateA}: {compareOverview.base.totalMinutes.toFixed(1)} мин</span>
-                        <span>{compareDateB}: {compareOverview.compare.totalMinutes.toFixed(1)} мин</span>
+                        <span>{compareDateA}: {formatDateTime(compareOverview.base.start)}</span>
+                        <span>{compareDateB}: {formatDateTime(compareOverview.compare.start)}</span>
                       </div>
                     </div>
                     <div className="entity-compare-card">
@@ -526,16 +540,44 @@ export default function SlowestTables({ onSelectTable }) {
                       </div>
                     </div>
                     <div className={`entity-compare-card ${compareDeltaClass(compareOverview.deltaMinutes)}`}>
-                      <div className="entity-compare-label">Итог по сущности</div>
+                      <div className="entity-compare-label">Длительность окна сущности</div>
                       <div className="entity-compare-values">
+                        <span>{compareDateA}: {compareOverview.base.spanMinutes ?? "—"} мин</span>
+                        <span>{compareDateB}: {compareOverview.compare.spanMinutes ?? "—"} мин</span>
                         <span>
-                          {compareOverview.deltaMinutes > 0
+                          {compareOverview.deltaMinutes === null
+                            ? "не хватает данных"
+                            : compareOverview.deltaMinutes > 0
                             ? `стало дольше на ${compareOverview.deltaMinutes.toFixed(1)} мин`
                             : compareOverview.deltaMinutes < 0
                               ? `стало быстрее на ${Math.abs(compareOverview.deltaMinutes).toFixed(1)} мин`
                               : "без изменений"}
                         </span>
                       </div>
+                      {compareOverviewMaxSpan > 0 && (
+                        <div className="entity-compare-bars">
+                          <div className="entity-compare-bar-row">
+                            <span>{compareDateA}</span>
+                            <div className="entity-compare-bar-track">
+                              <div
+                                className="entity-compare-bar-fill"
+                                style={{ width: `${Math.max(10, ((compareOverview.base.spanMinutes || 0) / compareOverviewMaxSpan) * 100)}%` }}
+                              />
+                            </div>
+                            <span>{compareOverview.base.spanMinutes ?? "—"} мин</span>
+                          </div>
+                          <div className="entity-compare-bar-row">
+                            <span>{compareDateB}</span>
+                            <div className="entity-compare-bar-track">
+                              <div
+                                className="entity-compare-bar-fill"
+                                style={{ width: `${Math.max(10, ((compareOverview.compare.spanMinutes || 0) / compareOverviewMaxSpan) * 100)}%` }}
+                              />
+                            </div>
+                            <span>{compareOverview.compare.spanMinutes ?? "—"} мин</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

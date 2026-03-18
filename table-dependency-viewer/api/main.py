@@ -2516,6 +2516,64 @@ def get_entities():
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
+@router.get("/api/entities/timeline")
+def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
+    try:
+        query = f"""
+            WITH base AS (
+                SELECT
+                    t.entity_id,
+                    e.entity_name,
+                    DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm)) AS load_day,
+                    MIN(l.loading_start_dttm) AS start_dttm,
+                    MAX(COALESCE(l.loading_finish_dttm, l.loading_start_dttm)) AS end_dttm
+                FROM {TABLE_LOADING_HISTORY} l
+                JOIN {TABLE_TABLES_META} t
+                  ON t.table_id = l.object_id
+                JOIN {TABLE_ENTITIES_META} e
+                  ON e.entity_id = t.entity_id
+                WHERE l.object_type = 'table'
+                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND (e.flag_active OR COALESCE(e.on_new_fraemwork, FALSE))
+                  AND COALESCE(l.loading_finish_dttm, l.loading_start_dttm) >= now() - (:days || ' days')::interval
+                GROUP BY t.entity_id, e.entity_name, DATE(COALESCE(l.loading_finish_dttm, l.loading_start_dttm))
+            )
+            SELECT
+                entity_id,
+                entity_name,
+                load_day,
+                start_dttm,
+                end_dttm,
+                EXTRACT(EPOCH FROM (end_dttm - start_dttm)) / 60.0 AS duration_minutes
+            FROM base
+            ORDER BY entity_name, load_day
+        """
+
+        with engine.connect() as conn:
+            rows = conn.execute(text(query), {"days": days}).mappings().all()
+
+        payload = {}
+        for row in rows:
+            entity_id = row.get("entity_id")
+            if not entity_id:
+                continue
+            payload.setdefault(str(entity_id), []).append(
+                {
+                    "day": str(row.get("load_day")),
+                    "start_dttm": serialize_datetime(row.get("start_dttm")),
+                    "end_dttm": serialize_datetime(row.get("end_dttm")),
+                    "duration_minutes": round(float(row.get("duration_minutes") or 0.0), 2),
+                }
+            )
+
+        return JSONResponse(content={"days": days, "items": payload}, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ Ошибка при получении таймлайна сущностей:", str(e))
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @router.get("/api/timeline")
 def get_table_timeline(table_name: str):
     query = f"""

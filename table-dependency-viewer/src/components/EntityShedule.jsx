@@ -26,6 +26,7 @@ export default function EntityShedule() {
   const [dqEntitiesLoading, setDqEntitiesLoading] = useState(false);
   const [favoriteEntityIds, setFavoriteEntityIds] = useState(new Set());
   const [favoriteEntityLoadingId, setFavoriteEntityLoadingId] = useState(null);
+  const [entityTimelineMap, setEntityTimelineMap] = useState({});
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -84,6 +85,13 @@ export default function EntityShedule() {
         setFavoriteEntityIds(ids);
       })
       .catch(() => setFavoriteEntityIds(new Set()));
+  }, []);
+
+  useEffect(() => {
+    entitiesApi
+      .timeline(7)
+      .then((data) => setEntityTimelineMap(data?.items || {}))
+      .catch(() => setEntityTimelineMap({}));
   }, []);
 
   const openEntityTables = (row) => {
@@ -165,6 +173,13 @@ export default function EntityShedule() {
     if (!value) return "—";
     return formatLocalDateTime(value);
   };
+
+  const timelineMax = useMemo(() => {
+    const values = Object.values(entityTimelineMap).flatMap((rows) =>
+      Array.isArray(rows) ? rows.map((row) => Number(row.duration_minutes || 0)) : []
+    );
+    return values.length ? Math.max(...values) : 0;
+  }, [entityTimelineMap]);
 
   const coverageFiltered = useMemo(() => {
     const normalize = (value) =>
@@ -423,6 +438,28 @@ export default function EntityShedule() {
                   <div className="entity-meta-value">
                     {sharedMap[String(row.entity_id)]?.count ?? 0}
                   </div>
+                </div>
+              </div>
+              <div className="entity-trend-block">
+                <div className="entity-meta-label">Загрузка за 7 дней</div>
+                <div className="entity-trend-bars">
+                  {(entityTimelineMap[String(row.entity_id)] || []).map((item) => {
+                    const ratio = timelineMax ? Number(item.duration_minutes || 0) / timelineMax : 0;
+                    const height = `${Math.max(14, ratio * 56)}px`;
+                    return (
+                      <div
+                        key={`${row.entity_id}-${item.day}`}
+                        className="entity-trend-day"
+                        title={`${item.day}: ${item.duration_minutes ?? "—"} мин\n${item.start_dttm || "—"} -> ${item.end_dttm || "—"}`}
+                      >
+                        <span className="entity-trend-bar" style={{ height }} />
+                        <span className="entity-trend-label">{String(item.day || "").slice(5)}</span>
+                      </div>
+                    );
+                  })}
+                  {!(entityTimelineMap[String(row.entity_id)] || []).length && (
+                    <span className="muted">Нет истории за 7 дней</span>
+                  )}
                 </div>
               </div>
               {sharedMap[String(row.entity_id)]?.tables?.length > 0 && (

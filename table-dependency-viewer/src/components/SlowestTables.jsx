@@ -337,6 +337,28 @@ export default function SlowestTables({ onSelectTable }) {
     return stats;
   }, [filteredCompareRows]);
 
+  const compareOverview = useMemo(() => {
+    if (!filteredCompareRows.length) return null;
+    const aggregate = (suffix) => {
+      const durations = filteredCompareRows
+        .map((row) => row[`duration_${suffix}`])
+        .filter((value) => Number.isFinite(Number(value)))
+        .map(Number);
+      const endValues = filteredCompareRows
+        .map((row) => row[`end_${suffix}`])
+        .filter(Boolean)
+        .sort((a, b) => String(a).localeCompare(String(b)));
+      return {
+        totalMinutes: durations.reduce((sum, value) => sum + value, 0),
+        end: endValues.length ? endValues[endValues.length - 1] : null,
+      };
+    };
+    const base = aggregate("a");
+    const compare = aggregate("b");
+    const deltaMinutes = compare.totalMinutes - base.totalMinutes;
+    return { base, compare, deltaMinutes };
+  }, [filteredCompareRows]);
+
   function formatObjectFqn(schema, table) {
     const schemaText = String(schema || "").trim();
     const tableText = String(table || "").trim();
@@ -485,8 +507,38 @@ export default function SlowestTables({ onSelectTable }) {
             )}
             {compareLoading && <div className="muted">Сравниваем загрузки...</div>}
           {compareError && <div className="dep-error-title">{compareError}</div>}
-          {!compareLoading && !compareError && !!filteredCompareRows.length && (
+            {!compareLoading && !compareError && !!filteredCompareRows.length && (
               <>
+                {compareOverview && (
+                  <div className="entity-compare-overview">
+                    <div className="entity-compare-card">
+                      <div className="entity-compare-label">Суммарная длительность</div>
+                      <div className="entity-compare-values">
+                        <span>{compareDateA}: {compareOverview.base.totalMinutes.toFixed(1)} мин</span>
+                        <span>{compareDateB}: {compareOverview.compare.totalMinutes.toFixed(1)} мин</span>
+                      </div>
+                    </div>
+                    <div className="entity-compare-card">
+                      <div className="entity-compare-label">Финиш последней таблицы</div>
+                      <div className="entity-compare-values">
+                        <span>{compareDateA}: {formatDateTime(compareOverview.base.end)}</span>
+                        <span>{compareDateB}: {formatDateTime(compareOverview.compare.end)}</span>
+                      </div>
+                    </div>
+                    <div className={`entity-compare-card ${compareDeltaClass(compareOverview.deltaMinutes)}`}>
+                      <div className="entity-compare-label">Итог по сущности</div>
+                      <div className="entity-compare-values">
+                        <span>
+                          {compareOverview.deltaMinutes > 0
+                            ? `стало дольше на ${compareOverview.deltaMinutes.toFixed(1)} мин`
+                            : compareOverview.deltaMinutes < 0
+                              ? `стало быстрее на ${Math.abs(compareOverview.deltaMinutes).toFixed(1)} мин`
+                              : "без изменений"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="slow-summary compare-summary">
                   <div className="slow-summary-card">
                     <div className="label">Объектов</div>

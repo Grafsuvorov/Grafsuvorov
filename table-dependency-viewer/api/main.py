@@ -6213,6 +6213,22 @@ def get_table_releases(
             rows = conn.execute(
                 text(
                     f"""
+                    WITH issue_snapshot AS (
+                        SELECT
+                            issue_id,
+                            assignee,
+                            created_by
+                        FROM {TABLE_YT_ISSUE_SNAPSHOT}
+                    ),
+                    issue_executor AS (
+                        SELECT DISTINCT ON (issue_id)
+                               issue_id,
+                               author AS executor
+                        FROM {TABLE_YT_ISSUE_TIMELINE}
+                        WHERE event_type = 'State change'
+                          AND value_to IN ('Ожидание релиза', 'В работе')
+                        ORDER BY issue_id, ts DESC NULLS LAST
+                    )
                     SELECT
                         o.release_id,
                         o.task_id,
@@ -6233,9 +6249,12 @@ def get_table_releases(
                         l.initiated_by,
                         l.started_at,
                         l.finished_at,
-                        l.status AS release_status
+                        l.status AS release_status,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, '—') AS task_executor
                     FROM {TABLE_RELEASE_OBJECTS} o
                     LEFT JOIN {TABLE_RELEASE_LOG} l ON l.release_id = o.release_id
+                    LEFT JOIN issue_snapshot snap ON snap.issue_id = o.task_id
+                    LEFT JOIN issue_executor exec ON exec.issue_id = o.task_id
                     WHERE o.schema_name = :schema
                       AND o.table_name = :table
                       AND (:target_system IS NULL OR lower(o.target_system) = lower(:target_system))

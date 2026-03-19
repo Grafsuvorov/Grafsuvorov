@@ -79,6 +79,7 @@ export default function TableCard({
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [expandedGpErrors, setExpandedGpErrors] = useState({});
   const [expandedClickErrors, setExpandedClickErrors] = useState({});
+  const graphSectionRef = useRef(null);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -497,6 +498,9 @@ export default function TableCard({
         setGraphTooLarge(isTooLarge);
         setGraphTruncated(Boolean(data.truncated));
         setShowGraph(!isTooLarge);
+        requestAnimationFrame(() => {
+          graphSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
       })
       .catch((err) => {
         console.error(err);
@@ -1028,7 +1032,8 @@ export default function TableCard({
                 <span>Релиз</span>
                 <span>Задача</span>
                 <span>БД</span>
-                <span>Автор</span>
+                <span>Кто релизил</span>
+                <span>Исполнитель задачи</span>
                 <span>Статус</span>
                 <span>Изменения</span>
                 <span>Дата</span>
@@ -1050,6 +1055,7 @@ export default function TableCard({
                   </span>
                   <span>{item.target_system || "—"}</span>
                   <span>{item.initiated_by || "—"}</span>
+                  <span>{item.task_executor || "—"}</span>
                   <span className={`status-pill ${releaseStatusClass(item.final_status)}`}>
                     {item.final_status || "—"}
                   </span>
@@ -1376,7 +1382,7 @@ export default function TableCard({
         </div>
       )}
 
-      <div className="table-section">
+      <div className="table-section" ref={graphSectionRef}>
         <div className="section-title">Граф зависимостей</div>
         <div className="card">
           {loadingDeps && <div className="muted">Построение графа...</div>}

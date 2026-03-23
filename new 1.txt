@@ -1,130 +1,62 @@
-на совещании так же проговорили примеры:
+Результаты мониторинга
+Мониторинг продолжительности загрузки данных в разрезе тегов и суммарное время загрузки:
+Группа слоев	Прод-ость текущей загрузки	Старт текущей загрузки	Окончание текущей загрузки	Прод-ость пред-ей загрузки	Старт пред-ей загрузки	Окончание пред-ей загрузки	Дельта прод-ости загрузок
+ALL 	0:00:44 	2026-03-20 12:23:17 	2026-03-20 12:23:17 	0:00:17 	2026-03-20 12:23:17 	2026-03-20 12:23:17 	0 min 
+dict 	0:00:07 	2025-10-21 15:43:58 	2025-10-21 15:44:05 	0:00:16 	2025-10-21 15:40:01 	2025-10-21 15:40:18 	0 min 
+stg_ods 	0:00:37 	2025-10-21 15:42:40 	2025-10-21 15:43:18 	0:00:00 	2025-10-21 15:37:04 	2025-10-21 15:37:05 	+1 min 
+Мониторинг продолжительности суммарной загрузки данных с учетом пауз между дагами:
+Ошибок не выявлено.
+Продолжительность работы DAG's
+Имя дага	Статус загрузки	Старт текущего дага	Окончание текущего дага	Текущая прод-сть дага	Предыдущая прод-сть дага	Дельта прод-сти загрузок	Дельта времени работы	ID дага
+dag_airtable_load_api_dict 	success 	2026-03-20 07:32:03 	2026-03-20 07:32:05 	2 sec 	None 	None 	None 	manual__2026-03-20T07:16:35.091011+00:00 
+dag_airtable_load_api_general 	success 	2026-03-20 07:15:28 	2026-03-20 07:15:40 	12 sec 	None 	None 	None 	manual__2026-03-20T07:15:26.910343+00:00 
+dbt_dict_dds 	success 	2026-03-20 08:26:27 	2026-03-20 08:27:03 	35 sec 	None 	None 	None 	scheduled__2026-03-18T20:00:00+00:00 
+dbt_main 	success 	2026-03-20 07:22:21 	2026-03-20 07:22:54 	33 sec 	33 sec 	0 sec 	0 sec 	manual__2026-03-20T07:22:20.738650+00:00 
+oracle_general 	success 	2026-03-20 08:29:29 	2026-03-20 08:30:38 	69 sec 	None 	None 	None 	scheduled__2026-03-18T14:30:00+00:00 
 
-Если ключевое поле в алгоритме должно быть отфильтровано по is not null
 
-Если справочник(либо dm) выгружается в CLick и доступен пользователям, по значению ключевого поля = пробел бизнес-пользователи не найдут того, что ожидали увидеть, в сап это было пустота, дефакто null
+Результаты мониторинга
+Сводка по обновлению dm слоя:
+Дата последнего обновления	Схема	Название таблицы	Статус
+2026-03-20 14:13:06.455756 	dm 	airtable_transportation_lte_baltic_exchange_rates 	success 
+2026-03-20 14:13:06.818761 	dm 	fixed_asset_main 	success 
+2026-03-20 14:13:07.068741 	dm 	transportation_marine_cargo_flow_detailed_by_invoice 	success 
+2026-03-20 14:13:07.193557 	dm 	transportation_technical_management_bp_vs_actual 	success 
+2026-03-20 14:13:06.153683 	dm 	airtable_transportation_bauxite_transshipment 	success 
+2026-03-20 14:13:06.177018 	dm 	airtable_transportation_fuel_cost_analysis 	success 
+2026-03-20 14:13:06.424633 	dm 	airtable_transportation_lte_bunker_control_inspection 	success 
+2026-03-20 14:13:06.465957 	dm 	airtable_transportation_lte_transshipment_voyages 	success 
+2026-03-20 14:13:25.083301 	dm 	airtable_transportation_ogv_voyage_efficiency 	success 
+2026-03-20 14:13:06.106159 	dm 	airtable_transportation_bauxite_fuel_consumption 	success 
+2026-03-20 14:13:06.723915 	dm 	airtable_transportation_ogv_voyage_efficiency_aggregated 	success 
+2026-03-20 14:13:06.806182 	dm 	airtable_transportation_vessels 	success 
+2026-03-20 14:13:06.531079 	dm 	airtable_transportation_marine_crew 	success 
+2026-03-20 14:13:06.912289 	dm 	transportation_bauxite_transshipment_bp_vs_actual 	success 
+2026-03-20 14:13:07.059981 	dm 	transportation_marine_cargo_flow_bp_vs_actual 	success 
+2026-03-20 14:13:26.976240 	dm 	transportation_technical_management_actual 	success 
+Список не загруженных таблиц dm слоя
+Дата последнего обновления	Схема	Название таблицы	ID загрузки	Статус обновления
+2026-03-23 09:02:29.540590+03:00 	ALL 	ALL 	ALL 	ALL 
 
-Зачастую дата может быть одним из полей составного ключа. Сап определяет диапазон доступных дат от 1000 года до 9999, мы в КХД работаем с другими крайними диапазонами дат (с 1900 до 2299), при этом формат даты в лучшем случае будет YYYYMMDD , а в худшем во внутреннем саповском формате
 
-@Sharay Petr для инфо
 
-Анастасия Семенова
-Обновлено 19 дней назад
-дата завершения:04 Mar 2026
-Состояние:Проверка / Тест → Завершена
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 7 дней назад (изменено)
-Обсудили 2026-03-16
-Ограничения
+Результаты мониторинга
+В схемах на DEV найдены таблицы, для которых требуется переименование: Cписок таблиц с названиями полей, длина которых больше 58 символов, на DEV:
+Ошибок не выявлено.
+Список таблиц с русскими буквами в названиях таблиц на DEV:
+Ошибок не выявлено.
+Список таблиц с русскими буквами в названиях полей на DEV:
+Ошибок не выявлено.
+Список 10 самых тяжелых старых таблиц:
+Тип	Схема	Название таблицы	Размер	Владелец	Дней от создания	Дата создания
+TABLE 	userdata 	sae_ods_rims_get_person 	146 MB 	soldatovaae 	40 	2026-02-04 
+TABLE 	userdata 	dict_ods_rims_get_person 	146 MB 	khaustovamg 	32 	2026-02-12 
+TABLE 	userdata 	sae_ods_rims_get_person_1102 	142 MB 	soldatovaae 	34 	2026-02-11 
+TABLE 	lte_ships 	ships_report_full 	12 MB 	gpetl 	88 	2025-12-18 
+TABLE 	sandbox 	ZCO087M_CDS 	10112 kB 	vaskovas 	88 	2025-12-18 
+TABLE 	userdata 	sae_ods_ods_is2_lfa1_1102 	9332 kB 	soldatovaae 	34 	2026-02-11 
+TABLE 	sandbox 	ZLE208M 	7168 kB 	vaskovas 	88 	2025-12-18 
+TABLE 	userdata 	sae_ods_ods_tr2_lfa1_1102 	5559 kB 	soldatovaae 	33 	2026-02-11 
+TABLE 	userdata 	material_texts 	4039 kB 	karimovadf 	146 	2025-10-21 
+TABLE 	lte_ships 	ships_bp 	4000 kB 	vaskovas 	88 	2025-12-18 
 
-заменить в зависимых условия is(not) null на ключевые поля
-2)superset должен получать все пустые поля в виде NULL
-поэтому алгоритм можем поменять так:
-1)для дат вместо NULL ставим 1900-01-01
-2)для остальных типов не меняем ключевые поля вообще
-3)во view для superset(gp или click) передаем ключевые поля через NULLIF(trim(f1),'')
-
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 7 дней назад
-Преимущества перехода:
-1)Расчеты на FULL - Если уберем coalesce на join то уберем перераспределение
-2)возможность расчета инкремента
-3)возможность создания скриптов QA для анализа качества данных
-
-User avatar
-Anastasiya Feoktistova
-Прокомментировал(а) 7 дней назад
-@Zernov Aleksandr
-
-есть разница между пустой датой и 1900-01-01 (может быть заполнена, тк саповская граница ниже)
-
-В SAP пробел существует только на уровне базы. с уровнем базы никто не работает - ни пользователи, ни разработчики, ни аналитики. зачем мы по кхд будем растягивать несуществующие значения, которых при сверках никто никогда нигде не найдет?
-
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 6 дней назад
-@Anastasiya Feoktistova
-1)дату мы зяли из FUNCTION tech_etl.util_text_to_date_validation
-там если в строке пробел или нули то возращает 0, если не может распознать дату или она меньше 1900 года то идет 1900
-так вот именно чтобы null не было решили сделать 1900 год
-begin
-
-if v_text_value = '00000000' then return null; end if; --if null then null
-
-if v_text_value = ' ' then return null; end if;
-
-if v_text_value !~ '^\d{8}$' then return to_date('19000101', 'YYYYMMDD'); --if not date then min date
-
-end if;
-
-if v_text_value < '19000101' then return to_date('19000101', 'YYYYMMDD'); --uf loweer than min return min date
-
-elsif v_text_value >= '22991231' then return to_date('22991231', 'YYYYMMDD'); --if higher than max return max date
-
-end if;
-
-а как именно работают с пробелом? как сверяют
-User avatar
-Anastasiya Feoktistova
-Прокомментировал(а) 6 дней назад
-@Zernov Aleksandr
-
-Так сейчас и обрабатывается незаполненная дата или нижняя граница по-разному, потому что с точки зрения бизнеса это разные ситуации. Я имею ввиду что есть отличие даты NULL от даты 1900-01-01
-
-пробелы существуют только на уровне базы в sap. с уровнем базы никто вообще не работает. сейчас мы очищаем везде это, поэтому никаких проблем нет.
-
-Если мы не будем чистить - у нас будут пробелы, в эталонных выгрузках из sap - их не будет.
-
-Кроме того, если интегрироваться с SAP через одобренные SAP-ом коннекторы - ту же одату, то никаких пробелов на данных тех же таблиц не будет - из-за интеграции БД-БД мы вытаскиваем внутреннюю логику БД под сапом, которая так работает, потому что так исторически сложилось.
-
-@Sharay Petr @Анастасия Семенова подключитесь плиз
-
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 6 дней назад
-задача в клик когда нльзя было выгружать null в ключах
-Создать таблицы "sales_shipment_to_china_plan_vs_actual_pivot" и "sales_shipment_to_china_plan_vs_actual" в ClickHouse : DWH-10649
-
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 6 дней назад
-Пример таблички когда мы не имея ключа не можем убрать дубли ods."/rusal/ledisloc_ral"
-а все загружать всегда не можем из-за того что табличка большая (600млн)
-мы удаляем через OR по дате создания или дате изменения и вставляем по такому же условию
-но при этом оставляем дубли по строке при
-meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/ods/rusalledisloc_ral/sql_query_insert_init.sql · main · dwh / etl · GitLab
-
-User avatar
-Solanov Roman
-Прокомментировал(а) 6 дней назад (изменено)
-Со стороны DE предлагаем:
-
-На слое ODS производить очистку, но не сохранять как null (нормализация данных)
-Для текстовых полей если пробелы - приводить к пустой строке
-Для дат если дата как пустая строка или "00000000" или !~ '^\d{8}$', то сохраняем как to_date('19000102', 'YYYYMMDD')
-Для дат если дата < '19000101' то сохраняем как to_date('19000101', 'YYYYMMDD')
-Для дат если дата >= '22991231' то сохраняем как return to_date('22991231', 'YYYYMMDD')
-В слоях dds и dm - получаем меньше редистрибуций из-за отсутствия необходимость соединять таблицы по ключевым полям через функции coalesce
-В слое dm_view в представлениях для каждого поля автоматически применяется функция автоматической замены на null
-Такое правило нормализации данных позволит использовать единообразные фильтры для полей
-Другими словами, предлагаем замену на null перенести с начала пайплайна (ods слоя) в конец пайплайна (dm_view слой)
-
-User avatar
-Zernov Aleksandr
-Прокомментировал(а) 6 дней назад
-Пример обработки когда уже не чистятся поле функциями и используется дельта по ключу - загрузки из landing
-meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_dds/toro_equipment_unit/sql_query_insert_init.sql · 1129193e90fe0164f6575ec9ebc16844e0c6b587 · dwh / etl · GitLab
-
-User avatar
-Anastasiya Feoktistova
-Прокомментировал(а) 6 дней назад
-
-Пример обработки когда уже не чистятся поле функциями и используется дельта по ключу - загрузки из landing
-
-@Zernov Aleksandr тут оно функцией обернуто + landing (а туда данные загружаются через XI) так же работает как ODATA - это тот способ интеграции, который пробелов не вернет
-
-select
-    tech_etl.util_text_to_null_validation(toro2."EQUNR")       as equipment_unit_code,
-.............

@@ -38,9 +38,9 @@ const LAYER_ORDER = [
   "ods",
   "dds",
   "dm_calc",
+  "dm",
   "dm_view",
   "other",
-  "dm",
 ];
 
 const layerIndexOf = (fqn) => {
@@ -130,7 +130,7 @@ function buildGraph(
   depthLimit = null,
   presetNodes = null,
   presetLayout = null,
-  hoveredNodeId = null
+  focusNodeId = null
 ) {
   if (!centralNode) {
     return {
@@ -146,9 +146,19 @@ function buildGraph(
   }
 
   if (Array.isArray(presetNodes) && presetNodes.length && presetLayout) {
+    const directUpstream = new Set();
+    const directDownstream = new Set();
+    if (focusNodeId) {
+      edges.forEach((edge) => {
+        if (edge.target === focusNodeId) directUpstream.add(edge.source);
+        if (edge.source === focusNodeId) directDownstream.add(edge.target);
+      });
+    }
     const nodes = presetNodes.map((node) => {
       const fqn = node.id;
       const isCentral = fqn === centralNode;
+      const isFocused = fqn === focusNodeId;
+      const isNeighbor = directUpstream.has(fqn) || directDownstream.has(fqn);
       const layer = layerOf(fqn);
       const width = node.width || (isCentral ? CENTRAL_STYLE.width : NODE_WIDTH_BY_LAYER[layer]);
       const height = node.height || 56;
@@ -159,6 +169,21 @@ function buildGraph(
             border: "1px solid rgba(255,255,255,.18)",
             ...NODE_STYLE_BY_LAYER[layer],
           };
+      const emphasisStyle = focusNodeId
+        ? isFocused
+          ? {
+              border: "2px solid rgba(250, 204, 21, 0.95)",
+              boxShadow: "0 0 0 1px rgba(250, 204, 21, 0.28), 0 18px 42px rgba(3,7,18,0.34)",
+            }
+          : isNeighbor
+            ? {
+                border: directUpstream.has(fqn)
+                  ? "2px solid rgba(96, 165, 250, 0.9)"
+                  : "2px solid rgba(251, 146, 60, 0.9)",
+                opacity: 1,
+              }
+            : { opacity: 0.22, filter: "saturate(0.55)" }
+        : {};
       const pos = presetLayout?.[fqn] || { x: 0, y: 0 };
       const entityName = node.entity || entities?.[fqn];
 
@@ -182,7 +207,7 @@ function buildGraph(
             </div>
           ),
         },
-        style: { ...baseNodeStyle, ...style },
+        style: { ...baseNodeStyle, ...style, ...emphasisStyle },
       };
     });
 
@@ -196,9 +221,29 @@ function buildGraph(
         type: "smoothstep",
         markerEnd: { type: MarkerType.ArrowClosed },
         style: {
-          stroke: e.target === centralNode ? "#60a5fa" : e.source === centralNode ? "#fb923c" : "#94a3b8",
-          strokeWidth: e.source === centralNode || e.target === centralNode ? 1.8 : 1.35,
-          opacity: 0.78,
+          stroke: focusNodeId
+            ? e.target === focusNodeId
+              ? "#60a5fa"
+              : e.source === focusNodeId
+                ? "#fb923c"
+                : "#64748b"
+            : e.target === centralNode
+              ? "#60a5fa"
+              : e.source === centralNode
+                ? "#fb923c"
+                : "#94a3b8",
+          strokeWidth: focusNodeId
+            ? e.source === focusNodeId || e.target === focusNodeId
+              ? 2.2
+              : 1.1
+            : e.source === centralNode || e.target === centralNode
+              ? 1.8
+              : 1.35,
+          opacity: focusNodeId
+            ? e.source === focusNodeId || e.target === focusNodeId
+              ? 0.96
+              : 0.14
+            : 0.78,
           strokeDasharray:
             Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
         },
@@ -277,6 +322,10 @@ function buildGraph(
       const sorted = list.sort((a, b) => a.localeCompare(b));
       return sorted.map((fqn, index) => {
         const isCentral = fqn === centralNode;
+        const isFocused = fqn === focusNodeId;
+        const directUpstream = new Set((rev[focusNodeId] || []));
+        const directDownstream = new Set((adj[focusNodeId] || []));
+        const isNeighbor = directUpstream.has(fqn) || directDownstream.has(fqn);
         const layer = layerOf(fqn);
         const entityName = entities?.[fqn];
         const width = isCentral
@@ -289,6 +338,21 @@ function buildGraph(
               border: "1px solid rgba(255,255,255,.18)",
               ...NODE_STYLE_BY_LAYER[layer],
             };
+        const emphasisStyle = focusNodeId
+          ? isFocused
+            ? {
+                border: "2px solid rgba(250, 204, 21, 0.95)",
+                boxShadow: "0 0 0 1px rgba(250, 204, 21, 0.28), 0 18px 42px rgba(3,7,18,0.34)",
+              }
+            : isNeighbor
+              ? {
+                  border: directUpstream.has(fqn)
+                    ? "2px solid rgba(96, 165, 250, 0.9)"
+                    : "2px solid rgba(251, 146, 60, 0.9)",
+                  opacity: 1,
+                }
+              : { opacity: 0.22, filter: "saturate(0.55)" }
+          : {};
 
         return {
           id: fqn,
@@ -310,7 +374,7 @@ function buildGraph(
               </div>
             ),
           },
-          style: { ...baseNodeStyle, ...style },
+          style: { ...baseNodeStyle, ...style, ...emphasisStyle },
         };
       });
     });
@@ -325,9 +389,27 @@ function buildGraph(
       type: "smoothstep",
       markerEnd: { type: MarkerType.ArrowClosed },
       style: {
-        stroke: isDict(e.source) ? "#64748b" : "#6b7280",
-        strokeWidth: 1.4,
-        opacity: 0.6,
+        stroke: focusNodeId
+          ? e.target === focusNodeId
+            ? "#60a5fa"
+            : e.source === focusNodeId
+              ? "#fb923c"
+              : isDict(e.source)
+                ? "#64748b"
+                : "#6b7280"
+          : isDict(e.source)
+            ? "#64748b"
+            : "#6b7280",
+        strokeWidth: focusNodeId
+          ? e.source === focusNodeId || e.target === focusNodeId
+            ? 2.2
+            : 1.0
+          : 1.4,
+        opacity: focusNodeId
+          ? e.source === focusNodeId || e.target === focusNodeId
+            ? 0.95
+            : 0.12
+          : 0.6,
         strokeDasharray:
           Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
       },
@@ -359,13 +441,14 @@ export default function GraphViewer({
 }) {
   const [depthLimit, setDepthLimit] = useState(DEFAULT_DEPTH);
   const [showAll, setShowAll] = useState(false);
-  const hoveredNodeId = null;
+  const [clickMode, setClickMode] = useState("open");
+  const [focusNodeId, setFocusNodeId] = useState(null);
   const flowRef = useRef(null);
   const fitKeyRef = useRef("");
   const usePreset = Array.isArray(nodes) && nodes.length > 0 && layout;
   const graph = useMemo(
-    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout, hoveredNodeId),
-    [centralNode, edges, entities, depthLimit, showAll, nodes, layout, hoveredNodeId]
+    () => buildGraph(centralNode, edges, entities, showAll ? null : depthLimit, nodes, layout, focusNodeId),
+    [centralNode, edges, entities, depthLimit, showAll, nodes, layout, focusNodeId]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
 
@@ -380,6 +463,10 @@ export default function GraphViewer({
   }, [centralNode, graph.nodes.length, graph.rfEdges.length]);
 
   const handleNodeClick = (_, node) => {
+    if (clickMode === "focus") {
+      setFocusNodeId((current) => (current === node.id ? null : node.id));
+      return;
+    }
     if (!onNodeClick) return;
     const parts = node.id.split(".");
     const table = parts.pop();
@@ -399,6 +486,20 @@ export default function GraphViewer({
           Показано {graph.visibleNodes}/{graph.totalNodes} узлов · {graph.visibleEdges}/{graph.totalEdges} связей
         </div>
         <div className="dep-graph-actions">
+          <button
+            className={`btn btn-ghost ${clickMode === "focus" ? "active" : ""}`}
+            onClick={() => {
+              setClickMode((mode) => (mode === "open" ? "focus" : "open"));
+              setFocusNodeId(null);
+            }}
+          >
+            {clickMode === "open" ? "Клик: открыть карточку" : "Клик: подсветить связи"}
+          </button>
+          {focusNodeId && (
+            <button className="btn btn-ghost" onClick={() => setFocusNodeId(null)}>
+              Сбросить подсветку
+            </button>
+          )}
           {!usePreset && !showAll && (
             <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
               +1 уровень
@@ -440,7 +541,9 @@ export default function GraphViewer({
             </span>
           ))}
         </div>
-        <div className="dep-graph-hint">Синие стрелки входят в текущую таблицу, оранжевые выходят из нее. Клик по узлу открывает карточку.</div>
+        <div className="dep-graph-hint">
+          Синие стрелки входят в выбранный узел, оранжевые выходят из него. В режиме подсветки клик выделяет только прямые связи.
+        </div>
       </div>
       <div className="dep-graph-canvas">
         <ReactFlow

@@ -980,7 +980,7 @@ def _layer_of_table(fqn: str) -> str:
 
 
 def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
-    order = ["raw_ext", "landing", "dict_stg", "dict_ods", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm_view", "other", "dm"]
+    order = ["raw_ext", "landing", "dict_stg", "dict_ods", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm", "dm_view", "other"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
         layer = _layer_of_table(node_id)

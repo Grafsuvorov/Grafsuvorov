@@ -6624,6 +6624,112 @@ def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
         raise HTTPException(status_code=500, detail="Не удалось получить задачи YouTrack")
 
 
+@router.get("/api/ytrek/workload")
+def get_ytrek_workload(days: int = Query(90, ge=14, le=3650)):
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"""
+                    WITH tasks AS (
+                        SELECT DISTINCT ro.task_id
+                        FROM {TABLE_RELEASE_OBJECTS} ro
+                        WHERE ro.task_id IS NOT NULL
+                    ),
+                    day_series AS (
+                        SELECT generate_series(
+                            CURRENT_DATE - (:days - 1) * INTERVAL '1 day',
+                            CURRENT_DATE,
+                            INTERVAL '1 day'
+                        )::date AS day
+                    ),
+                    snap AS (
+                        SELECT s.issue_id, s.created_at
+                        FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                        JOIN tasks t ON t.task_id = s.issue_id
+                    ),
+                    first_assignee AS (
+                        SELECT issue_id, MIN(ts) AS ts
+                        FROM {TABLE_YT_ISSUE_TIMELINE}
+                        WHERE event_type = 'Assignee change'
+                        GROUP BY issue_id
+                    ),
+                    first_work AS (
+                        SELECT issue_id, MIN(ts) AS ts
+                        FROM {TABLE_YT_ISSUE_TIMELINE}
+                        WHERE event_type = 'State change'
+                          AND value_to = 'В работе'
+                        GROUP BY issue_id
+                    ),
+                    first_wait_release AS (
+                        SELECT issue_id, MIN(ts) AS ts
+                        FROM {TABLE_YT_ISSUE_TIMELINE}
+                        WHERE event_type = 'State change'
+                          AND value_to = 'Ожидание релиза'
+                        GROUP BY issue_id
+                    ),
+                    created_daily AS (
+                        SELECT DATE(created_at) AS day, COUNT(*) AS cnt
+                        FROM snap
+                        WHERE created_at >= CURRENT_DATE - (:days - 1) * INTERVAL '1 day'
+                        GROUP BY 1
+                    ),
+                    assignee_daily AS (
+                        SELECT DATE(a.ts) AS day, COUNT(*) AS cnt
+                        FROM first_assignee a
+                        JOIN tasks t ON t.task_id = a.issue_id
+                        WHERE a.ts >= CURRENT_DATE - (:days - 1) * INTERVAL '1 day'
+                        GROUP BY 1
+                    ),
+                    work_daily AS (
+                        SELECT DATE(w.ts) AS day, COUNT(*) AS cnt
+                        FROM first_work w
+                        JOIN tasks t ON t.task_id = w.issue_id
+                        WHERE w.ts >= CURRENT_DATE - (:days - 1) * INTERVAL '1 day'
+                        GROUP BY 1
+                    ),
+                    wait_daily AS (
+                        SELECT DATE(w.ts) AS day, COUNT(*) AS cnt
+                        FROM first_wait_release w
+                        JOIN tasks t ON t.task_id = w.issue_id
+                        WHERE w.ts >= CURRENT_DATE - (:days - 1) * INTERVAL '1 day'
+                        GROUP BY 1
+                    ),
+                    release_daily AS (
+                        SELECT DATE(started_at) AS day, COUNT(*) AS cnt
+                        FROM {TABLE_RELEASE_LOG}
+                        WHERE started_at >= CURRENT_DATE - (:days - 1) * INTERVAL '1 day'
+                        GROUP BY 1
+                    )
+                    SELECT
+                        ds.day::text AS day,
+                        COALESCE(cd.cnt, 0) AS created_count,
+                        COALESCE(ad.cnt, 0) AS assigned_count,
+                        COALESCE(wd.cnt, 0) AS in_work_count,
+                        COALESCE(rd.cnt, 0) AS release_ready_count,
+                        COALESCE(ld.cnt, 0) AS release_count,
+                        COALESCE(cd.cnt, 0)
+                          + COALESCE(ad.cnt, 0)
+                          + COALESCE(wd.cnt, 0)
+                          + COALESCE(rd.cnt, 0) AS total_activity
+                    FROM day_series ds
+                    LEFT JOIN created_daily cd ON cd.day = ds.day
+                    LEFT JOIN assignee_daily ad ON ad.day = ds.day
+                    LEFT JOIN work_daily wd ON wd.day = ds.day
+                    LEFT JOIN wait_daily rd ON rd.day = ds.day
+                    LEFT JOIN release_daily ld ON ld.day = ds.day
+                    ORDER BY ds.day
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+            return list(rows)
+    except Exception as e:
+        print("❌ /api/ytrek/workload error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить нагрузку по задачам")
+
+
 @router.get("/api/analytics/dashboard")
 def get_analytics_dashboard(
     days: int = Query(30, ge=1, le=3650),

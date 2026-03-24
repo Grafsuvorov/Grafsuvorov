@@ -5653,6 +5653,102 @@ main.content {
   margin-top: 18px;
 }
 
+.yt-workload-shell {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at top right, rgba(251,191,36,0.14), transparent 28%),
+    linear-gradient(180deg, rgba(15,23,42,0.82), rgba(2,6,23,0.78));
+}
+
+.yt-workload-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.yt-workload-note {
+  max-width: 280px;
+  text-align: right;
+}
+
+.yt-workload-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.yt-workload-kpi {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: linear-gradient(180deg, rgba(30,41,59,0.58), rgba(2,6,23,0.44));
+}
+
+.yt-workload-kpi .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.yt-workload-kpi .value {
+  margin-top: 8px;
+  font-size: 30px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.yt-workload-kpi .hint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.yt-workload-chart {
+  height: 340px;
+}
+
+.yt-workload-tooltip {
+  min-width: 220px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(2,6,23,0.94);
+  box-shadow: 0 18px 36px rgba(2,6,23,0.4);
+}
+
+.yt-workload-tooltip-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 8px;
+}
+
+.yt-workload-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #cbd5e1;
+  padding: 3px 0;
+}
+
+.yt-workload-tooltip-row strong {
+  color: #f8fafc;
+}
+
+.yt-workload-tooltip-row.highlight {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
 .yt-analytics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -5737,6 +5833,21 @@ main.content {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .yt-workload-head {
+    flex-direction: column;
+  }
+
+  .yt-workload-note {
+    text-align: left;
+    max-width: none;
+  }
+
+  .yt-workload-chart {
+    height: 300px;
+  }
 }
 
 .entity-meta-grid {

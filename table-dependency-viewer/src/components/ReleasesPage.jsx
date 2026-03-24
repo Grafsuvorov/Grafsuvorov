@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Bar,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceLine,
+} from "recharts";
 import "../style/app.css";
 import { formatLocalDateTime } from "../utils/datetime.js";
 
@@ -22,6 +34,9 @@ export default function ReleasesPage() {
   const [ytTasks, setYtTasks] = useState([]);
   const [ytTasksLoading, setYtTasksLoading] = useState(false);
   const [ytTasksError, setYtTasksError] = useState(null);
+  const [ytWorkload, setYtWorkload] = useState([]);
+  const [ytWorkloadLoading, setYtWorkloadLoading] = useState(false);
+  const [ytWorkloadError, setYtWorkloadError] = useState(null);
   const analyticsDays = 30;
   const [selectedDirection, setSelectedDirection] = useState(null);
   const [selectedCreator, setSelectedCreator] = useState(null);
@@ -61,6 +76,14 @@ export default function ReleasesPage() {
       .then((data) => setYtTasks(Array.isArray(data) ? data : []))
       .catch((err) => setYtTasksError(typeof err === "string" ? err : "Не удалось загрузить задачи YouTrack"))
       .finally(() => setYtTasksLoading(false));
+
+    setYtWorkloadLoading(true);
+    setYtWorkloadError(null);
+    fetch(`${API_BASE}/api/ytrek/workload?days=${analyticsDays}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить нагрузку по задачам")))
+      .then((data) => setYtWorkload(Array.isArray(data) ? data : []))
+      .catch((err) => setYtWorkloadError(typeof err === "string" ? err : "Не удалось загрузить нагрузку по задачам"))
+      .finally(() => setYtWorkloadLoading(false));
   }, []);
 
   const openDetails = (releaseId) => {
@@ -91,6 +114,66 @@ export default function ReleasesPage() {
   const formatDateTime = (value) => {
     if (!value) return "—";
     return formatLocalDateTime(value, { withSeconds: false });
+  };
+
+  const formatShortDay = (value) => {
+    if (!value) return "—";
+    const [year, month, day] = String(value).split("-");
+    if (!year || !month || !day) return value;
+    return `${day}.${month}`;
+  };
+
+  const workloadSummary = useMemo(() => {
+    if (!ytWorkload.length) return null;
+    const peakActivity = [...ytWorkload].sort((a, b) => (b.total_activity || 0) - (a.total_activity || 0))[0] || null;
+    const peakCreated = [...ytWorkload].sort((a, b) => (b.created_count || 0) - (a.created_count || 0))[0] || null;
+    const releaseDays = ytWorkload.filter((row) => Number(row.release_count || 0) > 0);
+    return {
+      peakActivity,
+      peakCreated,
+      releaseDays: releaseDays.length,
+    };
+  }, [ytWorkload]);
+
+  const releaseReferenceDays = useMemo(
+    () => ytWorkload.filter((row) => Number(row.release_count || 0) > 0).map((row) => row.day),
+    [ytWorkload],
+  );
+
+  const workloadTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    const data = payload[0]?.payload || {};
+    return (
+      <div className="yt-workload-tooltip">
+        <div className="yt-workload-tooltip-title">{formatShortDay(label)}</div>
+        <div className="yt-workload-tooltip-row">
+          <span>Создано</span>
+          <strong>{data.created_count || 0}</strong>
+        </div>
+        <div className="yt-workload-tooltip-row">
+          <span>Назначено</span>
+          <strong>{data.assigned_count || 0}</strong>
+        </div>
+        <div className="yt-workload-tooltip-row">
+          <span>Взято в работу</span>
+          <strong>{data.in_work_count || 0}</strong>
+        </div>
+        <div className="yt-workload-tooltip-row">
+          <span>Ожидание релиза</span>
+          <strong>{data.release_ready_count || 0}</strong>
+        </div>
+        <div className="yt-workload-tooltip-row">
+          <span>Суммарная активность</span>
+          <strong>{data.total_activity || 0}</strong>
+        </div>
+        {data.release_count ? (
+          <div className="yt-workload-tooltip-row highlight">
+            <span>Релизов в день</span>
+            <strong>{data.release_count}</strong>
+          </div>
+        ) : null}
+      </div>
+    );
   };
 
   const openTable = (schema, table) => {
@@ -179,6 +262,82 @@ export default function ReleasesPage() {
           <div className="dep-error-title">{ytStatsError || ytTasksError}</div>
         )}
         {!ytStatsLoading && !ytStatsError && ytStats && (
+          <>
+          <div className="yt-workload-shell">
+            <div className="yt-workload-head">
+              <div>
+                <div className="section-subtitle">Нагрузка по задачам по дням</div>
+                <div className="muted">
+                  Видно, когда задачи создавались, назначались, брались в работу и доходили до ожидания релиза.
+                </div>
+              </div>
+              <div className="yt-workload-note muted">
+                Вертикальные маркеры показывают дни релизов.
+              </div>
+            </div>
+            {(ytWorkloadLoading || ytWorkloadError) && (
+              <div className={ytWorkloadError ? "dep-error-title" : "muted"}>
+                {ytWorkloadError || "Загрузка графика..."}
+              </div>
+            )}
+            {!ytWorkloadLoading && !ytWorkloadError && workloadSummary && (
+              <div className="yt-workload-kpis">
+                <div className="yt-workload-kpi">
+                  <div className="label">Пик активности</div>
+                  <div className="value">{workloadSummary.peakActivity?.total_activity || 0}</div>
+                  <div className="hint">{formatShortDay(workloadSummary.peakActivity?.day)}</div>
+                </div>
+                <div className="yt-workload-kpi">
+                  <div className="label">Пик новых задач</div>
+                  <div className="value">{workloadSummary.peakCreated?.created_count || 0}</div>
+                  <div className="hint">{formatShortDay(workloadSummary.peakCreated?.day)}</div>
+                </div>
+                <div className="yt-workload-kpi">
+                  <div className="label">Дней с релизами</div>
+                  <div className="value">{workloadSummary.releaseDays}</div>
+                  <div className="hint">в окне {analyticsDays} дней</div>
+                </div>
+              </div>
+            )}
+            {!ytWorkloadLoading && !ytWorkloadError && ytWorkload.length > 0 && (
+              <div className="yt-workload-chart">
+                <ResponsiveContainer width="100%" height={340}>
+                  <ComposedChart data={ytWorkload} margin={{ top: 16, right: 18, left: -8, bottom: 8 }}>
+                    <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
+                    <XAxis
+                      dataKey="day"
+                      tickFormatter={formatShortDay}
+                      fontSize={12}
+                      minTickGap={20}
+                    />
+                    <YAxis allowDecimals={false} fontSize={12} width={28} />
+                    <Tooltip content={workloadTooltip} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {releaseReferenceDays.map((day) => (
+                      <ReferenceLine
+                        key={day}
+                        x={day}
+                        stroke="rgba(251,191,36,0.78)"
+                        strokeDasharray="4 4"
+                      />
+                    ))}
+                    <Area
+                      type="monotone"
+                      dataKey="total_activity"
+                      name="Общая активность"
+                      stroke="#f59e0b"
+                      fill="rgba(245,158,11,0.16)"
+                      strokeWidth={2.2}
+                    />
+                    <Bar dataKey="created_count" name="Создано" fill="#60a5fa" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="assigned_count" name="Назначено" fill="#34d399" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="in_work_count" name="Взято в работу" fill="#f97316" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="release_ready_count" name="Ожидание релиза" fill="#a78bfa" radius={[4, 4, 0, 0]} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
           <div className="yt-analytics-grid">
             <div className="yt-analytics-block">
               <div className="section-subtitle">По направлениям</div>
@@ -333,6 +492,7 @@ export default function ReleasesPage() {
               )}
             </div>
           </div>
+          </>
         )}
       </section>
 

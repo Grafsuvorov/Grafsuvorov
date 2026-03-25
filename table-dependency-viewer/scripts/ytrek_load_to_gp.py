@@ -27,7 +27,8 @@ RELEASE_LOOKBACK_DAYS = int(os.getenv("YT_RELEASE_LOOKBACK_DAYS", "14"))
 
 ISSUE_FIELDS = (
     "id,idReadable,summary,description,project(name,key),"
-    "customFields(name,value(id,name)),reporter(login,name),assignee(login,name),"
+    "customFields(id,name,$type,value(id,name,login,fullName,text,presentation)),"
+    "reporter(login,name),assignee(login,name),"
     "created,updated,resolved"
 )
 ACTIVITY_FIELDS = "author(name,login),timestamp,field(name),added(name,login),removed(name,login),to(name,login)"
@@ -112,29 +113,29 @@ def api_get(url, params):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Load or refresh YouTrack issues into tech_etl.yt_issue_* tables"
+        description="Загрузка и обновление задач YouTrack в таблицы tech_etl.yt_issue_*"
     )
     parser.add_argument(
         "--days",
         type=int,
         default=RELEASE_LOOKBACK_DAYS,
-        help="Lookback window in days from the latest release point (default: 14)",
+        help="Окно в днях назад от последнего релиза (по умолчанию: 14)",
     )
     parser.add_argument(
         "--issues",
         type=str,
         default="",
-        help="Comma-separated issue IDs to refresh explicitly, e.g. DWH-1,DWH-2",
+        help="Список issue ID через запятую для принудительного обновления, например DWH-1,DWH-2",
     )
     parser.add_argument(
         "--manual-only",
         action="store_true",
-        help="Use only --issues or built-in ISSUE_IDS and do not derive task IDs from releases",
+        help="Использовать только --issues или встроенный ISSUE_IDS и не брать задачи из релизов",
     )
     parser.add_argument(
         "--truncate",
         action="store_true",
-        help="Truncate yt_issue_* tables before load",
+        help="Полностью очистить таблицы yt_issue_* перед загрузкой",
     )
     return parser.parse_args()
 
@@ -206,11 +207,15 @@ def clean_text(value):
 
 def normalize_value(value):
     if isinstance(value, list):
-        return ", ".join([v.get("name", str(v)) if isinstance(v, dict) else str(v) for v in value])
+        normalized = [normalize_value(v) for v in value]
+        return ", ".join([str(v) for v in normalized if v not in (None, "", "None")])
     if isinstance(value, dict):
         if value.get("$type") == "PeriodValue":
             return fmt_period_value(value)
-        return value.get("name", str(value))
+        for key in ("name", "fullName", "login", "text", "presentation"):
+            if value.get(key) not in (None, ""):
+                return value.get(key)
+        return str(value)
     if isinstance(value, int):
         if value > 1_000_000_000_000:
             return fmt_ts(value)

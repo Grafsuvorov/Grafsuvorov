@@ -1,164 +1,170 @@
-#!/usr/bin/env python3
-  import json
-  import sys
+SELECT `plant_code` AS `plant_code_62a6a8`, `warehouse_code` AS `warehouse_code_7f67cd`, `warehouse_name` AS `warehouse_name_a1ef6f`, `material_code` AS `material_code_87485b`, `material_short_name` AS `material_short_name_026bf7`, `valuation_type_code` AS `valuation_type_code_88411b`, `batch_code` AS `batch_code_692d47`, `stock_type_code` AS `stock_type_code_4e5eb8`, `external_contract_number` AS `external_contract_number_e1001a`, `sales_document_code` AS `sales_document_code_b395f4`, `sales_document_position_line_item_code` AS `sales_document_position_line_item_code_e59107`, `wbs_element_number` AS `wbs_element_number_9ae543`, `supplier_code` AS `supplier_code_f92bfe`, `customer_code` AS `customer_code_cef158`, `material_costing_system_code` AS `material_costing_system_code_8076e7`, `price_valuation_type_code` AS `price_valuation_type_code_c3375c`, `valuation_class_code` AS `valuation_class_code_1f7c53`, `valuation_class_name` AS `valuation_class_name_8016b3`, `general_ledger_account_code` AS `general_ledger_account_code_dfcc91`, `unit_balance_currency_code` AS `unit_balance_currency_code_02ebf7`, `base_uom_name` AS `base_uom_name_34011c`, sum(`total_stock_quantity`) AS `Общий Запас_953dd5`, SUM(total_stock_quantity * average_weighted_stock_price_amount) AS `Общая Стоимость_177965`, AVG(`moving_average_price_amount`) AS `Средняя скользящая цена_e8018f`, AVG(`standard_price_amount`) AS `Стандартная цена_d3267c`, ROUND(AVG(ROUND(average_weighted_stock_price_amount, 14)), 14) AS `Цена кумулятивного запаса_46dfa1` 
+FROM (
 
-  import requests
-  import urllib3
-
-  urllib3.disable_warnings()
-
-  YOUTRACK_URL = "https://yt.rusal.ru"
-  YOUTRACK_TOKEN = "PUT_TOKEN_HERE"
-  ISSUE_ID = sys.argv[1] if len(sys.argv) > 1 else "DWH-10867"
-
-  HEADERS = {
-      "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-      "Accept": "application/json",
-  }
+    
 
 
-  def api_get(path, params=None):
-      r = requests.get(
-          f"{YOUTRACK_URL}{path}",
-          headers=HEADERS,
-          params=params or {},
-          verify=False,
-          timeout=60,
-      )
-      print(f"\n>>> GET {path}")
-      print("status:", r.status_code)
-      r.raise_for_status()
-      return r.json()
+with
+t_rls as (
+select distinct
+unit_id
+from dm.rls_t
+where business_area_type IN ('MM','BI')
+and rls_type = 'user_to_plant_code'
+and lower(user_id) =lower('ArchibasovaZV' )  --( 'ArchibasovaZV')	
+),
+sklad_data 
+AS
+(
+SELECT *
+FROM dm_view.material_stock_balance balace
+  JOIN t_rls ON t_rls.unit_id = balace.plant_code
+WHERE NOT
+(
+    toStartOfMonth(today()) + INTERVAL 1 MONTH - INTERVAL 1 DAY = dt_posting_next
+    AND
+    total_stock_quantity = 0
+)
+and  formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') BETWEEN dt_posting AND dt_posting_next
+--and plant_code = '5101' and warehouse_code = '1107' and material_code = '000000140210039164' and batch_code = '0011964520'
+),
+avg_prices
+AS
+(
+SELECT calculation_code,
+	price_valuation_type_code as price_valuation_type_code,
+	standard_price_amount / price_unit_code as standard_price_amount,
+	moving_average_price_amount  / price_unit_code as moving_average_price_amount
+FROM dm_view.material_price_calculation
+WHERE formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') BETWEEN dt_valid_from AND dt_valid_to
+and calculation_code in (select material_costing_system_code from sklad_data)
+),
+sklad_data_with_date as (
+	select base.*,
+	case when base.price_rule_code = '3' then DATE_TRUNC('month', toDate(subtractDays(today(), 100))) -- период запроса выборки
+	when base.dt_last_material_movement_and_calculation > DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then DATE_TRUNC('month', toDate(subtractDays(today(), 100))) -- период запроса выборки
+	when base.dt_last_material_movement_and_calculation < DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then coalesce(base.dt_last_material_movement_and_calculation_shifted, base.dt_last_existed_material_movement_and_calculation, base.dt_last_material_movement_and_calculation)
+	when base.dt_last_material_movement_and_calculation = DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then DATE_TRUNC('month', toDate(subtractDays(today(), 100))) -- период запроса выборки
+	end as zapros_period,
+	case when base.price_rule_code = '3' then 1
+	when base.dt_last_material_movement_and_calculation > DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then 2
+	when base.dt_last_material_movement_and_calculation < DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then 3
+	when base.dt_last_material_movement_and_calculation = DATE_TRUNC('month', toDate(subtractDays(today(), 100))) then 4
+	end as what_date
+	from sklad_data as base
+)
+,
+price as (
+select average_weighted_stock_price_rule3_amount, dt_valid_from, calculation_code from dm_view.material_price_calculation
+where DATE_TRUNC('month', toDate(subtractDays(today(), 100))) between dt_valid_from and dt_valid_to
+and calculation_code in (select material_costing_system_code from sklad_data_with_date)
+and price_rule_code = '3'
+),
+
+price_2 as (
+select average_weighted_stock_price_rule2_prev_date_amount, average_weighted_stock_price_rule2_next_date_amount, dt_valid_from, calculation_code from dm_view.material_price_calculation
+where calculation_code in (select material_costing_system_code from sklad_data_with_date)
+and price_rule_code = '2'
+)
+
+SELECT base.dt_posting AS dt_posting,
+base.material_code AS material_code,
+base.material_uom_code AS material_uom_code,
+base.plant_code AS plant_code,
+base.warehouse_code AS warehouse_code,
+base.batch_code AS batch_code,
+base.valuation_type_code AS valuation_type_code,
+base.stock_type_code AS stock_type_code,
+base.sales_document_code AS sales_document_code,
+base.sales_document_position_line_item_code AS sales_document_position_line_item_code,
+base.wbs_element_code AS wbs_element_code,
+base.wbs_element_number AS wbs_element_number,
+base.supplier_code AS supplier_code,
+base.customer_code AS customer_code,
+base.total_stock_quantity AS total_stock_quantity,
+base.unit_balance_currency_code AS unit_balance_currency_code,
+base.material_costing_system_code AS material_costing_system_code,
+base.price_rule_code AS price_rule_code,
+base.dt_posting_next AS dt_next_posting,
+base.plant_name AS plant_name,
+base.valuation_assessment_code AS valuation_assessment_code,
+base.warehouse_name AS warehouse_name,
+base.warehouse_type_code AS warehouse_type_code,
+base.warehouse_type_name AS warehouse_type_name,
+base.storage_bin_code AS storage_bin_code,
+base.material_full_name AS material_full_name,
+base.material_kubal_code AS material_kubal_code,
+base.is_batch_mandatory AS is_batch_mandatory,
+base.material_type_code AS material_type_code,
+base.material_group_code AS material_group_code,
+base.sector_code AS sector_code,
+base.material_category_code AS material_category_code,
+base.material_short_name AS material_short_name,
+base.material_alternative_uom_code AS material_alternative_uom_code,
+base.material_tnved_eas_code AS material_tnved_eas_code,
+base.material_okpd2_code AS material_okpd2_code,
+base.purchase_responsible_department_code AS purchase_responsible_department_code,
+base.material_planning_controller_code AS material_planning_controller_code,
+base.head_of_production_code AS head_of_production_code,
+base.material_type_name AS material_type_name,
+base.material_group_name AS material_group_name,
+base.purchase_responsible_department_name AS purchase_responsible_department_name,
+base.material_planning_controller_name AS material_planning_controller_name,
+base.holding_currency_code AS holding_currency_code,
+base.wbs_element_short_name AS wbs_element_short_name,
+base.unit_balance_code AS unit_balance_code,
+base.material_category_name AS material_category_name,
+base.counterparty_wbs_element_code AS counterparty_wbs_element_code,
+base.valuation_class_code AS valuation_class_code,
+base.external_contract_number AS external_contract_number,
+base.supplier_extended_name AS supplier_extended_name,
+base.customer_extended_name AS customer_extended_name,
+base.non_liquid_asset_type_code AS non_liquid_asset_type_code,
+base.uom_to_alternative_uom_coefficient_amount AS uom_to_alternative_uom_coefficient_amount,
+base.base_uom_name AS base_uom_name,
+base.valuation_class_name AS valuation_class_name,
+base.general_ledger_account_code AS general_ledger_account_code,
+base.general_ledger_account_name AS general_ledger_account_name,
+base.general_ledger_alternative_account_code AS general_ledger_alternative_account_code,
+base.general_ledger_alternative_account_name AS general_ledger_alternative_account_name,
+base.counterparty_wbs_element_name AS counterparty_wbs_element_name,
+base.non_liquid_asset_type_name AS non_liquid_asset_type_name,
+base.material_search_name AS material_search_name,
+base.material_group_search_name AS material_group_search_name,
+base.warehouse_search_name AS warehouse_search_name,
+base.purchase_responsible_department_search_name AS purchase_responsible_department_search_name,
+base.valuation_class_search_name AS valuation_class_search_name,
+base.material_planning_controller_search_name AS material_planning_controller_search_name,
+base.material_trimmed_code AS material_trimmed_code,
+base.material_truncated_code AS material_truncated_code,
+base.material_alternative_uom_name as material_alternative_uom_name,
+avg_prices.price_valuation_type_code AS price_valuation_type_code, 
+coalesce(avg_prices.standard_price_amount, 0) as standard_price_amount, 
+coalesce(avg_prices.moving_average_price_amount, 0) as moving_average_price_amount,
+
+coalesce(case when base.what_date = 1 then price.average_weighted_stock_price_rule3_amount
+when base.what_date in (2, 4) then price_2.average_weighted_stock_price_rule2_prev_date_amount
+else price_2.average_weighted_stock_price_rule2_next_date_amount end, 0) as average_weighted_stock_price_amount,
+
+coalesce(case when base.what_date = 1 then price.average_weighted_stock_price_rule3_amount * base.total_stock_quantity
+when base.what_date in (2, 4)  then price_2.average_weighted_stock_price_rule2_prev_date_amount * base.total_stock_quantity
+else price_2.average_weighted_stock_price_rule2_next_date_amount * base.total_stock_quantity end, 0) as total_cost_amount
+
+from sklad_data_with_date as base
+left join price
+on price.calculation_code = base.material_costing_system_code and price.dt_valid_from = DATE_TRUNC('month', base.zapros_period)
+left join price_2 on price_2.calculation_code = base.material_costing_system_code and price_2.dt_valid_from = DATE_TRUNC('month', base.zapros_period)
+left join avg_prices on avg_prices.calculation_code = base.material_costing_system_code
+JOIN t_rls ON t_rls.unit_id = base.plant_code
+--LIMIT 100
+) AS `virtual_table` GROUP BY `plant_code`, `warehouse_code`, `warehouse_name`, `material_code`, `material_short_name`, `valuation_type_code`, `batch_code`, `stock_type_code`, `external_contract_number`, `sales_document_code`, `sales_document_position_line_item_code`, `wbs_element_number`, `supplier_code`, `customer_code`, `material_costing_system_code`, `price_valuation_type_code`, `valuation_class_code`, `valuation_class_name`, `general_ledger_account_code`, `unit_balance_currency_code`, `base_uom_name` 
+HAVING (
+  (
+    SUM(total_stock_quantity) <> 0
+  )
+) ORDER BY warehouse_name ASC, material_short_name ASC
+ LIMIT 10000;
 
 
-  def dump(title, payload):
-      print(f"\n===== {title} =====")
-      print(json.dumps(payload, ensure_ascii=False, indent=2))
-
-
-  def main():
-      issue = api_get(
-          f"/api/issues/{ISSUE_ID}",
-          {
-              "fields": ",".join(
-                  [
-                      "id",
-                      "idReadable",
-                      "summary",
-                      "description",
-                      "created",
-                      "updated",
-                      "resolved",
-                      "project(id,shortName,name)",
-                      "reporter(id,login,name,fullName)",
-                      "customFields(id,name,$type,projectCustomField(field(id,name),$type),value(id,name,login,fullName,text,presentation,$type))",
-                      "links(direction,linkType(name,sourceToTarget,targetToSource),issues(id,idReadable,summary))",
-                  ]
-              )
-          },
-      )
-      dump("ISSUE", issue)
-
-      custom_fields = api_get(
-          f"/api/issues/{ISSUE_ID}/customFields",
-          {
-              "fields": ",".join(
-                  [
-                      "id",
-                      "name",
-                      "$type",
-                      "projectCustomField(field(id,name),$type)",
-                      "value(id,name,login,fullName,text,presentation,$type)",
-                  ]
-              )
-          },
-      )
-      dump("ISSUE CUSTOM FIELDS", custom_fields)
-
-      project_id = issue["project"]["id"]
-
-      project_fields = api_get(
-          f"/api/admin/projects/{project_id}/customFields",
-          {
-              "fields": ",".join(
-                  [
-                      "id",
-                      "$type",
-                      "field(id,name)",
-                      "bundle(id,name,$type)",
-                      "canBeEmpty",
-                      "emptyFieldText",
-                  ]
-              )
-          },
-      )
-      dump("PROJECT CUSTOM FIELDS", project_fields)
-
-      activities = api_get(
-          f"/api/issues/{ISSUE_ID}/activitiesPage",
-          {
-              "fields": ",".join(
-                  [
-                      "activities(",
-                      "id,",
-                      "timestamp,",
-                      "category(id,name),",
-                      "author(id,login,name,fullName),",
-                      "field(name,id),",
-                      "added(id,name,login,fullName,text,presentation,$type),",
-                      "removed(id,name,login,fullName,text,presentation,$type),",
-                      "target(id,idReadable,summary)",
-                      ")",
-                  ]
-              )
-          },
-      )
-      dump("ACTIVITIES", activities)
-
-      comments = api_get(
-          f"/api/issues/{ISSUE_ID}/comments",
-          {
-              "fields": "id,text,created,updated,author(id,login,name,fullName)"
-          },
-      )
-      dump("COMMENTS", comments)
-
-      work_items = api_get(
-          f"/api/issues/{ISSUE_ID}/timeTracking/workItems",
-          {
-              "fields": "id,text,duration(presentation,minutes),date,author(id,login,name,fullName),creator(id,login,name,fullName)"
-          },
-      )
-      dump("WORK ITEMS", work_items)
-
-      print("\n===== FILTERED TARGET FIELDS =====")
-      targets = {
-          "Направление",
-          "Дашборд КХД/Направление",
-          "Дашборд SD",
-          "Фактические трудозатраты",
-      }
-      for row in custom_fields:
-          field = (row.get("projectCustomField") or {}).get("field") or {}
-          if row.get("name") in targets or field.get("name") in targets:
-              print(json.dumps(row, ensure_ascii=False, indent=2))
-
-      print("\n===== FIELD ID 111-132 =====")
-      found = False
-      for row in custom_fields:
-          field = (row.get("projectCustomField") or {}).get("field") or {}
-          if field.get("id") == "111-132":
-              found = True
-              print(json.dumps(row, ensure_ascii=False, indent=2))
-      if not found:
-          print("field.id=111-132 not returned for this issue")
-
-      print("\n===== ACTIVITIES FILTERED =====")
-      for row in activities.get("activities", []):
-          field = (row.get("field") or {}).get("name")
-          if field in targets:
-              print(json.dumps(row, ensure_ascii=False, indent=2))
-
-
-  if __name__ == "__main__":
-      main()
+SQL Error [43] [07000]: Code: 43. DB::Exception: Illegal type Date32 of 2nd argument of function dateTrunc. Should be a date or a date with time: In scope WITH t_rls AS (SELECT DISTINCT unit_id FROM dm.rls_t WHERE (business_area_type IN ('MM', 'BI')) AND (rls_type = 'user_to_plant_code') AND (lower(user_id) = lower('ArchibasovaZV'))), sklad_data AS (SELECT * FROM dm_view.material_stock_balance AS balace INNER JOIN t_rls ON t_rls.unit_id = balace.plant_code WHERE (NOT ((((toStartOfMonth(today()) + toIntervalMonth(1)) - toIntervalDay(1)) = dt_posting_next) AND (total_stock_quantity = 0))) AND ((formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') >= dt_posting) AND (formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') <= dt_posting_next))), avg_prices AS (SELECT calculation_code, price_valuation_type_code AS price_valuation_type_code, standard_price_amount / price_unit_code AS standard_price_amount, moving_average_price_amount / price_unit_code AS moving_average_price_amount FROM dm_view.material_price_calculation WHERE ((formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') >= dt_valid_from) AND (formatDateTime(toDate(subtractDays(today(), 100)), '%Y-%m-%d') <= dt_valid_to)) AND (calculation_code IN (SELECT material_costing_system_code FROM sklad_data))), sklad_data_with_date AS (SELECT base.*, multiIf(base.price_rule_code = '3', DATE_TRUNC('month', toDate(subtractDays(today(), 100))), base.dt_last_material_movement_and_calculation > DATE_TRUNC('month', toDate(subtractDays(today(), 100))), DATE_TRUNC('month', toDate(subtractDays(today(), 100))), base.dt_last_material_movement_and_calculation < DATE_TRUNC('month', toDate(subtractDays(today(), 100))), coalesce(base.dt_last_material_movement_and_calculation_shifted, base.dt_last_existed_material_movement_and_calculation, base.dt_last_material_movement_and_calculation), base.dt_last_material_movement_and_calculation = DATE_TRUNC('month', toDate(subtractDays(today(), 100))), DATE_TRUNC('month', toDate(subtractDays(today(), 100))), NULL) AS zapros_period, multiIf(base.price_rule_code = '3', 1, base.dt_last_material_movement_and_calculation > DATE_TRUNC('month', toDate(subtractDays(today(), 100))), 2, base.dt_last_material_movement_and_calculation < DATE_TRUNC('month', toDate(subtractDays(today(), 100))), 3, base.dt_last_material_movement_and_calculation = DATE_TRUNC('month', toDate(subtractDays(today(), 100))), 4, NULL) AS what_date FROM sklad_data AS base), price AS (SELECT average_weighted_stock_price_rule3_amount, dt_valid_from, calculation_code FROM dm_view.material_price_calculation WHERE ((DATE_TRUNC('month', toDate(subtractDays(today(), 100))) >= dt_valid_from) AND (DATE_TRUNC('month', toDate(subtractDays(today(), 100))) <= dt_valid_to)) AND (calculation_code IN (SELECT material_costing_system_code FROM sklad_data_with_date)) AND (price_rule_code = '3')), price_2 AS (SELECT average_weighted_stock_price_rule2_prev_date_amount, average_weighted_stock_price_rule2_next_date_amount, dt_valid_from, calculation_code FROM dm_view.material_price_calculation WHERE (calculation_code IN (SELECT material_costing_system_code FROM sklad_data_with_date)) AND (price_rule_code = '2')) SELECT base.dt_posting AS dt_posting, base.material_code AS material_code, base.material_uom_code AS material_uom_code, base.plant_code AS plant_code, base.warehouse_code AS warehouse_code, base.batch_code AS batch_code, base.valuation_type_code AS valuation_type_code, base.stock_type_code AS stock_type_code, base.sales_document_code AS sales_document_code, base.sales_document_position_line_item_code AS sales_document_position_line_item_code, base.wbs_element_code AS wbs_element_code, base.wbs_element_number AS wbs_element_number, base.supplier_code AS supplier_code, base.customer_code AS customer_code, base.total_stock_quantity AS total_stock_quantity, base.unit_balance_currency_code AS unit_balance_currency_code, base.material_costing_system_code AS material_costing_system_code, base.price_rule_code AS price_rule_code, base.dt_posting_next AS dt_next_posting, base.plant_name AS plant_name, base.valuation_assessment_code AS valuation_assessment_code, base.warehouse_name AS warehouse_name, base.warehouse_type_code AS warehouse_type_code, base.warehouse_type_name AS warehouse_type_name, base.storage_bin_code AS storage_bin_code, base.material_full_name AS material_full_name, base.material_kubal_code AS material_kubal_code, base.is_batch_mandatory AS is_batch_mandatory, base.material_type_code AS material_type_code, base.material_group_code AS material_group_code, base.sector_code AS sector_code, base.material_category_code AS material_category_code, base.material_short_name AS material_short_name, base.material_alternative_uom_code AS material_alternative_uom_code, base.material_tnved_eas_code AS material_tnved_eas_code, base.material_okpd2_code AS material_okpd2_code, base.purchase_responsible_department_code AS purchase_responsible_department_code, base.material_planning_controller_code AS material_planning_controller_code, base.head_of_production_code AS head_of_production_code, base.material_type_name AS material_type_name, base.material_group_name AS material_group_name, base.purchase_responsible_department_name AS purchase_responsible_department_name, base.material_planning_controller_name AS material_planning_controller_name, base.holding_currency_code AS holding_currency_code, base.wbs_element_short_name AS wbs_element_short_name, base.unit_balance_code AS unit_balance_code, base.material_category_name AS material_category_name, base.counterparty_wbs_element_code AS counterparty_wbs_element_code, base.valuation_class_code AS valuation_class_code, base.external_contract_number AS external_contract_number, base.supplier_extended_name AS supplier_extended_name, base.customer_extended_name AS customer_extended_name, base.non_liquid_asset_type_code AS non_liquid_asset_type_code, base.uom_to_alternative_uom_coefficient_amount AS uom_to_alternative_uom_coefficient_amount, base.base_uom_name AS base_uom_name, base.valuation_class_name AS valuation_class_name, base.general_ledger_account_code AS general_ledger_account_code, base.general_ledger_account_name AS general_ledger_account_name, base.general_ledger_alternative_account_code AS general_ledger_alternative_account_code, base.general_ledger_alternative_account_name AS general_ledger_alternative_account_name, base.counterparty_wbs_element_name AS counterparty_wbs_element_name, base.non_liquid_asset_type_name AS non_liquid_asset_type_name, base.material_search_name AS material_search_name, base.material_group_search_name AS material_group_search_name, base.warehouse_search_name AS warehouse_search_name, base.purchase_responsible_department_search_name AS purchase_responsible_department_search_name, base.valuation_class_search_name AS valuation_class_search_name, base.material_planning_controller_search_name AS material_planning_controller_search_name, base.material_trimmed_code AS material_trimmed_code, base.material_truncated_code AS material_truncated_code, base.material_alternative_uom_name AS material_alternative_uom_name, avg_prices.price_valuation_type_code AS price_valuation_type_code, coalesce(avg_prices.standard_price_amount, 0) AS standard_price_amount, coalesce(avg_prices.moving_average_price_amount, 0) AS moving_average_price_amount, coalesce(multiIf(base.what_date = 1, price.average_weighted_stock_price_rule3_amount, base.what_date IN (2, 4), price_2.average_weighted_stock_price_rule2_prev_date_amount, price_2.average_weighted_stock_price_rule2_next_date_amount), 0) AS average_weighted_stock_price_amount, coalesce(multiIf(base.what_date = 1, price.average_weighted_stock_price_rule3_amount * base.total_stock_quantity, base.what_date IN (2, 4), price_2.average_weighted_stock_price_rule2_prev_date_amount * base.total_stock_quantity, price_2.average_weighted_stock_price_rule2_next_date_amount * base.total_stock_quantity), 0) AS total_cost_amount FROM sklad_data_with_date AS base LEFT JOIN price ON (price.calculation_code = base.material_costing_system_code) AND (price.dt_valid_from = DATE_TRUNC('month', base.zapros_period)) LEFT JOIN price_2 ON (price_2.calculation_code = base.material_costing_system_code) AND (price_2.dt_valid_from = DATE_TRUNC('month', base.zapros_period)) LEFT JOIN avg_prices ON avg_prices.calculation_code = base.material_costing_system_code INNER JOIN t_rls ON t_rls.unit_id = base.plant_code. (ILLEGAL_TYPE_OF_ARGUMENT) (version 24.3.3.102 (official build))
+, server ClickHouseNode(addr=http:10.66.229.219/<unresolved>:443, db=dm)@1984160645

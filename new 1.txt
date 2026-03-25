@@ -1,16 +1,131 @@
-200
-{"projectCustomField": {"field": {"name": "Тип карточки", "id": "111-57", "$type": "CustomField"}, "$type": "EnumProjectCustomField"}, "value": {"name": "Task", "id": "114-147", "$type": "EnumBundleElement"}, "name": "Тип карточки", "id": "134-394", "$type": "SingleEnumIssueCustomField"}
-{"projectCustomField": {"field": {"name": "Priority", "id": "111-0", "$type": "CustomField"}, "$type": "EnumProjectCustomField"}, "value": {"name": "Normal", "id": "114-141", "$type": "EnumBundleElement"}, "name": "Priority", "id": "134-171", "$type": "SingleEnumIssueCustomField"}
-{"value": {"name": "Завершена", "id": "116-733", "$type": "StateBundleElement"}, "projectCustomField": {"field": {"name": "State", "id": "111-2", "$type": "CustomField"}, "$type": "StateProjectCustomField"}, "name": "State", "id": "134-288", "$type": "StateMachineIssueCustomField"}
-{"value": {"login": "KornienkoAV", "name": "Aleksandr Kornienko", "fullName": "Aleksandr Kornienko", "id": "1-660", "$type": "User"}, "projectCustomField": {"field": {"name": "Assignee", "id": "111-309", "$type": "CustomField"}, "$type": "UserProjectCustomField"}, "name": "Assignee", "id": "135-737", "$type": "SingleUserIssueCustomField"}
-{"projectCustomField": {"field": {"name": "Subsystem", "id": "111-4", "$type": "CustomField"}, "$type": "OwnedProjectCustomField"}, "value": {"name": "SD Team", "id": "142-76", "$type": "OwnedBundleElement"}, "name": "Subsystem", "id": "134-174", "$type": "SingleOwnedIssueCustomField"}
-{"value": 0, "projectCustomField": {"field": {"name": "Оценка (чел./час.)", "id": "111-20", "$type": "CustomField"}, "$type": "SimpleProjectCustomField"}, "name": "Оценка (чел./час.)", "id": "173-140", "$type": "SimpleIssueCustomField"}
-{"value": 1773694800000, "projectCustomField": {"field": {"name": "Due Date", "id": "111-8", "$type": "CustomField"}, "$type": "SimpleProjectCustomField"}, "name": "Due Date", "id": "173-69", "$type": "SimpleIssueCustomField"}  
-{"value": null, "projectCustomField": {"field": {"name": "Затраченное время", "id": "111-10", "$type": "CustomField"}, "$type": "PeriodProjectCustomField"}, "name": "Затраченное время", "id": "141-32", "$type": "PeriodIssueCustomField"}
-{"projectCustomField": {"field": {"name": "Дашборд SD", "id": "111-155", "$type": "CustomField"}, "$type": "EnumProjectCustomField"}, "value": [{"name": "Statement", "id": "114-1079", "$type": "EnumBundleElement"}], "name": "Дашборд SD", "id": "134-1411", "$type": "MultiEnumIssueCustomField"}
-{"value": 1773835200000, "projectCustomField": {"field": {"name": "Дата релиза", "id": "111-198", "$type": "CustomField"}, "$type": "SimpleProjectCustomField"}, "name": "Дата релиза", "id": "173-426", "$type": "DateIssueCustomField"}
-{"value": null, "projectCustomField": {"field": {"name": "Spent time", "id": "111-18", "$type": "CustomField"}, "$type": "PeriodProjectCustomField"}, "name": "Spent time", "id": "141-450", "$type": "PeriodIssueCustomField"}     
-{"value": {"presentation": "4д 5ч 30м", "id": "P4DT5H30M", "$type": "PeriodValue"}, "projectCustomField": {"field": {"name": "Фактические трудозатраты", "id": "111-129", "$type": "CustomField"}, "$type": "PeriodProjectCustomField"}, "name": "Фактические трудозатраты", "id": "141-451", "$type": "PeriodIssueCustomField"}
-{"value": "Statement", "projectCustomField": {"field": {"name": "Дашборд КХД/Направление", "id": "111-273", "$type": "CustomField"}, "$type": "SimpleProjectCustomField"}, "name": "Дашборд КХД/Направление", "id": "173-627", "$type": "SimpleIssueCustomField"}
-{"value": null, "projectCustomField": {"field": {"name": "Экономия за счет ИИ", "id": "111-277", "$type": "CustomField"}, "$type": "PeriodProjectCustomField"}, "name": "Экономия за счет ИИ", "id": "141-468", "$type": "PeriodIssueCustomField"}
-{"value": null, "projectCustomField": {"field": {"name": "Оценка трудозатрат", "id": "111-128", "$type": "CustomField"}, "$type": "PeriodProjectCustomField"}, "name": "Оценка трудозатрат", "id": "141-474", "$type": "PeriodIssueCustomField"}
+#!/usr/bin/env python3
+  import json
+  import os
+  import sys
+
+  import requests
+  import urllib3
+
+  urllib3.disable_warnings()
+
+  YOUTRACK_URL = os.environ["YOUTRACK_URL"].rstrip("/")
+  YOUTRACK_TOKEN = os.environ["YOUTRACK_TOKEN"]
+
+  ISSUE_ID = sys.argv[1] if len(sys.argv) > 1 else "DWH-10867"
+
+  HEADERS = {
+      "Authorization": f"Bearer {YOUTRACK_TOKEN}",
+      "Accept": "application/json",
+  }
+
+
+  def api_get(path, params=None):
+      r = requests.get(
+          f"{YOUTRACK_URL}{path}",
+          headers=HEADERS,
+          params=params or {},
+          verify=False,
+          timeout=60,
+      )
+      r.raise_for_status()
+      return r.json()
+
+
+  def dump(title, payload):
+      print(f"\n===== {title} =====")
+      if isinstance(payload, list):
+          for row in payload:
+              print(json.dumps(row, ensure_ascii=False))
+      else:
+          print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+  def main():
+      issue = api_get(
+          f"/api/issues/{ISSUE_ID}",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "idReadable",
+                      "summary",
+                      "project(id,shortName,name)",
+                      "customFields(id,name,$type,projectCustomField(field(id,name),$type),value(id,name,login,fullName,text,presentation,$type))",
+                  ]
+              )
+          },
+      )
+      dump("ISSUE", issue)
+
+      custom_fields = api_get(
+          f"/api/issues/{ISSUE_ID}/customFields",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "name",
+                      "$type",
+                      "projectCustomField(field(id,name),$type)",
+                      "value(id,name,login,fullName,text,presentation,$type)",
+                  ]
+              )
+          },
+      )
+      dump("ISSUE CUSTOM FIELDS", custom_fields)
+
+      project_id = issue["project"]["id"]
+
+      project_fields = api_get(
+          f"/api/admin/projects/{project_id}/customFields",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "$type",
+                      "field(id,name)",
+                      "bundle(id,name)",
+                      "canBeEmpty",
+                      "emptyFieldText",
+                  ]
+              )
+          },
+      )
+      dump("PROJECT CUSTOM FIELDS", project_fields)
+
+      print("\n===== FILTERED BY NAME =====")
+      targets = {"Направление", "Дашборд КХД/Направление", "Дашборд SD"}
+      for row in custom_fields:
+          if row.get("name") in targets:
+              print(json.dumps(row, ensure_ascii=False, indent=2))
+      print("\n===== PROJECT FIELD NAMES =====")
+      for row in project_fields:
+          field = row.get("field") or {}
+          name = field.get("name")
+          if name in targets:
+              print(json.dumps(row, ensure_ascii=False, indent=2))
+
+
+  if __name__ == "__main__":
+      main()
+
+  Как запускать:
+
+  python3 scripts/debug_ytrack_fields.py DWH-10867
+
+  Что он покажет:
+
+  - сам issue;
+  - все customFields задачи;
+  - все custom fields проекта;
+  - отдельно отфильтрует:
+      - Направление
+      - Дашборд КХД/Направление
+      - Дашборд SD
+
+  На что смотреть:
+
+  - есть ли Направление в ISSUE CUSTOM FIELDS
+  - есть ли Направление в PROJECT CUSTOM FIELDS
+  - совпадает ли field.id у старой и новой схемы
+
+  Если хочешь быстро сравнить 2 задачи:

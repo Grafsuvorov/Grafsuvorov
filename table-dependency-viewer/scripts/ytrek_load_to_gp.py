@@ -153,6 +153,8 @@ def fmt_ts(value):
 def fmt_period_value(value):
     if not isinstance(value, dict):
         return value
+    if value.get("presentation"):
+        return value.get("presentation")
     if value.get("$type") != "PeriodValue":
         return value.get("name", value)
     raw = value.get("id") or ""

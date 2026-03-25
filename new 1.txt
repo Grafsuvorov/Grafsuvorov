@@ -1,74 +1,24 @@
-Проект
+import os, json, requests, urllib3
+  urllib3.disable_warnings()
 
-КХД
-User avatar
-Тип карточки
+  issue = "DWH-10867"
+  url = os.environ["YOUTRACK_URL"]
+  token = os.environ["YOUTRACK_TOKEN"]
 
-Task⁠
-T
-Приоритет
+  fields = (
+      "id,name,$type,"
+      "projectCustomField(field(id,name)),"
+      "value(id,name,login,fullName,text,presentation)"
+  )
 
-Normal⁠
-N
-Состояние
+  r = requests.get(
+      f"{url}/api/issues/{issue}/customFields",
+      headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+      params={"fields": fields},
+      verify=False,
+      timeout=60,
+  )
 
-Завершена
-З
-Исполнитель
-
-Aleksandr Kornienko
-User avatar
-Команда (Подсистема)
-
-SD Team
-S
-Оценка (чел./час.)
-
-0
-Срок
-17 мар. 2026, 00:00
-Затраченное время
-
-?
-Направление
-
-Сбыт
-С
-Дашборд SD
-
-Statement
-Дата релиза
-18 мар. 2026
-Spent time
-
-?
-Фактические трудозатраты
-
-4д 5ч 30м
-Дашборд КХД/Направление
-
-Statement
-Экономия за счет ИИ
-
-?
-Оценка трудозатрат
-
-?
-Доски
-
-КХД
-
-
-КХД BA SD дашборды
-
-
-КХД-копия
-
-
-Доска DE
-
-
-КХД-копия.1
-
-
-Тестовая доска релизов
+  print(r.status_code)
+  for row in r.json():
+      print(json.dumps(row, ensure_ascii=False))

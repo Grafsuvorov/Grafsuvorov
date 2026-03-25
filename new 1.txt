@@ -1,46 +1,164 @@
-import json
+#!/usr/bin/env python3
+  import json
+  import sys
+
   import requests
   import urllib3
 
   urllib3.disable_warnings()
 
-  issue = "DWH-10867"
   YOUTRACK_URL = "https://yt.rusal.ru"
-  YOUTRACK_TOKEN = "..."
+  YOUTRACK_TOKEN = "PUT_TOKEN_HERE"
+  ISSUE_ID = sys.argv[1] if len(sys.argv) > 1 else "DWH-10867"
 
-  r = requests.get(
-      f"{YOUTRACK_URL}/api/issues/{issue}/customFields",
-      headers={
-          "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-          "Accept": "application/json",
-      },
-      params={
-          "fields": "id,name,$type,projectCustomField(field(id,name)),value(id,name,login,fullName,text,presentation)"
-      },
-      verify=False,
-      timeout=60,
-  )
+  HEADERS = {
+      "Authorization": f"Bearer {YOUTRACK_TOKEN}",
+      "Accept": "application/json",
+  }
 
-  r.raise_for_status()
-  rows = r.json()
 
-  print("=== all custom fields ===")
-  for row in rows:
-      field = (row.get("projectCustomField") or {}).get("field") or {}
-      print(
-          json.dumps(
-              {
-                  "issue_field_name": row.get("name"),
-                  "project_field_id": field.get("id"),
-                  "project_field_name": field.get("name"),
-                  "value": row.get("value"),
-              },
-              ensure_ascii=False,
-          )
+  def api_get(path, params=None):
+      r = requests.get(
+          f"{YOUTRACK_URL}{path}",
+          headers=HEADERS,
+          params=params or {},
+          verify=False,
+          timeout=60,
       )
+      print(f"\n>>> GET {path}")
+      print("status:", r.status_code)
+      r.raise_for_status()
+      return r.json()
 
-  print("\n=== only field.id = 111-132 (Направление) ===")
-  for row in rows:
-      field = (row.get("projectCustomField") or {}).get("field") or {}
-      if field.get("id") == "111-132":
-          print(json.dumps(row, ensure_ascii=False, indent=2))
+
+  def dump(title, payload):
+      print(f"\n===== {title} =====")
+      print(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+  def main():
+      issue = api_get(
+          f"/api/issues/{ISSUE_ID}",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "idReadable",
+                      "summary",
+                      "description",
+                      "created",
+                      "updated",
+                      "resolved",
+                      "project(id,shortName,name)",
+                      "reporter(id,login,name,fullName)",
+                      "customFields(id,name,$type,projectCustomField(field(id,name),$type),value(id,name,login,fullName,text,presentation,$type))",
+                      "links(direction,linkType(name,sourceToTarget,targetToSource),issues(id,idReadable,summary))",
+                  ]
+              )
+          },
+      )
+      dump("ISSUE", issue)
+
+      custom_fields = api_get(
+          f"/api/issues/{ISSUE_ID}/customFields",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "name",
+                      "$type",
+                      "projectCustomField(field(id,name),$type)",
+                      "value(id,name,login,fullName,text,presentation,$type)",
+                  ]
+              )
+          },
+      )
+      dump("ISSUE CUSTOM FIELDS", custom_fields)
+
+      project_id = issue["project"]["id"]
+
+      project_fields = api_get(
+          f"/api/admin/projects/{project_id}/customFields",
+          {
+              "fields": ",".join(
+                  [
+                      "id",
+                      "$type",
+                      "field(id,name)",
+                      "bundle(id,name,$type)",
+                      "canBeEmpty",
+                      "emptyFieldText",
+                  ]
+              )
+          },
+      )
+      dump("PROJECT CUSTOM FIELDS", project_fields)
+
+      activities = api_get(
+          f"/api/issues/{ISSUE_ID}/activitiesPage",
+          {
+              "fields": ",".join(
+                  [
+                      "activities(",
+                      "id,",
+                      "timestamp,",
+                      "category(id,name),",
+                      "author(id,login,name,fullName),",
+                      "field(name,id),",
+                      "added(id,name,login,fullName,text,presentation,$type),",
+                      "removed(id,name,login,fullName,text,presentation,$type),",
+                      "target(id,idReadable,summary)",
+                      ")",
+                  ]
+              )
+          },
+      )
+      dump("ACTIVITIES", activities)
+
+      comments = api_get(
+          f"/api/issues/{ISSUE_ID}/comments",
+          {
+              "fields": "id,text,created,updated,author(id,login,name,fullName)"
+          },
+      )
+      dump("COMMENTS", comments)
+
+      work_items = api_get(
+          f"/api/issues/{ISSUE_ID}/timeTracking/workItems",
+          {
+              "fields": "id,text,duration(presentation,minutes),date,author(id,login,name,fullName),creator(id,login,name,fullName)"
+          },
+      )
+      dump("WORK ITEMS", work_items)
+
+      print("\n===== FILTERED TARGET FIELDS =====")
+      targets = {
+          "Направление",
+          "Дашборд КХД/Направление",
+          "Дашборд SD",
+          "Фактические трудозатраты",
+      }
+      for row in custom_fields:
+          field = (row.get("projectCustomField") or {}).get("field") or {}
+          if row.get("name") in targets or field.get("name") in targets:
+              print(json.dumps(row, ensure_ascii=False, indent=2))
+
+      print("\n===== FIELD ID 111-132 =====")
+      found = False
+      for row in custom_fields:
+          field = (row.get("projectCustomField") or {}).get("field") or {}
+          if field.get("id") == "111-132":
+              found = True
+              print(json.dumps(row, ensure_ascii=False, indent=2))
+      if not found:
+          print("field.id=111-132 not returned for this issue")
+
+      print("\n===== ACTIVITIES FILTERED =====")
+      for row in activities.get("activities", []):
+          field = (row.get("field") or {}).get("name")
+          if field in targets:
+              print(json.dumps(row, ensure_ascii=False, indent=2))
+
+
+  if __name__ == "__main__":
+      main()

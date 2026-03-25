@@ -8,61 +8,39 @@ import json
   YOUTRACK_URL = "https://yt.rusal.ru"
   YOUTRACK_TOKEN = "..."
 
-  fields = (
-      "activities("
-      "timestamp,"
-      "author(name,login),"
-      "field(name),"
-      "added(name,fullName,login,text,presentation),"
-      "removed(name,fullName,login,text,presentation),"
-      "target(id,idReadable)"
-      ")"
-  )
-
   r = requests.get(
-      f"{YOUTRACK_URL}/api/issues/{issue}/activitiesPage",
+      f"{YOUTRACK_URL}/api/issues/{issue}/customFields",
       headers={
           "Authorization": f"Bearer {YOUTRACK_TOKEN}",
           "Accept": "application/json",
       },
-      params={"fields": fields},
+      params={
+          "fields": "id,name,$type,projectCustomField(field(id,name)),value(id,name,login,fullName,text,presentation)"
+      },
       verify=False,
       timeout=60,
   )
-
-  print(r.status_code)
-  print(r.text[:500])
 
   r.raise_for_status()
-  data = r.json()
+  rows = r.json()
 
-  for row in data.get("activities", []):
-      field = (row.get("field") or {}).get("name")
-      if field in {"Направление", "Дашборд КХД/Направление", "Дашборд SD"}:
+  print("=== all custom fields ===")
+  for row in rows:
+      field = (row.get("projectCustomField") or {}).get("field") or {}
+      print(
+          json.dumps(
+              {
+                  "issue_field_name": row.get("name"),
+                  "project_field_id": field.get("id"),
+                  "project_field_name": field.get("name"),
+                  "value": row.get("value"),
+              },
+              ensure_ascii=False,
+          )
+      )
+
+  print("\n=== only field.id = 111-132 (Направление) ===")
+  for row in rows:
+      field = (row.get("projectCustomField") or {}).get("field") or {}
+      if field.get("id") == "111-132":
           print(json.dumps(row, ensure_ascii=False, indent=2))
-
-  Если и это не сработает, тогда, скорее всего, у activitiesPage нужен другой формат полей для вашей версии YouTrack. Тогда попробуй более простой вариант:
-
-  import json
-  import requests
-  import urllib3
-
-  urllib3.disable_warnings()
-
-  issue = "DWH-10867"
-  YOUTRACK_URL = "https://yt.rusal.ru"
-  YOUTRACK_TOKEN = "..."
-
-  r = requests.get(
-      f"{YOUTRACK_URL}/api/issues/{issue}/activitiesPage",
-      headers={
-          "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-          "Accept": "application/json",
-      },
-      params={"fields": "activities(id,timestamp,field(name))"},
-      verify=False,
-      timeout=60,
-  )
-
-  print(r.status_code)
-  print(r.text)

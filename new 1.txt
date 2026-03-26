@@ -1,46 +1,6 @@
-
->>> GET /api/issues/DWH-10152 | status=200
-
-=== ISSUE CUSTOM FIELDS ===
-Тип карточки => {'name': 'Task', '$type': 'EnumBundleElement'}
-Priority => {'name': 'Normal', '$type': 'EnumBundleElement'}
-State => {'name': 'Завершена', '$type': 'StateBundleElement'}
-Assignee => {'name': 'Vaskov Aleksey', '$type': 'User'}
-Subsystem => {'name': 'SD Team', '$type': 'OwnedBundleElement'}
-Оценка (чел./час.) => 0
-Due Date => 1771012800000
-Затраченное время => None
-Дашборд SD => []
-Дата релиза => 1771416000000
-Spent time => None
-Фактические трудозатраты => {'presentation': '3ч', '$type': 'PeriodValue'}
-Дашборд КХД/Направление => None
-Экономия за счет ИИ => None
-Оценка трудозатрат => None
-
-=== RESULT: НАПРАВЛЕНИЕ ===
-❌ поле НЕ пришло из API
-
->>> GET /api/admin/projects/0-30/customFields | status=200
-
-=== PROJECT FIELD: НАПРАВЛЕНИЕ ===
-{
-  "canBeEmpty": true,
-  "emptyFieldText": "Нет: направление",
-  "field": {
-    "name": "Направление",
-    "id": "111-132",
-    "$type": "CustomField"
-  },
-  "$type": "OwnedProjectCustomField"
-}
-
->>> GET /api/issues/DWH-10152/activitiesPage | status=400
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\test.py", line 81, in <module>
-    activities = api_get(
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\test.py", line 30, in api_get
-    r.raise_for_status()
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\models.py", line 1024, in raise_for_status
-    raise HTTPError(http_error_msg, response=self)
-requests.exceptions.HTTPError: 400 Client Error: Bad Request for url: https://yt.rusal.ru/api/issues/DWH-10152/activitiesPage?fields=activities%28field%28name%29%2Cadded%28name%29%2Cremoved%28name%29%2Ctimestamp%29
+activities = api_get(
+    f"/api/issues/{ISSUE_ID}/activitiesPage",
+    {
+        "fields": "activities(id,timestamp,field(name),added(name),removed(name))"
+    },
+)

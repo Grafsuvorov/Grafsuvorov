@@ -1,36 +1,19 @@
-import requests
+=== ВСЕ ПОЛЯ ===
+Тип карточки => {'name': 'Task', '$type': 'EnumBundleElement'}
+Priority => {'name': 'Normal', '$type': 'EnumBundleElement'}
+State => {'name': 'Завершена', '$type': 'StateBundleElement'}
+Assignee => {'name': 'Vaskov Aleksey', '$type': 'User'}
+Subsystem => {'name': 'SD Team', '$type': 'OwnedBundleElement'}
+Оценка (чел./час.) => 0
+Due Date => 1771012800000
+Затраченное время => None
+Дашборд SD => []
+Дата релиза => 1771416000000
+Spent time => None
+Фактические трудозатраты => {'$type': 'PeriodValue'}
+Дашборд КХД/Направление => None
+Экономия за счет ИИ => None
+Оценка трудозатрат => None
 
-YOUTRACK_URL = ""
-YOUTRACK_TOKEN = ""
-ISSUE_ID = "DWH-10152"
-
-headers = {
-    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-    "Accept": "application/json",
-}
-
-r = requests.get(
-    f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}",
-    headers=headers,
-    params={
-        "fields": "idReadable,customFields(name,value(name))"
-    },
-    verify=False
-)
-
-data = r.json()
-
-print("\n=== ВСЕ ПОЛЯ ===")
-for f in data.get("customFields", []):
-    print(f["name"], "=>", f.get("value"))
-
-print("\n=== ИЩЕМ НАПРАВЛЕНИЕ ===")
-found = False
-
-for f in data.get("customFields", []):
-    if f["name"] == "Направление":
-        found = True
-        print("FOUND:", f)
-
-if not found:
-    print("❌ Направление НЕ пришло из API")
+=== ИЩЕМ НАПРАВЛЕНИЕ ===
+❌ Направление НЕ пришло из API

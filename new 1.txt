@@ -1,19 +1,102 @@
-=== ВСЕ ПОЛЯ ===
-Тип карточки => {'name': 'Task', '$type': 'EnumBundleElement'}
-Priority => {'name': 'Normal', '$type': 'EnumBundleElement'}
-State => {'name': 'Завершена', '$type': 'StateBundleElement'}
-Assignee => {'name': 'Vaskov Aleksey', '$type': 'User'}
-Subsystem => {'name': 'SD Team', '$type': 'OwnedBundleElement'}
-Оценка (чел./час.) => 0
-Due Date => 1771012800000
-Затраченное время => None
-Дашборд SD => []
-Дата релиза => 1771416000000
-Spent time => None
-Фактические трудозатраты => {'$type': 'PeriodValue'}
-Дашборд КХД/Направление => None
-Экономия за счет ИИ => None
-Оценка трудозатрат => None
+import requests
+import json
+import urllib3
 
-=== ИЩЕМ НАПРАВЛЕНИЕ ===
-❌ Направление НЕ пришло из API
+urllib3.disable_warnings()
+
+YOUTRACK_URL = ""
+YOUTRACK_TOKEN = ""
+ISSUE_ID = "DWH-10152"
+
+HEADERS = {
+    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
+    "Accept": "application/json",
+}
+
+
+def api_get(path, params=None):
+    r = requests.get(
+        f"{YOUTRACK_URL}{path}",
+        headers=HEADERS,
+        params=params or {},
+        verify=False,
+        timeout=60,
+    )
+    print(f"\n>>> GET {path} | status={r.status_code}")
+    r.raise_for_status()
+    return r.json()
+
+
+# -------------------------
+# 1. Получаем задачу
+# -------------------------
+issue = api_get(
+    f"/api/issues/{ISSUE_ID}",
+    {
+        "fields": "idReadable,project(id,name),customFields(name,value(name,text,presentation))"
+    },
+)
+
+print("\n=== ISSUE CUSTOM FIELDS ===")
+for f in issue.get("customFields", []):
+    print(f["name"], "=>", f.get("value"))
+
+# проверка направления
+direction = None
+for f in issue.get("customFields", []):
+    if f["name"] == "Направление":
+        direction = f
+
+print("\n=== RESULT: НАПРАВЛЕНИЕ ===")
+if direction:
+    print("✅ найдено:", json.dumps(direction, ensure_ascii=False, indent=2))
+else:
+    print("❌ поле НЕ пришло из API")
+
+# -------------------------
+# 2. Проверяем проектные поля
+# -------------------------
+project_id = issue["project"]["id"]
+
+project_fields = api_get(
+    f"/api/admin/projects/{project_id}/customFields",
+    {
+        "fields": "field(name,id),$type,canBeEmpty,emptyFieldText"
+    },
+)
+
+print("\n=== PROJECT FIELD: НАПРАВЛЕНИЕ ===")
+for f in project_fields:
+    field = f.get("field", {})
+    if field.get("name") == "Направление":
+        print(json.dumps(f, ensure_ascii=False, indent=2))
+
+# -------------------------
+# 3. Проверяем ВСЕ изменения по полю
+# -------------------------
+activities = api_get(
+    f"/api/issues/{ISSUE_ID}/activitiesPage",
+    {
+        "fields": "activities(field(name),added(name),removed(name),timestamp)",
+    },
+)
+
+print("\n=== ACTIVITIES: НАПРАВЛЕНИЕ ===")
+found = False
+
+for act in activities.get("activities", []):
+    field = (act.get("field") or {}).get("name")
+    if field == "Направление":
+        found = True
+        print(json.dumps(act, ensure_ascii=False, indent=2))
+
+if not found:
+    print("❌ изменений по полю не найдено")
+
+# -------------------------
+# 4. Проверка типа задачи
+# -------------------------
+print("\n=== TYPE CHECK ===")
+for f in issue.get("customFields", []):
+    if f["name"] == "Тип карточки":
+        print("Тип задачи:", f.get("value"))

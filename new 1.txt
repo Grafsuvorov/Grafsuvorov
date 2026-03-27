@@ -1,11 +1,70 @@
-docker inspect table-dependency-viewer-api-1 --format '{{json .Mounts}}'
+[root@rgm-s-dwhapp01 scripts]# docker inspect table-dependency-viewer-api-1 --format '{{json .Mounts}}'
+[{"Type":"bind","Source":"/root/table-dependency-viewer/meta_info","Destination":"/app/meta_info","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/root/table-dependency-viewer/config_files","Destination":"/app/config_files","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/root/git_dir","Destination":"/root/git_dir","Mode":"rw","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/root/table-dependency-viewer/scripts","Destination":"/app/scripts","Mode":"ro","RW":false,"Propagation":"rprivate"}]
+[root@rgm-s-dwhapp01 scripts]# sed -n '1,80p' /root/table-dependency-viewer/scripts/ci_cd.sh
+#!/usr/bin/bash
+set -euo pipefail
 
-  Нужно увидеть mount примерно такого вида:
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+export GIT_SSL_NO_VERIFY=1
 
-  - source: /root/table-dependency-viewer/scripts
-  - destination: /app/scripts
+REPO_ROOT="/root/git_dir/etl"
+APP_ROOT="/app"
+BRANCH="main"
 
-  Потом сравнить файл с хоста и внутри контейнера:
+echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-  sed -n '1,80p' /root/table-dependency-viewer/scripts/ci_cd.sh
-  docker exec -it table-dependency-viewer-api-1 sh -c 'sed -n "1,80p" /app/scripts/ci_cd.sh'
+git -C "${REPO_ROOT}" fetch origin
+git -C "${REPO_ROOT}" checkout "${BRANCH}"
+git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+git -C "${REPO_ROOT}" clean -fd
+
+mkdir -p "${APP_ROOT}/meta_info"
+mkdir -p "${APP_ROOT}/config_files/dm"
+mkdir -p "${APP_ROOT}/config_files/dm_view"
+
+rm -rf "${APP_ROOT}/meta_info"/*
+rm -rf "${APP_ROOT}/config_files/dm"/*
+rm -rf "${APP_ROOT}/config_files/dm_view"/*
+
+cp -a "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+cp -a "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/dm/"
+cp -a "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/dm_view/"
+
+echo "[ci_cd] synced meta_info, dm, dm_view from origin/${BRANCH}"
+echo "[ci_cd] done"[root@rgm-s-dwhapp01 scripts]# docker exec -it table-dependency-viewer-api-1 sh -c 'sed -n "1,80p" /app/scripts/ci_cd.sh'
+#!/usr/bin/bash
+set -euo pipefail
+
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+export GIT_SSL_NO_VERIFY=1
+
+REPO_ROOT="/root/git_dir/etl"
+APP_ROOT="/app"
+BRANCH="main"
+
+echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+git -C "${REPO_ROOT}" fetch origin
+git -C "${REPO_ROOT}" checkout "${BRANCH}"
+git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+git -C "${REPO_ROOT}" clean -fd
+
+mkdir -p "${APP_ROOT}/meta_info"
+mkdir -p "${APP_ROOT}/config_files/dm"
+mkdir -p "${APP_ROOT}/config_files/dm_view"
+
+rm -rf "${APP_ROOT}/meta_info"/*
+rm -rf "${APP_ROOT}/config_files/dm"/*
+rm -rf "${APP_ROOT}/config_files/dm_view"/*
+
+cp -a "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+cp -a "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/dm/"
+cp -a "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/dm_view/"
+
+echo "[ci_cd] synced meta_info, dm, dm_view from origin/${BRANCH}"

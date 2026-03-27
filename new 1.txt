@@ -1,5 +1,128 @@
-sed -i 's/\r$//' /root/table-dependency-viewer/scripts/ci_cd.sh
 
-  Или через dos2unix, если есть:
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_         cd.sh
++ set -euo pipefail
++ unset http_proxy
++ unset HTTPS_PROXY
++ unset https_proxy
++ unset HTTP_PROXY
++ export GIT_SSL_NO_VERIFY=1
++ GIT_SSL_NO_VERIFY=1
++ SOURCE_REPO=/root/git_dir/etl
++ BRANCH=main
++ echo gogogogo
+gogogogo
++ git -C /root/git_dir/etl fetch origin
++ git -C /root/git_dir/etl checkout main
+Already on 'main'
+Your branch is up to date with 'origin/main'.
++ git -C /root/git_dir/etl reset --hard origin/main
+HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
++ git -C /root/git_dir/etl clean -fd meta/dm meta/dm_view meta_info
++ mkdir -p /app/meta_info
++ mkdir -p /app/config_files/dm
++ mkdir -p /app/config_files/dm_view
++ rm -rf /app/meta_info/database
++ rm -rf '/app/config_files/dm/*'
++ rm -rf '/app/config_files/dm_view/*'
++ cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
++ cp -a /root/git_dir/etl/meta/dm/. /app/config_files/dm/
+cp: cannot stat '/root/git_dir/etl/meta/dm/.': No such file or directory
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
++ set -euo $'pipefail\r'
+: invalid option name: line 2: set: pipefail
+[root@rgm-s-dwhapp01 table-dependency-viewer]# sed -i 's/\r$//' /root/table-dependency-viewer/scripts/ci_cd.sh
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
++ set -euo pipefail
++ unset http_proxy
++ unset HTTPS_PROXY
++ unset https_proxy
++ unset HTTP_PROXY
++ export GIT_SSL_NO_VERIFY=1
++ GIT_SSL_NO_VERIFY=1
++ SOURCE_REPO=/root/git_dir/etl
++ SOURCE_REPO_CN=/root/git_dir
++ BRANCH=main
++ echo gogogogo
+gogogogo
++ git -C /root/git_dir/etl fetch origin
+remote: Enumerating objects: 12, done.
+remote: Counting objects: 100% (12/12), done.
+remote: Compressing objects: 100% (8/8), done.
+remote: Total 12 (delta 0), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (12/12), 3.12 KiB | 1.56 MiB/s, done.
+From https://prod.gitlab.dwh.rusal.com/dwh/etl
+#!/usr/bin/bash
+set -euo pipefail
 
-  dos2unix /root/table-dependency-viewer/scripts/ci_cd.sh
+unset http_proxy
+unset HTTPS_PROXY
+unset https_proxy
+unset HTTP_PROXY
+export GIT_SSL_NO_VERIFY=1
+
+SOURCE_REPO="/root/git_dir/etl"
+SOURCE_REPO_CN="/root/git_dir"
+BRANCH="main"
+
+echo 'gogogogo'
+
+git -C "${SOURCE_REPO}" fetch origin
+git -C "${SOURCE_REPO}" checkout "${BRANCH}"
+git -C "${SOURCE_REPO}" reset --hard "origin/${BRANCH}"
+git -C "${SOURCE_REPO_CN}" clean -fd meta/dm meta/dm_view meta_info
+
+mkdir -p /app/meta_info
+mkdir -p /app/config_files/dm
+mkdir -p /app/config_files/dm_view
+
+rm -rf /app/meta_info/*
+rm -rf /app/config_files/dm/*
+rm -rf /app/config_files/dm_view/*
+
+cp -a "${SOURCE_REPO}/meta_info/." /app/meta_info/
+cp -a "${SOURCE_REPO_CN}/meta/dm/." /app/config_files/dm/
+cp -a "${SOURCE_REPO_CN}/meta/dm_view/." /app/config_files/dm_view/
+
+echo 'Закончили упражнение'
+echo 'Как же ты хорош!'
+ 
+
+4260f4fa8..2b1761107  feature/DWH-9332 -> origin/feature/DWH-9332
++ git -C /root/git_dir/etl checkout main
+Already on 'main'
+Your branch is up to date with 'origin/main'.
++ git -C /root/git_dir/etl reset --hard origin/main
+HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
++ git -C /root/git_dir/etl clean -fd meta/dm meta/dm_view meta_info
++ mkdir -p /app/meta_info
++ mkdir -p /app/config_files/dm
++ mkdir -p /app/config_files/dm_view
++ rm -rf /app/meta_info/database
++ rm -rf '/app/config_files/dm/*'
++ rm -rf '/app/config_files/dm_view/*'
++ cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
++ cp -a /root/git_dir/etl/meta/dm/. /app/config_files/dm/
+cp: cannot stat '/root/git_dir/etl/meta/dm/.': No such file or directory
+[root@rgm-s-dwhapp01 table-dependency-viewer]# sed -i 's/\r$//' /root/table-dependency-viewer/scripts/ci_cd.sh
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
++ set -euo pipefail
++ unset http_proxy
++ unset HTTPS_PROXY
++ unset https_proxy
++ unset HTTP_PROXY
++ export GIT_SSL_NO_VERIFY=1
++ GIT_SSL_NO_VERIFY=1
++ SOURCE_REPO=/root/git_dir/etl
++ SOURCE_REPO_CN=/root/git_dir
++ BRANCH=main
++ echo gogogogo
+gogogogo
++ git -C /root/git_dir/etl fetch origin
++ git -C /root/git_dir/etl checkout main
+Already on 'main'
+Your branch is up to date with 'origin/main'.
++ git -C /root/git_dir/etl reset --hard origin/main
+HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
++ git -C /root/git_dir clean -fd meta/dm meta/dm_view meta_info
+fatal: not a git repository (or any parent up to mount point /root)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).

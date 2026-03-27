@@ -1,36 +1,5 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'echo $ADM        IN_CICD_SCRIPT && sed -n "1,80p" /app/scripts/ci_cd.sh'
-/app/scripts/ci_cd.sh
- #!/usr/bin/bash
-set -euo pipefail
+sed -i 's/\r$//' /root/table-dependency-viewer/scripts/ci_cd.sh
 
-unset http_proxy
-unset HTTPS_PROXY
-unset https_proxy
-unset HTTP_PROXY
-export GIT_SSL_NO_VERIFY=1
+  Или через dos2unix, если есть:
 
-echo 'gogogogo'
-
-# git repo есть только тут
-git -C /root/git_dir/etl -c http.sslVerify=false pull
-
-# директории в контейнере
-mkdir -p /app/meta_info
-mkdir -p /app/config_files/meta
-
-# копируем meta_info
-rm -rf /app/meta_info/*
-cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
-
-# копируем config_files/meta
-rm -rf /app/config_files/meta/*
-cp -a /root/git_dir/meta/. /app/config_files/meta/
-
-echo 'Закончили упражнение'
-echo 'Как же ты хорош!'[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer        p/scripts/ci_cd.sh' /ap
--rwxr-xr-x. 1 root root 659 Mar  3 09:05 /app/scripts/ci_cd.sh
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash /app/script        s/ci_cd.sh
-: invalid option name: line 2: set: pipefail
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
-+ set -euo $'pipefail\r'
-: invalid option name: line 2: set: pipefail
+  dos2unix /root/table-dependency-viewer/scripts/ci_cd.sh

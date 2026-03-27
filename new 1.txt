@@ -1,7 +1,33 @@
-activities = api_get(
-    f"/api/issues/{ISSUE_ID}/activitiesPage",
-    {
-        "categories": "CustomFieldCategory",
-        "fields": "activities(field(name),added(name),removed(name),timestamp)"
+import requests
+import json
+import urllib3
+
+urllib3.disable_warnings()
+
+YOUTRACK_URL = ""
+YOUTRACK_TOKEN = ""
+ISSUE_ID = "DWH-10152"
+
+headers = {
+    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
+    "Accept": "application/json",
+}
+
+r = requests.get(
+    f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}",
+    headers=headers,
+    params={
+        "fields": "customFields(name,$type,value(name,text,presentation,$type))"
     },
+    verify=False
 )
+
+data = r.json()
+
+print("\n=== ВСЕ ПОЛЯ С ТИПАМИ ===\n")
+
+for f in data.get("customFields", []):
+    print("FIELD:", f["name"])
+    print("TYPE:", f.get("$type"))
+    print("VALUE:", f.get("value"))
+    print("-" * 50)

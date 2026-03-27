@@ -1,52 +1,78 @@
-#!/usr/bin/bash
-  set -euo pipefail
 
-  unset http_proxy
-  unset https_proxy
-  unset HTTP_PROXY
-  unset HTTPS_PROXY
-  export GIT_SSL_NO_VERIFY=1
-
-  REPO_ROOT="/root/git_dir/etl"
-  APP_ROOT="/app"
-  BRANCH="main"
-
-  echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-  git -C "${REPO_ROOT}" fetch origin
-  git -C "${REPO_ROOT}" checkout "${BRANCH}"
-  git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
-  git -C "${REPO_ROOT}" clean -fd
-
-  mkdir -p "${APP_ROOT}/meta_info"
-  mkdir -p "${APP_ROOT}/config_files/dm"
-  mkdir -p "${APP_ROOT}/config_files/dm_view"
-
-  rm -rf "${APP_ROOT}/meta_info"/*
-  rm -rf "${APP_ROOT}/config_files/dm"/*
-  rm -rf "${APP_ROOT}/config_files/dm_view"/*
-
-  cp -a "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
-  cp -a "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/dm/"
-  cp -a "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/dm_view/"
-
-  echo "[ci_cd] synced meta_info, dm, dm_view from origin/${BRANCH}"
-  echo "[ci_cd] done"
-
-  Почему это лучше:
-
-  - один источник данных;
-  - reset --hard + clean реально удаляет то, чего нет в main;
-  - не остается старого мусора в отдельной папке /root/git_dir/meta;
-  - поведение кнопки становится предсказуемым.
-
-  Что должно быть после этого:
-
-  - если файл удалили из main в config_files/meta/dm_view, после кнопки он пропадет и в приложении;
-  - meta_info тоже будет актуален из того же checkout.
-
-  Что проверить перед заменой:
-
-  ls /root/git_dir/etl/config_files/meta/dm
-  ls /root/git_dir/etl/config_files/meta/dm_view
-  ls /root/git_dir/etl/meta_info
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
++ set -euo pipefail
++ unset http_proxy
++ unset https_proxy
++ unset HTTP_PROXY
++ unset HTTPS_PROXY
++ export GIT_SSL_NO_VERIFY=1
++ GIT_SSL_NO_VERIFY=1
++ REPO_ETL=/root/git_dir/etl
++ REPO_META=/root/git_dir/meta
++ APP_ROOT=/app
++ BRANCH=main
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ echo '[ci_cd] start 2026-03-27T11:08:22Z'
+[ci_cd] start 2026-03-27T11:08:22Z
++ git -C /root/git_dir/etl fetch origin
++ git -C /root/git_dir/etl checkout main
+Already on 'main'
+Your branch is up to date with 'origin/main'.
++ git -C /root/git_dir/etl reset --hard origin/main
+HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
++ git -C /root/git_dir/etl clean -fd
++ mkdir -p /app/meta_info
++ mkdir -p /app/config_files/dm
++ mkdir -p /app/config_files/dm_view
++ rm -rf /app/meta_info/database
++ rm -rf '/app/config_files/dm/*'
++ rm -rf '/app/config_files/dm_view/*'
++ cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
++ cp -a /root/git_dir/meta/dm/. /app/config_files/dm/
++ cp -a /root/git_dir/meta/dm_view/. /app/config_files/dm_view/
++ echo '[ci_cd] synced meta_info, dm, dm_view'
+[ci_cd] synced meta_info, dm, dm_view
++ echo '[ci_cd] done'
+[ci_cd] done
+[root@rgm-s-dwhapp01 table-dependency-viewer]# sed -i 's/\r$//' /root/table-dependency-viewer/scripts/ci_cd.sh
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
++ set -euo pipefail
++ unset http_proxy
++ unset https_proxy
++ unset HTTP_PROXY
++ unset HTTPS_PROXY
++ export GIT_SSL_NO_VERIFY=1
++ GIT_SSL_NO_VERIFY=1
++ REPO_ROOT=/root/git_dir/etl
++ APP_ROOT=/app
++ BRANCH=main
+++ date -u +%Y-%m-%dT%H:%M:%SZ
++ echo '[ci_cd] start 2026-03-27T11:48:41Z'
+[ci_cd] start 2026-03-27T11:48:41Z
++ git -C /root/git_dir/etl fetch origin
+remote: Enumerating objects: 23, done.
+remote: Counting objects: 100% (23/23), done.
+remote: Compressing objects: 100% (8/8), done.
+remote: Total 12 (delta 6), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 100% (12/12), 859 bytes | 286.00 KiB/s, done.
+From https://prod.gitlab.dwh.rusal.com/dwh/etl
+ * [new branch]          feature/DWH-11428 -> origin/feature/DWH-11428
++ git -C /root/git_dir/etl checkout main
+Already on 'main'
+Your branch is up to date with 'origin/main'.
++ git -C /root/git_dir/etl reset --hard origin/main
+HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
++ git -C /root/git_dir/etl clean -fd
++ mkdir -p /app/meta_info
++ mkdir -p /app/config_files/dm
++ mkdir -p /app/config_files/dm_view
++ rm -rf /app/meta_info/database
++ rm -rf /app/config_files/dm/dict_dds_counterparty_meta.yaml /app/config_files/dm/dict_dds_counterparty_relation_type_td_meta.yaml /app/config_files/dm/dict_dds_counterparty_relation_type_texts_meta.yaml /app/config_files/dm/dict_dds_counterparty_restriction_list_meta.yaml /app/config_files/dm/dict_dds_counterparty_td_meta.yaml /app/config_files/dm/dict_dds_currency_rate_meta.yaml /app/config_files/dm/dict_dds_currency_rates_meta.yaml /app/config_files/dm/dict_dds_settings_and_parameters_sap_meta.yaml /app/config_files/dm/dict_dds_tax_budget_fund_receiver_hierarchy_level_based_meta.yaml /app/config_files/dm/dict_dds_tax_hierarchy_level_based_meta.yaml /app/config_files/dm/dict_dds_tax_movement_type_hierarchy_level_based_meta.yaml /app/config_files/dm/dict_dds_unit_balance_meta.yaml /app/config_files/dm/dict_dds_unit_budget_hierarchy_level_based_meta.yaml /app/config_files/dm/dm_account_balance_by_contract_meta.yaml /app/config_files/dm/dm_account_counterparty_credit_limit_meta.yaml /app/config_files/dm/dm_account_debt_for_working_capital_1c_meta.yaml /app/config_files/dm/dm_account_debt_for_working_capital_meta.yaml /app/config_files/dm/dm_account_debt_meta.yaml /app/config_files/dm/dm_account_turnover_by_counterparty_meta.yaml /app/config_files/dm/dm_account_turnover_by_counterparty_virtual_meta.yaml /app/config_files/dm/dm_account_turnover_meta.yaml /app/config_files/dm/dm_accounting_bank_statements_meta.yaml /app/config_files/dm/dm_accounting_documents_leading_to_debt_meta.yaml /app/config_files/dm/dm_accounting_exchange_rate_revaluation_meta.yaml /app/config_files/dm/dm_accounts_receivable_sales_aggregated_meta.yaml /app/config_files/dm/dm_accounts_receivable_sales_detailed_meta.yaml /app/config_files/dm/dm_accounts_receivaible_sales_alverse_meta.yaml /app/config_files/dm/dm_alumina_balance_meta.yaml /app/config_files/dm/dm_alverse_mlc_overview_pivot_meta.yaml /app/config_files/dm/dm_alverse_sales_life_cycle_meta.yaml /app/config_files/dm/dm_alverse_transportation_life_cycle_meta.yaml /app/config_files/dm/dm_asuzdc_container_and_platform_availability_at_plant_dkp_meta.yaml /app/config_files/dm/dm_counterparties_and_organizations_relations_meta.yaml /app/config_files/dm/dm_counterparty_profile_meta.yaml /app/config_files/dm/dm_demand_planning_material_reservation_adjustments_meta.yaml /app/config_files/dm/dm_demand_planning_material_reservation_financials_meta.yaml /app/config_files/dm/dm_demand_planning_material_reservations_by_status_meta.yaml /app/config_files/dm/dm_demand_planning_material_reservations_meta.yaml /app/config_files/dm/dm_demand_planning_purchase_request_analysis_by_status_meta.yaml /app/config_files/dm/dm_demand_planning_purchase_request_analysis_meta.yaml /app/config_files/dm/dm_dq_sd0001_meta.yaml /app/config_files/dm/dm_dq_sd0002_meta.yaml /app/config_files/dm/dm_dq_sd0003_meta.yaml /app/config_files/dm/dm_dq_sd0005_meta.yaml /app/config_files/dm/dm_dq_sd0006_meta.yaml /app/config_files/dm/dm_dq_sd0007_meta.yaml /app/config_files/dm/dm_dq_sd0008_meta.yaml /app/config_files/dm/dm_exp_toro_diesel_equipment_unit_plan_vs_actual_meta.yaml /app/config_files/dm/dm_fixed_asset_main_meta.yaml /app/config_files/dm/dm_general_ledger_balance_sheet_structure_meta.yaml /app/config_files/dm/dm_general_ledger_balances_meta.yaml /app/config_files/dm/dm_investment_expenses_actual_meta.yaml /app/config_files/dm/dm_investment_expenses_and_payments_isuip_meta.yaml /app/config_files/dm/dm_investment_expenses_and_payments_meta.yaml /app/config_files/dm/dm_invoice_to_act_of_completed_work_meta.yaml /app/config_files/dm/dm_invoice_to_act_of_material_acceptence_meta.yaml /app/config_files/dm/dm_kpi_raw_warehouse_stock_meta.yaml /app/config_files/dm/dm_material_purchase_document_approvement_history_dob_dtil_meta.yaml /app/config_files/dm/dm_material_raw_stock_balance_for_purchase_planning_meta.yaml /app/config_files/dm/dm_material_stock_balance_meta.yaml /app/config_files/dm/dm_otif_daily_meta.yaml /app/config_files/dm/dm_paydox_credit_limits_meta.yaml /app/config_files/dm/dm_payment_request_approvement_history_dob_dtil_meta.yaml /app/config_files/dm/dm_production_aluminium_casting_schedule_meta.yaml /app/config_files/dm/dm_production_aluminium_electrolysis_meta.yaml /app/config_files/dm/dm_production_aluminium_finish_goods_meta.yaml /app/config_files/dm/dm_production_aluminium_remelt_meta.yaml /app/config_files/dm/dm_production_cost_plan_meta.yaml /app/config_files/dm/dm_production_finish_goods_stock_meta.yaml /app/config_files/dm/dm_production_toro_diesel_equipment_unit_plan_vs_actual_meta.yaml /app/config_files/dm/dm_purchase_documents_main_data_meta.yaml /app/config_files/dm/dm_purchase_documents_supply_schedule_meta.yaml /app/config_files/dm/dm_purchase_lead_time_meta.yaml /app/config_files/dm/dm_sales_account_receivables_and_customs_clearance_rset_meta.yaml /app/config_files/dm/dm_sales_alverse_mlc_meta.yaml /app/config_files/dm/dm_sales_carbon_footprint_by_delivery_meta.yaml /app/config_files/dm/dm_sales_delivery_estimated_business_location_by_date_meta.yaml /app/config_files/dm/dm_sales_delivery_tracking_normative_check_meta.yaml /app/config_files/dm/dm_sales_forwarder_metal_acceptance_delays_meta.yaml /app/config_files/dm/dm_sales_margin_meta.yaml /app/config_files/dm/dm_sales_material_turnover_detailed_meta.yaml /app/config_files/dm/dm_sales_scanned_documents_analysis_meta.yaml /app/config_files/dm/dm_sales_shipment_from_russian_port_actual_vs_plan_dob_dkp_meta.yaml /app/config_files/dm/dm_sales_statement_report_meta.yaml /app/config_files/dm/dm_sales_stock_balance_by_production_bundle_meta.yaml /app/config_files/dm/dm_sales_stock_balance_with_forecast_meta.yaml /app/config_files/dm/dm_sales_storage_registration_vs_storage_movement_meta.yaml /app/config_files/dm/dm_sales_unplanned_metal_stock_at_plant_meta.yaml /app/config_files/dm/dm_sb_wuc_meta.yaml /app/config_files/dm/dm_tax_accruals_and_payments_aggregated_meta.yaml /app/config_files/dm/dm_toro_diesel_equipment_unit_plan_vs_actual_meta.yaml /app/config_files/dm/dm_toro_equipment_downtime_by_plant_type_meta.yaml /app/config_files/dm/dm_toro_equipment_downtime_by_production_type_meta.yaml /app/config_files/dm/dm_toro_equipment_downtime_losses_meta.yaml /app/config_files/dm/dm_toro_repair_duration_and_cost_plan_vs_actual_meta.yaml /app/config_files/dm/dm_transportation_aluminium_shipment_from_plant_meta.yaml /app/config_files/dm/dm_transportation_external_location_metal_stock_aggregated_meta.yaml /app/config_files/dm/dm_transportation_external_location_metal_stock_meta.yaml /app/config_files/dm/dm_transportation_own_container_movement_meta.yaml /app/config_files/dm/dm_transportation_service_invoice_approvement_history_meta.yaml /app/config_files/dm/dm_transportation_service_invoice_approvement_history_pivot_meta.yaml /app/config_files/dm/dm_transportation_service_invoices_and_payments_aggregated_meta.yaml /app/config_files/dm/dm_transportation_service_invoices_and_payments_meta.yaml /app/config_files/dm/dm_transportation_services_purchase_price_agreement_meta.yaml /app/config_files/dm/dm_transportation_vehicle_capacity_average_utilization_meta.yaml /app/config_files/dm/dm_view_account_debt_penalty_meta.yaml /app/config_files/dm/dm_view_investment_payments_actual_meta.yaml /app/config_files/dm/dm_view_kpi_indicators_daily_ad_meta.yaml /app/config_files/dm/dm_view_material_price_calculation_meta.yaml /app/config_files/dm/dm_view_otif_meta.yaml /app/config_files/dm/dm_view_production_ad_kpa_finish_goods_stock_and_shipment_meta.yaml /app/config_files/dm/dm_view_production_ad_kpa_hr_kpi_meta.yaml /app/config_files/dm/dm_view_purchase_contract_limits_and_current_balances_meta.yaml /app/config_files/dm/dm_view_raw_materials_shipment_and_arrival_meta.yaml /app/config_files/dm/dm_view_sales_delivery_tracking_dob_dkp_meta.yaml /app/config_files/dm/dm_view_sales_delivery_tracking_domestic_meta.yaml /app/config_files/dm/dm_view_sd_sales_to_india_scm_meta.yaml /app/config_files/dm/rls_rls_t_meta.yaml
++ rm -rf /app/config_files/dm_view/account_debt_for_working_capital_final.sql /app/config_files/dm_view/consolidated_document_workflow_approval_performance.sql /app/config_files/dm_view/kpi_indicators_actual_daily_report_ad.sql /app/config_files/dm_view/production_ad_kpa_finish_goods_stock_and_shipment.sql /app/config_files/dm_view/production_ad_mr_finish_goods_stock.sql /app/config_files/dm_view/production_toro_diesel_equipment_unit_plan_vs_actual.sql /app/config_files/dm_view/sales_business_location_stay_history.sql /app/config_files/dm_view/sales_carbon_footprint_by_delivery.sql /app/config_files/dm_view/sales_material_turnover_detailed.sql /app/config_files/dm_view/sales_stock_balance_with_forecast.sql /app/config_files/dm_view/sales_storage_registration_vs_storage_movement.sql /app/config_files/dm_view/sb_wuc.sql /app/config_files/dm_view/transportation_aluminium_shipment_from_plant.sql /app/config_files/dm_view/transportation_own_container_information_card.sql /app/config_files/dm_view/transportation_price_rates.sql /app/config_files/dm_view/transportation_service_invoice_approvement_history_pivot.sql /app/config_files/dm_view/transportation_service_invoices_and_payments.sql /app/config_files/dm_view/transportation_service_invoices_and_payments_aggregated.sql /app/config_files/dm_view/transportation_services_purchase_price_agr_filt_container.sql /app/config_files/dm_view/transportation_services_purchase_price_agreement.sql /app/config_files/dm_view/working_capital_finish_goods_balance.sql
++ cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
++ cp -a /root/git_dir/etl/config_files/meta/dm/. /app/config_files/dm/
++ cp -a /root/git_dir/etl/config_files/meta/dm_view/. /app/config_files/dm_view/
++ echo '[ci_cd] synced meta_info, dm, dm_view from origin/main'
+[ci_cd] synced meta_info, dm, dm_view from origin/main
++ echo '[ci_cd] done'
+[ci_cd] done

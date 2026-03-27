@@ -1,36 +1,52 @@
+#!/usr/bin/bash
+  set -euo pipefail
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh
-+ set -euo pipefail
-+ unset http_proxy
-+ unset https_proxy
-+ unset HTTP_PROXY
-+ unset HTTPS_PROXY
-+ export GIT_SSL_NO_VERIFY=1
-+ GIT_SSL_NO_VERIFY=1
-+ REPO_ETL=/root/git_dir/etl
-+ REPO_META=/root/git_dir/meta
-+ APP_ROOT=/app
-+ BRANCH=main
-++ date -u +%Y-%m-%dT%H:%M:%SZ
-+ echo '[ci_cd] start 2026-03-27T11:08:22Z'
-[ci_cd] start 2026-03-27T11:08:22Z
-+ git -C /root/git_dir/etl fetch origin
-+ git -C /root/git_dir/etl checkout main
-Already on 'main'
-Your branch is up to date with 'origin/main'.
-+ git -C /root/git_dir/etl reset --hard origin/main
-HEAD is now at 5271a140c Merge branch 'vnerelease/DWH-11389' into 'main'
-+ git -C /root/git_dir/etl clean -fd
-+ mkdir -p /app/meta_info
-+ mkdir -p /app/config_files/dm
-+ mkdir -p /app/config_files/dm_view
-+ rm -rf /app/meta_info/database
-+ rm -rf '/app/config_files/dm/*'
-+ rm -rf '/app/config_files/dm_view/*'
-+ cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
-+ cp -a /root/git_dir/meta/dm/. /app/config_files/dm/
-+ cp -a /root/git_dir/meta/dm_view/. /app/config_files/dm_view/
-+ echo '[ci_cd] synced meta_info, dm, dm_view'
-[ci_cd] synced meta_info, dm, dm_view
-+ echo '[ci_cd] done'
-[ci_cd] done
+  unset http_proxy
+  unset https_proxy
+  unset HTTP_PROXY
+  unset HTTPS_PROXY
+  export GIT_SSL_NO_VERIFY=1
+
+  REPO_ROOT="/root/git_dir/etl"
+  APP_ROOT="/app"
+  BRANCH="main"
+
+  echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+  git -C "${REPO_ROOT}" fetch origin
+  git -C "${REPO_ROOT}" checkout "${BRANCH}"
+  git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+  git -C "${REPO_ROOT}" clean -fd
+
+  mkdir -p "${APP_ROOT}/meta_info"
+  mkdir -p "${APP_ROOT}/config_files/dm"
+  mkdir -p "${APP_ROOT}/config_files/dm_view"
+
+  rm -rf "${APP_ROOT}/meta_info"/*
+  rm -rf "${APP_ROOT}/config_files/dm"/*
+  rm -rf "${APP_ROOT}/config_files/dm_view"/*
+
+  cp -a "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+  cp -a "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/dm/"
+  cp -a "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/dm_view/"
+
+  echo "[ci_cd] synced meta_info, dm, dm_view from origin/${BRANCH}"
+  echo "[ci_cd] done"
+
+  Почему это лучше:
+
+  - один источник данных;
+  - reset --hard + clean реально удаляет то, чего нет в main;
+  - не остается старого мусора в отдельной папке /root/git_dir/meta;
+  - поведение кнопки становится предсказуемым.
+
+  Что должно быть после этого:
+
+  - если файл удалили из main в config_files/meta/dm_view, после кнопки он пропадет и в приложении;
+  - meta_info тоже будет актуален из того же checkout.
+
+  Что проверить перед заменой:
+
+  ls /root/git_dir/etl/config_files/meta/dm
+  ls /root/git_dir/etl/config_files/meta/dm_view
+  ls /root/git_dir/etl/meta_info

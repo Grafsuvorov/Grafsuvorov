@@ -1109,7 +1109,8 @@ export default function TableCard({
                   <span>Постановщик</span>
                   <span>Исполнитель</span>
                   <span>Статус</span>
-                  <span>Направление</span>
+                  <span>Команда</span>
+                  <span>Дашборд КХД/Направление</span>
                   <span>Трудозатраты</span>
                   <span>Последняя смена исполнителя</span>
                   <span>Последняя смена статуса</span>
@@ -1130,7 +1131,8 @@ export default function TableCard({
                       ) : null}
                     </span>
                     <span>{t.current_state || "—"}</span>
-                    <span>{t.custom?.["Направление"] || "—"}</span>
+                    <span>{t.custom?.Subsystem || "—"}</span>
+                    <span>{t.custom?.["Дашборд КХД/Направление"] || "—"}</span>
                     <span>
                       {t.work_minutes ? `${Math.round(t.work_minutes / 60)} ч` : "—"}
                     </span>

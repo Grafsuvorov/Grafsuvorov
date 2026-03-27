@@ -38,7 +38,8 @@ export default function ReleasesPage() {
   const [ytWorkloadLoading, setYtWorkloadLoading] = useState(false);
   const [ytWorkloadError, setYtWorkloadError] = useState(null);
   const analyticsDays = 30;
-  const [selectedDirection, setSelectedDirection] = useState(null);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [selectedDashboard, setSelectedDashboard] = useState(null);
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
 
@@ -340,47 +341,104 @@ export default function ReleasesPage() {
           </div>
           <div className="yt-analytics-grid">
             <div className="yt-analytics-block">
-              <div className="section-subtitle">По направлениям</div>
+              <div className="section-subtitle">По командам</div>
               <div className="yt-analytics-table">
                 <div className="yt-analytics-head">
-                  <span>Направление</span>
+                  <span>Команда</span>
                   <span>Задач</span>
                   <span>Часы</span>
                   <span></span>
                 </div>
-                {(ytStats.by_direction || []).map((row, idx) => (
-                  <div key={`dir-${idx}`} className="yt-analytics-row">
-                    <span>{row.direction || "—"}</span>
+                {(ytStats.by_team || []).map((row, idx) => (
+                  <div key={`team-${idx}`} className="yt-analytics-row">
+                    <span>{row.team || "—"}</span>
                     <span>{row.tasks_count || 0}</span>
                     <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
                     <button
                       className="btn btn-secondary"
                       onClick={() =>
-                        setSelectedDirection((prev) => (prev === row.direction ? null : row.direction))
+                        setSelectedTeam((prev) => (prev === row.team ? null : row.team))
                       }
                     >
-                      {selectedDirection === row.direction ? "Скрыть" : "Задачи"}
+                      {selectedTeam === row.team ? "Скрыть" : "Задачи"}
                     </button>
                   </div>
                 ))}
               </div>
-              {selectedDirection && (
+              {selectedTeam && (
                 <div className="yt-analytics-tasks">
                   <div className="yt-analytics-task-head">
                     <span>Задача</span>
-                    <span>Направление</span>
+                    <span>Команда</span>
+                    <span>Дашборд КХД/Направление</span>
                     <span>Постановщик</span>
                     <span>Исполнитель</span>
                     <span>Часы</span>
                   </div>
                   {(ytTasks || [])
-                    .filter((t) => (t.direction || "Не указан") === selectedDirection)
+                    .filter((t) => (t.team || "Не указана") === selectedTeam)
                     .map((t, idx) => (
-                    <div key={`dir-task-${idx}`} className="yt-analytics-task-row">
+                    <div key={`team-task-${idx}`} className="yt-analytics-task-row">
                       <a className="yt-link mono" href={`${YT_BASE}${t.issue_id}`} target="_blank" rel="noreferrer">
                         {t.issue_id}
                       </a>
-                      <span>{t.direction || "—"}</span>
+                      <span>{t.team || "—"}</span>
+                      <span>{t.dashboard_direction || "—"}</span>
+                      <span>{t.created_by || "—"}</span>
+                      <span>{t.assignee || "—"}</span>
+                      <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="yt-analytics-block">
+              <div className="section-subtitle">По дашбордам КХД</div>
+              <div className="yt-analytics-table">
+                <div className="yt-analytics-head">
+                  <span>Дашборд КХД/Направление</span>
+                  <span>Задач</span>
+                  <span>Часы</span>
+                  <span></span>
+                </div>
+                {(ytStats.by_dashboard || []).map((row, idx) => (
+                  <div key={`dashboard-${idx}`} className="yt-analytics-row">
+                    <span>{row.dashboard_direction || "—"}</span>
+                    <span>{row.tasks_count || 0}</span>
+                    <span>{row.minutes ? Math.round(row.minutes / 60) : 0}</span>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() =>
+                        setSelectedDashboard((prev) =>
+                          prev === row.dashboard_direction ? null : row.dashboard_direction
+                        )
+                      }
+                    >
+                      {selectedDashboard === row.dashboard_direction ? "Скрыть" : "Задачи"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {selectedDashboard && (
+                <div className="yt-analytics-tasks">
+                  <div className="yt-analytics-task-head">
+                    <span>Задача</span>
+                    <span>Команда</span>
+                    <span>Дашборд КХД/Направление</span>
+                    <span>Постановщик</span>
+                    <span>Исполнитель</span>
+                    <span>Часы</span>
+                  </div>
+                  {(ytTasks || [])
+                    .filter((t) => (t.dashboard_direction || "Не указан") === selectedDashboard)
+                    .map((t, idx) => (
+                    <div key={`dashboard-task-${idx}`} className="yt-analytics-task-row">
+                      <a className="yt-link mono" href={`${YT_BASE}${t.issue_id}`} target="_blank" rel="noreferrer">
+                        {t.issue_id}
+                      </a>
+                      <span>{t.team || "—"}</span>
+                      <span>{t.dashboard_direction || "—"}</span>
                       <span>{t.created_by || "—"}</span>
                       <span>{t.assignee || "—"}</span>
                       <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
@@ -419,7 +477,8 @@ export default function ReleasesPage() {
                 <div className="yt-analytics-tasks">
                   <div className="yt-analytics-task-head">
                     <span>Задача</span>
-                    <span>Направление</span>
+                    <span>Команда</span>
+                    <span>Дашборд КХД/Направление</span>
                     <span>Постановщик</span>
                     <span>Исполнитель</span>
                     <span>Часы</span>
@@ -431,7 +490,8 @@ export default function ReleasesPage() {
                       <a className="yt-link mono" href={`${YT_BASE}${t.issue_id}`} target="_blank" rel="noreferrer">
                         {t.issue_id}
                       </a>
-                      <span>{t.direction || "—"}</span>
+                      <span>{t.team || "—"}</span>
+                      <span>{t.dashboard_direction || "—"}</span>
                       <span>{t.created_by || "—"}</span>
                       <span>{t.assignee || "—"}</span>
                       <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>
@@ -470,7 +530,8 @@ export default function ReleasesPage() {
                 <div className="yt-analytics-tasks">
                   <div className="yt-analytics-task-head">
                     <span>Задача</span>
-                    <span>Направление</span>
+                    <span>Команда</span>
+                    <span>Дашборд КХД/Направление</span>
                     <span>Постановщик</span>
                     <span>Исполнитель</span>
                     <span>Часы</span>
@@ -482,7 +543,8 @@ export default function ReleasesPage() {
                       <a className="yt-link mono" href={`${YT_BASE}${t.issue_id}`} target="_blank" rel="noreferrer">
                         {t.issue_id}
                       </a>
-                      <span>{t.direction || "—"}</span>
+                      <span>{t.team || "—"}</span>
+                      <span>{t.dashboard_direction || "—"}</span>
                       <span>{t.created_by || "—"}</span>
                       <span>{t.assignee || "—"}</span>
                       <span>{t.minutes ? Math.round(t.minutes / 60) : 0} ч</span>

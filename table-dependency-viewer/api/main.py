@@ -6405,7 +6405,7 @@ def get_ytrek_table_info(schema: str, table: str):
                     SELECT issue_id, field_name, field_value
                     FROM {TABLE_YT_ISSUE_CUSTOM}
                     WHERE issue_id = ANY(:ids)
-                      AND field_name IN ('Направление', 'Тип карточки', 'Дата релиза')
+                      AND field_name IN ('Subsystem', 'Дашборд КХД/Направление', 'Дашборд SD', 'Тип карточки', 'Дата релиза')
                     """
                 ),
                 {"ids": task_ids},
@@ -6498,24 +6498,46 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
                     FROM {TABLE_YT_ISSUE_WORKLOG}
                     GROUP BY issue_id
                 ),
-                direction AS (
-                    SELECT issue_id, field_value AS direction
+                team AS (
+                    SELECT issue_id, field_value AS team
                     FROM {TABLE_YT_ISSUE_CUSTOM}
-                    WHERE field_name = 'Направление'
+                    WHERE field_name = 'Subsystem'
+                ),
+                dashboard AS (
+                    SELECT issue_id, field_value AS dashboard_direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Дашборд КХД/Направление'
                 )
             """
 
-            by_direction = conn.execute(
+            by_team = conn.execute(
                 text(
                     base
                     + """
-                    SELECT COALESCE(d.direction, 'Не указан') AS direction,
+                    SELECT COALESCE(t.team, 'Не указана') AS team,
                            COUNT(*) AS tasks_count,
                            COALESCE(SUM(w.minutes), 0) AS minutes
                     FROM snap s
                     LEFT JOIN work w ON w.issue_id = s.issue_id
-                    LEFT JOIN direction d ON d.issue_id = s.issue_id
-                    GROUP BY d.direction
+                    LEFT JOIN team t ON t.issue_id = s.issue_id
+                    GROUP BY t.team
+                    ORDER BY minutes DESC NULLS LAST
+                    """
+                ),
+                {"days": days},
+            ).mappings().all()
+
+            by_dashboard = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT COALESCE(d.dashboard_direction, 'Не указан') AS dashboard_direction,
+                           COUNT(*) AS tasks_count,
+                           COALESCE(SUM(w.minutes), 0) AS minutes
+                    FROM snap s
+                    LEFT JOIN work w ON w.issue_id = s.issue_id
+                    LEFT JOIN dashboard d ON d.issue_id = s.issue_id
+                    GROUP BY d.dashboard_direction
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -6556,7 +6578,8 @@ def get_ytrek_analytics(days: int = Query(365, ge=1, le=3650)):
             ).mappings().all()
 
             return {
-                "by_direction": by_direction,
+                "by_team": by_team,
+                "by_dashboard": by_dashboard,
                 "by_creator": by_creator,
                 "by_assignee": by_assignee,
             }
@@ -6592,29 +6615,36 @@ def get_ytrek_tasks(days: int = Query(365, ge=1, le=3650)):
                           AND value_to IN ('Ожидание релиза', 'В работе')
                         ORDER BY issue_id, ts DESC NULLS LAST
                     ),
-                    work AS (
-                        SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
-                        FROM {TABLE_YT_ISSUE_WORKLOG}
-                        GROUP BY issue_id
-                    ),
-                    direction AS (
-                        SELECT issue_id, field_value AS direction
-                        FROM {TABLE_YT_ISSUE_CUSTOM}
-                        WHERE field_name = 'Направление'
-                    )
-                    SELECT s.issue_id,
-                           COALESCE(s.created_by, 'Не указан') AS created_by,
-                           COALESCE(exec.executor, s.assignee, s.created_by, 'Не указан') AS assignee,
-                           s.current_state,
-                           COALESCE(d.direction, 'Не указан') AS direction,
-                           COALESCE(w.minutes, 0) AS minutes
-                    FROM snap s
-                    LEFT JOIN exec ON exec.issue_id = s.issue_id
-                    LEFT JOIN work w ON w.issue_id = s.issue_id
-                    LEFT JOIN direction d ON d.issue_id = s.issue_id
-                    ORDER BY w.minutes DESC NULLS LAST
-                    """
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
                 ),
+                team AS (
+                    SELECT issue_id, field_value AS team
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Subsystem'
+                ),
+                dashboard AS (
+                    SELECT issue_id, field_value AS dashboard_direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Дашборд КХД/Направление'
+                )
+                SELECT s.issue_id,
+                       COALESCE(s.created_by, 'Не указан') AS created_by,
+                       COALESCE(exec.executor, s.assignee, s.created_by, 'Не указан') AS assignee,
+                       s.current_state,
+                       COALESCE(t.team, 'Не указана') AS team,
+                       COALESCE(d.dashboard_direction, 'Не указан') AS dashboard_direction,
+                       COALESCE(w.minutes, 0) AS minutes
+                FROM snap s
+                LEFT JOIN exec ON exec.issue_id = s.issue_id
+                LEFT JOIN work w ON w.issue_id = s.issue_id
+                LEFT JOIN team t ON t.issue_id = s.issue_id
+                LEFT JOIN dashboard d ON d.issue_id = s.issue_id
+                ORDER BY w.minutes DESC NULLS LAST
+                """
+            ),
                 {"days": days},
             ).mappings().all()
             return rows

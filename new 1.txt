@@ -1,203 +1,146 @@
-insert into dm.dq_sd0005(
-	error_code,
-	error_short_name,
-	error_full_name,
-	business_area_code,
-	error_type_code,
-	severity_type_code,
-	table_source_code,
-	error_description_text,
-	error_algorithm_text,
-	change_type_code,
-	total_weight_net,
-	total_including_smelters_wh_weight_net,
-	total_shipped_metal_in_inventory_weight_net,
-	total_not_yet_delivered_metal_weight_net,
-	dt_report,
-	delivery_number_sales,
-	batch,
-	uni,
-	weight_nk,
-	"location",
-	business_location_name,
-	plant_producer_code,
-	warehouse_shipment_type_name)
- 
-with dq_sd_0005 as (
-	select
-		'3-total_weight' as change_type_code,
-		SUM(weight_net) as total_weight_net, --без фильтров с дашборда
-		SUM(case 
-			when business_location_name in ('Scheduled',
-	                                        'Order issued')
-				then 0
-			when "location" ilike 'Scheduled%' 
-				then 0
-			else weight_net
-			end ) as total_including_smelters_wh_weight_net, -- фильтры с дашборда
-		SUM(case 
-			when business_location_name in ('Scheduled',
-	                                        'Order issued',
-	                                        'Status Smelter WH', 
-	                                        'At station')
-				then 0
-			when "location" ilike 'Scheduled%' 
-				then 0
-			else weight_net
-			end) as total_shipped_metal_in_inventory_weight_net, -- фильтры с дашборда
-		SUM(case 
-			when business_location_name in ('Scheduled',
-	                                        'Order issued',
-	                                        'Status Smelter WH',
-	                                        'At station',
-	                                        'Delivered')
-				then 0
-			when "location" ilike 'Scheduled%' 
-				then 0
-			else weight_net
-			end) as total_not_yet_delivered_metal_weight_net,
-		dt_report,
-		null as delivery_number_sales,
-		null as batch,
-		null as uni,
-		null as weight_nk,
-		null as "location",
-		business_location_name,
-		plant_producer_code,
-		warehouse_shipment_type_name
-	from
-	    dm.sb_wuc as wuc
-	group by dt_report, business_location_name, plant_producer_code, warehouse_shipment_type_name
-	union all
-	/*insert change_type_code '1-add'*/
-	--записываем в лог те строки, которые добавились по ключу из перечисленных полей витрины
-	select
-		'1-add' as change_type_code,
-		0 as total_weight_net,
-		0 as total_including_smelters_wh_weight_net,
-		0 as total_shipped_metal_in_inventory_weight_net,
-		0 as total_not_yet_delivered_metal_weight_net,
-		dt_report,
-		delivery_number_sales,
-		batch,
-		uni,
-		weight_nk,
-		"location",
-		business_location_name,
-		plant_producer_code,
-		warehouse_shipment_type_name
-	from
-	--данные в витрине за сегодня
-		dm.sb_wuc
-	where 
-		(business_location_name not in ('Scheduled','Order issued')	
-		or business_location_name is null)
-		and ("location" not ilike 'Scheduled%'
-	    or "location" is null)	
-	except
-	select
-		'1-add' as change_type_code,
-		0 as total_weight_net,
-		0 as total_including_smelters_wh_weight_net,
-		0 as total_shipped_metal_in_inventory_weight_net,
-		0 as total_not_yet_delivered_metal_weight_net,
-		dt_report,
-		delivery_number_sales,
-		batch,
-		uni,
-		weight_nk,
-		"location",
-		business_location_name,
-		plant_producer_code,
-		warehouse_shipment_type_name
-	from
-	--данные из бекапа за вчера
-		dm_calc.sb_wuc_backup
-	where 
-		(business_location_name not in ('Scheduled','Order issued')	
-		or business_location_name is null)
-		and ("location" not ilike 'Scheduled%'
-	    or "location" is null)	
-	union all
-	/*insert change_type_code '2-delete'*/
-	--записываем в лог те строки, которые удалились по ключу из перечисленных полей витрины
-	select
-		'2-delete' as change_type_code,
-		0 as total_weight_net,
-		0 as total_including_smelters_wh_weight_net,
-		0 as total_shipped_metal_in_inventory_weight_net,
-		0 as total_not_yet_delivered_metal_weight_net,
-		dt_report,
-		delivery_number_sales,
-		batch,
-		uni,
-		weight_nk,
-		"location",
-		business_location_name,
-		plant_producer_code,
-		warehouse_shipment_type_name
-	from
-	--данные из бекапа за вчера
-		dm_calc.sb_wuc_backup
-	where 
-		(business_location_name not in ('Scheduled','Order issued')	
-		or business_location_name is null)
-		and ("location" not ilike 'Scheduled%'
-	    or "location" is null)	
-	except
-	select
-		'2-delete' as change_type_code,
-		0 as total_weight_net,
-		0 as total_including_smelters_wh_weight_net,
-		0 as total_shipped_metal_in_inventory_weight_net,
-		0 as total_not_yet_delivered_metal_weight_net,
-		dt_report,
-		delivery_number_sales,
-		batch,
-		uni,
-		weight_nk,
-		"location",
-		business_location_name,
-		plant_producer_code,
-		warehouse_shipment_type_name
-	from
-	--данные в витрине за сегодня
-		dm.sb_wuc
-	where 
-		(business_location_name not in ('Scheduled','Order issued')	
-		or business_location_name is null)
-		and ("location" not ilike 'Scheduled%'
-	    or "location" is null)
+import requests
+import json
+import urllib3
+
+urllib3.disable_warnings()
+
+YOUTRACK_URL = ""
+YOUTRACK_TOKEN = ""
+ISSUE_ID = "DWH-10152"
+
+HEADERS = {
+    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
+    "Accept": "application/json",
+}
+
+
+def api_get(path, params=None):
+    r = requests.get(
+        f"{YOUTRACK_URL}{path}",
+        headers=HEADERS,
+        params=params or {},
+        verify=False,
+        timeout=60,
+    )
+    print(f"\n>>> GET {path} | status={r.status_code}")
+    if r.status_code != 200:
+        print(r.text)
+    r.raise_for_status()
+    return r.json()
+
+
+# -------------------------
+# 1. ISSUE (основной источник)
+# -------------------------
+issue = api_get(
+    f"/api/issues/{ISSUE_ID}",
+    {
+        "fields": "idReadable,project(id,name),customFields(name,value(name,text,presentation,$type))"
+    },
 )
-select
-	de.error_code,
-	de.error_short_name,
-	de.error_full_name,
-	de.business_area_code,
-	de.error_type_code,
-	de.severity_type_code,
-	de.table_source_code,
-	de.error_description_text,
-	de.error_algorithm_text,
-	dq.change_type_code,
-	dq.total_weight_net,
-	dq.total_including_smelters_wh_weight_net,
-	dq.total_shipped_metal_in_inventory_weight_net,
-	dq.total_not_yet_delivered_metal_weight_net,
-	dq.dt_report,
-	dq.delivery_number_sales,
-	dq.batch,
-	dq.uni,
-	dq.weight_nk,
-	dq."location",
-	dq.business_location_name,
-	dq.plant_producer_code,
-	dq.warehouse_shipment_type_name
-from 
-	dq_sd_0005 as dq
-left join dict_dds.dq_error as de 
-	on de.error_code = 'dq_sd0005'
-where 
-	not exists (select 1
-	            from dm.dq_sd0005
-	            where dttm_inserted::date = current_date);
+
+print("\n=== ISSUE CUSTOM FIELDS ===")
+direction_issue = None
+
+for f in issue.get("customFields", []):
+    print(f["name"], "=>", f.get("value"))
+    if f["name"] == "Направление":
+        direction_issue = f.get("value")
+
+print("\n=== RESULT FROM ISSUE ===")
+print("Direction:", direction_issue)
+
+
+# -------------------------
+# 2. ISSUE CUSTOM FIELDS (альтернативный endpoint)
+# -------------------------
+custom_fields = api_get(
+    f"/api/issues/{ISSUE_ID}/customFields",
+    {
+        "fields": "name,value(name,text,presentation,$type)"
+    },
+)
+
+print("\n=== ISSUE /customFields ===")
+direction_cf = None
+
+for f in custom_fields:
+    print(f["name"], "=>", f.get("value"))
+    if f["name"] == "Направление":
+        direction_cf = f.get("value")
+
+print("\n=== RESULT FROM /customFields ===")
+print("Direction:", direction_cf)
+
+
+# -------------------------
+# 3. PROJECT FIELD (есть ли вообще)
+# -------------------------
+project_id = issue["project"]["id"]
+
+project_fields = api_get(
+    f"/api/admin/projects/{project_id}/customFields",
+    {
+        "fields": "field(name,id),$type"
+    },
+)
+
+print("\n=== PROJECT FIELD CHECK ===")
+
+for f in project_fields:
+    field = f.get("field", {})
+    if field.get("name") == "Направление":
+        print("FOUND PROJECT FIELD:", json.dumps(f, ensure_ascii=False, indent=2))
+
+
+# -------------------------
+# 4. ACTIVITIES (история)
+# -------------------------
+print("\n=== ACTIVITIES RAW ===")
+
+activities = api_get(
+    f"/api/issues/{ISSUE_ID}/activitiesPage",
+    {
+        "fields": "activities"
+    },
+)
+
+direction_history = None
+
+for a in activities.get("activities", []):
+    field = (a.get("field") or {}).get("name")
+
+    if field == "Направление":
+        print(json.dumps(a, ensure_ascii=False, indent=2))
+
+        if a.get("added"):
+            direction_history = a["added"].get("name")
+
+print("\n=== RESULT FROM HISTORY ===")
+print("Direction:", direction_history)
+
+
+# -------------------------
+# 5. TYPE CHECK
+# -------------------------
+print("\n=== TYPE CHECK ===")
+
+for f in issue.get("customFields", []):
+    if f["name"] == "Тип карточки":
+        print("Тип:", f.get("value"))
+
+
+# -------------------------
+# 6. FINAL SUMMARY
+# -------------------------
+print("\n=== FINAL SUMMARY ===")
+
+print("FROM ISSUE:", direction_issue)
+print("FROM /customFields:", direction_cf)
+print("FROM HISTORY:", direction_history)
+
+if not direction_issue and direction_history:
+    print("\n⚠️ ВАЖНО: поле есть только в истории, но НЕ в текущем issue")
+
+if not direction_issue and not direction_history:
+    print("\n❌ Поле полностью отсутствует (даже в истории)")

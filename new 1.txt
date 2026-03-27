@@ -1,25 +1,4 @@
-import requests
-import json
-import urllib3
-
-urllib3.disable_warnings()
-
-YOUTRACK_URL = ""
-YOUTRACK_TOKEN = ""
-ISSUE_ID = "DWH-10152"
-
-headers = {
-    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-    "Accept": "application/json",
+{
+  "error": "bad_request",
+  "error_description": "Query string has invalid syntax"
 }
-
-r = requests.get(
-    f"{YOUTRACK_URL}/api/issues/{ISSUE_ID}",
-    headers=headers,
-    params={"fields": "*"},
-    verify=False
-)
-
-data = r.json()
-
-print(json.dumps(data, ensure_ascii=False, indent=2))

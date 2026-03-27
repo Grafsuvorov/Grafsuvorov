@@ -1,33 +1,5 @@
-#!/usr/bin/bash
-  set -euo pipefail
+docker exec -it table-dependency-viewer-api-1 bash /app/scripts/ci_cd.sh
 
-  unset http_proxy
-  unset HTTPS_PROXY
-  unset https_proxy
-  unset HTTP_PROXY
-  export GIT_SSL_NO_VERIFY=1
+  Если хочешь видеть, где падает, лучше так:
 
-  SOURCE_REPO="/root/git_dir/etl"
-  BRANCH="main"
-
-  echo 'gogogogo'
-
-  git -C "${SOURCE_REPO}" fetch origin
-  git -C "${SOURCE_REPO}" checkout "${BRANCH}"
-  git -C "${SOURCE_REPO}" reset --hard "origin/${BRANCH}"
-  git -C "${SOURCE_REPO}" clean -fd meta/dm meta/dm_view meta_info
-
-  mkdir -p /app/meta_info
-  mkdir -p /app/config_files/dm
-  mkdir -p /app/config_files/dm_view
-
-  rm -rf /app/meta_info/*
-  rm -rf /app/config_files/dm/*
-  rm -rf /app/config_files/dm_view/*
-
-  cp -a "${SOURCE_REPO}/meta_info/." /app/meta_info/
-  cp -a "${SOURCE_REPO}/meta/dm/." /app/config_files/dm/
-  cp -a "${SOURCE_REPO}/meta/dm_view/." /app/config_files/dm_view/
-
-  echo 'Закончили упражнение'
-  echo 'Как же ты хорош!'
+  docker exec -it table-dependency-viewer-api-1 bash -x /app/scripts/ci_cd.sh

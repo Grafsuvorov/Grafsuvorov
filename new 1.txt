@@ -1,28 +1,33 @@
- #!/usr/bin/bash
-set -euo pipefail
+#!/usr/bin/bash
+  set -euo pipefail
 
-unset http_proxy
-unset HTTPS_PROXY
-unset https_proxy
-unset HTTP_PROXY
-export GIT_SSL_NO_VERIFY=1
+  unset http_proxy
+  unset HTTPS_PROXY
+  unset https_proxy
+  unset HTTP_PROXY
+  export GIT_SSL_NO_VERIFY=1
 
-echo 'gogogogo'
+  SOURCE_REPO="/root/git_dir/etl"
+  BRANCH="main"
 
-# git repo есть только тут
-git -C /root/git_dir/etl -c http.sslVerify=false pull
+  echo 'gogogogo'
 
-# директории в контейнере
-mkdir -p /app/meta_info
-mkdir -p /app/config_files/meta
+  git -C "${SOURCE_REPO}" fetch origin
+  git -C "${SOURCE_REPO}" checkout "${BRANCH}"
+  git -C "${SOURCE_REPO}" reset --hard "origin/${BRANCH}"
+  git -C "${SOURCE_REPO}" clean -fd meta/dm meta/dm_view meta_info
 
-# копируем meta_info
-rm -rf /app/meta_info/*
-cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
+  mkdir -p /app/meta_info
+  mkdir -p /app/config_files/dm
+  mkdir -p /app/config_files/dm_view
 
-# копируем config_files/meta
-rm -rf /app/config_files/meta/*
-cp -a /root/git_dir/meta/. /app/config_files/meta/
+  rm -rf /app/meta_info/*
+  rm -rf /app/config_files/dm/*
+  rm -rf /app/config_files/dm_view/*
 
-echo 'Закончили упражнение'
-echo 'Как же ты хорош!'
+  cp -a "${SOURCE_REPO}/meta_info/." /app/meta_info/
+  cp -a "${SOURCE_REPO}/meta/dm/." /app/config_files/dm/
+  cp -a "${SOURCE_REPO}/meta/dm_view/." /app/config_files/dm_view/
+
+  echo 'Закончили упражнение'
+  echo 'Как же ты хорош!'

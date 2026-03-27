@@ -1636,7 +1636,7 @@ META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", BASE_DIR / "etl_loads_enti
 # ClickHouse meta configs (config_files/meta)
 _click_meta_cache = None
 _click_meta_ts = 0
-_CLICK_META_TTL = 300
+_CLICK_META_TTL = 86400  # 24 часа
 
 
 def _load_click_meta_index():

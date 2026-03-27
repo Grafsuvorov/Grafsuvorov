@@ -1,2 +1,11 @@
- cd /root/git_dir/etl
-  git ls-tree -r --name-only origin/main | grep dm_view
+docker inspect table-dependency-viewer-api-1 --format '{{json .Mounts}}'
+
+  Нужно увидеть mount примерно такого вида:
+
+  - source: /root/table-dependency-viewer/scripts
+  - destination: /app/scripts
+
+  Потом сравнить файл с хоста и внутри контейнера:
+
+  sed -n '1,80p' /root/table-dependency-viewer/scripts/ci_cd.sh
+  docker exec -it table-dependency-viewer-api-1 sh -c 'sed -n "1,80p" /app/scripts/ci_cd.sh'

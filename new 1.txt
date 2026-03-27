@@ -1,5 +1,28 @@
-docker exec -it table-dependency-viewer-api-1 sh -c 'echo $ADMIN_CICD_SCRIPT && sed -n "1,80p" /app/scripts/ci_cd.sh'
+ #!/usr/bin/bash
+set -euo pipefail
 
-  И еще полезно:
+unset http_proxy
+unset HTTPS_PROXY
+unset https_proxy
+unset HTTP_PROXY
+export GIT_SSL_NO_VERIFY=1
 
-  docker exec -it table-dependency-viewer-api-1 sh -c 'ls -l /app/scripts/ci_cd.sh'
+echo 'gogogogo'
+
+# git repo есть только тут
+git -C /root/git_dir/etl -c http.sslVerify=false pull
+
+# директории в контейнере
+mkdir -p /app/meta_info
+mkdir -p /app/config_files/meta
+
+# копируем meta_info
+rm -rf /app/meta_info/*
+cp -a /root/git_dir/etl/meta_info/. /app/meta_info/
+
+# копируем config_files/meta
+rm -rf /app/config_files/meta/*
+cp -a /root/git_dir/meta/. /app/config_files/meta/
+
+echo 'Закончили упражнение'
+echo 'Как же ты хорош!'

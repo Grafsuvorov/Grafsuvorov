@@ -1,146 +1,67 @@
-import requests
-import json
-import urllib3
 
-urllib3.disable_warnings()
+>>> GET /api/issues/DWH-10152 | status=200
 
-YOUTRACK_URL = ""
-YOUTRACK_TOKEN = ""
-ISSUE_ID = "DWH-10152"
+=== ISSUE CUSTOM FIELDS ===
+Тип карточки => {'name': 'Task', '$type': 'EnumBundleElement'}
+Priority => {'name': 'Normal', '$type': 'EnumBundleElement'}
+State => {'name': 'Завершена', '$type': 'StateBundleElement'}
+Assignee => {'name': 'Vaskov Aleksey', '$type': 'User'}
+Subsystem => {'name': 'SD Team', '$type': 'OwnedBundleElement'}
+Оценка (чел./час.) => 0
+Due Date => 1771012800000
+Затраченное время => None
+Дата релиза => 1771416000000
+Spent time => None
+Фактические трудозатраты => {'presentation': '3ч', '$type': 'PeriodValue'}
+Дашборд КХД/Направление => None
+Экономия за счет ИИ => None
+Оценка трудозатрат => None
 
-HEADERS = {
-    "Authorization": f"Bearer {YOUTRACK_TOKEN}",
-    "Accept": "application/json",
+=== RESULT FROM ISSUE ===
+Direction: None
+
+>>> GET /api/issues/DWH-10152/customFields | status=200
+
+=== ISSUE /customFields ===
+Тип карточки => {'name': 'Task', '$type': 'EnumBundleElement'}
+Priority => {'name': 'Normal', '$type': 'EnumBundleElement'}
+State => {'name': 'Завершена', '$type': 'StateBundleElement'}
+Assignee => {'name': 'Vaskov Aleksey', '$type': 'User'}
+Subsystem => {'name': 'SD Team', '$type': 'OwnedBundleElement'}
+Оценка (чел./час.) => 0
+Due Date => 1771012800000
+Затраченное время => None
+Дата релиза => 1771416000000
+Spent time => None
+Фактические трудозатраты => {'presentation': '3ч', '$type': 'PeriodValue'}
+Дашборд КХД/Направление => None
+Экономия за счет ИИ => None
+Оценка трудозатрат => None
+
+=== RESULT FROM /customFields ===
+Direction: None
+
+>>> GET /api/admin/projects/0-30/customFields | status=200
+
+=== PROJECT FIELD CHECK ===
+FOUND PROJECT FIELD: {
+  "field": {
+    "name": "Направление",
+    "id": "111-132",
+    "$type": "CustomField"
+  },
+  "$type": "OwnedProjectCustomField"
 }
 
+=== ACTIVITIES RAW ===
 
-def api_get(path, params=None):
-    r = requests.get(
-        f"{YOUTRACK_URL}{path}",
-        headers=HEADERS,
-        params=params or {},
-        verify=False,
-        timeout=60,
-    )
-    print(f"\n>>> GET {path} | status={r.status_code}")
-    if r.status_code != 200:
-        print(r.text)
+>>> GET /api/issues/DWH-10152/activitiesPage | status=400
+{"error":"Bad Request","error_description":"No requested categories specified as a filter parameter"}
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\test.py", line 105, in <module>
+    activities = api_get(
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\test.py", line 32, in api_get
     r.raise_for_status()
-    return r.json()
-
-
-# -------------------------
-# 1. ISSUE (основной источник)
-# -------------------------
-issue = api_get(
-    f"/api/issues/{ISSUE_ID}",
-    {
-        "fields": "idReadable,project(id,name),customFields(name,value(name,text,presentation,$type))"
-    },
-)
-
-print("\n=== ISSUE CUSTOM FIELDS ===")
-direction_issue = None
-
-for f in issue.get("customFields", []):
-    print(f["name"], "=>", f.get("value"))
-    if f["name"] == "Направление":
-        direction_issue = f.get("value")
-
-print("\n=== RESULT FROM ISSUE ===")
-print("Direction:", direction_issue)
-
-
-# -------------------------
-# 2. ISSUE CUSTOM FIELDS (альтернативный endpoint)
-# -------------------------
-custom_fields = api_get(
-    f"/api/issues/{ISSUE_ID}/customFields",
-    {
-        "fields": "name,value(name,text,presentation,$type)"
-    },
-)
-
-print("\n=== ISSUE /customFields ===")
-direction_cf = None
-
-for f in custom_fields:
-    print(f["name"], "=>", f.get("value"))
-    if f["name"] == "Направление":
-        direction_cf = f.get("value")
-
-print("\n=== RESULT FROM /customFields ===")
-print("Direction:", direction_cf)
-
-
-# -------------------------
-# 3. PROJECT FIELD (есть ли вообще)
-# -------------------------
-project_id = issue["project"]["id"]
-
-project_fields = api_get(
-    f"/api/admin/projects/{project_id}/customFields",
-    {
-        "fields": "field(name,id),$type"
-    },
-)
-
-print("\n=== PROJECT FIELD CHECK ===")
-
-for f in project_fields:
-    field = f.get("field", {})
-    if field.get("name") == "Направление":
-        print("FOUND PROJECT FIELD:", json.dumps(f, ensure_ascii=False, indent=2))
-
-
-# -------------------------
-# 4. ACTIVITIES (история)
-# -------------------------
-print("\n=== ACTIVITIES RAW ===")
-
-activities = api_get(
-    f"/api/issues/{ISSUE_ID}/activitiesPage",
-    {
-        "fields": "activities"
-    },
-)
-
-direction_history = None
-
-for a in activities.get("activities", []):
-    field = (a.get("field") or {}).get("name")
-
-    if field == "Направление":
-        print(json.dumps(a, ensure_ascii=False, indent=2))
-
-        if a.get("added"):
-            direction_history = a["added"].get("name")
-
-print("\n=== RESULT FROM HISTORY ===")
-print("Direction:", direction_history)
-
-
-# -------------------------
-# 5. TYPE CHECK
-# -------------------------
-print("\n=== TYPE CHECK ===")
-
-for f in issue.get("customFields", []):
-    if f["name"] == "Тип карточки":
-        print("Тип:", f.get("value"))
-
-
-# -------------------------
-# 6. FINAL SUMMARY
-# -------------------------
-print("\n=== FINAL SUMMARY ===")
-
-print("FROM ISSUE:", direction_issue)
-print("FROM /customFields:", direction_cf)
-print("FROM HISTORY:", direction_history)
-
-if not direction_issue and direction_history:
-    print("\n⚠️ ВАЖНО: поле есть только в истории, но НЕ в текущем issue")
-
-if not direction_issue and not direction_history:
-    print("\n❌ Поле полностью отсутствует (даже в истории)")
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\models.py", line 1024, in raise_for_status
+    raise HTTPError(http_error_msg, response=self)
+requests.exceptions.HTTPError: 400 Client Error: Bad Request for url: https://yt.rusal.ru/api/issues/DWH-10152/activitiesPage?fields=activities

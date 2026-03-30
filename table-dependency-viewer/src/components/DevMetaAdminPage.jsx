@@ -9,6 +9,13 @@ const SCHEMA_OPTIONS = [
 
 export default function DevMetaAdminPage({ userProfile }) {
   const [schemaName, setSchemaName] = useState("dm");
+  const [generator, setGenerator] = useState({
+    schema_name_gp: "dm",
+    object_name: "",
+    schema_name_click: "dm",
+    greenplum_table_name: "",
+    order_by: "",
+  });
   const [status, setStatus] = useState(null);
   const [files, setFiles] = useState({ prod_files: [], dev_files: [], locks: [] });
   const [selectedFile, setSelectedFile] = useState(null);
@@ -181,6 +188,33 @@ export default function DevMetaAdminPage({ userProfile }) {
     }
   };
 
+  const handleGenerate = async () => {
+    setError(null);
+    setMessage(null);
+    try {
+      const orderBy = generator.order_by
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const data = await devMetaApi.generate({
+        schema_name_gp: generator.schema_name_gp,
+        object_name: generator.object_name,
+        schema_name_click: generator.schema_name_click,
+        greenplum_table_name: generator.greenplum_table_name || null,
+        order_by: orderBy,
+      });
+      setSchemaName(generator.schema_name_click);
+      setSelectedFile(data?.file_name || null);
+      setSelectedSource("dev");
+      setContent(data?.content || "");
+      setValidation(null);
+      setLockInfo(null);
+      setMessage("Черновик YAML сгенерирован. Возьми файл в работу, проверь и сохрани.");
+    } catch (err) {
+      setError(err.message || "Не удалось сгенерировать YAML");
+    }
+  };
+
   const handleRunDag = async () => {
     if (!selectedFile) return;
     setRunningDag(true);
@@ -259,6 +293,62 @@ export default function DevMetaAdminPage({ userProfile }) {
 
         {message && <div className="muted">{message}</div>}
         {error && <div className="login-error">{error}</div>}
+
+        <div className="dev-meta-generator">
+          <div className="section-subtitle">Новый YAML из параметров</div>
+          <div className="dev-meta-generator-grid">
+            <label className="admin-field">
+              <span>GP схема</span>
+              <input
+                value={generator.schema_name_gp}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, schema_name_gp: e.target.value }))}
+                placeholder="dm"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Имя объекта ClickHouse</span>
+              <input
+                value={generator.object_name}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, object_name: e.target.value }))}
+                placeholder="counterparty_profile"
+              />
+            </label>
+            <label className="admin-field">
+              <span>Имя объекта в GP</span>
+              <input
+                value={generator.greenplum_table_name}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, greenplum_table_name: e.target.value }))}
+                placeholder="Если отличается от ClickHouse"
+              />
+            </label>
+            <label className="admin-field">
+              <span>ClickHouse схема</span>
+              <select
+                value={generator.schema_name_click}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, schema_name_click: e.target.value }))}
+              >
+                <option value="dm">dm</option>
+                <option value="dm_view">dm_view</option>
+              </select>
+            </label>
+            <label className="admin-field dev-meta-generator-wide">
+              <span>ORDER BY</span>
+              <input
+                value={generator.order_by}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, order_by: e.target.value }))}
+                placeholder="counterparty_code, dttm_updated"
+              />
+            </label>
+          </div>
+          <div className="dev-meta-generator-actions">
+            <button className="btn btn-primary" onClick={handleGenerate}>
+              Сгенерировать черновик
+            </button>
+            <div className="muted">
+              Генератор сейчас создает новый YAML для `dm` по структуре Greenplum и базовым default-параметрам.
+            </div>
+          </div>
+        </div>
 
         <div className="dev-meta-layout">
           <div className="dev-meta-side">

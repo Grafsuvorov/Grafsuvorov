@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 RUN pip install --no-cache-dir fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-client \
+    && apt-get install -y --no-install-recommends openssh-client sshpass \
     && rm -rf /var/lib/apt/lists/*
 
 COPY api/ /app/api/

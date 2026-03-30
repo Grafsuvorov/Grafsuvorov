@@ -56,6 +56,7 @@ from .config import (
     DEV_DATABASE_URL,
     DEV_META_DEPLOY_BASE_DIR,
     DEV_META_DEPLOY_HOST,
+    DEV_META_DEPLOY_PASSWORD,
     DEV_META_DEPLOY_PORT,
     DEV_META_DEPLOY_SSH_KEY_PATH,
     DEV_META_DEPLOY_STRICT_HOST_KEY,
@@ -72,6 +73,7 @@ from .services.dev_meta import (
     acquire_dev_meta_lock,
     assert_dev_meta_lock_owner,
     deploy_dev_meta_file,
+    generate_dev_meta_yaml,
     get_dev_meta_files,
     get_dev_meta_status,
     read_dev_meta_file,
@@ -141,6 +143,14 @@ class DevMetaDeployPayload(BaseModel):
     schema_name: str
     file_name: str
     content: str
+
+
+class DevMetaGeneratePayload(BaseModel):
+    schema_name_gp: str
+    object_name: str
+    schema_name_click: str = "dm"
+    greenplum_table_name: Optional[str] = None
+    order_by: List[str]
 
 
 @app.get("/api/health")
@@ -261,6 +271,25 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
         raise HTTPException(status_code=404, detail="Файл не найден")
 
 
+@router.post("/api/admin/dev-meta/generate")
+def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        result = generate_dev_meta_yaml(
+            database_url=DEV_DATABASE_URL or DATABASE_URL,
+            schema_name_gp=payload.schema_name_gp,
+            object_name=payload.object_name,
+            schema_name_click=payload.schema_name_click,
+            greenplum_table_name=payload.greenplum_table_name,
+            order_by=payload.order_by,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
 @router.post("/api/admin/dev-meta/lock")
 def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
     user = get_current_user_from_request(request)
@@ -374,6 +403,7 @@ def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
             host=DEV_META_DEPLOY_HOST,
             port=DEV_META_DEPLOY_PORT,
             user=DEV_META_DEPLOY_USER,
+            password=DEV_META_DEPLOY_PASSWORD,
             remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
             ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
             strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,

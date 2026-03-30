@@ -115,6 +115,7 @@ DEV_DATABASE_URL=
 DEV_META_DEPLOY_HOST=
 DEV_META_DEPLOY_PORT=22
 DEV_META_DEPLOY_USER=
+DEV_META_DEPLOY_PASSWORD=
 DEV_META_DEPLOY_BASE_DIR=
 DEV_META_DEPLOY_SSH_KEY_PATH=
 DEV_META_DEPLOY_STRICT_HOST_KEY=false
@@ -128,10 +129,11 @@ DEV_META_LOCK_TTL_MIN=30
 Замечания:
 
 - `DEV_DATABASE_URL` опционален. Он нужен только для проверки существования объекта в DEV Greenplum.
-- `DEV_META_DEPLOY_*` нужны для отправки meta-файла на отдельный DEV сервер по `ssh/scp`.
+- `DEV_META_DEPLOY_*` нужны для отправки meta-файла на отдельный DEV сервер по `ssh/scp`. Можно использовать либо пароль, либо SSH-ключ.
 - `AIRFLOW_DEV_*` нужны только для кнопки запуска DEV DAG.
 - Для записи файлов из контейнера `api` каталог `config_files` должен быть примонтирован в `/app/config_files`.
-- Для `ssh/scp` контейнер `api` должен видеть ключ, если сервер не пускает по встроенному trust. Обычно это отдельный bind-mount с read-only ключом.
+- Если используешь парольный вход под `root`, достаточно `DEV_META_DEPLOY_USER=root` и `DEV_META_DEPLOY_PASSWORD=...`.
+- Если используешь ключ, контейнер `api` должен видеть этот ключ через read-only bind-mount.
 
 ## Технический долг / куда дальше
 

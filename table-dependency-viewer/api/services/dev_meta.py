@@ -65,6 +65,27 @@ REQUIRED_ATTRIBUTE_KEYS = {
     "is_nullable",
 }
 
+MAPPING_GP_TO_CLICK = {
+    "date": "Date32",
+    "timestamp": "DateTime",
+    "varchar": "String",
+    "text": "String",
+    "bpchar": "String",
+    "numeric": "Decimal(32,10)",
+    "decimal": "Decimal(32,10)",
+    "int8": "Int64",
+    "int4": "Int32",
+    "int2": "Int32",
+    "int": "Int32",
+    "bigint": "Int64",
+    "bool": "UInt8",
+    "boolean": "UInt8",
+    "json": "String",
+    "jsonb": "String",
+    "time": "String",
+    "float8": "Decimal(32,10)",
+}
+
 
 def _resolve_root(base_dir: Path, root_value: str) -> Path:
     root = Path(root_value)
@@ -83,6 +104,158 @@ def ensure_dev_meta_tables(engine) -> None:
             conn.execute(text(AUDIT_TABLE_SQL))
         except Exception:
             pass
+
+
+def _connection_url_for_generator(dev_database_url: str, default_database_url: str) -> str:
+    return dev_database_url or default_database_url
+
+
+def _normalize_click_type(data_type_gp: str) -> str:
+    base_type = (data_type_gp or "").split("(", 1)[0].strip().lower()
+    if base_type == "numeric":
+        if "(" in (data_type_gp or ""):
+            return f"Decimal{data_type_gp[data_type_gp.index('('):]}"
+        return "Decimal(32,10)"
+    return MAPPING_GP_TO_CLICK.get(base_type, "String")
+
+
+def generate_dev_meta_yaml(
+    *,
+    database_url: str,
+    schema_name_gp: str,
+    object_name: str,
+    schema_name_click: str,
+    order_by: list[str],
+    greenplum_table_name: str | None = None,
+) -> dict[str, Any]:
+    if not database_url:
+        raise ValueError("Для генератора нужен DEV_DATABASE_URL или DATABASE_URL")
+    if not schema_name_gp.strip() or not object_name.strip():
+        raise ValueError("Нужно указать schema_name_gp и object_name")
+    if schema_name_click not in {"dm", "dm_view"}:
+        raise ValueError("schema_name_click должен быть dm или dm_view")
+    if schema_name_click == "dm_view":
+        raise ValueError("Автогенерация сейчас поддержана только для dm")
+    if not order_by:
+        raise ValueError("Укажи хотя бы одну колонку в order_by")
+
+    source_object_name = (greenplum_table_name or object_name).strip()
+    engine = create_engine(database_url)
+    query = text(
+        """
+        SELECT
+            t.table_type,
+            c.column_name,
+            c.ordinal_position,
+            concat(
+                c.udt_name,
+                CASE
+                    WHEN c.character_maximum_length IS NOT NULL
+                        THEN concat('(', c.character_maximum_length, ')')
+                    WHEN c.numeric_precision IS NOT NULL AND c.data_type = 'numeric'
+                        THEN concat('(', c.numeric_precision, ',', c.numeric_scale, ')')
+                    ELSE ''
+                END
+            ) AS data_type_gp,
+            CASE WHEN c.is_nullable = 'YES' THEN true ELSE false END AS is_nullable,
+            c.column_default,
+            pd.description
+        FROM information_schema.columns c
+        JOIN information_schema.tables t
+          ON t.table_schema = c.table_schema
+         AND t.table_name = c.table_name
+        LEFT JOIN pg_catalog.pg_statio_all_tables p
+          ON c.table_schema = p.schemaname
+         AND c.table_name = p.relname
+        LEFT JOIN pg_catalog.pg_description pd
+          ON c.ordinal_position = pd.objsubid
+         AND p.relid = pd.objoid
+        WHERE c.table_schema = :schema_name
+          AND c.table_name = :table_name
+        ORDER BY c.ordinal_position
+        """
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(
+            query,
+            {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
+        ).mappings().all()
+    if not rows:
+        raise ValueError(f"Объект {schema_name_gp}.{source_object_name} не найден")
+
+    column_names = [str(row["column_name"]) for row in rows]
+    missing_order_by = [name for name in order_by if name not in column_names]
+    if missing_order_by:
+        raise ValueError(f"Колонки из order_by не найдены: {', '.join(missing_order_by)}")
+
+    object_type = "table"
+    first_type = str(rows[0]["table_type"] or "").upper()
+    if "VIEW" in first_type:
+        object_type = "view"
+
+    attributes: list[dict[str, Any]] = []
+    for row in rows:
+        column_name = str(row["column_name"])
+        data_type_gp = str(row["data_type_gp"] or "")
+        attr = {
+            "column_name_click": column_name,
+            "column_name_gp": column_name,
+            "data_type_click": _normalize_click_type(data_type_gp),
+            "data_type_gp": data_type_gp,
+            "is_nullable": "NULL" if bool(row["is_nullable"]) and column_name not in order_by else "NOT NULL",
+            "description": (row["description"] or "Комментария нет").replace("\n", " "),
+        }
+        if row["column_default"]:
+            attr["default"] = str(row["column_default"])
+        attributes.append(attr)
+
+    payload: dict[str, Any] = {
+        "schema_name_gp": schema_name_gp.strip(),
+        "schema_name_click": schema_name_click.strip(),
+        "object_name": object_name.strip(),
+        "object_type": object_type,
+        "clickhouse_cluster": "{cluster}",
+        "engine": "ReplicatedMergeTree",
+        "order_by": order_by,
+        "partitions": None,
+        "table_settings": "index_granularity = 8192",
+        "table_comment": None,
+        "settings_external_table": {
+            "max_threads": 20,
+            "max_insert_threads": 20,
+            "input_format_parallel_parsing": 0,
+        },
+        "load_type": "full",
+        "recreate_mode": "drop_create",
+        "truncate_mode_on": object_name.strip() != "account_turnover",
+        "postgres_conn_id": "gp_connection",
+        "clickhouse_conn_id": "clickhouse",
+        "dag_name": None,
+        "dag_schedule_interval": {
+            "PROD": None,
+            "DEV": None,
+        },
+        "dag_tags": [],
+        "task_pool": "dm_pool",
+        "task_pool_slots": 1,
+        "attributes": attributes,
+    }
+    if greenplum_table_name and greenplum_table_name.strip() != object_name.strip():
+        payload["greenplum_table_name"] = greenplum_table_name.strip()
+
+    file_name = f"{schema_name_gp.strip()}_{object_name.strip()}_meta.yaml"
+    content = yaml.dump(
+        payload,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=float("inf"),
+    )
+    return {
+        "file_name": file_name,
+        "content": content,
+        "payload": payload,
+    }
 
 
 def list_meta_files(root: Path, schema_name: str) -> list[dict[str, Any]]:
@@ -520,9 +693,12 @@ def _build_ssh_base_command(
     *,
     port: int,
     ssh_key_path: str,
+    password: str,
     strict_host_key: str,
 ) -> list[str]:
     cmd = ["ssh"]
+    if password:
+        cmd = ["sshpass", "-p", password] + cmd
     if port:
         cmd.extend(["-p", str(port)])
     if ssh_key_path:
@@ -544,9 +720,12 @@ def _build_scp_base_command(
     *,
     port: int,
     ssh_key_path: str,
+    password: str,
     strict_host_key: str,
 ) -> list[str]:
     cmd = ["scp"]
+    if password:
+        cmd = ["sshpass", "-p", password] + cmd
     if port:
         cmd.extend(["-P", str(port)])
     if ssh_key_path:
@@ -577,6 +756,7 @@ def deploy_dev_meta_file(
     host: str,
     port: int,
     user: str,
+    password: str,
     remote_base_dir: str,
     ssh_key_path: str,
     strict_host_key: str,
@@ -601,11 +781,13 @@ def deploy_dev_meta_file(
     ssh_cmd = _build_ssh_base_command(
         port=port,
         ssh_key_path=ssh_key_path,
+        password=password,
         strict_host_key=strict_host_key,
     )
     scp_cmd = _build_scp_base_command(
         port=port,
         ssh_key_path=ssh_key_path,
+        password=password,
         strict_host_key=strict_host_key,
     )
 

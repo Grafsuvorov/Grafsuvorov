@@ -7110,6 +7110,34 @@ main.content {
   flex-wrap: wrap;
 }
 
+.dev-meta-generator {
+  position: relative;
+  margin-top: 18px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.48);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dev-meta-generator-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.dev-meta-generator-wide {
+  grid-column: 1 / -1;
+}
+
+.dev-meta-generator-actions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
 .dev-meta-layout {
   position: relative;
   margin-top: 18px;

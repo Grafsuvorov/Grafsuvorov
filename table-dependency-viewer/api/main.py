@@ -49,12 +49,30 @@ from .config import (
     TABLE_CLICK_LOAD_RUN,
     TABLE_CLICK_LOAD_STAGE,
     CLICK_META_DIR,
+    DEV_CLICK_META_DIR,
     ADMIN_CICD_SCRIPT,
     YTRACK_ISSUE_URL,
     DATABASE_URL,
+    DEV_DATABASE_URL,
+    AIRFLOW_DEV_BASE_URL,
+    AIRFLOW_DEV_DAG_ID,
+    AIRFLOW_DEV_USERNAME,
+    AIRFLOW_DEV_PASSWORD,
+    DEV_META_LOCK_TTL_MIN,
 )
 from .services.admin import refresh_application_caches, run_ci_cd_script
 from .services.entities import fetch_entities
+from .services.dev_meta import (
+    acquire_dev_meta_lock,
+    assert_dev_meta_lock_owner,
+    get_dev_meta_files,
+    get_dev_meta_status,
+    read_dev_meta_file,
+    release_dev_meta_lock,
+    save_dev_meta_file,
+    trigger_airflow_dev_dag,
+    validate_dev_meta_content,
+)
 
 from .auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
 
@@ -88,6 +106,28 @@ _ci_cd_status = {
     "stdout": None,
     "stderr": None,
 }
+
+
+class DevMetaFilePayload(BaseModel):
+    schema_name: str
+    file_name: str
+    source: Optional[str] = "dev"
+
+
+class DevMetaLockPayload(BaseModel):
+    schema_name: str
+    file_name: str
+
+
+class DevMetaSavePayload(BaseModel):
+    schema_name: str
+    file_name: str
+    content: str
+
+
+class DevMetaDagPayload(BaseModel):
+    schema_name: str
+    file_name: str
 
 
 @app.get("/api/health")
@@ -153,6 +193,151 @@ def get_ci_cd_status(request: Request):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     return _ci_cd_status
+
+
+@router.get("/api/admin/dev-meta/status")
+def get_admin_dev_meta_status(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return get_dev_meta_status(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=CLICK_META_DIR,
+        dev_root_value=DEV_CLICK_META_DIR,
+        airflow_base_url=AIRFLOW_DEV_BASE_URL,
+        airflow_dag_id=AIRFLOW_DEV_DAG_ID,
+        lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
+        dev_database_url=DEV_DATABASE_URL,
+    )
+
+
+@router.get("/api/admin/dev-meta/files")
+def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    if schema_name not in {"dm", "dm_view"}:
+        raise HTTPException(status_code=400, detail="schema_name must be dm or dm_view")
+    return get_dev_meta_files(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=CLICK_META_DIR,
+        dev_root_value=DEV_CLICK_META_DIR,
+        schema_name=schema_name,
+    )
+
+
+@router.post("/api/admin/dev-meta/file")
+def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    root = DEV_CLICK_META_DIR if payload.source != "prod" else CLICK_META_DIR
+    try:
+        return read_dev_meta_file(
+            base_dir=BASE_DIR,
+            root_value=root,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+        )
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+
+
+@router.post("/api/admin/dev-meta/lock")
+def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        return acquire_dev_meta_lock(
+            engine=engine,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            author=user.email,
+            ttl_minutes=DEV_META_LOCK_TTL_MIN,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post("/api/admin/dev-meta/unlock")
+def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    release_dev_meta_lock(
+        engine=engine,
+        schema_name=payload.schema_name,
+        file_name=payload.file_name,
+        author=user.email,
+    )
+    return {"status": "ok"}
+
+
+@router.post("/api/admin/dev-meta/validate")
+def validate_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return validate_dev_meta_content(
+        content=payload.content,
+        schema_name=payload.schema_name,
+        dev_database_url=DEV_DATABASE_URL,
+    )
+
+
+@router.post("/api/admin/dev-meta/save")
+def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        result = save_dev_meta_file(
+            engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            content=payload.content,
+            author=user.email,
+            dev_database_url=DEV_DATABASE_URL,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.post("/api/admin/dev-meta/run-dag")
+def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        assert_dev_meta_lock_owner(
+            engine=engine,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            author=user.email,
+        )
+        data = trigger_airflow_dev_dag(
+            engine=engine,
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            dag_id=AIRFLOW_DEV_DAG_ID,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            author=user.email,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):

@@ -10,11 +10,20 @@ services:
     volumes:
       - ./api:/app/api
       - ./scripts:/app/scripts
+      - ./config_files:/app/config_files
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - META_PARENT_DIR=/app/etl_loads_entity
+      - CLICK_META_DIR=${CLICK_META_DIR}
+      - DEV_CLICK_META_DIR=${DEV_CLICK_META_DIR}
+      - DEV_DATABASE_URL=${DEV_DATABASE_URL}
+      - AIRFLOW_DEV_BASE_URL=${AIRFLOW_DEV_BASE_URL}
+      - AIRFLOW_DEV_DAG_ID=${AIRFLOW_DEV_DAG_ID}
+      - AIRFLOW_DEV_USERNAME=${AIRFLOW_DEV_USERNAME}
+      - AIRFLOW_DEV_PASSWORD=${AIRFLOW_DEV_PASSWORD}
+      - DEV_META_LOCK_TTL_MIN=${DEV_META_LOCK_TTL_MIN}
       - AUTH_ENABLED=${AUTH_ENABLED}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
       - AUTH_ACCESS_TTL_MIN=${AUTH_ACCESS_TTL_MIN}

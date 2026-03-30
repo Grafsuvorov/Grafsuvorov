@@ -21,6 +21,7 @@ import OnboardingPage from "./components/OnboardingPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
+import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
@@ -139,6 +140,10 @@ export default function App() {
       }
       if (target === "/admin/users") {
         navigate("/admin/users");
+        return;
+      }
+      if (target === "/admin/dev-meta") {
+        navigate("/admin/dev-meta");
         return;
       }
       if (target === "/account") {
@@ -297,7 +302,6 @@ export default function App() {
               onLogin={({ token, profile }) => {
                 if (token) setAuthToken(token);
                 if (profile) setUserProfile(profile);
-                navigate("/", { replace: true });
               }}
             />
           }
@@ -309,6 +313,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : isAdmin ? (
               <AdminUsersPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/dev-meta"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <DevMetaAdminPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

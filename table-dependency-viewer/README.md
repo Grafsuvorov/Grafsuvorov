@@ -99,6 +99,32 @@ Docker-сборка (frontend + backend):
 docker compose up --build
 ```
 
+## DEV Meta контур
+
+Для admin-only работы с DEV meta добавлен отдельный каталог:
+
+- `config_files/meta` — PROD source
+- `config_files/meta_dev` — DEV контур для ручных правок и тестового запуска DAG
+
+Нужные env:
+
+```env
+CLICK_META_DIR=config_files/meta
+DEV_CLICK_META_DIR=config_files/meta_dev
+DEV_DATABASE_URL=
+AIRFLOW_DEV_BASE_URL=
+AIRFLOW_DEV_DAG_ID=
+AIRFLOW_DEV_USERNAME=
+AIRFLOW_DEV_PASSWORD=
+DEV_META_LOCK_TTL_MIN=30
+```
+
+Замечания:
+
+- `DEV_DATABASE_URL` опционален. Он нужен только для проверки существования объекта в DEV Greenplum.
+- `AIRFLOW_DEV_*` нужны только для кнопки запуска DEV DAG.
+- Для записи файлов из контейнера `api` каталог `config_files` должен быть примонтирован в `/app/config_files`.
+
 ## Технический долг / куда дальше
 
 - Разбить крупные файлы (`HomePage`, `api/main.py`) на модули по доменам.

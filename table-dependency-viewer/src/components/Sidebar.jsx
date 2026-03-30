@@ -74,6 +74,14 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   Админка
                 </button>
               )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  className={isActive("/admin/dev-meta") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/dev-meta")}
+                >
+                  DEV Meta
+                </button>
+              )}
               <button
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}

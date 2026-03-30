@@ -16,6 +16,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [validating, setValidating] = useState(false);
   const [runningDag, setRunningDag] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
@@ -158,6 +159,28 @@ export default function DevMetaAdminPage({ userProfile }) {
     }
   };
 
+  const handleDeploy = async () => {
+    if (!selectedFile) return;
+    setDeploying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await devMetaApi.deploy({
+        schema_name: schemaName,
+        file_name: selectedFile,
+        content,
+      });
+      setValidation(data?.validation || null);
+      setSelectedSource("dev");
+      await refreshFiles();
+      setMessage(`Файл отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
+    } catch (err) {
+      setError(err.message || "Не удалось отправить файл на DEV сервер");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
   const handleRunDag = async () => {
     if (!selectedFile) return;
     setRunningDag(true);
@@ -191,7 +214,7 @@ export default function DevMetaAdminPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Meta Generator</div>
         <div className="section-subtitle">
-          Отдельный admin-only контур для генерации, ручной правки, валидации и запуска DEV DAG без пересечения с PROD meta.
+          Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с PROD meta.
         </div>
 
         <div className="dev-meta-kpis">
@@ -210,6 +233,10 @@ export default function DevMetaAdminPage({ userProfile }) {
           <div className="dev-meta-kpi">
             <div className="label">DEV GP check</div>
             <div className="value">{status?.dev_database_configured ? "Настроен" : "Опционально"}</div>
+          </div>
+          <div className="dev-meta-kpi">
+            <div className="label">DEV Deploy</div>
+            <div className="value">{status?.deploy?.configured ? "Настроен" : "Не настроен"}</div>
           </div>
         </div>
 
@@ -317,6 +344,13 @@ export default function DevMetaAdminPage({ userProfile }) {
                 </button>
                 <button
                   className="btn btn-secondary"
+                  onClick={handleDeploy}
+                  disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured}
+                >
+                  {deploying ? "Отправляем..." : "Отправить на DEV сервер"}
+                </button>
+                <button
+                  className="btn btn-secondary"
                   onClick={handleRunDag}
                   disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured}
                 >
@@ -335,10 +369,13 @@ export default function DevMetaAdminPage({ userProfile }) {
 
             <div className="dev-meta-notes">
               <div className="dev-meta-note">
-                Рабочий поток: открой PROD-файл, возьми lock, внеси правки, проверь, сохрани в `meta_dev`, затем запускай DEV DAG.
+                Рабочий поток: открой PROD-файл, возьми lock, внеси правки, проверь, сохрани в `meta_dev`, затем отправь YAML на DEV сервер.
               </div>
               <div className="dev-meta-note">
                 `DEV_DATABASE_URL` нужен только для проверки существования объекта в DEV Greenplum. Без него YAML/SQL валидация все равно работает.
+              </div>
+              <div className="dev-meta-note">
+                Выкладка на DEV сервер перезапишет файл, если он уже существует по тому же пути, и создаст новый, если его еще нет.
               </div>
             </div>
 

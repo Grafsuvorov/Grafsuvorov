@@ -8,5 +8,6 @@ export const devMetaApi = {
   unlock: (body) => apiClient.post("/api/admin/dev-meta/unlock", body),
   validate: (body) => apiClient.post("/api/admin/dev-meta/validate", body),
   save: (body) => apiClient.post("/api/admin/dev-meta/save", body),
+  deploy: (body) => apiClient.post("/api/admin/dev-meta/deploy", body),
   runDag: (body) => apiClient.post("/api/admin/dev-meta/run-dag", body),
 };

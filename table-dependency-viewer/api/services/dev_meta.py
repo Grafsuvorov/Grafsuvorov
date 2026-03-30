@@ -3,6 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -169,6 +172,9 @@ def get_dev_meta_status(
     airflow_dag_id: str,
     lock_ttl_minutes: int,
     dev_database_url: str,
+    deploy_host: str,
+    deploy_user: str,
+    deploy_base_dir: str,
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -180,6 +186,12 @@ def get_dev_meta_status(
             "base_url": airflow_base_url,
             "dag_id": airflow_dag_id,
             "configured": bool(airflow_base_url and airflow_dag_id),
+        },
+        "deploy": {
+            "host": deploy_host,
+            "user": deploy_user,
+            "base_dir": deploy_base_dir,
+            "configured": bool(deploy_host and deploy_user and deploy_base_dir),
         },
         "dev_database_configured": bool(dev_database_url),
         "locks_count": len(locks),
@@ -501,6 +513,157 @@ def save_dev_meta_file(
     return {
         "path": str(path),
         "validation": validation,
+    }
+
+
+def _build_ssh_base_command(
+    *,
+    port: int,
+    ssh_key_path: str,
+    strict_host_key: str,
+) -> list[str]:
+    cmd = ["ssh"]
+    if port:
+        cmd.extend(["-p", str(port)])
+    if ssh_key_path:
+        cmd.extend(["-i", ssh_key_path])
+    strict_enabled = str(strict_host_key).strip().lower() in {"1", "true", "yes", "on"}
+    if not strict_enabled:
+        cmd.extend(
+            [
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
+    return cmd
+
+
+def _build_scp_base_command(
+    *,
+    port: int,
+    ssh_key_path: str,
+    strict_host_key: str,
+) -> list[str]:
+    cmd = ["scp"]
+    if port:
+        cmd.extend(["-P", str(port)])
+    if ssh_key_path:
+        cmd.extend(["-i", ssh_key_path])
+    strict_enabled = str(strict_host_key).strip().lower() in {"1", "true", "yes", "on"}
+    if not strict_enabled:
+        cmd.extend(
+            [
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
+            ]
+        )
+    return cmd
+
+
+def deploy_dev_meta_file(
+    *,
+    engine,
+    base_dir: Path,
+    dev_root_value: str,
+    schema_name: str,
+    file_name: str,
+    content: str,
+    author: str,
+    dev_database_url: str,
+    host: str,
+    port: int,
+    user: str,
+    remote_base_dir: str,
+    ssh_key_path: str,
+    strict_host_key: str,
+) -> dict[str, Any]:
+    if not host or not user or not remote_base_dir:
+        raise ValueError("Не настроен deploy на DEV сервер")
+
+    saved = save_dev_meta_file(
+        engine=engine,
+        base_dir=base_dir,
+        dev_root_value=dev_root_value,
+        schema_name=schema_name,
+        file_name=file_name,
+        content=content,
+        author=author,
+        dev_database_url=dev_database_url,
+    )
+
+    remote_dir = f"{remote_base_dir.rstrip('/')}/{schema_name}"
+    remote_path = f"{remote_dir}/{file_name}"
+    ssh_target = f"{user}@{host}"
+    ssh_cmd = _build_ssh_base_command(
+        port=port,
+        ssh_key_path=ssh_key_path,
+        strict_host_key=strict_host_key,
+    )
+    scp_cmd = _build_scp_base_command(
+        port=port,
+        ssh_key_path=ssh_key_path,
+        strict_host_key=strict_host_key,
+    )
+
+    try:
+        subprocess.run(
+            ssh_cmd + [ssh_target, f"mkdir -p {remote_dir}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(exc.stderr.strip() or exc.stdout.strip() or "Не удалось создать папку на DEV сервере") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось подключиться к DEV серверу: {exc}") from exc
+
+    temp_path: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as temp_file:
+            temp_file.write(content)
+            temp_path = temp_file.name
+        subprocess.run(
+            scp_cmd + [temp_path, f"{ssh_target}:{remote_path}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(exc.stderr.strip() or exc.stdout.strip() or "Не удалось передать файл на DEV сервер") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось отправить файл на DEV сервер: {exc}") from exc
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
+    _audit_dev_meta(
+        engine,
+        schema_name=schema_name,
+        file_name=file_name,
+        author=author,
+        action="deploy",
+        content=content,
+        details={
+            "host": host,
+            "port": port,
+            "remote_dir": remote_dir,
+            "remote_path": remote_path,
+            "local_path": saved["path"],
+        },
+    )
+    return {
+        "path": saved["path"],
+        "remote_path": remote_path,
+        "validation": saved["validation"],
     }
 
 

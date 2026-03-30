@@ -54,6 +54,12 @@ from .config import (
     YTRACK_ISSUE_URL,
     DATABASE_URL,
     DEV_DATABASE_URL,
+    DEV_META_DEPLOY_BASE_DIR,
+    DEV_META_DEPLOY_HOST,
+    DEV_META_DEPLOY_PORT,
+    DEV_META_DEPLOY_SSH_KEY_PATH,
+    DEV_META_DEPLOY_STRICT_HOST_KEY,
+    DEV_META_DEPLOY_USER,
     AIRFLOW_DEV_BASE_URL,
     AIRFLOW_DEV_DAG_ID,
     AIRFLOW_DEV_USERNAME,
@@ -65,6 +71,7 @@ from .services.entities import fetch_entities
 from .services.dev_meta import (
     acquire_dev_meta_lock,
     assert_dev_meta_lock_owner,
+    deploy_dev_meta_file,
     get_dev_meta_files,
     get_dev_meta_status,
     read_dev_meta_file,
@@ -128,6 +135,12 @@ class DevMetaSavePayload(BaseModel):
 class DevMetaDagPayload(BaseModel):
     schema_name: str
     file_name: str
+
+
+class DevMetaDeployPayload(BaseModel):
+    schema_name: str
+    file_name: str
+    content: str
 
 
 @app.get("/api/health")
@@ -209,6 +222,9 @@ def get_admin_dev_meta_status(request: Request):
         airflow_dag_id=AIRFLOW_DEV_DAG_ID,
         lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         dev_database_url=DEV_DATABASE_URL,
+        deploy_host=DEV_META_DEPLOY_HOST,
+        deploy_user=DEV_META_DEPLOY_USER,
+        deploy_base_dir=DEV_META_DEPLOY_BASE_DIR,
     )
 
 
@@ -338,6 +354,35 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-meta/deploy")
+def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        result = deploy_dev_meta_file(
+            engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
+            schema_name=payload.schema_name,
+            file_name=payload.file_name,
+            content=payload.content,
+            author=user.email,
+            dev_database_url=DEV_DATABASE_URL,
+            host=DEV_META_DEPLOY_HOST,
+            port=DEV_META_DEPLOY_PORT,
+            user=DEV_META_DEPLOY_USER,
+            remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
+            ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
+            strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
 
 # Модель для ответа зависимостей
 class DependencyItem(BaseModel):

@@ -112,6 +112,12 @@ docker compose up --build
 CLICK_META_DIR=config_files/meta
 DEV_CLICK_META_DIR=config_files/meta_dev
 DEV_DATABASE_URL=
+DEV_META_DEPLOY_HOST=
+DEV_META_DEPLOY_PORT=22
+DEV_META_DEPLOY_USER=
+DEV_META_DEPLOY_BASE_DIR=
+DEV_META_DEPLOY_SSH_KEY_PATH=
+DEV_META_DEPLOY_STRICT_HOST_KEY=false
 AIRFLOW_DEV_BASE_URL=
 AIRFLOW_DEV_DAG_ID=
 AIRFLOW_DEV_USERNAME=
@@ -122,8 +128,10 @@ DEV_META_LOCK_TTL_MIN=30
 Замечания:
 
 - `DEV_DATABASE_URL` опционален. Он нужен только для проверки существования объекта в DEV Greenplum.
+- `DEV_META_DEPLOY_*` нужны для отправки meta-файла на отдельный DEV сервер по `ssh/scp`.
 - `AIRFLOW_DEV_*` нужны только для кнопки запуска DEV DAG.
 - Для записи файлов из контейнера `api` каталог `config_files` должен быть примонтирован в `/app/config_files`.
+- Для `ssh/scp` контейнер `api` должен видеть ключ, если сервер не пускает по встроенному trust. Обычно это отдельный bind-mount с read-only ключом.
 
 ## Технический долг / куда дальше
 

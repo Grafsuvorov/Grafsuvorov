@@ -1,15 +1,21 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const TOKEN_KEY = "tdv_access_token";
 const USER_KEY = "tdv_user_profile";
 
 export default function LoginPage({ onLogin }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const sessionExpired = params.get("reason") === "session-expired";
+  const nextPath = params.get("next") || "/";
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -41,6 +47,7 @@ export default function LoginPage({ onLogin }) {
           profile: { email: data.email, username: data.username, role: data.role },
         });
       }
+      navigate(nextPath, { replace: true });
     } catch (err) {
       setError(err.message || "Ошибка входа");
     } finally {
@@ -53,6 +60,11 @@ export default function LoginPage({ onLogin }) {
       <div className="login-card">
         <div className="login-title">Вход в систему</div>
         <div className="login-subtitle">Контроль DWH и мониторинг загрузок</div>
+        {sessionExpired && !error && (
+          <div className="login-error">
+            Сессия истекла. Войдите снова, чтобы продолжить работу.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="login-form">
           <label className="login-label">Email</label>
           <input

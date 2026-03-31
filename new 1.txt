@@ -1,4 +1,10 @@
-{
+Curl
+
+curl -X 'POST' \
+  'http://rgm-s-dwhair01.hq.root.ad:8080/api/v1/dags/dict_dds_currency_rates_meta/dagRuns' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
     "conf": {
       "schema_name": "dm",
       "file_name": "dict_dds_currency_rates_meta.yaml",
@@ -6,4 +12,145 @@
       "author": "Nikita.Suvorov@rusal.com",
       "dev_bypass_dm_sensor": true
     }
-  }
+  }'
+Request URL
+http://rgm-s-dwhair01.hq.root.ad:8080/api/v1/dags/dict_dds_currency_rates_meta/dagRuns
+Server response
+Code	Details
+200	
+Response body
+Download
+{
+  "conf": {
+    "author": "Nikita.Suvorov@rusal.com",
+    "dev_bypass_dm_sensor": true,
+    "file_name": "dict_dds_currency_rates_meta.yaml",
+    "remote_path": "/home/airflow/config_files/meta/dm/dict_dds_currency_rates_meta.yaml",
+    "schema_name": "dm"
+  },
+  "dag_id": "dict_dds_currency_rates_meta",
+  "dag_run_id": "manual__2026-03-31T14:01:36.457430+00:00",
+  "data_interval_end": "2026-03-31T14:01:36.457430+00:00",
+  "data_interval_start": "2026-03-31T14:01:36.457430+00:00",
+  "end_date": null,
+  "execution_date": "2026-03-31T14:01:36.457430+00:00",
+  "external_trigger": true,
+  "last_scheduling_decision": null,
+  "logical_date": "2026-03-31T14:01:36.457430+00:00",
+  "note": null,
+  "run_type": "manual",
+  "start_date": null,
+  "state": "queued"
+}
+Response headers
+ connection: close 
+ content-length: 766 
+ content-type: application/json 
+ date: Tue,31 Mar 2026 14:01:36 GMT 
+ server: gunicorn 
+ x-robots-tag: noindex,nofollow 
+Responses
+Code	Description	Links
+200	
+Success.
+
+Media type
+
+application/json
+Controls Accept header.
+Example Value
+Schema
+{
+  "conf": {},
+  "dag_id": "string",
+  "dag_run_id": "string",
+  "data_interval_end": "2026-03-31T14:01:36.579Z",
+  "data_interval_start": "2026-03-31T14:01:36.579Z",
+  "end_date": "2026-03-31T14:01:36.579Z",
+  "external_trigger": true,
+  "last_scheduling_decision": "2026-03-31T14:01:36.579Z",
+  "logical_date": "2026-03-31T14:01:36.579Z",
+  "note": "string",
+  "run_type": "backfill",
+  "start_date": "2026-03-31T14:01:36.579Z",
+  "state": "queued"
+}
+No links
+400	
+Client specified an invalid argument.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": "string",
+  "instance": "string",
+  "status": 0,
+  "title": "string",
+  "type": "string"
+}
+No links
+401	
+Request not authenticated due to missing, invalid, authentication info.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": "string",
+  "instance": "string",
+  "status": 0,
+  "title": "string",
+  "type": "string"
+}
+No links
+403	
+Client does not have sufficient permission.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": "string",
+  "instance": "string",
+  "status": 0,
+  "title": "string",
+  "type": "string"
+}
+No links
+404	
+A specified resource is not found.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": "string",
+  "instance": "string",
+  "status": 0,
+  "title": "string",
+  "type": "string"
+}
+No links
+409	
+An existing resource conflicts with the request.
+
+Media type
+
+application/json
+Example Value
+Schema
+{
+  "detail": "string",
+  "instance": "string",
+  "status": 0,
+  "title": "string",
+  "type": "string"

@@ -67,7 +67,7 @@ from .config import (
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
 )
-from .services.admin import refresh_application_caches, run_ci_cd_script
+
 from .services.entities import fetch_entities
 from .services.dev_meta import (
     acquire_dev_meta_lock,
@@ -88,15 +88,15 @@ from .auth import auth_middleware, init_auth, router as auth_router, get_current
 app = FastAPI()
 # CORS для взаимодействия с фронтом
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+  CORSMiddleware,
+  allow_origins=[
+      "http://rgm-s-dwhapp01.hq.root.ad:15312",
+      "http://rgm-s-dwhapp01.hq.root.ad",
+  ],
+  allow_credentials=True,
+  allow_methods=["*"],
+  allow_headers=["*"],
 )
-
-app.middleware("http")(auth_middleware)
-app.include_router(auth_router)
 
 # Подключение
 engine = create_engine(DATABASE_URL)
@@ -106,6 +106,8 @@ router = APIRouter()
 print("BOOT FILE:", __file__)
 
 init_auth()
+app.middleware("http")(auth_middleware)
+app.include_router(auth_router)
 
 # admin ci_cd status (in-memory)
 _ci_cd_status = {
@@ -164,32 +166,30 @@ def refresh_cache(request: Request):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
 
-    def reset_fn():
-        globals()["_cached_meta_index"] = None
-        globals()["_cache_timestamp"] = 0
-        globals()["_order_breaches_cache"] = None
-        globals()["_order_breaches_ts"] = 0
-        globals()["_graph_snapshot"] = None
-        globals()["_graph_snapshot_ts"] = 0
-        globals()["_graph_snapshot_hash"] = None
-        globals()["_graph_cache"].clear()
-        globals()["_graph_cache_ts"] = 0
-        globals()["_graph_cache_meta_ts"] = 0
-        globals()["_logic_audit_cache_payload"] = None
-        globals()["_logic_audit_cache_ts"] = 0
+    globals()["_cached_meta_index"] = None
+    globals()["_cache_timestamp"] = 0
+    globals()["_order_breaches_cache"] = None
+    globals()["_order_breaches_ts"] = 0
+    globals()["_graph_snapshot"] = None
+    globals()["_graph_snapshot_ts"] = 0
+    globals()["_graph_snapshot_hash"] = None
+    globals()["_graph_cache"].clear()
+    globals()["_graph_cache_ts"] = 0
+    globals()["_graph_cache_meta_ts"] = 0
+    globals()["_logic_audit_cache_payload"] = None
+    globals()["_logic_audit_cache_ts"] = 0
 
-    def warmup_fn():
+    try:
         get_cached_meta_and_index()
         get_cached_order_breaches()
         get_graph_snapshot()
         _build_logic_audit_cache()
-
-    try:
-        return refresh_application_caches(reset_fn, warmup_fn)
-    except HTTPException:
-        print("❌ refresh cache error:")
+    except Exception as exc:
+        print("❌ refresh cache error:", exc)
         print(traceback.format_exc())
-        raise
+        raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
+
+    return {"status": "ok"}
 
 
 @router.post("/api/admin/run-ci-cd")
@@ -207,7 +207,41 @@ def run_ci_cd(request: Request):
     if not script_path.is_file():
         raise HTTPException(status_code=400, detail="Путь скрипта должен указывать на файл")
 
-    return run_ci_cd_script(script_path=script_path, status_state=_ci_cd_status)
+    _ci_cd_status.update(
+        {
+            "last_run_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "running",
+            "return_code": None,
+            "stdout": None,
+            "stderr": None,
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            ["bash", str(script_path)],
+            capture_output=True,
+            text=True,
+            timeout=900,
+            cwd=str(script_path.parent),
+            env=os.environ.copy(),
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Скрипт выполняется слишком долго (timeout)")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось запустить скрипт: {exc}")
+
+    response = {
+        "status": "ok" if result.returncode == 0 else "failed",
+        "return_code": result.returncode,
+        "stdout": (result.stdout or "").strip()[:2000],
+        "stderr": (result.stderr or "").strip()[:2000],
+        "last_run_at": _ci_cd_status.get("last_run_at"),
+    }
+    _ci_cd_status.update(response)
+    if result.returncode != 0:
+        raise HTTPException(status_code=500, detail=response)
+    return response
 
 
 @router.get("/api/admin/ci-cd/status")
@@ -455,6 +489,7 @@ TOP_DIRS = [
     "SALES_MARGIN",
     "MANAGEMENT_REPORTING_1",
     "TEST_SAP_ODATA_DELTA",
+    "SALES_2HOUR",
 ]
 
 ENTITY_GROUP_SUFFIX_RE = re.compile(r"^(.*?)(?:[_-]\d+)$", re.IGNORECASE)

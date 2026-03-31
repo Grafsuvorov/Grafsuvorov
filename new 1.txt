@@ -1,12 +1,44 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
-/usr/bin/sshpass
-sshpass 1.10
-(C) 2006-2011 Lingnu Open Source Consulting Ltd.
-(C) 2015-2016, 2021-2022 Shachar Shemesh
-This program is free software, and can be distributed under the terms of the GPL
-See the COPYING file for more information.
+3. В контейнере все еще крутится старая версия api/services/dev_meta.py, где не было нормальной проверки результата
 
-Using "assword" as the default password prompt indicator.
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && which ssh'
-/usr/bin/sshpass
-/usr/bin/ssh
+  Что проверить по порядку.
+
+  Сначала env внутри контейнера:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c 'env | grep DEV_META_DEPLOY'
+
+  Должно показать что-то вроде:
+
+  DEV_META_DEPLOY_HOST=10.66.129.242
+  DEV_META_DEPLOY_PORT=22
+  DEV_META_DEPLOY_USER=root
+  DEV_META_DEPLOY_PASSWORD=...
+  DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+
+  Потом ручной тест именно из контейнера:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c "sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/
+  config_files/meta/dm && touch /home/airflow/config_files/meta/dm/test_from_container.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_container.yaml'"
+
+  Если это работает, проверь scp тоже из контейнера:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c "printf 'hello\n' > /tmp/test_meta.yaml && sshpass -p 'rootuserdwh' scp -o StrictHostKeyChecking=no /tmp/
+  test_meta.yaml root@10.66.129.242:/home/airflow/config_files/meta/dm/test_from_container_scp.yaml && sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no
+  root@10.66.129.242 'ls -l /home/airflow/config_files/meta/dm/test_from_container_scp.yaml && cat /home/airflow/config_files/meta/dm/test_from_container_scp.yaml'"
+
+  Если и это проходит, тогда проблема уже не в сети и не в доступе, а в API-коде/версии.
+
+  Тогда проверь, что в контейнере реально новый dev_meta.py:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c "grep -n 'test -f' /app/api/services/dev_meta.py"
+
+  Если ничего не найдет, значит контейнер читает старый файл.
+
+  И еще смотри логи прямо в момент нажатия кнопки:
+
+  docker compose logs -f api
+
+  Если хочешь, пришли вывод этих 3 проверок:
+
+  - env | grep DEV_META_DEPLOY
+  - scp из контейнера
+  - grep -n 'test -f' /app/api/services/dev_meta.py

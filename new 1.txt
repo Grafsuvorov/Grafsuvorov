@@ -1,13 +1,6 @@
-docker compose logs --tail=200 api
-
-  И отдельно из контейнера руками проверь ssh:
-
-  docker exec -it table-dependency-viewer-api-1 sh
-  sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'echo ok'
-
-  Если это не работает, приложение тоже не отправит.
-
-  И проверь путь:
-
-  sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/config_files/meta/dm && touch /home/airflow/config_files/meta/dm/
-  test_from_app.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_app.yaml'
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'echo ok'
+sh: 0: cannot open sshpass: No such file
+[root@rgm-s-dwhapp01 table-dependency-viewer]# sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/config_files/meta/dm && touch /home/airflow/config_files/meta/dm/test_from_app.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_app.yaml
+> ^C
+[root@rgm-s-dwhapp01 table-dependency-viewer]# sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/config_files/meta/dm && touch /home/airflow/config_files/meta/dm/test_from_app.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_app.yaml'
+-rw-r--r--. 1 root root 0 Mar 31 13:33 /home/airflow/config_files/meta/dm/test_from_app.yaml

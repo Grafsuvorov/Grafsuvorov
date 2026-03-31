@@ -1,33 +1,36 @@
-curl -i -u '<логин>:<пароль>' \
-    -H 'Content-Type: application/json' \
-    -X POST \
-    -d '{"conf":{"ping":"ok"}}' \
-    http://rgm-s-dwhair.o1.root.ad:8080/api/v1/dags/<dag_id>/dagRuns
+3. Проверить, что контейнер видит эти env:
 
-  Если снова 403, проблема точно на стороне Airflow auth.
+  docker exec -it table-dependency-viewer-api-1 sh -c 'env | grep AIRFLOW_DEV'
 
-  Что обычно нужно:
+  После этого кнопка Запустить DEV DAG должна начать ходить в Airflow.
 
-  1. отдельный сервисный пользователь для API
-  2. Basic Auth для API должен быть реально включен
-  3. у пользователя должны быть права на:
+  Еще полезно:
+  в Swagger попробуй руками именно trigger:
 
-  - can_read DAG
-  - can_create DagRun
-  - иногда еще доступ к конкретному DAG
+  - POST /api/v1/dags/{dag_id}/dagRuns
 
-  Что спросить у того, кто администрирует Airflow:
+  Для dag_id бери имя файла без .yaml, например:
 
-  - какой способ авторизации нужен именно для REST API
-  - подходит ли обычный web-логин для /api/v1
-  - есть ли у твоего пользователя право запускать Dag Runs
-  - не стоит ли перед Airflow reverse proxy, который режет API
+  - dict_dds_currency_rates_meta.yaml
+  - dag_id = dict_dds_currency_rates_meta
 
-  Итог:
+  Body можно такой:
 
-  - приложение работает правильно
-  - сейчас блокер: Airflow REST API возвращает 403
-  - надо подобрать корректные API credentials или дать права пользователю
+  {
+    "conf": {
+      "schema_name": "dm",
+      "file_name": "dict_dds_currency_rates_meta.yaml",
+      "remote_path": "/home/airflow/config_files/meta/dm/dict_dds_currency_rates_meta.yaml",
+      "author": "Nikita.Suvorov@rusal.com",
+      "dev_bypass_dm_sensor": true
+    }
+  }
 
-  Если хочешь, я могу дать тебе готовую curl-команду уже с твоим конкретным dag_id, чтобы ты сразу проверил доступ вне приложения.
+  Если в Swagger этот POST проходит, приложение тоже заработает с теми же кредами.
 
+  Важно:
+
+  - даже после успешного trigger dm_sensor сам не станет зеленым, если DAG на стороне Airflow не читает dev_bypass_dm_sensor.
+  - это нужно доделать в самом DAG.
+
+  Если хочешь, следующим сообщением я дам тебе точный тестовый POST для Swagger по любому твоему файлу.

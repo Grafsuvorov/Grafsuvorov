@@ -1,1 +1,38 @@
-docker compose run --rm api sh -c 'echo "$DATABASE_URL"'
+:15312/api/admin/dev-meta/status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+:15312/api/admin/dev-meta/status:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+index-BruFl6vs.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/dev-meta/status 500 (Internal Server Error)
+window.fetch	@	index-BruFl6vs.js:140
+vu	@	index-BruFl6vs.js:60
+get	@	index-BruFl6vs.js:60
+status	@	index-BruFl6vs.js:140
+G	@	index-BruFl6vs.js:140
+(anonymous)	@	index-BruFl6vs.js:140
+Kc	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+Ha	@	index-BruFl6vs.js:48
+y1	@	index-BruFl6vs.js:48
+z1	@	index-BruFl6vs.js:48
+(anonymous)	@	index-BruFl6vs.js:48
+X	@	index-BruFl6vs.js:25
+﻿

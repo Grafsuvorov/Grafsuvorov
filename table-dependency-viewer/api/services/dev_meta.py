@@ -839,6 +839,11 @@ def _dag_id_from_file_name(file_name: str) -> str:
     return dag_id
 
 
+def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
+    opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
+    return opener.open(req, timeout=timeout)
+
+
 def trigger_airflow_dev_dag(
     *,
     engine,
@@ -877,7 +882,7 @@ def trigger_airflow_dev_dag(
         raw = f"{username}:{password}".encode("utf-8")
         req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
     try:
-        with urlrequest.urlopen(req, timeout=30) as resp:
+        with _urlopen_without_proxy(req, timeout=30) as resp:
             body = resp.read().decode("utf-8")
             data = json.loads(body) if body else {}
     except urlerror.HTTPError as exc:

@@ -1,15 +1,33 @@
-Операция не выполнена
-Airflow вернул 403: <html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>
+curl -i -u '<логин>:<пароль>' \
+    -H 'Content-Type: application/json' \
+    -X POST \
+    -d '{"conf":{"ping":"ok"}}' \
+    http://rgm-s-dwhair.o1.root.ad:8080/api/v1/dags/<dag_id>/dagRuns
 
-:15312/api/admin/dev-meta/run-dag:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+  Если снова 403, проблема точно на стороне Airflow auth.
 
-| INFO:     Application startup complete.
-table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52936 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52938 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52940 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52942 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52966 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52968 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52970 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:52996 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 400 Bad Request
+  Что обычно нужно:
+
+  1. отдельный сервисный пользователь для API
+  2. Basic Auth для API должен быть реально включен
+  3. у пользователя должны быть права на:
+
+  - can_read DAG
+  - can_create DagRun
+  - иногда еще доступ к конкретному DAG
+
+  Что спросить у того, кто администрирует Airflow:
+
+  - какой способ авторизации нужен именно для REST API
+  - подходит ли обычный web-логин для /api/v1
+  - есть ли у твоего пользователя право запускать Dag Runs
+  - не стоит ли перед Airflow reverse proxy, который режет API
+
+  Итог:
+
+  - приложение работает правильно
+  - сейчас блокер: Airflow REST API возвращает 403
+  - надо подобрать корректные API credentials или дать права пользователю
+
+  Если хочешь, я могу дать тебе готовую curl-команду уже с твоим конкретным dag_id, чтобы ты сразу проверил доступ вне приложения.
+

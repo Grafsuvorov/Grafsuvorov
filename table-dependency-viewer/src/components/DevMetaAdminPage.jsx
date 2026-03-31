@@ -27,6 +27,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [lockInfo, setLockInfo] = useState(null);
   const [validation, setValidation] = useState(null);
   const [message, setMessage] = useState(null);
+  const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
 
   const isAdmin = userProfile?.role === "admin";
@@ -80,6 +81,7 @@ export default function DevMetaAdminPage({ userProfile }) {
     setValidation(null);
     setLockInfo(null);
     setMessage(null);
+    setMessageType("info");
     setError(null);
   };
 
@@ -87,13 +89,14 @@ export default function DevMetaAdminPage({ userProfile }) {
     setLoading(true);
     setError(null);
     setMessage(null);
+    setMessageType("info");
     setValidation(null);
     try {
       await acquireLock(fileName);
       const data = await devMetaApi.readFile({ schema_name: schemaName, file_name: fileName, source: "dev" });
       setSelectedFile(fileName);
       setContent(data?.content || "");
-      setMessage("Файл открыт и автоматически взят в работу");
+      setMessage("Файл открыт и автоматически взят в работу.");
       await refreshFiles();
     } catch (err) {
       setError(err.message || "Не удалось открыть файл");
@@ -113,7 +116,12 @@ export default function DevMetaAdminPage({ userProfile }) {
         content,
       });
       setValidation(data);
-      setMessage(data?.valid ? "Валидация пройдена" : "Найдены ошибки валидации");
+      setMessageType(data?.valid ? "success" : "warning");
+      setMessage(
+        data?.valid
+          ? "Проверка пройдена: файл корректен и готов к сохранению."
+          : "Проверка завершилась с ошибками. Исправь их перед сохранением."
+      );
     } catch (err) {
       setError(err.message || "Не удалось провалидировать файл");
     } finally {
@@ -126,6 +134,7 @@ export default function DevMetaAdminPage({ userProfile }) {
     setSaving(true);
     setError(null);
     setMessage(null);
+    setMessageType("info");
     try {
       const data = await devMetaApi.save({
         schema_name: schemaName,
@@ -134,7 +143,8 @@ export default function DevMetaAdminPage({ userProfile }) {
       });
       setValidation(data?.validation || null);
       await refreshFiles();
-      setMessage("Файл сохранен в DEV-контур");
+      setMessageType("success");
+      setMessage("Сохранено в DEV. Файл записан локально и еще не отправлен на DEV сервер.");
     } catch (err) {
       setError(err.message || "Не удалось сохранить файл");
     } finally {
@@ -147,6 +157,7 @@ export default function DevMetaAdminPage({ userProfile }) {
     setDeploying(true);
     setError(null);
     setMessage(null);
+    setMessageType("info");
     try {
       const data = await devMetaApi.deploy({
         schema_name: schemaName,
@@ -155,6 +166,7 @@ export default function DevMetaAdminPage({ userProfile }) {
       });
       setValidation(data?.validation || null);
       await refreshFiles();
+      setMessageType("success");
       setMessage(`Файл отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
     } catch (err) {
       setError(err.message || "Не удалось отправить файл на DEV сервер");
@@ -166,6 +178,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const handleGenerate = async () => {
     setError(null);
     setMessage(null);
+    setMessageType("info");
     try {
       const orderBy = generator.order_by
         .split(",")
@@ -256,8 +269,20 @@ export default function DevMetaAdminPage({ userProfile }) {
           </div>
         </div>
 
-        {message && <div className="muted">{message}</div>}
-        {error && <div className="login-error">{error}</div>}
+        {(message || error) && (
+          <div className={`dev-meta-feedback ${error ? "error" : messageType}`}>
+            <div className="dev-meta-feedback-title">
+              {error
+                ? "Операция не выполнена"
+                : messageType === "success"
+                  ? "Успешно"
+                  : messageType === "warning"
+                    ? "Нужно исправить"
+                    : "Статус"}
+            </div>
+            <div className="dev-meta-feedback-text">{error || message}</div>
+          </div>
+        )}
 
         <div className="dev-meta-generator">
           <div className="section-subtitle">Новый YAML из параметров</div>
@@ -319,6 +344,7 @@ export default function DevMetaAdminPage({ userProfile }) {
           <div className="dev-meta-side">
             <div className="dev-meta-file-block">
               <div className="section-subtitle">DEV файлы</div>
+              <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
               <div className="dev-meta-file-list">
                 {(files.dev_files || []).map((file) => (() => {
                   const fileLock = (files.locks || []).find(
@@ -360,7 +386,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={!selectedFile || saving || isLockedByAnother}>
-                  {saving ? "Сохраняем..." : "Сохранить в DEV"}
+                  {saving ? "Сохраняем..." : "Сохранить"}
                 </button>
                 <button
                   className="btn btn-secondary"
@@ -380,31 +406,14 @@ export default function DevMetaAdminPage({ userProfile }) {
               </span>
             </div>
 
-            <div className="dev-meta-notes">
-              <div className="dev-meta-note">
-                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, редактор автоматически возьмет его в работу, затем проверь, сохрани и отправь на DEV сервер.
-              </div>
-              <div className="dev-meta-note">
-                `DEV_DATABASE_URL` нужен только для проверки существования объекта в DEV Greenplum. Без него YAML/SQL валидация все равно работает.
-              </div>
-              <div className="dev-meta-note">
-                Выкладка на DEV сервер перезапишет файл, если он уже существует по тому же пути, и создаст новый, если его еще нет.
-              </div>
-            </div>
-
-            <textarea
-              className="dev-meta-editor"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              disabled={isLockedByAnother}
-              placeholder="Сгенерируйте новый YAML или откройте DEV-файл, чтобы начать работу"
-            />
-
             {validation && (
               <div className="dev-meta-validation">
                 <div className="section-subtitle">Результат проверки</div>
                 <div className={`dev-meta-validation-pill ${validation.valid ? "ok" : "bad"}`}>
                   {validation.valid ? "Файл валиден" : "Есть ошибки"}
+                </div>
+                <div className="dev-meta-validation-meta">
+                  Проверяем: синтаксис YAML/SQL, обязательные поля, `order_by`, `attributes`, и объект в DEV Greenplum, если настроен `DEV_DATABASE_URL`.
                 </div>
                 {validation.errors?.length ? (
                   <ul className="dev-meta-validation-list">
@@ -422,6 +431,24 @@ export default function DevMetaAdminPage({ userProfile }) {
                 ) : null}
               </div>
             )}
+
+            <div className="dev-meta-notes">
+              <div className="dev-meta-note">
+                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, проверь, затем сначала сохрани локально, а потом отдельно отправь на DEV сервер.
+              </div>
+              <div className="dev-meta-note">
+                `Сохранить` пишет файл только в `meta_dev`. `Отправить на DEV сервер` отдельно копирует его на удаленный сервер и перезаписывает файл там, если он уже существует.
+              </div>
+            </div>
+
+            <textarea
+              className="dev-meta-editor"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              disabled={isLockedByAnother}
+              placeholder="Сгенерируйте новый YAML или откройте DEV-файл, чтобы начать работу"
+            />
+
           </div>
         </div>
       </section>

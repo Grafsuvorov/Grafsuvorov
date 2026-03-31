@@ -1,55 +1,10 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d api
-[+] Running 1/1
- ⠿ Container table-dependency-viewer-api-1  Started                                                                                                                                                                                     0.2s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d frontend api
+[+] Running 2/2
+ ⠿ Container table-dependency-viewer-api-1       Started                                                                                                                                                                                1.1s
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                                                                                                                                                1.1s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "DEV_META_DEPLOY_PASSWORD" /root/table-dependency-viewer/api/config.py
+38:DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1485, in __call__
-table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1406, in main
-table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1269, in invoke
-table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 824, in invoke
-table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 433, in main
-table-dependency-viewer-api-1  |     run(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 606, in run
-table-dependency-viewer-api-1  |     server.run()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 75, in run
-table-dependency-viewer-api-1  |     return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/_compat.py", line 30, in asyncio_run
-table-dependency-viewer-api-1  |     return runner.run(main)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
-table-dependency-viewer-api-1  |     return self._loop.run_until_complete(task)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 79, in serve
-table-dependency-viewer-api-1  |     await self._serve(sockets)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 86, in _serve
-table-dependency-viewer-api-1  |     config.load()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 441, in load
-table-dependency-viewer-api-1  |     self.loaded_app = import_from_string(self.app)
-table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
-table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
-table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
-table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 35, in <module>
-table-dependency-viewer-api-1  |     from .config import (
-table-dependency-viewer-api-1  | ImportError: cannot import name 'TABLE_CLICK_LOAD_RUN' from 'api.config' (/app/api/config.py)
 table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
 table-dependency-viewer-api-1  |     sys.exit(main())
@@ -99,7 +54,6 @@ table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 11
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 35, in <module>
-table-dependency-viewer-api-1  |     from .config import (
-table-dependency-viewer-api-1  | ImportError: cannot import name 'TABLE_CLICK_LOAD_RUN' from 'api.config' (/app/api/config.py)
-[root@rgm-s-dw
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 76, in <module>
+table-dependency-viewer-api-1  |     from .services.dev_meta import (
+table-dependency-viewer-api-1  | ImportError: cannot import name 'generate_dev_meta_yaml' from 'api.services.dev_meta' (/app/api/services/dev_meta.py)

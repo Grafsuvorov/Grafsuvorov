@@ -1,4 +1,6 @@
-services:
+docker-compose.yml
+
+  services:
     frontend:
       build: .
       ports:
@@ -18,66 +20,80 @@ services:
       env_file:
         - ./api/.env
       environment:
-        - DATABASE_URL=${DATABASE_URL}
-        - META_PARENT_DIR=/app/etl_loads_entity
-        - CLICK_META_DIR=${CLICK_META_DIR}
-        - DEV_CLICK_META_DIR=${DEV_CLICK_META_DIR}
-        - DEV_DATABASE_URL=${DEV_DATABASE_URL}
-        - DEV_META_DEPLOY_HOST=${DEV_META_DEPLOY_HOST}
-        - DEV_META_DEPLOY_PORT=${DEV_META_DEPLOY_PORT}
-        - DEV_META_DEPLOY_USER=${DEV_META_DEPLOY_USER}
-        - DEV_META_DEPLOY_PASSWORD=${DEV_META_DEPLOY_PASSWORD}
-        - DEV_META_DEPLOY_BASE_DIR=${DEV_META_DEPLOY_BASE_DIR}
-        - DEV_META_DEPLOY_SSH_KEY_PATH=${DEV_META_DEPLOY_SSH_KEY_PATH}
-        - DEV_META_DEPLOY_STRICT_HOST_KEY=${DEV_META_DEPLOY_STRICT_HOST_KEY}
-        - AIRFLOW_DEV_BASE_URL=${AIRFLOW_DEV_BASE_URL}
-        - AIRFLOW_DEV_DAG_ID=${AIRFLOW_DEV_DAG_ID}
-        - AIRFLOW_DEV_USERNAME=${AIRFLOW_DEV_USERNAME}
-        - AIRFLOW_DEV_PASSWORD=${AIRFLOW_DEV_PASSWORD}
-        - DEV_META_LOCK_TTL_MIN=${DEV_META_LOCK_TTL_MIN}
-        - AUTH_ENABLED=${AUTH_ENABLED}
-        - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
-        - AUTH_ACCESS_TTL_MIN=${AUTH_ACCESS_TTL_MIN}
-        - AUTH_ALLOW_REGISTER=${AUTH_ALLOW_REGISTER}
-        - AUTH_BOOTSTRAP_ADMIN_EMAIL=${AUTH_BOOTSTRAP_ADMIN_EMAIL}
-        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=${AUTH_BOOTSTRAP_ADMIN_PASSWORD}
+        - DATABASE_URL=
+        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+        - CLICK_META_DIR=/app/config_files/meta
+        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
+        - DEV_DATABASE_URL=
+        - DEV_META_DEPLOY_HOST=10.66.129.242
+        - DEV_META_DEPLOY_PORT=22
+        - DEV_META_DEPLOY_USER=root
+        - DEV_META_DEPLOY_PASSWORD=
+        - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+        - DEV_META_DEPLOY_SSH_KEY_PATH=
+        - DEV_META_DEPLOY_STRICT_HOST_KEY=false
+        - AIRFLOW_DEV_BASE_URL=
+        - AIRFLOW_DEV_DAG_ID=
+        - AIRFLOW_DEV_USERNAME=
+        - AIRFLOW_DEV_PASSWORD=
+        - DEV_META_LOCK_TTL_MIN=30
+        - AUTH_ENABLED=true
+        - AUTH_SECRET_KEY=change_me_please
+        - AUTH_ACCESS_TTL_MIN=7200
+        - AUTH_ALLOW_REGISTER=false
+        - AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
+        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
 
+  api/.env
 
+  TABLE_LOADING_HISTORY=tech_etl.log_objects_loading_history
+  TABLE_ENTITIES_META=tech_etl.entities_meta
+  TABLE_TABLES_META=tech_etl.tables_meta
+  TABLE_TABLE_COMPARE=tech_monitoring.vw_table_compare
+  TABLE_YT_SLA=tech_etl.yt_sla
+  TABLE_TABLES_META_CLICK=tech_etl.tables_meta_clickhouse_upload
+  TABLE_YTREK_INCIDENTS=tech_etl.YTREK_INCIDENTS
 
-env
-TABLE_LOADING_HISTORY=tech_etl.log_objects_loading_history
-TABLE_ENTITIES_META=tech_etl.entities_meta
-TABLE_TABLES_META=tech_etl.tables_meta
-TABLE_TABLE_COMPARE=tech_monitoring.vw_table_compare
-TABLE_YT_SLA=tech_etl.yt_sla
-TABLE_TABLES_META_CLICK=tech_etl.tables_meta_clickhouse_upload
-DATABASE_URL=
-TABLE_YTREK_INCIDENTS=tech_etl.YTREK_INCIDENTS
-VITE_AUTH_ENABLED=true
-AUTH_ENABLED=true
-AUTH_SECRET_KEY=change_me_please
-AUTH_ACCESS_TTL_MIN=7200
-AUTH_ALLOW_REGISTER=false
-AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
-AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
+  DATABASE_URL=
 
-CLICK_META_DIR=/app/config_files/meta
-DEV_CLICK_META_DIR=/app/config_files/meta_dev
-DEV_DATABASE_URL=
-DEV_META_DEPLOY_HOST=10.66.129.242
-DEV_META_DEPLOY_PORT=22
-DEV_META_DEPLOY_USER=root
-DEV_META_DEPLOY_PASSWORD=
-DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
-DEV_META_DEPLOY_SSH_KEY_PATH=
-DEV_META_DEPLOY_STRICT_HOST_KEY=false
-AIRFLOW_DEV_BASE_URL=
-AIRFLOW_DEV_DAG_ID=
-AIRFLOW_DEV_USERNAME=
-AIRFLOW_DEV_PASSWORD=
-DEV_META_LOCK_TTL_MIN=30
+  VITE_AUTH_ENABLED=true
+  AUTH_ENABLED=true
+  AUTH_SECRET_KEY=change_me_please
+  AUTH_ACCESS_TTL_MIN=7200
+  AUTH_ALLOW_REGISTER=false
+  AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
+  AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
 
+  CLICK_META_DIR=/app/config_files/meta
+  DEV_CLICK_META_DIR=/app/config_files/meta_dev
+  DEV_DATABASE_URL=
 
+  DEV_META_DEPLOY_HOST=10.66.129.242
+  DEV_META_DEPLOY_PORT=22
+  DEV_META_DEPLOY_USER=root
+  DEV_META_DEPLOY_PASSWORD=
+  DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+  DEV_META_DEPLOY_SSH_KEY_PATH=
+  DEV_META_DEPLOY_STRICT_HOST_KEY=false
 
+  AIRFLOW_DEV_BASE_URL=
+  AIRFLOW_DEV_DAG_ID=
+  AIRFLOW_DEV_USERNAME=
+  AIRFLOW_DEV_PASSWORD=
 
+  DEV_META_LOCK_TTL_MIN=30
 
+  Что я специально поправил:
+
+  - убрал ${...} из docker-compose.yml, чтобы не было warning и пустых значений
+  - поправил META_PARENT_DIR на твой старый рабочий путь:
+      - /app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+  - CLICK_META_DIR и DEV_CLICK_META_DIR оставил абсолютными внутри контейнера
+  - DEV_META_DEPLOY_BASE_DIR оставил таким, как ты прислал:
+      - /home/airflow/config_files/meta
+
+  Важно:
+
+  - при таком варианте значения в environment имеют приоритет над env_file
+  - то есть если хочешь менять их только в api/.env, тогда лучше убрать дубли из environment
+  - но для сервера твой текущий надежный вариант именно такой: фиксированные значения прямо в compose

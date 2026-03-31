@@ -1,17 +1,15 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 "ls -l /home/airflow/config_files/meta/dm | grep 'dict_dds_counterparty_restriction_list_meta.yaml'"
--rw-------. 1 root root 3042 Mar 31 13:16 dict_dds_counterparty_restriction_list_meta.yaml
-[root@rgm-s-dwhapp01 table-dependency-viewer]# tail -n 20 /root/table-dependency-viewer/config_files/meta_dev/.admin/audit.jsonl
-{"schema_name": "dm", "file_name": "dict_dds_counterparty_restriction_list_meta.yaml", "action": "save", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "903a5cd1a7a479a1fd87ea3d231074911fda5ec6ee8e1153f239fc3f111085b6", "details": {"path": "/app/config_files/meta_dev/dm/dict_dds_counterparty_restriction_list_meta.yaml", "warnings": []}, "created_at": "2026-03-31T10:16:01.105849"}
-{"schema_name": "dm", "file_name": "dict_dds_counterparty_restriction_list_meta.yaml", "action": "save", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "903a5cd1a7a479a1fd87ea3d231074911fda5ec6ee8e1153f239fc3f111085b6", "details": {"path": "/app/config_files/meta_dev/dm/dict_dds_counterparty_restriction_list_meta.yaml", "warnings": []}, "created_at": "2026-03-31T10:16:09.161676"}
-{"schema_name": "dm", "file_name": "dict_dds_counterparty_restriction_list_meta.yaml", "action": "deploy", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "903a5cd1a7a479a1fd87ea3d231074911fda5ec6ee8e1153f239fc3f111085b6", "details": {"host": "10.66.129.242", "port": 22, "remote_dir": "/home/airflow/config_files/meta/dm", "remote_path": "/home/airflow/config_files/meta/dm/dict_dds_counterparty_restriction_list_meta.yaml", "local_path": "/app/config_files/meta_dev/dm/dict_dds_counterparty_restriction_list_meta.yaml"}, "created_at": "2026-03-31T10:16:10.587857"}
-{"schema_name": "dm", "file_name": "dict_dds_currency_rates_meta.yaml", "action": "save", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "99f4a789e3ee87e1bc9b181a478913dcfb84bab7a1e18cc2b9415abf8e6783e9", "details": {"path": "/app/config_files/meta_dev/dm/dict_dds_currency_rates_meta.yaml", "warnings": []}, "created_at": "2026-03-31T10:29:36.866092"}
-{"schema_name": "dm", "file_name": "dict_dds_currency_rates_meta.yaml", "action": "save", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "99f4a789e3ee87e1bc9b181a478913dcfb84bab7a1e18cc2b9415abf8e6783e9", "details": {"path": "/app/config_files/meta_dev/dm/dict_dds_currency_rates_meta.yaml", "warnings": []}, "created_at": "2026-03-31T10:29:59.542196"}
-{"schema_name": "dm", "file_name": "dict_dds_currency_rates_meta.yaml", "action": "deploy", "author": "Nikita.Suvorov@rusal.com", "yaml_hash": "99f4a789e3ee87e1bc9b181a478913dcfb84bab7a1e18cc2b9415abf8e6783e9", "details": {"host": "10.66.129.242", "port": 22, "remote_dir": "/home/airflow/config_files/meta/dm", "remote_path": "/home/airflow/config_files/meta/dm/dict_dds_currency_rates_meta.yaml", "local_path": "/app/config_files/meta_dev/dm/dict_dds_currency_rates_meta.yaml"}, "created_at": "2026-03-31T10:30:00.923103"}
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c "printf 'hello\n' > /tmp/test_meta.yaml && sshpass -p 'rootuserdwh' scp -o StrictHostKeyChecking=no /tmp/
-> test_meta.yaml root@10.66.129.242:/home/airflow/config_files/meta/dm/test_from_container_scp.yaml && sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no
-> root@10.66.129.242 'ls -l /home/airflow/config_files/meta/dm/test_from_container_scp.yaml && cat /home/airflow/config_files/meta/dm/test_from_container_scp.yaml'"
-usage: scp [-346ABCOpqRrsTv] [-c cipher] [-D sftp_server_path] [-F ssh_config]
-           [-i identity_file] [-J destination] [-l limit] [-o ssh_option]
-           [-P port] [-S program] [-X sftp_option] source ... target
-sh: 2: test_meta.yaml: not found
-sh: 3: root@10.66.129.242: not found
+Операция не выполнена
+Airflow вернул 403: <html><head><title>Error 403</title></head><body><h1>Error 403: Forbidden</h1><p></p></body></html>
+
+:15312/api/admin/dev-meta/run-dag:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+
+| INFO:     Application startup complete.
+table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52936 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52938 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52940 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52942 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52966 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52968 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52970 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:52996 - "POST /api/admin/dev-meta/run-dag HTTP/1.1" 400 Bad Request

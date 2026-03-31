@@ -259,7 +259,7 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
     user = get_current_user_from_request(request)
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
-    root = DEV_CLICK_META_DIR if payload.source != "prod" else CLICK_META_DIR
+    root = DEV_CLICK_META_DIR
     try:
         return read_dev_meta_file(
             base_dir=BASE_DIR,
@@ -298,6 +298,8 @@ def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
     try:
         return acquire_dev_meta_lock(
             engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
             schema_name=payload.schema_name,
             file_name=payload.file_name,
             author=user.email,
@@ -314,6 +316,8 @@ def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
         raise HTTPException(status_code=403, detail="Admin role required")
     release_dev_meta_lock(
         engine=engine,
+        base_dir=BASE_DIR,
+        dev_root_value=DEV_CLICK_META_DIR,
         schema_name=payload.schema_name,
         file_name=payload.file_name,
         author=user.email,
@@ -364,12 +368,16 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     try:
         assert_dev_meta_lock_owner(
             engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
             schema_name=payload.schema_name,
             file_name=payload.file_name,
             author=user.email,
         )
         data = trigger_airflow_dev_dag(
             engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_CLICK_META_DIR,
             airflow_base_url=AIRFLOW_DEV_BASE_URL,
             dag_id=AIRFLOW_DEV_DAG_ID,
             username=AIRFLOW_DEV_USERNAME,

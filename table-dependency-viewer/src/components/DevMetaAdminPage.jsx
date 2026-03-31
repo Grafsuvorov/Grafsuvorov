@@ -17,15 +17,13 @@ export default function DevMetaAdminPage({ userProfile }) {
     order_by: "",
   });
   const [status, setStatus] = useState(null);
-  const [files, setFiles] = useState({ prod_files: [], dev_files: [], locks: [] });
+  const [files, setFiles] = useState({ dev_files: [], locks: [] });
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedSource, setSelectedSource] = useState("prod");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [validating, setValidating] = useState(false);
-  const [runningDag, setRunningDag] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
   const [validation, setValidation] = useState(null);
   const [message, setMessage] = useState(null);
@@ -41,7 +39,7 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   const refreshFiles = async (schema = schemaName) => {
     const data = await devMetaApi.files(schema);
-    setFiles(data || { prod_files: [], dev_files: [], locks: [] });
+    setFiles(data || { dev_files: [], locks: [] });
   };
 
   useEffect(() => {
@@ -52,11 +50,6 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   useEffect(() => {
     if (!isAdmin) return;
-    setSelectedFile(null);
-    setSelectedSource("prod");
-    setContent("");
-    setValidation(null);
-    setLockInfo(null);
     refreshFiles(schemaName).catch((err) => setError(err.message || "Не удалось загрузить файлы"));
   }, [schemaName, isAdmin]);
 
@@ -74,54 +67,38 @@ export default function DevMetaAdminPage({ userProfile }) {
       (lockInfo?.locked_by || lockRow?.locked_by) !== currentUser
   );
 
-  const openFile = async (fileName, source) => {
+  const acquireLock = async (fileName) => {
+    const data = await devMetaApi.lock({ schema_name: schemaName, file_name: fileName });
+    setLockInfo(data || null);
+    return data;
+  };
+
+  const handleSchemaChange = (nextSchema) => {
+    setSchemaName(nextSchema);
+    setSelectedFile(null);
+    setContent("");
+    setValidation(null);
+    setLockInfo(null);
+    setMessage(null);
+    setError(null);
+  };
+
+  const openFile = async (fileName) => {
     setLoading(true);
     setError(null);
     setMessage(null);
     setValidation(null);
     try {
-      const data = await devMetaApi.readFile({
-        schema_name: schemaName,
-        file_name: fileName,
-        source,
-      });
+      await acquireLock(fileName);
+      const data = await devMetaApi.readFile({ schema_name: schemaName, file_name: fileName, source: "dev" });
       setSelectedFile(fileName);
-      setSelectedSource(source);
       setContent(data?.content || "");
-      const currentLock = (files.locks || []).find(
-        (item) => item.schema_name === schemaName && item.file_name === fileName
-      );
-      setLockInfo(currentLock || null);
+      setMessage("Файл открыт и автоматически взят в работу");
+      await refreshFiles();
     } catch (err) {
       setError(err.message || "Не удалось открыть файл");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleLock = async () => {
-    if (!selectedFile) return;
-    setError(null);
-    try {
-      const data = await devMetaApi.lock({ schema_name: schemaName, file_name: selectedFile });
-      setLockInfo(data);
-      await refreshFiles();
-      setMessage("Файл взят в работу");
-    } catch (err) {
-      setError(err.message || "Не удалось взять файл в работу");
-    }
-  };
-
-  const handleUnlock = async () => {
-    if (!selectedFile) return;
-    setError(null);
-    try {
-      await devMetaApi.unlock({ schema_name: schemaName, file_name: selectedFile });
-      setLockInfo(null);
-      await refreshFiles();
-      setMessage("Блокировка снята");
-    } catch (err) {
-      setError(err.message || "Не удалось снять блокировку");
     }
   };
 
@@ -156,7 +133,6 @@ export default function DevMetaAdminPage({ userProfile }) {
         content,
       });
       setValidation(data?.validation || null);
-      setSelectedSource("dev");
       await refreshFiles();
       setMessage("Файл сохранен в DEV-контур");
     } catch (err) {
@@ -178,7 +154,6 @@ export default function DevMetaAdminPage({ userProfile }) {
         content,
       });
       setValidation(data?.validation || null);
-      setSelectedSource("dev");
       await refreshFiles();
       setMessage(`Файл отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
     } catch (err) {
@@ -204,31 +179,25 @@ export default function DevMetaAdminPage({ userProfile }) {
         order_by: orderBy,
       });
       setSchemaName(generator.schema_name_click);
+      if (data?.file_name) {
+        await devMetaApi.lock({ schema_name: generator.schema_name_click, file_name: data.file_name });
+      }
       setSelectedFile(data?.file_name || null);
-      setSelectedSource("dev");
       setContent(data?.content || "");
       setValidation(null);
-      setLockInfo(null);
-      setMessage("Черновик YAML сгенерирован. Возьми файл в работу, проверь и сохрани.");
+      setLockInfo(
+        data?.file_name
+          ? {
+              schema_name: generator.schema_name_click,
+              file_name: data.file_name,
+              locked_by: currentUser,
+            }
+          : null
+      );
+      await refreshFiles(generator.schema_name_click);
+      setMessage("Черновик YAML сгенерирован и автоматически взят в работу.");
     } catch (err) {
       setError(err.message || "Не удалось сгенерировать YAML");
-    }
-  };
-
-  const handleRunDag = async () => {
-    if (!selectedFile) return;
-    setRunningDag(true);
-    setError(null);
-    try {
-      await devMetaApi.runDag({
-        schema_name: schemaName,
-        file_name: selectedFile,
-      });
-      setMessage("DEV DAG запущен");
-    } catch (err) {
-      setError(err.message || "Не удалось запустить DAG");
-    } finally {
-      setRunningDag(false);
     }
   };
 
@@ -248,14 +217,10 @@ export default function DevMetaAdminPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Meta Generator</div>
         <div className="section-subtitle">
-          Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с PROD meta.
+          Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
         </div>
 
         <div className="dev-meta-kpis">
-          <div className="dev-meta-kpi">
-            <div className="label">PROD путь</div>
-            <div className="value mono">{status?.prod_root || "—"}</div>
-          </div>
           <div className="dev-meta-kpi">
             <div className="label">DEV путь</div>
             <div className="value mono">{status?.dev_root || "—"}</div>
@@ -280,7 +245,7 @@ export default function DevMetaAdminPage({ userProfile }) {
               <button
                 key={option.value}
                 className={`btn ${schemaName === option.value ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setSchemaName(option.value)}
+                onClick={() => handleSchemaChange(option.value)}
               >
                 {option.label}
               </button>
@@ -353,35 +318,6 @@ export default function DevMetaAdminPage({ userProfile }) {
         <div className="dev-meta-layout">
           <div className="dev-meta-side">
             <div className="dev-meta-file-block">
-              <div className="section-subtitle">PROD файлы</div>
-              <div className="dev-meta-file-list">
-                {(files.prod_files || []).map((file) => (() => {
-                  const fileLock = (files.locks || []).find(
-                    (item) => item.schema_name === schemaName && item.file_name === file.file_name
-                  );
-                  const blocked = fileLock?.locked_by && fileLock.locked_by !== currentUser;
-                  return (
-                    <button
-                      key={`prod-${file.file_name}`}
-                      className={`dev-meta-file ${selectedFile === file.file_name && selectedSource === "prod" ? "active" : ""} ${blocked ? "blocked" : ""}`}
-                      onClick={() => openFile(file.file_name, "prod")}
-                      disabled={blocked}
-                    >
-                      <span className="mono">{file.file_name}</span>
-                      <span className="muted">{formatDateTime(file.updated_at)}</span>
-                      {file.last_action_by ? (
-                        <span className="dev-meta-file-meta">
-                          DEV: {file.last_action_by} · {formatDateTime(file.last_action_at)}
-                        </span>
-                      ) : null}
-                      {blocked ? <span className="dev-meta-file-badge">Занят</span> : null}
-                    </button>
-                  );
-                })())}
-              </div>
-            </div>
-
-            <div className="dev-meta-file-block">
               <div className="section-subtitle">DEV файлы</div>
               <div className="dev-meta-file-list">
                 {(files.dev_files || []).map((file) => (() => {
@@ -392,8 +328,8 @@ export default function DevMetaAdminPage({ userProfile }) {
                   return (
                     <button
                       key={`dev-${file.file_name}`}
-                      className={`dev-meta-file ${selectedFile === file.file_name && selectedSource === "dev" ? "active" : ""} ${blocked ? "blocked" : ""}`}
-                      onClick={() => openFile(file.file_name, "dev")}
+                      className={`dev-meta-file ${selectedFile === file.file_name ? "active" : ""} ${blocked ? "blocked" : ""}`}
+                      onClick={() => openFile(file.file_name)}
                       disabled={blocked}
                     >
                       <span className="mono">{file.file_name}</span>
@@ -416,16 +352,10 @@ export default function DevMetaAdminPage({ userProfile }) {
               <div>
                 <div className="section-subtitle">Редактор</div>
                 <div className="muted">
-                  {selectedFile ? `${schemaName}/${selectedFile} · source: ${selectedSource}` : "Выберите файл"}
+                  {selectedFile ? `${schemaName}/${selectedFile}` : "Сгенерируйте новый YAML или выберите DEV-файл"}
                 </div>
               </div>
               <div className="dev-meta-actions">
-                <button className="btn btn-secondary" onClick={handleLock} disabled={!selectedFile || isLockedByAnother}>
-                  Взять в работу
-                </button>
-                <button className="btn btn-secondary" onClick={handleUnlock} disabled={!selectedFile}>
-                  Снять блок
-                </button>
                 <button className="btn btn-secondary" onClick={handleValidate} disabled={!selectedFile || validating}>
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
@@ -438,13 +368,6 @@ export default function DevMetaAdminPage({ userProfile }) {
                   disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured}
                 >
                   {deploying ? "Отправляем..." : "Отправить на DEV сервер"}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleRunDag}
-                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured}
-                >
-                  {runningDag ? "Запускаем..." : "Запустить DEV DAG"}
                 </button>
               </div>
             </div>
@@ -459,7 +382,7 @@ export default function DevMetaAdminPage({ userProfile }) {
 
             <div className="dev-meta-notes">
               <div className="dev-meta-note">
-                Рабочий поток: открой PROD-файл, возьми lock, внеси правки, проверь, сохрани в `meta_dev`, затем отправь YAML на DEV сервер.
+                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, редактор автоматически возьмет его в работу, затем проверь, сохрани и отправь на DEV сервер.
               </div>
               <div className="dev-meta-note">
                 `DEV_DATABASE_URL` нужен только для проверки существования объекта в DEV Greenplum. Без него YAML/SQL валидация все равно работает.
@@ -474,7 +397,7 @@ export default function DevMetaAdminPage({ userProfile }) {
               value={content}
               onChange={(e) => setContent(e.target.value)}
               disabled={isLockedByAnother}
-              placeholder="Выберите продовый или dev файл, чтобы начать работу"
+              placeholder="Сгенерируйте новый YAML или откройте DEV-файл, чтобы начать работу"
             />
 
             {validation && (

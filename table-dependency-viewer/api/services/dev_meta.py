@@ -15,31 +15,6 @@ from urllib import request as urlrequest
 import yaml
 from sqlalchemy import create_engine, text
 
-
-LOCK_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS tech_etl.app_dev_meta_lock (
-    schema_name TEXT NOT NULL,
-    file_name TEXT NOT NULL,
-    locked_by TEXT NOT NULL,
-    locked_at TIMESTAMP NOT NULL,
-    expires_at TIMESTAMP NOT NULL
-)
-DISTRIBUTED RANDOMLY
-"""
-
-AUDIT_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS tech_etl.app_dev_meta_audit (
-    schema_name TEXT NOT NULL,
-    file_name TEXT NOT NULL,
-    action TEXT NOT NULL,
-    author TEXT NOT NULL,
-    yaml_hash TEXT,
-    details TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-)
-DISTRIBUTED RANDOMLY
-"""
-
 REQUIRED_TOP_LEVEL_KEYS = {
     "schema_name_gp",
     "schema_name_click",
@@ -94,16 +69,66 @@ def _resolve_root(base_dir: Path, root_value: str) -> Path:
     return root
 
 
-def ensure_dev_meta_tables(engine) -> None:
-    with engine.begin() as conn:
+def _state_root(base_dir: Path, dev_root_value: str) -> Path:
+    return _resolve_root(base_dir, dev_root_value) / ".admin"
+
+
+def _locks_root(base_dir: Path, dev_root_value: str) -> Path:
+    return _state_root(base_dir, dev_root_value) / "locks"
+
+
+def _audit_log_path(base_dir: Path, dev_root_value: str) -> Path:
+    return _state_root(base_dir, dev_root_value) / "audit.jsonl"
+
+
+def _ensure_state_dirs(base_dir: Path, dev_root_value: str) -> None:
+    state_root = _state_root(base_dir, dev_root_value)
+    (state_root / "locks").mkdir(parents=True, exist_ok=True)
+
+
+def _lock_file_path(base_dir: Path, dev_root_value: str, schema_name: str, file_name: str) -> Path:
+    return _locks_root(base_dir, dev_root_value) / schema_name / f"{file_name}.json"
+
+
+def _read_json_file(path: Path) -> dict[str, Any] | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def _prune_expired_locks(base_dir: Path, dev_root_value: str) -> dict[tuple[str, str], dict[str, Any]]:
+    _ensure_state_dirs(base_dir, dev_root_value)
+    locks: dict[tuple[str, str], dict[str, Any]] = {}
+    now = datetime.now()
+    for path in _locks_root(base_dir, dev_root_value).rglob("*.json"):
+        payload = _read_json_file(path)
+        if not payload:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            continue
         try:
-            conn.execute(text(LOCK_TABLE_SQL))
-        except Exception:
-            pass
-        try:
-            conn.execute(text(AUDIT_TABLE_SQL))
-        except Exception:
-            pass
+            expires_at = datetime.fromisoformat(str(payload.get("expires_at") or ""))
+        except ValueError:
+            expires_at = None
+        if not expires_at or expires_at <= now:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+            continue
+        schema_name = str(payload.get("schema_name") or "")
+        file_name = str(payload.get("file_name") or "")
+        if not schema_name or not file_name:
+            continue
+        locks[(schema_name, file_name)] = {
+            "locked_by": payload.get("locked_by"),
+            "locked_at": payload.get("locked_at"),
+            "expires_at": payload.get("expires_at"),
+        }
+    return locks
 
 
 def _connection_url_for_generator(dev_database_url: str, default_database_url: str) -> str:
@@ -277,62 +302,36 @@ def list_meta_files(root: Path, schema_name: str) -> list[dict[str, Any]]:
     return result
 
 
-def _get_active_locks(engine) -> dict[tuple[str, str], dict[str, Any]]:
-    ensure_dev_meta_tables(engine)
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM tech_etl.app_dev_meta_lock WHERE expires_at <= NOW()"))
-        rows = conn.execute(
-            text(
-                """
-                SELECT schema_name, file_name, locked_by, locked_at, expires_at
-                FROM tech_etl.app_dev_meta_lock
-                """
-            )
-        ).mappings().all()
-    return {
-        (row["schema_name"], row["file_name"]): {
-            "locked_by": row["locked_by"],
-            "locked_at": row["locked_at"].isoformat() if row["locked_at"] else None,
-            "expires_at": row["expires_at"].isoformat() if row["expires_at"] else None,
-        }
-        for row in rows
-    }
+def _get_active_locks(base_dir: Path, dev_root_value: str) -> dict[tuple[str, str], dict[str, Any]]:
+    return _prune_expired_locks(base_dir, dev_root_value)
 
 
-def _get_last_audit_map(engine, schema_name: str) -> dict[str, dict[str, Any]]:
-    ensure_dev_meta_tables(engine)
-    with engine.begin() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT schema_name, file_name, author, action, created_at
-                FROM (
-                    SELECT
-                        schema_name,
-                        file_name,
-                        author,
-                        action,
-                        created_at,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY schema_name, file_name
-                            ORDER BY created_at DESC
-                        ) AS rn
-                    FROM tech_etl.app_dev_meta_audit
-                    WHERE schema_name = :schema_name
-                ) t
-                WHERE rn = 1
-                """
-            ),
-            {"schema_name": schema_name},
-        ).mappings().all()
-    return {
-        row["file_name"]: {
-            "last_action_by": row["author"],
-            "last_action": row["action"],
-            "last_action_at": row["created_at"].isoformat() if row["created_at"] else None,
-        }
-        for row in rows
-    }
+def _get_last_audit_map(base_dir: Path, dev_root_value: str, schema_name: str) -> dict[str, dict[str, Any]]:
+    audit_path = _audit_log_path(base_dir, dev_root_value)
+    if not audit_path.exists():
+        return {}
+    latest: dict[str, dict[str, Any]] = {}
+    try:
+        for line in audit_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row.get("schema_name") != schema_name:
+                continue
+            file_name = str(row.get("file_name") or "")
+            if not file_name:
+                continue
+            created_at = str(row.get("created_at") or "")
+            current = latest.get(file_name)
+            if not current or created_at >= str(current.get("last_action_at") or ""):
+                latest[file_name] = {
+                    "last_action_by": row.get("author"),
+                    "last_action": row.get("action"),
+                    "last_action_at": created_at,
+                }
+    except Exception:
+        return {}
+    return latest
 
 
 def get_dev_meta_status(
@@ -349,11 +348,9 @@ def get_dev_meta_status(
     deploy_user: str,
     deploy_base_dir: str,
 ) -> dict[str, Any]:
-    prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
-    locks = _get_active_locks(engine)
+    locks = _get_active_locks(base_dir, dev_root_value)
     return {
-        "prod_root": str(prod_root),
         "dev_root": str(dev_root),
         "airflow": {
             "base_url": airflow_base_url,
@@ -380,19 +377,14 @@ def get_dev_meta_files(
     dev_root_value: str,
     schema_name: str,
 ) -> dict[str, Any]:
-    prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
-    locks = _get_active_locks(engine)
-    audit_map = _get_last_audit_map(engine, schema_name)
-    prod_files = list_meta_files(prod_root, schema_name)
+    locks = _get_active_locks(base_dir, dev_root_value)
+    audit_map = _get_last_audit_map(base_dir, dev_root_value, schema_name)
     dev_files = list_meta_files(dev_root, schema_name)
-    for file_row in prod_files:
-        file_row.update(audit_map.get(file_row["file_name"], {}))
     for file_row in dev_files:
         file_row.update(audit_map.get(file_row["file_name"], {}))
     return {
         "schema_name": schema_name,
-        "prod_files": prod_files,
         "dev_files": dev_files,
         "locks": [
             {"schema_name": key[0], "file_name": key[1], **value}
@@ -419,95 +411,75 @@ def read_dev_meta_file(*, base_dir: Path, root_value: str, schema_name: str, fil
 def acquire_dev_meta_lock(
     *,
     engine,
+    base_dir: Path,
+    dev_root_value: str,
     schema_name: str,
     file_name: str,
     author: str,
     ttl_minutes: int,
 ) -> dict[str, Any]:
-    ensure_dev_meta_tables(engine)
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM tech_etl.app_dev_meta_lock WHERE expires_at <= NOW()"))
-        row = conn.execute(
-            text(
-                """
-                SELECT locked_by, expires_at
-                FROM tech_etl.app_dev_meta_lock
-                WHERE schema_name = :schema_name AND file_name = :file_name
-                """
-            ),
-            {"schema_name": schema_name, "file_name": file_name},
-        ).mappings().first()
-        if row and row["locked_by"] != author:
-            raise PermissionError(f"Файл уже редактирует {row['locked_by']}")
-        conn.execute(
-            text(
-                """
-                DELETE FROM tech_etl.app_dev_meta_lock
-                WHERE schema_name = :schema_name AND file_name = :file_name
-                """
-            ),
-            {"schema_name": schema_name, "file_name": file_name},
-        )
-        now = datetime.now()
-        expires_at = now + timedelta(minutes=ttl_minutes)
-        conn.execute(
-            text(
-                """
-                INSERT INTO tech_etl.app_dev_meta_lock (schema_name, file_name, locked_by, locked_at, expires_at)
-                VALUES (:schema_name, :file_name, :locked_by, :locked_at, :expires_at)
-                """
-            ),
+    locks = _prune_expired_locks(base_dir, dev_root_value)
+    current = locks.get((schema_name, file_name))
+    if current and current.get("locked_by") != author:
+        raise PermissionError(f"Файл уже редактирует {current['locked_by']}")
+    now = datetime.now()
+    expires_at = now + timedelta(minutes=ttl_minutes)
+    lock_path = _lock_file_path(base_dir, dev_root_value, schema_name, file_name)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(
+        json.dumps(
             {
                 "schema_name": schema_name,
                 "file_name": file_name,
                 "locked_by": author,
-                "locked_at": now,
-                "expires_at": expires_at,
+                "locked_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
             },
-        )
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
     return {
         "schema_name": schema_name,
         "file_name": file_name,
         "locked_by": author,
+        "locked_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
     }
 
 
-def release_dev_meta_lock(*, engine, schema_name: str, file_name: str, author: str) -> None:
-    ensure_dev_meta_tables(engine)
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                DELETE FROM tech_etl.app_dev_meta_lock
-                WHERE schema_name = :schema_name
-                  AND file_name = :file_name
-                  AND locked_by = :locked_by
-                """
-            ),
-            {
-                "schema_name": schema_name,
-                "file_name": file_name,
-                "locked_by": author,
-            },
-        )
+def release_dev_meta_lock(
+    *,
+    engine,
+    base_dir: Path,
+    dev_root_value: str,
+    schema_name: str,
+    file_name: str,
+    author: str,
+) -> None:
+    lock_path = _lock_file_path(base_dir, dev_root_value, schema_name, file_name)
+    if not lock_path.exists():
+        return
+    payload = _read_json_file(lock_path) or {}
+    if payload.get("locked_by") != author:
+        return
+    try:
+        lock_path.unlink()
+    except OSError:
+        pass
 
 
-def assert_dev_meta_lock_owner(*, engine, schema_name: str, file_name: str, author: str) -> None:
-    ensure_dev_meta_tables(engine)
-    with engine.begin() as conn:
-        conn.execute(text("DELETE FROM tech_etl.app_dev_meta_lock WHERE expires_at <= NOW()"))
-        row = conn.execute(
-            text(
-                """
-                SELECT locked_by
-                FROM tech_etl.app_dev_meta_lock
-                WHERE schema_name = :schema_name
-                  AND file_name = :file_name
-                """
-            ),
-            {"schema_name": schema_name, "file_name": file_name},
-        ).mappings().first()
+def assert_dev_meta_lock_owner(
+    *,
+    engine,
+    base_dir: Path,
+    dev_root_value: str,
+    schema_name: str,
+    file_name: str,
+    author: str,
+) -> None:
+    locks = _prune_expired_locks(base_dir, dev_root_value)
+    row = locks.get((schema_name, file_name))
     if not row:
         raise PermissionError("Перед сохранением возьмите файл в работу")
     if row["locked_by"] != author:
@@ -621,6 +593,8 @@ def validate_dev_meta_content(
 
 def _audit_dev_meta(
     engine,
+    base_dir: Path,
+    dev_root_value: str,
     schema_name: str,
     file_name: str,
     author: str,
@@ -628,25 +602,20 @@ def _audit_dev_meta(
     content: str,
     details: dict[str, Any],
 ) -> None:
-    ensure_dev_meta_tables(engine)
     yaml_hash = hashlib.sha256(content.encode("utf-8")).hexdigest() if content else None
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO tech_etl.app_dev_meta_audit (schema_name, file_name, action, author, yaml_hash, details)
-                VALUES (:schema_name, :file_name, :action, :author, :yaml_hash, :details)
-                """
-            ),
-            {
-                "schema_name": schema_name,
-                "file_name": file_name,
-                "action": action,
-                "author": author,
-                "yaml_hash": yaml_hash,
-                "details": json.dumps(details, ensure_ascii=False),
-            },
-        )
+    _ensure_state_dirs(base_dir, dev_root_value)
+    audit_path = _audit_log_path(base_dir, dev_root_value)
+    record = {
+        "schema_name": schema_name,
+        "file_name": file_name,
+        "action": action,
+        "author": author,
+        "yaml_hash": yaml_hash,
+        "details": details,
+        "created_at": datetime.now().isoformat(),
+    }
+    with audit_path.open("a", encoding="utf-8") as audit_file:
+        audit_file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def save_dev_meta_file(
@@ -662,6 +631,8 @@ def save_dev_meta_file(
 ) -> dict[str, Any]:
     assert_dev_meta_lock_owner(
         engine=engine,
+        base_dir=base_dir,
+        dev_root_value=dev_root_value,
         schema_name=schema_name,
         file_name=file_name,
         author=author,
@@ -676,6 +647,8 @@ def save_dev_meta_file(
     path.write_text(content, encoding="utf-8")
     _audit_dev_meta(
         engine,
+        base_dir=base_dir,
+        dev_root_value=dev_root_value,
         schema_name=schema_name,
         file_name=file_name,
         author=author,
@@ -816,6 +789,13 @@ def deploy_dev_meta_file(
             text=True,
             timeout=60,
         )
+        subprocess.run(
+            ssh_cmd + [ssh_target, f"test -f {remote_path}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
     except subprocess.CalledProcessError as exc:
         raise ValueError(exc.stderr.strip() or exc.stdout.strip() or "Не удалось передать файл на DEV сервер") from exc
     except Exception as exc:
@@ -829,6 +809,8 @@ def deploy_dev_meta_file(
 
     _audit_dev_meta(
         engine,
+        base_dir=base_dir,
+        dev_root_value=dev_root_value,
         schema_name=schema_name,
         file_name=file_name,
         author=author,
@@ -852,6 +834,8 @@ def deploy_dev_meta_file(
 def trigger_airflow_dev_dag(
     *,
     engine,
+    base_dir: Path,
+    dev_root_value: str,
     airflow_base_url: str,
     dag_id: str,
     username: str,
@@ -890,6 +874,8 @@ def trigger_airflow_dev_dag(
         raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
     _audit_dev_meta(
         engine,
+        base_dir=base_dir,
+        dev_root_value=dev_root_value,
         schema_name=schema_name,
         file_name=file_name,
         author=author,

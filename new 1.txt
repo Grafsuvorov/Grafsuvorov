@@ -1,28 +1,42 @@
-This will initiate a dagrun. If DAG is paused then dagrun state will remain queued, and the task won't run.
-
-Parameters
-Cancel
-Reset
-Name	Description
-dag_id *
-string
-(path)
-The DAG ID.
-
-dag_id
-Request body
-
-application/json
 {
-  "conf": {},
+  "conf": {"dm_sensor: true},
   "dag_run_id": "string",
   "logical_date": "2026-03-31T13:39:22.098Z",
   "note": "string"
 }
 
+Curl
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'env | grep AIRFLOW_DEV'
-AIRFLOW_DEV_DAG_ID=
-AIRFLOW_DEV_USERNAME=admin
-AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
-AIRFLOW_DEV_PASSWORD=admin
+curl -X 'POST' \
+  'http://rgm-s-dwhair01.hq.root.ad:8080/api/v1/dags/dict_dds_currency_rates_meta/dagRuns' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "conf": {"dm_sensor: true},
+  "dag_run_id": "string",
+  "logical_date": "2026-03-31T13:39:22.098Z",
+  "note": "string"
+}'
+Request URL
+http://rgm-s-dwhair01.hq.root.ad:8080/api/v1/dags/dict_dds_currency_rates_meta/dagRuns
+Server response
+Code	Details
+400	
+Error: BAD REQUEST
+
+Response body
+Download
+{
+  "detail": "Request body is not valid JSON",
+  "status": 400,
+  "title": "Bad Request",
+  "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/BadRequest"
+}
+Response headers
+ connection: close 
+ content-length: 209 
+ content-type: application/problem+json 
+ date: Tue,31 Mar 2026 13:54:07 GMT 
+ server: gunicorn 
+ x-robots-tag: noindex,nofollow 
+Responses

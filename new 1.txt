@@ -1,52 +1,70 @@
-services:
-    frontend:
-      build: .
-      ports:
-        - "15312:80"
-
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
-        - ADMIN_CICD_SCRIPT=/app/scripts/ci_cd.sh
-        - DEV_DATABASE_URL=${DEV_DATABASE_URL}
-        - AIRFLOW_DEV_BASE_URL=${AIRFLOW_DEV_BASE_URL}
-        - AIRFLOW_DEV_DAG_ID=${AIRFLOW_DEV_DAG_ID}
-        - AIRFLOW_DEV_USERNAME=${AIRFLOW_DEV_USERNAME}
-        - AIRFLOW_DEV_PASSWORD=${AIRFLOW_DEV_PASSWORD}
-        - DEV_META_LOCK_TTL_MIN=${DEV_META_LOCK_TTL_MIN}
-
-  И в api/.env добавь:
-
-  DEV_DATABASE_URL=
-  AIRFLOW_DEV_BASE_URL=
-  AIRFLOW_DEV_DAG_ID=
-  AIRFLOW_DEV_USERNAME=
-  AIRFLOW_DEV_PASSWORD=
-  DEV_META_LOCK_TTL_MIN=30
-
-  Если не хочешь проверку DEV GP:
-
-  - DEV_DATABASE_URL можно оставить пустым
-
-  И еще:
-
-  - папку /root/table-dependency-viewer/config_files/meta_dev/dm
-  - и /root/table-dependency-viewer/config_files/meta_dev/dm_view
-    лучше заранее создать
-
-  mkdir -p /root/table-dependency-viewer/config_files/meta_dev/dm
-  mkdir -p /root/table-dependency-viewer/config_files/meta_dev/dm_view
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache api frontend
+WARN[0000] The "DATABASE_URL" variable is not set. Defaulting to a blank string.
+WARN[0000] The "CLICK_META_DIR" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_CLICK_META_DIR" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_DATABASE_URL" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_HOST" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_PORT" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_USER" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_PASSWORD" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_BASE_DIR" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_SSH_KEY_PATH" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_DEPLOY_STRICT_HOST_KEY" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AIRFLOW_DEV_BASE_URL" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AIRFLOW_DEV_DAG_ID" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AIRFLOW_DEV_USERNAME" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AIRFLOW_DEV_PASSWORD" variable is not set. Defaulting to a blank string.
+WARN[0000] The "DEV_META_LOCK_TTL_MIN" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_ENABLED" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_SECRET_KEY" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_ACCESS_TTL_MIN" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_ALLOW_REGISTER" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_BOOTSTRAP_ADMIN_EMAIL" variable is not set. Defaulting to a blank string.
+WARN[0000] The "AUTH_BOOTSTRAP_ADMIN_PASSWORD" variable is not set. Defaulting to a blank string.
+[+] Building 118.9s (33/33) FINISHED
+ => [table-dependency-viewer_api internal] load build definition from Dockerfile                                                                                                                                                        0.0s
+ => => transferring dockerfile: 1.74kB                                                                                                                                                                                                  0.0s
+ => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                                                                                                                                   0.0s
+ => => transferring dockerfile: 659B                                                                                                                                                                                                    0.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                                                                                                                                        2.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                                                                                                                                      2.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                                                                                                                                         2.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                                                                                                                             1.9s
+ => [table-dependency-viewer_api internal] load .dockerignore                                                                                                                                                                           0.0s
+ => => transferring context: 162B                                                                                                                                                                                                       0.0s
+ => [table-dependency-viewer_frontend internal] load .dockerignore                                                                                                                                                                      0.0s
+ => => transferring context: 162B                                                                                                                                                                                                       0.0s
+ => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634                                                                         0.0s
+ => => resolve docker.io/library/python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634                                                                                                               0.0s
+ => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3                                                                           0.0s
+ => [table-dependency-viewer_api internal] load build context                                                                                                                                                                           0.0s
+ => => transferring context: 331.25kB                                                                                                                                                                                                   0.0s
+ => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c                                                                          0.0s
+ => [table-dependency-viewer_frontend internal] load build context                                                                                                                                                                      0.5s
+ => => transferring context: 6.29MB                                                                                                                                                                                                     0.4s
+ => CACHED [table-dependency-viewer_frontend stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:e7257f1ef28ba17cf7c248cb8ccf6f0c6e0228ab9c315c152f9c203cd34cf6d1                                                                   0.0s
+ => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                                                                                                                                                    0.0s
+ => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                                                                                                                                                     0.0s
+ => [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*                                                                                                            68.5s
+ => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm install -g dagre                             2.7s
+ => [table-dependency-viewer_frontend stage-1 2/3] COPY nginx.conf /etc/nginx/conf.d/default.conf                                                                                                                                       0.2s
+ => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                                                                                                                                  0.5s
+ => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm ci --include=dev                       9.0s
+ => [table-dependency-viewer_frontend build 5/6] COPY . .                                                                                                                                                                               2.8s
+ => [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                                                                                                                                      6.0s
+ => [table-dependency-viewer_frontend stage-1 3/3] COPY --from=build /app/dist /usr/share/nginx/html                                                                                                                                    0.4s
+ => [table-dependency-viewer_frontend] exporting to image                                                                                                                                                                               0.1s
+ => => exporting layers                                                                                                                                                                                                                 0.0s
+ => => writing image sha256:0fff3ce90443c100d2a5e8710ae4d82b3a60f92315f0172a762fb0f18f836360                                                                                                                                            0.0s
+ => => naming to docker.io/library/table-dependency-viewer_frontend                                                                                                                                                                     0.0s
+ => [table-dependency-viewer_api stage-1  4/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node                                                                                                                                0.4s
+ => [table-dependency-viewer_api stage-1  5/10] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm                                                                                                                                  0.3s
+ => [table-dependency-viewer_api stage-1  6/10] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx                                                                                                                                  0.4s
+ => [table-dependency-viewer_api stage-1  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules                                                                                                                0.7s
+ => [table-dependency-viewer_api stage-1  8/10] COPY api/ /app/api/                                                                                                                                                                     0.2s
+ => [table-dependency-viewer_api stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pip install --index-url=https://pypi.nx.sib.rual.ru/simple   --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru  34.2s
+ => [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/apt/lists/*                                                         11.3s
+ => [table-dependency-viewer_api] exporting to image                                                                                                                                                                                    0.7s
+ => => exporting layers                                                                                                                                                                                                                 0.7s
+ => => writing image sha256:4bad704e61315d11a2251af260c15bac0787f606e619ce052da59d277bb07819                                                                                                                                            0.0s
+ => => naming to docker.io/library/table-dependency-viewer_api             

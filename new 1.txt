@@ -1,6 +1,41 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'echo ok'
-sh: 0: cannot open sshpass: No such file
-[root@rgm-s-dwhapp01 table-dependency-viewer]# sshpass -p '<пароль>' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/config_files/meta/dm && touch /home/airflow/config_files/meta/dm/test_from_app.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_app.yaml
-> ^C
-[root@rgm-s-dwhapp01 table-dependency-viewer]# sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'mkdir -p /home/airflow/config_files/meta/dm && touch /home/airflow/config_files/meta/dm/test_from_app.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_app.yaml'
--rw-r--r--. 1 root root 0 Mar 31 13:33 /home/airflow/config_files/meta/dm/test_from_app.yaml
+ Вот это:
+
+  docker exec -it table-dependency-viewer-api-1 sh sshpass ...
+
+  некорректная форма команды. sh пытается открыть файл sshpass, поэтому и пишет:
+
+  sh: 0: cannot open sshpass: No such file
+
+  Проверять надо так:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
+
+  Если ничего не найдет, значит в контейнере sshpass реально нет. Тогда приложение по паролю отправлять не сможет.
+
+  У тебя при этом с хоста доступ есть:
+
+  sshpass -p 'rootuserdwh' ssh ...
+
+  Это хорошо. Значит проблема не в пароле и не в удаленном сервере, а именно в контейнере api.
+
+  Что сделать:
+
+  1. Проверь внутри контейнера:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && which ssh'
+
+  2. Если sshpass нет, пересобери именно api без кеша:
+
+  docker compose build --no-cache api
+  docker compose up -d api
+
+  3. После этого снова проверь:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
+
+  4. И потом уже тест из контейнера:
+
+  docker exec -it table-dependency-viewer-api-1 sh -c "sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'touch /home/airflow/config_files/
+  meta/dm/test_from_container.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_container.yaml'"
+
+  Если это сработает, кнопка тоже должна заработать.

@@ -7196,11 +7196,40 @@ main.content {
   overflow: hidden;
 }
 
+.dev-meta-file-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.dev-meta-file-tools {
+  display: grid;
+  gap: 8px;
+  min-width: min(100%, 320px);
+}
+
+.dev-meta-file-search {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.72);
+  color: #f8fafc;
+  padding: 10px 12px;
+}
+
+.dev-meta-file-search:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+}
+
 .dev-meta-file-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 12px;
-  max-height: none;
+  max-height: 420px;
   overflow: auto;
   padding-right: 4px;
   margin-top: 12px;

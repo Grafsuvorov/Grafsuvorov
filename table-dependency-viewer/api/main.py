@@ -419,6 +419,7 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
             schema_name=payload.schema_name,
             file_name=payload.file_name,
             author=user.email,
+            remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

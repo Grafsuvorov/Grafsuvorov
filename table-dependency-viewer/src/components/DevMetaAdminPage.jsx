@@ -26,6 +26,8 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
+  const [fileSearch, setFileSearch] = useState("");
+  const [runningDag, setRunningDag] = useState(false);
 
   const isAdmin = userProfile?.role === "admin";
   const currentUser = userProfile?.email || userProfile?.username || "";
@@ -80,7 +82,21 @@ export default function DevMetaAdminPage({ userProfile }) {
     setMessage(null);
     setMessageType("info");
     setError(null);
+    setFileSearch("");
   };
+
+  const filteredFiles = useMemo(() => {
+    const term = fileSearch.trim().toLowerCase();
+    const rows = [...(files.dev_files || [])].sort((left, right) => {
+      const leftTs = new Date(left.updated_at || 0).getTime();
+      const rightTs = new Date(right.updated_at || 0).getTime();
+      return rightTs - leftTs;
+    });
+    if (!term) {
+      return rows;
+    }
+    return rows.filter((file) => file.file_name.toLowerCase().includes(term));
+  }, [files.dev_files, fileSearch]);
 
   const openFile = async (fileName) => {
     setLoading(true);
@@ -146,6 +162,26 @@ export default function DevMetaAdminPage({ userProfile }) {
       setError(err.message || "Не удалось сохранить и отправить файл на DEV сервер");
     } finally {
       setDeploying(false);
+    }
+  };
+
+  const handleRunDag = async () => {
+    if (!selectedFile) return;
+    setRunningDag(true);
+    setError(null);
+    setMessage(null);
+    setMessageType("info");
+    try {
+      const data = await devMetaApi.runDag({
+        schema_name: schemaName,
+        file_name: selectedFile,
+      });
+      setMessageType("success");
+      setMessage(`DEV DAG запущен: ${data?.response?.dag_id || data?.response?.dag_run_id || data?.response?.run_id || data?.response?.dag_run?.dag_id || selectedFile.replace(/\.[^.]+$/, "")}`);
+    } catch (err) {
+      setError(err.message || "Не удалось запустить DEV DAG");
+    } finally {
+      setRunningDag(false);
     }
   };
 
@@ -300,10 +336,23 @@ export default function DevMetaAdminPage({ userProfile }) {
 
         <div className="dev-meta-browser">
           <div className="dev-meta-file-block">
-            <div className="section-subtitle">DEV файлы</div>
-            <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
+            <div className="dev-meta-file-head">
+              <div>
+                <div className="section-subtitle">DEV файлы</div>
+                <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
+              </div>
+              <div className="dev-meta-file-tools">
+                <input
+                  className="dev-meta-file-search"
+                  value={fileSearch}
+                  onChange={(e) => setFileSearch(e.target.value)}
+                  placeholder="Поиск по имени файла"
+                />
+                <div className="muted">Сортировка: сначала последние изменения</div>
+              </div>
+            </div>
             <div className="dev-meta-file-list">
-              {(files.dev_files || []).map((file) => (() => {
+              {filteredFiles.map((file) => (() => {
                 const fileLock = (files.locks || []).find(
                   (item) => item.schema_name === schemaName && item.file_name === file.file_name
                 );
@@ -350,6 +399,13 @@ export default function DevMetaAdminPage({ userProfile }) {
                 >
                   {deploying ? "Сохраняем и отправляем..." : "Сохранить и отправить на DEV"}
                 </button>
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleRunDag}
+                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured}
+                >
+                  {runningDag ? "Запускаем DAG..." : "Запустить DEV DAG"}
+                </button>
               </div>
             </div>
 
@@ -393,6 +449,9 @@ export default function DevMetaAdminPage({ userProfile }) {
               </div>
               <div className="dev-meta-note">
                 Отправка на DEV всегда перезаписывает одноименный файл на удаленном сервере, если он уже существует.
+              </div>
+              <div className="dev-meta-note">
+                Кнопка запуска DAG вычисляет `dag_id` из имени файла автоматически: из `dict_dds_currency_rates_meta.yaml` получится `dict_dds_currency_rates_meta`. В `dag_run.conf` уходит флаг `dev_bypass_dm_sensor=true`, но сам `dm_sensor` станет зеленым только если DAG на стороне Airflow умеет этот флаг обрабатывать.
               </div>
             </div>
 

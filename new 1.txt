@@ -1,4 +1,55 @@
-что-то реально ошибки остались не все подкгружается [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d api
+[+] Running 1/1
+ ⠿ Container table-dependency-viewer-api-1  Started                                                                                                                                                                                     0.2s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1485, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1406, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1269, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 824, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 433, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 606, in run
+table-dependency-viewer-api-1  |     server.run()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 75, in run
+table-dependency-viewer-api-1  |     return asyncio_run(self.serve(sockets=sockets), loop_factory=self.config.get_loop_factory())
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/_compat.py", line 30, in asyncio_run
+table-dependency-viewer-api-1  |     return runner.run(main)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/asyncio/runners.py", line 118, in run
+table-dependency-viewer-api-1  |     return self._loop.run_until_complete(task)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 79, in serve
+table-dependency-viewer-api-1  |     await self._serve(sockets)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/server.py", line 86, in _serve
+table-dependency-viewer-api-1  |     config.load()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 441, in load
+table-dependency-viewer-api-1  |     self.loaded_app = import_from_string(self.app)
+table-dependency-viewer-api-1  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 35, in <module>
+table-dependency-viewer-api-1  |     from .config import (
+table-dependency-viewer-api-1  | ImportError: cannot import name 'TABLE_CLICK_LOAD_RUN' from 'api.config' (/app/api/config.py)
 table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
 table-dependency-viewer-api-1  |     sys.exit(main())
@@ -51,61 +102,4 @@ table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 24
 table-dependency-viewer-api-1  |   File "/app/api/main.py", line 35, in <module>
 table-dependency-viewer-api-1  |     from .config import (
 table-dependency-viewer-api-1  | ImportError: cannot import name 'TABLE_CLICK_LOAD_RUN' from 'api.config' (/app/api/config.py)
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "TABLE_CLICK_LOAD_RUN" /root/table-dependency-viewer/api/config.py
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "DEV_META_DEPLOY_PASSWORD" /root/table-dependency-viewer/api/config.py
-36:DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "generate_admin_dev_meta" /root/table-dependency-viewer/api/main.py
-316:def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
-
-
-вот мой конфиг 
-# config.py
-from dotenv import load_dotenv
-import os
-load_dotenv()
-TABLE_LOADING_HISTORY = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
-TABLE_ENTITIES_META = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
-TABLE_TABLES_META = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
-TABLE_TABLE_COMPARE = os.getenv("TABLE_TABLE_COMPARE", "tech_monitoring.vw_table_compare")
-TABLE_YT_SLA = os.getenv("TABLE_YT_SLA", "tech_etl.yt_sla")
-TABLE_TABLES_META_CLICK = os.getenv("TABLE_TABLES_META_CLICK", "tech_etl.tables_meta_clickhouse_upload")
-DATABASE_URL = os.getenv("DATABASE_URL")
-TABLE_YTREK_INCIDENTS = os.getenv("TABLE_YTREK_INCIDENTS", "tech_etl.ytrek_incidents")
-TABLE_DATA_QUALITY = os.getenv("TABLE_DATA_QUALITY", "dq.data_quality_results")
-YTRACK_ISSUE_URL        = os.getenv("YTRACK_ISSUE_URL", "https://yt.rusal.ru/issue/{id}")
-TABLE_RELEASE_LOG       = os.getenv("TABLE_RELEASE_LOG", "tech_etl.release_log")
-TABLE_RELEASE_OBJECTS   = os.getenv("TABLE_RELEASE_OBJECTS", "tech_etl.release_objects")
-TABLE_YT_ISSUE_SNAPSHOT = os.getenv("TABLE_YT_ISSUE_SNAPSHOT", "tech_etl.yt_issue_snapshot")
-TABLE_YT_ISSUE_CUSTOM   = os.getenv("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field")
-TABLE_YT_ISSUE_TIMELINE = os.getenv("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline")
-TABLE_YT_ISSUE_WORKLOG  = os.getenv("TABLE_YT_ISSUE_WORKLOG", "tech_etl.yt_issue_worklog")
-TABLE_YT_ISSUE_COMMENT  = os.getenv("TABLE_YT_ISSUE_COMMENT", "tech_etl.yt_issue_comment")
-
-
-CLICK_META_DIR          = os.getenv("CLICK_META_DIR", "config_files/meta")
-DEV_CLICK_META_DIR      = os.getenv("DEV_CLICK_META_DIR", "config_files/meta_dev")
-ADMIN_CICD_SCRIPT       = os.getenv("ADMIN_CICD_SCRIPT", "scripts/ci_cd.sh")
-DEV_DATABASE_URL        = os.getenv("DEV_DATABASE_URL", "")
-AIRFLOW_DEV_BASE_URL    = os.getenv("AIRFLOW_DEV_BASE_URL", "")
-AIRFLOW_DEV_DAG_ID      = os.getenv("AIRFLOW_DEV_DAG_ID", "")
-AIRFLOW_DEV_USERNAME    = os.getenv("AIRFLOW_DEV_USERNAME", "")
-AIRFLOW_DEV_PASSWORD    = os.getenv("AIRFLOW_DEV_PASSWORD", "")
-DEV_META_LOCK_TTL_MIN   = int(os.getenv("DEV_META_LOCK_TTL_MIN", "30"))
-DEV_META_DEPLOY_HOST    = os.getenv("DEV_META_DEPLOY_HOST", "")
-DEV_META_DEPLOY_PORT    = int(os.getenv("DEV_META_DEPLOY_PORT", "22"))
-DEV_META_DEPLOY_USER    = os.getenv("DEV_META_DEPLOY_USER", "")
-DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
-DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
-DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
-DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
-
-
-
-
-
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
-AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
-AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))
-AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
-AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
-AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")
+[root@rgm-s-dw

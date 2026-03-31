@@ -12,8 +12,6 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
     object_name: "",
-    schema_name_click: "dm",
-    greenplum_table_name: "",
     order_by: "",
   });
   const [status, setStatus] = useState(null);
@@ -21,7 +19,6 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [validating, setValidating] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
@@ -129,30 +126,7 @@ export default function DevMetaAdminPage({ userProfile }) {
     }
   };
 
-  const handleSave = async () => {
-    if (!selectedFile) return;
-    setSaving(true);
-    setError(null);
-    setMessage(null);
-    setMessageType("info");
-    try {
-      const data = await devMetaApi.save({
-        schema_name: schemaName,
-        file_name: selectedFile,
-        content,
-      });
-      setValidation(data?.validation || null);
-      await refreshFiles();
-      setMessageType("success");
-      setMessage("Сохранено в DEV. Файл записан локально и еще не отправлен на DEV сервер.");
-    } catch (err) {
-      setError(err.message || "Не удалось сохранить файл");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeploy = async () => {
+  const handleSaveAndDeploy = async () => {
     if (!selectedFile) return;
     setDeploying(true);
     setError(null);
@@ -167,9 +141,9 @@ export default function DevMetaAdminPage({ userProfile }) {
       setValidation(data?.validation || null);
       await refreshFiles();
       setMessageType("success");
-      setMessage(`Файл отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
+      setMessage(`Файл сохранен локально и отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
     } catch (err) {
-      setError(err.message || "Не удалось отправить файл на DEV сервер");
+      setError(err.message || "Не удалось сохранить и отправить файл на DEV сервер");
     } finally {
       setDeploying(false);
     }
@@ -180,6 +154,9 @@ export default function DevMetaAdminPage({ userProfile }) {
     setMessage(null);
     setMessageType("info");
     try {
+      if (schemaName !== "dm") {
+        throw new Error("Автогенерация сейчас доступна только для схемы dm");
+      }
       const orderBy = generator.order_by
         .split(",")
         .map((item) => item.trim())
@@ -187,13 +164,12 @@ export default function DevMetaAdminPage({ userProfile }) {
       const data = await devMetaApi.generate({
         schema_name_gp: generator.schema_name_gp,
         object_name: generator.object_name,
-        schema_name_click: generator.schema_name_click,
-        greenplum_table_name: generator.greenplum_table_name || null,
+        schema_name_click: schemaName,
+        greenplum_table_name: null,
         order_by: orderBy,
       });
-      setSchemaName(generator.schema_name_click);
       if (data?.file_name) {
-        await devMetaApi.lock({ schema_name: generator.schema_name_click, file_name: data.file_name });
+        await devMetaApi.lock({ schema_name: schemaName, file_name: data.file_name });
       }
       setSelectedFile(data?.file_name || null);
       setContent(data?.content || "");
@@ -201,13 +177,13 @@ export default function DevMetaAdminPage({ userProfile }) {
       setLockInfo(
         data?.file_name
           ? {
-              schema_name: generator.schema_name_click,
+              schema_name: schemaName,
               file_name: data.file_name,
               locked_by: currentUser,
             }
           : null
       );
-      await refreshFiles(generator.schema_name_click);
+      await refreshFiles(schemaName);
       setMessage("Черновик YAML сгенерирован и автоматически взят в работу.");
     } catch (err) {
       setError(err.message || "Не удалось сгенерировать YAML");
@@ -296,30 +272,12 @@ export default function DevMetaAdminPage({ userProfile }) {
               />
             </label>
             <label className="admin-field">
-              <span>Имя объекта ClickHouse</span>
+              <span>Имя таблицы / объекта</span>
               <input
                 value={generator.object_name}
                 onChange={(e) => setGenerator((prev) => ({ ...prev, object_name: e.target.value }))}
                 placeholder="counterparty_profile"
               />
-            </label>
-            <label className="admin-field">
-              <span>Имя объекта в GP</span>
-              <input
-                value={generator.greenplum_table_name}
-                onChange={(e) => setGenerator((prev) => ({ ...prev, greenplum_table_name: e.target.value }))}
-                placeholder="Если отличается от ClickHouse"
-              />
-            </label>
-            <label className="admin-field">
-              <span>ClickHouse схема</span>
-              <select
-                value={generator.schema_name_click}
-                onChange={(e) => setGenerator((prev) => ({ ...prev, schema_name_click: e.target.value }))}
-              >
-                <option value="dm">dm</option>
-                <option value="dm_view">dm_view</option>
-              </select>
             </label>
             <label className="admin-field dev-meta-generator-wide">
               <span>ORDER BY</span>
@@ -331,48 +289,48 @@ export default function DevMetaAdminPage({ userProfile }) {
             </label>
           </div>
           <div className="dev-meta-generator-actions">
-            <button className="btn btn-primary" onClick={handleGenerate}>
+            <button className="btn btn-primary" onClick={handleGenerate} disabled={schemaName !== "dm"}>
               Сгенерировать черновик
             </button>
             <div className="muted">
-              Генератор сейчас создает новый YAML для `dm` по структуре Greenplum и базовым default-параметрам.
+              Генератор берет имя объекта из Greenplum и создает файл для той же схемы и того же имени в ClickHouse. Для `dm_view` оставлена только ручная правка существующих DEV-файлов.
+            </div>
+          </div>
+        </div>
+
+        <div className="dev-meta-browser">
+          <div className="dev-meta-file-block">
+            <div className="section-subtitle">DEV файлы</div>
+            <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
+            <div className="dev-meta-file-list">
+              {(files.dev_files || []).map((file) => (() => {
+                const fileLock = (files.locks || []).find(
+                  (item) => item.schema_name === schemaName && item.file_name === file.file_name
+                );
+                const blocked = fileLock?.locked_by && fileLock.locked_by !== currentUser;
+                return (
+                  <button
+                    key={`dev-${file.file_name}`}
+                    className={`dev-meta-file ${selectedFile === file.file_name ? "active" : ""} ${blocked ? "blocked" : ""}`}
+                    onClick={() => openFile(file.file_name)}
+                    disabled={blocked}
+                  >
+                    <span className="mono">{file.file_name}</span>
+                    <span className="muted">{formatDateTime(file.updated_at)}</span>
+                    {file.last_action_by ? (
+                      <span className="dev-meta-file-meta">
+                        {file.last_action_by} · {formatDateTime(file.last_action_at)}
+                      </span>
+                    ) : null}
+                    {blocked ? <span className="dev-meta-file-badge">Занят</span> : null}
+                  </button>
+                );
+              })())}
             </div>
           </div>
         </div>
 
         <div className="dev-meta-layout">
-          <div className="dev-meta-side">
-            <div className="dev-meta-file-block">
-              <div className="section-subtitle">DEV файлы</div>
-              <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
-              <div className="dev-meta-file-list">
-                {(files.dev_files || []).map((file) => (() => {
-                  const fileLock = (files.locks || []).find(
-                    (item) => item.schema_name === schemaName && item.file_name === file.file_name
-                  );
-                  const blocked = fileLock?.locked_by && fileLock.locked_by !== currentUser;
-                  return (
-                    <button
-                      key={`dev-${file.file_name}`}
-                      className={`dev-meta-file ${selectedFile === file.file_name ? "active" : ""} ${blocked ? "blocked" : ""}`}
-                      onClick={() => openFile(file.file_name)}
-                      disabled={blocked}
-                    >
-                      <span className="mono">{file.file_name}</span>
-                      <span className="muted">{formatDateTime(file.updated_at)}</span>
-                      {file.last_action_by ? (
-                        <span className="dev-meta-file-meta">
-                          {file.last_action_by} · {formatDateTime(file.last_action_at)}
-                        </span>
-                      ) : null}
-                      {blocked ? <span className="dev-meta-file-badge">Занят</span> : null}
-                    </button>
-                  );
-                })())}
-              </div>
-            </div>
-          </div>
-
           <div className="dev-meta-editor-shell">
             <div className="dev-meta-editor-head">
               <div>
@@ -385,15 +343,12 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <button className="btn btn-secondary" onClick={handleValidate} disabled={!selectedFile || validating}>
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
-                <button className="btn btn-primary" onClick={handleSave} disabled={!selectedFile || saving || isLockedByAnother}>
-                  {saving ? "Сохраняем..." : "Сохранить"}
-                </button>
                 <button
-                  className="btn btn-secondary"
-                  onClick={handleDeploy}
+                  className="btn btn-primary"
+                  onClick={handleSaveAndDeploy}
                   disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured}
                 >
-                  {deploying ? "Отправляем..." : "Отправить на DEV сервер"}
+                  {deploying ? "Сохраняем и отправляем..." : "Сохранить и отправить на DEV"}
                 </button>
               </div>
             </div>
@@ -413,7 +368,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                   {validation.valid ? "Файл валиден" : "Есть ошибки"}
                 </div>
                 <div className="dev-meta-validation-meta">
-                  Проверяем: синтаксис YAML/SQL, обязательные поля, `order_by`, `attributes`, и объект в DEV Greenplum, если настроен `DEV_DATABASE_URL`.
+                  Проверяем: синтаксис YAML, отступы и структуру файла, обязательные поля, `order_by`, `attributes`, допустимые значения схемы и объект в DEV Greenplum, если настроен `DEV_DATABASE_URL`. Для `dm_view` сейчас проверка базовая: файл не пустой и в SQL есть `SELECT`.
                 </div>
                 {validation.errors?.length ? (
                   <ul className="dev-meta-validation-list">
@@ -434,10 +389,10 @@ export default function DevMetaAdminPage({ userProfile }) {
 
             <div className="dev-meta-notes">
               <div className="dev-meta-note">
-                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, проверь, затем сначала сохрани локально, а потом отдельно отправь на DEV сервер.
+                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, проверь его и одной кнопкой сохрани в `meta_dev` и отправь на DEV сервер.
               </div>
               <div className="dev-meta-note">
-                `Сохранить` пишет файл только в `meta_dev`. `Отправить на DEV сервер` отдельно копирует его на удаленный сервер и перезаписывает файл там, если он уже существует.
+                Отправка на DEV всегда перезаписывает одноименный файл на удаленном сервере, если он уже существует.
               </div>
             </div>
 

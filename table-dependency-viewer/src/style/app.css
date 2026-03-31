@@ -7178,21 +7178,14 @@ main.content {
   flex-wrap: wrap;
 }
 
+.dev-meta-browser {
+  margin-top: 24px;
+}
+
 .dev-meta-layout {
   position: relative;
   margin-top: 24px;
-  display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 32px;
-  align-items: start;
-}
-
-.dev-meta-side {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-  position: sticky;
-  top: 16px;
+  display: block;
 }
 
 .dev-meta-file-block {
@@ -7205,17 +7198,20 @@ main.content {
 
 .dev-meta-file-list {
   display: grid;
-  gap: 8px;
-  max-height: 420px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  max-height: none;
   overflow: auto;
   padding-right: 4px;
+  margin-top: 12px;
 }
 
 .dev-meta-file {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   text-align: left;
-  padding: 12px 13px;
+  min-height: 92px;
+  padding: 14px 15px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   background: rgba(30, 41, 59, 0.58);
@@ -7379,16 +7375,8 @@ main.content {
 }
 
 @media (max-width: 1180px) {
-  .dev-meta-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .dev-meta-side {
-    position: static;
-  }
-
   .dev-meta-file-list {
-    max-height: 260px;
+    grid-template-columns: 1fr;
   }
 }
 

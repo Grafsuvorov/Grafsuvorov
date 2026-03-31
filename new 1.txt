@@ -1,36 +1,28 @@
-3. Проверить, что контейнер видит эти env:
+This will initiate a dagrun. If DAG is paused then dagrun state will remain queued, and the task won't run.
 
-  docker exec -it table-dependency-viewer-api-1 sh -c 'env | grep AIRFLOW_DEV'
+Parameters
+Cancel
+Reset
+Name	Description
+dag_id *
+string
+(path)
+The DAG ID.
 
-  После этого кнопка Запустить DEV DAG должна начать ходить в Airflow.
+dag_id
+Request body
 
-  Еще полезно:
-  в Swagger попробуй руками именно trigger:
+application/json
+{
+  "conf": {},
+  "dag_run_id": "string",
+  "logical_date": "2026-03-31T13:39:22.098Z",
+  "note": "string"
+}
 
-  - POST /api/v1/dags/{dag_id}/dagRuns
 
-  Для dag_id бери имя файла без .yaml, например:
-
-  - dict_dds_currency_rates_meta.yaml
-  - dag_id = dict_dds_currency_rates_meta
-
-  Body можно такой:
-
-  {
-    "conf": {
-      "schema_name": "dm",
-      "file_name": "dict_dds_currency_rates_meta.yaml",
-      "remote_path": "/home/airflow/config_files/meta/dm/dict_dds_currency_rates_meta.yaml",
-      "author": "Nikita.Suvorov@rusal.com",
-      "dev_bypass_dm_sensor": true
-    }
-  }
-
-  Если в Swagger этот POST проходит, приложение тоже заработает с теми же кредами.
-
-  Важно:
-
-  - даже после успешного trigger dm_sensor сам не станет зеленым, если DAG на стороне Airflow не читает dev_bypass_dm_sensor.
-  - это нужно доделать в самом DAG.
-
-  Если хочешь, следующим сообщением я дам тебе точный тестовый POST для Swagger по любому твоему файлу.
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'env | grep AIRFLOW_DEV'
+AIRFLOW_DEV_DAG_ID=
+AIRFLOW_DEV_USERNAME=admin
+AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
+AIRFLOW_DEV_PASSWORD=admin

@@ -1,41 +1,12 @@
- Вот это:
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
+/usr/bin/sshpass
+sshpass 1.10
+(C) 2006-2011 Lingnu Open Source Consulting Ltd.
+(C) 2015-2016, 2021-2022 Shachar Shemesh
+This program is free software, and can be distributed under the terms of the GPL
+See the COPYING file for more information.
 
-  docker exec -it table-dependency-viewer-api-1 sh sshpass ...
-
-  некорректная форма команды. sh пытается открыть файл sshpass, поэтому и пишет:
-
-  sh: 0: cannot open sshpass: No such file
-
-  Проверять надо так:
-
-  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
-
-  Если ничего не найдет, значит в контейнере sshpass реально нет. Тогда приложение по паролю отправлять не сможет.
-
-  У тебя при этом с хоста доступ есть:
-
-  sshpass -p 'rootuserdwh' ssh ...
-
-  Это хорошо. Значит проблема не в пароле и не в удаленном сервере, а именно в контейнере api.
-
-  Что сделать:
-
-  1. Проверь внутри контейнера:
-
-  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && which ssh'
-
-  2. Если sshpass нет, пересобери именно api без кеша:
-
-  docker compose build --no-cache api
-  docker compose up -d api
-
-  3. После этого снова проверь:
-
-  docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && sshpass -V'
-
-  4. И потом уже тест из контейнера:
-
-  docker exec -it table-dependency-viewer-api-1 sh -c "sshpass -p 'rootuserdwh' ssh -o StrictHostKeyChecking=no root@10.66.129.242 'touch /home/airflow/config_files/
-  meta/dm/test_from_container.yaml && ls -l /home/airflow/config_files/meta/dm/test_from_container.yaml'"
-
-  Если это сработает, кнопка тоже должна заработать.
+Using "assword" as the default password prompt indicator.
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker exec -it table-dependency-viewer-api-1 sh -c 'which sshpass && which ssh'
+/usr/bin/sshpass
+/usr/bin/ssh

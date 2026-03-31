@@ -1,9 +1,3 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d frontend api
-[+] Running 2/2
- ⠿ Container table-dependency-viewer-api-1       Started                                                                                                                                                                                1.1s
- ⠿ Container table-dependency-viewer-frontend-1  Started                                                                                                                                                                                1.1s
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "DEV_META_DEPLOY_PASSWORD" /root/table-dependency-viewer/api/config.py
-38:DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
 [root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
 table-dependency-viewer-api-1  | Traceback (most recent call last):
 table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
@@ -54,6 +48,21 @@ table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 11
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
 table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 76, in <module>
-table-dependency-viewer-api-1  |     from .services.dev_meta import (
-table-dependency-viewer-api-1  | ImportError: cannot import name 'generate_dev_meta_yaml' from 'api.services.dev_meta' (/app/api/services/dev_meta.py)
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 93, in <module>
+table-dependency-viewer-api-1  |     from .auth import auth_middleware, init_auth, router as auth_router, get_current_user_from_request
+table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 35, in <module>
+table-dependency-viewer-api-1  |     engine = create_engine(DATABASE_URL)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<string>", line 2, in create_engine
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/deprecations.py", line 281, in warned
+table-dependency-viewer-api-1  |     return fn(*args, **kwargs)  # type: ignore[no-any-return]
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 564, in create_engine
+table-dependency-viewer-api-1  |     u = _url.make_url(url)
+table-dependency-viewer-api-1  |         ^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/url.py", line 856, in make_url
+table-dependency-viewer-api-1  |     return _parse_url(name_or_url)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/url.py", line 922, in _parse_url
+table-dependency-viewer-api-1  |     raise exc.ArgumentError(
+table-dependency-viewer-api-1  | sqlalchemy.exc.ArgumentError: Could not parse SQLAlchemy URL from given URL string

@@ -28,6 +28,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [error, setError] = useState(null);
   const [fileSearch, setFileSearch] = useState("");
   const [runningDag, setRunningDag] = useState(false);
+  const [dagStatus, setDagStatus] = useState(null);
 
   const isAdmin = userProfile?.role === "admin";
   const currentUser = userProfile?.email || userProfile?.username || "";
@@ -83,6 +84,7 @@ export default function DevMetaAdminPage({ userProfile }) {
     setMessageType("info");
     setError(null);
     setFileSearch("");
+    setDagStatus(null);
   };
 
   const filteredFiles = useMemo(() => {
@@ -176,14 +178,54 @@ export default function DevMetaAdminPage({ userProfile }) {
         schema_name: schemaName,
         file_name: selectedFile,
       });
+      const dagRun = data?.response?.response || data?.response || {};
+      setDagStatus({
+        dag_id: data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, ""),
+        dag_run_id: dagRun?.dag_run_id,
+        dag_run_state: dagRun?.state || "queued",
+        highlight_tasks: [],
+        failed_tasks: [],
+      });
       setMessageType("success");
-      setMessage(`DEV DAG запущен: ${data?.response?.dag_id || data?.response?.dag_run_id || data?.response?.run_id || data?.response?.dag_run?.dag_id || selectedFile.replace(/\.[^.]+$/, "")}`);
+      setMessage(`DEV DAG запущен: ${data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, "")}`);
     } catch (err) {
       setError(err.message || "Не удалось запустить DEV DAG");
     } finally {
       setRunningDag(false);
     }
   };
+
+  useEffect(() => {
+    if (!dagStatus?.dag_id || !dagStatus?.dag_run_id) {
+      return undefined;
+    }
+    const isTerminal = ["success", "failed"].includes(String(dagStatus.dag_run_state || "").toLowerCase());
+    if (isTerminal) {
+      return undefined;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await devMetaApi.dagStatus({
+          dag_id: dagStatus.dag_id,
+          dag_run_id: dagStatus.dag_run_id,
+        });
+        if (!cancelled) {
+          setDagStatus(data?.response || null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Не удалось получить статус DAG");
+        }
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, 7000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [dagStatus?.dag_id, dagStatus?.dag_run_id, dagStatus?.dag_run_state]);
 
   const handleGenerate = async () => {
     setError(null);
@@ -416,6 +458,35 @@ export default function DevMetaAdminPage({ userProfile }) {
                 {lockInfo?.expires_at || lockRow?.expires_at ? `до ${formatDateTime(lockInfo?.expires_at || lockRow?.expires_at)}` : ""}
               </span>
             </div>
+
+            {dagStatus && (
+              <div className="dev-meta-dag-status">
+                <div className="section-subtitle">Статус DEV DAG</div>
+                <div className="dev-meta-dag-grid">
+                  <div className="dev-meta-dag-card">
+                    <span className="label">DAG</span>
+                    <strong className="mono">{dagStatus.dag_id}</strong>
+                  </div>
+                  <div className="dev-meta-dag-card">
+                    <span className="label">Run</span>
+                    <strong className="mono">{dagStatus.dag_run_id || "—"}</strong>
+                  </div>
+                  <div className="dev-meta-dag-card">
+                    <span className="label">Статус запуска</span>
+                    <strong>{dagStatus.dag_run_state || "—"}</strong>
+                  </div>
+                  <div className="dev-meta-dag-card">
+                    <span className="label">dm_sensor</span>
+                    <strong>{dagStatus.highlight_tasks?.find((item) => item.task_id === "dm_sensor")?.state || "ожидание"}</strong>
+                  </div>
+                </div>
+                {dagStatus.failed_tasks?.length ? (
+                  <div className="dev-meta-dag-failed">
+                    Ошибки: {dagStatus.failed_tasks.map((task) => `${task.task_id} (${task.state})`).join(", ")}
+                  </div>
+                ) : null}
+              </div>
+            )}
 
             {validation && (
               <div className="dev-meta-validation">

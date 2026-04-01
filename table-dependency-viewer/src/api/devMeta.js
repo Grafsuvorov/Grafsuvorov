@@ -11,4 +11,5 @@ export const devMetaApi = {
   save: (body) => apiClient.post("/api/admin/dev-meta/save", body),
   deploy: (body) => apiClient.post("/api/admin/dev-meta/deploy", body),
   runDag: (body) => apiClient.post("/api/admin/dev-meta/run-dag", body),
+  dagStatus: (body) => apiClient.post("/api/admin/dev-meta/dag-status", body),
 };

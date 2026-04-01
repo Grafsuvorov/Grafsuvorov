@@ -844,6 +844,35 @@ def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
     return opener.open(req, timeout=timeout)
 
 
+def _airflow_json_request(
+    *,
+    url: str,
+    username: str,
+    password: str,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    req = urlrequest.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={"Content-Type": "application/json"},
+        method=method,
+    )
+    if username or password:
+        raw = f"{username}:{password}".encode("utf-8")
+        req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
+    try:
+        with _urlopen_without_proxy(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
+
+
 def trigger_airflow_dev_dag(
     *,
     engine,
@@ -872,24 +901,14 @@ def trigger_airflow_dev_dag(
         }
     }
     url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}/dagRuns"
-    req = urlrequest.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+    data = _airflow_json_request(
+        url=url,
+        username=username,
+        password=password,
         method="POST",
+        payload=payload,
+        timeout=30,
     )
-    if username or password:
-        raw = f"{username}:{password}".encode("utf-8")
-        req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
-    try:
-        with _urlopen_without_proxy(req, timeout=30) as resp:
-            body = resp.read().decode("utf-8")
-            data = json.loads(body) if body else {}
-    except urlerror.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
-    except Exception as exc:
-        raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
     _audit_dev_meta(
         engine,
         base_dir=base_dir,
@@ -902,3 +921,61 @@ def trigger_airflow_dev_dag(
         details={"url": url, "response": data, "dag_id": resolved_dag_id, "remote_path": remote_path},
     )
     return {"dag_id": resolved_dag_id, "response": data, "remote_path": remote_path}
+
+
+def get_airflow_dev_dag_status(
+    *,
+    airflow_base_url: str,
+    username: str,
+    password: str,
+    dag_id: str,
+    dag_run_id: str,
+    highlight_task_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    if not airflow_base_url:
+        raise ValueError("Airflow DEV не настроен")
+    if not dag_id or not dag_run_id:
+        raise ValueError("Нужно указать dag_id и dag_run_id")
+    run_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}"
+    task_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances"
+    run_data = _airflow_json_request(
+        url=run_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    task_data = _airflow_json_request(
+        url=task_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    task_instances = task_data.get("task_instances") or []
+    highlight = set(highlight_task_ids or ["dm_sensor"])
+    highlight_tasks = [
+        {
+            "task_id": task.get("task_id"),
+            "state": task.get("state"),
+            "start_date": task.get("start_date"),
+            "end_date": task.get("end_date"),
+        }
+        for task in task_instances
+        if task.get("task_id") in highlight
+    ]
+    failed_tasks = [
+        {
+            "task_id": task.get("task_id"),
+            "state": task.get("state"),
+        }
+        for task in task_instances
+        if task.get("state") in {"failed", "upstream_failed"}
+    ]
+    return {
+        "dag_id": dag_id,
+        "dag_run_id": dag_run_id,
+        "dag_run_state": run_data.get("state"),
+        "logical_date": run_data.get("logical_date"),
+        "run_type": run_data.get("run_type"),
+        "highlight_tasks": highlight_tasks,
+        "failed_tasks": failed_tasks,
+    }

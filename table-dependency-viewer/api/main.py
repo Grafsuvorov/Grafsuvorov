@@ -74,6 +74,7 @@ from .services.dev_meta import (
     assert_dev_meta_lock_owner,
     deploy_dev_meta_file,
     generate_dev_meta_yaml,
+    get_airflow_dev_dag_status,
     get_dev_meta_files,
     get_dev_meta_status,
     read_dev_meta_file,
@@ -139,6 +140,11 @@ class DevMetaSavePayload(BaseModel):
 class DevMetaDagPayload(BaseModel):
     schema_name: str
     file_name: str
+
+
+class DevMetaDagStatusPayload(BaseModel):
+    dag_id: str
+    dag_run_id: str
 
 
 class DevMetaDeployPayload(BaseModel):
@@ -423,6 +429,25 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-meta/dag-status")
+def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Request):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        data = get_airflow_dev_dag_status(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            dag_id=payload.dag_id,
+            dag_run_id=payload.dag_run_id,
+            highlight_task_ids=["dm_sensor"],
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}

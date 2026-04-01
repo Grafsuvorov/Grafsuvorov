@@ -7321,6 +7321,40 @@ main.content {
   border: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.dev-meta-dag-status {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dev-meta-dag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.dev-meta-dag-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dev-meta-dag-card .label {
+  font-size: 12px;
+  color: rgba(191, 219, 254, 0.7);
+}
+
+.dev-meta-dag-failed {
+  margin-top: 12px;
+  color: #fecaca;
+}
+
 .dev-meta-notes {
   margin-top: 14px;
   display: grid;

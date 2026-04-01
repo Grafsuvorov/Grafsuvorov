@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { devMetaApi } from "../api/devMeta.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 
@@ -8,10 +8,17 @@ const SCHEMA_OPTIONS = [
 ];
 
 function DagLoadingMiniGame({ active }) {
+  const bestScoreRef = useRef(0);
   const [runnerY, setRunnerY] = useState(0);
-  const [velocity, setVelocity] = useState(0);
   const [obstacleX, setObstacleX] = useState(100);
+  const [obstacleHeight, setObstacleHeight] = useState(26);
+  const [obstacleWidth, setObstacleWidth] = useState(14);
+  const [packetX, setPacketX] = useState(134);
+  const [packetY, setPacketY] = useState(52);
+  const [velocity, setVelocity] = useState(0);
   const [score, setScore] = useState(0);
+  const [packets, setPackets] = useState(0);
+  const [bestScore, setBestScore] = useState(0);
   const [crashed, setCrashed] = useState(false);
 
   useEffect(() => {
@@ -19,19 +26,26 @@ function DagLoadingMiniGame({ active }) {
       setRunnerY(0);
       setVelocity(0);
       setObstacleX(100);
+      setObstacleHeight(26);
+      setObstacleWidth(14);
+      setPacketX(134);
+      setPacketY(52);
       setScore(0);
+      setPackets(0);
       setCrashed(false);
       return undefined;
     }
     const onKeyDown = (event) => {
       if (event.code === "Space" || event.code === "ArrowUp") {
         event.preventDefault();
-        setRunnerY((currentY) => {
-          if (currentY === 0 && !crashed) {
-            setVelocity(7.5);
-          }
-          return currentY;
-        });
+        if (!crashed) {
+          setRunnerY((currentY) => {
+            if (currentY <= 2) {
+              setVelocity(10.8);
+            }
+            return currentY;
+          });
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -44,20 +58,32 @@ function DagLoadingMiniGame({ active }) {
     }
     const timer = window.setInterval(() => {
       setRunnerY((currentY) => {
-        const nextVelocity = velocity - 0.8;
+        const nextVelocity = velocity - 0.95;
         const nextY = Math.max(0, currentY + nextVelocity);
         setVelocity(nextY === 0 ? 0 : nextVelocity);
         return nextY;
       });
       setObstacleX((currentX) => {
-        const nextX = currentX - 4;
-        if (nextX < -8) {
+        const speed = 2.3 + Math.min(score * 0.08, 1.8);
+        const nextX = currentX - speed;
+        if (nextX < -18) {
           setScore((currentScore) => currentScore + 1);
-          return 100;
+          setObstacleHeight(18 + Math.floor(Math.random() * 18));
+          setObstacleWidth(12 + Math.floor(Math.random() * 10));
+          return 108 + Math.random() * 20;
         }
         return nextX;
       });
-    }, 50);
+      setPacketX((currentX) => {
+        const speed = 2.3 + Math.min(score * 0.08, 1.8);
+        const nextX = currentX - speed;
+        if (nextX < -12) {
+          setPacketY(34 + Math.floor(Math.random() * 34));
+          return 132 + Math.random() * 34;
+        }
+        return nextX;
+      });
+    }, 40);
     return () => window.clearInterval(timer);
   }, [active, crashed, velocity]);
 
@@ -65,17 +91,39 @@ function DagLoadingMiniGame({ active }) {
     if (!active || crashed) {
       return;
     }
-    const obstacleNearRunner = obstacleX >= 8 && obstacleX <= 20;
-    if (obstacleNearRunner && runnerY < 10) {
+    const obstacleNearRunner = obstacleX <= 20 + obstacleWidth && obstacleX >= 7;
+    const runnerTooLow = runnerY < Math.max(18, obstacleHeight - 4);
+    if (obstacleNearRunner && runnerTooLow) {
       setCrashed(true);
+      bestScoreRef.current = Math.max(bestScoreRef.current, score);
+      setBestScore(bestScoreRef.current);
     }
-  }, [active, crashed, obstacleX, runnerY]);
+  }, [active, crashed, obstacleHeight, obstacleWidth, obstacleX, runnerY, score]);
+
+  useEffect(() => {
+    if (!active || crashed) {
+      return;
+    }
+    const packetNearRunner = packetX <= 18 && packetX >= 6;
+    const runnerAligned = runnerY + 18 >= packetY - 12 && runnerY <= packetY + 12;
+    if (packetNearRunner && runnerAligned) {
+      setPackets((currentValue) => currentValue + 1);
+      setScore((currentValue) => currentValue + 2);
+      setPacketY(34 + Math.floor(Math.random() * 34));
+      setPacketX(132 + Math.random() * 34);
+    }
+  }, [active, crashed, packetX, packetY, runnerY]);
 
   const resetGame = () => {
     setRunnerY(0);
     setVelocity(0);
     setObstacleX(100);
+    setObstacleHeight(26);
+    setObstacleWidth(14);
+    setPacketX(134);
+    setPacketY(52);
     setScore(0);
+    setPackets(0);
     setCrashed(false);
   };
 
@@ -87,24 +135,40 @@ function DagLoadingMiniGame({ active }) {
     <div className="dev-meta-game">
       <div className="dev-meta-game-head">
         <div>
-          <div className="section-subtitle">Пока грузится</div>
-          <div className="muted">Пробел или стрелка вверх: перепрыгнуть ошибку.</div>
+          <div className="section-subtitle">Pipeline Hopper</div>
+          <div className="muted">Пробел или стрелка вверх: перепрыгнуть ошибку и собрать пакеты.</div>
         </div>
-        <div className="dev-meta-game-score">Score: {score}</div>
+        <div className="dev-meta-game-stats">
+          <div className="dev-meta-game-score">Очки: {score}</div>
+          <div className="dev-meta-game-score">Пакеты: {packets}</div>
+          <div className="dev-meta-game-score">Рекорд: {bestScore}</div>
+        </div>
       </div>
       <div className="dev-meta-game-track">
-        <div className="dev-meta-game-runner" style={{ bottom: `${runnerY}px` }} />
-        <div className="dev-meta-game-obstacle" style={{ left: `${obstacleX}%` }} />
+        <div className="dev-meta-game-skyline" />
+        <div className="dev-meta-game-runner" style={{ bottom: `${runnerY + 14}px` }}>
+          <span className="dev-meta-game-runner-eye" />
+        </div>
+        <div
+          className="dev-meta-game-obstacle"
+          style={{ left: `${obstacleX}%`, height: `${obstacleHeight}px`, width: `${obstacleWidth}px` }}
+        />
+        <div className="dev-meta-game-packet" style={{ left: `${packetX}%`, bottom: `${packetY}px` }} />
         <div className="dev-meta-game-ground" />
       </div>
       {crashed ? (
         <div className="dev-meta-game-footer">
-          <span>Пайплайн споткнулся.</span>
+          <span>Пайплайн споткнулся. Можно сразу переиграть.</span>
           <button className="btn btn-secondary" onClick={resetGame}>
             Еще раз
           </button>
         </div>
-      ) : null}
+      ) : (
+        <div className="dev-meta-game-footer">
+          <span>Чем дольше бежишь, тем быстрее трасса.</span>
+          <span className="muted">Игра скрывается сама, когда загрузка завершена.</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ const SCHEMA_OPTIONS = [
 ];
 
 function DagLoadingMiniGame({ active }) {
+  const baseSpeed = 1.55;
   const bestScoreRef = useRef(0);
   const [runnerY, setRunnerY] = useState(0);
   const [obstacleX, setObstacleX] = useState(100);
@@ -36,12 +37,12 @@ function DagLoadingMiniGame({ active }) {
       return undefined;
     }
     const onKeyDown = (event) => {
-      if (event.code === "Space" || event.code === "ArrowUp") {
+        if (event.code === "Space" || event.code === "ArrowUp") {
         event.preventDefault();
         if (!crashed) {
           setRunnerY((currentY) => {
             if (currentY <= 2) {
-              setVelocity(10.8);
+              setVelocity(13.4);
             }
             return currentY;
           });
@@ -58,13 +59,13 @@ function DagLoadingMiniGame({ active }) {
     }
     const timer = window.setInterval(() => {
       setRunnerY((currentY) => {
-        const nextVelocity = velocity - 0.95;
+        const nextVelocity = velocity - 0.82;
         const nextY = Math.max(0, currentY + nextVelocity);
         setVelocity(nextY === 0 ? 0 : nextVelocity);
         return nextY;
       });
       setObstacleX((currentX) => {
-        const speed = 2.3 + Math.min(score * 0.08, 1.8);
+        const speed = baseSpeed + Math.min(score * 0.04, 0.95);
         const nextX = currentX - speed;
         if (nextX < -18) {
           setScore((currentScore) => currentScore + 1);
@@ -75,7 +76,7 @@ function DagLoadingMiniGame({ active }) {
         return nextX;
       });
       setPacketX((currentX) => {
-        const speed = 2.3 + Math.min(score * 0.08, 1.8);
+        const speed = baseSpeed + Math.min(score * 0.04, 0.95);
         const nextX = currentX - speed;
         if (nextX < -12) {
           setPacketY(34 + Math.floor(Math.random() * 34));
@@ -91,8 +92,9 @@ function DagLoadingMiniGame({ active }) {
     if (!active || crashed) {
       return;
     }
-    const obstacleNearRunner = obstacleX <= 20 + obstacleWidth && obstacleX >= 7;
-    const runnerTooLow = runnerY < Math.max(18, obstacleHeight - 4);
+    const obstacleRightEdge = obstacleX + obstacleWidth;
+    const obstacleNearRunner = obstacleX <= 13 && obstacleRightEdge >= 9;
+    const runnerTooLow = runnerY < Math.max(12, obstacleHeight - 10);
     if (obstacleNearRunner && runnerTooLow) {
       setCrashed(true);
       bestScoreRef.current = Math.max(bestScoreRef.current, score);
@@ -104,8 +106,8 @@ function DagLoadingMiniGame({ active }) {
     if (!active || crashed) {
       return;
     }
-    const packetNearRunner = packetX <= 18 && packetX >= 6;
-    const runnerAligned = runnerY + 18 >= packetY - 12 && runnerY <= packetY + 12;
+    const packetNearRunner = packetX <= 16 && packetX >= 8;
+    const runnerAligned = runnerY + 22 >= packetY - 10 && runnerY <= packetY + 10;
     if (packetNearRunner && runnerAligned) {
       setPackets((currentValue) => currentValue + 1);
       setScore((currentValue) => currentValue + 2);

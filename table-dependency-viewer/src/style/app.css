@@ -1076,6 +1076,7 @@ main.content {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(148, 163, 184, 0.08);
   text-align: left;
+  color: #e2e8f0;
 }
 
 .engineering-table-row.active {
@@ -1085,6 +1086,12 @@ main.content {
 
 .engineering-primary {
   font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engineering-cell-ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

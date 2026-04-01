@@ -6478,7 +6478,7 @@ def get_admin_engineering_efficiency(
                 task_facts AS (
                     SELECT
                         snap.issue_id AS task_id,
-                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(NULLIF(exec.executor, ''), NULLIF(snap.assignee, ''), 'Не указан') AS engineer,
                         COALESCE(snap.created_by, 'Не указан') AS creator,
                         COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
                         COALESCE(work.minutes, 0) AS minutes,
@@ -6499,7 +6499,7 @@ def get_admin_engineering_efficiency(
                         ro.task_id,
                         ro.schema_name,
                         ro.table_name,
-                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(NULLIF(exec.executor, ''), NULLIF(snap.assignee, ''), 'Не указан') AS engineer,
                         COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
                         COALESCE(work.minutes, 0) / NULLIF(COALESCE(toc.object_count, 1), 0)::numeric AS allocated_minutes
                     FROM ro
@@ -6541,6 +6541,7 @@ def get_admin_engineering_efficiency(
                         COUNT(DISTINCT tf.first_day) AS active_days,
                         MAX(tf.last_day) AS last_activity
                     FROM task_facts tf
+                    WHERE tf.engineer <> 'Не указан'
                     GROUP BY tf.engineer
                     ORDER BY minutes DESC NULLS LAST, tasks_count DESC
                     """
@@ -6559,6 +6560,7 @@ def get_admin_engineering_efficiency(
                         COUNT(*) AS objects_count,
                         COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
                     FROM object_facts of
+                    WHERE of.engineer <> 'Не указан'
                     GROUP BY of.day, of.engineer
                     ORDER BY of.day, of.engineer
                     """
@@ -6577,6 +6579,7 @@ def get_admin_engineering_efficiency(
                         COUNT(DISTINCT of.task_id) AS tasks_count,
                         COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
                     FROM object_facts of
+                    WHERE of.engineer <> 'Не указан'
                     GROUP BY of.engineer, of.schema_name
                     ORDER BY of.engineer, allocated_minutes DESC NULLS LAST
                     """

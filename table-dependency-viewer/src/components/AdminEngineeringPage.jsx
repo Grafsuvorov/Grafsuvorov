@@ -160,7 +160,7 @@ export default function AdminEngineeringPage({ userProfile }) {
 
             <div className="engineering-focus-grid">
               <div className="engineering-focus-card focus-overloaded">
-                <div className="section-subtitle">Перегружены</div>
+                <div className="section-subtitle">Риск перегруза</div>
                 {(data.focus?.overloaded || []).length ? (
                   (data.focus?.overloaded || []).map((row) => (
                     <button
@@ -178,7 +178,7 @@ export default function AdminEngineeringPage({ userProfile }) {
               </div>
 
               <div className="engineering-focus-card focus-efficient">
-                <div className="section-subtitle">Молодцы</div>
+                <div className="section-subtitle">Высокая отдача</div>
                 {(data.focus?.efficient || []).length ? (
                   (data.focus?.efficient || []).map((row) => (
                     <button
@@ -196,7 +196,7 @@ export default function AdminEngineeringPage({ userProfile }) {
               </div>
 
               <div className="engineering-focus-card focus-underloaded">
-                <div className="section-subtitle">Недогружены</div>
+                <div className="section-subtitle">Низкая загрузка</div>
                 {(data.focus?.underloaded || []).length ? (
                   (data.focus?.underloaded || []).map((row) => (
                     <button
@@ -288,7 +288,7 @@ export default function AdminEngineeringPage({ userProfile }) {
               </section>
 
               <section className="engineering-block">
-                <div className="section-subtitle">Дашборды</div>
+                <div className="section-subtitle">По дашбордам КХД</div>
                 <div className="engineering-chart">
                   <ResponsiveContainer width="100%" height={290}>
                     <BarChart data={dashboardChart} margin={{ top: 10, right: 10, left: 0, bottom: 24 }}>
@@ -328,7 +328,7 @@ export default function AdminEngineeringPage({ userProfile }) {
                   </div>
                   {(data.top_objects || []).map((row) => (
                     <div key={`${row.schema_name}.${row.table_name}`} className="engineering-table-row engineering-object-row">
-                      <span className="mono" title={`${row.schema_name}.${row.table_name}`}>
+                      <span className="mono engineering-cell-ellipsis" title={`${row.schema_name}.${row.table_name}`}>
                         {row.schema_name}.{row.table_name}
                       </span>
                       <span>{formatHours(row.hours)}</span>
@@ -352,7 +352,7 @@ export default function AdminEngineeringPage({ userProfile }) {
                   </div>
                   {(data.dashboard_report || []).map((row) => (
                     <div key={row.dashboard_direction} className="engineering-table-row engineering-dashboard-row">
-                      <span title={row.dashboard_direction}>{row.dashboard_direction}</span>
+                      <span className="engineering-cell-ellipsis" title={row.dashboard_direction}>{row.dashboard_direction}</span>
                       <span>{formatHours(row.hours)}</span>
                       <span>{row.tasks_count}</span>
                       <span>{row.objects_count}</span>

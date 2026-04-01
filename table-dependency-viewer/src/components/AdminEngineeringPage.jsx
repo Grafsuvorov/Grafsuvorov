@@ -70,7 +70,7 @@ export default function AdminEngineeringPage({ userProfile }) {
   }, [engineers, selectedEngineer]);
 
   const topEngineers = useMemo(
-    () => engineers.slice(0, 6).map((row) => row.engineer),
+    () => engineers.slice(0, 8).map((row) => row.engineer),
     [engineers]
   );
 
@@ -217,7 +217,7 @@ export default function AdminEngineeringPage({ userProfile }) {
             <div className="engineering-grid">
               <section className="engineering-block">
                 <div className="section-subtitle">Нагрузка по дням</div>
-                <div className="muted">Топ инженеров по часам и общий ритм задач.</div>
+                <div className="muted">Топ-8 инженеров по часам за период и общий ритм задач.</div>
                 <div className="engineering-chart">
                   <ComposedDailyChart data={dailyChart} topEngineers={topEngineers} />
                 </div>

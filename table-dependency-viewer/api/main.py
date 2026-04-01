@@ -6419,43 +6419,32 @@ def get_admin_engineering_efficiency(
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
     try:
-        date_clause, params = _resolve_date_window(date_from, date_to, days)
+        params = {"days": days}
+        task_date_clause = "s.created_at >= (now() - (:days || ' days')::interval)"
+        if date_from:
+            task_date_clause = "s.created_at >= :date_from"
+            params = {"date_from": date_from, "days": days}
+        if date_to:
+            task_date_clause = task_date_clause + " AND s.created_at <= :date_to"
+            params["date_to"] = date_to
         with engine.connect() as conn:
             base = f"""
-                WITH rel AS (
-                    SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
-                    FROM {TABLE_RELEASE_LOG} r
-                    WHERE {date_clause}
-                ),
-                ro AS (
-                    SELECT ro.*
+                WITH tasks AS (
+                    SELECT DISTINCT ro.task_id
                     FROM {TABLE_RELEASE_OBJECTS} ro
-                    JOIN rel r ON r.release_id = ro.release_id
+                    WHERE ro.task_id IS NOT NULL
                 ),
                 task_object_counts AS (
-                    SELECT task_id, COUNT(*) AS object_count
-                    FROM ro
-                    WHERE task_id IS NOT NULL
-                    GROUP BY task_id
-                ),
-                task_release_days AS (
-                    SELECT ro.task_id,
-                           MIN(rel.started_at::date) AS first_day,
-                           MAX(rel.started_at::date) AS last_day
-                    FROM ro
-                    JOIN rel ON rel.release_id = ro.release_id
-                    WHERE ro.task_id IS NOT NULL
+                    SELECT ro.task_id, COUNT(*) AS object_count
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN tasks t ON t.task_id = ro.task_id
                     GROUP BY ro.task_id
-                ),
-                tasks AS (
-                    SELECT DISTINCT task_id
-                    FROM ro
-                    WHERE task_id IS NOT NULL
                 ),
                 snap AS (
                     SELECT s.*
                     FROM {TABLE_YT_ISSUE_SNAPSHOT} s
                     JOIN tasks t ON t.task_id = s.issue_id
+                    WHERE {task_date_clause}
                 ),
                 exec AS (
                     SELECT DISTINCT ON (issue_id)
@@ -6473,7 +6462,7 @@ def get_admin_engineering_efficiency(
                 direction AS (
                     SELECT issue_id, field_value AS dashboard_direction
                     FROM {TABLE_YT_ISSUE_CUSTOM}
-                    WHERE field_name = 'Направление'
+                    WHERE field_name = 'Дашборд КХД/Направление'
                 ),
                 task_facts AS (
                     SELECT
@@ -6483,18 +6472,17 @@ def get_admin_engineering_efficiency(
                         COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
                         COALESCE(work.minutes, 0) AS minutes,
                         COALESCE(toc.object_count, 0) AS objects_count,
-                        COALESCE(trd.first_day, snap.created_at::date) AS first_day,
-                        COALESCE(trd.last_day, snap.updated_at::date, snap.created_at::date) AS last_day
+                        snap.created_at::date AS first_day,
+                        COALESCE(snap.updated_at::date, snap.created_at::date) AS last_day
                     FROM snap
                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN direction ON direction.issue_id = snap.issue_id
                     LEFT JOIN task_object_counts toc ON toc.task_id = snap.issue_id
-                    LEFT JOIN task_release_days trd ON trd.task_id = snap.issue_id
                 ),
                 object_facts AS (
                     SELECT
-                        rel.started_at::date AS day,
+                        COALESCE(rl.started_at::date, ro.created_at::date, snap.created_at::date) AS day,
                         ro.release_id,
                         ro.task_id,
                         ro.schema_name,
@@ -6502,13 +6490,14 @@ def get_admin_engineering_efficiency(
                         COALESCE(NULLIF(exec.executor, ''), NULLIF(snap.assignee, ''), 'Не указан') AS engineer,
                         COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
                         COALESCE(work.minutes, 0) / NULLIF(COALESCE(toc.object_count, 1), 0)::numeric AS allocated_minutes
-                    FROM ro
-                    JOIN rel ON rel.release_id = ro.release_id
+                    FROM {TABLE_RELEASE_OBJECTS} ro
                     LEFT JOIN snap ON snap.issue_id = ro.task_id
+                    LEFT JOIN {TABLE_RELEASE_LOG} rl ON rl.release_id = ro.release_id
                     LEFT JOIN exec ON exec.issue_id = ro.task_id
                     LEFT JOIN work ON work.issue_id = ro.task_id
                     LEFT JOIN direction ON direction.issue_id = ro.task_id
                     LEFT JOIN task_object_counts toc ON toc.task_id = ro.task_id
+                    WHERE snap.issue_id IS NOT NULL
                 )
             """
 
@@ -6517,10 +6506,10 @@ def get_admin_engineering_efficiency(
                     base
                     + """
                     SELECT
-                        COUNT(DISTINCT task_id) AS tasks_count,
+                        (SELECT COUNT(DISTINCT task_id) FROM task_facts) AS tasks_count,
                         COUNT(*) AS objects_count,
                         COUNT(DISTINCT engineer) AS engineers_count,
-                        COUNT(DISTINCT dashboard_direction) AS dashboards_count,
+                        (SELECT COUNT(DISTINCT dashboard_direction) FROM task_facts) AS dashboards_count,
                         COALESCE(SUM(allocated_minutes), 0) AS allocated_minutes
                     FROM object_facts
                     """
@@ -6554,15 +6543,15 @@ def get_admin_engineering_efficiency(
                     base
                     + """
                     SELECT
-                        of.day::text AS day,
-                        of.engineer,
-                        COUNT(DISTINCT of.task_id) AS tasks_count,
-                        COUNT(*) AS objects_count,
-                        COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
-                    FROM object_facts of
-                    WHERE of.engineer <> 'Не указан'
-                    GROUP BY of.day, of.engineer
-                    ORDER BY of.day, of.engineer
+                        tf.first_day::text AS day,
+                        tf.engineer,
+                        COUNT(DISTINCT tf.task_id) AS tasks_count,
+                        COALESCE(SUM(tf.objects_count), 0) AS objects_count,
+                        COALESCE(SUM(tf.minutes), 0) AS allocated_minutes
+                    FROM task_facts tf
+                    WHERE tf.engineer <> 'Не указан'
+                    GROUP BY tf.first_day, tf.engineer
+                    ORDER BY tf.first_day, tf.engineer
                     """
                 ),
                 params,

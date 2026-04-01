@@ -7410,41 +7410,115 @@ main.content {
 
 .dev-meta-game-runner {
   position: absolute;
-  left: 18px;
-  width: 20px;
-  height: 20px;
-  border-radius: 7px;
-  background: linear-gradient(180deg, #67e8f9, #0ea5e9);
+  left: 34px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(180deg, #67e8f9, #0891b2);
   box-shadow: 0 0 18px rgba(56, 189, 248, 0.34);
-  transform: rotate(-4deg);
+  transform: rotate(-3deg);
+}
+
+.dev-meta-game-runner-face {
+  position: absolute;
+  top: 7px;
+  left: 6px;
+  display: flex;
+  gap: 6px;
 }
 
 .dev-meta-game-runner-eye {
   position: absolute;
-  top: 5px;
-  right: 3px;
+  position: static;
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background: #082f49;
 }
 
-.dev-meta-game-obstacle {
+.dev-meta-game-runner-leg {
   position: absolute;
-  bottom: 14px;
-  border-radius: 4px;
-  background: linear-gradient(180deg, #f97316, #ea580c);
-  box-shadow: 0 0 14px rgba(249, 115, 22, 0.24);
+  bottom: -8px;
+  width: 5px;
+  height: 12px;
+  border-radius: 999px;
+  background: #38bdf8;
+  transform-origin: top center;
+  animation: dev-meta-runner-leg 0.22s infinite alternate linear;
 }
 
-.dev-meta-game-packet {
+.dev-meta-game-runner-leg-left {
+  left: 7px;
+}
+
+.dev-meta-game-runner-leg-right {
+  right: 7px;
+  animation-delay: 0.11s;
+}
+
+.dev-meta-game-entity {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  transform: rotate(45deg);
-  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f8fafc;
+  user-select: none;
+}
+
+.dev-meta-game-entity-hazard {
+  border-radius: 10px;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.18);
+}
+
+.dev-meta-game-entity-error {
+  background: linear-gradient(180deg, #ef4444, #b91c1c);
+}
+
+.dev-meta-game-entity-sql {
+  background: linear-gradient(180deg, #f97316, #c2410c);
+}
+
+.dev-meta-game-entity-warning {
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+}
+
+.dev-meta-game-entity-null {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fb7185, #be123c);
+}
+
+.dev-meta-game-entity-proxy {
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f43f5e, #9f1239);
+}
+
+.dev-meta-game-entity-collectible {
+  color: #082f49;
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.18);
+}
+
+.dev-meta-game-entity-cache,
+.dev-meta-game-entity-ok,
+.dev-meta-game-entity-rows {
+  border-radius: 999px;
+  animation: dev-meta-float 0.9s infinite ease-in-out alternate;
+}
+
+.dev-meta-game-entity-cache {
+  background: linear-gradient(180deg, #5eead4, #14b8a6);
+}
+
+.dev-meta-game-entity-ok {
+  background: linear-gradient(180deg, #a7f3d0, #34d399);
+}
+
+.dev-meta-game-entity-rows {
   background: linear-gradient(180deg, #fde68a, #f59e0b);
-  box-shadow: 0 0 16px rgba(250, 204, 21, 0.28);
 }
 
 .dev-meta-game-ground {
@@ -7482,6 +7556,24 @@ main.content {
   color: rgba(226, 232, 240, 0.86);
   font-size: 13px;
   line-height: 1.5;
+}
+
+@keyframes dev-meta-runner-leg {
+  from {
+    transform: rotate(18deg);
+  }
+  to {
+    transform: rotate(-22deg);
+  }
+}
+
+@keyframes dev-meta-float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-6px);
+  }
 }
 
 .dev-meta-editor {

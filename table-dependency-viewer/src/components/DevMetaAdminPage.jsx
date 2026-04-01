@@ -45,9 +45,9 @@ function DagLoadingMiniGame({ active }) {
       { kind: "hazard", variant: "proxy", label: "407", width: 48, height: 48, y: 24 },
     ];
     const bonusPool = [
-      { kind: "collectible", variant: "cache", label: "CACHE", width: 24, height: 24, y: 88 },
-      { kind: "collectible", variant: "ok", label: "OK", width: 22, height: 22, y: 60 },
-      { kind: "collectible", variant: "rows", label: "ROWS", width: 26, height: 26, y: 98 },
+      { kind: "collectible", variant: "cache", label: "C", width: 24, height: 24, y: 88 },
+      { kind: "collectible", variant: "ok", label: "+", width: 22, height: 22, y: 60 },
+      { kind: "collectible", variant: "rows", label: "R", width: 26, height: 26, y: 98 },
     ];
     const pool = Math.random() < Math.max(0.26, 0.46 - currentScore * 0.01) ? bonusPool : hazardPool;
     const template = pool[Math.floor(Math.random() * pool.length)];
@@ -92,6 +92,22 @@ function DagLoadingMiniGame({ active }) {
     currentState.jumpCount += 1;
   };
 
+  const triggerDashJump = () => {
+    const currentState = stateRef.current;
+    if (currentState.crashed) {
+      return;
+    }
+    if (currentState.jumpCount < 2) {
+      currentState.velocityY = currentState.jumpCount === 0 ? 13.8 : 11.6;
+      currentState.jumpCount += 1;
+    }
+    currentState.entities = currentState.entities.map((entity) => ({
+      ...entity,
+      x: entity.x - 42,
+    }));
+    currentState.score += 1.2;
+  };
+
   useEffect(() => {
     if (!active) {
       resetGame();
@@ -101,6 +117,9 @@ function DagLoadingMiniGame({ active }) {
       if (event.code === "Space" || event.code === "ArrowUp") {
         event.preventDefault();
         triggerJump();
+      } else if (event.code === "ArrowRight") {
+        event.preventDefault();
+        triggerDashJump();
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -240,21 +259,20 @@ function DagLoadingMiniGame({ active }) {
               height: `${entity.height}px`,
             }}
           >
-            <span>{entity.label}</span>
+            <span aria-hidden="true">{entity.label}</span>
           </div>
         ))}
         <div className="dev-meta-game-ground" />
       </div>
       {gameState.crashed ? (
         <div className="dev-meta-game-footer">
-          <span>Пайплайн упал об {gameState.crashLabel}. Можно сразу переиграть.</span>
           <button className="btn btn-secondary" onClick={resetGame}>
             Еще раз
           </button>
         </div>
       ) : (
         <div className="dev-meta-game-footer">
-          <span>Сначала легко, дальше появляются `NULL`, `407`, `WARN` и быстрые пролеты.</span>
+          <span>`ArrowRight` делает рывок вперед с прыжком. Бонусы: `C` cache, `R` rows, `+` boost.</span>
           <span className="muted">Игра скрывается сама, когда загрузка завершена.</span>
         </div>
       )}

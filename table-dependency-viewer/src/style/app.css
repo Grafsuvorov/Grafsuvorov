@@ -7505,20 +7505,24 @@ main.content {
 .dev-meta-game-entity-cache,
 .dev-meta-game-entity-ok,
 .dev-meta-game-entity-rows {
-  border-radius: 999px;
   animation: dev-meta-float 0.9s infinite ease-in-out alternate;
 }
 
 .dev-meta-game-entity-cache {
+  border-radius: 8px;
   background: linear-gradient(180deg, #5eead4, #14b8a6);
 }
 
 .dev-meta-game-entity-ok {
+  border-radius: 999px;
   background: linear-gradient(180deg, #a7f3d0, #34d399);
+  font-size: 14px;
 }
 
 .dev-meta-game-entity-rows {
+  border-radius: 6px;
   background: linear-gradient(180deg, #fde68a, #f59e0b);
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
 }
 
 .dev-meta-game-ground {

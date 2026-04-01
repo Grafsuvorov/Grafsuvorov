@@ -4,6 +4,8 @@ export const adminApi = {
   users: () => apiClient.get("/auth/users"),
   userAnalytics: (days) => apiClient.get("/auth/users/analytics", { params: { days } }),
   ciCdStatus: () => apiClient.get("/api/admin/ci-cd/status"),
+  engineeringEfficiency: (days, date_from, date_to) =>
+    apiClient.get("/api/admin/engineering-efficiency", { params: { days, date_from, date_to } }),
   refreshCache: () => apiClient.post("/api/admin/refresh-cache"),
   runCiCd: () => apiClient.post("/api/admin/run-ci-cd"),
   createUser: (body) => apiClient.post("/auth/users", body),

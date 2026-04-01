@@ -27,6 +27,7 @@ import hashlib
 import subprocess
 import tempfile
 from itertools import combinations
+from statistics import median
 
 from fastapi import APIRouter, HTTPException
 
@@ -6398,6 +6399,408 @@ def _resolve_date_window(date_from: Optional[str], date_to: Optional[str], days:
         clause = clause + " AND r.started_at <= :date_to"
         params["date_to"] = date_to
     return clause, params
+
+
+def _round_hours(minutes_value: Any) -> float:
+    try:
+        return round(float(minutes_value or 0) / 60, 2)
+    except Exception:
+        return 0.0
+
+
+@router.get("/api/admin/engineering-efficiency")
+def get_admin_engineering_efficiency(
+    request: Request,
+    days: int = Query(90, ge=7, le=3650),
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        date_clause, params = _resolve_date_window(date_from, date_to, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                ),
+                task_object_counts AS (
+                    SELECT task_id, COUNT(*) AS object_count
+                    FROM ro
+                    WHERE task_id IS NOT NULL
+                    GROUP BY task_id
+                ),
+                task_release_days AS (
+                    SELECT ro.task_id,
+                           MIN(rel.started_at::date) AS first_day,
+                           MAX(rel.started_at::date) AS last_day
+                    FROM ro
+                    JOIN rel ON rel.release_id = ro.release_id
+                    WHERE ro.task_id IS NOT NULL
+                    GROUP BY ro.task_id
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id
+                    FROM ro
+                    WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                direction AS (
+                    SELECT issue_id, field_value AS dashboard_direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Направление'
+                ),
+                task_facts AS (
+                    SELECT
+                        snap.issue_id AS task_id,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(snap.created_by, 'Не указан') AS creator,
+                        COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
+                        COALESCE(work.minutes, 0) AS minutes,
+                        COALESCE(toc.object_count, 0) AS objects_count,
+                        COALESCE(trd.first_day, snap.created_at::date) AS first_day,
+                        COALESCE(trd.last_day, snap.updated_at::date, snap.created_at::date) AS last_day
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN direction ON direction.issue_id = snap.issue_id
+                    LEFT JOIN task_object_counts toc ON toc.task_id = snap.issue_id
+                    LEFT JOIN task_release_days trd ON trd.task_id = snap.issue_id
+                ),
+                object_facts AS (
+                    SELECT
+                        rel.started_at::date AS day,
+                        ro.release_id,
+                        ro.task_id,
+                        ro.schema_name,
+                        ro.table_name,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(direction.dashboard_direction, 'Не указан') AS dashboard_direction,
+                        COALESCE(work.minutes, 0) / NULLIF(COALESCE(toc.object_count, 1), 0)::numeric AS allocated_minutes
+                    FROM ro
+                    JOIN rel ON rel.release_id = ro.release_id
+                    LEFT JOIN snap ON snap.issue_id = ro.task_id
+                    LEFT JOIN exec ON exec.issue_id = ro.task_id
+                    LEFT JOIN work ON work.issue_id = ro.task_id
+                    LEFT JOIN direction ON direction.issue_id = ro.task_id
+                    LEFT JOIN task_object_counts toc ON toc.task_id = ro.task_id
+                )
+            """
+
+            summary = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COUNT(DISTINCT task_id) AS tasks_count,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT engineer) AS engineers_count,
+                        COUNT(DISTINCT dashboard_direction) AS dashboards_count,
+                        COALESCE(SUM(allocated_minutes), 0) AS allocated_minutes
+                    FROM object_facts
+                    """
+                ),
+                params,
+            ).mappings().first()
+
+            engineers_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        tf.engineer,
+                        COUNT(DISTINCT tf.task_id) AS tasks_count,
+                        COALESCE(SUM(tf.minutes), 0) AS minutes,
+                        COALESCE(SUM(tf.objects_count), 0) AS objects_count,
+                        COUNT(DISTINCT tf.dashboard_direction) AS dashboards_count,
+                        COUNT(DISTINCT tf.first_day) AS active_days,
+                        MAX(tf.last_day) AS last_activity
+                    FROM task_facts tf
+                    GROUP BY tf.engineer
+                    ORDER BY minutes DESC NULLS LAST, tasks_count DESC
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            daily_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        of.day::text AS day,
+                        of.engineer,
+                        COUNT(DISTINCT of.task_id) AS tasks_count,
+                        COUNT(*) AS objects_count,
+                        COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
+                    FROM object_facts of
+                    GROUP BY of.day, of.engineer
+                    ORDER BY of.day, of.engineer
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            engineer_schema_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        of.engineer,
+                        of.schema_name,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT of.task_id) AS tasks_count,
+                        COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
+                    FROM object_facts of
+                    GROUP BY of.engineer, of.schema_name
+                    ORDER BY of.engineer, allocated_minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            schema_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        of.schema_name,
+                        COUNT(*) AS objects_count,
+                        COUNT(DISTINCT of.task_id) AS tasks_count,
+                        COUNT(DISTINCT of.engineer) AS engineers_count,
+                        COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes
+                    FROM object_facts of
+                    GROUP BY of.schema_name
+                    ORDER BY allocated_minutes DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_objects_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        of.schema_name,
+                        of.table_name,
+                        COUNT(*) AS changes_count,
+                        COUNT(DISTINCT of.task_id) AS tasks_count,
+                        COUNT(DISTINCT of.engineer) AS engineers_count,
+                        COALESCE(SUM(of.allocated_minutes), 0) AS allocated_minutes,
+                        MAX(of.day) AS last_change_at,
+                        (
+                            SELECT sub.engineer
+                            FROM object_facts sub
+                            WHERE sub.schema_name = of.schema_name
+                              AND sub.table_name = of.table_name
+                            GROUP BY sub.engineer
+                            ORDER BY SUM(sub.allocated_minutes) DESC NULLS LAST
+                            LIMIT 1
+                        ) AS top_engineer
+                    FROM object_facts of
+                    GROUP BY of.schema_name, of.table_name
+                    ORDER BY allocated_minutes DESC NULLS LAST, changes_count DESC
+                    LIMIT 30
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            dashboard_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        tf.dashboard_direction,
+                        COUNT(DISTINCT tf.task_id) AS tasks_count,
+                        COALESCE(SUM(tf.minutes), 0) AS minutes,
+                        COALESCE(SUM(tf.objects_count), 0) AS objects_count,
+                        COUNT(DISTINCT tf.engineer) AS engineers_count,
+                        (
+                            SELECT sub.engineer
+                            FROM task_facts sub
+                            WHERE sub.dashboard_direction = tf.dashboard_direction
+                            GROUP BY sub.engineer
+                            ORDER BY SUM(sub.minutes) DESC NULLS LAST
+                            LIMIT 1
+                        ) AS top_engineer
+                    FROM task_facts tf
+                    GROUP BY tf.dashboard_direction
+                    ORDER BY minutes DESC NULLS LAST, tasks_count DESC
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+        schema_by_engineer: dict[str, list[dict[str, Any]]] = {}
+        for row in engineer_schema_rows:
+            engineer = row["engineer"]
+            schema_by_engineer.setdefault(engineer, []).append(
+                {
+                    "schema_name": row["schema_name"],
+                    "objects_count": int(row["objects_count"] or 0),
+                    "tasks_count": int(row["tasks_count"] or 0),
+                    "hours": _round_hours(row["allocated_minutes"]),
+                }
+            )
+
+        hours_values = [_round_hours(row["minutes"]) for row in engineers_rows if row["engineer"]]
+        tasks_values = [int(row["tasks_count"] or 0) for row in engineers_rows if row["engineer"]]
+        active_days_values = [int(row["active_days"] or 0) for row in engineers_rows if row["engineer"]]
+        avg_task_values = [
+            (_round_hours(row["minutes"]) / int(row["tasks_count"]))
+            for row in engineers_rows
+            if int(row["tasks_count"] or 0) > 0
+        ]
+        median_hours = median(hours_values) if hours_values else 0
+        median_tasks = median(tasks_values) if tasks_values else 0
+        median_active_days = median(active_days_values) if active_days_values else 0
+        median_avg_task = median(avg_task_values) if avg_task_values else 0
+
+        engineers_payload: list[dict[str, Any]] = []
+        for row in engineers_rows:
+            engineer = row["engineer"]
+            tasks_count = int(row["tasks_count"] or 0)
+            objects_count = int(row["objects_count"] or 0)
+            hours = _round_hours(row["minutes"])
+            active_days = int(row["active_days"] or 0)
+            avg_hours_per_task = round(hours / tasks_count, 2) if tasks_count else 0
+            avg_objects_per_task = round(objects_count / tasks_count, 2) if tasks_count else 0
+            dominant_schema = None
+            dominant_schema_hours = 0.0
+            for schema_item in schema_by_engineer.get(engineer, []):
+                if schema_item["hours"] > dominant_schema_hours:
+                    dominant_schema = schema_item["schema_name"]
+                    dominant_schema_hours = schema_item["hours"]
+
+            load_status = "Стабильно"
+            if median_hours and hours >= median_hours * 1.35 and active_days >= max(1, median_active_days * 0.8):
+                load_status = "Перегружен"
+            elif median_hours and hours <= median_hours * 0.6 and tasks_count <= max(1, median_tasks * 0.7):
+                load_status = "Недогружен"
+            elif (
+                median_tasks
+                and median_avg_task
+                and tasks_count >= median_tasks
+                and avg_hours_per_task <= median_avg_task * 0.82
+            ):
+                load_status = "Эффективен"
+
+            engineers_payload.append(
+                {
+                    "engineer": engineer,
+                    "tasks_count": tasks_count,
+                    "objects_count": objects_count,
+                    "hours": hours,
+                    "active_days": active_days,
+                    "dashboards_count": int(row["dashboards_count"] or 0),
+                    "avg_hours_per_task": avg_hours_per_task,
+                    "avg_objects_per_task": avg_objects_per_task,
+                    "dominant_schema": dominant_schema,
+                    "load_status": load_status,
+                    "last_activity": row["last_activity"],
+                    "schemas": schema_by_engineer.get(engineer, []),
+                }
+            )
+
+        overloaded = [row for row in engineers_payload if row["load_status"] == "Перегружен"][:5]
+        underloaded = [row for row in engineers_payload if row["load_status"] == "Недогружен"][:5]
+        efficient = [row for row in engineers_payload if row["load_status"] == "Эффективен"][:5]
+
+        return {
+            "summary": {
+                "tasks_count": int(summary["tasks_count"] or 0) if summary else 0,
+                "objects_count": int(summary["objects_count"] or 0) if summary else 0,
+                "engineers_count": int(summary["engineers_count"] or 0) if summary else 0,
+                "dashboards_count": int(summary["dashboards_count"] or 0) if summary else 0,
+                "hours": _round_hours(summary["allocated_minutes"]) if summary else 0,
+                "median_hours": round(float(median_hours or 0), 2),
+                "median_tasks": round(float(median_tasks or 0), 2),
+            },
+            "engineers": engineers_payload,
+            "daily_engineers": [
+                {
+                    "day": row["day"],
+                    "engineer": row["engineer"],
+                    "tasks_count": int(row["tasks_count"] or 0),
+                    "objects_count": int(row["objects_count"] or 0),
+                    "hours": _round_hours(row["allocated_minutes"]),
+                }
+                for row in daily_rows
+            ],
+            "schema_breakdown": [
+                {
+                    "schema_name": row["schema_name"],
+                    "tasks_count": int(row["tasks_count"] or 0),
+                    "objects_count": int(row["objects_count"] or 0),
+                    "engineers_count": int(row["engineers_count"] or 0),
+                    "hours": _round_hours(row["allocated_minutes"]),
+                    "avg_hours_per_object": round(
+                        _round_hours(row["allocated_minutes"]) / max(int(row["objects_count"] or 0), 1), 2
+                    ),
+                }
+                for row in schema_rows
+            ],
+            "top_objects": [
+                {
+                    "schema_name": row["schema_name"],
+                    "table_name": row["table_name"],
+                    "changes_count": int(row["changes_count"] or 0),
+                    "tasks_count": int(row["tasks_count"] or 0),
+                    "engineers_count": int(row["engineers_count"] or 0),
+                    "hours": _round_hours(row["allocated_minutes"]),
+                    "last_change_at": row["last_change_at"],
+                    "top_engineer": row["top_engineer"] or "Не указан",
+                }
+                for row in top_objects_rows
+            ],
+            "dashboard_report": [
+                {
+                    "dashboard_direction": row["dashboard_direction"],
+                    "tasks_count": int(row["tasks_count"] or 0),
+                    "objects_count": int(row["objects_count"] or 0),
+                    "engineers_count": int(row["engineers_count"] or 0),
+                    "hours": _round_hours(row["minutes"]),
+                    "top_engineer": row["top_engineer"] or "Не указан",
+                }
+                for row in dashboard_rows
+            ],
+            "focus": {
+                "overloaded": overloaded,
+                "underloaded": underloaded,
+                "efficient": efficient,
+            },
+        }
+    except Exception as e:
+        print("❌ /api/admin/engineering-efficiency error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить аналитику по сотрудникам")
 
 
 @router.get("/api/releases")

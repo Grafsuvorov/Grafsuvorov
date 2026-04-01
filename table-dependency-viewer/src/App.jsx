@@ -21,6 +21,7 @@ import OnboardingPage from "./components/OnboardingPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
+import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
@@ -140,6 +141,10 @@ export default function App() {
       }
       if (target === "/admin/users") {
         navigate("/admin/users");
+        return;
+      }
+      if (target === "/admin/engineering") {
+        navigate("/admin/engineering");
         return;
       }
       if (target === "/admin/dev-meta") {
@@ -313,6 +318,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : isAdmin ? (
               <AdminUsersPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/engineering"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminEngineeringPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

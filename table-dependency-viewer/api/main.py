@@ -446,7 +446,6 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
             password=AIRFLOW_DEV_PASSWORD,
             dag_id=payload.dag_id,
             dag_run_id=payload.dag_run_id,
-            highlight_task_ids=["dm_sensor"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

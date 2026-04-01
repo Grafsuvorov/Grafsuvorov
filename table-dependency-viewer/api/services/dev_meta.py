@@ -930,7 +930,6 @@ def get_airflow_dev_dag_status(
     password: str,
     dag_id: str,
     dag_run_id: str,
-    highlight_task_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if not airflow_base_url:
         raise ValueError("Airflow DEV не настроен")
@@ -951,17 +950,6 @@ def get_airflow_dev_dag_status(
         timeout=20,
     )
     task_instances = task_data.get("task_instances") or []
-    highlight = set(highlight_task_ids or ["dm_sensor"])
-    highlight_tasks = [
-        {
-            "task_id": task.get("task_id"),
-            "state": task.get("state"),
-            "start_date": task.get("start_date"),
-            "end_date": task.get("end_date"),
-        }
-        for task in task_instances
-        if task.get("task_id") in highlight
-    ]
     failed_tasks = [
         {
             "task_id": task.get("task_id"),
@@ -976,6 +964,5 @@ def get_airflow_dev_dag_status(
         "dag_run_state": run_data.get("state"),
         "logical_date": run_data.get("logical_date"),
         "run_type": run_data.get("run_type"),
-        "highlight_tasks": highlight_tasks,
         "failed_tasks": failed_tasks,
     }

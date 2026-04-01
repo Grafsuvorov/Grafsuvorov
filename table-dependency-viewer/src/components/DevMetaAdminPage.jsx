@@ -183,7 +183,6 @@ export default function DevMetaAdminPage({ userProfile }) {
         dag_id: data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, ""),
         dag_run_id: dagRun?.dag_run_id,
         dag_run_state: dagRun?.state || "queued",
-        highlight_tasks: [],
         failed_tasks: [],
       });
       setMessageType("success");
@@ -475,10 +474,6 @@ export default function DevMetaAdminPage({ userProfile }) {
                     <span className="label">Статус запуска</span>
                     <strong>{dagStatus.dag_run_state || "—"}</strong>
                   </div>
-                  <div className="dev-meta-dag-card">
-                    <span className="label">dm_sensor</span>
-                    <strong>{dagStatus.highlight_tasks?.find((item) => item.task_id === "dm_sensor")?.state || "ожидание"}</strong>
-                  </div>
                 </div>
                 {dagStatus.failed_tasks?.length ? (
                   <div className="dev-meta-dag-failed">
@@ -522,7 +517,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                 Отправка на DEV всегда перезаписывает одноименный файл на удаленном сервере, если он уже существует.
               </div>
               <div className="dev-meta-note">
-                Кнопка запуска DAG вычисляет `dag_id` из имени файла автоматически: из `dict_dds_currency_rates_meta.yaml` получится `dict_dds_currency_rates_meta`. В `dag_run.conf` уходит флаг `dev_bypass_dm_sensor=true`, но сам `dm_sensor` станет зеленым только если DAG на стороне Airflow умеет этот флаг обрабатывать.
+                Кнопка запуска DAG вычисляет `dag_id` из имени файла автоматически: из `dict_dds_currency_rates_meta.yaml` получится `dict_dds_currency_rates_meta`.
               </div>
             </div>
 

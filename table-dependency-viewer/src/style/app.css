@@ -7355,6 +7355,76 @@ main.content {
   color: #fecaca;
 }
 
+.dev-meta-game {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(12, 18, 32, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dev-meta-game-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dev-meta-game-score {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.dev-meta-game-track {
+  position: relative;
+  margin-top: 12px;
+  height: 110px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 35%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.94));
+}
+
+.dev-meta-game-runner {
+  position: absolute;
+  left: 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #38bdf8, #0ea5e9);
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.32);
+}
+
+.dev-meta-game-obstacle {
+  position: absolute;
+  bottom: 14px;
+  width: 12px;
+  height: 26px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f97316, #ea580c);
+}
+
+.dev-meta-game-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.5), rgba(125, 211, 252, 0.18));
+}
+
+.dev-meta-game-footer {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .dev-meta-notes {
   margin-top: 14px;
   display: grid;

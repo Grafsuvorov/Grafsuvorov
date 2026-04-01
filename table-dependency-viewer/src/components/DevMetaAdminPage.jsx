@@ -7,6 +7,108 @@ const SCHEMA_OPTIONS = [
   { value: "dm_view", label: "dm_view" },
 ];
 
+function DagLoadingMiniGame({ active }) {
+  const [runnerY, setRunnerY] = useState(0);
+  const [velocity, setVelocity] = useState(0);
+  const [obstacleX, setObstacleX] = useState(100);
+  const [score, setScore] = useState(0);
+  const [crashed, setCrashed] = useState(false);
+
+  useEffect(() => {
+    if (!active) {
+      setRunnerY(0);
+      setVelocity(0);
+      setObstacleX(100);
+      setScore(0);
+      setCrashed(false);
+      return undefined;
+    }
+    const onKeyDown = (event) => {
+      if (event.code === "Space" || event.code === "ArrowUp") {
+        event.preventDefault();
+        setRunnerY((currentY) => {
+          if (currentY === 0 && !crashed) {
+            setVelocity(7.5);
+          }
+          return currentY;
+        });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [active, crashed]);
+
+  useEffect(() => {
+    if (!active || crashed) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => {
+      setRunnerY((currentY) => {
+        const nextVelocity = velocity - 0.8;
+        const nextY = Math.max(0, currentY + nextVelocity);
+        setVelocity(nextY === 0 ? 0 : nextVelocity);
+        return nextY;
+      });
+      setObstacleX((currentX) => {
+        const nextX = currentX - 4;
+        if (nextX < -8) {
+          setScore((currentScore) => currentScore + 1);
+          return 100;
+        }
+        return nextX;
+      });
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [active, crashed, velocity]);
+
+  useEffect(() => {
+    if (!active || crashed) {
+      return;
+    }
+    const obstacleNearRunner = obstacleX >= 8 && obstacleX <= 20;
+    if (obstacleNearRunner && runnerY < 10) {
+      setCrashed(true);
+    }
+  }, [active, crashed, obstacleX, runnerY]);
+
+  const resetGame = () => {
+    setRunnerY(0);
+    setVelocity(0);
+    setObstacleX(100);
+    setScore(0);
+    setCrashed(false);
+  };
+
+  if (!active) {
+    return null;
+  }
+
+  return (
+    <div className="dev-meta-game">
+      <div className="dev-meta-game-head">
+        <div>
+          <div className="section-subtitle">Пока грузится</div>
+          <div className="muted">Пробел или стрелка вверх: перепрыгнуть ошибку.</div>
+        </div>
+        <div className="dev-meta-game-score">Score: {score}</div>
+      </div>
+      <div className="dev-meta-game-track">
+        <div className="dev-meta-game-runner" style={{ bottom: `${runnerY}px` }} />
+        <div className="dev-meta-game-obstacle" style={{ left: `${obstacleX}%` }} />
+        <div className="dev-meta-game-ground" />
+      </div>
+      {crashed ? (
+        <div className="dev-meta-game-footer">
+          <span>Пайплайн споткнулся.</span>
+          <button className="btn btn-secondary" onClick={resetGame}>
+            Еще раз
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function DevMetaAdminPage({ userProfile }) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
@@ -55,6 +157,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   }, [schemaName, isAdmin]);
 
   const formatDateTime = (value) => (value ? formatRuDateTime(value) : "—");
+  const dagIsActive = ["queued", "running"].includes(String(dagStatus?.dag_run_state || "").toLowerCase());
 
   const lockRow = useMemo(() => {
     if (!selectedFile) return null;
@@ -480,6 +583,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                     Ошибки: {dagStatus.failed_tasks.map((task) => `${task.task_id} (${task.state})`).join(", ")}
                   </div>
                 ) : null}
+                <DagLoadingMiniGame active={dagIsActive} />
               </div>
             )}
 

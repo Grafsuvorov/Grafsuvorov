@@ -157,10 +157,8 @@ def generate_dev_meta_yaml(
         raise ValueError("Для генератора нужен DEV_DATABASE_URL или DATABASE_URL")
     if not schema_name_gp.strip() or not object_name.strip():
         raise ValueError("Нужно указать schema_name_gp и object_name")
-    if schema_name_click not in {"dm", "dm_view"}:
-        raise ValueError("schema_name_click должен быть dm или dm_view")
-    if schema_name_click == "dm_view":
-        raise ValueError("Автогенерация сейчас поддержана только для dm")
+    if schema_name_click != "dm":
+        raise ValueError("Автогенерация создает YAML только для схемы dm")
     if not order_by:
         raise ValueError("Укажи хотя бы одну колонку в order_by")
 
@@ -268,7 +266,7 @@ def generate_dev_meta_yaml(
     if greenplum_table_name and greenplum_table_name.strip() != object_name.strip():
         payload["greenplum_table_name"] = greenplum_table_name.strip()
 
-    file_name = f"{schema_name_gp.strip()}_{object_name.strip()}_meta.yaml"
+    file_name = f"{schema_name_click.strip()}_{object_name.strip()}_meta.yaml"
     content = yaml.dump(
         payload,
         default_flow_style=False,

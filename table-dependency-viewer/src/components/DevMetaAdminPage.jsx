@@ -505,37 +505,36 @@ export default function DevMetaAdminPage({ userProfile }) {
     setMessage(null);
     setMessageType("info");
     try {
-      if (schemaName !== "dm") {
-        throw new Error("Автогенерация сейчас доступна только для схемы dm");
-      }
       const orderBy = generator.order_by
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
+      const targetSchema = "dm";
       const data = await devMetaApi.generate({
         schema_name_gp: generator.schema_name_gp,
         object_name: generator.object_name,
-        schema_name_click: schemaName,
+        schema_name_click: targetSchema,
         greenplum_table_name: null,
         order_by: orderBy,
       });
       if (data?.file_name) {
-        await devMetaApi.lock({ schema_name: schemaName, file_name: data.file_name });
+        await devMetaApi.lock({ schema_name: targetSchema, file_name: data.file_name });
       }
+      setSchemaName(targetSchema);
       setSelectedFile(data?.file_name || null);
       setContent(data?.content || "");
       setValidation(null);
       setLockInfo(
         data?.file_name
           ? {
-              schema_name: schemaName,
+              schema_name: targetSchema,
               file_name: data.file_name,
               locked_by: currentUser,
             }
           : null
       );
-      await refreshFiles(schemaName);
-      setMessage("Черновик YAML сгенерирован и автоматически взят в работу.");
+      await refreshFiles(targetSchema);
+      setMessage("Черновик YAML создан из GP-объекта и открыт в DEV-схеме dm.");
     } catch (err) {
       setError(err.message || "Не удалось сгенерировать YAML");
     }
@@ -640,11 +639,11 @@ export default function DevMetaAdminPage({ userProfile }) {
             </label>
           </div>
           <div className="dev-meta-generator-actions">
-            <button className="btn btn-primary" onClick={handleGenerate} disabled={schemaName !== "dm"}>
+            <button className="btn btn-primary" onClick={handleGenerate}>
               Сгенерировать черновик
             </button>
             <div className="muted">
-              Генератор берет имя объекта из Greenplum и создает файл для той же схемы и того же имени в ClickHouse. Для `dm_view` оставлена только ручная правка существующих DEV-файлов.
+              Источник в Greenplum можно брать из любой схемы, обычно `dm` или `dm_view`. Черновик всегда создается в DEV-схеме `dm` с тем же именем объекта для ClickHouse.
             </div>
           </div>
         </div>

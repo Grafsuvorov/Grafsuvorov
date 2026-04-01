@@ -329,6 +329,7 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   const formatDateTime = (value) => (value ? formatRuDateTime(value) : "—");
   const dagIsActive = ["queued", "running"].includes(String(dagStatus?.dag_run_state || "").toLowerCase());
+  const dagRunState = String(dagStatus?.dag_run_state || "").toLowerCase();
 
   const lockRow = useMemo(() => {
     if (!selectedFile) return null;
@@ -559,25 +560,6 @@ export default function DevMetaAdminPage({ userProfile }) {
           Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
         </div>
 
-        <div className="dev-meta-kpis">
-          <div className="dev-meta-kpi">
-            <div className="label">DEV путь</div>
-            <div className="value mono">{status?.dev_root || "—"}</div>
-          </div>
-          <div className="dev-meta-kpi">
-            <div className="label">DEV Airflow</div>
-            <div className="value">{status?.airflow?.configured ? "Настроен" : "Не настроен"}</div>
-          </div>
-          <div className="dev-meta-kpi">
-            <div className="label">DEV GP check</div>
-            <div className="value">{status?.dev_database_configured ? "Настроен" : "Опционально"}</div>
-          </div>
-          <div className="dev-meta-kpi">
-            <div className="label">DEV Deploy</div>
-            <div className="value">{status?.deploy?.configured ? "Настроен" : "Не настроен"}</div>
-          </div>
-        </div>
-
         <div className="dev-meta-toolbar">
           <div className="dev-meta-tabs">
             {SCHEMA_OPTIONS.map((option) => (
@@ -642,9 +624,6 @@ export default function DevMetaAdminPage({ userProfile }) {
             <button className="btn btn-primary" onClick={handleGenerate}>
               Сгенерировать черновик
             </button>
-            <div className="muted">
-              Источник в Greenplum можно брать из любой схемы, обычно `dm` или `dm_view`. Черновик всегда создается в DEV-схеме `dm` с тем же именем объекта для ClickHouse.
-            </div>
           </div>
         </div>
 
@@ -678,7 +657,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                     onClick={() => openFile(file.file_name)}
                     disabled={blocked}
                   >
-                    <span className="mono">{file.file_name}</span>
+                    <span className="mono dev-meta-file-name" title={file.file_name}>{file.file_name}</span>
                     <span className="muted">{formatDateTime(file.updated_at)}</span>
                     {file.last_action_by ? (
                       <span className="dev-meta-file-meta">
@@ -736,14 +715,10 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <div className="section-subtitle">Статус DEV DAG</div>
                 <div className="dev-meta-dag-grid">
                   <div className="dev-meta-dag-card">
-                    <span className="label">DAG</span>
-                    <strong className="mono">{dagStatus.dag_id}</strong>
-                  </div>
-                  <div className="dev-meta-dag-card">
                     <span className="label">Run</span>
                     <strong className="mono">{dagStatus.dag_run_id || "—"}</strong>
                   </div>
-                  <div className="dev-meta-dag-card">
+                  <div className={`dev-meta-dag-card dev-meta-dag-state dev-meta-dag-state-${dagRunState || "idle"}`}>
                     <span className="label">Статус запуска</span>
                     <strong>{dagStatus.dag_run_state || "—"}</strong>
                   </div>
@@ -763,9 +738,6 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <div className={`dev-meta-validation-pill ${validation.valid ? "ok" : "bad"}`}>
                   {validation.valid ? "Файл валиден" : "Есть ошибки"}
                 </div>
-                <div className="dev-meta-validation-meta">
-                  Проверяем: синтаксис YAML, отступы и структуру файла, обязательные поля, `order_by`, `attributes`, допустимые значения схемы и объект в DEV Greenplum, если настроен `DEV_DATABASE_URL`. Для `dm_view` сейчас проверка базовая: файл не пустой и в SQL есть `SELECT`.
-                </div>
                 {validation.errors?.length ? (
                   <ul className="dev-meta-validation-list">
                     {validation.errors.map((item, idx) => (
@@ -782,18 +754,6 @@ export default function DevMetaAdminPage({ userProfile }) {
                 ) : null}
               </div>
             )}
-
-            <div className="dev-meta-notes">
-              <div className="dev-meta-note">
-                Рабочий поток: сгенерируй новый YAML или открой DEV-файл, проверь его и одной кнопкой сохрани в `meta_dev` и отправь на DEV сервер.
-              </div>
-              <div className="dev-meta-note">
-                Отправка на DEV всегда перезаписывает одноименный файл на удаленном сервере, если он уже существует.
-              </div>
-              <div className="dev-meta-note">
-                Кнопка запуска DAG вычисляет `dag_id` из имени файла автоматически: из `dict_dds_currency_rates_meta.yaml` получится `dict_dds_currency_rates_meta`.
-              </div>
-            </div>
 
             <textarea
               className="dev-meta-editor"

@@ -40,6 +40,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("email", help="Почта сотрудника, например ivan.ivanov@rusal.com")
     parser.add_argument(
+        "--login",
+        type=str,
+        default="",
+        help="Логин YouTrack. Если известен, лучше передавать его явно.",
+    )
+    parser.add_argument(
         "--days",
         type=int,
         default=30,
@@ -97,6 +103,13 @@ def build_candidates(email: str) -> list[str]:
     return sorted(x for x in candidates if x)
 
 
+def build_candidates_from_login(login: str) -> list[str]:
+    value = (login or "").strip().lower()
+    if not value:
+        return []
+    return sorted({value, value.replace(".", "_"), value.replace("_", ".")})
+
+
 def headers() -> dict[str, str]:
     if not YOUTRACK_TOKEN:
         raise SystemExit("Нужен YOUTRACK_TOKEN в env или .env")
@@ -149,24 +162,44 @@ def get_current_state(custom_fields) -> str | None:
     return None
 
 
-def resolve_users(email: str, candidates: list[str]) -> list[str]:
+def resolve_users(email: str, candidates: list[str], login: str = "") -> tuple[list[str], list[dict], list[str]]:
     found = set(candidates)
-    try:
-        users = api_get(
-            "/api/users",
-            {
-                "fields": "id,login,name,fullName,email",
-                "query": email,
-            },
-        ) or []
+    queries_tried = []
+    raw_users = []
+    seen_users = set()
+
+    query_candidates = []
+    if login.strip():
+        query_candidates.extend(build_candidates_from_login(login))
+    query_candidates.extend(candidates)
+    query_candidates.append(email)
+
+    for query in query_candidates:
+        if not query:
+            continue
+        queries_tried.append(query)
+        try:
+            users = api_get(
+                "/api/users",
+                {
+                    "fields": "id,login,name,fullName,email",
+                    "query": query,
+                },
+            ) or []
+        except Exception:
+            continue
+
         for user in users:
+            user_id = user.get("id")
+            if user_id and user_id not in seen_users:
+                raw_users.append(user)
+                seen_users.add(user_id)
             for key in ("login", "name", "fullName", "email"):
                 value = user.get(key)
                 if value:
                     found.add(str(value).strip().lower())
-    except Exception:
-        pass
-    return sorted(x for x in found if x)
+
+    return sorted(x for x in found if x), raw_users, queries_tried
 
 
 def search_issues(query: str) -> list[dict]:
@@ -410,7 +443,8 @@ def main() -> int:
 
     args = parse_args()
     email = normalize_email(args.email)
-    identifiers = resolve_users(email, build_candidates(email))
+    base_candidates = build_candidates(email)
+    identifiers, resolved_users, user_queries = resolve_users(email, base_candidates, args.login)
     identifiers_set = {x.strip().lower() for x in identifiers if x}
 
     issues_map, queries_used = collect_issue_candidates(identifiers)
@@ -443,7 +477,25 @@ def main() -> int:
     )
 
     print(f"Почта: {email}")
+    if args.login.strip():
+        print(f"Переданный логин: {args.login.strip()}")
+    print(f"Поиск пользователя: {', '.join(user_queries) if user_queries else 'не выполнялся'}")
     print(f"Идентификаторы: {', '.join(identifiers)}")
+    if resolved_users:
+        preview = []
+        for user in resolved_users[:10]:
+            preview.append(
+                " / ".join(
+                    [
+                        str(user.get("login") or "").strip(),
+                        str(user.get("fullName") or user.get("name") or "").strip(),
+                        str(user.get("email") or "").strip(),
+                    ]
+                ).strip(" /")
+            )
+        print(f"Найденные пользователи: {'; '.join(preview)}")
+    else:
+        print("Найденные пользователи: не удалось получить из /api/users, поиск идет только по локальным кандидатам")
     print(f"Запросы: {', '.join(queries_used[:8]) if queries_used else 'не удалось подобрать'}")
     print(f"Найдено задач за {args.days} дней: {len(rows)}")
 

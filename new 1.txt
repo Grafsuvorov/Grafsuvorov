@@ -1,11 +1,9 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrek_tasks_by_email.py Nikita.Suvorov@rusal.com --days 30
-Почта: nikita.suvorov@rusal.com
-Поиск пользователя: nikita.suvorov, nikita.suvorov@rusal.com, nikita_suvorov, nikita.suvorov@rusal.com
-Идентификаторы: nikita.suvorov, nikita.suvorov@rusal.com, nikita_suvorov
-Найденные пользователи: не удалось получить из /api/users, поиск идет только по локальным кандидатам
-Запросы: не удалось подобрать
-Найдено задач за 30 дней: 0
+Операция не выполнена
+Airflow вернул 404: { "detail": "DAG with dag_id: 'dm_material_price_calculation_meta' not found", "status": 404, "title": "DAG not found", "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/NotFound" }
 
-Ничего не найдено.
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrek_tasks_by_email.py SuvorovND --login exact_login --days 30
-Нужна именно почта, например ivan.ivanov@rusal.com
+Broken DAG: [/home/airflow/dags/dag_api_load.py] Traceback (most recent call last):
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/session.py", line 79, in wrapper
+    return func(*args, session=session, **kwargs)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/dag.py", line 1485, in get_dagrun
+    raise TypeError("You must provide either the execution_date or the run_id")
+TypeError: You must provide either the execution_date or the run_id

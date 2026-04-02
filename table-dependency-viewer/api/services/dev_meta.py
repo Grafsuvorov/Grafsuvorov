@@ -266,7 +266,7 @@ def generate_dev_meta_yaml(
     if greenplum_table_name and greenplum_table_name.strip() != object_name.strip():
         payload["greenplum_table_name"] = greenplum_table_name.strip()
 
-    file_name = f"{schema_name_click.strip()}_{object_name.strip()}_meta.yaml"
+    file_name = f"{schema_name_gp.strip()}_{object_name.strip()}_meta.yaml"
     content = yaml.dump(
         payload,
         default_flow_style=False,
@@ -837,6 +837,10 @@ def _dag_id_from_file_name(file_name: str) -> str:
     return dag_id
 
 
+def _airflow_dag_url(airflow_base_url: str, dag_id: str) -> str:
+    return f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}"
+
+
 def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
     opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
     return opener.open(req, timeout=timeout)
@@ -889,6 +893,26 @@ def trigger_airflow_dev_dag(
         raise ValueError("Airflow DEV не настроен")
     resolved_dag_id = dag_id or _dag_id_from_file_name(file_name)
     remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}" if remote_base_dir else None
+    dag_url = _airflow_dag_url(airflow_base_url, resolved_dag_id)
+    dag_info = _airflow_json_request(
+        url=dag_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    was_paused = bool(dag_info.get("is_paused"))
+    auto_unpaused = False
+    if was_paused:
+        _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            method="PATCH",
+            payload={"is_paused": False},
+            timeout=20,
+        )
+        auto_unpaused = True
+
     payload = {
         "conf": {
             "schema_name": schema_name,
@@ -899,14 +923,29 @@ def trigger_airflow_dev_dag(
         }
     }
     url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}/dagRuns"
-    data = _airflow_json_request(
-        url=url,
-        username=username,
-        password=password,
-        method="POST",
-        payload=payload,
-        timeout=30,
-    )
+    try:
+        data = _airflow_json_request(
+            url=url,
+            username=username,
+            password=password,
+            method="POST",
+            payload=payload,
+            timeout=30,
+        )
+    except Exception:
+        if auto_unpaused:
+            try:
+                _airflow_json_request(
+                    url=dag_url,
+                    username=username,
+                    password=password,
+                    method="PATCH",
+                    payload={"is_paused": True},
+                    timeout=20,
+                )
+            except Exception:
+                pass
+        raise
     _audit_dev_meta(
         engine,
         base_dir=base_dir,
@@ -916,9 +955,22 @@ def trigger_airflow_dev_dag(
         author=author,
         action="run_dag",
         content="",
-        details={"url": url, "response": data, "dag_id": resolved_dag_id, "remote_path": remote_path},
+        details={
+            "url": url,
+            "response": data,
+            "dag_id": resolved_dag_id,
+            "remote_path": remote_path,
+            "auto_unpaused": auto_unpaused,
+            "was_paused": was_paused,
+        },
     )
-    return {"dag_id": resolved_dag_id, "response": data, "remote_path": remote_path}
+    return {
+        "dag_id": resolved_dag_id,
+        "response": data,
+        "remote_path": remote_path,
+        "auto_unpaused": auto_unpaused,
+        "was_paused": was_paused,
+    }
 
 
 def get_airflow_dev_dag_status(
@@ -928,6 +980,7 @@ def get_airflow_dev_dag_status(
     password: str,
     dag_id: str,
     dag_run_id: str,
+    auto_unpaused: bool = False,
 ) -> dict[str, Any]:
     if not airflow_base_url:
         raise ValueError("Airflow DEV не настроен")
@@ -935,6 +988,7 @@ def get_airflow_dev_dag_status(
         raise ValueError("Нужно указать dag_id и dag_run_id")
     run_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}"
     task_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances"
+    dag_url = _airflow_dag_url(airflow_base_url, dag_id)
     run_data = _airflow_json_request(
         url=run_url,
         username=username,
@@ -956,11 +1010,38 @@ def get_airflow_dev_dag_status(
         for task in task_instances
         if task.get("state") in {"failed", "upstream_failed"}
     ]
+    dag_info = _airflow_json_request(
+        url=dag_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    dag_run_state = run_data.get("state")
+    auto_paused_back = False
+    if auto_unpaused and str(dag_run_state or "").lower() in {"success", "failed"} and not dag_info.get("is_paused"):
+        _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            method="PATCH",
+            payload={"is_paused": True},
+            timeout=20,
+        )
+        auto_paused_back = True
+        dag_info = _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            timeout=20,
+        )
     return {
         "dag_id": dag_id,
         "dag_run_id": dag_run_id,
-        "dag_run_state": run_data.get("state"),
+        "dag_run_state": dag_run_state,
         "logical_date": run_data.get("logical_date"),
         "run_type": run_data.get("run_type"),
         "failed_tasks": failed_tasks,
+        "dag_is_paused": bool(dag_info.get("is_paused")),
+        "auto_unpaused": bool(auto_unpaused),
+        "auto_paused_back": auto_paused_back,
     }

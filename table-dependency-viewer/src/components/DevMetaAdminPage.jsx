@@ -459,6 +459,8 @@ export default function DevMetaAdminPage({ userProfile }) {
         dag_run_id: dagRun?.dag_run_id,
         dag_run_state: dagRun?.state || "queued",
         failed_tasks: [],
+        auto_unpaused: Boolean(data?.response?.auto_unpaused),
+        dag_is_paused: Boolean(data?.response?.was_paused),
       });
       setMessageType("success");
       setMessage(`DEV DAG запущен: ${data?.response?.dag_id || dagRun?.dag_id || selectedFile.replace(/\.[^.]+$/, "")}`);
@@ -483,6 +485,7 @@ export default function DevMetaAdminPage({ userProfile }) {
         const data = await devMetaApi.dagStatus({
           dag_id: dagStatus.dag_id,
           dag_run_id: dagStatus.dag_run_id,
+          auto_unpaused: Boolean(dagStatus.auto_unpaused),
         });
         if (!cancelled) {
           setDagStatus(data?.response || null);
@@ -535,7 +538,7 @@ export default function DevMetaAdminPage({ userProfile }) {
           : null
       );
       await refreshFiles(targetSchema);
-      setMessage("Черновик YAML создан из GP-объекта и открыт в DEV-схеме dm.");
+      setMessage(`Черновик YAML создан и открыт в DEV-схеме dm: ${data?.file_name || ""}`);
     } catch (err) {
       setError(err.message || "Не удалось сгенерировать YAML");
     }

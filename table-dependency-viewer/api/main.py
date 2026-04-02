@@ -146,6 +146,7 @@ class DevMetaDagPayload(BaseModel):
 class DevMetaDagStatusPayload(BaseModel):
     dag_id: str
     dag_run_id: str
+    auto_unpaused: Optional[bool] = False
 
 
 class DevMetaDeployPayload(BaseModel):
@@ -447,6 +448,7 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
             password=AIRFLOW_DEV_PASSWORD,
             dag_id=payload.dag_id,
             dag_run_id=payload.dag_run_id,
+            auto_unpaused=bool(payload.auto_unpaused),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

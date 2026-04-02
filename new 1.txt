@@ -1,6 +1,4 @@
-[ci_cd] start 2026-04-01T14:29:31Z
-Your branch is up to date with 'origin/main'.
-HEAD is now at e48cd7d51 Merge branch 'release/2026-04-01' into 'main'
-[ci_cd] synced meta_info and config_files/meta from origin/main
-[ci_cd] done
-Already on 'main'
+python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com
+  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --days 180
+  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --format csv --output /tmp/ivan_tasks.csv
+  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --format json --output /tmp/ivan_tasks.json

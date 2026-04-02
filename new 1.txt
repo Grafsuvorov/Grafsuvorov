@@ -1,4 +1,11 @@
-python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com
-  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --days 180
-  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --format csv --output /tmp/ivan_tasks.csv
-  python3 scripts/ytrek_tasks_by_email.py ivan.ivanov@rusal.com --format json --output /tmp/ivan_tasks.json
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrek_tasks_by_email.py Nikita.Suvorov@rusal.com --days 30
+Почта: nikita.suvorov@rusal.com
+Поиск пользователя: nikita.suvorov, nikita.suvorov@rusal.com, nikita_suvorov, nikita.suvorov@rusal.com
+Идентификаторы: nikita.suvorov, nikita.suvorov@rusal.com, nikita_suvorov
+Найденные пользователи: не удалось получить из /api/users, поиск идет только по локальным кандидатам
+Запросы: не удалось подобрать
+Найдено задач за 30 дней: 0
+
+Ничего не найдено.
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\ytrek_tasks_by_email.py SuvorovND --login exact_login --days 30
+Нужна именно почта, например ivan.ivanov@rusal.com

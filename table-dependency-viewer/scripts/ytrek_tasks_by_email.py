@@ -36,9 +36,9 @@ COMMENT_FIELDS = "author(name,login,fullName),created,text"
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Выгрузить из YouTrack все задачи сотрудника по почте за период"
+        description="Выгрузить из YouTrack все задачи сотрудника по почте или логину за период"
     )
-    parser.add_argument("email", help="Почта сотрудника, например ivan.ivanov@rusal.com")
+    parser.add_argument("user", help="Почта или логин сотрудника, например ivan.ivanov@rusal.com или ivan.ivanov")
     parser.add_argument(
         "--login",
         type=str,
@@ -84,17 +84,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def normalize_email(value: str) -> str:
-    email = (value or "").strip().lower()
-    if "@" not in email:
-        raise SystemExit("Нужна именно почта, например ivan.ivanov@rusal.com")
-    return email
+def normalize_user(value: str) -> str:
+    user = (value or "").strip().lower()
+    if not user:
+        raise SystemExit("Нужна почта или логин, например ivan.ivanov@rusal.com или ivan.ivanov")
+    return user
 
 
-def build_candidates(email: str) -> list[str]:
-    local = email.split("@", 1)[0]
+def build_candidates(user: str) -> list[str]:
+    local = user.split("@", 1)[0]
     candidates = {
-        email,
+        user,
         local,
         local.replace(".", "_"),
         local.replace("_", "."),
@@ -162,17 +162,18 @@ def get_current_state(custom_fields) -> str | None:
     return None
 
 
-def resolve_users(email: str, candidates: list[str], login: str = "") -> tuple[list[str], list[dict], list[str]]:
+def resolve_users(user: str, candidates: list[str], login: str = "") -> tuple[list[str], list[dict], list[str], str | None]:
     found = set(candidates)
     queries_tried = []
     raw_users = []
     seen_users = set()
+    warning = None
 
     query_candidates = []
     if login.strip():
         query_candidates.extend(build_candidates_from_login(login))
     query_candidates.extend(candidates)
-    query_candidates.append(email)
+    query_candidates.append(user)
 
     for query in query_candidates:
         if not query:
@@ -186,7 +187,8 @@ def resolve_users(email: str, candidates: list[str], login: str = "") -> tuple[l
                     "query": query,
                 },
             ) or []
-        except Exception:
+        except Exception as exc:
+            warning = str(exc)
             continue
 
         for user in users:
@@ -199,7 +201,7 @@ def resolve_users(email: str, candidates: list[str], login: str = "") -> tuple[l
                 if value:
                     found.add(str(value).strip().lower())
 
-    return sorted(x for x in found if x), raw_users, queries_tried
+    return sorted(x for x in found if x), raw_users, queries_tried, warning
 
 
 def search_issues(query: str) -> list[dict]:
@@ -234,6 +236,8 @@ def collect_issue_candidates(identifiers: list[str]) -> tuple[dict[str, dict], l
             "Assignee: {{{ident}}}",
             "Исполнитель: {ident}",
             "Исполнитель: {{{ident}}}",
+            "assigned to: {ident}",
+            "for: {ident}",
         ):
             query = template.format(ident=ident)
             try:
@@ -442,9 +446,11 @@ def main() -> int:
     PAGE_SIZE = int(os.getenv("YOUTRACK_PAGE_SIZE", str(PAGE_SIZE)))
 
     args = parse_args()
-    email = normalize_email(args.email)
-    base_candidates = build_candidates(email)
-    identifiers, resolved_users, user_queries = resolve_users(email, base_candidates, args.login)
+    user = normalize_user(args.user)
+    base_candidates = build_candidates(user)
+    if args.login.strip():
+        base_candidates = sorted(set(base_candidates) | set(build_candidates_from_login(args.login)))
+    identifiers, resolved_users, user_queries, resolve_warning = resolve_users(user, base_candidates, args.login)
     identifiers_set = {x.strip().lower() for x in identifiers if x}
 
     issues_map, queries_used = collect_issue_candidates(identifiers)
@@ -476,7 +482,7 @@ def main() -> int:
         )
     )
 
-    print(f"Почта: {email}")
+    print(f"Пользователь: {user}")
     if args.login.strip():
         print(f"Переданный логин: {args.login.strip()}")
     print(f"Поиск пользователя: {', '.join(user_queries) if user_queries else 'не выполнялся'}")
@@ -496,6 +502,8 @@ def main() -> int:
         print(f"Найденные пользователи: {'; '.join(preview)}")
     else:
         print("Найденные пользователи: не удалось получить из /api/users, поиск идет только по локальным кандидатам")
+    if resolve_warning:
+        print(f"Предупреждение /api/users: {resolve_warning}")
     print(f"Запросы: {', '.join(queries_used[:8]) if queries_used else 'не удалось подобрать'}")
     print(f"Найдено задач за {args.days} дней: {len(rows)}")
 
@@ -508,7 +516,7 @@ def main() -> int:
         print(render_table(rows))
     elif args.format == "json":
         payload = json.dumps(
-            {"email": email, "identifiers": identifiers, "rows": rows},
+            {"user": user, "identifiers": identifiers, "rows": rows},
             ensure_ascii=False,
             indent=2,
         )
@@ -518,7 +526,7 @@ def main() -> int:
         else:
             print(payload)
     else:
-        output_path = Path(args.output or f"ytrek_tasks_{email.split('@', 1)[0]}.csv")
+        output_path = Path(args.output or f"ytrek_tasks_{user.split('@', 1)[0]}.csv")
         save_csv(output_path, rows)
         print(f"\nCSV сохранен в {output_path}")
 

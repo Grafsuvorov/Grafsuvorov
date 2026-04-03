@@ -425,6 +425,9 @@ def get_dev_meta_status(
     airflow_dag_id: str,
     lock_ttl_minutes: int,
     dev_database_url: str,
+    deploy_host: str = "",
+    deploy_user: str = "",
+    deploy_base_dir: str = "",
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -436,6 +439,12 @@ def get_dev_meta_status(
             "base_url": airflow_base_url,
             "dag_id": airflow_dag_id,
             "configured": bool(airflow_base_url and airflow_dag_id),
+        },
+        "deploy": {
+            "host": deploy_host,
+            "user": deploy_user,
+            "base_dir": deploy_base_dir,
+            "configured": bool(deploy_host and deploy_user and deploy_base_dir),
         },
         "dev_database_configured": bool(dev_database_url),
         "locks_count": len(locks),
@@ -490,6 +499,8 @@ def read_dev_meta_file(*, base_dir: Path, root_value: str, schema_name: str, fil
 def acquire_dev_meta_lock(
     *,
     engine,
+    base_dir: Path | None = None,
+    dev_root_value: str = "",
     schema_name: str,
     file_name: str,
     author: str,
@@ -544,7 +555,15 @@ def acquire_dev_meta_lock(
     }
 
 
-def release_dev_meta_lock(*, engine, schema_name: str, file_name: str, author: str) -> None:
+def release_dev_meta_lock(
+    *,
+    engine,
+    base_dir: Path | None = None,
+    dev_root_value: str = "",
+    schema_name: str,
+    file_name: str,
+    author: str,
+) -> None:
     ensure_dev_meta_tables(engine)
     with engine.begin() as conn:
         conn.execute(
@@ -564,7 +583,15 @@ def release_dev_meta_lock(*, engine, schema_name: str, file_name: str, author: s
         )
 
 
-def assert_dev_meta_lock_owner(*, engine, schema_name: str, file_name: str, author: str) -> None:
+def assert_dev_meta_lock_owner(
+    *,
+    engine,
+    base_dir: Path | None = None,
+    dev_root_value: str = "",
+    schema_name: str,
+    file_name: str,
+    author: str,
+) -> None:
     ensure_dev_meta_tables(engine)
     with engine.begin() as conn:
         conn.execute(text("DELETE FROM tech_etl.app_dev_meta_lock WHERE expires_at <= NOW()"))

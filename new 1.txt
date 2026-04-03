@@ -1,41 +1,10 @@
-docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" "$AIRFLOW_DEV_BASE_URL/api/v1/dags"'
+docker compose exec api sh -lc 'env | grep AIRFLOW_DEV'
 
-  Если хочешь проверить именно запуск DAG:
+  Главное:
 
-  docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" -H "Content-Type: application/json" -X POST "$AIRFLOW_DEV_BASE_URL/api/v1/
-  dags/<DAG_ID>/dagRuns" -d "{\"conf\":{\"schema_name\":\"dm\",\"file_name\":\"<FILE>.yaml\",\"author\":\"admin\"}}"'
+  - AIRFLOW_DEV_BASE_URL должен быть заполнен
+  - AIRFLOW_DEV_DAG_ID может быть пустым
 
-  Сначала посмотри, какие env реально подставились:
+  И проверь руками конкретный DAG через Airflow API:
 
-  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV'
-
-  Что смотреть в ответах:
-
-  - 200/401/403 на GET /api/v1/dags
-  - если 403, значит логин есть, но нет прав
-  - если 401, логин/пароль неверный
-  - если 404, base url неправильный
-  - если 200, тогда надо тестировать конкретный POST dagRuns
-
-  Если раньше работало, а сейчас нет, очень вероятно одно из двух:
-
-  - поменялись AIRFLOW_DEV_USERNAME / AIRFLOW_DEV_PASSWORD в env контейнера
-  - раньше дергался другой DAG id, а сейчас другой endpoint
-
-  Чтобы быстро сравнить, выполни ещё:
-
-  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV_DAG_ID'
-
-  И если AIRFLOW_DEV_DAG_ID пустой, приложение сейчас берёт DAG id из имени файла, например:
-
-  - dm_sales_alverse_mlc_meta.yaml -> DAG id dm_sales_alverse_mlc_meta
-
-  Если в Airflow DAG называется иначе, запуск даст ошибку.
-
-  Минимальный набор команд:
-
-  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV'
-  docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" "$AIRFLOW_DEV_BASE_URL/api/v1/dags"'
-
-  Пришли вывод этих двух команд, и я скажу, что именно не так.
-
+  docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" "$AIRFLOW_DEV_BASE_URL/api/v1/dags/dm_sales_alverse_mlc_meta"'

@@ -1,16 +1,41 @@
+docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" "$AIRFLOW_DEV_BASE_URL/api/v1/dags"'
 
-table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52948 - "GET /api/admin/dev-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52950 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52954 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52958 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52966 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52968 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52970 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:52984 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 409 Conflict
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:53006 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:53008 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:53010 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:53020 - "POST /api/admin/dev-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:53034 - "POST /api/admin/dev-meta/deploy HTTP/1.1" 409 Conflict
-[root@rgm-s-dwhapp01 table-
+  Если хочешь проверить именно запуск DAG:
+
+  docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" -H "Content-Type: application/json" -X POST "$AIRFLOW_DEV_BASE_URL/api/v1/
+  dags/<DAG_ID>/dagRuns" -d "{\"conf\":{\"schema_name\":\"dm\",\"file_name\":\"<FILE>.yaml\",\"author\":\"admin\"}}"'
+
+  Сначала посмотри, какие env реально подставились:
+
+  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV'
+
+  Что смотреть в ответах:
+
+  - 200/401/403 на GET /api/v1/dags
+  - если 403, значит логин есть, но нет прав
+  - если 401, логин/пароль неверный
+  - если 404, base url неправильный
+  - если 200, тогда надо тестировать конкретный POST dagRuns
+
+  Если раньше работало, а сейчас нет, очень вероятно одно из двух:
+
+  - поменялись AIRFLOW_DEV_USERNAME / AIRFLOW_DEV_PASSWORD в env контейнера
+  - раньше дергался другой DAG id, а сейчас другой endpoint
+
+  Чтобы быстро сравнить, выполни ещё:
+
+  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV_DAG_ID'
+
+  И если AIRFLOW_DEV_DAG_ID пустой, приложение сейчас берёт DAG id из имени файла, например:
+
+  - dm_sales_alverse_mlc_meta.yaml -> DAG id dm_sales_alverse_mlc_meta
+
+  Если в Airflow DAG называется иначе, запуск даст ошибку.
+
+  Минимальный набор команд:
+
+  docker compose exec api sh -lc 'env | grep AIRFLOW_DEV'
+  docker compose exec api sh -lc 'curl -i -u "$AIRFLOW_DEV_USERNAME:$AIRFLOW_DEV_PASSWORD" "$AIRFLOW_DEV_BASE_URL/api/v1/dags"'
+
+  Пришли вывод этих двух команд, и я скажу, что именно не так.
+

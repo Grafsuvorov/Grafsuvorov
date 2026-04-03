@@ -1,50 +1,26 @@
-docker compose exec api python - <<'PY'
-  import os
-  import base64
-  from urllib.request import Request, urlopen
-  from urllib.error import HTTPError
-
-  base = os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/")
-  user = os.environ["AIRFLOW_DEV_USERNAME"]
-  pwd = os.environ["AIRFLOW_DEV_PASSWORD"]
-  url = f"{base}/api/v1/dags"
-
-  req = Request(url)
-  token = base64.b64encode(f"{user}:{pwd}".encode()).decode()
-  req.add_header("Authorization", f"Basic {token}")
-
-  try:
-      with urlopen(req, timeout=20) as resp:
-          print("STATUS:", resp.status)
-          print(resp.read().decode())
-  except HTTPError as e:
-      print("STATUS:", e.code)
-      print(e.read().decode())
-  PY
-
-  И для конкретного DAG:
-
-  docker compose exec api python - <<'PY'
-  import os
-  import base64
-  from urllib.request import Request, urlopen
-  from urllib.error import HTTPError
-
-  dag_id = "dict_dds_currency_rates_meta"
-  base = os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/")
-  user = os.environ["AIRFLOW_DEV_USERNAME"]
-  pwd = os.environ["AIRFLOW_DEV_PASSWORD"]
-  url = f"{base}/api/v1/dags/{dag_id}"
-
-  req = Request(url)
-  token = base64.b64encode(f"{user}:{pwd}".encode()).decode()
-  req.add_header("Authorization", f"Basic {token}")
-
-  try:
-      with urlopen(req, timeout=20) as resp:
-          print("STATUS:", resp.status)
-          print(resp.read().decode())
-  except HTTPError as e:
-      print("STATUS:", e.code)
-      print(e.read().decode())
-  PY
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python - <<'PY'
+> import os
+> import base64
+> from urllib.request import Request, urlopen
+> from urllib.error import HTTPError
+>
+> base = os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/")
+> user = os.environ["AIRFLOW_DEV_USERNAME"]
+> pwd = os.environ["AIRFLOW_DEV_PASSWORD"]
+> url = f"{base}/api/v1/dags"
+>
+> req = Request(url)
+> token = base64.b64encode(f"{user}:{pwd}".encode()).decode()
+> req.add_header("Authorization", f"Basic {token}")
+>
+> try:
+>     with urlopen(req, timeout=20) as resp:
+>         print("STATUS:", resp.status)
+>         print(resp.read().decode())
+> except HTTPError as e:
+>     print("STATUS:", e.code)
+>     print(e.read().decode())
+> PY
+Python 3.11.15 (main, Mar 16 2026, 23:07:56) [GCC 14.2.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>>

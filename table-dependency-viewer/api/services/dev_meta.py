@@ -460,6 +460,40 @@ def _dag_id_from_file_name(file_name: str) -> str:
     return dag_id
 
 
+def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
+    opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
+    return opener.open(req, timeout=timeout)
+
+
+def _airflow_json_request(
+    *,
+    url: str,
+    username: str,
+    password: str,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    req = urlrequest.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={"Content-Type": "application/json"},
+        method=method,
+    )
+    if username or password:
+        raw = f"{username}:{password}".encode("utf-8")
+        req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
+    try:
+        with _urlopen_without_proxy(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
+
+
 def get_dev_meta_files(
     *,
     engine,
@@ -815,6 +849,25 @@ def trigger_airflow_dev_dag(
         raise ValueError("Airflow DEV не настроен")
     resolved_dag_id = dag_id or _dag_id_from_file_name(file_name)
     remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}" if remote_base_dir else None
+    dag_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}"
+    dag_info = _airflow_json_request(
+        url=dag_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    was_paused = bool(dag_info.get("is_paused"))
+    auto_unpaused = False
+    if was_paused:
+        _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            method="PATCH",
+            payload={"is_paused": False},
+            timeout=20,
+        )
+        auto_unpaused = True
     payload = {
         "conf": {
             "schema_name": schema_name,
@@ -825,24 +878,29 @@ def trigger_airflow_dev_dag(
         }
     }
     url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}/dagRuns"
-    req = urlrequest.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    if username or password:
-        raw = f"{username}:{password}".encode("utf-8")
-        req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
     try:
-        with urlrequest.urlopen(req, timeout=30) as resp:
-            body = resp.read().decode("utf-8")
-            data = json.loads(body) if body else {}
-    except urlerror.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="ignore")
-        raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
-    except Exception as exc:
-        raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
+        data = _airflow_json_request(
+            url=url,
+            username=username,
+            password=password,
+            method="POST",
+            payload=payload,
+            timeout=30,
+        )
+    except Exception:
+        if auto_unpaused:
+            try:
+                _airflow_json_request(
+                    url=dag_url,
+                    username=username,
+                    password=password,
+                    method="PATCH",
+                    payload={"is_paused": True},
+                    timeout=20,
+                )
+            except Exception:
+                pass
+        raise
     _audit_dev_meta(
         engine,
         schema_name=schema_name,
@@ -855,12 +913,16 @@ def trigger_airflow_dev_dag(
             "response": data,
             "dag_id": resolved_dag_id,
             "remote_path": remote_path,
+            "auto_unpaused": auto_unpaused,
+            "was_paused": was_paused,
         },
     )
     return {
         "dag_id": resolved_dag_id,
         "response": data,
         "remote_path": remote_path,
+        "auto_unpaused": auto_unpaused,
+        "was_paused": was_paused,
     }
 
 
@@ -878,34 +940,14 @@ def get_airflow_dev_dag_status(
     if not dag_id or not dag_run_id:
         raise ValueError("Нужно указать dag_id и dag_run_id")
 
-    def _request_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        req = urlrequest.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8") if payload is not None else None,
-            headers={"Content-Type": "application/json"},
-            method=method,
-        )
-        if username or password:
-            raw = f"{username}:{password}".encode("utf-8")
-            req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
-        try:
-            with urlrequest.urlopen(req, timeout=20) as resp:
-                body = resp.read().decode("utf-8")
-                return json.loads(body) if body else {}
-        except urlerror.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="ignore")
-            raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
-        except Exception as exc:
-            raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
-
     base_url = airflow_base_url.rstrip("/")
     dag_url = f"{base_url}/api/v1/dags/{dag_id}"
     run_url = f"{dag_url}/dagRuns/{dag_run_id}"
     task_url = f"{run_url}/taskInstances"
 
-    run_data = _request_json(run_url)
-    task_data = _request_json(task_url)
-    dag_info = _request_json(dag_url)
+    run_data = _airflow_json_request(url=run_url, username=username, password=password, timeout=20)
+    task_data = _airflow_json_request(url=task_url, username=username, password=password, timeout=20)
+    dag_info = _airflow_json_request(url=dag_url, username=username, password=password, timeout=20)
     dag_run_state = run_data.get("state")
 
     failed_tasks = [
@@ -919,9 +961,16 @@ def get_airflow_dev_dag_status(
 
     auto_paused_back = False
     if auto_unpaused and str(dag_run_state or "").lower() in {"success", "failed"} and not dag_info.get("is_paused"):
-        _request_json(dag_url, method="PATCH", payload={"is_paused": True})
+        _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            method="PATCH",
+            payload={"is_paused": True},
+            timeout=20,
+        )
         auto_paused_back = True
-        dag_info = _request_json(dag_url)
+        dag_info = _airflow_json_request(url=dag_url, username=username, password=password, timeout=20)
 
     return {
         "dag_id": dag_id,

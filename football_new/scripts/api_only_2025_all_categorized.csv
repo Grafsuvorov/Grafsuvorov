@@ -1,0 +1,149 @@
+id,season,league_name,canonical_team_name,canonical_player_name,api_player_id,api_player_name,api_team_id,api_team_name,minutes,goals,assists,shots,key_passes,category
+10825,2025,Premier League,chelsea,l colwill,152953,L. Colwill,49,Chelsea,478,0,1,1,2,medium_priority_review
+10771,2025,Premier League,chelsea,c nkunku,269,C. Nkunku,49,Chelsea,291,1,0,6,5,likely_not_in_understat
+10769,2025,Premier League,manchester city,m akanji,5,M. Akanji,50,Manchester City,247,0,0,3,2,likely_not_in_understat
+10901,2025,Premier League,manchester city,vitor nunes,414359,Vitor Nunes,50,Manchester City,213,0,0,1,1,likely_not_in_understat
+10819,2025,Premier League,chelsea,n madueke,136723,N. Madueke,49,Chelsea,198,0,0,7,6,likely_not_in_understat
+10862,2025,Premier League,sunderland,harrison jones,330640,Harrison Jones,746,Sunderland,107,0,0,1,1,likely_not_in_understat
+10799,2025,Premier League,sunderland,a patterson,19881,A. Patterson,746,Sunderland,107,0,0,0,0,likely_not_in_understat
+10841,2025,Premier League,chelsea,n jackson,283058,N. Jackson,49,Chelsea,98,0,1,4,3,likely_not_in_understat
+10773,2025,Premier League,manchester united,a onana,526,A. Onana,33,Manchester United,96,0,0,0,0,likely_not_in_understat
+10789,2025,Premier League,everton,m travers,18860,M. Travers,45,Everton,95,0,0,0,0,likely_not_in_understat
+10792,2025,Premier League,brighton hove albion,j steele,18960,J. Steele,51,Brighton,95,0,0,0,0,likely_not_in_understat
+10785,2025,Premier League,brighton hove albion,igor,7600,Igor,51,Brighton,95,0,0,0,0,likely_not_in_understat
+10840,2025,Premier League,burnley,a ramsey,278079,A. Ramsey,44,Burnley,90,1,0,2,0,likely_not_in_understat
+10812,2025,Premier League,bournemouth,j araujo,51051,J. Araujo,35,Bournemouth,90,0,0,0,0,likely_not_in_understat
+10801,2025,Premier League,fulham,b lecomte,21566,B. Lecomte,36,Fulham,90,0,0,0,0,likely_not_in_understat
+10860,2025,Premier League,burnley,m wei,328273,M. Weiß,44,Burnley,90,0,0,0,0,likely_not_in_understat
+10782,2025,Premier League,west ham united,edson alvarez,2869,Edson Álvarez,48,West Ham,90,0,0,0,0,likely_not_in_understat
+10881,2025,Premier League,sunderland,jenson jones,381014,Jenson Jones,746,Sunderland,62,0,0,2,0,likely_not_in_understat
+10833,2025,Premier League,sunderland,n huggins,169282,N. Huggins,746,Sunderland,45,0,0,0,0,likely_not_in_understat
+10868,2025,Premier League,liverpool,b doak,343576,B. Doak,40,Liverpool,45,0,0,0,0,likely_not_in_understat
+10890,2025,Premier League,brentford,kaye furo,393193,Kaye Furo,55,Brentford,43,0,0,0,1,likely_not_in_understat
+10906,2025,Premier League,sunderland,m aleksia,428076,M. AleksiÄ,746,Sunderland,29,0,1,0,1,likely_not_in_understat
+10857,2025,Premier League,brighton hove albion,c tasker,328076,C. Tasker,51,Brighton,17,0,0,0,0,likely_not_in_understat
+10820,2025,Premier League,leeds,largie ramazani,138776,Largie Ramazani,63,Leeds,11,0,1,0,1,likely_not_in_understat
+10909,2025,Premier League,everton,adam aznou,431921,Adam Aznou,45,Everton,8,0,0,0,0,likely_not_in_understat
+10831,2025,Premier League,everton,t onyango,167657,T. Onyango,45,Everton,1,0,0,0,0,likely_not_in_understat
+10822,2025,Premier League,everton,harry tyrer,138844,Harry Tyrer,45,Everton,0,0,0,0,0,likely_not_in_understat
+10885,2025,Premier League,tottenham hotspur,l vuskovic,387521,L. Vušković,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10916,2025,Premier League,arsenal,a annous,457731,A. Annous,42,Arsenal,0,0,0,0,0,likely_not_in_understat
+10816,2025,Premier League,bournemouth,r faivre,84082,R. Faivre,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10775,2025,Premier League,manchester city,ilkay gundogan,633,İlkay Gündoğan,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10788,2025,Premier League,nottingham forest,w boly,18739,W. Boly,65,Nottingham Forest,0,0,0,0,0,likely_not_in_understat
+10899,2025,Premier League,brighton hove albion,freddie simmonds,412086,Freddie Simmonds,51,Brighton,0,0,0,0,0,likely_not_in_understat
+10894,2025,Premier League,sunderland,timur tutierov,400033,Timur Tutierov,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10774,2025,Premier League,manchester city,ederson,617,Ederson,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10815,2025,Premier League,everton,t king,82855,T. King,45,Everton,0,0,0,0,0,likely_not_in_understat
+10854,2025,Premier League,chelsea,dario essugo,308678,Dário Essugo,49,Chelsea,0,0,0,0,0,likely_not_in_understat
+10855,2025,Premier League,aston villa,travis patterson,308843,Travis Patterson,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10866,2025,Premier League,burnley,tom tweedy,339259,Tom Tweedy,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10874,2025,Premier League,sunderland,j whittaker,362766,J. Whittaker,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10810,2025,Premier League,burnley,v hladky,44994,V. Hladký,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10924,2025,Premier League,newcastle united,park seung soo,526535,Park Seung-soo,34,Newcastle,0,0,0,0,0,likely_not_in_understat
+10847,2025,Premier League,crystal palace,j rak sakyi,284449,J. Rak-Sakyi,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10837,2025,Premier League,tottenham hotspur,a kinsky,265826,A. Kinský,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10915,2025,Premier League,burnley,o pimlott,456637,O. Pimlott,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10794,2025,Premier League,sunderland,simon moore,19089,Simon Moore,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10896,2025,Premier League,bournemouth,remy rees dottin,402434,Remy Rees-Dottin,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10781,2025,Premier League,bournemouth,philip billing,2734,Philip Billing,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10805,2025,Premier League,manchester city,s ortega,25004,S. Ortega,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10903,2025,Premier League,burnley,marley leuluai,416256,Marley Leuluai,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10850,2025,Premier League,west ham united,l orford,288118,L. Orford,48,West Ham,0,0,0,0,0,likely_not_in_understat
+10861,2025,Premier League,everton,youssef chermiti,330412,Youssef Chermiti,45,Everton,0,0,0,0,0,likely_not_in_understat
+10776,2025,Premier League,tottenham hotspur,manor solomon,697,Manor Solomon,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10832,2025,Premier League,brighton hove albion,t mcgill,167663,T. McGill,51,Brighton,0,0,0,0,0,likely_not_in_understat
+10843,2025,Premier League,wolverhampton wanderers,ojinnaka temple,284236,Ojinnaka Temple,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10851,2025,Premier League,fulham,alfie mcnally,288129,Alfie McNally,36,Fulham,0,0,0,0,0,likely_not_in_understat
+10818,2025,Premier League,liverpool,calvin ramsay,135525,Calvin Ramsay,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10807,2025,Premier League,bournemouth,christos mandas,26644,Christos Mandas,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10784,2025,Premier League,west ham united,ukasz fabianski,2997,Łukasz Fabiański,48,West Ham,0,0,0,0,0,likely_not_in_understat
+10923,2025,Premier League,brentford,luka bentt,513316,Luka Bentt,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10936,2025,Premier League,wolverhampton wanderers,jerome abbey,613795,Jerome Abbey,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10904,2025,Premier League,tottenham hotspur,james wilson,418942,James Wilson,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10856,2025,Premier League,tottenham hotspur,rio kyerematen,310531,Rio Kyerematen,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10849,2025,Premier League,chelsea,max merrick,287868,Max Merrick,49,Chelsea,0,0,0,0,0,likely_not_in_understat
+10922,2025,Premier League,burnley,george brierley,503414,George Brierley,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10938,2025,Premier League,bournemouth,malcom dacosta,626383,Malcom Dacosta,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10883,2025,Premier League,fulham,samuel amissah,384981,Samuel Amissah,36,Fulham,0,0,0,0,0,likely_not_in_understat
+10907,2025,Premier League,brentford,yunus konak,430734,Yunus Konak,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10902,2025,Premier League,aston villa,tj carroll,416250,TJ Carroll,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10905,2025,Premier League,brentford,gustavo nunes,427736,Gustavo Nunes,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10793,2025,Premier League,manchester city,marcus bettinelli,19012,Marcus Bettinelli,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10863,2025,Premier League,bournemouth,dominic sadi,334725,Dominic Sadi,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10787,2025,Premier League,newcastle united,john ruddy,18737,John Ruddy,34,Newcastle,0,0,0,0,0,likely_not_in_understat
+10926,2025,Premier League,aston villa,ben broggio,550218,Ben Broggio,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10932,2025,Premier League,west ham united,airidas golambeckis,557541,Airidas Golambeckis,48,West Ham,0,0,0,0,0,likely_not_in_understat
+10921,2025,Premier League,aston villa,leon routh,482915,Leon Routh,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10870,2025,Premier League,leeds,sam chambers,351344,Sam Chambers,63,Leeds,0,0,0,0,0,likely_not_in_understat
+10873,2025,Premier League,tottenham hotspur,james rowswell,361735,James Rowswell,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10937,2025,Premier League,brentford,ollie shield,624708,Ollie Shield,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10872,2025,Premier League,burnley,enock agyei,361388,Enock Agyei,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10876,2025,Premier League,crystal palace,zach marsh,363974,Zach Marsh,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10931,2025,Premier League,aston villa,ronnie hollingshead,557506,Ronnie Hollingshead,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10911,2025,Premier League,manchester city,ryan mcaidoo,442048,Ryan McAidoo,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10858,2025,Premier League,liverpool,wellity lucky,328081,Wellity Lucky,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10918,2025,Premier League,tottenham hotspur,luca williams barnett,465310,Luca Williams-Barnett,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10933,2025,Premier League,crystal palace,george king,557584,George King,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10891,2025,Premier League,newcastle united,sean neave,394165,Sean Neave,34,Newcastle,0,0,0,0,0,likely_not_in_understat
+10877,2025,Premier League,wolverhampton wanderers,ethan sutherland,379678,Ethan Sutherland,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10900,2025,Premier League,everton,braiden graham,413034,Braiden Graham,45,Everton,0,0,0,0,0,likely_not_in_understat
+10879,2025,Premier League,tottenham hotspur,callum olusesi,380689,Callum Olusesi,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10852,2025,Premier League,sunderland,leo fuhr hjelde,297187,Leo Fuhr Hjelde,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10889,2025,Premier League,manchester united,chido obi martin,389309,Chido Obi-Martin,33,Manchester United,0,0,0,0,0,likely_not_in_understat
+10834,2025,Premier League,chelsea,teddy sharman lowe,180940,Teddy Sharman-Lowe,49,Chelsea,0,0,0,0,0,likely_not_in_understat
+10869,2025,Premier League,manchester united,jack moorhouse,344229,Jack Moorhouse,33,Manchester United,0,0,0,0,0,likely_not_in_understat
+10844,2025,Premier League,everton,reece welch,284327,Reece Welch,45,Everton,0,0,0,0,0,likely_not_in_understat
+10887,2025,Premier League,liverpool,kieran morrison,389032,Kieran Morrison,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10895,2025,Premier League,wolverhampton wanderers,luke rawlings,401098,Luke Rawlings,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10934,2025,Premier League,newcastle united,adedamola samuel alabi,567998,Adedamola Samuel Alabi,34,Newcastle,0,0,0,0,0,likely_not_in_understat
+10935,2025,Premier League,bournemouth,charlie stevens,573755,Charlie Stevens,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10920,2025,Premier League,arsenal,marli salmon,482903,Marli Salmon,42,Arsenal,0,0,0,0,0,likely_not_in_understat
+10835,2025,Premier League,crystal palace,daniel imray,196856,Daniel Imray,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10930,2025,Premier League,crystal palace,benjamin casey,557475,Benjamin Casey,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10913,2025,Premier League,manchester city,reigan heskey,448969,Reigan Heskey,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10865,2025,Premier League,newcastle united,leo shahar,337934,Leo Shahar,34,Newcastle,0,0,0,0,0,likely_not_in_understat
+10867,2025,Premier League,liverpool,armin pecsi,342467,Ármin Pécsi,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10795,2025,Premier League,brentford,ellery balcombe,19340,Ellery Balcombe,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10864,2025,Premier League,tottenham hotspur,kota takai,337593,Kota Takai,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10800,2025,Premier League,leeds,illan meslier,20619,Illan Meslier,63,Leeds,0,0,0,0,0,likely_not_in_understat
+10914,2025,Premier League,chelsea,landon emenalo,454935,Landon Emenalo,49,Chelsea,0,0,0,0,0,likely_not_in_understat
+10925,2025,Premier League,everton,callum bates,546654,Callum Bates,45,Everton,0,0,0,0,0,likely_not_in_understat
+10842,2025,Premier League,wolverhampton wanderers,alfie pond,283272,Alfie Pond,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10878,2025,Premier League,tottenham hotspur,yusuf akhamrich,380688,Yusuf Akhamrich,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10884,2025,Premier League,wolverhampton wanderers,enso gonzalez,385726,Enso González,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10929,2025,Premier League,crystal palace,dean benamar,557414,Dean Benamar,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10791,2025,Premier League,bournemouth,fraser forster,18932,Fraser Forster,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10790,2025,Premier League,liverpool,freddie woodman,18889,Freddie Woodman,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10897,2025,Premier League,liverpool,amara nallo,407032,Amara Nallo,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10928,2025,Premier League,fulham,seth ridgeon,557335,Seth Ridgeon,36,Fulham,0,0,0,0,0,likely_not_in_understat
+10888,2025,Premier League,manchester city,charlie gray,389034,Charlie Gray,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10882,2025,Premier League,manchester city,stephen mfuni,382358,Stephen Mfuni,50,Manchester City,0,0,0,0,0,likely_not_in_understat
+10910,2025,Premier League,manchester united,godwill kukonki,440159,Godwill Kukonki,33,Manchester United,0,0,0,0,0,likely_not_in_understat
+10826,2025,Premier League,tottenham hotspur,brandon austin,156428,Brandon Austin,47,Tottenham,0,0,0,0,0,likely_not_in_understat
+10892,2025,Premier League,wolverhampton wanderers,saheed olagunju,397999,Saheed Olagunju,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10898,2025,Premier League,liverpool,g leoni,409047,G. Leoni,40,Liverpool,0,0,0,0,0,likely_not_in_understat
+10871,2025,Premier League,aston villa,triston rowe,360269,Triston Rowe,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10893,2025,Premier League,aston villa,sam proctor,398004,Sam Proctor,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10777,2025,Premier League,fulham,andreas pereira,899,Andreas Pereira,36,Fulham,0,0,0,0,0,likely_not_in_understat
+10814,2025,Premier League,chelsea,g s onina,64167,G. Słonina,49,Chelsea,0,0,0,0,0,likely_not_in_understat
+10796,2025,Premier League,wolverhampton wanderers,daniel bentley,19341,Daniel Bentley,39,Wolves,0,0,0,0,0,likely_not_in_understat
+10802,2025,Premier League,crystal palace,walter benitez,22157,Walter Benítez,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10912,2025,Premier League,leeds,harry gray,444291,Harry Gray,63,Leeds,0,0,0,0,0,likely_not_in_understat
+10845,2025,Premier League,everton,elijah campbell,284385,Elijah Campbell,45,Everton,0,0,0,0,0,likely_not_in_understat
+10813,2025,Premier League,arsenal,jakub kiwior,61431,Jakub Kiwior,42,Arsenal,0,0,0,0,0,likely_not_in_understat
+10886,2025,Premier League,sunderland,a abdullahi,388461,A. Abdullahi,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10786,2025,Premier League,brentford,m roerslev,15745,M. Roerslev,55,Brentford,0,0,0,0,0,likely_not_in_understat
+10859,2025,Premier League,sunderland,b middlemas,328086,B. Middlemas,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10780,2025,Premier League,arsenal,kepa arrizabalaga,2273,Kepa Arrizabalaga,42,Arsenal,0,0,0,0,0,likely_not_in_understat
+10798,2025,Premier League,crystal palace,r matthews,19684,R. Matthews,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10919,2025,Premier League,manchester united,d leon,475598,D. León,33,Manchester United,0,0,0,0,0,likely_not_in_understat
+10846,2025,Premier League,aston villa,james wright,284390,James Wright,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10821,2025,Premier League,brighton hove albion,t lamptey,138815,T. Lamptey,51,Brighton,0,0,0,0,0,likely_not_in_understat
+10824,2025,Premier League,bournemouth,w dennis,151756,W. Dennis,35,Bournemouth,0,0,0,0,0,likely_not_in_understat
+10783,2025,Premier League,manchester united,tom heaton,2931,Tom Heaton,33,Manchester United,0,0,0,0,0,likely_not_in_understat
+10880,2025,Premier League,crystal palace,rio cardines,380703,Rio Cardines,52,Crystal Palace,0,0,0,0,0,likely_not_in_understat
+10875,2025,Premier League,sunderland,jayden jones,362768,Jayden Jones,746,Sunderland,0,0,0,0,0,likely_not_in_understat
+10830,2025,Premier League,aston villa,samuel iling junior,162173,Samuel Iling Junior,66,Aston Villa,0,0,0,0,0,likely_not_in_understat
+10779,2025,Premier League,burnley,h delcroix,1411,H. Delcroix,44,Burnley,0,0,0,0,0,likely_not_in_understat
+10908,2025,Premier League,brentford,benjamin arthur,430827,Benjamin Arthur,55,Brentford,0,0,0,0,0,likely_not_in_understat

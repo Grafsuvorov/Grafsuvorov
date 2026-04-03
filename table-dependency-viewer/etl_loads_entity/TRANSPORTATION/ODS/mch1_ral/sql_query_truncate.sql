@@ -1,0 +1,1 @@
+truncate ods.mch1_ral;

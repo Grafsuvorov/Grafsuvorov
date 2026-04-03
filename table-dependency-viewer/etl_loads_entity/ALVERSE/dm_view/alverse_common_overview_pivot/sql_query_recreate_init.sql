@@ -1,0 +1,61 @@
+drop view if exists dm_view.alverse_common_overview_pivot;
+
+create or replace view dm_view.alverse_common_overview_pivot
+as 
+select
+    sa.sales_order_in_shipment,
+    sa.plant_producer_name,
+    sa.port_of_loading_name,
+    sa.material_aggr_name,
+    sa.forwarder_name,
+    sa.transport_railcar_type_name,
+    sa.weight_gross,
+    sa.weight_net,
+    sa.weight_net_with_wirerod,
+    sa.customer_name,
+    sa.contract_name,
+    sa.delivery_basis,
+    sa.delivery_point_name,
+    sa.dimensions_unit,
+    sa.consignee_name,
+    sa.material_specification_name,
+    sa.weight_strip,
+    sa.dt_collection,
+    sa.destination_station_in_shipment_name,
+    sa.grade_name,
+    sa.shipment_period_preferred,
+    sa.end_user_name,
+    sa.quantity_shipped,
+    sa.quantity_ordered,
+    sa.invoice_provisional_number,
+    sa.invoice_final_number,
+    sa.material_shape_name_full,
+    sa.frame_contract_code,
+    sa.delivery_region_name,
+    sa.country_of_end_user_name,
+    sa.vessel_and_voyage_actual_search_name,
+    pac.plant_name,
+    pac.casting_unit_name,
+    pac.casting_department_name,
+    pac.dt_casting_plan_start,
+    pac.dt_casting_plan_end,
+    pac.dt_warehouse_acceptance_plan_start,
+    pac.dt_warehouse_acceptance_plan_end,
+    pac.acceprted_plan_weight as accepted_plan_weight,
+    ar.dt_report,
+    ar.dt_posting,
+    ar.dt_overdue,
+    ar.dt_clearing,
+    ar.unit_balance_name,
+    ar.counterparty_full_name,
+    ar.external_contract_number,
+    ar.terms_of_payment_name,
+    ar.responsibility_center_name,
+    ar.contract_supervisor_name,
+    ar.debt_balance_subposition_document_currency_amount,
+    ar.document_currency_code
+from dm.sales_alverse_mlc sa
+	join dm.production_aluminium_casting_schedule pac
+		on sa.sales_order_in_shipment = pac.sales_request_code
+	join dm.accounts_receivaible_sales_alverse ar
+        on sa.sales_order_in_shipment = ar.sales_order_in_shipment;

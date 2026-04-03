@@ -1,0 +1,1 @@
+truncate table ods.map_transportation_raw_container_import_tracking_keys;

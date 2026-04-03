@@ -1,0 +1,2 @@
+id,season,league_name,canonical_team_name,canonical_player_name,api_player_id,api_player_name,api_team_id,api_team_name,minutes,goals,assists,shots,key_passes,category
+10825,2025,Premier League,chelsea,l colwill,152953,L. Colwill,49,Chelsea,478,0,1,1,2,medium_priority_review

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+.git
+*.log
+src/components/*.bak
+src/components/*.bak2
+public/onboarding/
+model/
+img*.png
+__pycache__/

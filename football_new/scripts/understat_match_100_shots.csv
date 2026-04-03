@@ -1,0 +1,32 @@
+id,minute,result,X,Y,xG,player,h_a,player_id,situation,season,shotType,match_id,h_team,a_team,h_goals,a_goals,date,player_assisted,lastAction,side
+51764,3,MissedShots,0.7709999847412109,0.625999984741211,0.016912000253796577,Jordon Ibe,h,481,FromCorner,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Martin Skrtel,LayOff,h
+51766,23,MissedShots,0.754000015258789,0.6140000152587891,0.01962430030107498,Christian Benteke,h,606,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,BallRecovery,h
+51767,25,Goal,0.9569999694824218,0.4759999847412109,0.5297859907150269,Christian Benteke,h,606,FromCorner,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Jordan Henderson,Cross,h
+51768,28,ShotOnPost,0.7930000305175782,0.3820000076293945,0.0268568005412817,Jordan Henderson,h,605,SetPiece,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,James Milner,Pass,h
+51769,30,BlockedShot,0.7809999847412109,0.45099998474121095,0.0461324006319046,Philippe Coutinho,h,488,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Christian Benteke,Pass,h
+51770,43,MissedShots,0.7969999694824219,0.30100000381469727,0.017776399850845337,Philippe Coutinho,h,488,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Christian Benteke,HeadPass,h
+51771,43,MissedShots,0.845,0.47,0.3563770055770874,Philippe Coutinho,h,488,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,None,h
+51775,50,MissedShots,0.825999984741211,0.7169999694824218,0.04867029935121536,Jordon Ibe,h,481,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Adam Lallana,TakeOn,h
+51776,50,BlockedShot,0.7709999847412109,0.37599998474121094,0.03337100148200989,Philippe Coutinho,h,488,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,Dispossessed,h
+51777,54,MissedShots,0.9269999694824219,0.585,0.13849300146102905,James Milner,h,489,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Jordon Ibe,Pass,h
+51782,67,BlockedShot,0.805,0.24399999618530274,0.05305569991469383,Philippe Coutinho,h,488,DirectFreekick,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,Standard,h
+51783,69,MissedShots,0.8669999694824219,0.26799999237060546,0.04357289895415306,Philippe Coutinho,h,488,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Christian Benteke,Pass,h
+51784,71,BlockedShot,0.8780000305175781,0.5209999847412109,0.11291000247001648,Philippe Coutinho,h,488,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,None,h
+51785,73,BlockedShot,0.8490000152587891,0.43400001525878906,0.12812000513076782,Philippe Coutinho,h,488,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Christian Benteke,Pass,h
+51791,87,MissedShots,0.7869999694824219,0.295,0.026128899306058884,Nathaniel Clyne,h,603,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,None,h
+51792,89,SavedShot,0.9330000305175781,0.48700000762939455,0.4758009910583496,Christian Benteke,h,606,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Nathaniel Clyne,Cross,h
+51793,89,MissedShots,0.865,0.45099998474121095,0.09445799887180328,Adam Lallana,h,486,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,,Rebound,h
+51794,91,MissedShots,0.7859999847412109,0.5820000076293945,0.027517899870872498,James Milner,h,489,SetPiece,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Emre Can,Pass,h
+51765,11,MissedShots,0.9219999694824219,0.610999984741211,0.02875489927828312,Joshua King,a,465,FromCorner,2015,Head,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Max Gradel,Cross,a
+51772,46,SavedShot,0.7369999694824219,0.549000015258789,0.019499799236655235,Matt Ritchie,a,461,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Eunan O&#039;Kane,Pass,a
+51773,48,MissedShots,0.830999984741211,0.3129999923706055,0.035874199122190475,Matt Ritchie,a,461,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Callum Wilson,Pass,a
+51774,49,BlockedShot,0.7980000305175782,0.34,0.023447200655937195,Callum Wilson,a,468,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Matt Ritchie,Chipped,a
+51778,59,ShotOnPost,0.8519999694824218,0.3129999923706055,0.044646698981523514,Matt Ritchie,a,461,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Joshua King,Pass,a
+51779,62,BlockedShot,0.785,0.3890000152587891,0.03107460029423237,Matt Ritchie,a,461,OpenPlay,2015,LeftFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Eunan O&#039;Kane,Pass,a
+51780,62,MissedShots,0.9440000152587891,0.33099998474121095,0.07165630161762238,Eunan O&#039;Kane,a,472,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Callum Wilson,Pass,a
+51781,64,BlockedShot,0.7759999847412109,0.42700000762939455,0.03037470020353794,Matt Ritchie,a,461,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Max Gradel,Pass,a
+51786,79,MissedShots,0.9159999847412109,0.5970000076293945,0.03618960082530975,Steve Cook,a,458,FromCorner,2015,Head,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Max Gradel,Cross,a
+51787,83,BlockedShot,0.720999984741211,0.500999984741211,0.014533599838614464,Eunan O&#039;Kane,a,472,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Andrew Surman,HeadPass,a
+51788,84,BlockedShot,0.9059999847412109,0.315,0.05647759884595871,Lee Tomlin,a,975,OpenPlay,2015,RightFoot,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Adam Smith,Pass,a
+51789,85,MissedShots,0.915,0.5,0.04438130185008049,Lee Tomlin,a,975,FromCorner,2015,OtherBodyPart,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Matt Ritchie,Aerial,a
+51790,87,SavedShot,0.9380000305175781,0.36700000762939455,0.02389420010149479,Lee Tomlin,a,975,OpenPlay,2015,Head,100,Liverpool,Bournemouth,1,0,2015-08-17 23:00:00,Simon Francis,Aerial,a

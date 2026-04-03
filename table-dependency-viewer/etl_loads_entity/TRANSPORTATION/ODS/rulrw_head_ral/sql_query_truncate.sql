@@ -1,0 +1,1 @@
+truncate table ods."/rul/rw_head_ral";

@@ -1,0 +1,1 @@
+truncate ods.cdhdr_ral;

@@ -1,0 +1,89 @@
+id,season,league_name,canonical_team_name,canonical_player_name,api_player_id,api_player_name,api_team_id,api_team_name,understat_player_id,understat_player_name,understat_team_id,understat_team_name,mapping_method,confidence,notes,updated_dttm
+9532,2025,Premier League,arsenal,a annous,457731,A. Annous,42,Arsenal,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9467,2025,Premier League,arsenal,gabriel magalhaes,22224,Gabriel Magalhães,42,Arsenal,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9475,2025,Premier League,arsenal,j kiwior,61431,J. Kiwior,42,Arsenal,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9451,2025,Premier League,arsenal,kepa,2273,Kepa,42,Arsenal,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9501,2025,Premier League,aston villa,j wright,284390,J. Wright,66,Aston Villa,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9491,2025,Premier League,aston villa,s iling junior,162173,S. Iling-Junior,66,Aston Villa,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9520,2025,Premier League,aston villa,s proctor,398004,S. Proctor,66,Aston Villa,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9505,2025,Premier League,aston villa,t patterson,308843,T. Patterson,66,Aston Villa,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9513,2025,Premier League,aston villa,triston rowe,360269,Triston Rowe,66,Aston Villa,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9474,2025,Premier League,bournemouth,j araujo,51051,J. Araujo,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9452,2025,Premier League,bournemouth,p billing,2734,P. Billing,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9479,2025,Premier League,bournemouth,petrovic,118307,Đ. Petrović,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9478,2025,Premier League,bournemouth,r faivre,84082,R. Faivre,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9522,2025,Premier League,bournemouth,remy rees dottin,402434,Remy Rees-Dottin,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9485,2025,Premier League,bournemouth,w dennis,151756,W. Dennis,35,Bournemouth,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9528,2025,Premier League,brentford,benjamin arthur,430827,Benjamin Arthur,55,Brentford,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9456,2025,Premier League,brentford,m roerslev,15745,M. Roerslev,55,Brentford,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9506,2025,Premier League,brighton hove albion,c tasker,328076,C. Tasker,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9449,2025,Premier League,brighton hove albion,f kad oglu,1361,F. Kadıoğlu,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9524,2025,Premier League,brighton hove albion,f simmonds,412086,F. Simmonds,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9455,2025,Premier League,brighton hove albion,igor,7600,Igor,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9459,2025,Premier League,brighton hove albion,j steele,18960,J. Steele,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9482,2025,Premier League,brighton hove albion,t lamptey,138815,T. Lamptey,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9493,2025,Premier League,brighton hove albion,t mcgill,167663,T. McGill,51,Brighton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9498,2025,Premier League,burnley,a ramsey,278079,A. Ramsey,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9450,2025,Premier League,burnley,h delcroix,1411,H. Delcroix,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9497,2025,Premier League,burnley,l ugochukwu,270508,L. Ugochukwu,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9508,2025,Premier League,burnley,m wei,328273,M. Weiß,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9526,2025,Premier League,burnley,marley leuluai,416256,Marley Leuluai,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9531,2025,Premier League,burnley,o pimlott,456637,O. Pimlott,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9511,2025,Premier League,burnley,tom tweedy,339259,Tom Tweedy,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9472,2025,Premier League,burnley,v hladky,44994,V. Hladký,44,Burnley,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9442,2025,Premier League,chelsea,c nkunku,269,C. Nkunku,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9504,2025,Premier League,chelsea,dario essugo,308678,Dário Essugo,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9476,2025,Premier League,chelsea,g s onina,64167,G. Słonina,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9486,2025,Premier League,chelsea,l colwill,152953,L. Colwill,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9499,2025,Premier League,chelsea,n jackson,283058,N. Jackson,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9480,2025,Premier League,chelsea,n madueke,136723,N. Madueke,49,Chelsea,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9502,2025,Premier League,crystal palace,j rak sakyi,284449,J. Rak-Sakyi,52,Crystal Palace,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9463,2025,Premier League,crystal palace,r matthews,19684,R. Matthews,52,Crystal Palace,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9516,2025,Premier League,crystal palace,rio cardines,380703,Rio Cardines,52,Crystal Palace,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9466,2025,Premier League,crystal palace,w benitez,22157,W. Benítez,52,Crystal Palace,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9500,2025,Premier League,everton,elijah xavier campbell,284385,Elijah Xavier Campbell,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9483,2025,Premier League,everton,h tyrer,138844,H. Tyrer,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9458,2025,Premier League,everton,m travers,18860,M. Travers,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9477,2025,Premier League,everton,t king,82855,T. King,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9492,2025,Premier League,everton,t onyango,167657,T. Onyango,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9509,2025,Premier League,everton,youssef chermiti,330412,Youssef Chermiti,45,Everton,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9448,2025,Premier League,fulham,andreas pereira,899,Andreas Pereira,36,Fulham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9465,2025,Premier League,fulham,b lecomte,21566,B. Lecomte,36,Fulham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9529,2025,Premier League,leeds,harry gray,444291,Harry Gray,63,Leeds,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9481,2025,Premier League,leeds,l ramazani,138776,L. Ramazani,63,Leeds,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9443,2025,Premier League,liverpool,alisson becker,280,Alisson Becker,40,Liverpool,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9512,2025,Premier League,liverpool,b doak,343576,B. Doak,40,Liverpool,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9523,2025,Premier League,liverpool,g leoni,409047,G. Leoni,40,Liverpool,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9445,2025,Premier League,manchester city,ederson,617,Ederson,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9446,2025,Premier League,manchester city,i gundogan,633,İ. Gündoğan,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9441,2025,Premier League,manchester city,m akanji,5,M. Akanji,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9488,2025,Premier League,manchester city,r cherki,156477,R. Cherki,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9469,2025,Premier League,manchester city,s ortega,25004,S. Ortega,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9525,2025,Premier League,manchester city,vitor nunes,414359,Vitor Nunes,50,Manchester City,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9473,2025,Premier League,manchester united,a bay nd r,50132,A. Bayındır,33,Manchester United,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9444,2025,Premier League,manchester united,a onana,526,A. Onana,33,Manchester United,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9533,2025,Premier League,manchester united,d leon,475598,D. León,33,Manchester United,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9454,2025,Premier League,manchester united,t heaton,2931,T. Heaton,33,Manchester United,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9534,2025,Premier League,newcastle united,park seung soo,526535,Park Seung-soo,34,Newcastle,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9490,2025,Premier League,newcastle united,t livramento,158694,T. Livramento,34,Newcastle,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9457,2025,Premier League,nottingham forest,w boly,18739,W. Boly,65,Nottingham Forest,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9519,2025,Premier League,sunderland,a abdullahi,388461,A. Abdullahi,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9464,2025,Premier League,sunderland,a patterson,19881,A. Patterson,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9507,2025,Premier League,sunderland,b middlemas,328086,B. Middlemas,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9510,2025,Premier League,sunderland,harrison jones,330640,Harrison Jones,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9514,2025,Premier League,sunderland,j whittaker,362766,J. Whittaker,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9515,2025,Premier League,sunderland,jayden jones,362768,Jayden Jones,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9517,2025,Premier League,sunderland,jenson jones,381014,Jenson Jones,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9527,2025,Premier League,sunderland,m aleksia,428076,M. AleksiÄ,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9494,2025,Premier League,sunderland,n huggins,169282,N. Huggins,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9460,2025,Premier League,sunderland,s moore,19089,S. Moore,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9521,2025,Premier League,sunderland,timur tuterov,400033,Timur Tuterov,746,Sunderland,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9496,2025,Premier League,tottenham hotspur,a kinsky,265826,A. Kinský,47,Tottenham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9487,2025,Premier League,tottenham hotspur,b austin,156428,B. Austin,47,Tottenham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9495,2025,Premier League,tottenham hotspur,d udogie,204039,D. Udogie,47,Tottenham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9518,2025,Premier League,tottenham hotspur,l vuskovic,387521,L. Vušković,47,Tottenham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9447,2025,Premier League,tottenham hotspur,m solomon,697,M. Solomon,47,Tottenham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9453,2025,Premier League,west ham united,e alvarez,2869,E. Álvarez,48,West Ham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9503,2025,Premier League,west ham united,l orford,288118,L. Orford,48,West Ham,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9461,2025,Premier League,wolverhampton wanderers,d bentley,19341,D. Bentley,39,Wolves,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07
+9471,2025,Premier League,wolverhampton wanderers,toti gomes,41606,Toti Gomes,39,Wolves,,,,,api_only,0.0000,,2026-03-11 00:30:47.109504-07

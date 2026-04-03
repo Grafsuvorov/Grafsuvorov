@@ -1,0 +1,1 @@
+truncate dds.sales_batch_delivery;

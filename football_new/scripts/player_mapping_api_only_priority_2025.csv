@@ -1,0 +1,79 @@
+id,canonical_team_name,canonical_player_name,api_player_name,minutes,goals,assists,shots,key_passes,mapping_method
+9486,chelsea,l colwill,L. Colwill,478,0,1,1,2,api_only
+9442,chelsea,c nkunku,C. Nkunku,291,1,0,6,5,api_only
+9441,manchester city,m akanji,M. Akanji,247,0,0,3,2,api_only
+9525,manchester city,vitor nunes,Vitor Nunes,213,0,0,1,1,api_only
+9480,chelsea,n madueke,N. Madueke,198,0,0,7,6,api_only
+9510,sunderland,harrison jones,Harrison Jones,107,0,0,1,1,api_only
+9464,sunderland,a patterson,A. Patterson,107,0,0,0,0,api_only
+9499,chelsea,n jackson,N. Jackson,98,0,1,4,3,api_only
+9444,manchester united,a onana,A. Onana,96,0,0,0,0,api_only
+9458,everton,m travers,M. Travers,95,0,0,0,0,api_only
+9455,brighton hove albion,igor,Igor,95,0,0,0,0,api_only
+9459,brighton hove albion,j steele,J. Steele,95,0,0,0,0,api_only
+9498,burnley,a ramsey,A. Ramsey,90,1,0,2,0,api_only
+9453,west ham united,e alvarez,E. Álvarez,90,0,0,0,0,api_only
+9465,fulham,b lecomte,B. Lecomte,90,0,0,0,0,api_only
+9474,bournemouth,j araujo,J. Araujo,90,0,0,0,0,api_only
+9508,burnley,m wei,M. Weiß,90,0,0,0,0,api_only
+9517,sunderland,jenson jones,Jenson Jones,62,0,0,2,0,api_only
+9494,sunderland,n huggins,N. Huggins,45,0,0,0,0,api_only
+9512,liverpool,b doak,B. Doak,45,0,0,0,0,api_only
+9527,sunderland,m aleksia,M. AleksiÄ,29,0,1,0,1,api_only
+9506,brighton hove albion,c tasker,C. Tasker,17,0,0,0,0,api_only
+9481,leeds,l ramazani,L. Ramazani,11,0,1,0,1,api_only
+9492,everton,t onyango,T. Onyango,1,0,0,0,0,api_only
+9450,burnley,h delcroix,H. Delcroix,0,0,0,0,0,api_only
+9528,brentford,benjamin arthur,Benjamin Arthur,0,0,0,0,0,api_only
+9483,everton,h tyrer,H. Tyrer,0,0,0,0,0,api_only
+9518,tottenham hotspur,l vuskovic,L. Vušković,0,0,0,0,0,api_only
+9532,arsenal,a annous,A. Annous,0,0,0,0,0,api_only
+9478,bournemouth,r faivre,R. Faivre,0,0,0,0,0,api_only
+9446,manchester city,i gundogan,İ. Gündoğan,0,0,0,0,0,api_only
+9457,nottingham forest,w boly,W. Boly,0,0,0,0,0,api_only
+9487,tottenham hotspur,b austin,B. Austin,0,0,0,0,0,api_only
+9521,sunderland,timur tuterov,Timur Tuterov,0,0,0,0,0,api_only
+9445,manchester city,ederson,Ederson,0,0,0,0,0,api_only
+9477,everton,t king,T. King,0,0,0,0,0,api_only
+9504,chelsea,dario essugo,Dário Essugo,0,0,0,0,0,api_only
+9505,aston villa,t patterson,T. Patterson,0,0,0,0,0,api_only
+9511,burnley,tom tweedy,Tom Tweedy,0,0,0,0,0,api_only
+9514,sunderland,j whittaker,J. Whittaker,0,0,0,0,0,api_only
+9472,burnley,v hladky,V. Hladký,0,0,0,0,0,api_only
+9534,newcastle united,park seung soo,Park Seung-soo,0,0,0,0,0,api_only
+9502,crystal palace,j rak sakyi,J. Rak-Sakyi,0,0,0,0,0,api_only
+9496,tottenham hotspur,a kinsky,A. Kinský,0,0,0,0,0,api_only
+9531,burnley,o pimlott,O. Pimlott,0,0,0,0,0,api_only
+9460,sunderland,s moore,S. Moore,0,0,0,0,0,api_only
+9522,bournemouth,remy rees dottin,Remy Rees-Dottin,0,0,0,0,0,api_only
+9452,bournemouth,p billing,P. Billing,0,0,0,0,0,api_only
+9469,manchester city,s ortega,S. Ortega,0,0,0,0,0,api_only
+9526,burnley,marley leuluai,Marley Leuluai,0,0,0,0,0,api_only
+9503,west ham united,l orford,L. Orford,0,0,0,0,0,api_only
+9509,everton,youssef chermiti,Youssef Chermiti,0,0,0,0,0,api_only
+9447,tottenham hotspur,m solomon,M. Solomon,0,0,0,0,0,api_only
+9493,brighton hove albion,t mcgill,T. McGill,0,0,0,0,0,api_only
+9524,brighton hove albion,f simmonds,F. Simmonds,0,0,0,0,0,api_only
+9523,liverpool,g leoni,G. Leoni,0,0,0,0,0,api_only
+9513,aston villa,triston rowe,Triston Rowe,0,0,0,0,0,api_only
+9520,aston villa,s proctor,S. Proctor,0,0,0,0,0,api_only
+9448,fulham,andreas pereira,Andreas Pereira,0,0,0,0,0,api_only
+9476,chelsea,g s onina,G. Słonina,0,0,0,0,0,api_only
+9461,wolverhampton wanderers,d bentley,D. Bentley,0,0,0,0,0,api_only
+9466,crystal palace,w benitez,W. Benítez,0,0,0,0,0,api_only
+9529,leeds,harry gray,Harry Gray,0,0,0,0,0,api_only
+9500,everton,elijah xavier campbell,Elijah Xavier Campbell,0,0,0,0,0,api_only
+9475,arsenal,j kiwior,J. Kiwior,0,0,0,0,0,api_only
+9519,sunderland,a abdullahi,A. Abdullahi,0,0,0,0,0,api_only
+9456,brentford,m roerslev,M. Roerslev,0,0,0,0,0,api_only
+9507,sunderland,b middlemas,B. Middlemas,0,0,0,0,0,api_only
+9451,arsenal,kepa,Kepa,0,0,0,0,0,api_only
+9463,crystal palace,r matthews,R. Matthews,0,0,0,0,0,api_only
+9533,manchester united,d leon,D. León,0,0,0,0,0,api_only
+9501,aston villa,j wright,J. Wright,0,0,0,0,0,api_only
+9482,brighton hove albion,t lamptey,T. Lamptey,0,0,0,0,0,api_only
+9485,bournemouth,w dennis,W. Dennis,0,0,0,0,0,api_only
+9454,manchester united,t heaton,T. Heaton,0,0,0,0,0,api_only
+9516,crystal palace,rio cardines,Rio Cardines,0,0,0,0,0,api_only
+9515,sunderland,jayden jones,Jayden Jones,0,0,0,0,0,api_only
+9491,aston villa,s iling junior,S. Iling-Junior,0,0,0,0,0,api_only

@@ -1,0 +1,1 @@
+truncate table dds.transportation_service_invoice_partner_mirror_relation;

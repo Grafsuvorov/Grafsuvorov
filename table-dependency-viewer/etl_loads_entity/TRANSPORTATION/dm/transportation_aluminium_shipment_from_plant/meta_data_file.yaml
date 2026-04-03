@@ -1,0 +1,49 @@
+table_name: transportation_aluminium_shipment_from_plant
+table_schema: dm
+table_id: 1729
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 34
+entity_name: TRANSPORTATION
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 23:30:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_aluminium_shipment_from_plant/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_aluminium_shipment_from_plant/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/dm/transportation_aluminium_shipment_from_plant/sql_query_truncate.sql
+depends_on:
+  dds:
+  - sales_batch_delivery
+  - sales_request
+  dict_dds:
+  - counterparty
+  - currency_rate
+  - etsng
+  - material
+  - material_shape_texts
+  - material_specification
+  - material_texts
+  - plant_and_subsidiary
+  - railcar_quantity_index_texts
+  - railway_platform_completeness_type_texts
+  - sales_order_market
+  - sales_sector_texts
+  - transport_hub
+  - transport_route
+  - transport_transfer_type
+  - transportation_scheme
+  dm_calc:
+  - transportation_aluminium_shipment_from_plant
+  ods:
+  - map_delivery_document_attributes_keys_ral
+  - map_transportation_expenses_keys_ral

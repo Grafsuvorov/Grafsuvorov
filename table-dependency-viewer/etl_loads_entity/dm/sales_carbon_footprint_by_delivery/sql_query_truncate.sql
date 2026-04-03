@@ -1,0 +1,1 @@
+TRUNCATE dm.sales_carbon_footprint_by_delivery;

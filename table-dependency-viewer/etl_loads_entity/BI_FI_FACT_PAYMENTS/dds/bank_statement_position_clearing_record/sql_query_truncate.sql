@@ -1,0 +1,1 @@
+truncate dds.bank_statement_position_clearing_record;

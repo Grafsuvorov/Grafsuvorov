@@ -1,0 +1,103 @@
+apply,season,league_name,canonical_team_name,understat_row_id,understat_player_name,api_row_id,api_player_name_suggested,score,reason,note
+0,2025,Premier League,arsenal,9065,Christian Nørgaard,,,,,no_candidate
+0,2025,Premier League,arsenal,8990,Gabriel Jesus,,,,,no_candidate
+0,2025,Premier League,arsenal,9216,Piero Hincapié,,,,,no_candidate
+0,2025,Premier League,aston villa,9439,Alysson Edward,,,,,no_candidate
+0,2025,Premier League,aston villa,9380,Andrés García,,,,,no_candidate
+0,2025,Premier League,aston villa,9426,George Hemmings,,,,,no_candidate
+0,2025,Premier League,aston villa,9086,Harvey Elliott,,,,,no_candidate
+0,2025,Premier League,aston villa,9030,Jadon Sancho,,,,,no_candidate
+0,2025,Premier League,aston villa,8985,Leon Bailey,,,,,no_candidate
+0,2025,Premier League,aston villa,8921,Ross Barkley,,,,,no_candidate
+0,2025,Premier League,aston villa,8930,Tammy Abraham,,,,,no_candidate
+0,2025,Premier League,aston villa,9017,Victor Lindelöf,,,,,no_candidate
+0,2025,Premier League,bournemouth,9327,Alejandro Jiménez,,,,,no_candidate
+0,2025,Premier League,bournemouth,9435,Alex Tóth,,,,,no_candidate
+0,2025,Premier League,bournemouth,9026,Enes Ünal,,,,,no_candidate
+0,2025,Premier League,bournemouth,8965,Lewis Cook,,,,,no_candidate
+0,2025,Premier League,bournemouth,9190,Rayan,,,,,no_candidate
+0,2025,Premier League,bournemouth,9416,Veljko Milosavljevic,,,,,no_candidate
+0,2025,Premier League,brentford,9036,Reiss Nelson,,,,,no_candidate
+0,2025,Premier League,brentford,9428,Romelle Donovan,,,,,no_candidate
+1,2025,Premier League,brighton hove albion,9362,Ferdi Kadioglu,9449,F. Kadıoğlu,0.7500,fuzzy,low_conf_auto
+0,2025,Premier League,brighton hove albion,9381,Joe Knight,,,,,no_candidate
+0,2025,Premier League,brighton hove albion,9424,Nehemiah Oriola,,,,,no_candidate
+0,2025,Premier League,brighton hove albion,8913,Pascal Groß,,,,,no_candidate
+0,2025,Premier League,brighton hove albion,9014,Solly March,,,,,no_candidate
+0,2025,Premier League,burnley,9166,Florentino Luís,,,,,no_candidate
+0,2025,Premier League,burnley,8937,James Ward-Prowse,,,,,no_candidate
+0,2025,Premier League,chelsea,9238,Alejandro Garnacho,,,,,no_candidate
+0,2025,Premier League,chelsea,9072,Benoit Badiashile Mukinayi,,,,,no_candidate
+0,2025,Premier League,chelsea,9287,Facundo Buonanotte,,,,,no_candidate
+0,2025,Premier League,chelsea,9278,Mamadou Sarr,,,,,no_candidate
+0,2025,Premier League,chelsea,9221,Romeo Lavia,,,,,no_candidate
+0,2025,Premier League,crystal palace,9252,Brennan Johnson,,,,,no_candidate
+0,2025,Premier League,crystal palace,9274,Chadi Riad,,,,,no_candidate
+0,2025,Premier League,crystal palace,9345,Christantus Uche,,,,,no_candidate
+0,2025,Premier League,crystal palace,9035,Eddie Nketiah,,,,,no_candidate
+0,2025,Premier League,crystal palace,9108,Evann Guessand,,,,,no_candidate
+0,2025,Premier League,crystal palace,9270,Jørgen Strand Larsen,,,,,no_candidate
+0,2025,Premier League,crystal palace,9365,Jaydee Canvot,,,,,no_candidate
+0,2025,Premier League,crystal palace,9430,Joél Drakes-Thomas,,,,,no_candidate
+0,2025,Premier League,everton,9135,Jarrad Branthwaite,,,,,no_candidate
+0,2025,Premier League,everton,9284,Merlin Röhl,,,,,no_candidate
+0,2025,Premier League,everton,9233,Nathan Patterson,,,,,no_candidate
+0,2025,Premier League,fulham,9374,Jonah Kusi-Asare,,,,,no_candidate
+0,2025,Premier League,fulham,9419,Kevin,,,,,no_candidate
+0,2025,Premier League,leeds,9288,Facundo Buonanotte,,,,,no_candidate
+0,2025,Premier League,liverpool,8986,Alexander Isak,,,,,no_candidate
+0,2025,Premier League,manchester city,9290,Antoine Semenyo,,,,,no_candidate
+0,2025,Premier League,manchester city,9420,Divine Mukasa,,,,,no_candidate
+0,2025,Premier League,manchester city,8951,Gianluigi Donnarumma,,,,,no_candidate
+0,2025,Premier League,manchester city,9213,Josko Gvardiol,,,,,no_candidate
+0,2025,Premier League,manchester city,9090,Marc Guehi,,,,,no_candidate
+0,2025,Premier League,manchester city,8970,Mateo Kovacic,,,,,no_candidate
+0,2025,Premier League,manchester city,9375,Max Alleyne,,,,,no_candidate
+0,2025,Premier League,manchester city,9305,Sávio,,,,,no_candidate
+1,2025,Premier League,manchester united,9322,Altay Bayindir,9473,A. Bayındır,0.6667,fuzzy,low_conf_auto
+0,2025,Premier League,manchester united,9431,Bendito Mantato,,,,,no_candidate
+0,2025,Premier League,manchester united,9366,Jack Fletcher,,,,,no_candidate
+0,2025,Premier League,manchester united,9256,Lisandro Martínez,,,,,no_candidate
+0,2025,Premier League,manchester united,9421,Senne Lammens,,,,,no_candidate
+0,2025,Premier League,manchester united,9427,Shea Lacey,,,,,no_candidate
+0,2025,Premier League,manchester united,9432,Tyler Fletcher,,,,,no_candidate
+0,2025,Premier League,manchester united,9257,Tyrell Malacia,,,,,no_candidate
+0,2025,Premier League,newcastle united,9328,Alex Murphy,,,,,no_candidate
+0,2025,Premier League,newcastle united,9008,Yoane Wissa,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9161,Dilane Bakwa,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9415,John Victor,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9314,Lorenzo Lucca,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9133,Luca Netz,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9120,Nicolás Domínguez,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9352,Nicolò Savona,,,,,no_candidate
+0,2025,Premier League,nottingham forest,8974,Oleksandr Zinchenko,,,,,no_candidate
+0,2025,Premier League,nottingham forest,9149,Stefan Ortega Moreno,,,,,no_candidate
+0,2025,Premier League,sunderland,8929,Bertrand Traoré,,,,,no_candidate
+0,2025,Premier League,sunderland,9212,Brian Brobbey,,,,,no_candidate
+0,2025,Premier League,sunderland,9138,Dennis Cirkin,,,,,no_candidate
+0,2025,Premier League,sunderland,9440,Djiamgone Jocelin Ta Bi,,,,,no_candidate
+0,2025,Premier League,sunderland,9422,Luke O&#039;Nien,,,,,no_candidate
+0,2025,Premier League,sunderland,9361,Lutsharel Geertruida,,,,,no_candidate
+0,2025,Premier League,sunderland,9438,Melker Ellborg,,,,,no_candidate
+0,2025,Premier League,sunderland,9437,Nilson Angulo,,,,,no_candidate
+0,2025,Premier League,sunderland,9294,Romaine Mundle,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9173,Conor Gallagher,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9183,Dane Scarlett,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9176,Radu Dragusin,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9007,Randal Kolo Muani,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9436,Souza,,,,,no_candidate
+0,2025,Premier League,tottenham hotspur,9001,Yves Bissouma,,,,,no_candidate
+0,2025,Premier League,west ham united,9054,Axel Disasi,,,,,no_candidate
+0,2025,Premier League,west ham united,9373,Ezra Mayers,,,,,no_candidate
+0,2025,Premier League,west ham united,9339,George Earthy,,,,,no_candidate
+0,2025,Premier League,west ham united,9104,Igor Julio,,,,,no_candidate
+0,2025,Premier League,west ham united,9359,Luis Guilherme,,,,,no_candidate
+0,2025,Premier League,west ham united,9429,Mohamadou Kanté,,,,,no_candidate
+0,2025,Premier League,west ham united,9434,Pablo,,,,,no_candidate
+0,2025,Premier League,west ham united,9255,Soungoutou Magassa,,,,,no_candidate
+0,2025,Premier League,west ham united,9266,Valentín Castellanos,,,,,no_candidate
+0,2025,Premier League,wolverhampton wanderers,8981,Adam Armstrong,,,,,no_candidate
+0,2025,Premier League,wolverhampton wanderers,8999,Angel Gomes,,,,,no_candidate
+0,2025,Premier League,wolverhampton wanderers,9384,Mateus Mané,,,,,no_candidate
+0,2025,Premier League,wolverhampton wanderers,9367,Pedro Lima,,,,,no_candidate
+0,2025,Premier League,wolverhampton wanderers,9160,Tolu Arokodare,,,,,no_candidate

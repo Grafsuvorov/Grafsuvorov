@@ -1,0 +1,1 @@
+truncate ods."bank_statement_header";

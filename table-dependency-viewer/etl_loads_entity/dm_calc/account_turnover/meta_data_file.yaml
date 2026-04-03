@@ -1,0 +1,45 @@
+table_name: account_turnover
+table_schema: dm_calc
+table_id: 1410
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 36
+entity_name: BI_FI
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/account_turnover/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/account_turnover/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/account_turnover/sql_query_truncate.sql
+depends_on:
+  dds:
+  - accounting_document_position_correspondence
+  dm_calc:
+  - plant_by_unit_balance
+  ods:
+  - accounting_documents
+verification:
+- duplicate_check
+key_attributes:
+- unit_balance_code
+- fiscal_year
+- accounting_document_code
+- position_line_item
+- correspondence_debit_or_credit_code
+- correspondence_line_item_number
+- credit_line_item_number
+- debit_line_item_number
+- credit_item_for_new_item_number
+- debit_item_for_new_item_number
+- credit_item_number_from_ledger_item_split
+- debit_item_number_from_ledger_item_split

@@ -1,0 +1,1 @@
+truncate table dm.sales_delivery_tracking_normative_check;

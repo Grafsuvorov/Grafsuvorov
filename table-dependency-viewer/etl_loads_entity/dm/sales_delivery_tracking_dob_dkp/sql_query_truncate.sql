@@ -1,0 +1,1 @@
+truncate dm."sales_delivery_tracking_dob_dkp";

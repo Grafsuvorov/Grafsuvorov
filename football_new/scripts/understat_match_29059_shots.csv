@@ -1,0 +1,25 @@
+id,minute,result,X,Y,xG,player,h_a,player_id,situation,season,shotType,match_id,h_team,a_team,h_goals,a_goals,date,player_assisted,lastAction,side
+672203,1,Goal,0.93,0.45299999237060545,0.14487452805042267,Douglas Luiz,h,6122,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Leon Bailey,Pass,h
+672209,23,SavedShot,0.879000015258789,0.3579999923706055,0.06287028640508652,Ollie Watkins,h,8865,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Emiliano Martinez,Pass,h
+672213,30,SavedShot,0.870999984741211,0.33099998474121095,0.32006531953811646,Ollie Watkins,h,8865,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Emiliano Buendía,Throughball,h
+672214,33,SavedShot,0.855999984741211,0.7140000152587891,0.04437154158949852,Morgan Rogers,h,12412,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Ian Maatsen,Pass,h
+672218,48,MissedShots,0.7759999847412109,0.6819999694824219,0.05843624100089073,Morgan Rogers,h,12412,DirectFreekick,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,,Standard,h
+672222,79,MissedShots,0.9019999694824219,0.35200000762939454,0.05279543623328209,Alysson Edward,h,14446,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,,None,h
+672224,83,MissedShots,0.8090000152587891,0.5379999923706055,0.05273498594760895,Morgan Rogers,h,12412,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Jadon Sancho,Pass,h
+672225,83,BlockedShot,0.7369999694824219,0.675,0.010846469551324844,Ross Barkley,h,592,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Jadon Sancho,Pass,h
+672226,89,ShotOnPost,0.9280000305175782,0.465,0.3215424418449402,Tammy Abraham,h,702,OpenPlay,2025,Head,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Ross Barkley,Chipped,h
+672204,5,SavedShot,0.9459999847412109,0.42700000762939455,0.2791185975074768,João Pedro,a,8272,OpenPlay,2025,Head,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Cross,a
+672205,14,SavedShot,0.79,0.5829999923706055,0.03208793327212334,Cole Palmer,a,8497,OpenPlay,2025,LeftFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Pass,a
+672206,15,BlockedShot,0.945,0.5259999847412109,0.07942557334899902,Wesley Fofana,a,7589,FromCorner,2025,Head,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,,None,a
+672207,21,BlockedShot,0.8809999847412109,0.64,0.058075807988643646,Alejandro Garnacho,a,10552,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Cole Palmer,Pass,a
+672208,23,SavedShot,0.8440000152587891,0.615,0.05760219320654869,Enzo Fernández,a,11356,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Pass,a
+672210,28,BlockedShot,0.835999984741211,0.43099998474121093,0.048743750900030136,Reece James,a,8067,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Cross,a
+672211,28,BlockedShot,0.855999984741211,0.710999984741211,0.03458963707089424,Alejandro Garnacho,a,10552,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Enzo Fernández,Pass,a
+672212,29,MissedShots,0.924000015258789,0.4470000076293945,0.04752112179994583,Wesley Fofana,a,7589,FromCorner,2025,Head,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,,None,a
+672215,34,Goal,0.9730000305175781,0.51,0.8978991508483887,João Pedro,a,8272,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Malo Gusto,Pass,a
+672216,47,MissedShots,0.9069999694824219,0.665,0.07121910154819489,Jorrel Hato,a,13776,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Pass,a
+672217,50,Goal,0.9230000305175782,0.5709999847412109,0.4525119662284851,João Pedro,a,8272,OpenPlay,2025,LeftFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Enzo Fernández,Throughball,a
+672219,54,Goal,0.855,0.4490000152587891,0.1363144814968109,Cole Palmer,a,8497,OpenPlay,2025,LeftFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,João Pedro,None,a
+672220,63,Goal,0.935,0.4859999847412109,0.6222708821296692,João Pedro,a,8272,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Alejandro Garnacho,Pass,a
+672221,70,MissedShots,0.85,0.47299999237060547,0.11878543347120285,João Pedro,a,8272,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Cole Palmer,Pass,a
+672223,81,SavedShot,0.899000015258789,0.45099998474121095,0.4526680111885071,Alejandro Garnacho,a,10552,OpenPlay,2025,RightFoot,29059,Aston Villa,Chelsea,1,4,2026-03-04 19:30:00,Marc Cucurella,Pass,a

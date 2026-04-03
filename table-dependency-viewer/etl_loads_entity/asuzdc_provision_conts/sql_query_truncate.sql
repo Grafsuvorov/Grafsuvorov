@@ -1,0 +1,1 @@
+truncate table ods.asuzdc_provision_conts;

@@ -1,0 +1,1 @@
+truncate dds."earmarked_funds_documents";

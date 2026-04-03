@@ -1,0 +1,1 @@
+truncate table ods."/rusal/bp_schedp_ral";

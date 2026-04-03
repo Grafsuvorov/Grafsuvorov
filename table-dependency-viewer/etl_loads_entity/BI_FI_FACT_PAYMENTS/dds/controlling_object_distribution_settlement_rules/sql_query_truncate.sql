@@ -1,0 +1,1 @@
+truncate dds.controlling_object_distribution_settlement_rules;

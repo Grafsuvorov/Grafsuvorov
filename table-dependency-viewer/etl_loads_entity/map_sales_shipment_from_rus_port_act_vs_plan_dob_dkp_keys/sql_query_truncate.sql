@@ -1,0 +1,2 @@
+delete from ods.map_sales_shipment_from_rus_port_act_vs_plan_dob_dkp_keys
+where tech_etl.util_text_to_date_validation(dt_shipment_from_russian_port_plan_yyyymm || '01') between date_trunc('month', current_date - interval '1 month') and date_trunc('month', current_date + interval '1 month'); 

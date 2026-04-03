@@ -1,0 +1,60 @@
+      home: hg,
+      away: ag,
+      display: full || "",
+    },
+    ft_score: full || "",
+  };
+};
+
+/* ===== H2H блок ===== */
+function H2HBlock({ list, onOpenModal, onGoTeam }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-3">
+      <div className="text-sm font-semibold mb-2">
+        Личные встречи (последние 5)
+      </div>
+
+      {!list?.length ? (
+        <div className="text-sm text-gray-500">Нет личных встреч.</div>
+      ) : (
+        <div className="space-y-2">
+          {list.map((m, i) => (
+            <div
+              key={m.fixture_id || i}
+              onClick={() => onOpenModal?.(m)}
+              className="grid grid-cols-[70px,180px,64px,180px] items-center gap-3 border rounded-lg px-3 py-1.5 text-sm cursor-pointer hover:bg-rose-50/40 hover:border-rose-200 transition"
+
+            >
+
+              {/* 1. ДАТА */}
+              <div className="flex items-center">
+                <span className="px-1.5 py-0.5 rounded border bg-white text-[11px] tabular-nums text-gray-600">
+                  {toDDMM(m.date)}
+                </span>
+              </div>
+
+              {/* 2. HOME — логотип слева, выравнивание к дате */}
+              <div className="flex items-center gap-2 min-w-0 pl-2">
+
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); onGoTeam?.(m.home_team_id); }}
+                >
+                  <img
+                    className="w-4 h-4"
+                    src={logoSafe(m.home_team_id, m.home_team)}
+                    alt=""
+                  />
+                </button>
+                <span className="truncate">{m.home_team}</span>
+              </div>
+
+              {/* 3. СЧЁТ — строго центр */}
+              <div className="flex justify-center">
+                <span className="inline-flex justify-center items-center min-w-[64px] px-2 py-0.5 rounded-full bg-gray-100 font-semibold tabular-nums">
+                  {fmtScore(m)}
+                </span>
+              </div>
+
+              {/* 4. AWAY — логотип слева, тоже смещаем ближе к центру*/}
+              <div className="flex items-center gap-2 min-w-0 pl-4">

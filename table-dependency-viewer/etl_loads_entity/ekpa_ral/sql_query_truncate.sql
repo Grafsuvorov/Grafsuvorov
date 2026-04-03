@@ -1,0 +1,1 @@
+truncate ods.ekpa_ral;

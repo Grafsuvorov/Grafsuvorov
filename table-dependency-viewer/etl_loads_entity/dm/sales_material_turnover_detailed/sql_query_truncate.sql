@@ -1,0 +1,1 @@
+truncate dm.sales_material_turnover_detailed;

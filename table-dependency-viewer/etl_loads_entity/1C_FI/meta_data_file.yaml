@@ -1,0 +1,12 @@
+entity_id: 66
+entity_name: 1C_FI
+entity_type: TRANSACTION
+cron_interval: 30 4 * * *
+entity_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+entity_load_mode: RECREATE
+flag_active: true
+start_date: '2023-01-01 04:30:00'

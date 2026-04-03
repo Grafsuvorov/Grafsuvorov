@@ -1,0 +1,102 @@
+id,canonical_team_name,canonical_player_name,understat_player_name,minutes,goals,assists,xg,xa,shots,key_passes,mapping_method
+9290,manchester city,antoine semenyo,Antoine Semenyo,2520,15,4,11.118626,3.091043,67,32,understat_only
+9090,manchester city,marc guehi,Marc Guehi,2430,2,2,3.577785,2.410520,24,12,understat_only
+8951,manchester city,gianluigi donnarumma,Gianluigi Donnarumma,2340,0,0,0.000000,0.000000,0,0,understat_only
+9421,manchester united,senne lammens,Senne Lammens,2070,0,0,0.000000,0.000000,0,0,understat_only
+9327,bournemouth,alejandro jimenez,Alejandro Jiménez,1892,1,0,1.120446,1.548054,19,12,understat_only
+9270,crystal palace,j rgen strand larsen,Jørgen Strand Larsen,1830,4,1,5.339312,0.593646,32,9,understat_only
+9166,burnley,florentino luis,Florentino Luís,1684,0,2,0.939005,0.454098,9,9,understat_only
+9216,arsenal,piero hincapie,Piero Hincapié,1489,1,1,0.397272,1.302316,2,11,understat_only
+9213,manchester city,josko gvardiol,Josko Gvardiol,1307,2,2,1.818313,0.437605,16,4,understat_only
+9007,tottenham hotspur,randal kolo muani,Randal Kolo Muani,1229,1,0,2.054405,0.866060,14,15,understat_only
+9384,wolverhampton wanderers,mateus mane,Mateus Mané,1226,2,1,1.305744,1.177689,28,13,understat_only
+9361,sunderland,lutsharel geertruida,Lutsharel Geertruida,1209,0,0,0.649207,0.757615,7,7,understat_only
+9212,sunderland,brian brobbey,Brian Brobbey,1197,5,1,2.969452,0.940060,20,7,understat_only
+9160,wolverhampton wanderers,tolu arokodare,Tolu Arokodare,1193,2,1,5.130414,1.104517,36,10,understat_only
+9252,crystal palace,brennan johnson,Brennan Johnson,1125,2,1,1.923634,0.908431,16,12,understat_only
+9352,nottingham forest,nicolo savona,Nicolò Savona,1036,2,0,1.235481,0.594458,5,6,understat_only
+9238,chelsea,alejandro garnacho,Alejandro Garnacho,1012,1,4,3.641952,3.884127,25,23,understat_only
+9255,west ham united,soungoutou magassa,Soungoutou Magassa,944,1,0,0.619304,0.746385,7,5,understat_only
+9120,nottingham forest,nicolas dominguez,Nicolás Domínguez,915,1,0,0.712422,0.751408,15,9,understat_only
+9256,manchester united,lisandro martinez,Lisandro Martínez,889,0,0,0.053902,0.436116,4,4,understat_only
+9419,fulham,kevin,Kevin,876,1,1,1.229806,1.205335,22,13,understat_only
+8965,bournemouth,lewis cook,Lewis Cook,839,0,1,0.059646,0.346930,3,11,understat_only
+8913,brighton hove albion,pascal gro,Pascal Groß,825,1,1,0.678790,1.522259,9,18,understat_only
+9108,crystal palace,evann guessand,Evann Guessand,804,1,2,1.783343,1.237734,10,5,understat_only
+9266,west ham united,valentin castellanos,Valentín Castellanos,760,2,0,3.449848,0.571561,21,9,understat_only
+9030,aston villa,jadon sancho,Jadon Sancho,680,0,1,0.732707,1.677487,9,18,understat_only
+8929,sunderland,bertrand traore,Bertrand Traoré,675,1,0,0.624808,0.988775,12,8,understat_only
+9365,crystal palace,jaydee canvot,Jaydee Canvot,618,0,0,0.778076,0.051730,3,1,understat_only
+9173,tottenham hotspur,conor gallagher,Conor Gallagher,609,0,1,0.975754,0.387510,5,7,understat_only
+8937,burnley,james ward prowse,James Ward-Prowse,559,0,1,0.109742,1.950052,2,15,understat_only
+9017,aston villa,victor lindelof,Victor Lindelöf,556,0,1,0.016222,0.598100,1,2,understat_only
+9305,manchester city,savio,Sávio,542,0,1,2.454739,0.609888,13,6,understat_only
+8986,liverpool,alexander isak,Alexander Isak,519,2,1,2.767589,0.846110,15,2,understat_only
+9135,everton,jarrad branthwaite,Jarrad Branthwaite,493,1,0,0.285771,0.092620,5,2,understat_only
+8981,wolverhampton wanderers,adam armstrong,Adam Armstrong,488,0,2,0.031972,1.048253,2,5,understat_only
+9072,chelsea,benoit badiashile mukinayi,Benoit Badiashile Mukinayi,478,0,0,0.000000,0.000000,0,0,understat_only
+9001,tottenham hotspur,yves bissouma,Yves Bissouma,468,0,0,0.212382,0.000000,5,0,understat_only
+9190,bournemouth,rayan,Rayan,457,2,1,1.089947,1.161187,11,9,understat_only
+9054,west ham united,axel disasi,Axel Disasi,450,0,0,0.681806,0.023905,3,1,understat_only
+9415,nottingham forest,john victor,John Victor,440,0,0,0.000000,0.000000,0,0,understat_only
+9176,tottenham hotspur,radu dragusin,Radu Dragusin,421,0,0,0.207761,0.000000,4,0,understat_only
+9008,newcastle united,yoane wissa,Yoane Wissa,413,1,0,2.420663,0.134803,11,2,understat_only
+9035,crystal palace,eddie nketiah,Eddie Nketiah,396,2,0,1.942965,0.960513,15,7,understat_only
+9294,sunderland,romaine mundle,Romaine Mundle,370,0,0,0.673394,0.017135,7,1,understat_only
+9416,bournemouth,veljko milosavljevic,Veljko Milosavljevic,363,0,0,0.357437,0.067010,1,1,understat_only
+8974,nottingham forest,oleksandr zinchenko,Oleksandr Zinchenko,347,0,0,0.076707,0.450784,4,5,understat_only
+9161,nottingham forest,dilane bakwa,Dilane Bakwa,332,0,1,0.682750,0.696339,8,7,understat_only
+9284,everton,merlin rohl,Merlin Röhl,320,0,0,0.380690,0.255705,7,5,understat_only
+9274,crystal palace,chadi riad,Chadi Riad,314,0,1,0.135915,0.427692,2,1,understat_only
+9138,sunderland,dennis cirkin,Dennis Cirkin,295,0,0,0.000000,0.000000,0,0,understat_only
+8990,arsenal,gabriel jesus,Gabriel Jesus,283,2,0,2.594602,0.083491,14,1,understat_only
+8985,aston villa,leon bailey,Leon Bailey,278,0,1,0.266505,0.464750,5,8,understat_only
+9149,nottingham forest,stefan ortega moreno,Stefan Ortega Moreno,270,0,0,0.000000,0.000000,0,0,understat_only
+9434,west ham united,pablo,Pablo,266,0,0,0.574705,0.236218,4,4,understat_only
+9437,sunderland,nilson angulo,Nilson Angulo,261,0,0,0.558088,0.035429,3,2,understat_only
+8999,wolverhampton wanderers,angel gomes,Angel Gomes,250,0,0,0.055117,0.143210,2,3,understat_only
+9233,everton,nathan patterson,Nathan Patterson,240,0,0,0.170197,0.000000,1,0,understat_only
+8921,aston villa,ross barkley,Ross Barkley,199,1,0,0.428231,0.809621,8,6,understat_only
+8930,aston villa,tammy abraham,Tammy Abraham,145,1,0,1.029680,0.129206,6,3,understat_only
+9375,manchester city,max alleyne,Max Alleyne,138,0,0,0.381382,0.032163,2,1,understat_only
+9026,bournemouth,enes unal,Enes Ünal,130,1,0,1.592195,0.000000,11,0,understat_only
+9359,west ham united,luis guilherme,Luis Guilherme,118,0,0,0.039350,0.051797,1,1,understat_only
+9314,nottingham forest,lorenzo lucca,Lorenzo Lucca,117,1,0,1.128156,0.036645,3,1,understat_only
+9221,chelsea,romeo lavia,Romeo Lavia,113,0,0,0.000000,0.000000,0,0,understat_only
+9086,aston villa,harvey elliott,Harvey Elliott,110,0,0,0.289575,0.093849,5,1,understat_only
+9345,crystal palace,christantus uche,Christantus Uche,109,0,0,0.779783,0.000000,6,0,understat_only
+9422,sunderland,luke o nien,Luke O&#039;Nien,104,0,0,0.000000,0.000000,0,0,understat_only
+9366,manchester united,jack fletcher,Jack Fletcher,97,0,0,0.037386,0.114876,1,2,understat_only
+9373,west ham united,ezra mayers,Ezra Mayers,96,0,0,0.109894,0.116340,1,2,understat_only
+9104,west ham united,igor julio,Igor Julio,94,0,0,0.000000,0.018099,0,1,understat_only
+9278,chelsea,mamadou sarr,Mamadou Sarr,91,0,0,0.569463,0.000000,1,0,understat_only
+9438,sunderland,melker ellborg,Melker Ellborg,90,0,0,0.000000,0.000000,0,0,understat_only
+9436,tottenham hotspur,souza,Souza,78,0,0,0.000000,0.202362,0,3,understat_only
+9435,bournemouth,alex toth,Alex Tóth,69,0,0,0.099591,0.250354,1,3,understat_only
+9288,leeds,facundo buonanotte,Facundo Buonanotte,67,0,0,0.044330,0.168981,1,2,understat_only
+9287,chelsea,facundo buonanotte,Facundo Buonanotte,67,0,0,0.044330,0.168981,1,2,understat_only
+9036,brentford,reiss nelson,Reiss Nelson,47,0,0,0.592262,0.000000,3,0,understat_only
+9133,nottingham forest,luca netz,Luca Netz,45,0,0,0.000000,0.000000,0,0,understat_only
+9065,arsenal,christian n rgaard,Christian Nørgaard,44,0,0,0.048742,0.000000,1,0,understat_only
+9440,sunderland,djiamgone jocelin ta bi,Djiamgone Jocelin Ta Bi,38,0,0,0.000000,0.000000,0,0,understat_only
+9439,aston villa,alysson edward,Alysson Edward,34,0,0,0.052795,0.000000,1,0,understat_only
+9380,aston villa,andres garcia,Andrés García,29,0,0,0.000000,0.000000,0,0,understat_only
+9428,brentford,romelle donovan,Romelle Donovan,23,0,0,0.104704,0.032034,3,1,understat_only
+9420,manchester city,divine mukasa,Divine Mukasa,21,0,0,0.000000,0.211732,0,2,understat_only
+9426,aston villa,george hemmings,George Hemmings,19,0,0,0.019388,0.000000,1,0,understat_only
+9374,fulham,jonah kusi asare,Jonah Kusi-Asare,19,0,0,0.000000,0.081978,0,1,understat_only
+9429,west ham united,mohamadou kante,Mohamadou Kanté,15,0,0,0.065519,0.109894,1,1,understat_only
+9431,manchester united,bendito mantato,Bendito Mantato,14,0,0,0.000000,0.036478,0,1,understat_only
+9339,west ham united,george earthy,George Earthy,7,0,0,0.000000,0.000000,0,0,understat_only
+9427,manchester united,shea lacey,Shea Lacey,6,0,0,0.059301,0.000000,3,0,understat_only
+9183,tottenham hotspur,dane scarlett,Dane Scarlett,4,0,0,0.000000,0.000000,0,0,understat_only
+9367,wolverhampton wanderers,pedro lima,Pedro Lima,3,0,0,0.000000,0.000000,0,0,understat_only
+8970,manchester city,mateo kovacic,Mateo Kovacic,2,0,0,0.000000,0.000000,0,0,understat_only
+9430,crystal palace,joel drakes thomas,Joél Drakes-Thomas,2,0,0,0.000000,0.000000,0,0,understat_only
+9257,manchester united,tyrell malacia,Tyrell Malacia,2,0,0,0.000000,0.000000,0,0,understat_only
+9014,brighton hove albion,solly march,Solly March,2,0,0,0.000000,0.000000,0,0,understat_only
+9370,wolverhampton wanderers,tom edozie,Tom Edozie,1,1,0,0.082820,0.000000,1,0,understat_only
+9381,brighton hove albion,joe knight,Joe Knight,1,0,0,0.000000,0.000000,0,0,understat_only
+9328,newcastle united,alex murphy,Alex Murphy,1,0,0,0.000000,0.000000,0,0,understat_only
+9432,manchester united,tyler fletcher,Tyler Fletcher,1,0,0,0.000000,0.000000,0,0,understat_only
+9424,brighton hove albion,nehemiah oriola,Nehemiah Oriola,1,0,0,0.000000,0.000000,0,0,understat_only

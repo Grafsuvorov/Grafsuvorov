@@ -1,0 +1,1 @@
+truncate table ods.auak_ral;

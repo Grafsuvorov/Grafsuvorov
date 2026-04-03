@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+      "Segoe UI", sans-serif;
+    --type-body-size: 16px;
+    --type-body-leading: 1.6;
+    --type-heading-leading: 1.2;
+    --type-title-gap: 12px;
+    --type-section-gap: 20px;
+    --type-page-gap: 32px;
+  }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body,
+  button,
+  input,
+  textarea,
+  select {
+    font-family: var(--font-ui);
+  }
+
+  body {
+    margin: 0;
+    font-size: var(--type-body-size);
+    line-height: var(--type-body-leading);
+  }
+
+  #root {
+    min-height: 100vh;
+    font-family: inherit;
+  }
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui;
+}
+
+@layer components {
+  .app-typography {
+    @apply text-[16px] leading-[1.6];
+  }
+
+  .panel {
+    @apply rounded-3xl border border-white/10 text-white;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%),
+      rgba(10, 14, 24, 0.72);
+    backdrop-filter: blur(18px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.06),
+      0 18px 55px rgba(0,0,0,0.55);
+  }
+
+  .glass-card {
+    @apply rounded-[20px] border border-white/10 text-white;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%),
+      rgba(12, 16, 28, 0.68);
+    backdrop-filter: blur(14px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 14px 40px rgba(0,0,0,0.42);
+  }
+
+  .app-typography
+    :where(div, section, article, aside)
+    :is([class*="rounded-2xl"], [class*="rounded-3xl"], [class*="rounded-[20px]"], [class*="rounded-[24px]"])
+    :not([class*="bg-gradient"])
+    :not([class*="from-"])
+    :not([class*="to-"])
+    :not([class*="via-"])[class*="border"] {
+    border-color: rgba(255, 255, 255, 0.1);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.018) 100%),
+      rgba(10, 14, 24, 0.68);
+    backdrop-filter: blur(16px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.05),
+      0 16px 40px rgba(0,0,0,0.4);
+  }
+
+  .type-page {
+    display: grid;
+    gap: var(--type-page-gap);
+  }
+
+  .type-section {
+    display: grid;
+    gap: var(--type-section-gap);
+  }
+
+  .type-title-block {
+    display: grid;
+    gap: var(--type-title-gap);
+  }
+
+  .type-eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.18em] text-white/55;
+  }
+
+  .type-page-title {
+    @apply text-[30px] sm:text-[36px] font-semibold leading-[1.2] tracking-[-0.02em] text-white;
+  }
+
+  .type-section-title {
+    @apply text-[22px] sm:text-[24px] font-semibold leading-[1.25] tracking-[-0.015em] text-white;
+  }
+
+  .type-card-title {
+    @apply text-[18px] font-semibold leading-[1.3] tracking-[-0.01em] text-white;
+  }
+
+  .type-subtitle {
+    @apply text-[15px] leading-[1.6] text-white/65;
+  }
+
+  .type-body {
+    @apply text-[15px] leading-[1.65] text-slate-300;
+  }
+
+  .type-caption {
+    @apply text-[13px] leading-[1.5] text-slate-400;
+  }
+}
+
+/* ===========================
+   THEME: PINK (default)
+   =========================== */
+[data-theme="pink"] {
+  --bg-main: #ffffff;
+  --bg-secondary: #fff5f7;
+
+  --text-main: #1c1c1e;
+  --text-soft: #4b5563;
+
+  --accent: #e11d48;
+  --accent-light: #f43f5e;
+  --accent-dark: #be123c;
+
+  --card-bg: #ffffff;
+  --card-border: #e5e7eb;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px rgb(0 0 0 / 0.07);
+}
+
+/* ===========================
+   THEME: PREMIUM (sapphire-dark)
+   =========================== */
+[data-theme="premium"] {
+  --bg-main: radial-gradient(circle at top, #0b0f19 0%, #030712 70%);
+  --bg-secondary: rgba(255, 255, 255, 0.04);
+
+  --text-main: #f5f5f7;
+  --text-soft: #cbd5e1;
+
+  --accent: #6d6dff;
+  --accent-light: #8e8eff;
+  --accent-dark: #4a4aff;
+
+  --card-bg: rgba(255, 255, 255, 0.06);
+  --card-border: rgba(255, 255, 255, 0.10);
+
+  --shadow-sm: 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 6px 12px rgb(0 0 0 / 0.5);
+}
+
+/* ===========================
+   Scrollbar utilities
+   =========================== */
+
+/*   ,   */
+.no-scrollbar {
+  -ms-overflow-style: none;   /* IE/Edge */
+  scrollbar-width: none;      /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/*   */
+.thin-scrollbar {
+  scrollbar-width: thin;
+}
+.thin-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,.15);
+  border-radius: 9999px;
+}
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ===========================
+   Micro animations
+   =========================== */
+@keyframes mcFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mc-fade {
+  animation: mcFadeUp 0.3s ease forwards;
+}
+
+/* ===========================
+   Section title accent
+   =========================== */
+.section-title {
+  position: relative;
+  display: inline-block;
+}
+.section-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 40px;
+  height: 2px;
+  border-radius: 2px;
+  background: #8b5cf6;
+}
+
+/* Section title accent removed: keep whitespace only */

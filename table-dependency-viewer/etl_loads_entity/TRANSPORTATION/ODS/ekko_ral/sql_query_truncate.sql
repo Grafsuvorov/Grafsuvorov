@@ -1,0 +1,1 @@
+truncate ods.ekko_ral;

@@ -1,0 +1,17 @@
+.DS_Store
+*.pyc
+
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.venv/
+**/node_modules/
+**/dist/
+**/.playwright-*/
+
+airflow/logs/
+
+football_new/frontend/public/onboarding/onboard.mov
+football_new/frontend/dist/onboarding/onboard.mov
+
+table-dependency-viewer/pushrepo/

@@ -1,0 +1,1 @@
+truncate table dm.sales_delivery_estimated_business_location_by_date;

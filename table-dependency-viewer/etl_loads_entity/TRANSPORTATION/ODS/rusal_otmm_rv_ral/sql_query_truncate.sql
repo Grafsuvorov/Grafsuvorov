@@ -1,0 +1,1 @@
+truncate table ods."/rusal/otmm_rv_ral";

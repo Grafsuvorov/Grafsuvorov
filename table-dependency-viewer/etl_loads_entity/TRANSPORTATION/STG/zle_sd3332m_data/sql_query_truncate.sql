@@ -1,0 +1,1 @@
+truncate stg."ZLE_SD3332M_DATA";

@@ -438,7 +438,7 @@ def get_dev_meta_status(
         "airflow": {
             "base_url": airflow_base_url,
             "dag_id": airflow_dag_id,
-            "configured": bool(airflow_base_url and airflow_dag_id),
+            "configured": bool(airflow_base_url),
         },
         "deploy": {
             "host": deploy_host,
@@ -450,6 +450,14 @@ def get_dev_meta_status(
         "locks_count": len(locks),
         "lock_ttl_minutes": lock_ttl_minutes,
     }
+
+
+def _dag_id_from_file_name(file_name: str) -> str:
+    path = Path(file_name)
+    dag_id = path.stem.strip()
+    if not dag_id:
+        raise ValueError("Не удалось определить dag_id из имени файла")
+    return dag_id
 
 
 def get_dev_meta_files(
@@ -799,17 +807,24 @@ def trigger_airflow_dev_dag(
     schema_name: str,
     file_name: str,
     author: str,
+    base_dir: Path | None = None,
+    dev_root_value: str = "",
+    remote_base_dir: str = "",
 ) -> dict[str, Any]:
-    if not airflow_base_url or not dag_id:
+    if not airflow_base_url:
         raise ValueError("Airflow DEV не настроен")
+    resolved_dag_id = dag_id or _dag_id_from_file_name(file_name)
+    remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}" if remote_base_dir else None
     payload = {
         "conf": {
             "schema_name": schema_name,
             "file_name": file_name,
             "author": author,
+            "remote_path": remote_path,
+            "dev_bypass_dm_sensor": True,
         }
     }
-    url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns"
+    url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}/dagRuns"
     req = urlrequest.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -835,9 +850,18 @@ def trigger_airflow_dev_dag(
         author=author,
         action="run_dag",
         content="",
-        details={"url": url, "response": data},
+        details={
+            "url": url,
+            "response": data,
+            "dag_id": resolved_dag_id,
+            "remote_path": remote_path,
+        },
     )
-    return data
+    return {
+        "dag_id": resolved_dag_id,
+        "response": data,
+        "remote_path": remote_path,
+    }
 
 
 def get_airflow_dev_dag_status(

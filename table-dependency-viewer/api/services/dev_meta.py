@@ -530,28 +530,33 @@ def acquire_dev_meta_lock(
             ),
             {"schema_name": schema_name, "file_name": file_name},
         )
-        now = datetime.now()
-        expires_at = now + timedelta(minutes=ttl_minutes)
-        conn.execute(
+        lock_row = conn.execute(
             text(
                 """
                 INSERT INTO tech_etl.app_dev_meta_lock (schema_name, file_name, locked_by, locked_at, expires_at)
-                VALUES (:schema_name, :file_name, :locked_by, :locked_at, :expires_at)
+                VALUES (
+                    :schema_name,
+                    :file_name,
+                    :locked_by,
+                    NOW(),
+                    NOW() + (:ttl_minutes || ' minutes')::interval
+                )
+                RETURNING locked_at, expires_at
                 """
             ),
             {
                 "schema_name": schema_name,
                 "file_name": file_name,
                 "locked_by": author,
-                "locked_at": now,
-                "expires_at": expires_at,
+                "ttl_minutes": ttl_minutes,
             },
-        )
+        ).mappings().first()
     return {
         "schema_name": schema_name,
         "file_name": file_name,
         "locked_by": author,
-        "expires_at": expires_at.isoformat(),
+        "locked_at": lock_row["locked_at"].isoformat() if lock_row and lock_row["locked_at"] else None,
+        "expires_at": lock_row["expires_at"].isoformat() if lock_row and lock_row["expires_at"] else None,
     }
 
 

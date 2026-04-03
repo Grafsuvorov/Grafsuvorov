@@ -1,9 +1,5 @@
-Операция не выполнена
-Airflow вернул 404: { "detail": "DAG with dag_id: 'dm_material_price_calculation_meta' not found", "status": 404, "title": "DAG not found", "type": "https://airflow.apache.org/docs/apache-airflow/2.7.3/stable-rest-api-ref.html#section/Errors/NotFound" }
-
-Broken DAG: [/home/airflow/dags/dag_api_load.py] Traceback (most recent call last):
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/utils/session.py", line 79, in wrapper
-    return func(*args, session=session, **kwargs)
-  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/dag.py", line 1485, in get_dagrun
-    raise TypeError("You must provide either the execution_date or the run_id")
-TypeError: You must provide either the execution_date or the run_id
+Broken DAG: [/home/airflow/dags/clickhouse_datamart_generator.py] Traceback (most recent call last):
+  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
+  File "/home/airflow/dags/clickhouse_datamart_generator.py", line 46, in <module>
+    with open(config, 'r') as stream:
+PermissionError: [Errno 13] Permission denied: '/home/airflow/config_files/meta/dm/dm_sales_alverse_mlc_meta.yaml'

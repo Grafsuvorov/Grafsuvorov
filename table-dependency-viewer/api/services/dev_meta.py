@@ -808,6 +808,78 @@ def trigger_airflow_dev_dag(
     return data
 
 
+def get_airflow_dev_dag_status(
+    *,
+    airflow_base_url: str,
+    username: str,
+    password: str,
+    dag_id: str,
+    dag_run_id: str,
+    auto_unpaused: bool = False,
+) -> dict[str, Any]:
+    if not airflow_base_url:
+        raise ValueError("Airflow DEV не настроен")
+    if not dag_id or not dag_run_id:
+        raise ValueError("Нужно указать dag_id и dag_run_id")
+
+    def _request_json(url: str, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        req = urlrequest.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+            headers={"Content-Type": "application/json"},
+            method=method,
+        )
+        if username or password:
+            raw = f"{username}:{password}".encode("utf-8")
+            req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
+        try:
+            with urlrequest.urlopen(req, timeout=20) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+        except urlerror.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore")
+            raise ValueError(f"Airflow вернул {exc.code}: {body}") from exc
+        except Exception as exc:
+            raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
+
+    base_url = airflow_base_url.rstrip("/")
+    dag_url = f"{base_url}/api/v1/dags/{dag_id}"
+    run_url = f"{dag_url}/dagRuns/{dag_run_id}"
+    task_url = f"{run_url}/taskInstances"
+
+    run_data = _request_json(run_url)
+    task_data = _request_json(task_url)
+    dag_info = _request_json(dag_url)
+    dag_run_state = run_data.get("state")
+
+    failed_tasks = [
+        {
+            "task_id": task.get("task_id"),
+            "state": task.get("state"),
+        }
+        for task in (task_data.get("task_instances") or [])
+        if task.get("state") in {"failed", "upstream_failed"}
+    ]
+
+    auto_paused_back = False
+    if auto_unpaused and str(dag_run_state or "").lower() in {"success", "failed"} and not dag_info.get("is_paused"):
+        _request_json(dag_url, method="PATCH", payload={"is_paused": True})
+        auto_paused_back = True
+        dag_info = _request_json(dag_url)
+
+    return {
+        "dag_id": dag_id,
+        "dag_run_id": dag_run_id,
+        "dag_run_state": dag_run_state,
+        "logical_date": run_data.get("logical_date"),
+        "run_type": run_data.get("run_type"),
+        "failed_tasks": failed_tasks,
+        "dag_is_paused": bool(dag_info.get("is_paused")),
+        "auto_unpaused": bool(auto_unpaused),
+        "auto_paused_back": auto_paused_back,
+    }
+
+
 def deploy_dev_meta_file(
     *,
     engine,

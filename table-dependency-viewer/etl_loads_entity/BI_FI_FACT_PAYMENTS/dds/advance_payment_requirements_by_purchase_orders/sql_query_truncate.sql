@@ -1,0 +1,1 @@
+truncate dds.advance_payment_requirements_by_purchase_orders;

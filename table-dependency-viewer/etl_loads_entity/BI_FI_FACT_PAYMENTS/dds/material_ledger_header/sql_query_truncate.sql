@@ -1,0 +1,1 @@
+truncate dds.material_ledger_header;

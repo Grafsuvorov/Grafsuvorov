@@ -1,0 +1,1 @@
+truncate dm.alverse_mlc_overview_pivot;

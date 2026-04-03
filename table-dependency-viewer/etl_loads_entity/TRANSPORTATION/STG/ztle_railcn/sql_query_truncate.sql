@@ -1,0 +1,1 @@
+TRUNCATE stg."ZTLE_RAILCN";

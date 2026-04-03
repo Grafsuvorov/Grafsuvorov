@@ -1,0 +1,1 @@
+truncate table dm_calc.production_aluminium_casting_schedule;

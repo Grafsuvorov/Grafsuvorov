@@ -1,0 +1,1 @@
+truncate table ods."map_transportation_expenses_keys_ral";

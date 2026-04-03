@@ -1,0 +1,1 @@
+truncate table ods."vbfa_ral";

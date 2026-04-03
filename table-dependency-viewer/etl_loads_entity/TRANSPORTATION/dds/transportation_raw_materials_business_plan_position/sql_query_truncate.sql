@@ -1,0 +1,1 @@
+truncate table dds.transportation_raw_materials_business_plan_position;

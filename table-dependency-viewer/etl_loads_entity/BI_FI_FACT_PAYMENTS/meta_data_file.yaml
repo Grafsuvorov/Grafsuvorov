@@ -1,0 +1,12 @@
+entity_id: 38
+entity_name: BI_FI_FACT_PAYMENTS
+entity_type: TRANSACTION
+cron_interval: 10 5 * * *
+entity_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+entity_load_mode: RECREATE
+flag_active: true
+start_date: '2023-01-01 05:10:00'

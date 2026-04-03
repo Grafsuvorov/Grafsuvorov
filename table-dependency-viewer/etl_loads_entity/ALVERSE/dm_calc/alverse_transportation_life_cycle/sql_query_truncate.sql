@@ -1,0 +1,1 @@
+truncate table dm_calc.alverse_transportation_life_cycle;

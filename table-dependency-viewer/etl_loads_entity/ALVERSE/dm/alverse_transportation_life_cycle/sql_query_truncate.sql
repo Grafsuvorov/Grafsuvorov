@@ -1,0 +1,1 @@
+truncate dm.alverse_transportation_life_cycle;

@@ -1,0 +1,1 @@
+truncate table ods."/rusal/alloc_wag_ral";

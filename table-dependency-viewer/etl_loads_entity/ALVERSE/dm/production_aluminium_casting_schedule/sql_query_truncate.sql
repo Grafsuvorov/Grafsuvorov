@@ -1,0 +1,1 @@
+truncate dm."production_aluminium_casting_schedule";

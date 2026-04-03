@@ -1,0 +1,55 @@
+table_name: alverse_transportation_life_cycle
+table_schema: dm_calc
+table_id: 3499
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: true
+table_load_mode: TRUNCATE_INIT
+job_id: 298
+job_name: STG_LOADER
+table_loading_index: 1
+entity_id: 61
+entity_name: ALVERSE
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm_calc/alverse_transportation_life_cycle/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm_calc/alverse_transportation_life_cycle/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/ALVERSE/dm_calc/alverse_transportation_life_cycle/sql_query_truncate.sql
+depends_on:
+  dds:
+  - delivery_document_header
+  - delivery_document_position
+  - purchase_agreement_header
+  - purchase_contract_header
+  - purchase_order_header
+  - sales_batch_delivery
+  - sales_bundle
+  - sales_bundle_and_delivery_relationship
+  dict_dds:
+  - counterparty
+  - etsng
+  - grade_rusal_texts
+  - material
+  - material_shape_texts
+  - material_specification
+  - material_texts
+  - plant_and_subsidiary
+  - sales_sector_texts
+  - transport_subtype_texts
+  - transport_transfer_type
+  - transportation_expense_account_texts
+  - transportation_scheme
+  - transportation_scheme_subtype_texts
+  - transportation_scheme_type_texts
+  dm_calc:
+  - is_metal_transshipped_in_container
+  - is_relevant_transportation_aluminium_shipment_from_plant
+  ods:
+  - map_delivery_document_attributes_keys_ral
+  - map_transportation_expenses_keys_ral

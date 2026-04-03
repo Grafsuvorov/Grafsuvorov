@@ -1,0 +1,1 @@
+truncate table stg."/RUL/RW_DOCS";

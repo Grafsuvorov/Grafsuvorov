@@ -1,0 +1,1 @@
+truncate dm_calc.accounting_document_contracts;

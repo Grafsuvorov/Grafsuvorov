@@ -1,0 +1,1 @@
+truncate table dm_calc.accounting_external_contracts;

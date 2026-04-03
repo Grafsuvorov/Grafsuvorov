@@ -1,0 +1,1 @@
+truncate table ods.konp_ral;

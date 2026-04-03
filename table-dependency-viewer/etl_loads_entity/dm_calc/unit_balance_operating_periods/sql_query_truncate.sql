@@ -1,0 +1,1 @@
+ truncate table dm_calc.unit_balance_operating_periods;

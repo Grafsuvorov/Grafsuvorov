@@ -1,0 +1,1 @@
+truncate table ods."map_delivery_document_attributes_keys_ral";

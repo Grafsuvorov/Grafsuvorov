@@ -1,0 +1,1 @@
+truncate table dm.purchase_contract_limits_and_current_balances;

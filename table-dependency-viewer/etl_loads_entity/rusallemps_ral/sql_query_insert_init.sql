@@ -1,0 +1,51 @@
+insert into ods."/rusal/lemps_ral" (
+	id,
+	pos,
+	type_load,
+	numvag,
+	numnakl,
+	nkont,
+	weight,
+	sto,
+	stn,
+	dateot,
+	dtl_vbeln,
+	type_vagon,
+	lifnr,
+	lifnr_pr,
+	matnr,
+	cartare_pr,
+	erdat,
+	erzet,
+	ernam,
+	aedat,
+	aezet,
+	aenam
+)
+select
+	"ID" as id,
+	"POS" as pos,
+	"TYPE_LOAD" as type_load,
+	"NUMVAG" as numvag,
+	tech_etl.util_text_to_null_validation("NUMNAKL") as numnakl,
+	case when length(coalesce(trim(leading '0' from "NKONT"), '')) = 0 then null
+		 else tech_etl.util_text_to_null_validation("NKONT")
+	end as nkont,
+	"WEIGHT" as weight,
+	tech_etl.util_text_to_null_validation("STO") as sto,
+	tech_etl.util_text_to_null_validation("STN") as stn,
+	tech_etl.util_text_to_date_validation("DATEOT") as dateot,
+	tech_etl.util_text_to_date_validation("DTL_VBELN") as dtl_vbeln,
+	tech_etl.util_text_to_null_validation("TYPE_VAGON") as type_vagon,
+	tech_etl.util_text_to_null_validation("LIFNR") as lifnr,
+	tech_etl.util_text_to_null_validation("LIFNR_PR") as lifnr_pr,
+	tech_etl.util_text_to_null_validation("MATNR") as matnr,
+	tech_etl.util_text_to_null_validation("CARTARE_PR") as cartare_pr,
+	tech_etl.util_text_to_date_validation("ERDAT") as erdat,
+	tech_etl.util_text_to_time_validation("ERZET") as erzet,
+	tech_etl.util_text_to_null_validation("ERNAM") as ernam,
+	tech_etl.util_text_to_date_validation("AEDAT") as aedat,
+	tech_etl.util_text_to_time_validation("AEZET") as aezet,
+	tech_etl.util_text_to_null_validation("AENAM") as aenam
+from stg."/RUSAL/LEMPS"
+where "MANDT" = '400';

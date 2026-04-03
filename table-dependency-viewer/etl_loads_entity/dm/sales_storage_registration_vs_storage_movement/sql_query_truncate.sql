@@ -1,0 +1,1 @@
+TRUNCATE TABLE dm.sales_storage_registration_vs_storage_movement;

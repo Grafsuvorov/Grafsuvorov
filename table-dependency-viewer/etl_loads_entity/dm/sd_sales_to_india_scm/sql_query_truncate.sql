@@ -1,0 +1,1 @@
+truncate dm."sd_sales_to_india_scm";

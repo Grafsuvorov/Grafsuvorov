@@ -1,0 +1,1 @@
+truncate dm.sales_stock_balance_with_forecast;

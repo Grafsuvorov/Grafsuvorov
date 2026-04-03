@@ -1,0 +1,48 @@
+table_name: investment_payments_actual
+table_schema: dm
+table_id: 2157
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 38
+entity_name: BI_FI_FACT_PAYMENTS
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/dm/investment_payments_actual/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/dm/investment_payments_actual/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI_FACT_PAYMENTS/dm/investment_payments_actual/sql_query_truncate.sql
+depends_on:
+  dict_dds:
+  - allocation_of_capitalization_value_for_investment_activity
+  - budget_group_texts
+  - counterparty
+  - currency
+  - currency_rate
+  - division_texts
+  - general_ledger_account_chart
+  - investment_activity_additional_finance
+  - investment_activity_td
+  - investment_budget_section_texts
+  - investment_budget_subsection_texts
+  - investment_program_texts
+  - investment_project
+  - map_cost_element_to_budget
+  - material_texts
+  - order_toro
+  - plant_and_subsidiary
+  - unit_balance
+  - wbs_element_master_data_detail
+  dm_calc:
+  - investment_payments_actual_group_01
+  - investment_payments_actual_group_02
+  - investment_payments_actual_group_03

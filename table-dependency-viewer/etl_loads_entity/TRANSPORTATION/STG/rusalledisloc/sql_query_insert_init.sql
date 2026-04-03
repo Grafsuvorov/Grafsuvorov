@@ -1,0 +1,6 @@
+insert into stg."/RUSAL/LEDISLOC"
+SELECT "MANDT", "ID", "POS", "TYPE_LOAD", "NUMVAG", "NUMNAKL", "CARNO", "ROLIKNOTE", "CARTARE", "TRATY", "CARTYPE", "PR_SL", "LAND1", "BTGEW", "KNOTE_NAZ", "ET_TARIF", "ET_OPER", "KUNNR", "SPECNOTES", "CRTFULL", "CRTEMP", "KRTFULL", "KRTEMP", "LCOMM", "PARKTYPE", "DAMCODE", "KNOTE1", "OPCODE", "DATD", "UZEIT", "KNOTE2", "STREKL1", "STREKL2", "TRIND", "TRNO", "ERDAT", "ERZET", "ERNAM", "AEDAT", "AEZET", "AENAM", "DATEN", "TIMEN", "ARCHIVE", "DATE_SH", "SHIPMENT_OT", "NNAKL", "DELIV_DATE", "DISTANCE_LEFT", "RN"
+FROM raw_ext."/RUSAL/LEDISLOC_READ"
+where "AEDAT" >= to_char(current_date - interval '1 month', 'YYYYMMDD')
+    or "ERDAT" >= to_char(current_date - interval '1 month', 'YYYYMMDD')
+;

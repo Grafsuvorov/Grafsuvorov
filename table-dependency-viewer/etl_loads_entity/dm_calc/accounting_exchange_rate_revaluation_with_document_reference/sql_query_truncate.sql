@@ -1,0 +1,1 @@
+truncate table dm_calc.accounting_exchange_rate_revaluation_with_document_reference;

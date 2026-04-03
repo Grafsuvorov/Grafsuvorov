@@ -1,0 +1,1 @@
+truncate table ods."zsd7536m_pret_ral";

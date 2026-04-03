@@ -1,0 +1,12 @@
+entity_id: 61
+entity_name: ALVERSE
+entity_type: TRANSACTION
+cron_interval: 0 6 * * *
+entity_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+entity_load_mode: RECREATE
+flag_active: true
+start_date: '2023-01-01 03:30:00'

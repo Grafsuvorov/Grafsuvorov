@@ -1,0 +1,1 @@
+truncate table ods.dms_doc2loio_ral;

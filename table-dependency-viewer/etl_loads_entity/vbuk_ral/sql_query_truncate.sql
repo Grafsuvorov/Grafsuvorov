@@ -1,0 +1,1 @@
+truncate table ods.vbuk_ral;

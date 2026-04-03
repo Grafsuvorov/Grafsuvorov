@@ -1,0 +1,1 @@
+truncate STG."/RUSAL/SD2882M_1";

@@ -1,0 +1,1 @@
+truncate table dds.accounting_documents_texts;

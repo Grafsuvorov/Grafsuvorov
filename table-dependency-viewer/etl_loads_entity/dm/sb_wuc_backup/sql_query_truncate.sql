@@ -1,0 +1,1 @@
+TRUNCATE TABLE dm.sb_wuc_backup;

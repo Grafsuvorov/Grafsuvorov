@@ -1,0 +1,1 @@
+ truncate table dm_calc.accounting_documents_balance_aggregated;

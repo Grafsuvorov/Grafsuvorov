@@ -1,0 +1,1 @@
+TRUNCATE stg."ZLE_DISLCONT";

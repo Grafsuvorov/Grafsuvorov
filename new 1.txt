@@ -1,54 +1,34 @@
-Чек-лист релиза (инженер)
-🔹 Подготовка релиза
+#!/usr/bin/bash
+set -euo pipefail
 
- Обновить релизную ветку (pull latest)
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+export GIT_SSL_NO_VERIFY=1
 
- Провести ревью всех MR
+REPO_ROOT="/root/git_dir/etl"
+APP_ROOT="/app"
+BRANCH="main"
 
- Принять (merge) все MR в релизную ветку
+echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-🔹 Запуск релиза
+git -C "${REPO_ROOT}" fetch origin
+git -C "${REPO_ROOT}" checkout "${BRANCH}"
+git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+git -C "${REPO_ROOT}" clean -fd
 
- Запустить релизный DAG
+mkdir -p "${APP_ROOT}/meta_info"
+mkdir -p "${APP_ROOT}/config_files/meta/dm"
+mkdir -p "${APP_ROOT}/config_files/meta/dm_view"
 
- Сформировать письмо со списком задач и объектов релиза
+rm -rf "${APP_ROOT}/meta_info"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm_view"/*
 
- Переслать письмо команде DWH
+cp -a "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+cp -a "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
+cp -a "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
 
-🔹 Работа с DAG (этап ожидания)
-
- Дождаться стадии waiting_task
-
- Проставить статус SUCCESS для waiting_task (чтобы DAG продолжился)
-
-🔹 Загрузка в ClickHouse
-
- Дождаться остановки DAG на этапе ClickHouse
-
- Написать в Pulse по релизным направлениям:
-
-уведомление о начале загрузки
-
-просьба поставить плашки на дашборды
-
- Получить подтверждение (апрув)
-
- Проставить SUCCESS для waiting_click_task
-
-🔹 Завершение релиза
-
- Дождаться полного завершения DAG
-
- Проверить письмо мониторинга (нет ли ошибок)
-
- Проверить DAG в Airflow:
-
-нет ли пропущенных шагов
-
-нет ли ошибок
-
-🔹 Пост-релиз действия
-
- Перезапустить сущность MR4
-
- Перезапустить ClickHouse для каждой изменённой витрины
+echo "[ci_cd] synced meta_info and config_files/meta from origin/${BRANCH}"
+echo "[ci_cd] done"

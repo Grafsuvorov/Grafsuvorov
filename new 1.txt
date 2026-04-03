@@ -1,5 +1,54 @@
-Broken DAG: [/home/airflow/dags/clickhouse_datamart_generator.py] Traceback (most recent call last):
-  File "<frozen importlib._bootstrap>", line 219, in _call_with_frames_removed
-  File "/home/airflow/dags/clickhouse_datamart_generator.py", line 46, in <module>
-    with open(config, 'r') as stream:
-PermissionError: [Errno 13] Permission denied: '/home/airflow/config_files/meta/dm/dm_sales_alverse_mlc_meta.yaml'
+Чек-лист релиза (инженер)
+🔹 Подготовка релиза
+
+ Обновить релизную ветку (pull latest)
+
+ Провести ревью всех MR
+
+ Принять (merge) все MR в релизную ветку
+
+🔹 Запуск релиза
+
+ Запустить релизный DAG
+
+ Сформировать письмо со списком задач и объектов релиза
+
+ Переслать письмо команде DWH
+
+🔹 Работа с DAG (этап ожидания)
+
+ Дождаться стадии waiting_task
+
+ Проставить статус SUCCESS для waiting_task (чтобы DAG продолжился)
+
+🔹 Загрузка в ClickHouse
+
+ Дождаться остановки DAG на этапе ClickHouse
+
+ Написать в Pulse по релизным направлениям:
+
+уведомление о начале загрузки
+
+просьба поставить плашки на дашборды
+
+ Получить подтверждение (апрув)
+
+ Проставить SUCCESS для waiting_click_task
+
+🔹 Завершение релиза
+
+ Дождаться полного завершения DAG
+
+ Проверить письмо мониторинга (нет ли ошибок)
+
+ Проверить DAG в Airflow:
+
+нет ли пропущенных шагов
+
+нет ли ошибок
+
+🔹 Пост-релиз действия
+
+ Перезапустить сущность MR4
+
+ Перезапустить ClickHouse для каждой изменённой витрины

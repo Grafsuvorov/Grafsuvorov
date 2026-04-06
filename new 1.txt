@@ -1,24 +1,15 @@
-  SELECT
-      loading_start_dttm,
-      loading_finish_dttm,
-      loading_state,
-      object_id,
-      object_name--,
-      --loading_error_text
-  FROM tech_etl.log_objects_loading_history
-  WHERE loading_state IS NOT NULL
-    AND object_type = 'table'
-    AND object_id = 2693
-  ORDER BY loading_start_dttm DESC
-  LIMIT 10;
 
-2026-04-06 00:34:50.513	2026-04-06 00:37:28.571	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-04-05 00:35:49.699	2026-04-05 00:38:40.770	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-04-04 00:31:58.150	2026-04-04 00:34:51.607	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-04-03 00:32:05.997	2026-04-03 00:34:55.707	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-04-02 00:36:43.501	2026-04-02 00:39:20.927	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-04-01 00:34:59.123	2026-04-01 00:37:36.481	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-03-31 00:34:03.283	2026-03-31 00:36:52.384	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-03-30 00:34:05.820	2026-03-30 00:36:46.578	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-03-29 00:34:13.115	2026-03-29 00:36:49.604	SUCCESS	2693	ods./rusal/ledisloc_ral
-2026-03-28 00:32:17.229	2026-03-28 00:34:52.735	SUCCESS	2693	ods./rusal/ledisloc_ral
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54210 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54214 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54216 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54218 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54202 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54208 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54192 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54222 - "GET /auth/favorites/tables/2693 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54226 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6&table_id=2693 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54224 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20&table_id=2693 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54228 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10&table_id=2693 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54194 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54242 - "GET /api/graph/table/ods/rusal/ledisloc_ral?depth=3 HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:54240 - "POST /auth/audit/event HTTP/1.1" 200 OK

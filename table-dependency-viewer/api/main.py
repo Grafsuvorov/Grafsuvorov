@@ -263,6 +263,30 @@ def get_ci_cd_status(request: Request):
     return _ci_cd_status
 
 
+@router.get("/api/admin/engineering-efficiency")
+def get_admin_engineering_efficiency(
+    request: Request,
+    days: int = Query(90, ge=1, le=3650),
+):
+    user = get_current_user_from_request(request)
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    dashboard = get_analytics_dashboard(days=days)
+    workload = get_analytics_workload(days=days, group_by="executor")
+    hot_tables = get_analytics_hot_tables(days=days, min_changes=3)
+    return {
+        "days": days,
+        "summary": dashboard.get("summary"),
+        "by_executor": dashboard.get("by_executor", []),
+        "by_creator": dashboard.get("by_creator", []),
+        "by_direction": dashboard.get("by_direction", []),
+        "top_tables": dashboard.get("top_tables", []),
+        "workload_summary": workload.get("summary"),
+        "workload": workload.get("items", []),
+        "hot_tables": hot_tables.get("items", []),
+    }
+
+
 @router.get("/api/admin/dev-meta/status")
 def get_admin_dev_meta_status(request: Request):
     user = get_current_user_from_request(request)

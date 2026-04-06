@@ -854,6 +854,42 @@ def _calc_logic_similarity(left: dict, right: dict) -> float:
     }
 
 
+def _resolve_sql_path_from_meta(meta_path: Path, meta: dict, field_name: str, fallback_file_name: str) -> Optional[Path]:
+    raw_path = str(meta.get(field_name) or "").strip()
+    candidates = []
+    if raw_path:
+        raw = Path(raw_path)
+        candidates.append(raw)
+        candidates.append(meta_path.parent / raw_path)
+        candidates.append(BASE_DIR / raw_path)
+        candidates.append(BASE_DIR.parent / raw_path)
+    candidates.append(meta_path.parent / fallback_file_name)
+
+    seen = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=False)
+        except Exception:
+            resolved = candidate
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_sql_from_meta(meta_path: Path, meta: dict, field_name: str, fallback_file_name: str) -> str:
+    sql_path = _resolve_sql_path_from_meta(meta_path, meta, field_name, fallback_file_name)
+    if not sql_path:
+        return f"-- {fallback_file_name} not found"
+    try:
+        return sql_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"-- failed to read {sql_path}: {exc}"
+
+
 def _build_logic_object(meta_path: Path) -> Optional[dict]:
     try:
         meta = yaml.safe_load(meta_path.read_text("utf-8")) or {}
@@ -865,11 +901,10 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
     if not schema or not table:
         return None
 
-    sql_candidates = [
-        meta_path.parent / "sql_query_insert_init.sql",
-        meta_path.parent / "sql_query_recreate_init.sql",
-    ]
-    sql_path = next((p for p in sql_candidates if p.exists()), None)
+    sql_path = (
+        _resolve_sql_path_from_meta(meta_path, meta, "sql_query_insert_init", "sql_query_insert_init.sql")
+        or _resolve_sql_path_from_meta(meta_path, meta, "sql_query_recreate_init", "sql_query_recreate_init.sql")
+    )
     sql_text = sql_path.read_text("utf-8", errors="ignore") if sql_path else ""
     normalized_sql = _normalize_sql(sql_text)
     if not normalized_sql:
@@ -3491,13 +3526,24 @@ def get_table_card_info_by_path(schema: str, table: str):
         except Exception as e:
             return JSONResponse(status_code=500, content={"error": str(e)})
 
-        def read_sql_file(filename: str) -> str:
-            file_path = table_folder / filename
-            return file_path.read_text(encoding="utf-8") if file_path.exists() else f"-- {filename} not found"
-
-        meta["sql_query_insert_init_sql"] = read_sql_file("sql_query_insert_init.sql")
-        meta["sql_query_recreate_init_sql"] = read_sql_file("sql_query_recreate_init.sql")
-        meta["sql_query_truncate_sql"] = read_sql_file("sql_query_truncate.sql")
+        meta["sql_query_insert_init_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_insert_init",
+            "sql_query_insert_init.sql",
+        )
+        meta["sql_query_recreate_init_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_recreate_init",
+            "sql_query_recreate_init.sql",
+        )
+        meta["sql_query_truncate_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_truncate",
+            "sql_query_truncate.sql",
+        )
 
         # метрики
         # метрики

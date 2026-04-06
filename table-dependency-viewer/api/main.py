@@ -3737,7 +3737,7 @@ def get_graph_entity(entity_name: str):
     }
 
 
-@router.get("/api/graph/table/{schema}/{table}")
+@router.get("/api/graph/table/{schema}/{table:path}")
 def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     snapshot = get_graph_snapshot()
     table_nodes = snapshot["table_graph"]["nodes"]
@@ -3846,7 +3846,7 @@ def _traverse_forward(
     return visited, depth_map, truncated
 
 
-@router.get("/api/graph/impact/{schema}/{table}")
+@router.get("/api/graph/impact/{schema}/{table:path}")
 def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     snapshot = get_graph_snapshot()
     table_nodes = snapshot["table_graph"]["nodes"]
@@ -3878,7 +3878,7 @@ def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4))
     }
 
 
-@router.get("/api/impact/summary/{schema}/{table}")
+@router.get("/api/impact/summary/{schema}/{table:path}")
 def get_impact_summary(
     schema: str,
     table: str,
@@ -3955,7 +3955,7 @@ def get_impact_summary(
     }
 
 
-@router.get("/api/impact/list/{schema}/{table}")
+@router.get("/api/impact/list/{schema}/{table:path}")
 def get_impact_list(
     schema: str,
     table: str,
@@ -5058,7 +5058,7 @@ def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str
     return edges
 
 
-@router.get("/api/dependencies-down/{schema}/{table}")
+@router.get("/api/dependencies-down/{schema}/{table:path}")
 def get_dependencies_down(schema: str, table: str):
     key = f"{schema}.{table}"
     try:
@@ -5073,7 +5073,7 @@ def get_dependencies_down(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dependencies-graph/{schema}/{table}")
+@router.get("/api/dependencies-graph/{schema}/{table:path}")
 def get_dependency_graph(
     schema: str,
     table: str,
@@ -5183,7 +5183,7 @@ def get_dependency_graph(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dependencies-nodes/{schema}/{table}")
+@router.get("/api/dependencies-nodes/{schema}/{table:path}")
 def get_dependency_nodes(
     schema: str,
     table: str,
@@ -5880,7 +5880,7 @@ def get_clickhouse_summary(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/table/{schema}/{table}")
+@router.get("/api/click/table/{schema}/{table:path}")
 def get_clickhouse_table_runs(
     schema: str,
     table: str,
@@ -5970,7 +5970,7 @@ def get_clickhouse_table_runs(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/meta/{schema}/{table}")
+@router.get("/api/click/meta/{schema}/{table:path}")
 def get_clickhouse_meta(schema: str, table: str):
     try:
         schema_norm = (schema or "").strip().lower()
@@ -6022,7 +6022,7 @@ def search_clickhouse_view(schema: str, table: str, limit: int = Query(10, ge=1,
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/history/{schema}/{table}")
+@router.get("/api/click/history/{schema}/{table:path}")
 def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
     try:
         schema_norm = (schema or "").strip()

@@ -1,5 +1,2 @@
-SQL Error [22P04]: ERROR: missing data for column "logdetail"
-  Где: External table __gp_log_master_ext, line 81962561 of execute:cat $GP_SEG_DATADIR/pg_log/*.csv: "2025-11-12 08:14:30.749885 MSK,,,p4454,th-1518561152,,,,0,,,seg-1,,,,,"LOG","53100","could not write..."
+grep "2026-04"*.csv | grep -i "stg.sapxi_web_kaizen_authors"
 
-
-Позиция ошибки:

@@ -41,7 +41,7 @@ export default function ImpactGraphPage() {
     setLoadingGraph(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/graph/impact/${schema}/${table}?depth=${depth}`)
+    fetch(`${API_BASE}/api/graph/impact/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?depth=${depth}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить граф влияния")))
       .then((data) => {
         if (cancelled) return;
@@ -70,7 +70,7 @@ export default function ImpactGraphPage() {
     let cancelled = false;
     setLoadingSummary(true);
 
-    fetch(`${API_BASE}/api/impact/summary/${schema}/${table}?depth=${depth}&limit=160`)
+    fetch(`${API_BASE}/api/impact/summary/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?depth=${depth}&limit=160`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить сводку влияния")))
       .then((data) => {
         if (!cancelled) setSummary(data);
@@ -131,7 +131,7 @@ export default function ImpactGraphPage() {
     if (!schema || !table || exporting) return;
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/impact/list/${schema}/${table}?depth=${depth}`);
+      const res = await fetch(`${API_BASE}/api/impact/list/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?depth=${depth}`);
       if (!res.ok) throw new Error("Не удалось выгрузить список");
       const data = await res.json();
       const rows = Array.isArray(data.tables) ? data.tables : [];

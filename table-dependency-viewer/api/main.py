@@ -1918,6 +1918,19 @@ def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
         return table_norm
     return table_norm.replace("/", "").replace("-", "").replace(" ", "")
 
+
+def _resolve_table_key(mapping: dict, schema: str, table: str) -> Optional[str]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    direct = f"{schema_norm}.{table_norm}"
+    if direct in mapping:
+        return direct
+    table_clean = _clean_table_name(table_norm)
+    cleaned = f"{schema_norm}.{table_clean}" if table_clean else None
+    if cleaned and cleaned in mapping:
+        return cleaned
+    return direct
+
 @app.on_event("startup")
 def warm_up_cache():
     try:
@@ -3746,9 +3759,7 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3855,9 +3866,7 @@ def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4))
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3893,9 +3902,7 @@ def get_impact_summary(
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3969,9 +3976,7 @@ def get_impact_list(
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -5063,9 +5068,9 @@ def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str
 
 @router.get("/api/dependencies-down/{schema}/{table:path}")
 def get_dependencies_down(schema: str, table: str):
-    key = f"{schema}.{table}"
     try:
         all_meta = load_all_meta()
+        key = _resolve_table_key(all_meta, schema, table)
         if key not in all_meta:
             return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -5084,9 +5089,6 @@ def get_dependency_graph(
     max_edges: Optional[int] = Query(None, ge=1),
 ):
     try:
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        key = f"{schema_norm}.{table_norm}"
         now = time.time()
 
         all_meta_list, _ = get_cached_meta_and_index()
@@ -5095,17 +5097,17 @@ def get_dependency_graph(
             globals()["_graph_cache_meta_ts"] = _cache_timestamp
             globals()["_graph_cache_ts"] = now
 
-        cache_key = (key, max_depth, max_edges)
-        if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
-            cached = _graph_cache.get(cache_key)
-            if cached is not None:
-                return cached
-
         all_meta = {
             f"{m.get('table_schema')}.{m.get('table_name')}": m
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        key = _resolve_table_key(all_meta, schema, table)
+        cache_key = (key, max_depth, max_edges)
+        if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
+            cached = _graph_cache.get(cache_key)
+            if cached is not None:
+                return cached
         reverse_index = {}
         for m in all_meta_list:
             consumer = (m.get("table_schema"), m.get("table_name"))
@@ -5194,16 +5196,13 @@ def get_dependency_nodes(
     max_nodes: Optional[int] = Query(None, ge=1),
 ):
     try:
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        key = f"{schema_norm}.{table_norm}"
-
         all_meta_list, _ = get_cached_meta_and_index()
         all_meta = {
             f"{m.get('table_schema')}.{m.get('table_name')}": m
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        key = _resolve_table_key(all_meta, schema, table)
         reverse_index = {}
         for m in all_meta_list:
             consumer = (m.get("table_schema"), m.get("table_name"))
@@ -5270,9 +5269,7 @@ def get_gantt_data(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
         table_nodes = snapshot["table_graph"]["nodes"]
         table_edges = snapshot["table_graph"]["edges"]
 
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        start_table = f"{schema_norm}.{table_norm}"
+        start_table = _resolve_table_key(table_nodes, schema, table)
         if start_table not in table_nodes:
             return JSONResponse(status_code=404, content={"error": f"'{start_table}' not found in meta"})
 

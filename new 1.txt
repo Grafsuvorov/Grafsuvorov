@@ -1,15 +1,30 @@
+ Лог api по этим двум endpoint:
 
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54210 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54214 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54216 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54218 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54202 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54208 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54192 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54222 - "GET /auth/favorites/tables/2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54226 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6&table_id=2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54224 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20&table_id=2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54228 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10&table_id=2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54194 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54242 - "GET /api/graph/table/ods/rusal/ledisloc_ral?depth=3 HTTP/1.1" 404 Not Found
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54240 - "POST /auth/audit/event HTTP/1.1" 200 OK
+  docker compose logs --tail=120 api | grep -E 'table-history|graph/table'
+
+  2. В браузере Network строку запроса для GP history:
+
+  - нужен полный URL
+  - важно увидеть, есть ли table_id=2693
+
+  3. В браузере Network строку запроса для graph:
+
+  - нужен полный URL
+  - важно увидеть, есть ли %2Frusal%2Fledisloc_ral или всё ещё rusal/ledisloc_ral
+
+  Если хочешь одной серверной командой ещё проверить фронт-сборку, покажи:
+
+  docker compose exec frontend sh -lc "grep -R 'table_id=2693' -n /usr/share/nginx/html || true"
+
+  и
+
+  docker compose exec frontend sh -lc "grep -R 'encodeURIComponent(tableName)' -n /usr/share/nginx/html || true"
+
+  Главное сейчас:
+
+  - если в api логах table-history всё ещё без table_id, значит у тебя старый frontend
+  - если graph/table всё ещё без %2F, значит у тебя старый frontend
+  - если запросы уже новые, тогда проблема уже в ответе backend, и по этим логам я скажу следующий точный фикс
+
+
+› Summ

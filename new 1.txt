@@ -1,26 +1,35 @@
-table_name: asuzdc_ove_dislocation_cargo_group
-table_schema: ods
-table_id: 3911
-source_id: 6
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 298
-job_name: STG_LOADER
-table_loading_index: 1
-entity_id: 48
-entity_name: MANAGEMENT_REPORTING_2
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/asuzdc_ove_dislocation_cargo_group/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/asuzdc_ove_dislocation_cargo_group/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/asuzdc_ove_dislocation_cargo_group/sql_query_truncate.sql
-depends_on:
-  stg:
-    - asuzdc_ove_dislocation_cargo_group
+index-DMSNhGiM.js:140 
+ POST http://rgm-s-dwhapp01.hq.root.ad:15312/auth/audit/event 502 (Bad Gateway)
+window.fetch	@	index-DMSNhGiM.js:140
+Sa	@	index-DMSNhGiM.js:132
+(anonymous)	@	index-DMSNhGiM.js:140
+au	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+Fa	@	index-DMSNhGiM.js:48
+I1	@	index-DMSNhGiM.js:48
+aS	@	index-DMSNhGiM.js:48
+(anonymous)	@	index-DMSNhGiM.js:48
+X	@	index-DMSNhGiM.js:25
+index-DMSNhGiM.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/tables 502 (Bad Gateway)
+favicon.ico:1 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/favicon.ico 404 (Not Found)
+index-DMSNhGiM.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=90 500 (Internal Server Error)
+index-DMSNhGiM.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=30 500 (Internal Server Error)
+index-DMSNhGiM.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=180 500 (Internal Server Error)
+index-DMSNhGiM.js:140 
+ GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=30 500 (Internal Server Error)
+﻿

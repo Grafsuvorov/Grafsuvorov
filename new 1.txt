@@ -1,199 +1,133 @@
-do
-$$
-DECLARE    
-	v_row_cnt int8;
-	v_row_cnt_agg int8 = 0;
-	v_calc_time interval ;
-	v_start_dttm timestamp(0) ;
-	v_last_step_finish_dttm timestamp(0) ;
-BEGIN
-	v_start_dttm   := clock_timestamp()  ;
-	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
-	v_last_step_finish_dttm :=  clock_timestamp();
 
-
-
-	drop table if exists pg_temp.loaded_uuid;
-	create temporary  table pg_temp.loaded_uuid 	 	with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
-		select distinct uuid from stg.s1c_debt_for_working_capital/*stg.s1c_debt_for_working_capital*/
-	)
-	distributed replicated;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] create pg_temp.loaded_uuid (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
-
-	drop table if exists pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN;
-	create temporary  table pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN 	 	with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
-		select
-			uuid
-			, dt_insert
-			, (xpath('Header/Sender/text()', document_xml))[1]::varchar as sender
-			, (xpath('Header/Receiver/text()', document_xml))[1]::varchar as receiver
-			, ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp as create_date_time
-			, document_xml
-			from landing."INPUT_DATA_FROM_SAPXI_IN"
-			where
-				flow_id = 'SI_WorkingCapital_AI' --372 23c
-						and uuid not in (select uuid from pg_temp.loaded_uuid  )
-
-	)
-	distributed randomly;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] create pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
-
-	drop table if exists pg_temp.entrys_1c_wc;
-	create temporary table pg_temp.entrys_1c_wc  with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
-		with  items as (
-			select
-				uuid
-				, dt_insert
-				, sender
-				, receiver
-				, create_date_time
-				, (unnest(xpath('Body/Item', document_xml))) AS item_document_xml
-			from pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN as hed
-		)
-		select
-			uuid
-			, dt_insert
-			, sender
-			, receiver
-			, create_date_time
-			, item_document_xml
-			, ((xpath('//Item/dtRp/text()', item_document_xml))[1]::varchar)::date as dt_report
-			, (xpath('//Item/dbCd/text()', item_document_xml))[1]::varchar as database_code_1c
-			, (xpath('//Item/dbName/text()', item_document_xml))[1]::varchar as database_name_1c
-			, (xpath('//Item/unitMd/text()', item_document_xml))[1]::varchar as unit_balance_mdm_code_1c
-			, (xpath('//Item/tz/text()', item_document_xml))[1]::varchar as timezone_1c
-		from items
-	)
-	distributed by (unit_balance_mdm_code_1c);
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] create pg_temp.entrys_1c_wc (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
-
-
-
-	drop table if exists pg_temp.entrys;
-	create temporary table pg_temp.entrys  with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
-		select
-			uuid
-			, dt_insert
-			, sender
-			, receiver
-			, create_date_time
-			, dt_report
-			, database_code_1c
-			, database_name_1c
-			, unit_balance_mdm_code_1c
-			, timezone_1c
-			, (unnest(xpath('//Item/entry', item_document_xml))) AS item_document_xml
-		from pg_temp.entrys_1c_wc
-	)
-	distributed by (unit_balance_mdm_code_1c);
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] create pg_temp.entrys (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
-
-	insert into stg.s1c_debt_for_working_capital (sender,receiver,create_date_time,dt_report,database_code_1c,database_name_1c,unit_balance_mdm_code_1c,posting_uid_code_1c,invoice_registration_number,counterparty_role_name,debit_or_credit_name,accounting_document_descriprion_text,document_1c_code,responsibility_center_hfm_code,region_of_end_user_code,country_of_end_user_code,counterparty_mdm_code,counterparty_annual_turnover_amount,finish_goods_group_name,contract_number,paydox_document_url,contract_type_name,contract_amount,contract_currency_code,dt_contract_start,dt_contract_end,terms_of_payment_name,dt_overdue,debt_coverage_type_name,coverage_amount,coverage_currency_code,dt_debt,document_currency_code,debt_balance_document_currency_amount,debt_balance_rub_currency_amount,debt_balance_usd_currency_amount,debt_overdue_document_currency_amount,debt_overdue_rub_currency_amount,debt_overdue_usd_currency_amount,bank_receiver_name,receivable_claim_paydox_url,dt_receivable_claim,dt_claim_send_to_law_court,contract_supervisor_name,contract_supervisor_ad_login_code,general_ledger_account_code,general_ledger_account_name,dt_contract_registration,document_currency_amount,contract_supervisor_employee_1c_number,contract_supervisor_employee_sap_number,sales_market_code,sales_market_name,bad_debt_provision_amount,bad_debt_provision_currency_code,credit_limit_rub_currency_amount,dt_credit_limit_valid_to,paydox_credit_limit_url,insured_amount,insurance_currency_code,dt_insurance_valid_to,insurance_company_mdm_code,bank_guarantee_amount,bank_guarantee_currency_code,dt_bank_guarantee_valid_to,bank_guarantee_mdm_code,third_party_guarantee_amount,third_party_guarantee_currency_code,dt_third_party_guarantee_valid_to,third_party_guarantee_mdm_code,debt_balance_exchange_diff_rub_amount,debt_balance_exchange_diff_usd_amount,"uuid",dt_insert)
-	select
-		sender
-		, receiver
-		, create_date_time
-		, dt_report
-		, database_code_1c
-		, database_name_1c
-		, unit_balance_mdm_code_1c
-		, (xpath('//entry/id/text()', item_document_xml))[1]::varchar as posting_uid_code_1c
-		, (xpath('//entry/invNum/text()', item_document_xml))[1]::varchar as invoice_registration_number
-		, (xpath('//entry/ctrpRole/text()', item_document_xml))[1]::varchar as counterparty_role_name
-		, (xpath('//entry/dcName/text()', item_document_xml))[1]::varchar as debit_or_credit_name
-		, (xpath('//entry/docDesc/text()', item_document_xml))[1]::varchar as accounting_document_descriprion_text
-		, (xpath('//entry/docNum/text()', item_document_xml))[1]::varchar as document_1с_code
-		, (xpath('//entry/respCntr/text()', item_document_xml))[1]::varchar as responsibility_center_hfm_code
-		, (xpath('//entry/regEndUsr/text()', item_document_xml))[1]::varchar as region_of_end_user_code
-		, (xpath('//entry/cntEndUsr/text()', item_document_xml))[1]::varchar as country_of_end_user_code
-		, (xpath('//entry/ctrpMd/text()', item_document_xml))[1]::varchar as counterparty_mdm_code
-		, ((xpath('//entry/ctrpTurnov/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as counterparty_annual_turnover_amount -- cast
-		, (xpath('//entry/fgGrName/text()', item_document_xml))[1]::varchar as finish_goods_group_name
-		, (xpath('//entry/ctNum/text()', item_document_xml))[1]::varchar as contract_number
-		, (xpath('//entry/pdUrl/text()', item_document_xml))[1]::varchar as paydox_document_url -- не нашёл тег все нулы
-		, (xpath('//entry/ctType/text()', item_document_xml))[1]::varchar as contract_type_name
-		, ((xpath('//entry/ctAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as contract_amount
-		, (xpath('//entry/ctCurCd/text()', item_document_xml))[1]::varchar as contract_currency_code
-		, ((xpath('//entry/dtCtStart/text()', item_document_xml))[1]::varchar)::date as dt_contract_start
-		, ((xpath('//entry/dtCtEnd/text()', item_document_xml))[1]::varchar)::date as dt_contract_end
-		, (xpath('//entry/payTerm/text()', item_document_xml))[1]::varchar as terms_of_payment_name
-		, ((xpath('//entry/dtOverdue/text()', item_document_xml))[1]::varchar)::date as dt_overdue
-		, (xpath('//entry/covTypeName/text()', item_document_xml))[1]::varchar as debt_coverage_type_name
-		, ((xpath('//entry/covAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as coverage_amount
-		, (xpath('//entry/covCurCd/text()', item_document_xml))[1]::varchar as coverage_currency_code
-		, ((xpath('//entry/dtDebt/text()', item_document_xml))[1]::varchar)::date as dt_debt
-		, (xpath('//entry/docCurCd/text()', item_document_xml))[1]::varchar as document_currency_code
-		, ((xpath('//entry/dbDocCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_document_currency_amount
-		, ((xpath('//entry/dbRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_rub_currency_amount
-		, ((xpath('//entry/dbUsdAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_usd_currency_amount
-		, ((xpath('//entry/odDocCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_document_currency_amount
-		, ((xpath('//entry/odRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_rub_currency_amount
-		, ((xpath('//entry/odUsdAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_usd_currency_amount
-		, (xpath('//entry/bankRecName/text()', item_document_xml))[1]::varchar as bank_receiver_name
-		, (xpath('//entry/recClmUrl/text()', item_document_xml))[1]::varchar as receivable_claim_paydox_url
-		, ((xpath('//entry/dtRecClm/text()', item_document_xml))[1]::varchar)::date as dt_receivable_claim
-		, ((xpath('//entry/dtLawCrt/text()', item_document_xml))[1]::varchar)::date as dt_claim_send_to_law_court
-		, (xpath('//entry/ctrSupName/text()', item_document_xml))[1]::varchar as contract_supervisor_name
-		, (xpath('//entry/ctrSupId/text()', item_document_xml))[1]::varchar as contract_supervisor_ad_login_code
-		, (xpath('//entry/glAccCd/text()', item_document_xml))[1]::varchar as general_ledger_account_code
-		, (xpath('//entry/glAccName/text()', item_document_xml))[1]::varchar as general_ledger_account_name
-		, ((xpath('//entry/dtCtReg/text()', item_document_xml))[1]::varchar)::date as dt_contract_registration
-		, ((xpath('//entry/docCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as document_currency_amount
-		, (xpath('//entry/ctrSup1c/text()', item_document_xml))[1]::varchar as contract_supervisor_employee_1c_number
-		, (xpath('//entry/ctrSupSap/text()', item_document_xml))[1]::varchar as contract_supervisor_employee_sap_number
-		, (xpath('//entry/smCode/text()', item_document_xml))[1]::varchar as sales_market_code
-		, (xpath('//entry/smName/text()', item_document_xml))[1]::varchar as sales_market_name
-		, ((xpath('//entry/badDbAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as bad_debt_provision_amount
-		, (xpath('//entry/badDbCurCd/text()', item_document_xml))[1]::varchar as bad_debt_provision_currency_code
-		, ((xpath('//entry/crLimRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as credit_limit_rub_currency_amount
-		, ((xpath('//entry/dtCrLimEnd/text()', item_document_xml))[1]::varchar)::date as dt_credit_limit_valid_to
-		, (xpath('//entry/crUrlPd/text()', item_document_xml))[1]::varchar as paydox_credit_limit_url
-		, ((xpath('//entry/insAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as insured_amount
-		, (xpath('//entry/insCurCd/text()', item_document_xml))[1]::varchar as insurance_currency_code
-		, ((xpath('//entry/dtInsEnd/text()', item_document_xml))[1]::varchar)::date as dt_insurance_valid_to
-		, (xpath('//entry/insCoMd/text()', item_document_xml))[1]::varchar as insurance_company_mdm_code
-		, ((xpath('//entry/bgAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as bank_guarantee_amount
-		, (xpath('//entry/bgCurCd/text()', item_document_xml))[1]::varchar as bank_guarantee_currency_code
-		, ((xpath('//entry/dtBgEnd/text()', item_document_xml))[1]::varchar)::date as dt_bank_guarantee_valid_to
-		, (xpath('//entry/bgMd/text()', item_document_xml))[1]::varchar as bank_guarantee_mdm_code
-		, ((xpath('//entry/thpgAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as third_party_guarantee_amount
-		, (xpath('//entry/thpgCurCd/text()', item_document_xml))[1]::varchar as third_party_guarantee_currency_code
-		, ((xpath('//entry/dtThpgEnd/text()', item_document_xml))[1]::varchar)::date as dt_third_party_guarantee_valid_to
-		, (xpath('//entry/thpgMd/text()', item_document_xml))[1]::varchar as third_party_guarantee_mdm_code
-		, ((xpath('//entry/dbDfRub/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_exchange_diff_rub_amount
-		, ((xpath('//entry/dbDfUsd/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_exchange_diff_usd_amount
-		, uuid
-		, dt_insert
-	from pg_temp.entrys as entrys
-	;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
-	v_last_step_finish_dttm :=  clock_timestamp();
-
-	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
-
-
-	if v_row_cnt_agg > 0 then
-		analyze stg.s1c_debt_for_working_capital;
-		get diagnostics v_row_cnt = row_count;
-		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;	
-		v_last_step_finish_dttm :=  clock_timestamp();
-	end if;
-
-	v_calc_time :=  clock_timestamp() - v_start_dttm ;
-	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache api
+[+] Building 115.4s (18/18) FINISHED
+ => [internal] load build definition from Dockerfile                                                                                      0.0s
+ => => transferring dockerfile: 1.74kB                                                                                                    0.0s
+ => [internal] load metadata for docker.io/library/python:3.11-slim                                                                       1.7s
+ => [internal] load metadata for docker.io/library/node:20-slim                                                                           1.8s
+ => [internal] load .dockerignore                                                                                                         0.0s
+ => => transferring context: 162B                                                                                                         0.0s
+ => [stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634       0.0s
+ => => resolve docker.io/library/python:3.11-slim@sha256:9358444059ed78e2975ada2c189f1c1a3144a5dab6f35bff8c981afb38946634                 0.0s
+ => [internal] load build context                                                                                                         0.0s
+ => => transferring context: 302.61kB                                                                                                     0.0s
+ => CACHED [node 1/2] FROM docker.io/library/node:20-slim@sha256:1e85773c98c31d4fe5b545e4cb17379e617b348832fb3738b22a08f68dec30f3         0.0s
+ => CACHED [stage-1  2/10] WORKDIR /app                                                                                                   0.0s
+ => [stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*                                          58.9s
+ => [node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http://rgm-s-rtproxnlb01.  2.6s
+ => [stage-1  4/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node                                                              0.6s
+ => [stage-1  5/10] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm                                                                0.5s
+ => [stage-1  6/10] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx                                                                0.5s
+ => [stage-1  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules                                              0.8s
+ => [stage-1  8/10] COPY api/ /app/api/                                                                                                   0.2s
+ => [stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pip install --index-url=https://pypi.nx.sib.rual.ru/simple   41.7s
+ => [stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends openssh-client sshpass     && rm -rf /var/lib/a  9.6s
+ => exporting to image                                                                                                                    0.6s
+ => => exporting layers                                                                                                                   0.6s
+ => => writing image sha256:6f3e0f28f1b59389514688cf8d1531bc053b1a21ed13deb373624270095bc62e                                              0.0s
+ => => naming to docker.io/library/table-dependency-viewer_api                                                                            0.0s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d frontend api
+[+] Running 2/2
+ ⠿ Container table-dependency-viewer-api-1       Started                                                                                  1.4s
+ ⠿ Container table-dependency-viewer-frontend-1  Running                                                                                  0.0s
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=100 api
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_bi_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: rls.rls_t depends on rls.rls_roles_mask BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_eqp_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dict_stg.toro2_flc_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_i2_toro2_ntf_hdr_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_flc_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ntf_hdr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ral_is2_toro2_ord_hdr_opr depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ntf_wrp depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_eqp_avc depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.toro2_ord_cst depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm_calc.production_ad_kpa_finish_goods_stock_and_shipment depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.cast_sched depends on stg.cast_sched BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: ods.kpi_indicators_actual_report_ad depends on stg.bip_zbw1689m_srv BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.macro_index_rsv_atsenergo depends on api.dag_load_api_atsenergo BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_production_aluminium_finish_goods_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_demand_plannig depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_sharepoint_workspacestandartisation depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.mes_lp_reject_product depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_material_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.stock_on_wheels_asugdc depends on api.dag_asugdc_cargo_in_wheels BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_1c_personnel_attendance depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtime depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_purchase_planning depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_metal_electrolysis_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_raw_cubal_downtimeklass depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.sapxi_reject_product_kubal depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.auxiliary_production_anode_zyfra depends on api.dag_load_api_kraz BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.kpi_aggregation_characteristic_ppk depends on landing.kpi_aggregation_characteristic_ppk BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: dm.kpi_indicators_daily_gd depends on ods.alumina_production_xls BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asugdc_arrived_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.asugdc_dislocation_cargo depends on api.dag_api_asugdc_load BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.s1c_debt_for_working_capital depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ⚠️ rebuilding orderbreaches cache
+table-dependency-viewer-api-1  | INFO:     Application startup complete.
+table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+table-dependency-viewer-api-1  | [WARN] Table ods.rusal/ledisloc_ral not found in any of TOP_DIRS
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46454 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46458 - "GET /api/table-variants/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46462 - "GET /api/dq/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46460 - "GET /api/dq/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46464 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46476 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46478 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46482 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46484 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46486 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46496 - "GET /api/dq/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46494 - "GET /api/table-variants/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46498 - "GET /api/dq/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46500 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46502 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46506 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46504 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46512 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46456 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46514 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46520 - "GET /api/tables HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46518 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46532 - "GET /api/table-variants/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46530 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | [WARN] Table ods.rusal/ledisloc_ral not found in any of TOP_DIRS
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46536 - "GET /api/dq/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46488 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46538 - "GET /api/dq/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46544 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46540 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46542 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46546 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46550 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46552 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46474 - "GET /api/click/meta/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46556 - "GET /api/click/meta/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46558 - "GET /api/click/meta/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46480 - "GET /api/click/view/search?schema=ods&table=%2Frusal%2Fledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | [WARN] Table ods.rusal/ledisloc_ral not found in any of TOP_DIRS
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46554 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46560 - "GET /api/click/view/search?schema=ods&table=%2Frusal%2Fledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46562 - "GET /api/click/view/search?schema=ods&table=%2Frusal%2Fledisloc_ral HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:46534 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK

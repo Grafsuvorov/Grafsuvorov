@@ -1,32 +1,199 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc "grep -n 'api/ytrek/table' /app/api/main.py && grep -n 'api/click/history' /app/api/main.py"
-6581:@router.get("/api/ytrek/table/{schema}/{table:path}")
-6769:        print("❌ /api/ytrek/table error:", e)
-6025:@router.get("/api/click/history/{schema}/{table:path}")
-6062:        print("❌ /api/click/history error:", e)
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral",timeout=10).status)'
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/usr/local/lib/python3.11/urllib/request.py", line 216, in urlopen
-    return opener.open(url, data, timeout)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-    response = meth(req, response)
-               ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-    response = self.parent.error(
-               ^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-    return self._call_chain(*args)
-           ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-    result = func(*args)
-             ^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
-    raise HTTPError(req.full_url, code, msg, hdrs, fp)
-urllib.error.HTTPError: HTTP Error 407: Proxy Authentication Required
+do
+$$
+DECLARE    
+	v_row_cnt int8;
+	v_row_cnt_agg int8 = 0;
+	v_calc_time interval ;
+	v_start_dttm timestamp(0) ;
+	v_last_step_finish_dttm timestamp(0) ;
+BEGIN
+	v_start_dttm   := clock_timestamp()  ;
+	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
+	v_last_step_finish_dttm :=  clock_timestamp();
 
 
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:43922 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:43900 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
 
-файл вот так называется rusalledisloc_ral
+	drop table if exists pg_temp.loaded_uuid;
+	create temporary  table pg_temp.loaded_uuid 	 	with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		select distinct uuid from stg.s1c_debt_for_working_capital/*stg.s1c_debt_for_working_capital*/
+	)
+	distributed replicated;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] create pg_temp.loaded_uuid (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+
+	drop table if exists pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN;
+	create temporary  table pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN 	 	with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		select
+			uuid
+			, dt_insert
+			, (xpath('Header/Sender/text()', document_xml))[1]::varchar as sender
+			, (xpath('Header/Receiver/text()', document_xml))[1]::varchar as receiver
+			, ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp as create_date_time
+			, document_xml
+			from landing."INPUT_DATA_FROM_SAPXI_IN"
+			where
+				flow_id = 'SI_WorkingCapital_AI' --372 23c
+						and uuid not in (select uuid from pg_temp.loaded_uuid  )
+
+	)
+	distributed randomly;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] create pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+
+	drop table if exists pg_temp.entrys_1c_wc;
+	create temporary table pg_temp.entrys_1c_wc  with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		with  items as (
+			select
+				uuid
+				, dt_insert
+				, sender
+				, receiver
+				, create_date_time
+				, (unnest(xpath('Body/Item', document_xml))) AS item_document_xml
+			from pg_temp.tmp_INPUT_DATA_FROM_SAPXI_IN as hed
+		)
+		select
+			uuid
+			, dt_insert
+			, sender
+			, receiver
+			, create_date_time
+			, item_document_xml
+			, ((xpath('//Item/dtRp/text()', item_document_xml))[1]::varchar)::date as dt_report
+			, (xpath('//Item/dbCd/text()', item_document_xml))[1]::varchar as database_code_1c
+			, (xpath('//Item/dbName/text()', item_document_xml))[1]::varchar as database_name_1c
+			, (xpath('//Item/unitMd/text()', item_document_xml))[1]::varchar as unit_balance_mdm_code_1c
+			, (xpath('//Item/tz/text()', item_document_xml))[1]::varchar as timezone_1c
+		from items
+	)
+	distributed by (unit_balance_mdm_code_1c);
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] create pg_temp.entrys_1c_wc (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+
+
+
+	drop table if exists pg_temp.entrys;
+	create temporary table pg_temp.entrys  with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		select
+			uuid
+			, dt_insert
+			, sender
+			, receiver
+			, create_date_time
+			, dt_report
+			, database_code_1c
+			, database_name_1c
+			, unit_balance_mdm_code_1c
+			, timezone_1c
+			, (unnest(xpath('//Item/entry', item_document_xml))) AS item_document_xml
+		from pg_temp.entrys_1c_wc
+	)
+	distributed by (unit_balance_mdm_code_1c);
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] create pg_temp.entrys (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+
+	insert into stg.s1c_debt_for_working_capital (sender,receiver,create_date_time,dt_report,database_code_1c,database_name_1c,unit_balance_mdm_code_1c,posting_uid_code_1c,invoice_registration_number,counterparty_role_name,debit_or_credit_name,accounting_document_descriprion_text,document_1c_code,responsibility_center_hfm_code,region_of_end_user_code,country_of_end_user_code,counterparty_mdm_code,counterparty_annual_turnover_amount,finish_goods_group_name,contract_number,paydox_document_url,contract_type_name,contract_amount,contract_currency_code,dt_contract_start,dt_contract_end,terms_of_payment_name,dt_overdue,debt_coverage_type_name,coverage_amount,coverage_currency_code,dt_debt,document_currency_code,debt_balance_document_currency_amount,debt_balance_rub_currency_amount,debt_balance_usd_currency_amount,debt_overdue_document_currency_amount,debt_overdue_rub_currency_amount,debt_overdue_usd_currency_amount,bank_receiver_name,receivable_claim_paydox_url,dt_receivable_claim,dt_claim_send_to_law_court,contract_supervisor_name,contract_supervisor_ad_login_code,general_ledger_account_code,general_ledger_account_name,dt_contract_registration,document_currency_amount,contract_supervisor_employee_1c_number,contract_supervisor_employee_sap_number,sales_market_code,sales_market_name,bad_debt_provision_amount,bad_debt_provision_currency_code,credit_limit_rub_currency_amount,dt_credit_limit_valid_to,paydox_credit_limit_url,insured_amount,insurance_currency_code,dt_insurance_valid_to,insurance_company_mdm_code,bank_guarantee_amount,bank_guarantee_currency_code,dt_bank_guarantee_valid_to,bank_guarantee_mdm_code,third_party_guarantee_amount,third_party_guarantee_currency_code,dt_third_party_guarantee_valid_to,third_party_guarantee_mdm_code,debt_balance_exchange_diff_rub_amount,debt_balance_exchange_diff_usd_amount,"uuid",dt_insert)
+	select
+		sender
+		, receiver
+		, create_date_time
+		, dt_report
+		, database_code_1c
+		, database_name_1c
+		, unit_balance_mdm_code_1c
+		, (xpath('//entry/id/text()', item_document_xml))[1]::varchar as posting_uid_code_1c
+		, (xpath('//entry/invNum/text()', item_document_xml))[1]::varchar as invoice_registration_number
+		, (xpath('//entry/ctrpRole/text()', item_document_xml))[1]::varchar as counterparty_role_name
+		, (xpath('//entry/dcName/text()', item_document_xml))[1]::varchar as debit_or_credit_name
+		, (xpath('//entry/docDesc/text()', item_document_xml))[1]::varchar as accounting_document_descriprion_text
+		, (xpath('//entry/docNum/text()', item_document_xml))[1]::varchar as document_1с_code
+		, (xpath('//entry/respCntr/text()', item_document_xml))[1]::varchar as responsibility_center_hfm_code
+		, (xpath('//entry/regEndUsr/text()', item_document_xml))[1]::varchar as region_of_end_user_code
+		, (xpath('//entry/cntEndUsr/text()', item_document_xml))[1]::varchar as country_of_end_user_code
+		, (xpath('//entry/ctrpMd/text()', item_document_xml))[1]::varchar as counterparty_mdm_code
+		, ((xpath('//entry/ctrpTurnov/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as counterparty_annual_turnover_amount -- cast
+		, (xpath('//entry/fgGrName/text()', item_document_xml))[1]::varchar as finish_goods_group_name
+		, (xpath('//entry/ctNum/text()', item_document_xml))[1]::varchar as contract_number
+		, (xpath('//entry/pdUrl/text()', item_document_xml))[1]::varchar as paydox_document_url -- не нашёл тег все нулы
+		, (xpath('//entry/ctType/text()', item_document_xml))[1]::varchar as contract_type_name
+		, ((xpath('//entry/ctAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as contract_amount
+		, (xpath('//entry/ctCurCd/text()', item_document_xml))[1]::varchar as contract_currency_code
+		, ((xpath('//entry/dtCtStart/text()', item_document_xml))[1]::varchar)::date as dt_contract_start
+		, ((xpath('//entry/dtCtEnd/text()', item_document_xml))[1]::varchar)::date as dt_contract_end
+		, (xpath('//entry/payTerm/text()', item_document_xml))[1]::varchar as terms_of_payment_name
+		, ((xpath('//entry/dtOverdue/text()', item_document_xml))[1]::varchar)::date as dt_overdue
+		, (xpath('//entry/covTypeName/text()', item_document_xml))[1]::varchar as debt_coverage_type_name
+		, ((xpath('//entry/covAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as coverage_amount
+		, (xpath('//entry/covCurCd/text()', item_document_xml))[1]::varchar as coverage_currency_code
+		, ((xpath('//entry/dtDebt/text()', item_document_xml))[1]::varchar)::date as dt_debt
+		, (xpath('//entry/docCurCd/text()', item_document_xml))[1]::varchar as document_currency_code
+		, ((xpath('//entry/dbDocCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_document_currency_amount
+		, ((xpath('//entry/dbRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_rub_currency_amount
+		, ((xpath('//entry/dbUsdAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_usd_currency_amount
+		, ((xpath('//entry/odDocCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_document_currency_amount
+		, ((xpath('//entry/odRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_rub_currency_amount
+		, ((xpath('//entry/odUsdAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_overdue_usd_currency_amount
+		, (xpath('//entry/bankRecName/text()', item_document_xml))[1]::varchar as bank_receiver_name
+		, (xpath('//entry/recClmUrl/text()', item_document_xml))[1]::varchar as receivable_claim_paydox_url
+		, ((xpath('//entry/dtRecClm/text()', item_document_xml))[1]::varchar)::date as dt_receivable_claim
+		, ((xpath('//entry/dtLawCrt/text()', item_document_xml))[1]::varchar)::date as dt_claim_send_to_law_court
+		, (xpath('//entry/ctrSupName/text()', item_document_xml))[1]::varchar as contract_supervisor_name
+		, (xpath('//entry/ctrSupId/text()', item_document_xml))[1]::varchar as contract_supervisor_ad_login_code
+		, (xpath('//entry/glAccCd/text()', item_document_xml))[1]::varchar as general_ledger_account_code
+		, (xpath('//entry/glAccName/text()', item_document_xml))[1]::varchar as general_ledger_account_name
+		, ((xpath('//entry/dtCtReg/text()', item_document_xml))[1]::varchar)::date as dt_contract_registration
+		, ((xpath('//entry/docCurAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as document_currency_amount
+		, (xpath('//entry/ctrSup1c/text()', item_document_xml))[1]::varchar as contract_supervisor_employee_1c_number
+		, (xpath('//entry/ctrSupSap/text()', item_document_xml))[1]::varchar as contract_supervisor_employee_sap_number
+		, (xpath('//entry/smCode/text()', item_document_xml))[1]::varchar as sales_market_code
+		, (xpath('//entry/smName/text()', item_document_xml))[1]::varchar as sales_market_name
+		, ((xpath('//entry/badDbAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as bad_debt_provision_amount
+		, (xpath('//entry/badDbCurCd/text()', item_document_xml))[1]::varchar as bad_debt_provision_currency_code
+		, ((xpath('//entry/crLimRubAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as credit_limit_rub_currency_amount
+		, ((xpath('//entry/dtCrLimEnd/text()', item_document_xml))[1]::varchar)::date as dt_credit_limit_valid_to
+		, (xpath('//entry/crUrlPd/text()', item_document_xml))[1]::varchar as paydox_credit_limit_url
+		, ((xpath('//entry/insAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as insured_amount
+		, (xpath('//entry/insCurCd/text()', item_document_xml))[1]::varchar as insurance_currency_code
+		, ((xpath('//entry/dtInsEnd/text()', item_document_xml))[1]::varchar)::date as dt_insurance_valid_to
+		, (xpath('//entry/insCoMd/text()', item_document_xml))[1]::varchar as insurance_company_mdm_code
+		, ((xpath('//entry/bgAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as bank_guarantee_amount
+		, (xpath('//entry/bgCurCd/text()', item_document_xml))[1]::varchar as bank_guarantee_currency_code
+		, ((xpath('//entry/dtBgEnd/text()', item_document_xml))[1]::varchar)::date as dt_bank_guarantee_valid_to
+		, (xpath('//entry/bgMd/text()', item_document_xml))[1]::varchar as bank_guarantee_mdm_code
+		, ((xpath('//entry/thpgAmt/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as third_party_guarantee_amount
+		, (xpath('//entry/thpgCurCd/text()', item_document_xml))[1]::varchar as third_party_guarantee_currency_code
+		, ((xpath('//entry/dtThpgEnd/text()', item_document_xml))[1]::varchar)::date as dt_third_party_guarantee_valid_to
+		, (xpath('//entry/thpgMd/text()', item_document_xml))[1]::varchar as third_party_guarantee_mdm_code
+		, ((xpath('//entry/dbDfRub/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_exchange_diff_rub_amount
+		, ((xpath('//entry/dbDfUsd/text()', item_document_xml))[1]::varchar)::decimal(20, 6) as debt_balance_exchange_diff_usd_amount
+		, uuid
+		, dt_insert
+	from pg_temp.entrys as entrys
+	;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% [%] Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;
+	v_last_step_finish_dttm :=  clock_timestamp();
+
+	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+
+
+	if v_row_cnt_agg > 0 then
+		analyze stg.s1c_debt_for_working_capital;
+		get diagnostics v_row_cnt = row_count;
+		raise notice '% [%] analyze target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), (clock_timestamp() - v_last_step_finish_dttm)::interval, v_row_cnt;	
+		v_last_step_finish_dttm :=  clock_timestamp();
+	end if;
+
+	v_calc_time :=  clock_timestamp() - v_start_dttm ;
+	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$

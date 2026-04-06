@@ -1,67 +1,24 @@
-SELECT table_id
-  FROM public.tables_meta
-  WHERE lower(table_schema) = 'ods'
-    AND (
-      lower(table_name) = lower('/rusal/ledisloc_ral')
-      OR lower(table_name) = lower('rusalledisloc_ral')
-    )
-  LIMIT 1;
-
-  Если находит 2693, дальше:
-
-  2. История GP по object_id
-
   SELECT
       loading_start_dttm,
       loading_finish_dttm,
       loading_state,
       object_id,
-      object_name,
-      loading_error_text
-  FROM public.log_objects_loading_history
+      object_name--,
+      --loading_error_text
+  FROM tech_etl.log_objects_loading_history
   WHERE loading_state IS NOT NULL
     AND object_type = 'table'
     AND object_id = 2693
   ORDER BY loading_start_dttm DESC
   LIMIT 10;
 
-  Если table_id не находится, тогда fallback такой:
-
-  SELECT
-      loading_start_dttm,
-      loading_finish_dttm,
-      loading_state,
-      object_id,
-      object_name,
-      loading_error_text
-  FROM public.log_objects_loading_history
-  WHERE loading_state IS NOT NULL
-    AND object_type = 'table'
-    AND (
-      lower(object_name) = lower('ods./rusal/ledisloc_ral')
-      OR lower(object_name) = lower('ods.rusalledisloc_ral')
-      OR lower(object_name) = lower('/rusal/ledisloc_ral')
-      OR lower(object_name) = lower('rusalledisloc_ral')
-    )
-  ORDER BY loading_start_dttm DESC
-  LIMIT 10;
-
-  Самая полезная проверка сейчас:
-
-  select table_id, table_schema, table_name
-  from public.tables_meta
-  where table_id = 2693;
-
-  Потом:
-
-  select
-      object_id,
-      object_name,
-      object_type,
-      loading_state,
-      loading_start_dttm,
-      loading_finish_dttm
-  from public.log_objects_loading_history
-  where object_id = 2693
-  order by loading_start_dttm desc
-  limit 20;
+2026-04-06 00:34:50.513	2026-04-06 00:37:28.571	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-04-05 00:35:49.699	2026-04-05 00:38:40.770	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-04-04 00:31:58.150	2026-04-04 00:34:51.607	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-04-03 00:32:05.997	2026-04-03 00:34:55.707	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-04-02 00:36:43.501	2026-04-02 00:39:20.927	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-04-01 00:34:59.123	2026-04-01 00:37:36.481	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-03-31 00:34:03.283	2026-03-31 00:36:52.384	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-03-30 00:34:05.820	2026-03-30 00:36:46.578	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-03-29 00:34:13.115	2026-03-29 00:36:49.604	SUCCESS	2693	ods./rusal/ledisloc_ral
+2026-03-28 00:32:17.229	2026-03-28 00:34:52.735	SUCCESS	2693	ods./rusal/ledisloc_ral

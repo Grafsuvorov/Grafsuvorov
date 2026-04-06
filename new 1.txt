@@ -1,28 +1,32 @@
-grep -n 'api/ytrek/table' api/main.py
-  grep -n 'api/click/history' api/main.py
-  docker compose exec api sh -lc "grep -n 'api/ytrek/table' /app/api/main.py && grep -n 'api/click/history' /app/api/main.py"
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc "grep -n 'api/ytrek/table' /app/api/main.py && grep -n 'api/click/history' /app/api/main.py"
+6581:@router.get("/api/ytrek/table/{schema}/{table:path}")
+6769:        print("❌ /api/ytrek/table error:", e)
+6025:@router.get("/api/click/history/{schema}/{table:path}")
+6062:        print("❌ /api/click/history error:", e)
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral",timeout=10).status)'
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/usr/local/lib/python3.11/urllib/request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 407: Proxy Authentication Required
 
-  Что должно быть:
 
-  - ветка: snapshot/table-dependency-viewer-only
-  - в git log есть c9e7a7d
-  - и в обоих файлах, локальном и внутри контейнера, должно быть:
-      - @router.get("/api/ytrek/table/{schema}/{table:path}")
-      - @router.get("/api/click/history/{schema}/{table:path}")
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43922 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:43900 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
 
-  Если в контейнере всё ещё /{table}, значит:
-
-  - либо не тот git pull
-  - либо docker compose build взял не тот контекст
-  - либо контейнер не пересобрался из актуального каталога
-
-  После этого ещё полезно проверить прямо endpoint изнутри контейнера:
-
-  docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral",
-  timeout=10).status)'
-
-  Если там снова 404, значит в работающем контейнере код реально старый.
-  Пришли вывод этих команд, и я скажу точно, где расхождение.
-
-
-› Summa
+файл вот так называется rusalledisloc_ral

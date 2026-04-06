@@ -1,35 +1,29 @@
-index-DMSNhGiM.js:140 
- POST http://rgm-s-dwhapp01.hq.root.ad:15312/auth/audit/event 502 (Bad Gateway)
-window.fetch	@	index-DMSNhGiM.js:140
-Sa	@	index-DMSNhGiM.js:132
-(anonymous)	@	index-DMSNhGiM.js:140
-au	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-Fa	@	index-DMSNhGiM.js:48
-I1	@	index-DMSNhGiM.js:48
-aS	@	index-DMSNhGiM.js:48
-(anonymous)	@	index-DMSNhGiM.js:48
-X	@	index-DMSNhGiM.js:25
-index-DMSNhGiM.js:140 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/tables 502 (Bad Gateway)
-favicon.ico:1 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/favicon.ico 404 (Not Found)
-index-DMSNhGiM.js:140 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=90 500 (Internal Server Error)
-index-DMSNhGiM.js:140 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=30 500 (Internal Server Error)
-index-DMSNhGiM.js:140 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=180 500 (Internal Server Error)
-index-DMSNhGiM.js:140 
- GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/engineering-efficiency?days=30 500 (Internal Server Error)
-﻿
+Сейчас первичная проблема уже не в конкретной странице, а в том, что api у тебя местами падает целиком:
+
+  - POST /auth/audit/event -> 502
+  - GET /api/tables -> 502
+
+  Пока есть 502 на базовых endpoint, разбирать graph impact и engineering по UI бессмысленно. Сначала нужен traceback из api.
+
+  Сделай на сервере:
+
+  docker compose ps
+  docker compose logs --tail=200 api
+
+  И отдельно сразу отфильтруй ошибки:
+
+  docker compose logs --tail=300 api | grep -E 'ERROR|Traceback|Exception|engineering|graph/impact|api/tables'
+
+  Что уже видно по симптомам:
+
+  - engineering-efficiency теперь не 404, а 500
+  - значит route найден, но падает внутри backend
+  - graph impact тоже может не строиться уже из-за общего падения API, а не из-за URL
+
+  Скорее всего там один из двух сценариев:
+
+  1. мой новый /api/admin/engineering-efficiency падает на SQL/данных
+  2. после деплоя api стартует, но валится на одном из запросов и nginx начинает отдавать 502
+
+  Пришли именно вывод docker compose logs --tail=200 api, и я скажу точную правку. Без traceback это сейчас угадайка.
+

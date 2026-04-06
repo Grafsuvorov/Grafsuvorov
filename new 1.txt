@@ -1,35 +1,28 @@
-GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral 404 (Not Found)
-window.fetch @ index-CkgG9UYG.js:140
-(anonymous) @ index-CkgG9UYG.js:132
-eu @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-Ka @ index-CkgG9UYG.js:48
-z1 @ index-CkgG9UYG.js:48
-aS @ index-CkgG9UYG.js:48
-(anonymous) @ index-CkgG9UYG.js:48
-X @ index-CkgG9UYG.js:25
-index-CkgG9UYG.js:132 Не удалось загрузить данные YouTrack
+grep -n 'api/ytrek/table' api/main.py
+  grep -n 'api/click/history' api/main.py
+  docker compose exec api sh -lc "grep -n 'api/ytrek/table' /app/api/main.py && grep -n 'api/click/history' /app/api/main.py"
 
-/rusal/ledisloc_ral
+  Что должно быть:
+
+  - ветка: snapshot/table-dependency-viewer-only
+  - в git log есть c9e7a7d
+  - и в обоих файлах, локальном и внутри контейнера, должно быть:
+      - @router.get("/api/ytrek/table/{schema}/{table:path}")
+      - @router.get("/api/click/history/{schema}/{table:path}")
+
+  Если в контейнере всё ещё /{table}, значит:
+
+  - либо не тот git pull
+  - либо docker compose build взял не тот контекст
+  - либо контейнер не пересобрался из актуального каталога
+
+  После этого ещё полезно проверить прямо endpoint изнутри контейнера:
+
+  docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral",
+  timeout=10).status)'
+
+  Если там снова 404, значит в работающем контейнере код реально старый.
+  Пришли вывод этих команд, и я скажу точно, где расхождение.
+
+
+› Summa

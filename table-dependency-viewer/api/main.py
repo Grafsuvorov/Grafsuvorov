@@ -2976,30 +2976,36 @@ def get_metrics():
 
 
 @router.get("/api/table-history/{schema}/{table:path}")
-def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
+def get_table_history(
+    schema: str,
+    table: str,
+    table_id: Optional[int] = None,
+    limit: int = Query(10, ge=1, le=50),
+):
     schema_norm, table_norm = _normalize_table_param(schema, table)
     table_clean = _clean_table_name(table_norm)
-    table_id = None
 
     try:
         with engine.connect() as conn:
-            table_id = conn.execute(
-                text(
-                    f"""
-                    SELECT table_id
-                    FROM {TABLE_TABLES_META}
-                    WHERE lower(table_schema) = :schema
-                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
-                    LIMIT 1
-                    """
-                ),
-                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
-            ).scalar()
+            resolved_table_id = table_id
+            if not resolved_table_id:
+                resolved_table_id = conn.execute(
+                    text(
+                        f"""
+                        SELECT table_id
+                        FROM {TABLE_TABLES_META}
+                        WHERE lower(table_schema) = :schema
+                          AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
+                        LIMIT 1
+                        """
+                    ),
+                    {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
+                ).scalar()
 
             params = {"limit": limit}
-            if table_id:
+            if resolved_table_id:
                 where_clause = "object_id = :table_id"
-                params["table_id"] = table_id
+                params["table_id"] = resolved_table_id
             else:
                 where_clause = """
                     lower(object_name) = :table_fqn

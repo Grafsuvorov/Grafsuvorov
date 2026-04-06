@@ -109,7 +109,9 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setHistoryLoading(true);
     setHistoryError(null);
-    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=10`)
+    const params = new URLSearchParams({ limit: "10" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
       .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
       .catch((err) => {
@@ -117,7 +119,7 @@ export default function TableCard({
         setHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю запусков");
       })
       .finally(() => setHistoryLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;

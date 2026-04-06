@@ -5980,7 +5980,11 @@ def get_clickhouse_meta(schema: str, table: str):
         meta = idx["meta"].get((schema_norm, table_norm)) or idx["meta"].get((schema_norm, table_clean))
         view_sql = idx["view_sql"].get((schema_norm, table_norm)) or idx["view_sql"].get((schema_norm, table_clean))
         if not meta and not view_sql:
-            return JSONResponse(status_code=404, content={"error": "not found"})
+            return {
+                "meta": None,
+                "view_sql": None,
+                "meta_root": idx.get("root"),
+            }
         return {
             "meta": meta,
             "view_sql": view_sql,

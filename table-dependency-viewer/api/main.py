@@ -3447,12 +3447,15 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
 
 @router.get("/api/card/{schema}/{table:path}")
 def get_table_card_info_by_path(schema: str, table: str):
+    table_clean = _clean_table_name(norm(table))
     for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)
         if not schema_folder:
             continue
 
         table_folder = find_path_case_insensitive(schema_folder, table)
+        if not table_folder and table_clean:
+            table_folder = find_path_case_insensitive(schema_folder, table_clean)
         if not table_folder:
             continue
 

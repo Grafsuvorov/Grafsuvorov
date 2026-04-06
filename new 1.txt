@@ -1,22 +1,53 @@
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:35010 - "GET /api/graph/table/ods/rusal/ledisloc_ral?depth=3 HTTP/1.1" 404 Not Found
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3",timeout=20).read().decode())'
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/usr/local/lib/python3.11/urllib/request.py", line 216, in urlopen
-    return opener.open(url, data, timeout)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-    response = meth(req, response)
-               ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-    response = self.parent.error(
-               ^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-    return self._call_chain(*args)
-           ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-    result = func(*args)
-             ^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
-    raise HTTPError(req.full_url, code, msg, hdrs, fp)
-urllib.error.HTTPError: HTTP Error 407: Proxy Authentication Required
+Граф ломается из-за старого frontend
+     Лог показывает:
+
+  - /api/graph/table/ods/rusal/ledisloc_ral?depth=3
+
+  Это старый URL. Новый должен быть:
+
+  - /api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3
+
+  Значит backend уже не главный блокер, у тебя frontend контейнер или браузерный cache всё ещё старые.
+
+  2. Твоя проверка через python -c упёрлась в proxy, не в graph.
+     Нужно вызывать без proxy так:
+
+  docker compose exec api python -c 'import urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({}));
+  print(opener.open("http://127.0.0.1:8000/api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3", timeout=20).read().decode())'
+
+  Что делать сейчас.
+
+  Жёстко обновить frontend:
+
+  docker compose build --no-cache frontend
+  docker compose up -d --force-recreate frontend
+
+  Потом в браузере:
+
+  - Ctrl+Shift+R
+  - лучше открыть в Incognito
+
+  И сразу проверить лог again:
+
+  docker compose logs --tail=80 api | grep '/api/graph/table'
+
+  Если после этого там всё ещё:
+
+  - /api/graph/table/ods/rusal/ledisloc_ral?depth=3
+
+  то браузер/nginx реально отдаёт старый bundle.
+
+  Если станет:
+
+  - /api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3
+
+  но всё равно будет 404, тогда я чиню уже backend graph дальше.
+
+  По странице “эффективность”:
+
+  - это уже отдельная проблема
+  - нужен точный URL, который даёт 404
+  - или строка из api/frontend логов
+
+  Сейчас сначала добей frontend для графа, потому тут причина уже видна по логам однозначно.
+

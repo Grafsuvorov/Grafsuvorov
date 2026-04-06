@@ -7236,7 +7236,7 @@ def get_analytics_dashboard(
                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY executor
+                    GROUP BY COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -7254,7 +7254,7 @@ def get_analytics_dashboard(
                     FROM snap
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY creator
+                    GROUP BY COALESCE(snap.created_by, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -7273,7 +7273,7 @@ def get_analytics_dashboard(
                     LEFT JOIN direction ON direction.issue_id = snap.issue_id
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY direction
+                    GROUP BY COALESCE(direction.direction, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),

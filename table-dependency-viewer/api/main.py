@@ -6503,7 +6503,7 @@ def get_release_details(release_id: str, limit: int = Query(500, ge=1, le=2000))
         raise HTTPException(status_code=500, detail="Не удалось получить детали релиза")
 
 
-@router.get("/api/releases/table/{schema}/{table}")
+@router.get("/api/releases/table/{schema}/{table:path}")
 def get_table_releases(
     schema: str,
     table: str,
@@ -6578,7 +6578,7 @@ def get_table_releases(
         raise HTTPException(status_code=500, detail="Не удалось получить релизы по объекту")
 
 
-@router.get("/api/ytrek/table/{schema}/{table}")
+@router.get("/api/ytrek/table/{schema}/{table:path}")
 def get_ytrek_table_info(schema: str, table: str):
     try:
         with engine.connect() as conn:
@@ -7323,7 +7323,7 @@ def get_analytics_release(release_id: str):
         raise HTTPException(status_code=500, detail="Не удалось получить релиз")
 
 
-@router.get("/api/analytics/table/{schema}/{table}")
+@router.get("/api/analytics/table/{schema}/{table:path}")
 def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le=3650)):
     try:
         date_clause, params = _resolve_date_window(None, None, days)

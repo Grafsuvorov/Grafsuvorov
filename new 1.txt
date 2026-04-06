@@ -1,19 +1,35 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import os, base64, urllib.request, urllib.error; base=os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/");
-> user=os.environ["AIRFLOW_DEV_USERNAME"]; pwd=os.environ["AIRFLOW_DEV_PASSWORD"]; url=f"{base}/api/v1/dags"; req=urllib.request.Request(url);
-> req.add_header("Authorization", "Basic " + base64.b64encode(f"{user}:{pwd}".encode()).decode());
-> try:
->     resp=urllib.request.urlopen(req, timeout=20); print("STATUS:", resp.status); print(resp.read().decode())
-> except urllib.error.HTTPError as e:
->     print("STATUS:", e.code); print(e.read().decode())'
-STATUS: 407
-Proxy Authentication Required
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import os, base64, urllib.request, urllib.error; dag_id="dict_dds_currency_rates_meta";
-> base=os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/"); user=os.environ["AIRFLOW_DEV_USERNAME"]; pwd=os.environ["AIRFLOW_DEV_PASSWORD"]; url=f"{base}/api/v1/dags/
-> {dag_id}"; req=urllib.request.Request(url); req.add_header("Authorization", "Basic " + base64.b64encode(f"{user}:{pwd}".encode()).decode());
-> try:
->     resp=urllib.request.urlopen(req, timeout=20); print("STATUS:", resp.status); print(resp.read().decode())
-> except urllib.error.HTTPError as e:
->     print("STATUS:", e.code); print(e.read().decode())'
-  File "<string>", line 2
-    base=os.environ["AIRFLOW_DEV_BASE_URL"].rstrip("/"); user=os.environ["AIRFLOW_DEV_USERNAME"]; pwd=os.environ["AIRFLOW_DEV_PASSWORD"]; url=f"{base}/api/v1/dags/
-                                
+GET http://rgm-s-dwhapp01.hq.root.ad:15312/api/ytrek/table/ods/%2Frusal%2Fledisloc_ral 404 (Not Found)
+window.fetch @ index-CkgG9UYG.js:140
+(anonymous) @ index-CkgG9UYG.js:132
+eu @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+Ka @ index-CkgG9UYG.js:48
+z1 @ index-CkgG9UYG.js:48
+aS @ index-CkgG9UYG.js:48
+(anonymous) @ index-CkgG9UYG.js:48
+X @ index-CkgG9UYG.js:25
+index-CkgG9UYG.js:132 Не удалось загрузить данные YouTrack
+
+/rusal/ledisloc_ral

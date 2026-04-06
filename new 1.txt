@@ -1,29 +1,213 @@
-Сейчас первичная проблема уже не в конкретной странице, а в том, что api у тебя местами падает целиком:
 
-  - POST /auth/audit/event -> 502
-  - GET /api/tables -> 502
-
-  Пока есть 502 на базовых endpoint, разбирать graph impact и engineering по UI бессмысленно. Сначала нужен traceback из api.
-
-  Сделай на сервере:
-
-  docker compose ps
-  docker compose logs --tail=200 api
-
-  И отдельно сразу отфильтруй ошибки:
-
-  docker compose logs --tail=300 api | grep -E 'ERROR|Traceback|Exception|engineering|graph/impact|api/tables'
-
-  Что уже видно по симптомам:
-
-  - engineering-efficiency теперь не 404, а 500
-  - значит route найден, но падает внутри backend
-  - graph impact тоже может не строиться уже из-за общего падения API, а не из-за URL
-
-  Скорее всего там один из двух сценариев:
-
-  1. мой новый /api/admin/engineering-efficiency падает на SQL/данных
-  2. после деплоя api стартует, но валится на одном из запросов и nginx начинает отдавать 502
-
-  Пришли именно вывод docker compose logs --tail=200 api, и я скажу точную правку. Без traceback это сейчас угадайка.
-
+NAME                                 COMMAND                  SERVICE             STATUS              PORTS
+table-dependency-viewer-api-1        "uvicorn api.main:ap…"   api                 running             0.0.0.0:5312->8000/tcp
+table-dependency-viewer-frontend-1   "/docker-entrypoint.…"   frontend            running             0.0.0.0:15312->80/tcp
+[root@rgm-s-dwhapp01 table-dependency-viewer]#  docker compose logs --tail=200 api
+table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 work AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
+table-dependency-viewer-api-1  |                     GROUP BY issue_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 direction AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, field_value AS direction
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
+table-dependency-viewer-api-1  |                     WHERE field_name = 'Направление'
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                     SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+table-dependency-viewer-api-1  |                            COUNT(DISTINCT snap.issue_id) AS tasks_count,
+table-dependency-viewer-api-1  |                            COUNT(ro.table_name) AS tables_count,
+table-dependency-viewer-api-1  |                            COALESCE(SUM(work.minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM snap
+table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN ro ON ro.task_id = snap.issue_id
+table-dependency-viewer-api-1  |                     GROUP BY executor
+table-dependency-viewer-api-1  |                     ORDER BY minutes DESC NULLS LAST
+table-dependency-viewer-api-1  |                     ]
+table-dependency-viewer-api-1  | [parameters: {'days': 180}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42300 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | ❌ /api/analytics/dashboard error: (psycopg2.errors.GroupingError) column "snap.assignee" must appear in the GROUP BY clause or be used in an aggregate function
+table-dependency-viewer-api-1  | LINE 41: ...                   SELECT COALESCE(exec.executor, snap.assig...
+table-dependency-viewer-api-1  |                                                               ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |                 WITH rel AS (
+table-dependency-viewer-api-1  |                     SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
+table-dependency-viewer-api-1  |                     FROM tech_etl.release_log r
+table-dependency-viewer-api-1  |                     WHERE r.started_at >= (now() - (%(days)s || ' days')::interval)
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 ro AS (
+table-dependency-viewer-api-1  |                     SELECT ro.*
+table-dependency-viewer-api-1  |                     FROM tech_etl.release_objects ro
+table-dependency-viewer-api-1  |                     JOIN rel r ON r.release_id = ro.release_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 tasks AS (
+table-dependency-viewer-api-1  |                     SELECT DISTINCT task_id
+table-dependency-viewer-api-1  |                     FROM ro
+table-dependency-viewer-api-1  |                     WHERE task_id IS NOT NULL
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 snap AS (
+table-dependency-viewer-api-1  |                     SELECT s.*
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
+table-dependency-viewer-api-1  |                     JOIN tasks t ON t.task_id = s.issue_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 exec AS (
+table-dependency-viewer-api-1  |                     SELECT DISTINCT ON (issue_id)
+table-dependency-viewer-api-1  |                            issue_id, author AS executor, ts
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_timeline
+table-dependency-viewer-api-1  |                     WHERE event_type = 'State change'
+table-dependency-viewer-api-1  |                       AND value_to IN ('Ожидание релиза', 'В работе')
+table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 work AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
+table-dependency-viewer-api-1  |                     GROUP BY issue_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 direction AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, field_value AS direction
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
+table-dependency-viewer-api-1  |                     WHERE field_name = 'Направление'
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                     SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+table-dependency-viewer-api-1  |                            COUNT(DISTINCT snap.issue_id) AS tasks_count,
+table-dependency-viewer-api-1  |                            COUNT(ro.table_name) AS tables_count,
+table-dependency-viewer-api-1  |                            COALESCE(SUM(work.minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM snap
+table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN ro ON ro.task_id = snap.issue_id
+table-dependency-viewer-api-1  |                     GROUP BY executor
+table-dependency-viewer-api-1  |                     ORDER BY minutes DESC NULLS LAST
+table-dependency-viewer-api-1  |                     ]
+table-dependency-viewer-api-1  | [parameters: {'days': 30}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | psycopg2.errors.GroupingError: column "snap.assignee" must appear in the GROUP BY clause or be used in an aggregate function
+table-dependency-viewer-api-1  | LINE 41: ...                   SELECT COALESCE(exec.executor, snap.assig...
+table-dependency-viewer-api-1  |                                                               ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 7227, in get_analytics_dashboard
+table-dependency-viewer-api-1  |     by_executor = conn.execute(
+table-dependency-viewer-api-1  |                   ^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+table-dependency-viewer-api-1  |     return meth(
+table-dependency-viewer-api-1  |            ^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+table-dependency-viewer-api-1  |     return connection._execute_clauseelement(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+table-dependency-viewer-api-1  |     ret = self._execute_context(
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+table-dependency-viewer-api-1  |     return self._exec_single_context(
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+table-dependency-viewer-api-1  |     self._handle_dbapi_exception(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+table-dependency-viewer-api-1  |     self.dialect.do_execute(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+table-dependency-viewer-api-1  |     cursor.execute(statement, parameters)
+table-dependency-viewer-api-1  | sqlalchemy.exc.ProgrammingError: (psycopg2.errors.GroupingError) column "snap.assignee" must appear in the GROUP BY clause or be used in an aggregate function
+table-dependency-viewer-api-1  | LINE 41: ...                   SELECT COALESCE(exec.executor, snap.assig...
+table-dependency-viewer-api-1  |                                                               ^
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | [SQL:
+table-dependency-viewer-api-1  |                 WITH rel AS (
+table-dependency-viewer-api-1  |                     SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
+table-dependency-viewer-api-1  |                     FROM tech_etl.release_log r
+table-dependency-viewer-api-1  |                     WHERE r.started_at >= (now() - (%(days)s || ' days')::interval)
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 ro AS (
+table-dependency-viewer-api-1  |                     SELECT ro.*
+table-dependency-viewer-api-1  |                     FROM tech_etl.release_objects ro
+table-dependency-viewer-api-1  |                     JOIN rel r ON r.release_id = ro.release_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 tasks AS (
+table-dependency-viewer-api-1  |                     SELECT DISTINCT task_id
+table-dependency-viewer-api-1  |                     FROM ro
+table-dependency-viewer-api-1  |                     WHERE task_id IS NOT NULL
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 snap AS (
+table-dependency-viewer-api-1  |                     SELECT s.*
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_snapshot s
+table-dependency-viewer-api-1  |                     JOIN tasks t ON t.task_id = s.issue_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 exec AS (
+table-dependency-viewer-api-1  |                     SELECT DISTINCT ON (issue_id)
+table-dependency-viewer-api-1  |                            issue_id, author AS executor, ts
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_timeline
+table-dependency-viewer-api-1  |                     WHERE event_type = 'State change'
+table-dependency-viewer-api-1  |                       AND value_to IN ('Ожидание релиза', 'В работе')
+table-dependency-viewer-api-1  |                     ORDER BY issue_id, ts DESC NULLS LAST
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 work AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_worklog
+table-dependency-viewer-api-1  |                     GROUP BY issue_id
+table-dependency-viewer-api-1  |                 ),
+table-dependency-viewer-api-1  |                 direction AS (
+table-dependency-viewer-api-1  |                     SELECT issue_id, field_value AS direction
+table-dependency-viewer-api-1  |                     FROM tech_etl.yt_issue_custom_field
+table-dependency-viewer-api-1  |                     WHERE field_name = 'Направление'
+table-dependency-viewer-api-1  |                 )
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |                     SELECT COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS executor,
+table-dependency-viewer-api-1  |                            COUNT(DISTINCT snap.issue_id) AS tasks_count,
+table-dependency-viewer-api-1  |                            COUNT(ro.table_name) AS tables_count,
+table-dependency-viewer-api-1  |                            COALESCE(SUM(work.minutes), 0) AS minutes
+table-dependency-viewer-api-1  |                     FROM snap
+table-dependency-viewer-api-1  |                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN work ON work.issue_id = snap.issue_id
+table-dependency-viewer-api-1  |                     LEFT JOIN ro ON ro.task_id = snap.issue_id
+table-dependency-viewer-api-1  |                     GROUP BY executor
+table-dependency-viewer-api-1  |                     ORDER BY minutes DESC NULLS LAST
+table-dependency-viewer-api-1  |                     ]
+table-dependency-viewer-api-1  | [parameters: {'days': 30}]
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/f405)
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42304 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42836 - "GET /api/tables HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42838 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42886 - "GET /api/dq/history/dds/hr_employee_attendance?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42876 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42882 - "GET /api/table-variants/dds/hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42890 - "GET /api/click/meta/dds/hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42894 - "GET /api/analytics/table/dds/hr_employee_attendance?days=90 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42898 - "GET /api/click/view/search?schema=dds&table=hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42888 - "GET /api/click/table/dds/hr_employee_attendance?limit=6 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42892 - "GET /api/click/history/dds/hr_employee_attendance?limit=20 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42880 - "GET /api/table-history/dds/hr_employee_attendance?limit=10 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42884 - "GET /api/dq/table/dds/hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42902 - "GET /api/releases/table/dds/hr_employee_attendance?limit=12 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42904 - "GET /api/ytrek/table/dds/hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42906 - "POST /auth/audit/event HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42878 - "GET /api/card/dds/hr_employee_attendance HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42908 - "GET /auth/favorites/tables/5211 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42910 - "GET /api/click/table/dds/hr_employee_attendance?limit=6&table_id=5211 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42912 - "GET /api/click/history/dds/hr_employee_attendance?limit=20&table_id=5211 HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42914 - "GET /api/table-history/dds/hr_employee_attendance?limit=10&table_id=5211 HTTP/1.1" 200 OK
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=300 api | grep -E 'ERROR|Traceback|Exception|engineering|graph/impact|api/tables'
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42300 - "GET /api/admin/engineering-efficiency?days=180 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42304 - "GET /api/admin/engineering-efficiency?days=30 HTTP/1.1" 500 Internal Server Error
+table-dependency-viewer-api-1  | INFO:     172.22.0.3:42836 - "GET /api/tables HTTP/1.1" 200 OK

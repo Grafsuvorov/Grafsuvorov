@@ -1,15 +1,45 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs --tail=120 api | grep -E 'table-history|graph/table'
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53636 - "GET /api/table-history/dds/accidents?limit=10&table_id=4349 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53716 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10&table_id=2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53690 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53786 - "GET /api/table-history/stg/rusal/ledisloc?limit=10&table_id=2686 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53758 - "GET /api/table-history/stg/rusal/ledisloc?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:53822 - "GET /api/graph/table/stg/rusal/ledisloc?depth=3 HTTP/1.1" 404 Not Found
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54228 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10&table_id=2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54194 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:54242 - "GET /api/graph/table/ods/rusal/ledisloc_ral?depth=3 HTTP/1.1" 404 Not Found
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:33666 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:33712 - "GET /api/graph/table/ods/rusal/ledisloc_ral?depth=3 HTTP/1.1" 404 Not Found
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec frontend sh -lc "grep -R 'table_id=2693' -n /usr/share/nginx/html || true"
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec frontend sh -lc "grep -R 'table_id=2693' -n /usr/share/nginx/html || true"
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec frontend sh -lc "grep -R 'encodeURIComponent(tableName)' -n /usr/share/nginx/html || true"
+Значит GP history уже починился. Остался только граф.
+
+  Сейчас нужно отделить две причины:
+
+  1. фронт всё ещё шлёт старый URL без %2F
+  2. backend graph даже с правильным %2F не находит таблицу
+
+  Проверь ровно это.
+
+  1. Что реально уходит из браузера
+  В api логах нужна одна строка:
+
+  docker compose logs --tail=80 api | grep '/api/graph/table'
+
+  Если там:
+
+  - /api/graph/table/ods/rusal/ledisloc_ral?depth=3
+    значит у тебя всё ещё старый frontend bundle/cache
+  - /api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3
+    значит фронт уже новый, и проблема в backend graph lookup
+
+  2. Проверь backend graph напрямую
+
+  docker compose exec api python -c 'import urllib.request; print(urllib.request.urlopen("http://127.0.0.1:8000/api/graph/table/ods/%2Frusal%2Fledisloc_ral?depth=3",
+  timeout=20).read().decode())'
+
+  Если тут 404, я починю backend graph дальше.
+  Если тут 200, значит проблема только во frontend/caching.
+
+  3. Если фронт старый
+  Сделай:
+
+  docker compose build --no-cache frontend
+  docker compose up -d --force-recreate frontend
+
+  И в браузере:
+
+  - Ctrl+Shift+R
+  - или открыть в Incognito
+
+  Пришли вывод:
+
+  docker compose logs --tail=80 api | grep '/api/graph/table'
+
+  и, если есть, ответ команды с python -c выше. Тогда скажу следующий точный фикс.

@@ -22,6 +22,7 @@ import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
+import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
@@ -144,6 +145,10 @@ export default function App() {
       }
       if (target === "/admin/dev-meta") {
         navigate("/admin/dev-meta");
+        return;
+      }
+      if (target === "/admin/engineering") {
+        navigate("/admin/engineering");
         return;
       }
       if (target === "/account") {
@@ -329,6 +334,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : isAdmin ? (
               <DevMetaAdminPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/engineering"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminEngineeringPage />
             ) : (
               <Navigate to="/" replace />
             )

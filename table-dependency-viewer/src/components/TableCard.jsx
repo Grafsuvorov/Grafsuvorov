@@ -165,7 +165,9 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickLoading(true);
     setClickError(null);
-    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=6`)
+    const params = new URLSearchParams({ limit: "6" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
       .then((data) => {
         setClickRuns(Array.isArray(data?.runs) ? data.runs : []);
@@ -176,7 +178,7 @@ export default function TableCard({
         setClickError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-логи");
       })
       .finally(() => setClickLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -200,7 +202,9 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickHistoryLoading(true);
     setClickHistoryError(null);
-    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
+    const params = new URLSearchParams({ limit: "20" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
       .then((data) => setClickHistory(Array.isArray(data) ? data : []))
       .catch((err) => {
@@ -208,7 +212,7 @@ export default function TableCard({
         setClickHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю ClickHouse");
       })
       .finally(() => setClickHistoryLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;

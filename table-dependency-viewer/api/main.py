@@ -6028,7 +6028,12 @@ def search_clickhouse_view(schema: str, table: str, limit: int = Query(10, ge=1,
 
 
 @router.get("/api/click/history/{schema}/{table:path}")
-def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
+def get_clickhouse_history(
+    schema: str,
+    table: str,
+    table_id: Optional[int] = None,
+    limit: int = Query(20, ge=1, le=200),
+):
     try:
         schema_norm = (schema or "").strip()
         table_norm = (table or "").strip()
@@ -6038,7 +6043,10 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
                 text(
                     _clickhouse_run_agg_cte(
                         run_filter_sql="AND r.schema_name = :schema",
-                        stage_filter_sql="AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))",
+                        stage_filter_sql="""
+                          AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))
+                          AND (:table_id IS NULL OR s.table_id = :table_id)
+                        """,
                     )
                     + """
                     SELECT *
@@ -6047,7 +6055,7 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "table_id": table_id, "limit": limit},
             ).mappings().all()
 
         history = [

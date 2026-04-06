@@ -1,2 +1,66 @@
-grep "2026-04"*.csv | grep -i "stg.sapxi_web_kaizen_authors"
+ls -ltr *.csv | tail -20
 
+👉 выбери только свежие файлы
+
+✅ 2. ИЩИ ПО НИМ (самый быстрый вариант)
+grep -i "sapxi_web_kaizen_authors" gpdb-2026-04-0*.csv
+🔥 3. ЛУЧШИЙ ВАРИАНТ — ОДИН grep
+grep -i "sapxi_web_kaizen_authors" *.csv
+
+👉 не надо сначала фильтровать по дате
+(она уже в строке)
+
+⚡ 4. УСКОРИТЬ В РАЗЫ (ВАЖНО)
+
+Добавь --line-buffered или просто:
+
+grep -i "sapxi_web_kaizen_authors" *.csv | grep -i truncate
+
+ИЛИ лучше сразу:
+
+grep -i "truncate.*sapxi_web_kaizen_authors" *.csv
+💥 5. САМЫЙ БЫСТРЫЙ СПОСОБ
+grep -i "sapxi_web_kaizen_authors" gpdb-2026-04-0*.csv
+
+👉 ищешь только за нужные дни
+
+🚀 6. ЕСЛИ ХОЧЕШЬ МАКС СКОРОСТЬ
+
+Используй:
+
+zgrep -i "sapxi_web_kaizen_authors" *.gz
+
+или если есть:
+
+rg "sapxi_web_kaizen_authors"
+
+(ripgrep — в 10 раз быстрее grep)
+
+🧠 ЛОГИКА ПРАВИЛЬНОГО ПОИСКА
+сначала:
+ls -ltr
+потом:
+grep по 5-10 файлам, а не по всем
+💀 ГЛАВНАЯ ОШИБКА
+
+👉 искать сразу по *.csv
+
+Надо:
+
+сначала выбрать файлы → потом искать
+🔥 ДАВАЙ ПРЯМО СЕЙЧАС
+
+Сделай:
+
+ls -ltr *.csv | tail -10
+
+потом:
+
+grep -i "sapxi_web_kaizen_authors" <эти_файлы>
+
+Если найдёшь строку — скинь сюда
+👉 я скажу точно:
+
+кто это делает
+откуда
+и что это (DAG / человек / сервис) 🚀

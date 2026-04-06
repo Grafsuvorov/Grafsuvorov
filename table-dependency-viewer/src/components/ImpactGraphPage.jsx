@@ -168,7 +168,10 @@ export default function ImpactGraphPage() {
     <div className="container cc-page">
       <section className="cc-header-zone">
         <div className="table-head-meta">
-          <button className="btn" onClick={() => navigate(`/table/${schema}/${table}`)}>
+          <button
+            className="btn"
+            onClick={() => navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`)}
+          >
             ← Назад к таблице
           </button>
         </div>
@@ -293,7 +296,12 @@ export default function ImpactGraphPage() {
               edges={filteredGraph.edges}
               nodes={filteredGraph.nodes}
               layout={graph.layout || {}}
-              onNodeClick={(s, t) => navigate(`/table/${s}/${t}`, { state: { from: `/impact/${schema}/${table}` } })}
+              onNodeClick={(s, t) =>
+                navigate(
+                  `/table/${encodeURIComponent(s)}/${encodeURIComponent(t)}`,
+                  { state: { from: `/impact/${encodeURIComponent(schema)}/${encodeURIComponent(table)}` } }
+                )
+              }
             />
           </>
         ) : null}
@@ -320,7 +328,9 @@ export default function ImpactGraphPage() {
               <div key={row.id} className="impact-table-row">
                 <button
                   className="impact-table-link mono"
-                  onClick={() => navigate(`/table/${row.schema}/${row.table}`)}
+                  onClick={() =>
+                    navigate(`/table/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`)
+                  }
                 >
                   {row.id}
                 </button>

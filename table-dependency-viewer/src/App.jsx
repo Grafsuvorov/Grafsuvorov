@@ -236,7 +236,7 @@ export default function App() {
     const params = useParams();
     const handleBack = () => navigate(location.state?.from || "/tables");
     const handleNavigateTable = (schema, table) => {
-      navigate(`/table/${schema}/${table}`, {
+      navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}`, {
         state: { from: location.pathname + location.search },
       });
     };
@@ -246,7 +246,11 @@ export default function App() {
         tableName={params.table}
         onBack={handleBack}
         onNavigateTable={handleNavigateTable}
-        onOpenImpact={(s, t) => navigate(`/impact/${s}/${t}`, { state: { from: location.pathname + location.search } })}
+        onOpenImpact={(s, t) =>
+          navigate(`/impact/${encodeURIComponent(s)}/${encodeURIComponent(t)}`, {
+            state: { from: location.pathname + location.search },
+          })
+        }
         onOpenLogicAudit={(table) => openView({ view: "logic_audit", table })}
       />
     );

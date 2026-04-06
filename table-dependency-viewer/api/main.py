@@ -5890,13 +5890,14 @@ def get_clickhouse_table_runs(
     try:
         schema_norm = (schema or "").strip()
         table_norm = (table or "").strip()
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     _clickhouse_run_agg_cte(
                         run_filter_sql="AND r.schema_name = :schema",
                         stage_filter_sql="""
-                          AND s.table_name = :table
+                          AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))
                           AND (:table_id IS NULL OR s.table_id = :table_id)
                         """,
                     )
@@ -5907,7 +5908,7 @@ def get_clickhouse_table_runs(
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "table_id": table_id, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "table_id": table_id, "limit": limit},
             ).mappings().all()
 
             runs = [
@@ -5927,7 +5928,6 @@ def get_clickhouse_table_runs(
             stages = []
             if runs:
                 run_uuid = runs[0].get("run_uuid")
-                run_table_name = table_norm
                 stages_rows = conn.execute(
                     text(
                         f"""
@@ -5942,12 +5942,12 @@ def get_clickhouse_table_runs(
                             error_text
                         FROM {TABLE_CLICK_LOAD_STAGE}
                         WHERE run_uuid = :run_uuid
-                          AND table_name = :table_name
+                          AND (lower(table_name) = lower(:table_name) OR lower(table_name) = lower(:table_name_clean))
                           AND stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
                         ORDER BY start_dttm
                         """
                     ),
-                    {"run_uuid": run_uuid, "table_name": run_table_name},
+                    {"run_uuid": run_uuid, "table_name": table_norm, "table_name_clean": table_clean},
                 ).mappings().all()
                 stages = [
                     {
@@ -5975,9 +5975,10 @@ def get_clickhouse_meta(schema: str, table: str):
     try:
         schema_norm = (schema or "").strip().lower()
         table_norm = (table or "").strip().lower()
+        table_clean = _clean_table_name(table_norm)
         idx = get_click_meta_index()
-        meta = idx["meta"].get((schema_norm, table_norm))
-        view_sql = idx["view_sql"].get((schema_norm, table_norm))
+        meta = idx["meta"].get((schema_norm, table_norm)) or idx["meta"].get((schema_norm, table_clean))
+        view_sql = idx["view_sql"].get((schema_norm, table_norm)) or idx["view_sql"].get((schema_norm, table_clean))
         if not meta and not view_sql:
             return JSONResponse(status_code=404, content={"error": "not found"})
         return {
@@ -6027,12 +6028,13 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
     try:
         schema_norm = (schema or "").strip()
         table_norm = (table or "").strip()
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     _clickhouse_run_agg_cte(
                         run_filter_sql="AND r.schema_name = :schema",
-                        stage_filter_sql="AND s.table_name = :table",
+                        stage_filter_sql="AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))",
                     )
                     + """
                     SELECT *
@@ -6041,7 +6043,7 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "limit": limit},
             ).mappings().all()
 
         history = [
@@ -6511,6 +6513,7 @@ def get_table_releases(
     limit: int = Query(30, ge=1, le=200),
 ):
     try:
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
@@ -6558,13 +6561,13 @@ def get_table_releases(
                     LEFT JOIN issue_snapshot snap ON snap.issue_id = o.task_id
                     LEFT JOIN issue_executor exec ON exec.issue_id = o.task_id
                     WHERE o.schema_name = :schema
-                      AND o.table_name = :table
+                      AND (lower(o.table_name) = lower(:table) OR lower(o.table_name) = lower(:table_clean))
                       AND (:target_system IS NULL OR lower(o.target_system) = lower(:target_system))
                     ORDER BY o.created_at DESC
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema, "table": table, "target_system": target_system, "limit": limit},
+                {"schema": schema, "table": table, "table_clean": table_clean, "target_system": target_system, "limit": limit},
             ).fetchall()
             payload = []
             for row in rows:
@@ -6581,6 +6584,7 @@ def get_table_releases(
 @router.get("/api/ytrek/table/{schema}/{table:path}")
 def get_ytrek_table_info(schema: str, table: str):
     try:
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             task_rows = conn.execute(
                 text(
@@ -6588,11 +6592,11 @@ def get_ytrek_table_info(schema: str, table: str):
                     SELECT DISTINCT task_id
                     FROM {TABLE_RELEASE_OBJECTS}
                     WHERE schema_name = :schema
-                      AND table_name = :table
+                      AND (lower(table_name) = lower(:table) OR lower(table_name) = lower(:table_clean))
                       AND task_id IS NOT NULL
                     """
                 ),
-                {"schema": schema, "table": table},
+                {"schema": schema, "table": table, "table_clean": table_clean},
             ).fetchall()
             task_ids = [r[0] for r in task_rows if r[0]]
             if not task_ids:
@@ -7327,7 +7331,7 @@ def get_analytics_release(release_id: str):
 def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le=3650)):
     try:
         date_clause, params = _resolve_date_window(None, None, days)
-        params.update({"schema": schema, "table": table})
+        params.update({"schema": schema, "table": table, "table_clean": _clean_table_name(norm(table))})
         with engine.connect() as conn:
             base = f"""
                 WITH rel AS (
@@ -7339,7 +7343,8 @@ def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le
                     SELECT ro.*
                     FROM {TABLE_RELEASE_OBJECTS} ro
                     JOIN rel r ON r.release_id = ro.release_id
-                    WHERE ro.schema_name = :schema AND ro.table_name = :table
+                    WHERE ro.schema_name = :schema
+                      AND (lower(ro.table_name) = lower(:table) OR lower(ro.table_name) = lower(:table_clean))
                 ),
                 tasks AS (
                     SELECT DISTINCT task_id FROM ro WHERE task_id IS NOT NULL

@@ -1925,6 +1925,9 @@ def _resolve_table_key(mapping: dict, schema: str, table: str) -> Optional[str]:
     direct = f"{schema_norm}.{table_norm}"
     if direct in mapping:
         return direct
+    with_leading_slash = f"{schema_norm}./{table_norm}" if table_norm and not table_norm.startswith("/") else None
+    if with_leading_slash and with_leading_slash in mapping:
+        return with_leading_slash
     table_clean = _clean_table_name(table_norm)
     cleaned = f"{schema_norm}.{table_clean}" if table_clean else None
     if cleaned and cleaned in mapping:

@@ -80,6 +80,9 @@ export default function TableCard({
   const [expandedGpErrors, setExpandedGpErrors] = useState({});
   const [expandedClickErrors, setExpandedClickErrors] = useState({});
   const graphSectionRef = useRef(null);
+  const historyRequestRef = useRef(0);
+  const clickRunsRequestRef = useRef(0);
+  const clickHistoryRequestRef = useRef(0);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -109,16 +112,24 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setHistoryLoading(true);
     setHistoryError(null);
+    const requestId = ++historyRequestRef.current;
     const params = new URLSearchParams({ limit: "10" });
     if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
-      .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (requestId !== historyRequestRef.current) return;
+        setHistoryRows(Array.isArray(data) ? data : []);
+      })
       .catch((err) => {
+        if (requestId !== historyRequestRef.current) return;
         console.error(err);
         setHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю запусков");
       })
-      .finally(() => setHistoryLoading(false));
+      .finally(() => {
+        if (requestId !== historyRequestRef.current) return;
+        setHistoryLoading(false);
+      });
   }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
@@ -167,19 +178,25 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickLoading(true);
     setClickError(null);
+    const requestId = ++clickRunsRequestRef.current;
     const params = new URLSearchParams({ limit: "6" });
     if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
       .then((data) => {
+        if (requestId !== clickRunsRequestRef.current) return;
         setClickRuns(Array.isArray(data?.runs) ? data.runs : []);
         setClickStages(Array.isArray(data?.stages) ? data.stages : []);
       })
       .catch((err) => {
+        if (requestId !== clickRunsRequestRef.current) return;
         console.error(err);
         setClickError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-логи");
       })
-      .finally(() => setClickLoading(false));
+      .finally(() => {
+        if (requestId !== clickRunsRequestRef.current) return;
+        setClickLoading(false);
+      });
   }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
@@ -204,16 +221,24 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickHistoryLoading(true);
     setClickHistoryError(null);
+    const requestId = ++clickHistoryRequestRef.current;
     const params = new URLSearchParams({ limit: "20" });
     if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
-      .then((data) => setClickHistory(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (requestId !== clickHistoryRequestRef.current) return;
+        setClickHistory(Array.isArray(data) ? data : []);
+      })
       .catch((err) => {
+        if (requestId !== clickHistoryRequestRef.current) return;
         console.error(err);
         setClickHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю ClickHouse");
       })
-      .finally(() => setClickHistoryLoading(false));
+      .finally(() => {
+        if (requestId !== clickHistoryRequestRef.current) return;
+        setClickHistoryLoading(false);
+      });
   }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
@@ -486,7 +511,7 @@ export default function TableCard({
     setGraphNodes([]);
     setGraphLayout({});
 
-    fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
+    fetch(`${API_BASE}/api/graph/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?depth=3`)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )

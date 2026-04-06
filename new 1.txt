@@ -1,22 +1,5 @@
-:15312/api/click/meta/ods/%2Frusal%2Fledisloc_ral:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+SQL Error [22P04]: ERROR: missing data for column "logdetail"
+  Где: External table __gp_log_master_ext, line 81962561 of execute:cat $GP_SEG_DATADIR/pg_log/*.csv: "2025-11-12 08:14:30.749885 MSK,,,p4454,th-1518561152,,,,0,,,seg-1,,,,,"LOG","53100","could not write..."
 
 
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:36476 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37702 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37706 - "GET /api/tables HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37708 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37738 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37742 - "GET /api/table-variants/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37758 - "GET /api/click/table/ods/rusal/ledisloc_ral?limit=6 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37748 - "GET /api/dq/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37746 - "GET /api/dq/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37740 - "GET /api/card/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37764 - "GET /api/analytics/table/ods/rusal/ledisloc_ral?days=90 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37770 - "GET /api/ytrek/table/ods/rusal/ledisloc_ral HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37768 - "GET /api/releases/table/ods/rusal/ledisloc_ral?limit=12 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37772 - "GET /api/click/history/ods/rusal/ledisloc_ral?limit=20 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37774 - "GET /auth/favorites/tables/2693 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37776 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37744 - "GET /api/table-history/ods/rusal/ledisloc_ral?limit=10 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37762 - "GET /api/click/meta/ods/rusal/ledisloc_ral HTTP/1.1" 404 Not Found
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:37766 - "GET /api/click/view/search?schema=ods&table=%2Frusal%2Fledisloc_ral HTTP/1.1" 200 OK
+Позиция ошибки:

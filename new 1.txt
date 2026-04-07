@@ -1,9 +1,160 @@
-SQL Error [42P16]: ERROR: external tables can't have DISTRIBUTED REPLICATED clause
-
- create writable external table raw_ext."currency_rates_write_s3" (
-    like dict_dds."currency_rates"
+table raw_ext."unit_budget_hierarchy_level_based_write_s3" (
+    like dict_dds."unit_budget_hierarchy_level_based"
 )
-LOCATION ('pxf://datamart-bucket/gp_dev/dm/currency_rates/1775551993763?PROFILE=s3:parquet&SERVER=minioprod'
+LOCATION ('pxf://datamart-bucket/gp_dev/dm/unit_budget_hierarchy_level_based/1775552654430?PROFILE=s3:parquet&SERVER=minioprod'
 ) ON ALL
 FORMAT 'CUSTOM' ( FORMATTER='pxfwritable_export' )
 ENCODING 'UTF8'
+DISTRIBUTED by ("hierarchy_name")
+;, parameters: None
+[2026-04-07, 15:05:44 MSK] {sql.py:418} INFO - Running statement: insert into raw_ext."unit_budget_hierarchy_level_based_write_s3" (
+    "hierarchy_name",
+    "dt_hierarchy_valid_from",
+    "dt_hierarchy_valid_to",
+    "dt_text_valid_from",
+    "dt_text_valid_to",
+    "hierarchy_node_internal_code",
+    "hierarchy_node_external_code",
+    "hierarchy_node_type_code",
+    "hierarchy_node_name",
+    "hierarchy_node_level_code",
+    "hierarchy_node_indented_for_reporting_name",
+    "path_code",
+    "path_name",
+    "hierarchy_parent_node_internal_code",
+    "hierarchy_parent_node_external_code",
+    "hierarchy_parent_node_type_code",
+    "hierarchy_parent_node_name",
+    "hierarchy_node_level1_external_code",
+    "hierarchy_node_level1_internal_code",
+    "hierarchy_node_level1_type_code",
+    "hierarchy_node_level1_name",
+    "hierarchy_node_level2_external_code",
+    "hierarchy_node_level2_internal_code",
+    "hierarchy_node_level2_type_code",
+    "hierarchy_node_level2_name",
+    "hierarchy_node_level3_external_code",
+    "hierarchy_node_level3_internal_code",
+    "hierarchy_node_level3_type_code",
+    "hierarchy_node_level3_name",
+    "hierarchy_node_level4_external_code",
+    "hierarchy_node_level4_internal_code",
+    "hierarchy_node_level4_type_code",
+    "hierarchy_node_level4_name",
+    "hierarchy_node_level5_external_code",
+    "hierarchy_node_level5_internal_code",
+    "hierarchy_node_level5_type_code",
+    "hierarchy_node_level5_name",
+    "hierarchy_node_level6_external_code",
+    "hierarchy_node_level6_internal_code",
+    "hierarchy_node_level6_type_code",
+    "hierarchy_node_level6_name",
+    "hierarchy_node_level7_external_code",
+    "hierarchy_node_level7_internal_code",
+    "hierarchy_node_level7_type_code",
+    "hierarchy_node_level7_name",
+    "hierarchy_node_level8_external_code",
+    "hierarchy_node_level8_internal_code",
+    "hierarchy_node_level8_type_code",
+    "hierarchy_node_level8_name",
+    "hierarchy_node_level9_external_code",
+    "hierarchy_node_level9_internal_code",
+    "hierarchy_node_level9_type_code",
+    "hierarchy_node_level9_name",
+    "hierarchy_node_level10_external_code",
+    "hierarchy_node_level10_internal_code",
+    "hierarchy_node_level10_type_code",
+    "hierarchy_node_level10_name",
+    "dttm_inserted",
+    "dttm_updated",
+    "job_name",
+    "deleted_flag"
+)
+select
+    hierarchy_name,
+    tech_etl.validate_date("dt_hierarchy_valid_from"),
+    tech_etl.validate_date("dt_hierarchy_valid_to"),
+    tech_etl.validate_date("dt_text_valid_from"),
+    tech_etl.validate_date("dt_text_valid_to"),
+    hierarchy_node_internal_code,
+    hierarchy_node_external_code,
+    hierarchy_node_type_code,
+    hierarchy_node_name,
+    hierarchy_node_level_code,
+    hierarchy_node_indented_for_reporting_name,
+    path_code,
+    path_name,
+    hierarchy_parent_node_internal_code,
+    hierarchy_parent_node_external_code,
+    hierarchy_parent_node_type_code,
+    hierarchy_parent_node_name,
+    hierarchy_node_level1_external_code,
+    hierarchy_node_level1_internal_code,
+    hierarchy_node_level1_type_code,
+    hierarchy_node_level1_name,
+    hierarchy_node_level2_external_code,
+    hierarchy_node_level2_internal_code,
+    hierarchy_node_level2_type_code,
+    hierarchy_node_level2_name,
+    hierarchy_node_level3_external_code,
+    hierarchy_node_level3_internal_code,
+    hierarchy_node_level3_type_code,
+    hierarchy_node_level3_name,
+    hierarchy_node_level4_external_code,
+    hierarchy_node_level4_internal_code,
+    hierarchy_node_level4_type_code,
+    hierarchy_node_level4_name,
+    hierarchy_node_level5_external_code,
+    hierarchy_node_level5_internal_code,
+    hierarchy_node_level5_type_code,
+    hierarchy_node_level5_name,
+    hierarchy_node_level6_external_code,
+    hierarchy_node_level6_internal_code,
+    hierarchy_node_level6_type_code,
+    hierarchy_node_level6_name,
+    hierarchy_node_level7_external_code,
+    hierarchy_node_level7_internal_code,
+    hierarchy_node_level7_type_code,
+    hierarchy_node_level7_name,
+    hierarchy_node_level8_external_code,
+    hierarchy_node_level8_internal_code,
+    hierarchy_node_level8_type_code,
+    hierarchy_node_level8_name,
+    hierarchy_node_level9_external_code,
+    hierarchy_node_level9_internal_code,
+    hierarchy_node_level9_type_code,
+    hierarchy_node_level9_name,
+    hierarchy_node_level10_external_code,
+    hierarchy_node_level10_internal_code,
+    hierarchy_node_level10_type_code,
+    hierarchy_node_level10_name,
+    dttm_inserted,
+    dttm_updated,
+    job_name,
+    deleted_flag
+from dict_dds."unit_budget_hierarchy_level_based";, parameters: None
+[2026-04-07, 15:05:45 MSK] {sql.py:427} INFO - Rows affected: 27651
+[2026-04-07, 15:05:45 MSK] {sql.py:418} INFO - Running statement: DROP EXTERNAL TABLE IF EXISTS raw_ext."unit_budget_hierarchy_level_based_write_s3";, parameters: None
+[2026-04-07, 15:05:45 MSK] {taskinstance.py:1400} INFO - Marking task as SUCCESS. dag_id=dict_dds_unit_budget_hierarchy_level_based_meta, task_id=unit_budget_hierarchy_level_based_insert_to_s3, execution_date=20260407T120414, start_date=20260407T120544, end_date=20260407T120545
+[2026-04-07, 15:05:45 MSK] {help_utility.py:586} INFO - START fun: task_SUCCESS_log
+[2026-04-07, 15:05:45 MSK] {sql.py:274} INFO - Executing: UPDATE tech_etl.click_fact_table_load_stage
+SET end_dttm = now(),
+    duration = age(now(), start_dttm),
+    status = UPPER('success'),
+    error_text = ''
+WHERE run_uuid = 'c10c7971-31b9-5bbf-bcc9-d4f6bd1991d2'
+    AND stage_name = 'UPLOAD_TO_S3'
+    AND status = 'RUNNING';
+[2026-04-07, 15:05:45 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2026-04-07, 15:05:45 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+[2026-04-07, 15:05:45 MSK] {sql.py:418} INFO - Running statement: UPDATE tech_etl.click_fact_table_load_stage
+SET end_dttm = now(),
+    duration = age(now(), start_dttm),
+    status = UPPER('success'),
+    error_text = ''
+WHERE run_uuid = 'c10c7971-31b9-5bbf-bcc9-d4f6bd1991d2'
+    AND stage_name = 'UPLOAD_TO_S3'
+    AND status = 'RUNNING';, parameters: None
+[2026-04-07, 15:05:46 MSK] {sql.py:427} INFO - Rows affected: 1
+[2026-04-07, 15:05:46 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 0
+[2026-04-07, 15:05:46 MSK] {taskinstance.py:2778} INFO - 1 downstream tasks scheduled from follow-on schedule check

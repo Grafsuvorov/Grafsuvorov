@@ -191,7 +191,7 @@ export default function DevMetaAdminPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Meta Generator</div>
         <div className="section-subtitle">
-          Отдельный admin-only контур для генерации, ручной правки, валидации и запуска DEV DAG без пересечения с PROD meta.
+          Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
         </div>
 
         <div className="dev-meta-kpis">

@@ -7051,6 +7051,7 @@ main.content {
 .dev-meta-page {
   position: relative;
   overflow: hidden;
+  padding-top: 10px;
 }
 
 .dev-meta-page::before {
@@ -7112,7 +7113,7 @@ main.content {
 
 .dev-meta-layout {
   position: relative;
-  margin-top: 18px;
+  margin-top: 26px;
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   gap: 18px;

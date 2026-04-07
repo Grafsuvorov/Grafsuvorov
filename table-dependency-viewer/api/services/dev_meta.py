@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shlex
 import subprocess
 import tempfile
@@ -221,6 +222,50 @@ def _parse_gp_distribution_clause(raw_value: str | None) -> list[str] | None:
     return columns or None
 
 
+def _quote_identifier(name: str) -> str:
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _column_reference(name: str) -> str:
+    value = str(name)
+    return value if value == value.lower() and re.fullmatch(r"[a-z_][a-z0-9_]*", value) else _quote_identifier(value)
+
+
+def _build_prod_schedule(entity_last_load: Any, schema_name_gp: str) -> str | None:
+    if schema_name_gp == "dict_dds":
+        return "0 22 * * *"
+    if entity_last_load is None:
+        return None
+    target = entity_last_load
+    if isinstance(entity_last_load, datetime):
+        target = entity_last_load.time()
+    if hasattr(target, "hour") and hasattr(target, "minute"):
+        shifted = datetime(2000, 1, 1, int(target.hour), int(target.minute)) + timedelta(minutes=20)
+        return f"{shifted.minute} {shifted.hour} * * *"
+    return None
+
+
+def _extract_view_base(view_definition: str | None) -> tuple[str, str] | None:
+    sql = str(view_definition or "")
+    if not sql:
+        return None
+    upper_sql = sql.upper()
+    if " JOIN " in upper_sql or upper_sql.lstrip().startswith("WITH "):
+        return None
+    match = re.search(
+        r"\bFROM\s+((?:\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*)\.(?:\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_]*))",
+        sql,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    qualified = match.group(1)
+    if "." not in qualified:
+        return None
+    schema_name, table_name = qualified.split(".", 1)
+    return schema_name.strip('"'), table_name.strip('"')
+
+
 def generate_dev_meta_yaml(
     *,
     database_url: str,
@@ -249,7 +294,7 @@ def generate_dev_meta_yaml(
 
     source_object_name = (greenplum_table_name or object_name).strip()
     generator_engine = create_engine(database_url)
-    query = text(
+    columns_query = text(
         """
         SELECT
             t.table_type,
@@ -283,49 +328,130 @@ def generate_dev_meta_yaml(
         ORDER BY c.ordinal_position
         """
     )
+    object_query = text(
+        """
+        SELECT
+            t.table_type,
+            v.view_definition,
+            pg_catalog.pg_get_table_distributedby(pc.oid) AS distributed_by,
+            ent.entity_last_load,
+            obj_description(to_regclass(:qualified_name), 'pg_class') AS table_comment
+        FROM information_schema.tables t
+        LEFT JOIN information_schema.views v
+          ON v.table_schema = t.table_schema
+         AND v.table_name = t.table_name
+        LEFT JOIN pg_catalog.pg_namespace n
+          ON n.nspname = t.table_schema
+        LEFT JOIN pg_catalog.pg_class pc
+          ON pc.relnamespace = n.oid
+         AND pc.relname = t.table_name
+        LEFT JOIN public.tables_meta tm
+          ON lower(tm.table_schema) = lower(t.table_schema)
+         AND lower(tm.table_name) = lower(t.table_name)
+        LEFT JOIN public.entities_meta ent
+          ON ent.entity_id = tm.entity_id
+        WHERE t.table_schema = :schema_name
+          AND t.table_name = :table_name
+        LIMIT 1
+        """
+    )
+    distribution_query = text(
+        """
+        SELECT pg_catalog.pg_get_table_distributedby(c.oid) AS distributed_by
+        FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_namespace n
+          ON n.oid = c.relnamespace
+        WHERE n.nspname = :schema_name
+          AND c.relname = :table_name
+        LIMIT 1
+        """
+    )
     with generator_engine.connect() as conn:
         rows = conn.execute(
-            query,
+            columns_query,
             {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
         ).mappings().all()
-        distribution_clause = conn.execute(
-            text(
-                """
-                SELECT pg_catalog.pg_get_table_distributedby(c.oid) AS distributed_by
-                FROM pg_catalog.pg_class c
-                JOIN pg_catalog.pg_namespace n
-                  ON n.oid = c.relnamespace
-                WHERE n.nspname = :schema_name
-                  AND c.relname = :table_name
-                LIMIT 1
-                """
-            ),
-            {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
-        ).scalar()
+        object_meta = conn.execute(
+            object_query,
+            {
+                "schema_name": schema_name_gp.strip(),
+                "table_name": source_object_name,
+                "qualified_name": f"{schema_name_gp.strip()}.{source_object_name}",
+            },
+        ).mappings().first()
     if not rows:
         raise ValueError(f"Объект {schema_name_gp}.{source_object_name} не найден")
 
     column_names = [str(row["column_name"]) for row in rows]
-    missing_order_by = [name for name in order_by if name not in column_names]
+    normalized_order_by = [name for name in order_by if name != "tuple()"]
+    missing_order_by = [name for name in normalized_order_by if name not in column_names]
     if missing_order_by:
         raise ValueError(f"Колонки из order_by не найдены: {', '.join(missing_order_by)}")
 
     object_type = "table"
-    first_type = str(rows[0]["table_type"] or "").upper()
+    first_type = str((object_meta or {}).get("table_type") or rows[0]["table_type"] or "").upper()
     if "VIEW" in first_type:
         object_type = "view"
-    distributed = _parse_gp_distribution_clause(distribution_clause) if object_type == "table" else None
+    distribution_clause = (object_meta or {}).get("distributed_by")
+    view_definition = (object_meta or {}).get("view_definition")
+    table_comment = (object_meta or {}).get("table_comment")
+    entity_last_load = (object_meta or {}).get("entity_last_load")
+    if object_type == "view" and not distribution_clause:
+        view_base = _extract_view_base(view_definition)
+        if view_base:
+            with generator_engine.connect() as conn:
+                distribution_clause = conn.execute(
+                    distribution_query,
+                    {"schema_name": view_base[0], "table_name": view_base[1]},
+                ).scalar()
+    distributed = _parse_gp_distribution_clause(distribution_clause)
+    distributed_columns = {
+        item for item in (distributed or []) if item not in {"REPLICATED", "RANDOMLY"}
+    }
+
+    if order_by and order_by[0] != "tuple()":
+        null_checks_sql = ", ".join(
+            [
+                f"SUM(CASE WHEN {_quote_identifier(column)} IS NULL THEN 1 ELSE 0 END) AS {_quote_identifier(column)}"
+                for column in order_by
+            ]
+        )
+        null_check_query = text(
+            f"""
+            SELECT {null_checks_sql}
+            FROM {_quote_identifier(schema_name_gp.strip())}.{_quote_identifier(source_object_name)}
+            """
+        )
+        with generator_engine.connect() as conn:
+            null_row = conn.execute(null_check_query).mappings().first()
+        nullable_order_columns = [
+            column for column in order_by if int(null_row.get(column) or 0) > 0
+        ]
+        if nullable_order_columns:
+            raise ValueError(
+                "Колонки из order_by не могут быть NULL: " + ", ".join(nullable_order_columns)
+            )
 
     attributes: list[dict[str, Any]] = []
     for row in rows:
         column_name = str(row["column_name"])
         data_type_gp = str(row["data_type_gp"] or "")
+        column_name_gp = _column_reference(column_name)
+        base_type = data_type_gp.split("(", 1)[0].strip().lower()
+        if object_type != "view" and base_type == "date" and column_name not in distributed_columns:
+            column_name_gp = f'tech_etl.validate_date({_quote_identifier(column_name)})'
+        elif (
+            object_type != "view"
+            and base_type == "timestamp"
+            and column_name not in {"dttm_inserted", "dttm_updated"}
+        ):
+            column_name_gp = f'tech_etl.validate_timestamp({_quote_identifier(column_name)}::text)'
         attr: dict[str, Any] = {
             "column_name_click": column_name,
-            "column_name_gp": column_name,
+            "column_name_gp": column_name_gp,
             "data_type_click": _normalize_click_type(data_type_gp),
             "data_type_gp": data_type_gp,
-            "is_nullable": "NULL" if bool(row["is_nullable"]) and column_name not in order_by else "NOT NULL",
+            "is_nullable": "NULL" if bool(row["is_nullable"]) and column_name not in normalized_order_by else "NOT NULL",
             "description": str(row["description"] or "Комментария нет").replace("\n", " "),
         }
         if row["column_default"]:
@@ -342,7 +468,7 @@ def generate_dev_meta_yaml(
         "order_by": order_by,
         "partitions": None,
         "table_settings": "index_granularity = 8192",
-        "table_comment": None,
+        "table_comment": str(table_comment) if table_comment else None,
         "settings_external_table": {
             "max_threads": 20,
             "max_insert_threads": 20,
@@ -355,7 +481,7 @@ def generate_dev_meta_yaml(
         "clickhouse_conn_id": "clickhouse",
         "dag_name": None,
         "dag_schedule_interval": {
-            "PROD": None,
+            "PROD": _build_prod_schedule(entity_last_load, schema_name_gp.strip()),
             "DEV": None,
         },
         "dag_tags": dag_tags,

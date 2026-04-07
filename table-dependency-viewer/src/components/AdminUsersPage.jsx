@@ -178,6 +178,11 @@ export default function AdminUsersPage({ userProfile }) {
       setDeployReady(false);
     } catch (err) {
       setDeployError(normalizeError(err));
+      if (err?.detail && typeof err.detail === "object") {
+        setDeployOutput(err.detail);
+        setLastDeployAt(err.detail?.last_run_at || null);
+        return;
+      }
       try {
         const status = await adminApi.ciCdStatus();
         setDeployOutput(status);

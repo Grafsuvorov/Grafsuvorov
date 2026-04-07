@@ -30,9 +30,6 @@ cp -r "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
 cp -r "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
 cp -r "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
 
-chown -R airflow:airflow "${APP_ROOT}/meta_info"
-chown -R airflow:airflow "${APP_ROOT}/config_files/meta"
-
 find "${APP_ROOT}/meta_info" -type d -exec chmod 755 {} \;
 find "${APP_ROOT}/meta_info" -type f -exec chmod 644 {} \;
 find "${APP_ROOT}/config_files/meta" -type d -exec chmod 755 {} \;

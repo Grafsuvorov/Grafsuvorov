@@ -207,6 +207,7 @@ def generate_dev_meta_yaml(
     object_name: str,
     schema_name_click: str,
     order_by: list[str],
+    dag_tags: list[str],
     greenplum_table_name: str | None = None,
 ) -> dict[str, Any]:
     if not database_url:
@@ -221,6 +222,9 @@ def generate_dev_meta_yaml(
         )
     if not order_by:
         raise ValueError("Укажи хотя бы одну колонку в order_by")
+    dag_tags = [str(item).strip() for item in (dag_tags or []) if str(item).strip()]
+    if not dag_tags:
+        raise ValueError("Укажи хотя бы один dag_tag")
 
     source_object_name = (greenplum_table_name or object_name).strip()
     generator_engine = create_engine(database_url)
@@ -318,7 +322,7 @@ def generate_dev_meta_yaml(
             "PROD": None,
             "DEV": None,
         },
-        "dag_tags": [],
+        "dag_tags": dag_tags,
         "task_pool": "dm_pool",
         "task_pool_slots": 1,
         "attributes": attributes,

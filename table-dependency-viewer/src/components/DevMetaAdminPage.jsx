@@ -290,8 +290,10 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
+    schema_name_click: "dm",
     object_name: "",
     order_by: "",
+    dag_tags: "",
   });
   const [status, setStatus] = useState(null);
   const [files, setFiles] = useState({ dev_files: [], locks: [] });
@@ -540,11 +542,19 @@ export default function DevMetaAdminPage({ userProfile }) {
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
-      const targetSchema = String(generator.schema_name_gp || "")
+      const dagTags = generator.dag_tags
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const targetSchema = String(generator.schema_name_click || "")
         .trim()
         .toLowerCase();
       if (!targetSchema) {
-        setError("Нужно указать схему источника");
+        setError("Нужно указать Click схему");
+        return;
+      }
+      if (!dagTags.length) {
+        setError("Нужно указать хотя бы один dag_tag");
         return;
       }
       const data = await devMetaApi.generate({
@@ -553,6 +563,7 @@ export default function DevMetaAdminPage({ userProfile }) {
         schema_name_click: targetSchema,
         greenplum_table_name: null,
         order_by: orderBy,
+        dag_tags: dagTags,
       });
       if (data?.file_name) {
         await devMetaApi.lock({ schema_name: targetSchema, file_name: data.file_name });
@@ -598,17 +609,6 @@ export default function DevMetaAdminPage({ userProfile }) {
         </div>
 
         <div className="dev-meta-toolbar">
-          <div className="dev-meta-tabs">
-            {SCHEMA_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                className={`btn ${schemaName === option.value ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => handleSchemaChange(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
           <div className="muted">
             Lock TTL: {status?.lock_ttl_minutes ?? 30} минут. Сейчас блокировок: {status?.locks_count ?? 0}
           </div>
@@ -641,6 +641,19 @@ export default function DevMetaAdminPage({ userProfile }) {
               />
             </label>
             <label className="admin-field">
+              <span>Click схема</span>
+              <select
+                value={generator.schema_name_click}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, schema_name_click: e.target.value }))}
+              >
+                {SCHEMA_OPTIONS.map((option) => (
+                  <option key={`generator-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-field">
               <span>Имя таблицы / объекта</span>
               <input
                 value={generator.object_name}
@@ -654,6 +667,14 @@ export default function DevMetaAdminPage({ userProfile }) {
                 value={generator.order_by}
                 onChange={(e) => setGenerator((prev) => ({ ...prev, order_by: e.target.value }))}
                 placeholder="counterparty_code, dttm_updated"
+              />
+            </label>
+            <label className="admin-field dev-meta-generator-wide">
+              <span>DAG tags</span>
+              <input
+                value={generator.dag_tags}
+                onChange={(e) => setGenerator((prev) => ({ ...prev, dag_tags: e.target.value }))}
+                placeholder="DICT_LOADER, DAILY_LOAD"
               />
             </label>
           </div>
@@ -672,6 +693,17 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <div className="muted">Открытие файла сразу берет его в работу для текущего администратора.</div>
               </div>
               <div className="dev-meta-file-tools">
+                <select
+                  className="dev-meta-file-search"
+                  value={schemaName}
+                  onChange={(e) => handleSchemaChange(e.target.value)}
+                >
+                  {SCHEMA_OPTIONS.map((option) => (
+                    <option key={`browser-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
                 <input
                   className="dev-meta-file-search"
                   value={fileSearch}

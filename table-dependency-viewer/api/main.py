@@ -170,6 +170,7 @@ class DevMetaGeneratePayload(BaseModel):
     schema_name_click: str = "dm"
     greenplum_table_name: Optional[str] = None
     order_by: List[str]
+    dag_tags: List[str]
 
 
 
@@ -627,6 +628,7 @@ def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
             schema_name_click=payload.schema_name_click,
             greenplum_table_name=payload.greenplum_table_name,
             order_by=payload.order_by,
+            dag_tags=payload.dag_tags,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -296,6 +296,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [validating, setValidating] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
   const [validation, setValidation] = useState(null);
+  const [validatedContent, setValidatedContent] = useState(null);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
@@ -330,6 +331,12 @@ export default function DevMetaAdminPage({ userProfile }) {
   const formatDateTime = (value) => (value ? formatRuDateTime(value) : "—");
   const dagIsActive = ["queued", "running"].includes(String(dagStatus?.dag_run_state || "").toLowerCase());
   const dagRunState = String(dagStatus?.dag_run_state || "").toLowerCase();
+  const isValidationFresh = Boolean(
+    validation?.valid &&
+    selectedFile &&
+    validatedContent !== null &&
+    validatedContent === content
+  );
 
   const lockRow = useMemo(() => {
     if (!selectedFile) return null;
@@ -360,6 +367,8 @@ export default function DevMetaAdminPage({ userProfile }) {
     setError(null);
     setFileSearch("");
     setDagStatus(null);
+    setValidation(null);
+    setValidatedContent(null);
   };
 
   const filteredFiles = useMemo(() => {
@@ -386,6 +395,8 @@ export default function DevMetaAdminPage({ userProfile }) {
       const data = await devMetaApi.readFile({ schema_name: schemaName, file_name: fileName, source: "dev" });
       setSelectedFile(fileName);
       setContent(data?.content || "");
+      setValidation(null);
+      setValidatedContent(null);
       setMessage("Файл открыт и автоматически взят в работу.");
       await refreshFiles();
     } catch (err) {
@@ -406,6 +417,7 @@ export default function DevMetaAdminPage({ userProfile }) {
         content,
       });
       setValidation(data);
+      setValidatedContent(data?.valid ? content : null);
       setMessageType(data?.valid ? "success" : "warning");
       setMessage(
         data?.valid
@@ -421,6 +433,12 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   const handleSaveAndDeploy = async () => {
     if (!selectedFile) return;
+    if (!isValidationFresh) {
+      setMessageType("warning");
+      setError(null);
+      setMessage("Перед отправкой в DEV нужно успешно проверить текущую версию файла.");
+      return;
+    }
     setDeploying(true);
     setError(null);
     setMessage(null);
@@ -432,6 +450,7 @@ export default function DevMetaAdminPage({ userProfile }) {
         content,
       });
       setValidation(data?.validation || null);
+      setValidatedContent(data?.validation?.valid ? content : null);
       await refreshFiles();
       setMessageType("success");
       setMessage(`Файл сохранен локально и отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
@@ -530,6 +549,7 @@ export default function DevMetaAdminPage({ userProfile }) {
       setSelectedFile(data?.file_name || null);
       setContent(data?.content || "");
       setValidation(null);
+      setValidatedContent(null);
       setLockInfo(
         data?.file_name
           ? {
@@ -693,7 +713,7 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <button
                   className="btn btn-primary"
                   onClick={handleSaveAndDeploy}
-                  disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured}
+                  disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured || !isValidationFresh}
                 >
                   {deploying ? "Сохраняем и отправляем..." : "Сохранить и отправить на DEV"}
                 </button>
@@ -743,6 +763,11 @@ export default function DevMetaAdminPage({ userProfile }) {
                 <div className={`dev-meta-validation-pill ${validation.valid ? "ok" : "bad"}`}>
                   {validation.valid ? "Файл валиден" : "Есть ошибки"}
                 </div>
+                {validation.valid && !isValidationFresh ? (
+                  <div className="dev-meta-validation-meta">
+                    Файл менялся после последней успешной проверки. Проверь его заново перед отправкой в DEV.
+                  </div>
+                ) : null}
                 {validation.errors?.length ? (
                   <ul className="dev-meta-validation-list">
                     {validation.errors.map((item, idx) => (

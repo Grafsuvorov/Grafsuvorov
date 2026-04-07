@@ -850,12 +850,20 @@ def trigger_airflow_dev_dag(
     resolved_dag_id = dag_id or _dag_id_from_file_name(file_name)
     remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}" if remote_base_dir else None
     dag_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}"
-    dag_info = _airflow_json_request(
-        url=dag_url,
-        username=username,
-        password=password,
-        timeout=20,
-    )
+    try:
+        dag_info = _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            timeout=20,
+        )
+    except ValueError as exc:
+        if "Airflow вернул 404" in str(exc):
+            raise ValueError(
+                f"DAG {resolved_dag_id} пока не появился в Airflow DEV. "
+                "Подождите, пока Airflow подхватит новый файл, и повторите запуск."
+            ) from exc
+        raise
     was_paused = bool(dag_info.get("is_paused"))
     auto_unpaused = False
     if was_paused:

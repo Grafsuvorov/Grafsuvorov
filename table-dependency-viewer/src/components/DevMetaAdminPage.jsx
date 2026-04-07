@@ -16,12 +16,14 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [validating, setValidating] = useState(false);
   const [runningDag, setRunningDag] = useState(false);
   const [lockInfo, setLockInfo] = useState(null);
   const [validation, setValidation] = useState(null);
   const [message, setMessage] = useState(null);
   const [error, setError] = useState(null);
+  const [dagStatus, setDagStatus] = useState(null);
 
   const isAdmin = userProfile?.role === "admin";
   const currentUser = userProfile?.email || userProfile?.username || "";
@@ -158,15 +160,52 @@ export default function DevMetaAdminPage({ userProfile }) {
     }
   };
 
+  const handleDeploy = async () => {
+    if (!selectedFile) return;
+    setDeploying(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await devMetaApi.deploy({
+        schema_name: schemaName,
+        file_name: selectedFile,
+        content,
+      });
+      setSelectedSource("dev");
+      await refreshFiles();
+      setMessage("Файл отправлен на DEV сервер");
+    } catch (err) {
+      setError(err.message || "Не удалось отправить файл на DEV сервер");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
   const handleRunDag = async () => {
     if (!selectedFile) return;
     setRunningDag(true);
     setError(null);
     try {
-      await devMetaApi.runDag({
+      const data = await devMetaApi.runDag({
         schema_name: schemaName,
         file_name: selectedFile,
       });
+      const response = data?.response || data;
+      setDagStatus(
+        response?.response
+          ? {
+              dag_id: response.response?.dag_id || response?.dag_id,
+              dag_run_id: response.response?.response?.dag_run_id || response.response?.dag_run_id,
+              auto_unpaused: response.response?.auto_unpaused || false,
+              dag_run_state: "queued",
+            }
+          : {
+              dag_id: response?.dag_id,
+              dag_run_id: response?.response?.dag_run_id || response?.dag_run_id,
+              auto_unpaused: response?.auto_unpaused || false,
+              dag_run_state: "queued",
+            }
+      );
       setMessage("DEV DAG запущен");
     } catch (err) {
       setError(err.message || "Не удалось запустить DAG");
@@ -174,6 +213,36 @@ export default function DevMetaAdminPage({ userProfile }) {
       setRunningDag(false);
     }
   };
+
+  useEffect(() => {
+    if (!dagStatus?.dag_run_id || !selectedFile) return;
+    const terminalStates = new Set(["success", "failed"]);
+    if (terminalStates.has(String(dagStatus.dag_run_state || "").toLowerCase())) return;
+
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const data = await devMetaApi.dagStatus({
+          schema_name: schemaName,
+          file_name: selectedFile,
+          dag_id: dagStatus.dag_id,
+          dag_run_id: dagStatus.dag_run_id,
+          auto_unpaused: !!dagStatus.auto_unpaused,
+        });
+        const response = data?.response || data;
+        if (!cancelled) {
+          setDagStatus(response);
+        }
+      } catch {
+        // keep previous visible state; polling should not break the page
+      }
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [dagStatus?.dag_id, dagStatus?.dag_run_id, dagStatus?.dag_run_state, dagStatus?.auto_unpaused, schemaName, selectedFile]);
 
   if (!isAdmin) {
     return (
@@ -320,6 +389,13 @@ export default function DevMetaAdminPage({ userProfile }) {
                   {saving ? "Сохраняем..." : "Сохранить в DEV"}
                 </button>
                 <button
+                  className="btn btn-primary"
+                  onClick={handleDeploy}
+                  disabled={!selectedFile || deploying || isLockedByAnother}
+                >
+                  {deploying ? "Отправляем..." : "Отправить на DEV"}
+                </button>
+                <button
                   className="btn btn-secondary"
                   onClick={handleRunDag}
                   disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured}
@@ -336,6 +412,17 @@ export default function DevMetaAdminPage({ userProfile }) {
                 {lockInfo?.expires_at || lockRow?.expires_at ? `до ${formatDateTime(lockInfo?.expires_at || lockRow?.expires_at)}` : ""}
               </span>
             </div>
+
+            {dagStatus && (
+              <div className="dev-meta-lock-bar">
+                <span>Статус запуска:</span>
+                <strong>{dagStatus.dag_run_state || "queued"}</strong>
+                <span className="muted">
+                  {dagStatus.dag_id ? `${dagStatus.dag_id}` : ""}
+                  {dagStatus.dag_run_id ? ` · ${dagStatus.dag_run_id}` : ""}
+                </span>
+              </div>
+            )}
 
             <div className="dev-meta-notes">
               <div className="dev-meta-note">

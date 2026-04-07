@@ -1,160 +1,547 @@
-table raw_ext."unit_budget_hierarchy_level_based_write_s3" (
-    like dict_dds."unit_budget_hierarchy_level_based"
-)
-LOCATION ('pxf://datamart-bucket/gp_dev/dm/unit_budget_hierarchy_level_based/1775552654430?PROFILE=s3:parquet&SERVER=minioprod'
-) ON ALL
-FORMAT 'CUSTOM' ( FORMATTER='pxfwritable_export' )
-ENCODING 'UTF8'
-DISTRIBUTED by ("hierarchy_name")
-;, parameters: None
-[2026-04-07, 15:05:44 MSK] {sql.py:418} INFO - Running statement: insert into raw_ext."unit_budget_hierarchy_level_based_write_s3" (
-    "hierarchy_name",
-    "dt_hierarchy_valid_from",
-    "dt_hierarchy_valid_to",
-    "dt_text_valid_from",
-    "dt_text_valid_to",
-    "hierarchy_node_internal_code",
-    "hierarchy_node_external_code",
-    "hierarchy_node_type_code",
-    "hierarchy_node_name",
-    "hierarchy_node_level_code",
-    "hierarchy_node_indented_for_reporting_name",
-    "path_code",
-    "path_name",
-    "hierarchy_parent_node_internal_code",
-    "hierarchy_parent_node_external_code",
-    "hierarchy_parent_node_type_code",
-    "hierarchy_parent_node_name",
-    "hierarchy_node_level1_external_code",
-    "hierarchy_node_level1_internal_code",
-    "hierarchy_node_level1_type_code",
-    "hierarchy_node_level1_name",
-    "hierarchy_node_level2_external_code",
-    "hierarchy_node_level2_internal_code",
-    "hierarchy_node_level2_type_code",
-    "hierarchy_node_level2_name",
-    "hierarchy_node_level3_external_code",
-    "hierarchy_node_level3_internal_code",
-    "hierarchy_node_level3_type_code",
-    "hierarchy_node_level3_name",
-    "hierarchy_node_level4_external_code",
-    "hierarchy_node_level4_internal_code",
-    "hierarchy_node_level4_type_code",
-    "hierarchy_node_level4_name",
-    "hierarchy_node_level5_external_code",
-    "hierarchy_node_level5_internal_code",
-    "hierarchy_node_level5_type_code",
-    "hierarchy_node_level5_name",
-    "hierarchy_node_level6_external_code",
-    "hierarchy_node_level6_internal_code",
-    "hierarchy_node_level6_type_code",
-    "hierarchy_node_level6_name",
-    "hierarchy_node_level7_external_code",
-    "hierarchy_node_level7_internal_code",
-    "hierarchy_node_level7_type_code",
-    "hierarchy_node_level7_name",
-    "hierarchy_node_level8_external_code",
-    "hierarchy_node_level8_internal_code",
-    "hierarchy_node_level8_type_code",
-    "hierarchy_node_level8_name",
-    "hierarchy_node_level9_external_code",
-    "hierarchy_node_level9_internal_code",
-    "hierarchy_node_level9_type_code",
-    "hierarchy_node_level9_name",
-    "hierarchy_node_level10_external_code",
-    "hierarchy_node_level10_internal_code",
-    "hierarchy_node_level10_type_code",
-    "hierarchy_node_level10_name",
-    "dttm_inserted",
-    "dttm_updated",
-    "job_name",
-    "deleted_flag"
-)
-select
-    hierarchy_name,
-    tech_etl.validate_date("dt_hierarchy_valid_from"),
-    tech_etl.validate_date("dt_hierarchy_valid_to"),
-    tech_etl.validate_date("dt_text_valid_from"),
-    tech_etl.validate_date("dt_text_valid_to"),
-    hierarchy_node_internal_code,
-    hierarchy_node_external_code,
-    hierarchy_node_type_code,
-    hierarchy_node_name,
-    hierarchy_node_level_code,
-    hierarchy_node_indented_for_reporting_name,
-    path_code,
-    path_name,
-    hierarchy_parent_node_internal_code,
-    hierarchy_parent_node_external_code,
-    hierarchy_parent_node_type_code,
-    hierarchy_parent_node_name,
-    hierarchy_node_level1_external_code,
-    hierarchy_node_level1_internal_code,
-    hierarchy_node_level1_type_code,
-    hierarchy_node_level1_name,
-    hierarchy_node_level2_external_code,
-    hierarchy_node_level2_internal_code,
-    hierarchy_node_level2_type_code,
-    hierarchy_node_level2_name,
-    hierarchy_node_level3_external_code,
-    hierarchy_node_level3_internal_code,
-    hierarchy_node_level3_type_code,
-    hierarchy_node_level3_name,
-    hierarchy_node_level4_external_code,
-    hierarchy_node_level4_internal_code,
-    hierarchy_node_level4_type_code,
-    hierarchy_node_level4_name,
-    hierarchy_node_level5_external_code,
-    hierarchy_node_level5_internal_code,
-    hierarchy_node_level5_type_code,
-    hierarchy_node_level5_name,
-    hierarchy_node_level6_external_code,
-    hierarchy_node_level6_internal_code,
-    hierarchy_node_level6_type_code,
-    hierarchy_node_level6_name,
-    hierarchy_node_level7_external_code,
-    hierarchy_node_level7_internal_code,
-    hierarchy_node_level7_type_code,
-    hierarchy_node_level7_name,
-    hierarchy_node_level8_external_code,
-    hierarchy_node_level8_internal_code,
-    hierarchy_node_level8_type_code,
-    hierarchy_node_level8_name,
-    hierarchy_node_level9_external_code,
-    hierarchy_node_level9_internal_code,
-    hierarchy_node_level9_type_code,
-    hierarchy_node_level9_name,
-    hierarchy_node_level10_external_code,
-    hierarchy_node_level10_internal_code,
-    hierarchy_node_level10_type_code,
-    hierarchy_node_level10_name,
-    dttm_inserted,
-    dttm_updated,
-    job_name,
-    deleted_flag
-from dict_dds."unit_budget_hierarchy_level_based";, parameters: None
-[2026-04-07, 15:05:45 MSK] {sql.py:427} INFO - Rows affected: 27651
-[2026-04-07, 15:05:45 MSK] {sql.py:418} INFO - Running statement: DROP EXTERNAL TABLE IF EXISTS raw_ext."unit_budget_hierarchy_level_based_write_s3";, parameters: None
-[2026-04-07, 15:05:45 MSK] {taskinstance.py:1400} INFO - Marking task as SUCCESS. dag_id=dict_dds_unit_budget_hierarchy_level_based_meta, task_id=unit_budget_hierarchy_level_based_insert_to_s3, execution_date=20260407T120414, start_date=20260407T120544, end_date=20260407T120545
-[2026-04-07, 15:05:45 MSK] {help_utility.py:586} INFO - START fun: task_SUCCESS_log
-[2026-04-07, 15:05:45 MSK] {sql.py:274} INFO - Executing: UPDATE tech_etl.click_fact_table_load_stage
-SET end_dttm = now(),
-    duration = age(now(), start_dttm),
-    status = UPPER('success'),
-    error_text = ''
-WHERE run_uuid = 'c10c7971-31b9-5bbf-bcc9-d4f6bd1991d2'
-    AND stage_name = 'UPLOAD_TO_S3'
-    AND status = 'RUNNING';
-[2026-04-07, 15:05:45 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
-[2026-04-07, 15:05:45 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
-[2026-04-07, 15:05:45 MSK] {sql.py:418} INFO - Running statement: UPDATE tech_etl.click_fact_table_load_stage
-SET end_dttm = now(),
-    duration = age(now(), start_dttm),
-    status = UPPER('success'),
-    error_text = ''
-WHERE run_uuid = 'c10c7971-31b9-5bbf-bcc9-d4f6bd1991d2'
-    AND stage_name = 'UPLOAD_TO_S3'
-    AND status = 'RUNNING';, parameters: None
-[2026-04-07, 15:05:46 MSK] {sql.py:427} INFO - Rows affected: 1
-[2026-04-07, 15:05:46 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 0
-[2026-04-07, 15:05:46 MSK] {taskinstance.py:2778} INFO - 1 downstream tasks scheduled from follow-on schedule check
+schema_name_gp: dict_dds
+schema_name_click: dm
+object_name: currency_rates
+object_type: table
+clickhouse_cluster: '{cluster}'
+engine: ReplicatedMergeTree
+order_by:
+- currency_rate_type_code
+- currency_from_code
+- currency_to_code
+partitions: null
+table_settings: index_granularity = 8192
+table_comment: null
+settings_external_table:
+  max_threads: 20
+  max_insert_threads: 20
+  input_format_parallel_parsing: 0
+load_type: full
+recreate_mode: drop_create
+truncate_mode_on: true
+postgres_conn_id: gp_connection
+clickhouse_conn_id: clickhouse
+dag_name: null
+dag_schedule_interval:
+  PROD: null
+  DEV: null
+dag_tags:
+- DICT_LOADER
+task_pool: dm_pool
+task_pool_slots: 1
+attributes:
+- column_name_click: currency_rate_type_code
+  column_name_gp: currency_rate_type_code
+  data_type_click: String
+  data_type_gp: varchar(12)
+  is_nullable: NOT NULL
+  description: Тип курса (код)
+- column_name_click: currency_from_code
+  column_name_gp: currency_from_code
+  data_type_click: String
+  data_type_gp: varchar(15)
+  is_nullable: NOT NULL
+  description: Исходная валюта (код)
+- column_name_click: currency_to_code
+  column_name_gp: currency_to_code
+  data_type_click: String
+  data_type_gp: varchar(15)
+  is_nullable: NOT NULL
+  description: Целевая валюта (код)
+- column_name_click: dt_currency_rate
+  column_name_gp: dt_currency_rate
+  data_type_click: Date32
+  data_type_gp: date
+  is_nullable: 'NULL'
+  description: Дата курса
+- column_name_click: is_based_on_previous_period
+  column_name_gp: is_based_on_previous_period
+  data_type_click: String
+  data_type_gp: varchar(1)
+  is_nullable: 'NULL'
+  description: 'Флаг: курс скопирован с предыдущего периода'
+- column_name_click: currency_rate
+  column_name_gp: currency_rate
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Валютный курс
+- column_name_click: currency_from_multiplier
+  column_name_gp: currency_from_multiplier
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Коэффициент для единиц исходной валюты
+- column_name_click: currency_to_multiplier
+  column_name_gp: currency_to_multiplier
+  data_type_click: Decimal(32,10)
+  data_type_gp: numeric
+  is_nullable: 'NULL'
+  description: Коэффициент для единиц целевой валюты
+- column_name_click: technical_rate_type_code
+  column_name_gp: technical_rate_type_code
+  data_type_click: String
+  data_type_gp: varchar(12)
+  is_nullable: 'NULL'
+  description: техническое, Тип курса при пересчете по курсам ERP
+- column_name_click: technical_currency_from
+  column_name_gp: technical_currency_from
+  data_type_click: String
+  data_type_gp: varchar(15)
+  is_nullable: 'NULL'
+  description: техническое,Валюта из при пересчете по курсам ERP
+- column_name_click: technical_currency_to
+  column_name_gp: technical_currency_to
+  data_type_click: String
+  data_type_gp: varchar(15)
+  is_nullable: 'NULL'
+  description: техническое,Валюта к при пересчете по курсам ERP
+- column_name_click: source_system_code
+  column_name_gp: source_system_code
+  data_type_click: String
+  data_type_gp: varchar(100)
+  is_nullable: 'NULL'
+  description: Система-источник (код)
+- column_name_click: error_message_text
+  column_name_gp: error_message_text
+  data_type_click: String
+  data_type_gp: text
+  is_nullable: 'NULL'
+  description: Заполняется в случае неконсистентности курсов в системе BI и ERP, ловушка для ошибок
+- column_name_click: is_technical_currency_pair
+  column_name_gp: is_technical_currency_pair
+  data_type_click: String
+  data_type_gp: varchar(1)
+  is_nullable: 'NULL'
+  description: идентификатор для пар валют с разными источниками курсов в разных системах
+- column_name_click: dttm_inserted
+  column_name_gp: dttm_inserted
+  data_type_click: DateTime
+  data_type_gp: timestamp
+  is_nullable: 'NULL'
+  description: Комментария нет
+  default: now()
+- column_name_click: dttm_updated
+  column_name_gp: dttm_updated
+  data_type_click: DateTime
+  data_type_gp: timestamp
+  is_nullable: 'NULL'
+  description: Комментария нет
+  default: now()
+- column_name_click: job_name
+  column_name_gp: job_name
+  data_type_click: String
+  data_type_gp: varchar(50)
+  is_nullable: 'NULL'
+  description: Комментария нет
+  default: '''airflow''::character varying'
+- column_name_click: deleted_flag
+  column_name_gp: deleted_flag
+  data_type_click: UInt8
+  data_type_gp: bool
+  is_nullable: 'NULL'
+  description: Комментария нет
+  default: 'false'
+
+
+schema_name_gp: dict_dds
+schema_name_click: dm
+object_name: tax_movement_type_hierarchy_level_based
+object_type: table
+clickhouse_cluster: '{cluster}'
+engine: ReplicatedMergeTree
+order_by:
+  - hierarchy_name
+  - dt_hierarchy_valid_to
+  - dt_text_valid_to
+  - hierarchy_node_internal_code
+  - hierarchy_node_level_code
+  - hierarchy_node_external_code
+distributed:
+  - REPLICATED
+partitions: null
+table_settings: index_granularity = 8192
+table_comment: Иерархии видов движений в представлении по уровням
+settings_external_table:
+  max_threads: 20
+  max_insert_threads: 20
+  input_format_parallel_parsing: 0
+load_type: full
+recreate_mode: drop_create
+truncate_mode_on: true
+postgres_conn_id: gp_connection
+clickhouse_conn_id: clickhouse
+dag_name: null
+dag_schedule_interval:
+  PROD: 0 22 * * *
+  DEV: null
+dag_tags:
+  - DICT_LOADER
+task_pool: dm_pool
+task_pool_slots: 1
+attributes:
+  - column_name_click: hierarchy_name
+    column_name_gp: hierarchy_name
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: NOT NULL
+    description: Имя иерархии | Имя иерархии | RSHIEDIR.HIENM
+  - column_name_click: dt_hierarchy_valid_from
+    column_name_gp: tech_etl.validate_date("dt_hierarchy_valid_from")
+    data_type_click: Date
+    data_type_gp: date
+    is_nullable: 'NULL'
+    description: Дата действия иерархии с | Дата действия иерархии с | RSHIEDIR.DATEFROM
+  - column_name_click: dt_hierarchy_valid_to
+    column_name_gp: tech_etl.validate_date("dt_hierarchy_valid_to")
+    data_type_click: Date
+    data_type_gp: date
+    is_nullable: NOT NULL
+    description: Дата действия иерархии по | Дата действия иерархии по | RSHIEDIR.DATETO
+  - column_name_click: dt_text_valid_from
+    column_name_gp: tech_etl.validate_date("dt_text_valid_from")
+    data_type_click: Date
+    data_type_gp: date
+    is_nullable: 'NULL'
+    description: Дата действия текста с | Дата действия текста с | /BIC/TZPBE.DATEFROM
+  - column_name_click: dt_text_valid_to
+    column_name_gp: tech_etl.validate_date("dt_text_valid_to")
+    data_type_click: Date
+    data_type_gp: date
+    is_nullable: NOT NULL
+    description: Дата действия текста по | Дата действия текста по | /BIC/TZPBE.DATETO
+  - column_name_click: hierarchy_node_internal_code
+    column_name_gp: hierarchy_node_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: NOT NULL
+    description: Техключ узла | Техключ узла | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_external_code
+    column_name_gp: hierarchy_node_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: NOT NULL
+    description: Код узла | Код узла | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_type_code
+    column_name_gp: hierarchy_node_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла  (код) | Тип узла  (код) | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_name
+    column_name_gp: hierarchy_node_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла | Наименование узла | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level_code
+    column_name_gp: hierarchy_node_level_code
+    data_type_click: String
+    data_type_gp: varchar(2)
+    is_nullable: NOT NULL
+    description: Уровень узла | Уровень узла | /BIC/HZMOVETYPE.TLEVEL
+  - column_name_click: hierarchy_node_indented_for_reporting_name
+    column_name_gp: hierarchy_node_indented_for_reporting_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла  с отступом | Наименование узла  с отступом | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: path_code
+    column_name_gp: path_code
+    data_type_click: String
+    data_type_gp: text
+    is_nullable: 'NULL'
+    description: Полный путь узла (загл) | Полный путь узла (загл) | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: path_name
+    column_name_gp: path_name
+    data_type_click: String
+    data_type_gp: text
+    is_nullable: 'NULL'
+    description: Полный путь узла | Полный путь узла | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_parent_node_internal_code
+    column_name_gp: hierarchy_parent_node_internal_code
+    data_type_click: String
+    data_type_gp: varchar(8)
+    is_nullable: 'NULL'
+    description: Техключ родительского узла | Техключ родительского узла | /BIC/HZMOVETYPE.PARENTID
+  - column_name_click: hierarchy_parent_node_external_code
+    column_name_gp: hierarchy_parent_node_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Код родительского узла | Код родительского узла | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_parent_node_type_code
+    column_name_gp: hierarchy_parent_node_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип родительского узла | Тип родительского узла | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_parent_node_name
+    column_name_gp: hierarchy_parent_node_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование родительского узла | Наименование родительского узла | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level1_external_code
+    column_name_gp: hierarchy_node_level1_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 1го уровня | Техключ узла 1го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level1_internal_code
+    column_name_gp: hierarchy_node_level1_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 1го уровня | Код узла 1го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level1_type_code
+    column_name_gp: hierarchy_node_level1_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 1го уровня | Тип узла 1го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level1_name
+    column_name_gp: hierarchy_node_level1_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 1го уровня | Наименование узла 1го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level2_external_code
+    column_name_gp: hierarchy_node_level2_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 2го уровня | Техключ узла 2го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level2_internal_code
+    column_name_gp: hierarchy_node_level2_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 2го уровня | Код узла 2го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level2_type_code
+    column_name_gp: hierarchy_node_level2_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 2го уровня | Тип узла 2го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level2_name
+    column_name_gp: hierarchy_node_level2_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 2го уровня | Наименование узла 2го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level3_external_code
+    column_name_gp: hierarchy_node_level3_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 3го уровня | Техключ узла 3го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level3_internal_code
+    column_name_gp: hierarchy_node_level3_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 3го уровня | Код узла 3го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level3_type_code
+    column_name_gp: hierarchy_node_level3_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 3го уровня | Тип узла 3го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level3_name
+    column_name_gp: hierarchy_node_level3_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 3го уровня | Наименование узла 3го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level4_external_code
+    column_name_gp: hierarchy_node_level4_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 4го уровня | Техключ узла 4го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level4_internal_code
+    column_name_gp: hierarchy_node_level4_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 4го уровня | Код узла 4го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level4_type_code
+    column_name_gp: hierarchy_node_level4_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 4го уровня | Тип узла 4го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level4_name
+    column_name_gp: hierarchy_node_level4_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 4го уровня | Наименование узла 4го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level5_external_code
+    column_name_gp: hierarchy_node_level5_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 5го уровня | Техключ узла 5го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level5_internal_code
+    column_name_gp: hierarchy_node_level5_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 5го уровня | Код узла 5го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level5_type_code
+    column_name_gp: hierarchy_node_level5_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 5го уровня | Тип узла 5го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level5_name
+    column_name_gp: hierarchy_node_level5_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 5го уровня | Наименование узла 5го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level6_external_code
+    column_name_gp: hierarchy_node_level6_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 6го уровня | Техключ узла 6го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level6_internal_code
+    column_name_gp: hierarchy_node_level6_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 6го уровня | Код узла 6го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level6_type_code
+    column_name_gp: hierarchy_node_level6_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 6го уровня | Тип узла 6го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level6_name
+    column_name_gp: hierarchy_node_level6_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 6го уровня | Наименование узла 6го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level7_external_code
+    column_name_gp: hierarchy_node_level7_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 7го уровня | Техключ узла 7го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level7_internal_code
+    column_name_gp: hierarchy_node_level7_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 7го уровня | Код узла 7го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level7_type_code
+    column_name_gp: hierarchy_node_level7_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 7го уровня | Тип узла 7го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level7_name
+    column_name_gp: hierarchy_node_level7_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 7го уровня | Наименование узла 7го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level8_external_code
+    column_name_gp: hierarchy_node_level8_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 8го уровня | Техключ узла 8го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level8_internal_code
+    column_name_gp: hierarchy_node_level8_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 8го уровня | Код узла 8го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level8_type_code
+    column_name_gp: hierarchy_node_level8_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 8го уровня | Тип узла 8го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level8_name
+    column_name_gp: hierarchy_node_level8_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 8го уровня | Наименование узла 8го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level9_external_code
+    column_name_gp: hierarchy_node_level9_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 9го уровня | Техключ узла 9го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level9_internal_code
+    column_name_gp: hierarchy_node_level9_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 9го уровня | Код узла 9го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level9_type_code
+    column_name_gp: hierarchy_node_level9_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 9го уровня | Тип узла 9го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level9_name
+    column_name_gp: hierarchy_node_level9_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 9го уровня | Наименование узла 9го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: hierarchy_node_level10_external_code
+    column_name_gp: hierarchy_node_level10_external_code
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Техключ узла 10го уровня | Техключ узла 10го уровня | /BIC/HZMOVETYPE.NODENAME
+  - column_name_click: hierarchy_node_level10_internal_code
+    column_name_gp: hierarchy_node_level10_internal_code
+    data_type_click: String
+    data_type_gp: varchar(16)
+    is_nullable: 'NULL'
+    description: Код узла 10го уровня | Код узла 10го уровня | /BIC/HZMOVETYPE.NODEID
+  - column_name_click: hierarchy_node_level10_type_code
+    column_name_gp: hierarchy_node_level10_type_code
+    data_type_click: String
+    data_type_gp: varchar(30)
+    is_nullable: 'NULL'
+    description: Тип узла 10го уровня | Тип узла 10го уровня | /BIC/HZMOVETYPE.IOBJNM
+  - column_name_click: hierarchy_node_level10_name
+    column_name_gp: hierarchy_node_level10_name
+    data_type_click: String
+    data_type_gp: varchar(250)
+    is_nullable: 'NULL'
+    description: Наименование узла 10го уровня | Наименование узла 10го уровня | /BIC/TZPBE, /BIC/TZDIVISION,RSTHIERNODE.TXTLG
+  - column_name_click: dttm_inserted
+    column_name_gp: dttm_inserted
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: dttm_updated
+    column_name_gp: dttm_updated
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: job_name
+    column_name_gp: job_name
+    data_type_click: String
+    data_type_gp: varchar(50)
+    is_nullable: 'NULL'
+    description: Комментария нет
+  - column_name_click: deleted_flag
+    column_name_gp: deleted_flag
+    data_type_click: UInt8
+    data_type_gp: bool
+    is_nullable: 'NULL'
+    description: Комментария нет

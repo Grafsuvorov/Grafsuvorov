@@ -345,7 +345,7 @@ export default function App() {
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
             ) : isAdmin ? (
-              <AdminEngineeringPage />
+              <AdminEngineeringPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

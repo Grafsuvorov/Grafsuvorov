@@ -467,33 +467,37 @@ def generate_dev_meta_yaml(
         "clickhouse_cluster": "{cluster}",
         "engine": "ReplicatedMergeTree",
         "order_by": order_by,
-        "partitions": None,
-        "table_settings": "index_granularity = 8192",
-        "table_comment": str(table_comment) if table_comment else None,
-        "settings_external_table": {
-            "max_threads": 20,
-            "max_insert_threads": 20,
-            "input_format_parallel_parsing": 0,
-        },
-        "load_type": "full",
-        "recreate_mode": "drop_create",
-        "truncate_mode_on": object_name.strip() != "account_turnover",
-        "postgres_conn_id": "gp_connection",
-        "clickhouse_conn_id": "clickhouse",
-        "dag_name": None,
-        "dag_schedule_interval": {
-            "PROD": _build_prod_schedule(entity_last_load, schema_name_gp.strip()),
-            "DEV": None,
-        },
-        "dag_tags": dag_tags,
-        "task_pool": "dm_pool",
-        "task_pool_slots": 1,
-        "attributes": attributes,
     }
     if greenplum_table_name and greenplum_table_name.strip() != object_name.strip():
         payload["greenplum_table_name"] = greenplum_table_name.strip()
     if distributed:
         payload["distributed"] = distributed
+    payload.update(
+        {
+            "partitions": None,
+            "table_settings": "index_granularity = 8192",
+            "table_comment": str(table_comment) if table_comment else None,
+            "settings_external_table": {
+                "max_threads": 20,
+                "max_insert_threads": 20,
+                "input_format_parallel_parsing": 0,
+            },
+            "load_type": "full",
+            "recreate_mode": "drop_create",
+            "truncate_mode_on": object_name.strip() != "account_turnover",
+            "postgres_conn_id": "gp_connection",
+            "clickhouse_conn_id": "clickhouse",
+            "dag_name": None,
+            "dag_schedule_interval": {
+                "PROD": _build_prod_schedule(entity_last_load, schema_name_gp.strip()),
+                "DEV": None,
+            },
+            "dag_tags": dag_tags,
+            "task_pool": "dm_pool",
+            "task_pool_slots": 1,
+            "attributes": attributes,
+        }
+    )
 
     file_name = f"{schema_name_gp.strip()}_{object_name.strip()}_meta.yaml"
     content = yaml.dump(

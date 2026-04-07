@@ -5,6 +5,30 @@ import "../style/app.css";
 import { parseLocalDateTime } from "../utils/datetime.js";
 import { entitiesApi } from "../api/entities.js";
 
+const PIPELINE_SCHEMA_ORDER = [
+  "dm_view",
+  "dm",
+  "dm_calc",
+  "dds",
+  "ods",
+  "stg",
+  "dict_dds",
+  "dict_stg",
+];
+
+function compareSchemaNames(left, right) {
+  const a = String(left || "").toLowerCase();
+  const b = String(right || "").toLowerCase();
+  const aIdx = PIPELINE_SCHEMA_ORDER.indexOf(a);
+  const bIdx = PIPELINE_SCHEMA_ORDER.indexOf(b);
+  if (aIdx !== -1 || bIdx !== -1) {
+    if (aIdx === -1) return 1;
+    if (bIdx === -1) return -1;
+    if (aIdx !== bIdx) return aIdx - bIdx;
+  }
+  return a.localeCompare(b);
+}
+
 export default function EntityTablesPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -49,7 +73,7 @@ export default function EntityTablesPage() {
   // Schema list
   const allSchemas = useMemo(() => {
     const s = new Set(rows.map((r) => r.schema_name ?? r.table_schema).filter(Boolean));
-    return Array.from(s).sort((a,b) => a.localeCompare(b));
+    return Array.from(s).sort(compareSchemaNames);
   }, [rows]);
 
   // Typeahead suggestions
@@ -110,7 +134,7 @@ export default function EntityTablesPage() {
       map[r.schema].push(r);
     });
     return Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => compareSchemaNames(a, b))
       .map(([schema, list]) => ({
         schema,
         rows: list.sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0)),

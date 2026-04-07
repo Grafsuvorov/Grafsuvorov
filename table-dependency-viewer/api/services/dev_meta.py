@@ -200,6 +200,27 @@ def _normalize_click_type(data_type_gp: str) -> str:
     return MAPPING_GP_TO_CLICK.get(base_type, "String")
 
 
+def _parse_gp_distribution_clause(raw_value: str | None) -> list[str] | None:
+    text_value = str(raw_value or "").strip()
+    if not text_value:
+        return None
+    upper_value = text_value.upper()
+    if "REPLICATED" in upper_value:
+        return ["REPLICATED"]
+    if "RANDOMLY" in upper_value:
+        return ["RANDOMLY"]
+    marker = "DISTRIBUTED BY"
+    idx = upper_value.find(marker)
+    if idx == -1:
+        return None
+    source_tail = text_value[idx + len(marker):].strip()
+    if not source_tail.startswith("(") or ")" not in source_tail:
+        return None
+    inner = source_tail[1:source_tail.index(")")]
+    columns = [item.strip().strip('"') for item in inner.split(",") if item.strip()]
+    return columns or None
+
+
 def generate_dev_meta_yaml(
     *,
     database_url: str,
@@ -267,6 +288,20 @@ def generate_dev_meta_yaml(
             query,
             {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
         ).mappings().all()
+        distribution_clause = conn.execute(
+            text(
+                """
+                SELECT pg_catalog.pg_get_table_distributedby(c.oid) AS distributed_by
+                FROM pg_catalog.pg_class c
+                JOIN pg_catalog.pg_namespace n
+                  ON n.oid = c.relnamespace
+                WHERE n.nspname = :schema_name
+                  AND c.relname = :table_name
+                LIMIT 1
+                """
+            ),
+            {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
+        ).scalar()
     if not rows:
         raise ValueError(f"Объект {schema_name_gp}.{source_object_name} не найден")
 
@@ -279,6 +314,7 @@ def generate_dev_meta_yaml(
     first_type = str(rows[0]["table_type"] or "").upper()
     if "VIEW" in first_type:
         object_type = "view"
+    distributed = _parse_gp_distribution_clause(distribution_clause) if object_type == "table" else None
 
     attributes: list[dict[str, Any]] = []
     for row in rows:
@@ -329,6 +365,8 @@ def generate_dev_meta_yaml(
     }
     if greenplum_table_name and greenplum_table_name.strip() != object_name.strip():
         payload["greenplum_table_name"] = greenplum_table_name.strip()
+    if distributed:
+        payload["distributed"] = distributed
 
     file_name = f"{schema_name_gp.strip()}_{object_name.strip()}_meta.yaml"
     content = yaml.dump(

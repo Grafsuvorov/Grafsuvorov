@@ -7120,6 +7120,13 @@ main.content {
   align-items: start;
 }
 
+.dev-meta-feedback,
+.dev-meta-generator,
+.dev-meta-browser {
+  position: relative;
+  margin-top: 18px;
+}
+
 .dev-meta-side {
   display: grid;
   gap: 16px;

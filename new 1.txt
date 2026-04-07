@@ -1,9 +1,1 @@
-index-z4_lW6uJ.js:140  POST http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/dev-meta/dag-status 404 (Not Found)
-
-это убрать `ArrowRight` делает рывок вперед с прыжком. Бонусы: `C` cache, `R` rows, `+` boost. описание
-
-Статус запуска
-queued - не меняется рагьше менялся
-
-Новый YAML из параметров - этот блок нужно немного опустить сейчас наезжает на контейнер DEV Meta Generator
-Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
+generate: (body) => apiClient.post("/api/admin/dev-meta/generate", body),

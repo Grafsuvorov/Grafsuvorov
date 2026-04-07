@@ -395,7 +395,8 @@ def get_admin_engineering_efficiency(
                 text(
                     base
                     + """
-                    WITH dashboard_agg AS (
+                    ,
+                    dashboard_agg AS (
                         SELECT
                             dashboard_direction,
                             engineer,
@@ -423,7 +424,8 @@ def get_admin_engineering_efficiency(
                 text(
                     base
                     + """
-                    WITH object_agg AS (
+                    ,
+                    object_agg AS (
                         SELECT
                             schema_name,
                             table_name,

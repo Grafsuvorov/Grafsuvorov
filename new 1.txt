@@ -1,47 +1,8 @@
-# stage: node + dagre
-FROM node:20-slim AS node
-ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
-ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
-RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
-&& npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
-&& npm install -g dagre
-
-# stage: python
-FROM python:3.11-slim
-WORKDIR /app
-
-ENV PYTHONPATH=/app/api
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# proxy for apt only
-ENV http_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
-ENV https_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
-
-# install git
-RUN apt-get update \
-&& apt-get install -y git \
-&& rm -rf /var/lib/apt/lists/*
-
-COPY --from=node /usr/local/bin/node /usr/local/bin/node
-COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
-COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
-COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
-ENV PATH="/usr/local/bin:${PATH}"
-ENV NODE_PATH=/usr/local/lib/node_modules
-
-COPY api/ /app/api/
-
-# disable proxy for pip (internal pypi)
-RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= \
-  pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
-  --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
-  --retries 100 --timeout 600000 --no-cache-dir \
-  fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openssh-client sshpass \
-    && rm -rf /var/lib/apt/lists/*
-
-EXPOSE 8000
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+[ci_cd] start 2026-04-07T09:47:54Z
+Your branch is up to date with 'origin/main'.
+HEAD is now at 7138fd172 Merge branch 'cust_release/2026-04-07' into 'main'
+From https://prod.gitlab.dwh.rusal.com/dwh/etl
+   17d100e07..169e1a92b  feature/DWH-11687 -> origin/feature/DWH-11687
+ * [new branch]          feature/DWH-11719 -> origin/feature/DWH-11719
+Already on 'main'
+chown: invalid user: ‘airflow:airflow’

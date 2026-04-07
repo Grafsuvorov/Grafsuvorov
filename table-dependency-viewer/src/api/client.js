@@ -35,7 +35,10 @@ async function request(method, path, { params, body, headers, expect = "json" } 
         // ignore
       }
     }
-    throw new Error(detail);
+    const error = new Error(typeof detail === "string" ? detail : `HTTP ${response.status}`);
+    error.status = response.status;
+    error.detail = detail;
+    throw error;
   }
 
   if (expect === "text") return response.text();

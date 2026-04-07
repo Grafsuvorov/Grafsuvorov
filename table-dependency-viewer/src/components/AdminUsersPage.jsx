@@ -177,7 +177,14 @@ export default function AdminUsersPage({ userProfile }) {
       setLastDeployAt(data?.last_run_at || new Date().toLocaleString("ru-RU"));
       setDeployReady(false);
     } catch (err) {
-      setError(normalizeError(err));
+      setDeployError(normalizeError(err));
+      try {
+        const status = await adminApi.ciCdStatus();
+        setDeployOutput(status);
+        setLastDeployAt(status?.last_run_at || null);
+      } catch {
+        // ignore secondary status load errors
+      }
     } finally {
       setDeploying(false);
     }

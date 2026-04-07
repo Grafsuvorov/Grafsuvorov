@@ -1,44 +1,47 @@
+# stage: node + dagre
+FROM node:20-slim AS node
+ENV HTTP_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+ENV HTTPS_PROXY="http://rgm-s-rtproxnlb01.hq.root.ad:1010"
+RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm config set https-proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 \
+&& npm install -g dagre
 
-#!/usr/bin/bash
-set -euo pipefail
+# stage: python
+FROM python:3.11-slim
+WORKDIR /app
 
-unset http_proxy
-unset https_proxy
-unset HTTP_PROXY
-unset HTTPS_PROXY
-export GIT_SSL_NO_VERIFY=1
+ENV PYTHONPATH=/app/api
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-REPO_ROOT="/root/git_dir/etl"
-APP_ROOT="/app"
-BRANCH="main"
+# proxy for apt only
+ENV http_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
+ENV https_proxy=http://rgm-s-rtproxnlb01.hq.root.ad:1010
 
-echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+# install git
+RUN apt-get update \
+&& apt-get install -y git \
+&& rm -rf /var/lib/apt/lists/*
 
-git -C "${REPO_ROOT}" fetch origin
-git -C "${REPO_ROOT}" checkout "${BRANCH}"
-git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
-git -C "${REPO_ROOT}" clean -fd
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/bin/npm /usr/local/bin/npm
+COPY --from=node /usr/local/bin/npx /usr/local/bin/npx
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+ENV PATH="/usr/local/bin:${PATH}"
+ENV NODE_PATH=/usr/local/lib/node_modules
 
-mkdir -p "${APP_ROOT}/meta_info"
-mkdir -p "${APP_ROOT}/config_files/meta/dm"
-mkdir -p "${APP_ROOT}/config_files/meta/dm_view"
+COPY api/ /app/api/
 
-rm -rf "${APP_ROOT}/meta_info"/*
-rm -rf "${APP_ROOT}/config_files/meta/dm"/*
-rm -rf "${APP_ROOT}/config_files/meta/dm_view"/*
+# disable proxy for pip (internal pypi)
+RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= \
+  pip install --index-url=https://pypi.nx.sib.rual.ru/simple \
+  --trusted-host=nx.sib.rual.ru --trusted-host=pypi.nx.sib.rual.ru \
+  --retries 100 --timeout 600000 --no-cache-dir \
+  fastapi "uvicorn[standard]" sqlalchemy psycopg2-binary pyyaml openpyxl
 
-cp -r "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
-cp -r "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
-cp -r "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends openssh-client sshpass \
+    && rm -rf /var/lib/apt/lists/*
 
-chown -R airflow:airflow "${APP_ROOT}/meta_info"
-chown -R airflow:airflow "${APP_ROOT}/config_files/meta"
-
-find "${APP_ROOT}/meta_info" -type d -exec chmod 755 {} \;
-find "${APP_ROOT}/meta_info" -type f -exec chmod 644 {} \;
-
-find "${APP_ROOT}/config_files/meta" -type d -exec chmod 755 {} \;
-find "${APP_ROOT}/config_files/meta" -type f -exec chmod 644 {} \;
-
-echo "[ci_cd] synced meta_info and config_files/meta from origin/${BRANCH}"
-echo "[ci_cd] done"
+EXPOSE 8000
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -576,6 +576,9 @@ def get_admin_dev_meta_status(request: Request):
         airflow_dag_id=AIRFLOW_DEV_DAG_ID,
         lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         dev_database_url=DEV_DATABASE_URL,
+        deploy_host=DEV_META_DEPLOY_HOST,
+        deploy_user=DEV_META_DEPLOY_USER,
+        deploy_base_dir=DEV_META_DEPLOY_BASE_DIR,
     )
 
 @router.get("/api/admin/dev-meta/files")

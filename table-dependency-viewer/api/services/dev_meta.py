@@ -17,6 +17,8 @@ from urllib import request as urlrequest
 import yaml
 from sqlalchemy import create_engine, text
 
+from ..config import TABLE_ENTITIES_META, TABLE_TABLES_META
+
 
 LOCK_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS tech_etl.app_dev_meta_lock (
@@ -293,6 +295,8 @@ def generate_dev_meta_yaml(
         raise ValueError("Укажи хотя бы один dag_tag")
 
     source_object_name = (greenplum_table_name or object_name).strip()
+    tables_meta_ref = TABLE_TABLES_META or "public.tables_meta"
+    entities_meta_ref = TABLE_ENTITIES_META or "public.entities_meta"
     generator_engine = create_engine(database_url)
     columns_query = text(
         """
@@ -329,26 +333,20 @@ def generate_dev_meta_yaml(
         """
     )
     object_query = text(
-        """
+        f"""
         SELECT
             t.table_type,
             v.view_definition,
-            pg_catalog.pg_get_table_distributedby(pc.oid) AS distributed_by,
             ent.entity_last_load,
             obj_description(to_regclass(:qualified_name), 'pg_class') AS table_comment
         FROM information_schema.tables t
         LEFT JOIN information_schema.views v
           ON v.table_schema = t.table_schema
          AND v.table_name = t.table_name
-        LEFT JOIN pg_catalog.pg_namespace n
-          ON n.nspname = t.table_schema
-        LEFT JOIN pg_catalog.pg_class pc
-          ON pc.relnamespace = n.oid
-         AND pc.relname = t.table_name
-        LEFT JOIN public.tables_meta tm
+        LEFT JOIN {tables_meta_ref} tm
           ON lower(tm.table_schema) = lower(t.table_schema)
          AND lower(tm.table_name) = lower(t.table_name)
-        LEFT JOIN public.entities_meta ent
+        LEFT JOIN {entities_meta_ref} ent
           ON ent.entity_id = tm.entity_id
         WHERE t.table_schema = :schema_name
           AND t.table_name = :table_name
@@ -379,6 +377,10 @@ def generate_dev_meta_yaml(
                 "qualified_name": f"{schema_name_gp.strip()}.{source_object_name}",
             },
         ).mappings().first()
+        distribution_clause = conn.execute(
+            distribution_query,
+            {"schema_name": schema_name_gp.strip(), "table_name": source_object_name},
+        ).scalar()
     if not rows:
         raise ValueError(f"Объект {schema_name_gp}.{source_object_name} не найден")
 
@@ -392,7 +394,6 @@ def generate_dev_meta_yaml(
     first_type = str((object_meta or {}).get("table_type") or rows[0]["table_type"] or "").upper()
     if "VIEW" in first_type:
         object_type = "view"
-    distribution_clause = (object_meta or {}).get("distributed_by")
     view_definition = (object_meta or {}).get("view_definition")
     table_comment = (object_meta or {}).get("table_comment")
     entity_last_load = (object_meta or {}).get("entity_last_load")

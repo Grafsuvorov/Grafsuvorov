@@ -1,8 +1,146 @@
-[ci_cd] start 2026-04-07T09:47:54Z
-Your branch is up to date with 'origin/main'.
-HEAD is now at 7138fd172 Merge branch 'cust_release/2026-04-07' into 'main'
-From https://prod.gitlab.dwh.rusal.com/dwh/etl
-   17d100e07..169e1a92b  feature/DWH-11687 -> origin/feature/DWH-11687
- * [new branch]          feature/DWH-11719 -> origin/feature/DWH-11719
-Already on 'main'
-chown: invalid user: ‘airflow:airflow’
+schema_name_gp: dict_dds
+schema_name_click: dm
+object_name: currency_rates
+clickhouse_cluster: '{cluster}'
+object_type: table
+engine: ReplicatedMergeTree
+order_by:
+  - currency_rate_type_code
+  - currency_from_code
+  - currency_to_code
+- dt_currency_rate
+distributed:
+  - REPLICATED
+partitions: null
+table_settings: index_granularity = 8192
+table_comment: null
+settings_external_table:
+  max_threads: 20
+  max_insert_threads: 20
+  input_format_parallel_parsing: 0
+load_type: full
+recreate_mode: drop_create
+truncate_mode_on: true
+postgres_conn_id: gp_connection
+clickhouse_conn_id: clickhouse
+dag_name: ''
+dag_schedule_interval:
+  PROD: 0 22 * * *
+  DEV: null
+dag_tags:
+  - DICT_LOADER
+task_pool: dm_pool
+task_pool_slots: 1
+attributes:
+  - column_name_click: currency_rate_type_code
+    column_name_gp: currency_rate_type_code
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: NOT NULL
+    description: Тип курса (код)
+  - column_name_click: currency_from_code
+    column_name_gp: currency_from_code
+    data_type_click: String
+    data_type_gp: varchar(15)
+    is_nullable: NOT NULL
+    description: Исходная валюта (код)
+  - column_name_click: currency_to_code
+    column_name_gp: currency_to_code
+    data_type_click: String
+    data_type_gp: varchar(15)
+    is_nullable: NOT NULL
+    description: Целевая валюта (код)
+  - column_name_click: dt_currency_rate
+    column_name_gp: tech_etl.validate_date("dt_currency_rate")
+    data_type_click: Date32
+    data_type_gp: date
+    is_nullable: NOT NULL
+    description: Дата курса
+  - column_name_click: is_based_on_previous_period
+    column_name_gp: is_based_on_previous_period
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: 'Флаг: курс скопирован с предыдущего периода'
+  - column_name_click: currency_rate
+    column_name_gp: currency_rate
+    data_type_click: Decimal(32,10)
+    data_type_gp: numeric
+    is_nullable: 'NULL'
+    description: Валютный курс
+  - column_name_click: currency_from_multiplier
+    column_name_gp: currency_from_multiplier
+    data_type_click: Decimal(32,10)
+    data_type_gp: numeric
+    is_nullable: 'NULL'
+    description: Коэффициент для единиц исходной валюты
+  - column_name_click: currency_to_multiplier
+    column_name_gp: currency_to_multiplier
+    data_type_click: Decimal(32,10)
+    data_type_gp: numeric
+    is_nullable: 'NULL'
+    description: Коэффициент для единиц целевой валюты
+  - column_name_click: technical_rate_type_code
+    column_name_gp: technical_rate_type_code
+    data_type_click: String
+    data_type_gp: varchar(12)
+    is_nullable: 'NULL'
+    description: техническое, Тип курса при пересчете по курсам ERP
+  - column_name_click: technical_currency_from
+    column_name_gp: technical_currency_from
+    data_type_click: String
+    data_type_gp: varchar(15)
+    is_nullable: 'NULL'
+    description: техническое,Валюта из при пересчете по курсам ERP
+  - column_name_click: technical_currency_to
+    column_name_gp: technical_currency_to
+    data_type_click: String
+    data_type_gp: varchar(15)
+    is_nullable: 'NULL'
+    description: техническое,Валюта к при пересчете по курсам ERP
+  - column_name_click: source_system_code
+    column_name_gp: source_system_code
+    data_type_click: String
+    data_type_gp: varchar(100)
+    is_nullable: 'NULL'
+    description: Система-источник (код)
+  - column_name_click: error_message_text
+    column_name_gp: error_message_text
+    data_type_click: String
+    data_type_gp: text
+    is_nullable: 'NULL'
+    description: Заполняется в случае неконсистентности курсов в системе BI и ERP, ловушка для ошибок
+  - column_name_click: is_technical_currency_pair
+    column_name_gp: is_technical_currency_pair
+    data_type_click: String
+    data_type_gp: varchar(1)
+    is_nullable: 'NULL'
+    description: идентификатор для пар валют с разными источниками курсов в разных системах
+  - column_name_click: dttm_inserted
+    column_name_gp: dttm_inserted
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: null
+    default: now()
+  - column_name_click: dttm_updated
+    column_name_gp: dttm_updated
+    data_type_click: DateTime
+    data_type_gp: timestamp
+    is_nullable: 'NULL'
+    description: null
+    default: now()
+  - column_name_click: job_name
+    column_name_gp: job_name
+    data_type_click: String
+    data_type_gp: varchar(50)
+    is_nullable: 'NULL'
+    description: null
+    default: '''airflow''::character varying'
+  - column_name_click: deleted_flag
+    column_name_gp: deleted_flag
+    data_type_click: UInt8
+    data_type_gp: bool
+    is_nullable: 'NULL'
+    description: null
+    default: 'false'

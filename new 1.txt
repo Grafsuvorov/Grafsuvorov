@@ -1,10 +1,44 @@
 
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55338 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55348 - "POST /api/admin/dev-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55352 - "POST /api/admin/dev-meta/file HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55354 - "GET /api/admin/dev-meta/files?schema_name=dm HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55588 - "GET /api/admin/ci-cd/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55586 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55590 - "GET /auth/users HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55592 - "GET /auth/users/analytics?days=30 HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:55606 - "POST /api/admin/run-ci-cd HTTP/1.1" 500 Internal Server Error
+#!/usr/bin/bash
+set -euo pipefail
+
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+export GIT_SSL_NO_VERIFY=1
+
+REPO_ROOT="/root/git_dir/etl"
+APP_ROOT="/app"
+BRANCH="main"
+
+echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+git -C "${REPO_ROOT}" fetch origin
+git -C "${REPO_ROOT}" checkout "${BRANCH}"
+git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+git -C "${REPO_ROOT}" clean -fd
+
+mkdir -p "${APP_ROOT}/meta_info"
+mkdir -p "${APP_ROOT}/config_files/meta/dm"
+mkdir -p "${APP_ROOT}/config_files/meta/dm_view"
+
+rm -rf "${APP_ROOT}/meta_info"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm_view"/*
+
+cp -r "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+cp -r "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
+cp -r "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
+
+chown -R airflow:airflow "${APP_ROOT}/meta_info"
+chown -R airflow:airflow "${APP_ROOT}/config_files/meta"
+
+find "${APP_ROOT}/meta_info" -type d -exec chmod 755 {} \;
+find "${APP_ROOT}/meta_info" -type f -exec chmod 644 {} \;
+
+find "${APP_ROOT}/config_files/meta" -type d -exec chmod 755 {} \;
+find "${APP_ROOT}/config_files/meta" -type f -exec chmod 644 {} \;
+
+echo "[ci_cd] synced meta_info and config_files/meta from origin/${BRANCH}"
+echo "[ci_cd] done"

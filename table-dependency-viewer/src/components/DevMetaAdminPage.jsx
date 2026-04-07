@@ -3,8 +3,14 @@ import { devMetaApi } from "../api/devMeta.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 
 const SCHEMA_OPTIONS = [
-  { value: "dm", label: "dm" },
   { value: "dm_view", label: "dm_view" },
+  { value: "dm", label: "dm" },
+  { value: "dm_calc", label: "dm_calc" },
+  { value: "dds", label: "dds" },
+  { value: "ods", label: "ods" },
+  { value: "stg", label: "stg" },
+  { value: "dict_dds", label: "dict_dds" },
+  { value: "dict_stg", label: "dict_stg" },
 ];
 
 function DagLoadingMiniGame({ active }) {
@@ -534,7 +540,13 @@ export default function DevMetaAdminPage({ userProfile }) {
         .split(",")
         .map((item) => item.trim())
         .filter(Boolean);
-      const targetSchema = "dm";
+      const targetSchema = String(generator.schema_name_gp || "")
+        .trim()
+        .toLowerCase();
+      if (!targetSchema) {
+        setError("Нужно указать схему источника");
+        return;
+      }
       const data = await devMetaApi.generate({
         schema_name_gp: generator.schema_name_gp,
         object_name: generator.object_name,
@@ -560,7 +572,7 @@ export default function DevMetaAdminPage({ userProfile }) {
           : null
       );
       await refreshFiles(targetSchema);
-      setMessage(`Черновик YAML создан и открыт в DEV-схеме dm: ${data?.file_name || ""}`);
+      setMessage(`Черновик YAML создан и открыт в DEV-схеме ${targetSchema}: ${data?.file_name || ""}`);
     } catch (err) {
       setError(err.message || "Не удалось сгенерировать YAML");
     }

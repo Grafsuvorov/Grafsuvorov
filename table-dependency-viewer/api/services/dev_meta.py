@@ -66,6 +66,17 @@ REQUIRED_ATTRIBUTE_KEYS = {
     "is_nullable",
 }
 
+ALLOWED_CLICK_SCHEMAS = {
+    "dm_view",
+    "dm",
+    "dm_calc",
+    "dds",
+    "ods",
+    "stg",
+    "dict_dds",
+    "dict_stg",
+}
+
 MAPPING_GP_TO_CLICK = {
     "date": "Date32",
     "timestamp": "DateTime",
@@ -202,8 +213,12 @@ def generate_dev_meta_yaml(
         raise ValueError("Для генератора нужен DEV_DATABASE_URL или DATABASE_URL")
     if not schema_name_gp.strip() or not object_name.strip():
         raise ValueError("Нужно указать schema_name_gp и object_name")
-    if schema_name_click != "dm":
-        raise ValueError("Автогенерация создает YAML только для схемы dm")
+    schema_name_click = schema_name_click.strip().lower()
+    if schema_name_click not in ALLOWED_CLICK_SCHEMAS:
+        raise ValueError(
+            "schema_name_click должен быть одним из: "
+            + ", ".join(sorted(ALLOWED_CLICK_SCHEMAS))
+        )
     if not order_by:
         raise ValueError("Укажи хотя бы одну колонку в order_by")
 
@@ -279,7 +294,7 @@ def generate_dev_meta_yaml(
 
     payload: dict[str, Any] = {
         "schema_name_gp": schema_name_gp.strip(),
-        "schema_name_click": schema_name_click.strip(),
+        "schema_name_click": schema_name_click,
         "object_name": object_name.strip(),
         "object_type": object_type,
         "clickhouse_cluster": "{cluster}",
@@ -697,9 +712,12 @@ def _validate_yaml_structure(payload: Any, schema_name: str) -> list[str]:
     schedule = payload.get("dag_schedule_interval")
     if not isinstance(schedule, dict):
         errors.append("dag_schedule_interval должен быть объектом")
-    schema_click = str(payload.get("schema_name_click") or "").strip()
-    if schema_click and schema_click not in {"dm", "dm_view"}:
-        errors.append("schema_name_click должен быть dm или dm_view")
+    schema_click = str(payload.get("schema_name_click") or "").strip().lower()
+    if schema_click and schema_click not in ALLOWED_CLICK_SCHEMAS:
+        errors.append(
+            "schema_name_click должен быть одним из: "
+            + ", ".join(sorted(ALLOWED_CLICK_SCHEMAS))
+        )
     return errors
 
 

@@ -7635,6 +7635,197 @@ main.content {
   color: #fecaca;
 }
 
+.dev-meta-game {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(12, 18, 32, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.dev-meta-game-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dev-meta-game-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dev-meta-game-score {
+  color: #f8fafc;
+  font-weight: 700;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(125, 211, 252, 0.14);
+}
+
+.dev-meta-game-track {
+  position: relative;
+  margin-top: 12px;
+  height: 144px;
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 34%),
+    radial-gradient(circle at right top, rgba(250, 204, 21, 0.14), transparent 28%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.98));
+}
+
+.dev-meta-game-skyline {
+  position: absolute;
+  inset: auto 0 24px 0;
+  height: 46px;
+  opacity: 0.55;
+  background:
+    linear-gradient(90deg, rgba(56, 189, 248, 0.1) 0 8%, transparent 8% 12%, rgba(56, 189, 248, 0.08) 12% 20%, transparent 20% 24%, rgba(56, 189, 248, 0.11) 24% 34%, transparent 34% 38%, rgba(56, 189, 248, 0.09) 38% 48%, transparent 48% 52%, rgba(56, 189, 248, 0.1) 52% 64%, transparent 64% 68%, rgba(56, 189, 248, 0.08) 68% 78%, transparent 78% 82%, rgba(56, 189, 248, 0.12) 82% 100%);
+}
+
+.dev-meta-game-runner {
+  position: absolute;
+  left: 34px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(180deg, #67e8f9, #0891b2);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.34);
+  transform: rotate(-3deg);
+}
+
+.dev-meta-game-runner-face {
+  position: absolute;
+  top: 7px;
+  left: 6px;
+  display: flex;
+  gap: 6px;
+}
+
+.dev-meta-game-runner-eye {
+  position: absolute;
+  position: static;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #082f49;
+}
+
+.dev-meta-game-runner-leg {
+  position: absolute;
+  bottom: -8px;
+  width: 5px;
+  height: 12px;
+  border-radius: 999px;
+  background: #38bdf8;
+  transform-origin: top center;
+  animation: dev-meta-runner-leg 0.22s infinite alternate linear;
+}
+
+.dev-meta-game-runner-leg-left {
+  left: 7px;
+}
+
+.dev-meta-game-runner-leg-right {
+  right: 7px;
+  animation-delay: 0.11s;
+}
+
+.dev-meta-game-entity {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f8fafc;
+  user-select: none;
+}
+
+.dev-meta-game-entity-hazard {
+  border-radius: 10px;
+  box-shadow: 0 0 14px rgba(248, 113, 113, 0.18);
+}
+
+.dev-meta-game-entity-error {
+  background: linear-gradient(180deg, #ef4444, #b91c1c);
+}
+
+.dev-meta-game-entity-sql {
+  background: linear-gradient(180deg, #f97316, #c2410c);
+}
+
+.dev-meta-game-entity-warning {
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+}
+
+.dev-meta-game-entity-null {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fb7185, #be123c);
+}
+
+.dev-meta-game-entity-proxy {
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f43f5e, #9f1239);
+}
+
+.dev-meta-game-entity-collectible {
+  color: #082f49;
+  box-shadow: 0 0 18px rgba(45, 212, 191, 0.18);
+}
+
+.dev-meta-game-entity-cache,
+.dev-meta-game-entity-ok,
+.dev-meta-game-entity-rows {
+  animation: dev-meta-float 0.9s infinite ease-in-out alternate;
+}
+
+.dev-meta-game-entity-cache {
+  border-radius: 8px;
+  background: linear-gradient(180deg, #5eead4, #14b8a6);
+}
+
+.dev-meta-game-entity-ok {
+  border-radius: 999px;
+  background: linear-gradient(180deg, #a7f3d0, #34d399);
+  font-size: 14px;
+}
+
+.dev-meta-game-entity-rows {
+  border-radius: 6px;
+  background: linear-gradient(180deg, #fde68a, #f59e0b);
+  clip-path: polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%);
+}
+
+.dev-meta-game-ground {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  height: 10px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(56, 189, 248, 0.58), rgba(125, 211, 252, 0.2)),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.16) 0 12px, transparent 12px 22px);
+}
+
+.dev-meta-game-footer {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 @keyframes dev-meta-runner-leg {
   from {
     transform: rotate(18deg);

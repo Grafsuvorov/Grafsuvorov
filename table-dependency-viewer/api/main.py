@@ -173,6 +173,13 @@ class DevMetaGeneratePayload(BaseModel):
     dag_tags: List[str]
 
 
+def _require_dev_meta_role(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role not in {"admin", "engineer"}:
+        raise HTTPException(status_code=403, detail="Admin or engineer role required")
+    return user
+
+
 
 
 
@@ -565,9 +572,7 @@ def get_admin_engineering_efficiency(
 
 @router.get("/api/admin/dev-meta/status")
 def get_admin_dev_meta_status(request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     return get_dev_meta_status(
         engine=engine,
         base_dir=BASE_DIR,
@@ -584,9 +589,7 @@ def get_admin_dev_meta_status(request: Request):
 
 @router.get("/api/admin/dev-meta/files")
 def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     if schema_name not in {"dm", "dm_view"}:
         raise HTTPException(status_code=400, detail="schema_name must be dm or dm_view")
     return get_dev_meta_files(
@@ -600,9 +603,7 @@ def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
 
 @router.post("/api/admin/dev-meta/file")
 def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     root = DEV_CLICK_META_DIR if payload.source != "prod" else CLICK_META_DIR
     try:
         return read_dev_meta_file(
@@ -617,9 +618,7 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/generate")
 def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     try:
         result = generate_dev_meta_yaml(
             database_url=DEV_DATABASE_URL or DATABASE_URL,
@@ -637,9 +636,7 @@ def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/lock")
 def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         return acquire_dev_meta_lock(
             engine=engine,
@@ -654,9 +651,7 @@ def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
 
 @router.post("/api/admin/dev-meta/unlock")
 def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     release_dev_meta_lock(
         engine=engine,
         schema_name=payload.schema_name,
@@ -668,9 +663,7 @@ def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
 
 @router.post("/api/admin/dev-meta/validate")
 def validate_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     return validate_dev_meta_content(
         content=payload.content,
         schema_name=payload.schema_name,
@@ -680,9 +673,7 @@ def validate_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/save")
 def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         result = save_dev_meta_file(
             engine=engine,
@@ -703,9 +694,7 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/run-dag")
 def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         assert_dev_meta_lock_owner(
             engine=engine,
@@ -732,9 +721,7 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
 
 @router.post("/api/admin/dev-meta/dag-status")
 def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     try:
         dag_id = payload.dag_id or AIRFLOW_DEV_DAG_ID or Path(payload.file_name).stem
         data = get_airflow_dev_dag_status(
@@ -752,9 +739,7 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
 
 @router.post("/api/admin/dev-meta/deploy")
 def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         result = deploy_dev_meta_file(
             engine=engine,

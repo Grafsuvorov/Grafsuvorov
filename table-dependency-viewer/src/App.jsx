@@ -282,6 +282,10 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
+  const canUseDevMeta = useMemo(
+    () => ["admin", "engineer"].includes(userProfile?.role || ""),
+    [userProfile]
+  );
 
   return (
     <div className="app">
@@ -332,7 +336,7 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseDevMeta ? (
               <DevMetaAdminPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />

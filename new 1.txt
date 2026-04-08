@@ -1,12 +1,68 @@
+{%- set fields_string -%}
+    vessel_type_name varchar,
+    dt_operation date,
+    dt_operation_dd varchar,
+    dt_operation_mm varchar,
+    dt_operation_yyyy int4,
+    heavy_fuel_oil_consumption_plan_weight numeric(13,3),
+    heavy_fuel_oil_consumption_actual_weight numeric(13,3),
+    marine_gas_oil_consumption_plan_weight numeric(13,3),
+    marine_gas_oil_consumption_actual_weight numeric(13,3),
+    feeder_vessel_name varchar,
+    port_of_loading_name varchar,
+    dt_created date,
+    dt_updated date,
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar not null default 'dbt'::character varying,
+    deleted_flag bool not null default false
+{%- endset -%}
+{% set comments_dict = {
+    'table': 'Объемы потребляемого топлива судами при перевалке боксита с рудников в Гвинее',
+    'columns': {
+        'vessel_type_name': 'Тип судна | Тип судна | dict_dds.transport_vehicle.airtable_vessel_type_name',
+        'dt_operation': 'Конечная дата месяца | Конечная дата месяца | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_report',
+        'heavy_fuel_oil_consumption_plan_weight': 'Объем топлива Heavy Fuel Oil в месяце по БП | Объем топлива Heavy Fuel Oil в месяце по БП | dds.int_transportation_transshipment_fuel_bp_vs_actual.heavy_fuel_oil_consumption_plan_weight',
+        'heavy_fuel_oil_consumption_actual_weight': 'Объем топлива Heavy Fuel Oil в месяце по факту | Объем топлива Heavy Fuel Oil в месяце по факту | dds.int_transportation_transshipment_fuel_bp_vs_actual.heavy_fuel_oil_consumption_actual_weight',
+        'marine_gas_oil_consumption_plan_weight': 'Объем топлива Marine Gas Oil в месяце по БП | Объем топлива Marine Gas Oil в месяце по БП | dds.int_transportation_transshipment_fuel_bp_vs_actual.marine_gas_oil_consumption_plan_weight',
+        'marine_gas_oil_consumption_actual_weight': 'Объем топлива Marine Gas Oil в месяце по факту | Объем топлива Marine Gas Oil в месяце по факту | dds.int_transportation_transshipment_fuel_bp_vs_actual.marine_gas_oil_consumption_actual_weight',
+        'feeder_vessel_name': 'Наименование судна | Наименование судна | dds.int_transportation_transshipment_fuel_bp_vs_actual.vessel_name',
+        'port_of_loading_name': 'Наименование порта | Наименование порта | dds.int_transportation_transshipment_fuel_bp_vs_actual.port_name',
+        'dt_created': 'Дата создания записи | Дата создания записи | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_created',
+        'dt_updated': 'Дата изменения записи | Дата изменения записи | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_updated',
+        'dttm_inserted': 'Дата-время вставки строки',
+        'dttm_updated': 'Дата-время обновления строки',
+        'job_name': 'Framework',
+        'deleted_flag': 'Флаг удаления строки'
+    }
+} %}
 
-Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
-Блок клик схема убрать совсем всегда только dm имя таблицы\объекта убрать оставить только объект при генерации черновика сделать что-то типо загрузки что бы было понятно что процесс идет
-где дев файлы чекбокс с выбором схемы тоже убрать совсем он не нужен
+{{- config(
+    comments_dict = comments_dict,
+    distributed_by = 'feeder_vessel_name, dt_operation',
+    alias = "airtable_transportation_bauxite_fuel_consumption",
+    tags = ['dm', 'tr2', 'airtable'],
+    fields_string = fields_string
+    ) -}}
 
-Статус
-Файл открыт и автоматически взят в работу. - где вот эта надпись контейнер визуально не нравится она заходит за границы верхней шапки и нижнего блока нужно сделать по аккуратнее иначе налипает смотрится грязнор
-верхняя шапка это вот это DEV Meta Generator
-Отдельный admin-only контур для генерации, ручной правки, валидации и выкладки meta-файлов на DEV сервер без пересечения с основным набором meta.
-Lock TTL: 30 минут. Сейчас блокировок: 0 расположенное на темно-зеленом фоне нижняя это где этот фон заканчивается
-
-где рекорд екорд: 26.562727272713747 пиши только целые числа это убери ошибки и бонусы.
+select
+    tv.airtable_vessel_type_name as vessel_type_name,																-- Тип судна LE_TR2.000004
+    fca.dt_report as dt_operation,																					-- Конечная дата месяца LE_TR2.000025
+    lpad(extract(day from fca.dt_report)::text, 2, '0') as dt_operation_dd,														
+    lpad(extract(month  from fca.dt_report)::text, 2, '0') as dt_operation_mm,													
+    extract(year from fca.dt_report) as dt_operation_yyyy,													
+    fca.heavy_fuel_oil_consumption_plan_weight,																		-- Объем топлива Heavy Fuel Oil в месяце по БП LE_TR2.000026
+    fca.heavy_fuel_oil_consumption_actual_weight,																	-- Объем топлива Heavy Fuel Oil в месяце по факту LE_TR2.000027
+    fca.marine_gas_oil_consumption_plan_weight,																		-- Объем топлива Marine Gas Oil в месяце по БП LE_TR2.000028
+    fca.marine_gas_oil_consumption_actual_weight,																	-- Объем топлива Marine Gas Oil в месяце по факту LE_TR2.000029
+    fca.vessel_name as feeder_vessel_name,																			-- Наименование судна LE_TR2.000030
+    fca.port_name as port_of_loading_name,																			-- Наименование порта LE_TR2.000031
+    date(fca.dt_created) as dt_created,																				-- Дата создания записи LE_TR2.000032
+    date(fca.dt_updated) as dt_updated																				-- Дата изменения записи LE_TR2.000033	
+from 
+    {{ ref('dds_s_int_transportation_transshipment_fuel_bp_vs_actual') }} as fca
+left join {{ ref('dict_dds_s_transport_vehicle') }} as tv
+    on tv.vessel_name = fca.vessel_name
+where 
+    fca.dt_report is not null
+    and fca.source_system_code = 'airtable'

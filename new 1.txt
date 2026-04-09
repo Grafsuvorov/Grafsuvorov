@@ -1,68 +1,533 @@
-{%- set fields_string -%}
-    vessel_type_name varchar,
-    dt_operation date,
-    dt_operation_dd varchar,
-    dt_operation_mm varchar,
-    dt_operation_yyyy int4,
-    heavy_fuel_oil_consumption_plan_weight numeric(13,3),
-    heavy_fuel_oil_consumption_actual_weight numeric(13,3),
-    marine_gas_oil_consumption_plan_weight numeric(13,3),
-    marine_gas_oil_consumption_actual_weight numeric(13,3),
-    feeder_vessel_name varchar,
-    port_of_loading_name varchar,
-    dt_created date,
-    dt_updated date,
-    dttm_inserted timestamp not null default now(),
-    dttm_updated timestamp not null default now(),
-    job_name varchar not null default 'dbt'::character varying,
-    deleted_flag bool not null default false
-{%- endset -%}
-{% set comments_dict = {
-    'table': 'Объемы потребляемого топлива судами при перевалке боксита с рудников в Гвинее',
-    'columns': {
-        'vessel_type_name': 'Тип судна | Тип судна | dict_dds.transport_vehicle.airtable_vessel_type_name',
-        'dt_operation': 'Конечная дата месяца | Конечная дата месяца | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_report',
-        'heavy_fuel_oil_consumption_plan_weight': 'Объем топлива Heavy Fuel Oil в месяце по БП | Объем топлива Heavy Fuel Oil в месяце по БП | dds.int_transportation_transshipment_fuel_bp_vs_actual.heavy_fuel_oil_consumption_plan_weight',
-        'heavy_fuel_oil_consumption_actual_weight': 'Объем топлива Heavy Fuel Oil в месяце по факту | Объем топлива Heavy Fuel Oil в месяце по факту | dds.int_transportation_transshipment_fuel_bp_vs_actual.heavy_fuel_oil_consumption_actual_weight',
-        'marine_gas_oil_consumption_plan_weight': 'Объем топлива Marine Gas Oil в месяце по БП | Объем топлива Marine Gas Oil в месяце по БП | dds.int_transportation_transshipment_fuel_bp_vs_actual.marine_gas_oil_consumption_plan_weight',
-        'marine_gas_oil_consumption_actual_weight': 'Объем топлива Marine Gas Oil в месяце по факту | Объем топлива Marine Gas Oil в месяце по факту | dds.int_transportation_transshipment_fuel_bp_vs_actual.marine_gas_oil_consumption_actual_weight',
-        'feeder_vessel_name': 'Наименование судна | Наименование судна | dds.int_transportation_transshipment_fuel_bp_vs_actual.vessel_name',
-        'port_of_loading_name': 'Наименование порта | Наименование порта | dds.int_transportation_transshipment_fuel_bp_vs_actual.port_name',
-        'dt_created': 'Дата создания записи | Дата создания записи | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_created',
-        'dt_updated': 'Дата изменения записи | Дата изменения записи | dds.int_transportation_transshipment_fuel_bp_vs_actual.dt_updated',
-        'dttm_inserted': 'Дата-время вставки строки',
-        'dttm_updated': 'Дата-время обновления строки',
-        'job_name': 'Framework',
-        'deleted_flag': 'Флаг удаления строки'
-    }
-} %}
+do
+$$
+DECLARE    
+	v_row_cnt int8;
+	v_row_cnt_agg int8 = 0;
+	v_calc_time interval ;
+	v_start_dttm timestamp(0) ;
+BEGIN
+	v_start_dttm   := clock_timestamp()  ;
+	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
 
-{{- config(
-    comments_dict = comments_dict,
-    distributed_by = 'feeder_vessel_name, dt_operation',
-    alias = "airtable_transportation_bauxite_fuel_consumption",
-    tags = ['dm', 'tr2', 'airtable'],
-    fields_string = fields_string
-    ) -}}
 
-select
-    tv.airtable_vessel_type_name as vessel_type_name,																-- Тип судна LE_TR2.000004
-    fca.dt_report as dt_operation,																					-- Конечная дата месяца LE_TR2.000025
-    lpad(extract(day from fca.dt_report)::text, 2, '0') as dt_operation_dd,														
-    lpad(extract(month  from fca.dt_report)::text, 2, '0') as dt_operation_mm,													
-    extract(year from fca.dt_report) as dt_operation_yyyy,													
-    fca.heavy_fuel_oil_consumption_plan_weight,																		-- Объем топлива Heavy Fuel Oil в месяце по БП LE_TR2.000026
-    fca.heavy_fuel_oil_consumption_actual_weight,																	-- Объем топлива Heavy Fuel Oil в месяце по факту LE_TR2.000027
-    fca.marine_gas_oil_consumption_plan_weight,																		-- Объем топлива Marine Gas Oil в месяце по БП LE_TR2.000028
-    fca.marine_gas_oil_consumption_actual_weight,																	-- Объем топлива Marine Gas Oil в месяце по факту LE_TR2.000029
-    fca.vessel_name as feeder_vessel_name,																			-- Наименование судна LE_TR2.000030
-    fca.port_name as port_of_loading_name,																			-- Наименование порта LE_TR2.000031
-    date(fca.dt_created) as dt_created,																				-- Дата создания записи LE_TR2.000032
-    date(fca.dt_updated) as dt_updated																				-- Дата изменения записи LE_TR2.000033	
-from 
-    {{ ref('dds_s_int_transportation_transshipment_fuel_bp_vs_actual') }} as fca
-left join {{ ref('dict_dds_s_transport_vehicle') }} as tv
-    on tv.vessel_name = fca.vessel_name
-where 
-    fca.dt_report is not null
-    and fca.source_system_code = 'airtable'
+	drop table if exists pg_temp.adrc;
+	create temporary table pg_temp.adrc with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    address_code,
+		    MIN(country_code) AS country_code
+		FROM dict_dds.address
+		GROUP BY address_code
+	) distributed replicated;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.adrc (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;		
+	
+	drop table if exists pg_temp.dim_hub_geo;
+	create temporary table pg_temp.dim_hub_geo with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    th.transport_hub_code,
+		    a.country_code,
+		    ct.country_full_name,
+		    mr.market_region1_name
+		FROM dict_dds.transport_hub th
+		LEFT JOIN pg_temp.adrc a
+		       ON a.address_code = th.address_code
+		LEFT JOIN dict_dds.country_texts ct
+		       ON ct.country_code   = a.country_code
+		      AND ct.language_code  = 'R'
+		LEFT JOIN dict_dds.country c
+		       ON c.country_code = a.country_code
+		LEFT JOIN dict_dds.market_region1_texts mr
+		       ON mr.market_region1_code = c.market_region1_code
+		      AND mr.language_code       = 'R'
+	) distributed replicated;
+	
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_hub_geo (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;	
+	
+	drop table if exists pg_temp.dim_hub_texts_agg;
+	create temporary table pg_temp.dim_hub_texts_agg with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    transport_hub_code,
+		    MAX(CASE WHEN language_code = 'R' THEN transport_hub_name END) AS name_r,
+		    MAX(CASE WHEN language_code = 'E' THEN transport_hub_name END) AS name_e
+		FROM dict_dds.transport_hub_texts
+		GROUP BY transport_hub_code
+	) distributed replicated;
+	
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_hub_texts_agg (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;	
+	
+
+	drop table if exists pg_temp.dim_material_texts;
+	create temporary table pg_temp.dim_material_texts with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+	SELECT
+	    material_code,
+	    MAX(material_name) AS material_name
+	FROM dict_dds.material_texts
+	WHERE language_code = 'R'
+	GROUP BY material_code
+	) distributed replicated;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_material_texts (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;		
+	
+	drop table if exists pg_temp.dim_material_shape;
+	create temporary table pg_temp.dim_material_shape with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    ms.material_code,
+		    MAX(mf.material_shape_full_name) AS material_shape_full_name
+		FROM dict_dds.material_specification ms
+		JOIN dict_dds.material_shape_texts mf
+		      ON mf.shape_code    = ms.shape_code
+		     AND mf.language_code = 'R'
+		GROUP BY ms.material_code
+	) distributed replicated;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_material_shape (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;		
+	
+	drop table if exists pg_temp.dim_transport_type;
+	create temporary table pg_temp.dim_transport_type with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+	SELECT
+	    transport_transfer_type_code,
+	    MAX(transport_transfer_type_name) AS transport_transfer_type_name
+	FROM dict_dds.transport_transfer_type_texts
+	WHERE language_code = 'R'
+	GROUP BY transport_transfer_type_code
+	) distributed replicated;
+	
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_transport_type (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;	
+	
+	drop table if exists pg_temp.dim_service_texts;
+	create temporary table pg_temp.dim_service_texts with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    transportation_service_code AS service_code,
+		    MAX(transportation_service_name) AS transportation_service_name
+		FROM dict_dds.transportation_service_texts
+		WHERE language_code = 'R'
+		GROUP BY transportation_service_code
+	) distributed replicated;
+	
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_service_texts (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;	
+	
+	drop table if exists pg_temp.dim_storage_owner;
+	create temporary table pg_temp.dim_storage_owner with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+	SELECT
+	    delivery_code,
+	    MIN(plant_producer_code) AS plant_code
+	FROM dds.delivery_document_position
+	WHERE delivery_position_line_item_code = '000010'
+	GROUP BY delivery_code
+	) distributed replicated;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.dim_storage_owner (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;	
+
+
+	drop table if exists pg_temp.ods__texts_from_sap_fm_read_text;
+	create temporary table pg_temp.ods__texts_from_sap_fm_read_text with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
+		SELECT
+		    o_tfsfrt7.text_key_identifier_code,
+		    o_tfsfrt7.text_value
+		FROM ods.texts_from_sap_fm_read_text as o_tfsfrt7
+		WHERE
+			o_tfsfrt7.is_active is true
+			and o_tfsfrt7.application_object_code = 'KNA1'
+			and o_tfsfrt7.text_object_identifier_code = 'RA16'
+			and o_tfsfrt7.language_code = 'R'
+	) distributed replicated;
+
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% create pg_temp.ods__texts_from_sap_fm_read_text (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+
+
+	truncate table dm.transportation_external_location_metal_stock;
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% truncate target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+
+	INSERT INTO dm.transportation_external_location_metal_stock (
+	    sales_bundle_code,
+	    plant_producer_delivery_code,
+	    plant_producer_delivery_position_code,
+	    initial_delivery_code,
+	    initial_delivery_position_code,
+	    sales_delivery_position_code,
+	    material_code,
+	    material_name,
+	    material_search_name,
+	    dt_shipment,
+	    railcar_code,
+	    transport_bill_code,
+	    uni,
+	    material_shape_code,
+	    material_shape_name,
+	    material_shape_search_name,
+	    port_of_discharge_code,
+	    port_of_discharge_name,
+	    dt_arrival_to_russian_port,
+	    dt_storage_end_in_release,
+	    port_of_discharge_search_name,
+	    transport_type_code,
+	    transport_type_name,
+	    transport_type_search_name,
+	    etsng_code,
+	    etsng_name,
+	    etsng_search_name,
+	    dt_report,
+	    sales_bundle_net_weight,
+	    sales_bundle_gross_weight,
+	    batch_code,
+	    dt_arrival,
+	    region_of_remote_warehouse_name,
+	    receiving_plant_name,
+	    receiving_plant_search_name,
+	    country_of_remote_warehouse_name,
+	    receiving_plant_code,
+	    sales_delivery_code,
+	    transportation_inbound_delivery_code,
+	    delivery_for_storage_calculation_code,
+	    transportation_inbound_delivery_position_code,
+	    delivery_position_for_storage_calculation_code,
+	    forwarder_code,
+	    storage_cost_calculation_type_name,
+	    transport_departure_hub_code,
+	    transport_departure_hub_name,
+	    transport_destination_hub_code,
+	    transport_destination_hub_name,
+	    transportation_outbound_delivery_code,
+	    transportation_outbound_delivery_position_code,
+	    is_final_transportation_stage_code,
+	    transportation_stage_code,
+	    transportation_stage_name,
+	    transportation_stage_search_name,
+	    storage_calculation_bundle_quantity,
+	    forwarder_name,
+	    forwarder_search_name,
+	    warehouse_code,
+	    warehouse_name,
+	    warehouse_search_name,
+	    delivery_in_final_release_code,
+	    dt_final_release,
+	    bill_of_lading_code,
+	    bill_of_lading_number,
+	    dt_bill_of_lading,
+	    incoterms_code,
+	    storage_cost_special_calculation_type_code,
+	    warehouse_storage_area_code,
+	    warehouse_storage_area_name,
+	    warehouse_storage_area_search_name,
+	    plant_code,
+	    unit_balance_code,
+	    creditor_in_shipment_instruction_code,
+	    dt_storage_start,
+	    dt_shipped_from_warehouse,
+	    dt_storage_end,
+	    service_number,
+	    storage_duration_total_calendar_days,
+	    shipment_instruction_number,
+	    dt_for_price_search_in_purchase_contract,
+	    purchase_contract_code,
+	    purchase_contract_position_code,
+	    purchase_contract_position_currency_code,
+	    service_code,
+	    service_name,
+	    service_search_name,
+	    purchase_contract_position_uom_code,
+	    creditor_in_shipment_instruction_name,
+	    creditor_in_shipment_instruction_search_name,
+	    storage_duration_free_by_contract_calendar_days,
+	    storage_duration_free_by_delivery_calendar_days,
+	    storage_duration_payable_calendar_days,
+	    remote_warehouse_code,
+	    remote_warehouse_name,
+	    country_of_remote_warehouse_code,
+	    dt_transportation_stage_start_p,
+	    dt_transportation_stage_start_r,
+	    dt_shipment_from_foreign_warehouse,
+	    storage_cost_calculated_amount,
+	    storage_cost_calculated_amount_local,
+	    storage_payable_001_030_days_gross_weight,
+	    storage_payable_031_060_days_gross_weight,
+	    storage_payable_061_090_days_gross_weight,
+	    storage_payable_091_180_days_gross_weight,
+	    storage_payable_181_365_days_gross_weight,
+	    storage_payable_over_365_days_gross_weight,
+	    is_stored_in_russian_port_code,
+	    type_warehouse_name,
+	    type_freight_name,
+	    storage_calculated_cost_001_030_amount,
+	    storage_calculated_cost_031_060_amount,
+	    storage_calculated_cost_061_090_amount,
+	    storage_calculated_cost_091_180_amount,
+	    storage_calculated_cost_181_365_amount,
+	    storage_calculated_cost_over_365_amount,
+	    metal_in_china_stock_balance_closing_weight,
+	    barcode_ean_code
+	)
+	SELECT
+	    base.sales_bundle_code,
+	    base.plant_producer_delivery_code,
+	    base.plant_producer_delivery_position_code,
+	    base.initial_delivery_code,
+	    '10',
+	    '10',
+
+	    base.material_code,
+	    mat.material_name,
+	    base.material_code || '-' || mat.material_name,
+
+	    base.dt_shipment,
+	    base.railcar_code,
+	    base.transport_bill_code,
+	    base.uni,
+
+	    base.material_shape_code,
+	    dms.material_shape_full_name,
+	    base.material_shape_code || '-' || dms.material_shape_full_name,
+
+	    base.port_of_discharge_code,
+	    COALESCE(ht_port.name_e, ht_port.name_r),
+	    base.dt_arrival_to_russian_port,
+	    base.dt_storage_end_in_release,
+	    base.port_of_discharge_code || '-' || COALESCE(ht_port.name_e, ht_port.name_r),
+
+	    base.transport_type_code,
+	    dtt.transport_transfer_type_name,
+	    base.transport_type_code || '-' || dtt.transport_transfer_type_name,
+
+	    base.etsng_code,
+	    ette.etsng_name,
+	    base.etsng_code || '-' || ette.etsng_name,
+
+	    base.dt_report,
+	    base.sales_bundle_net_weight,
+	    base.sales_bundle_gross_weight,
+	    base.batch_code,
+	    base.dt_arrival,
+
+	    CASE
+	        WHEN hub_remote.market_region1_name = 'Турция' THEN 'Западная Азия'
+	        WHEN hub_remote.market_region1_name = 'Средний Восток и Афр' THEN 'Ближний Восток'
+	        WHEN hub_remote.market_region1_name IN ('Азия','Китай') THEN 'Восточная Азия'
+	        ELSE hub_remote.market_region1_name
+	    END,
+
+	    o_tfsfrt7.text_value as receiving_plant_name,
+	    base.receiving_plant_code || '-' || pas.plant_short_name || ' ' || pas.plant_full_name,
+
+	    CASE
+	        WHEN hub_remote.country_full_name = 'Корея, республика' THEN 'Южная Корея'
+	        WHEN hub_remote.country_full_name = 'Тайвань (Китай)' THEN 'Тайвань'
+	        ELSE hub_remote.country_full_name
+	    END,
+
+	    base.receiving_plant_code,
+	    base.sales_delivery_code,
+	    base.transportation_inbound_delivery_code,
+	    base.delivery_for_storage_calculation_code,
+	    base.transportation_inbound_delivery_position_code,
+	    base.delivery_position_for_storage_calculation_code,
+	    base.forwarder_code,
+	    base.storage_cost_calculation_type_name,
+
+	    base.transport_departure_hub_code,
+	    COALESCE(ht_dep.name_r, ht_dep.name_e),
+	    base.transport_destination_hub_code,
+	    COALESCE(ht_dest.name_r, ht_dest.name_e),
+
+	    base.transportation_outbound_delivery_code,
+	    base.transportation_outbound_delivery_position_code,
+	    base.is_final_transportation_stage_code,
+	    base.transportation_stage_code,
+
+	    CASE
+	        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+	            THEN trst.transportation_stage_name
+	    END,
+	    CASE
+	        WHEN base.storage_cost_calculation_type_name IN ('Логика Азия','Логика Европа','Логика СВХ')
+	            THEN base.transportation_stage_code || '-' || trst.transportation_stage_name
+	    END,
+
+	    base.storage_calculation_bundle_quantity,
+
+
+	    COALESCE(
+	        CASE
+	            WHEN base.storage_cost_calculation_type_name
+	                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+	                THEN counter_forwarder.counterparty_short_name
+	        END,
+	        'Не определено'
+	    ),
+	    COALESCE(
+	        CASE
+	            WHEN base.storage_cost_calculation_type_name
+	                 IN ('Логика Азия','Логика Европа','Логика СВХ')
+	                THEN base.forwarder_code || '-' || counter_forwarder.counterparty_short_name
+	        END,
+	        'Не определено'
+	    ),
+
+	    base.warehouse_code,
+	    CASE
+	        WHEN hub_wh.country_full_name = 'Россия'
+	            THEN COALESCE(ht_wh.name_r, ht_wh.name_e)
+	        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r)
+	    END,
+	    base.warehouse_code || '-' ||
+	    CASE
+	        WHEN hub_wh.country_full_name = 'Россия'
+	            THEN COALESCE(ht_wh.name_r, ht_wh.name_e)
+	        ELSE COALESCE(ht_wh.name_e, ht_wh.name_r)
+	    END,
+
+	    base.delivery_in_final_release_code,
+	    base.dt_final_release,
+	    base.bill_of_lading_code,
+	    base.bill_of_lading_number,
+	    base.dt_bill_of_lading,
+
+	    base.incoterms_code,
+	    base.storage_cost_special_calculation_type_code,
+
+	    base.warehouse_storage_area_code,
+	    COALESCE(ht_area.name_r, ht_area.name_e),
+	    base.warehouse_storage_area_code || '-' || COALESCE(ht_area.name_r, ht_area.name_e),
+
+	    base.plant_code,
+	    base.unit_balance_code,
+	    base.creditor_in_shipment_instruction_code,
+
+	    base.dt_storage_start,
+	    base.dt_shipped_from_warehouse,
+	    base.dt_storage_end,
+
+	    base.service_number,
+	    base.storage_duration_total_calendar_days,
+	    base.shipment_instruction_number,
+	    base.dt_for_price_search_in_purchase_contract,
+	    base.purchase_contract_code,
+	    base.purchase_contract_position_code,
+	    base.purchase_contract_position_currency_code,
+
+	    base.service_code,
+	    svc.transportation_service_name,
+	    base.service_code || '-' || svc.transportation_service_name,
+
+	    base.purchase_contract_position_uom_code,
+
+	    addr_8.address_full_name,
+	    base.creditor_in_shipment_instruction_code || '-' || addr_8.address_full_name,
+
+	    base.storage_duration_free_by_contract_calendar_days,
+	    base.storage_duration_free_by_delivery_calendar_days,
+	    base.storage_duration_payable_calendar_days,
+
+	    base.remote_warehouse_code,
+	   trht_remote.transport_hub_name AS remote_warehouse_name,
+	    hub_remote.country_code,
+
+	    base.dt_transportation_stage_start_p,
+	    base.dt_transportation_stage_start_r,
+	    base.dt_shipment_from_foreign_warehouse,
+
+	    base.storage_cost_calculated_amount,
+	    base.storage_cost_calculated_amount_local,
+
+	    base.storage_payable_001_030_days_gross_weight,
+	    base.storage_payable_031_060_days_gross_weight,
+	    base.storage_payable_061_090_days_gross_weight,
+	    base.storage_payable_091_180_days_gross_weight,
+	    base.storage_payable_181_365_days_gross_weight,
+	    base.storage_payable_over_365_days_gross_weight,
+
+	    base.is_stored_in_russian_port_code,
+
+	    CASE
+	        WHEN base.storage_cost_calculation_type_name IN ('Логика РФ-контейнеры','Логика РФ-балк')
+	            THEN 'Терминал порта'
+	        WHEN base.storage_cost_calculation_type_name = 'Логика СВХ'
+	            THEN 'Склад СВХ'
+	        ELSE 'Не определено'
+	    END,
+	    CASE
+	        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-контейнеры' THEN 'Контейнеры'
+	        WHEN base.storage_cost_calculation_type_name = 'Логика РФ-балк' THEN 'Балк'
+	        ELSE 'Не определено'
+	    END,
+
+	    base.storage_calculated_cost_001_030_amount,
+	    base.storage_calculated_cost_031_060_amount,
+	    base.storage_calculated_cost_061_090_amount,
+	    base.storage_calculated_cost_091_180_amount,
+	    base.storage_calculated_cost_181_365_amount,
+	    base.storage_calculated_cost_over_365_amount,
+
+	    base.metal_in_china_stock_balance_closing_weight,
+	    base.barcode_ean_code
+	FROM dm_calc.storage_sales_bundles_amount base
+	LEFT JOIN pg_temp.dim_material_texts mat ON mat.material_code = base.material_code
+	LEFT JOIN pg_temp.dim_material_shape dms ON dms.material_code = base.material_code
+	LEFT JOIN dict_dds.etsng_texts ette ON ette.etsng_code = base.etsng_code AND ette.language_code = 'R'
+	LEFT JOIN pg_temp.dim_transport_type dtt ON dtt.transport_transfer_type_code = base.transport_type_code
+	LEFT JOIN pg_temp.dim_service_texts svc ON svc.service_code = base.service_code
+	LEFT JOIN dict_dds.plant_and_subsidiary pas ON pas.plant_code = base.receiving_plant_code
+	LEFT JOIN pg_temp.dim_storage_owner so ON so.delivery_code = base.sales_delivery_code
+	LEFT JOIN dict_dds.plant_and_subsidiary pas_1124 ON pas_1124.plant_code = so.plant_code
+	LEFT JOIN pg_temp.dim_hub_geo hub_wh ON hub_wh.transport_hub_code = base.warehouse_code
+	LEFT JOIN pg_temp.dim_hub_geo hub_remote ON hub_remote.transport_hub_code = base.warehouse_code
+	LEFT JOIN dict_dds.transport_hub trh_remote
+	       ON trh_remote.transport_hub_code = base.remote_warehouse_code
+	LEFT JOIN pg_temp.adrc adrc_rw
+	       ON adrc_rw.address_code = trh_remote.address_code
+	LEFT JOIN dict_dds.country_texts cotex_rw
+	       ON cotex_rw.country_code = adrc_rw.country_code
+	      AND cotex_rw.language_code = 'R'
+	LEFT JOIN dict_dds.transport_hub_texts trht_remote
+	       ON trht_remote.transport_hub_code = base.remote_warehouse_code
+	      AND trht_remote.language_code =
+	          CASE
+	              WHEN cotex_rw.country_full_name = 'Россия' THEN 'R'
+	              ELSE 'E'
+	          END
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_dep ON ht_dep.transport_hub_code = base.transport_departure_hub_code
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_dest ON ht_dest.transport_hub_code = base.transport_destination_hub_code
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_wh ON ht_wh.transport_hub_code = base.warehouse_code
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_area ON ht_area.transport_hub_code = base.warehouse_storage_area_code
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_remote ON ht_remote.transport_hub_code = base.remote_warehouse_code
+	LEFT JOIN pg_temp.dim_hub_texts_agg ht_port ON ht_port.transport_hub_code = base.port_of_discharge_code
+	LEFT JOIN dict_dds.counterparty counter_forwarder ON counter_forwarder.counterparty_code = base.forwarder_code
+	LEFT JOIN dict_dds.counterparty counter_creditor ON counter_creditor.counterparty_code = base.creditor_in_shipment_instruction_code
+	LEFT JOIN dict_dds.address addr_8
+	    ON addr_8.address_code = counter_creditor.address_code
+	   AND addr_8.international_display_format_code IS NULL
+	LEFT JOIN dict_dds.transportation_stage_texts trst
+	    ON trst.transportation_stage_code = base.transportation_stage_code
+	   AND trst.language_code = 'R'
+	left join pg_temp.ods__texts_from_sap_fm_read_text as o_tfsfrt7 on
+		o_tfsfrt7.text_key_identifier_code = pas_1124.customer_code
+	   ;
+
+
+
+
+	get diagnostics v_row_cnt = row_count;
+	raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
+	v_row_cnt_agg := v_row_cnt_agg + v_row_cnt;
+
+
+	if v_row_cnt_agg > 0 then
+		analyze dm.transportation_external_location_metal_stock;
+		raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
+	end if;
+
+	v_calc_time :=  clock_timestamp() - v_start_dttm ;
+	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
+end;
+$$

@@ -1,14 +1,15 @@
 C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
   warnings.warn(
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\s3_laod.py", line 25, in <module>
-    for obj in client.list_objects(bucket_name=bucket_name, prefix=load_dir, recursive=True):
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\minio\api.py", line 3329, in _list_objects
-    response = self._execute(
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\minio\api.py", line 441, in _execute
-    region = self._get_region(bucket_name)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\minio\api.py", line 498, in _get_region
-    response = self._url_open(
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\minio\api.py", line 427, in _url_open
-    raise response_error
-minio.error.S3Error: S3 operation failed; code: SignatureDoesNotMatch, message: The request signature we calculated does not match the signature you provided. Check your key and signing method., resource: /dbt-zp-prod, request_id: 18A5E2AFF79B1FD0, host_id: 7b7b45d1e6ccde88dac2cc240092bf31d5fedf2f528c3ffb7c5e1395fb4e135c, bucket_name: dbt-zp-prod
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+Download: dbt_run_manual/2026-04-10/2026-04-10 15:57:17.494487/artifacts/manifest.json -> minio_download\manifest.json
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+Download: dbt_run_manual/2026-04-10/2026-04-10 15:57:17.494487/artifacts/run_results.json -> minio_download\run_results.json
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\urllib3\connectionpool.py:1064: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/1.26.x/advanced-usage.html#ssl-warnings
+  warnings.warn(
+Done

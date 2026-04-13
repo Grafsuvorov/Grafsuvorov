@@ -1,40 +1,63 @@
+Если локально тот же скрипт отрабатывает быстро, а на сервере “висит”, то обычно причины такие:
 
-[root@rgm-s-dwhapp01 scripts]# python -m pip install minio
-Collecting minio
-  Retrying (Retry(total=4, connect=None, read=None, redirect=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', error('Tunnel connection failed: 407 Proxy Authentication Required',))': /simple/minio/
-  Retrying (Retry(total=3, connect=None, read=None, redirect=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', error('Tunnel connection failed: 407 Proxy Authentication Required',))': /simple/minio/
-  Retrying (Retry(total=2, connect=None, read=None, redirect=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', error('Tunnel connection failed: 407 Proxy Authentication Required',))': /simple/minio/
-  Retrying (Retry(total=1, connect=None, read=None, redirect=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', error('Tunnel connection failed: 407 Proxy Authentication Required',))': /simple/minio/
-  Retrying (Retry(total=0, connect=None, read=None, redirect=None)) after connection broken by 'ProxyError('Cannot connect to proxy.', error('Tunnel connection failed: 407 Proxy Authentication Required',))': /simple/minio/
-  Could not find a version that satisfies the requirement minio (from versions: )
-No matching distribution found for minio
-You are using pip version 8.1.2, however version 26.0.1 is available.
-You should consider upgrading via the 'pip install --upgrade pip' command.
-[root@rgm-s-dwhapp01 scripts]# unset http_proxy
-[root@rgm-s-dwhapp01 scripts]# unset https_proxy
-[root@rgm-s-dwhapp01 scripts]# unset HTTP_PROXY
-[root@rgm-s-dwhapp01 scripts]# unset HTTPS_PROXY
-[root@rgm-s-dwhapp01 scripts]# python -m pip install minio
-Collecting minio
-  Downloading https://pypi.nx.sib.rual.ru/packages/minio/7.2.20/minio-7.2.20.tar.gz (136kB)
-    100% |████████████████████████████████| 143kB 2.0MB/s
-Collecting certifi (from minio)
-  Downloading https://pypi.nx.sib.rual.ru/packages/certifi/2026.2.25/certifi-2026.2.25.tar.gz (155kB)
-    100% |████████████████████████████████| 163kB 2.0MB/s
-Collecting urllib3 (from minio)
-  Downloading https://pypi.nx.sib.rual.ru/packages/urllib3/2.6.3/urllib3-2.6.3.tar.gz (435kB)
-    100% |████████████████████████████████| 440kB 2.1MB/s
-    Complete output from command python setup.py egg_info:
-    Traceback (most recent call last):
-      File "<string>", line 1, in <module>
-    IOError: [Errno 2] No such file or directory: '/tmp/pip-build-iDmksW/urllib3/setup.py'
+  - сервер не видит res-s-khs3.resource.local:9000
+  - DNS резолвится, но соединение до порта долго ждёт timeout
+  - сервер пытается идти через proxy
+  - на сервере другой маршрут/фаервол/ACL
+  - TLS handshake зависает
 
-    ----------------------------------------
-Command "python setup.py egg_info" failed with error code 1 in /tmp/pip-build-iDmksW/urllib3/
-You are using pip version 8.1.2, however version 26.0.1 is available.
-You should consider upgrading via the 'pip install --upgrade pip' command.
-[root@rgm-s-dwhapp01 scripts]# python3 s3_laod.py
-Traceback (most recent call last):
-  File "/root/table-dependency-viewer/scripts/s3_laod.py", line 2, in <module>
-    from minio import Minio
-ModuleNotFoundError: No module named 'minio'
+  Надо не гадать, а сразу поставить таймауты и проверить соединение отдельно.
+
+  Сначала проверь порт с сервера:
+
+  nc -vz res-s-khs3.resource.local 9000
+
+  Если nc нет:
+
+  curl -vk --connect-timeout 5 --max-time 10 https://res-s-khs3.resource.local:9000
+
+  И проверь DNS:
+
+  ping -c 1 res-s-khs3.resource.local
+
+  Ещё проверь proxy-переменные:
+
+  env | grep -i proxy
+
+  Если там что-то есть, запускай скрипт так:
+
+  NO_PROXY=res-s-khs3.resource.local,.resource.local,.local no_proxy=res-s-khs3.resource.local,.resource.local,.local python3 s3_laod.py
+
+  И сам скрипт лучше сразу сделать с таймаутами и отладочным выводом. Минимально:
+
+  import urllib3
+  from minio import Minio
+
+  urllib3.disable_warnings()
+
+  print('start')
+
+  client = Minio(
+      'res-s-khs3.resource.local:9000',
+      access_key='gpetl',
+      secret_key='pass',
+      secure=True,
+      cert_check=False,
+  )
+
+  print('client created')
+  print('checking bucket...')
+
+  print(client.bucket_exists('dbt-zp-prod'))
+
+  print('done')
+
+  Если зависает уже на bucket_exists, значит проблема именно в доступе с сервера до MinIO.
+
+  Итог:
+
+  - да, очень вероятно, что с сервера нет нормального сетевого доступа
+  - локальный успех это не доказывает для сервера
+  - следующий правильный шаг: ping, nc 9000, curl https://host:9000, env | grep -i proxy
+
+  Если

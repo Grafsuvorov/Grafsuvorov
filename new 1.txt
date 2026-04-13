@@ -1,11 +1,28 @@
-minio_client.fput_object(
-                    bucket_name=bucket_name,
-                    object_name=object_path.replace("\\", "/"),
-                    file_path=file_path
-                )
+from minio import Minio
 
-minio_client.fget_object(
-    bucket_name=bucket_name,
-    object_name=object_path.replace("\\", "/"),  # или Path(object_path).as_posix()
-    file_path=file_path  # куда сохранить на сервере
-)
+host = 'res-s-khs3.resource.local'
+port = 9000
+login = 'gpetl'
+password = 'pass'
+secure = True
+bucket_name = 'dbt-zp-prod'
+load_dir = 'dbt_run_manual/2026-04-10/2026-04-10 15:57:17.494487/artifacts'
+
+client = Minio(
+            f'{host}:{port}',
+            access_key=login,
+            secret_key=password,
+            secure=secure,
+            cert_check=False,
+        )
+
+obj_list =  client.list_objects(
+                bucket_name=bucket_name,
+                prefix=f"{load_dir}",
+                recursive=True
+        )
+for obj in obj_list:
+    if obj.object_name.endswith('.json'):
+        print(obj.object_name)
+        ll = client.get_object(bucket_name, obj.object_name)
+        print(ll.data)

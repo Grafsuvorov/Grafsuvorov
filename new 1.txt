@@ -1,63 +1,13 @@
-Если локально тот же скрипт отрабатывает быстро, а на сервере “висит”, то обычно причины такие:
+[root@rgm-s-dwhapp01 scripts]# curl -vk --connect-timeout 5 --max-time 10 https://res-s-khs3.resource.local:9000
+* About to connect() to res-s-khs3.resource.local port 9000 (#0)
+*   Trying 10.66.229.230...
+* Connection timed out after 5001 milliseconds
+* Closing connection 0
+curl: (28) Connection timed out after 5001 milliseconds
+[root@rgm-s-dwhapp01 scripts]#  ping -c 1 res-s-khs3.resource.local
+PING res-s-khs3.resource.local (10.66.229.230) 56(84) bytes of data.
+64 bytes from 10.66.229.230 (10.66.229.230): icmp_seq=1 ttl=62 time=0.430 ms
 
-  - сервер не видит res-s-khs3.resource.local:9000
-  - DNS резолвится, но соединение до порта долго ждёт timeout
-  - сервер пытается идти через proxy
-  - на сервере другой маршрут/фаервол/ACL
-  - TLS handshake зависает
-
-  Надо не гадать, а сразу поставить таймауты и проверить соединение отдельно.
-
-  Сначала проверь порт с сервера:
-
-  nc -vz res-s-khs3.resource.local 9000
-
-  Если nc нет:
-
-  curl -vk --connect-timeout 5 --max-time 10 https://res-s-khs3.resource.local:9000
-
-  И проверь DNS:
-
-  ping -c 1 res-s-khs3.resource.local
-
-  Ещё проверь proxy-переменные:
-
-  env | grep -i proxy
-
-  Если там что-то есть, запускай скрипт так:
-
-  NO_PROXY=res-s-khs3.resource.local,.resource.local,.local no_proxy=res-s-khs3.resource.local,.resource.local,.local python3 s3_laod.py
-
-  И сам скрипт лучше сразу сделать с таймаутами и отладочным выводом. Минимально:
-
-  import urllib3
-  from minio import Minio
-
-  urllib3.disable_warnings()
-
-  print('start')
-
-  client = Minio(
-      'res-s-khs3.resource.local:9000',
-      access_key='gpetl',
-      secret_key='pass',
-      secure=True,
-      cert_check=False,
-  )
-
-  print('client created')
-  print('checking bucket...')
-
-  print(client.bucket_exists('dbt-zp-prod'))
-
-  print('done')
-
-  Если зависает уже на bucket_exists, значит проблема именно в доступе с сервера до MinIO.
-
-  Итог:
-
-  - да, очень вероятно, что с сервера нет нормального сетевого доступа
-  - локальный успех это не доказывает для сервера
-  - следующий правильный шаг: ping, nc 9000, curl https://host:9000, env | grep -i proxy
-
-  Если
+--- res-s-khs3.resource.local ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.430/0.430/0.430/0.000 ms

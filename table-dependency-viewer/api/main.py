@@ -79,6 +79,7 @@ from .services.dev_meta import (
     assert_dev_meta_lock_owner,
     deploy_dev_meta_file,
     generate_dev_meta_yaml,
+    get_airflow_dev_dag_status,
     get_dev_meta_files,
     get_dev_meta_status,
     read_dev_meta_file,
@@ -156,6 +157,14 @@ class DevMetaDagPayload(BaseModel):
     file_name: str
 
 
+class DevMetaDagStatusPayload(BaseModel):
+    schema_name: str
+    file_name: str
+    dag_id: Optional[str] = None
+    dag_run_id: str
+    auto_unpaused: bool = False
+
+
 class DevMetaDeployPayload(BaseModel):
     schema_name: str
     file_name: str
@@ -168,6 +177,14 @@ class DevMetaGeneratePayload(BaseModel):
     schema_name_click: str = "dm"
     greenplum_table_name: Optional[str] = None
     order_by: List[str]
+    dag_tags: List[str]
+
+
+def _require_dev_meta_role(request: Request):
+    user = get_current_user_from_request(request)
+    if user.role not in {"admin", "engineer"}:
+        raise HTTPException(status_code=403, detail="Admin or engineer role required")
+    return user
 
 
 
@@ -270,11 +287,299 @@ def get_ci_cd_status(request: Request):
     return _ci_cd_status
 
 
-@router.get("/api/admin/dev-meta/status")
-def get_admin_dev_meta_status(request: Request):
+@router.get("/api/admin/engineering-efficiency")
+def get_admin_engineering_efficiency(
+    request: Request,
+    days: int = Query(90, ge=1, le=3650),
+):
     user = get_current_user_from_request(request)
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin role required")
+    try:
+        date_clause, params = _resolve_date_window(None, None, days)
+        with engine.connect() as conn:
+            base = f"""
+                WITH rel AS (
+                    SELECT r.release_id, r.started_at, r.finished_at, r.initiated_by, r.status
+                    FROM {TABLE_RELEASE_LOG} r
+                    WHERE {date_clause}
+                ),
+                ro AS (
+                    SELECT ro.*
+                    FROM {TABLE_RELEASE_OBJECTS} ro
+                    JOIN rel r ON r.release_id = ro.release_id
+                ),
+                tasks AS (
+                    SELECT DISTINCT task_id
+                    FROM ro
+                    WHERE task_id IS NOT NULL
+                ),
+                snap AS (
+                    SELECT s.*
+                    FROM {TABLE_YT_ISSUE_SNAPSHOT} s
+                    JOIN tasks t ON t.task_id = s.issue_id
+                ),
+                exec AS (
+                    SELECT DISTINCT ON (issue_id)
+                           issue_id, author AS executor, ts
+                    FROM {TABLE_YT_ISSUE_TIMELINE}
+                    WHERE event_type = 'State change'
+                      AND value_to IN ('Ожидание релиза', 'В работе')
+                    ORDER BY issue_id, ts DESC NULLS LAST
+                ),
+                work AS (
+                    SELECT issue_id, COALESCE(SUM(minutes), 0) AS minutes
+                    FROM {TABLE_YT_ISSUE_WORKLOG}
+                    GROUP BY issue_id
+                ),
+                dashboard AS (
+                    SELECT issue_id, field_value AS dashboard_direction
+                    FROM {TABLE_YT_ISSUE_CUSTOM}
+                    WHERE field_name = 'Дашборд КХД/Направление'
+                ),
+                engineer_issue AS (
+                    SELECT
+                        snap.issue_id,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COALESCE(snap.created_by, 'Не указан') AS creator,
+                        COALESCE(work.minutes, 0) AS minutes,
+                        COALESCE(dashboard.dashboard_direction, 'Не указан') AS dashboard_direction
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    LEFT JOIN dashboard ON dashboard.issue_id = snap.issue_id
+                ),
+                engineer_objects AS (
+                    SELECT
+                        ei.engineer,
+                        ei.issue_id,
+                        ei.minutes,
+                        ei.dashboard_direction,
+                        ro.schema_name,
+                        ro.table_name,
+                        COUNT(*) OVER (PARTITION BY ro.schema_name, ro.table_name) AS changes_count
+                    FROM engineer_issue ei
+                    LEFT JOIN ro ON ro.task_id = ei.issue_id
+                )
+            """
+
+            summary = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COUNT(DISTINCT issue_id) AS tasks_count,
+                        COUNT(schema_name || '.' || table_name) AS objects_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours,
+                        COUNT(DISTINCT engineer) AS engineers_count
+                    FROM engineer_objects
+                    """
+                ),
+                params,
+            ).mappings().first()
+
+            engineers = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        engineer,
+                        COUNT(DISTINCT issue_id) AS tasks_count,
+                        COUNT(schema_name || '.' || table_name) AS objects_count,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours,
+                        CASE
+                            WHEN COUNT(DISTINCT issue_id) = 0 THEN 0
+                            ELSE (COALESCE(SUM(minutes), 0) / 60.0) / COUNT(DISTINCT issue_id)
+                        END AS avg_hours_per_task
+                    FROM engineer_objects
+                    GROUP BY engineer
+                    ORDER BY hours DESC NULLS LAST, tasks_count DESC
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            schema_breakdown = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        COALESCE(schema_name, 'UNKNOWN') AS schema_name,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours
+                    FROM engineer_objects
+                    WHERE schema_name IS NOT NULL
+                    GROUP BY COALESCE(schema_name, 'UNKNOWN')
+                    ORDER BY hours DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            dashboards = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    dashboard_agg AS (
+                        SELECT
+                            dashboard_direction,
+                            engineer,
+                            COUNT(DISTINCT issue_id) AS tasks_count,
+                            COUNT(schema_name || '.' || table_name) AS objects_count,
+                            COALESCE(SUM(minutes), 0) / 60.0 AS hours
+                        FROM engineer_objects
+                        GROUP BY dashboard_direction, engineer
+                    )
+                    SELECT
+                        dashboard_direction,
+                        SUM(hours) AS hours,
+                        SUM(tasks_count) AS tasks_count,
+                        SUM(objects_count) AS objects_count,
+                        (ARRAY_AGG(engineer ORDER BY hours DESC NULLS LAST))[1] AS top_engineer
+                    FROM dashboard_agg
+                    GROUP BY dashboard_direction
+                    ORDER BY hours DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            top_objects = conn.execute(
+                text(
+                    base
+                    + """
+                    ,
+                    object_agg AS (
+                        SELECT
+                            schema_name,
+                            table_name,
+                            engineer,
+                            COUNT(DISTINCT issue_id) AS tasks_count,
+                            COUNT(*) AS changes_count,
+                            COALESCE(SUM(minutes), 0) / 60.0 AS hours
+                        FROM engineer_objects
+                        WHERE schema_name IS NOT NULL
+                          AND table_name IS NOT NULL
+                        GROUP BY schema_name, table_name, engineer
+                    )
+                    SELECT
+                        schema_name,
+                        table_name,
+                        SUM(hours) AS hours,
+                        SUM(tasks_count) AS tasks_count,
+                        SUM(changes_count) AS changes_count,
+                        (ARRAY_AGG(engineer ORDER BY hours DESC NULLS LAST))[1] AS top_engineer
+                    FROM object_agg
+                    GROUP BY schema_name, table_name
+                    ORDER BY hours DESC NULLS LAST, changes_count DESC
+                    LIMIT 30
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            daily_engineers = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        DATE(COALESCE(snap.updated_at, snap.created_at))::text AS day,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан') AS engineer,
+                        COUNT(DISTINCT snap.issue_id) AS tasks_count,
+                        COALESCE(SUM(work.minutes), 0) / 60.0 AS hours
+                    FROM snap
+                    LEFT JOIN exec ON exec.issue_id = snap.issue_id
+                    LEFT JOIN work ON work.issue_id = snap.issue_id
+                    GROUP BY
+                        DATE(COALESCE(snap.updated_at, snap.created_at))::text,
+                        COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан')
+                    ORDER BY day, hours DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+            engineer_schema_rows = conn.execute(
+                text(
+                    base
+                    + """
+                    SELECT
+                        engineer,
+                        schema_name,
+                        COALESCE(SUM(minutes), 0) / 60.0 AS hours
+                    FROM engineer_objects
+                    WHERE schema_name IS NOT NULL
+                    GROUP BY engineer, schema_name
+                    ORDER BY engineer, hours DESC NULLS LAST
+                    """
+                ),
+                params,
+            ).mappings().all()
+
+        engineer_schema_map = {}
+        for row in engineer_schema_rows:
+            engineer_schema_map.setdefault(row["engineer"], []).append(
+                {
+                    "schema_name": row["schema_name"],
+                    "hours": float(row["hours"] or 0),
+                }
+            )
+
+        engineers_payload = []
+        for row in engineers:
+            hours = float(row["hours"] or 0)
+            tasks_count = int(row["tasks_count"] or 0)
+            avg = float(row["avg_hours_per_task"] or 0)
+            if hours >= 120 or avg >= 12:
+                load_status = "Перегружен"
+            elif hours <= 16 and tasks_count <= 2:
+                load_status = "Недогружен"
+            elif tasks_count >= 5 and avg <= 6:
+                load_status = "Эффективен"
+            else:
+                load_status = "Стабильно"
+            engineers_payload.append(
+                {
+                    "engineer": row["engineer"],
+                    "tasks_count": tasks_count,
+                    "objects_count": int(row["objects_count"] or 0),
+                    "hours": hours,
+                    "avg_hours_per_task": avg,
+                    "load_status": load_status,
+                    "schemas": engineer_schema_map.get(row["engineer"], [])[:8],
+                }
+            )
+
+        focus = {
+            "overloaded": [row for row in engineers_payload if row["load_status"] == "Перегружен"][:5],
+            "efficient": [row for row in engineers_payload if row["load_status"] == "Эффективен"][:5],
+            "underloaded": [row for row in engineers_payload if row["load_status"] == "Недогружен"][:5],
+        }
+
+        return {
+            "days": days,
+            "summary": {
+                "tasks_count": int((summary or {}).get("tasks_count") or 0),
+                "objects_count": int((summary or {}).get("objects_count") or 0),
+                "hours": float((summary or {}).get("hours") or 0),
+                "engineers_count": int((summary or {}).get("engineers_count") or 0),
+            },
+            "engineers": engineers_payload,
+            "focus": focus,
+            "daily_engineers": [dict(row) for row in daily_engineers],
+            "schema_breakdown": [dict(row) for row in schema_breakdown],
+            "dashboard_report": [dict(row) for row in dashboards],
+            "top_objects": [dict(row) for row in top_objects],
+        }
+    except Exception as e:
+        print("❌ /api/admin/engineering-efficiency error:", e)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить страницу эффективности")
+
+
+@router.get("/api/admin/dev-meta/status")
+def get_admin_dev_meta_status(request: Request):
+    _require_dev_meta_role(request)
     return get_dev_meta_status(
         engine=engine,
         base_dir=BASE_DIR,
@@ -284,13 +589,14 @@ def get_admin_dev_meta_status(request: Request):
         airflow_dag_id=AIRFLOW_DEV_DAG_ID,
         lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         dev_database_url=DEV_DATABASE_URL,
+        deploy_host=DEV_META_DEPLOY_HOST,
+        deploy_user=DEV_META_DEPLOY_USER,
+        deploy_base_dir=DEV_META_DEPLOY_BASE_DIR,
     )
 
 @router.get("/api/admin/dev-meta/files")
 def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     if schema_name not in {"dm", "dm_view"}:
         raise HTTPException(status_code=400, detail="schema_name must be dm or dm_view")
     return get_dev_meta_files(
@@ -304,9 +610,7 @@ def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
 
 @router.post("/api/admin/dev-meta/file")
 def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     root = DEV_CLICK_META_DIR if payload.source != "prod" else CLICK_META_DIR
     try:
         return read_dev_meta_file(
@@ -321,9 +625,7 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/generate")
 def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     try:
         result = generate_dev_meta_yaml(
             database_url=DEV_DATABASE_URL or DATABASE_URL,
@@ -332,6 +634,7 @@ def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
             schema_name_click=payload.schema_name_click,
             greenplum_table_name=payload.greenplum_table_name,
             order_by=payload.order_by,
+            dag_tags=payload.dag_tags,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -340,9 +643,7 @@ def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/lock")
 def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         return acquire_dev_meta_lock(
             engine=engine,
@@ -357,9 +658,7 @@ def lock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
 
 @router.post("/api/admin/dev-meta/unlock")
 def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     release_dev_meta_lock(
         engine=engine,
         schema_name=payload.schema_name,
@@ -371,9 +670,7 @@ def unlock_admin_dev_meta_file(payload: DevMetaLockPayload, request: Request):
 
 @router.post("/api/admin/dev-meta/validate")
 def validate_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    _require_dev_meta_role(request)
     return validate_dev_meta_content(
         content=payload.content,
         schema_name=payload.schema_name,
@@ -383,9 +680,7 @@ def validate_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/save")
 def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         result = save_dev_meta_file(
             engine=engine,
@@ -406,9 +701,7 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/run-dag")
 def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         assert_dev_meta_lock_owner(
             engine=engine,
@@ -433,11 +726,27 @@ def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     return {"status": "ok", "response": data}
 
 
+@router.post("/api/admin/dev-meta/dag-status")
+def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Request):
+    _require_dev_meta_role(request)
+    try:
+        dag_id = payload.dag_id or AIRFLOW_DEV_DAG_ID or Path(payload.file_name).stem
+        data = get_airflow_dev_dag_status(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            dag_id=dag_id,
+            dag_run_id=payload.dag_run_id,
+            auto_unpaused=payload.auto_unpaused,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
 @router.post("/api/admin/dev-meta/deploy")
 def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
-    user = get_current_user_from_request(request)
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
+    user = _require_dev_meta_role(request)
     try:
         result = deploy_dev_meta_file(
             engine=engine,
@@ -908,11 +1217,10 @@ def _build_logic_object(meta_path: Path) -> Optional[dict]:
     if not schema or not table:
         return None
 
-    sql_candidates = [
-        meta_path.parent / "sql_query_insert_init.sql",
-        meta_path.parent / "sql_query_recreate_init.sql",
-    ]
-    sql_path = next((p for p in sql_candidates if p.exists()), None)
+    sql_path = (
+        _resolve_sql_path_from_meta(meta_path, meta, "sql_query_insert_init", "sql_query_insert_init.sql")
+        or _resolve_sql_path_from_meta(meta_path, meta, "sql_query_recreate_init", "sql_query_recreate_init.sql")
+    )
     sql_text = sql_path.read_text("utf-8", errors="ignore") if sql_path else ""
     normalized_sql = _normalize_sql(sql_text)
     if not normalized_sql:
@@ -2916,7 +3224,7 @@ def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
                 JOIN {TABLE_ENTITIES_META} e
                   ON e.entity_id = t.entity_id
                 WHERE l.rn = 1
-                  AND (e.flag_active OR COALESCE(e.on_new_fraemwork, FALSE))
+                  AND (e.flag_active OR COALESCE(e.on_new_framework, FALSE))
                 GROUP BY t.entity_id, e.entity_name, l.load_day
             ),
             ranked AS (
@@ -3029,30 +3337,36 @@ def get_metrics():
 
 
 @router.get("/api/table-history/{schema}/{table:path}")
-def get_table_history(schema: str, table: str, limit: int = Query(10, ge=1, le=50)):
+def get_table_history(
+    schema: str,
+    table: str,
+    table_id: Optional[int] = None,
+    limit: int = Query(10, ge=1, le=50),
+):
     schema_norm, table_norm = _normalize_table_param(schema, table)
     table_clean = _clean_table_name(table_norm)
-    table_id = None
 
     try:
         with engine.connect() as conn:
-            table_id = conn.execute(
-                text(
-                    f"""
-                    SELECT table_id
-                    FROM {TABLE_TABLES_META}
-                    WHERE lower(table_schema) = :schema
-                      AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
-                    LIMIT 1
-                    """
-                ),
-                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
-            ).scalar()
+            resolved_table_id = table_id
+            if not resolved_table_id:
+                resolved_table_id = conn.execute(
+                    text(
+                        f"""
+                        SELECT table_id
+                        FROM {TABLE_TABLES_META}
+                        WHERE lower(table_schema) = :schema
+                          AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
+                        LIMIT 1
+                        """
+                    ),
+                    {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
+                ).scalar()
 
             params = {"limit": limit}
-            if table_id:
+            if resolved_table_id:
                 where_clause = "object_id = :table_id"
-                params["table_id"] = table_id
+                params["table_id"] = resolved_table_id
             else:
                 where_clause = """
                     lower(object_name) = :table_fqn
@@ -5197,11 +5511,11 @@ def get_dependency_edges(start_table: str, all_meta: dict) -> List[Dict[str, str
     return edges
 
 
-@router.get("/api/dependencies-down/{schema}/{table}")
+@router.get("/api/dependencies-down/{schema}/{table:path}")
 def get_dependencies_down(schema: str, table: str):
-    key = f"{schema}.{table}"
     try:
         all_meta = load_all_meta()
+        key = _resolve_table_key(all_meta, schema, table)
         if key not in all_meta:
             return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -5212,7 +5526,7 @@ def get_dependencies_down(schema: str, table: str):
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dependencies-graph/{schema}/{table}")
+@router.get("/api/dependencies-graph/{schema}/{table:path}")
 def get_dependency_graph(
     schema: str,
     table: str,
@@ -5220,9 +5534,6 @@ def get_dependency_graph(
     max_edges: Optional[int] = Query(None, ge=1),
 ):
     try:
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        key = f"{schema_norm}.{table_norm}"
         now = time.time()
 
         all_meta_list, _ = get_cached_meta_and_index()
@@ -5231,17 +5542,17 @@ def get_dependency_graph(
             globals()["_graph_cache_meta_ts"] = _cache_timestamp
             globals()["_graph_cache_ts"] = now
 
-        cache_key = (key, max_depth, max_edges)
-        if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
-            cached = _graph_cache.get(cache_key)
-            if cached is not None:
-                return cached
-
         all_meta = {
             f"{m.get('table_schema')}.{m.get('table_name')}": m
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        key = _resolve_table_key(all_meta, schema, table)
+        cache_key = (key, max_depth, max_edges)
+        if _graph_cache and now - _graph_cache_ts < _GRAPH_CACHE_TTL:
+            cached = _graph_cache.get(cache_key)
+            if cached is not None:
+                return cached
         reverse_index = {}
         for m in all_meta_list:
             consumer = (m.get("table_schema"), m.get("table_name"))
@@ -5322,7 +5633,7 @@ def get_dependency_graph(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/dependencies-nodes/{schema}/{table}")
+@router.get("/api/dependencies-nodes/{schema}/{table:path}")
 def get_dependency_nodes(
     schema: str,
     table: str,
@@ -5330,16 +5641,13 @@ def get_dependency_nodes(
     max_nodes: Optional[int] = Query(None, ge=1),
 ):
     try:
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        key = f"{schema_norm}.{table_norm}"
-
         all_meta_list, _ = get_cached_meta_and_index()
         all_meta = {
             f"{m.get('table_schema')}.{m.get('table_name')}": m
             for m in all_meta_list
             if m.get("table_schema") and m.get("table_name")
         }
+        key = _resolve_table_key(all_meta, schema, table)
         reverse_index = {}
         for m in all_meta_list:
             consumer = (m.get("table_schema"), m.get("table_name"))
@@ -5406,9 +5714,7 @@ def get_gantt_data(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
         table_nodes = snapshot["table_graph"]["nodes"]
         table_edges = snapshot["table_graph"]["edges"]
 
-        schema_norm = norm(schema)
-        table_norm = norm(table)
-        start_table = f"{schema_norm}.{table_norm}"
+        start_table = _resolve_table_key(table_nodes, schema, table)
         if start_table not in table_nodes:
             return JSONResponse(status_code=404, content={"error": f"'{start_table}' not found in meta"})
 
@@ -6019,7 +6325,7 @@ def get_clickhouse_summary(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/table/{schema}/{table}")
+@router.get("/api/click/table/{schema}/{table:path}")
 def get_clickhouse_table_runs(
     schema: str,
     table: str,
@@ -6029,13 +6335,14 @@ def get_clickhouse_table_runs(
     try:
         schema_norm = (schema or "").strip()
         table_norm = (table or "").strip()
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     _clickhouse_run_agg_cte(
                         run_filter_sql="AND r.schema_name = :schema",
                         stage_filter_sql="""
-                          AND s.table_name = :table
+                          AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))
                           AND (:table_id IS NULL OR s.table_id = :table_id)
                         """,
                     )
@@ -6046,7 +6353,7 @@ def get_clickhouse_table_runs(
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "table_id": table_id, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "table_id": table_id, "limit": limit},
             ).mappings().all()
 
             runs = [
@@ -6066,7 +6373,6 @@ def get_clickhouse_table_runs(
             stages = []
             if runs:
                 run_uuid = runs[0].get("run_uuid")
-                run_table_name = table_norm
                 stages_rows = conn.execute(
                     text(
                         f"""
@@ -6081,12 +6387,12 @@ def get_clickhouse_table_runs(
                             error_text
                         FROM {TABLE_CLICK_LOAD_STAGE}
                         WHERE run_uuid = :run_uuid
-                          AND table_name = :table_name
+                          AND (lower(table_name) = lower(:table_name) OR lower(table_name) = lower(:table_name_clean))
                           AND stage_name IN ('UPLOAD_TO_S3', 'CLICKHOUSE_LOAD')
                         ORDER BY start_dttm
                         """
                     ),
-                    {"run_uuid": run_uuid, "table_name": run_table_name},
+                    {"run_uuid": run_uuid, "table_name": table_norm, "table_name_clean": table_clean},
                 ).mappings().all()
                 stages = [
                     {
@@ -6109,16 +6415,21 @@ def get_clickhouse_table_runs(
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/meta/{schema}/{table}")
+@router.get("/api/click/meta/{schema}/{table:path}")
 def get_clickhouse_meta(schema: str, table: str):
     try:
         schema_norm = (schema or "").strip().lower()
         table_norm = (table or "").strip().lower()
+        table_clean = _clean_table_name(table_norm)
         idx = get_click_meta_index()
-        meta = idx["meta"].get((schema_norm, table_norm))
-        view_sql = idx["view_sql"].get((schema_norm, table_norm))
+        meta = idx["meta"].get((schema_norm, table_norm)) or idx["meta"].get((schema_norm, table_clean))
+        view_sql = idx["view_sql"].get((schema_norm, table_norm)) or idx["view_sql"].get((schema_norm, table_clean))
         if not meta and not view_sql:
-            return JSONResponse(status_code=404, content={"error": "not found"})
+            return {
+                "meta": None,
+                "view_sql": None,
+                "meta_root": idx.get("root"),
+            }
         return {
             "meta": meta,
             "view_sql": view_sql,
@@ -6161,17 +6472,26 @@ def search_clickhouse_view(schema: str, table: str, limit: int = Query(10, ge=1,
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 
-@router.get("/api/click/history/{schema}/{table}")
-def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1, le=200)):
+@router.get("/api/click/history/{schema}/{table:path}")
+def get_clickhouse_history(
+    schema: str,
+    table: str,
+    table_id: Optional[int] = None,
+    limit: int = Query(20, ge=1, le=200),
+):
     try:
         schema_norm = (schema or "").strip()
         table_norm = (table or "").strip()
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
                     _clickhouse_run_agg_cte(
                         run_filter_sql="AND r.schema_name = :schema",
-                        stage_filter_sql="AND s.table_name = :table",
+                        stage_filter_sql="""
+                          AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))
+                          AND (:table_id IS NULL OR s.table_id = :table_id)
+                        """,
                     )
                     + """
                     SELECT *
@@ -6180,7 +6500,7 @@ def get_clickhouse_history(schema: str, table: str, limit: int = Query(20, ge=1,
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema_norm, "table": table_norm, "limit": limit},
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "table_id": table_id, "limit": limit},
             ).mappings().all()
 
         history = [
@@ -6642,7 +6962,7 @@ def get_release_details(release_id: str, limit: int = Query(500, ge=1, le=2000))
         raise HTTPException(status_code=500, detail="Не удалось получить детали релиза")
 
 
-@router.get("/api/releases/table/{schema}/{table}")
+@router.get("/api/releases/table/{schema}/{table:path}")
 def get_table_releases(
     schema: str,
     table: str,
@@ -6650,6 +6970,7 @@ def get_table_releases(
     limit: int = Query(30, ge=1, le=200),
 ):
     try:
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             rows = conn.execute(
                 text(
@@ -6697,13 +7018,13 @@ def get_table_releases(
                     LEFT JOIN issue_snapshot snap ON snap.issue_id = o.task_id
                     LEFT JOIN issue_executor exec ON exec.issue_id = o.task_id
                     WHERE o.schema_name = :schema
-                      AND o.table_name = :table
+                      AND (lower(o.table_name) = lower(:table) OR lower(o.table_name) = lower(:table_clean))
                       AND (:target_system IS NULL OR lower(o.target_system) = lower(:target_system))
                     ORDER BY o.created_at DESC
                     LIMIT :limit
                     """
                 ),
-                {"schema": schema, "table": table, "target_system": target_system, "limit": limit},
+                {"schema": schema, "table": table, "table_clean": table_clean, "target_system": target_system, "limit": limit},
             ).fetchall()
             payload = []
             for row in rows:
@@ -6717,9 +7038,10 @@ def get_table_releases(
         raise HTTPException(status_code=500, detail="Не удалось получить релизы по объекту")
 
 
-@router.get("/api/ytrek/table/{schema}/{table}")
+@router.get("/api/ytrek/table/{schema}/{table:path}")
 def get_ytrek_table_info(schema: str, table: str):
     try:
+        table_clean = _clean_table_name(norm(table))
         with engine.connect() as conn:
             task_rows = conn.execute(
                 text(
@@ -6727,11 +7049,11 @@ def get_ytrek_table_info(schema: str, table: str):
                     SELECT DISTINCT task_id
                     FROM {TABLE_RELEASE_OBJECTS}
                     WHERE schema_name = :schema
-                      AND table_name = :table
+                      AND (lower(table_name) = lower(:table) OR lower(table_name) = lower(:table_clean))
                       AND task_id IS NOT NULL
                     """
                 ),
-                {"schema": schema, "table": table},
+                {"schema": schema, "table": table, "table_clean": table_clean},
             ).fetchall()
             task_ids = [r[0] for r in task_rows if r[0]]
             if not task_ids:
@@ -7280,7 +7602,7 @@ def get_analytics_dashboard(
                     LEFT JOIN exec ON exec.issue_id = snap.issue_id
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY executor
+                    GROUP BY COALESCE(exec.executor, snap.assignee, snap.created_by, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -7298,7 +7620,7 @@ def get_analytics_dashboard(
                     FROM snap
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY creator
+                    GROUP BY COALESCE(snap.created_by, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -7317,7 +7639,7 @@ def get_analytics_dashboard(
                     LEFT JOIN direction ON direction.issue_id = snap.issue_id
                     LEFT JOIN work ON work.issue_id = snap.issue_id
                     LEFT JOIN ro ON ro.task_id = snap.issue_id
-                    GROUP BY direction
+                    GROUP BY COALESCE(direction.direction, 'Не указан')
                     ORDER BY minutes DESC NULLS LAST
                     """
                 ),
@@ -7462,11 +7784,11 @@ def get_analytics_release(release_id: str):
         raise HTTPException(status_code=500, detail="Не удалось получить релиз")
 
 
-@router.get("/api/analytics/table/{schema}/{table}")
+@router.get("/api/analytics/table/{schema}/{table:path}")
 def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le=3650)):
     try:
         date_clause, params = _resolve_date_window(None, None, days)
-        params.update({"schema": schema, "table": table})
+        params.update({"schema": schema, "table": table, "table_clean": _clean_table_name(norm(table))})
         with engine.connect() as conn:
             base = f"""
                 WITH rel AS (
@@ -7478,7 +7800,8 @@ def get_analytics_table(schema: str, table: str, days: int = Query(365, ge=1, le
                     SELECT ro.*
                     FROM {TABLE_RELEASE_OBJECTS} ro
                     JOIN rel r ON r.release_id = ro.release_id
-                    WHERE ro.schema_name = :schema AND ro.table_name = :table
+                    WHERE ro.schema_name = :schema
+                      AND (lower(ro.table_name) = lower(:table) OR lower(ro.table_name) = lower(:table_clean))
                 ),
                 tasks AS (
                     SELECT DISTINCT task_id FROM ro WHERE task_id IS NOT NULL

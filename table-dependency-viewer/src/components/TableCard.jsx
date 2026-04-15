@@ -10,6 +10,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 export default function TableCard({
   schema,
   tableName,
+  source = "current",
   onBack,
   onNavigateTable,
   onOpenImpact,
@@ -86,8 +87,12 @@ export default function TableCard({
 
     setLoadingMeta(true);
     setError(null);
-
-    fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
+    const params = new URLSearchParams();
+    if (source && source !== "current") {
+      params.set("source", source);
+    }
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}${suffix}`)
       .then((res) => {
         if (!res.ok) throw new Error("Не удалось загрузить карточку таблицы");
         return res.json();
@@ -95,7 +100,7 @@ export default function TableCard({
       .then(setMeta)
       .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoadingMeta(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, source]);
 
   useEffect(() => {
     if (!meta?.table_id) return;
@@ -405,6 +410,19 @@ export default function TableCard({
   }, [meta]);
 
   const clickLastRun = clickRuns[0] || null;
+  const dbtManifest = meta?.dbt_manifest || null;
+  const dbtMetadata = dbtManifest?.metadata || null;
+  const dbtArtifactPaths = dbtManifest
+    ? [
+        ["Manifest", dbtManifest.manifest_path],
+        ["Model file", dbtManifest.original_file_path || dbtManifest.path],
+        ["Patch", dbtManifest.patch_path],
+        ["Build", dbtManifest.build_path],
+        ["Compiled", dbtManifest.compiled_path],
+      ].filter(([, value]) => value)
+    : [];
+  const dbtConfigEntries = dbtManifest?.config ? Object.entries(dbtManifest.config).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
+  const dbtMetaEntries = dbtManifest?.meta ? Object.entries(dbtManifest.meta).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
   const clickStatusLabel = (status) => {
     switch (status) {
       case "SUCCESS":
@@ -480,7 +498,11 @@ export default function TableCard({
     setGraphNodes([]);
     setGraphLayout({});
 
-    fetch(`${API_BASE}/api/graph/table/${schema}/${tableName}?depth=3`)
+    const params = new URLSearchParams({ depth: "3" });
+    if (source && source !== "current") {
+      params.set("source", source);
+    }
+    fetch(`${API_BASE}/api/graph/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
@@ -521,7 +543,7 @@ export default function TableCard({
       autoGraphRef.current.fired = true;
       loadDependencies();
     }
-  }, [schema, tableName, autoShowGraph]);
+  }, [schema, tableName, autoShowGraph, source]);
 
   const tableList = useMemo(() => {
     return graphNodes.map((n) => n.id).filter(Boolean).sort();
@@ -544,6 +566,14 @@ export default function TableCard({
     setGraphTruncated(false);
     if (onNavigateTable) {
       onNavigateTable(newSchema, newTable);
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDbtUpstreamOpen = (item) => {
+    if (!item?.schema || !item?.table_name) return;
+    if (onNavigateTable) {
+      onNavigateTable(item.schema, item.table_name);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -584,6 +614,7 @@ export default function TableCard({
           <div className="table-head-meta">
             <span>{meta.entity_name || "—"}</span>
             <span>ID {meta.table_id ?? "—"}</span>
+            <span>Источник {source === "current" ? "current" : source}</span>
           </div>
         </div>
         <div className="table-status-wrap">
@@ -1228,6 +1259,282 @@ export default function TableCard({
           })}
         </div>
       </div>
+
+      {dbtManifest && (
+        <div className="table-section">
+          <div className="section-title">OHD / dbt Manifest</div>
+          <div className="card">
+            <div className="click-meta-grid">
+              <div>
+                <div className="click-label">Источник</div>
+                <div className="click-value">{dbtManifest.source || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Модель</div>
+                <div className="click-value mono">{dbtManifest.model_name || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Таблица</div>
+                <div className="click-value mono">{dbtManifest.schema}.{dbtManifest.table_name}</div>
+              </div>
+              <div>
+                <div className="click-label">Materialized</div>
+                <div className="click-value">{dbtManifest.materialized || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Package</div>
+                <div className="click-value">{dbtManifest.package_name || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Resource type</div>
+                <div className="click-value">{dbtManifest.resource_type || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Access</div>
+                <div className="click-value">{dbtManifest.access || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Database</div>
+                <div className="click-value">{dbtManifest.database || "—"}</div>
+              </div>
+              <div>
+                <div className="click-label">Колонки</div>
+                <div className="click-value">{dbtManifest.columns?.length ?? 0}</div>
+              </div>
+              <div>
+                <div className="click-label">Upstream refs</div>
+                <div className="click-value">{dbtManifest.upstream_models?.length ?? 0}</div>
+              </div>
+              <div>
+                <div className="click-label">Refs</div>
+                <div className="click-value">{dbtManifest.refs?.length ?? 0}</div>
+              </div>
+              <div>
+                <div className="click-label">Sources</div>
+                <div className="click-value">{dbtManifest.sources?.length ?? 0}</div>
+              </div>
+              <div>
+                <div className="click-label">Metrics</div>
+                <div className="click-value">{dbtManifest.metrics?.length ?? 0}</div>
+              </div>
+              <div>
+                <div className="click-label">Unique ID</div>
+                <div className="click-value mono">{dbtManifest.unique_id || "—"}</div>
+              </div>
+            </div>
+
+            {dbtManifest.description ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Описание</div>
+                <div>{dbtManifest.description}</div>
+              </div>
+            ) : null}
+
+            {Array.isArray(dbtManifest.tags) && dbtManifest.tags.length > 0 ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Теги</div>
+                <div className="table-key-list">
+                  {dbtManifest.tags.map((tag) => (
+                    <span key={tag} className="table-key-pill mono">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="dbt-manifest-block">
+              <div className="section-subtitle">Артефакты и пути</div>
+              <div className="dbt-manifest-paths">
+                {dbtArtifactPaths.map(([label, value]) => (
+                  <div key={label}>
+                    <div className="click-label">{label}</div>
+                    <div className="mono">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="dbt-manifest-block">
+              <div className="section-subtitle">Идентификация модели</div>
+              <div className="dbt-manifest-paths">
+                <div>
+                  <div className="click-label">Relation name</div>
+                  <div className="mono">{dbtManifest.relation_name || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Language</div>
+                  <div>{dbtManifest.language || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Checksum</div>
+                  <div className="mono">{dbtManifest.checksum || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Created at</div>
+                  <div>{dbtManifest.created_at || "—"}</div>
+                </div>
+              </div>
+            </div>
+
+            {dbtMetadata ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Manifest metadata</div>
+                <div className="dbt-manifest-paths">
+                  <div>
+                    <div className="click-label">dbt version</div>
+                    <div>{dbtMetadata.dbt_version || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="click-label">Generated at</div>
+                    <div>{dbtMetadata.generated_at || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="click-label">Adapter</div>
+                    <div>{dbtMetadata.adapter_type || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="click-label">Project ID</div>
+                    <div className="mono">{dbtMetadata.project_id || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="click-label">User ID</div>
+                    <div className="mono">{dbtMetadata.user_id || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="click-label">Invocation ID</div>
+                    <div className="mono">{dbtMetadata.invocation_id || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="dbt-manifest-block">
+              <div className="section-subtitle">Upstream зависимости</div>
+              {dbtManifest.upstream_models?.length ? (
+                <div className="dbt-manifest-list">
+                  {dbtManifest.upstream_models.map((item) => {
+                    const label = item.schema && item.table_name ? `${item.schema}.${item.table_name}` : item.unique_id;
+                    return (
+                      <button
+                        key={item.unique_id}
+                        className="dbt-manifest-item"
+                        onClick={() => handleDbtUpstreamOpen(item)}
+                        disabled={!item.schema || !item.table_name}
+                      >
+                        <span className="mono">{label}</span>
+                        <span className="muted">{item.schema && item.table_name ? "Открыть таблицу" : "Только unique_id"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="muted">Upstream зависимости не найдены.</div>
+              )}
+            </div>
+
+            {dbtManifest.refs?.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Refs</div>
+                <div className="dbt-manifest-list">
+                  {dbtManifest.refs.map((item, idx) => (
+                    <div key={`${item.name || "ref"}-${idx}`} className="dbt-manifest-item static">
+                      <span className="mono">{item.name || "—"}</span>
+                      <span className="muted">
+                        {[item.package, item.version].filter(Boolean).join(" · ") || "Локальный ref"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {dbtManifest.sources?.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Sources</div>
+                <div className="dbt-manifest-list">
+                  {dbtManifest.sources.map((item, idx) => (
+                    <div key={`source-${idx}`} className="dbt-manifest-item static">
+                      <span className="mono">{typeof item === "string" ? item : JSON.stringify(item)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {dbtManifest.metrics?.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Metrics</div>
+                <div className="dbt-manifest-list">
+                  {dbtManifest.metrics.map((item, idx) => (
+                    <div key={`metric-${idx}`} className="dbt-manifest-item static">
+                      <span className="mono">{typeof item === "string" ? item : JSON.stringify(item)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {dbtManifest.columns?.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Колонки</div>
+                <div className="dbt-manifest-list">
+                  {dbtManifest.columns.map((column) => (
+                    <div key={column.name} className="dbt-manifest-item static">
+                      <span className="mono">
+                        {column.name}
+                        {column.data_type ? <span className="muted"> · {column.data_type}</span> : null}
+                      </span>
+                      <span className="muted">{column.description || "Без описания"}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {dbtConfigEntries.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Config</div>
+                <div className="dbt-manifest-list">
+                  {dbtConfigEntries.map(([key, value]) => (
+                    <div key={key} className="dbt-manifest-item static">
+                      <span className="mono">{key}</span>
+                      <span className="muted mono">{typeof value === "string" ? value : JSON.stringify(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {dbtMetaEntries.length ? (
+              <div className="dbt-manifest-block">
+                <div className="section-subtitle">Meta</div>
+                <div className="dbt-manifest-list">
+                  {dbtMetaEntries.map(([key, value]) => (
+                    <div key={key} className="dbt-manifest-item static">
+                      <span className="mono">{key}</span>
+                      <span className="muted mono">{typeof value === "string" ? value : JSON.stringify(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="dbt-manifest-block">
+              <div className="section-subtitle">SQL модели</div>
+              <div className="table-sql-actions">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => openSqlModal({ title: `dbt model: ${dbtManifest.table_name}`, sql: dbtManifest.raw_code })}
+                  disabled={!dbtManifest.raw_code}
+                >
+                  Открыть raw_code
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="table-section">
         <div className="section-title">Последние запуски</div>

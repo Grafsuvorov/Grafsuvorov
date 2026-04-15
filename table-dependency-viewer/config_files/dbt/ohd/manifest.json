@@ -1,0 +1,209 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v9.json",
+    "dbt_version": "1.5.11",
+    "generated_at": "2026-04-10T12:56:02.662211Z",
+    "adapter_type": "greenplum"
+  },
+  "nodes": {
+    "model.dbt_greenplum_elt.dict_stg_s_tr2_t001w": {
+      "database": "dwh",
+      "schema": "dict_stg",
+      "name": "dict_stg_s_tr2_t001w",
+      "resource_type": "model",
+      "alias": "tr2_t001w",
+      "original_file_path": "models/dict_stg/dict_stg_s_tr2_t001w.sql",
+      "path": "dict_stg/dict_stg_s_tr2_t001w.sql",
+      "description": "Staging-слой заводов SAP TR2",
+      "tags": ["dict_stg", "tr2"],
+      "columns": {
+        "WERKS": {
+          "name": "WERKS",
+          "description": "Завод"
+        },
+        "NAME1": {
+          "name": "NAME1",
+          "description": "Краткое имя завода"
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      },
+      "relation_name": "\"dwh\".\"dict_stg\".\"tr2_t001w\"",
+      "raw_code": "select * from raw.tr2_t001w",
+      "config": {
+        "materialized": "table",
+        "tags": ["dict_stg", "tr2"]
+      }
+    },
+    "model.dbt_greenplum_elt.dict_stg_s_tr2_t001k": {
+      "database": "dwh",
+      "schema": "dict_stg",
+      "name": "dict_stg_s_tr2_t001k",
+      "resource_type": "model",
+      "alias": "tr2_t001k",
+      "original_file_path": "models/dict_stg/dict_stg_s_tr2_t001k.sql",
+      "path": "dict_stg/dict_stg_s_tr2_t001k.sql",
+      "description": "Staging-слой областей оценки SAP TR2",
+      "tags": ["dict_stg", "tr2"],
+      "columns": {
+        "BWKEY": {
+          "name": "BWKEY",
+          "description": "Область оценки"
+        },
+        "BUKRS": {
+          "name": "BUKRS",
+          "description": "Балансовая единица"
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      },
+      "relation_name": "\"dwh\".\"dict_stg\".\"tr2_t001k\"",
+      "raw_code": "select * from raw.tr2_t001k",
+      "config": {
+        "materialized": "table",
+        "tags": ["dict_stg", "tr2"]
+      }
+    },
+    "model.dbt_greenplum_elt.dict_ods_s_tr2_t093b": {
+      "database": "dwh",
+      "schema": "dict_ods",
+      "name": "dict_ods_s_tr2_t093b",
+      "resource_type": "model",
+      "alias": "tr2_t093b",
+      "original_file_path": "models/dict_ods/dict_ods_s_tr2_t093b.sql",
+      "path": "dict_ods/dict_ods_s_tr2_t093b.sql",
+      "description": "ODS-слой областей оценки и валют",
+      "tags": ["dict_ods", "tr2"],
+      "columns": {
+        "bukrs": {
+          "name": "bukrs",
+          "description": "Балансовая единица"
+        },
+        "afabe": {
+          "name": "afabe",
+          "description": "Область оценки"
+        }
+      },
+      "depends_on": {
+        "nodes": []
+      },
+      "relation_name": "\"dwh\".\"dict_ods\".\"tr2_t093b\"",
+      "raw_code": "select * from ods.tr2_t093b",
+      "config": {
+        "materialized": "table",
+        "tags": ["dict_ods", "tr2"]
+      }
+    },
+    "model.dbt_greenplum_elt.dict_dds_s_plant_and_subsidiary": {
+      "database": "dwh",
+      "schema": "dict_dds",
+      "name": "dict_dds_s_plant_and_subsidiary",
+      "resource_type": "model",
+      "alias": "plant_and_subsidiary",
+      "original_file_path": "models/dict_dds/dict_dds_s_plant_and_subsidiary.sql",
+      "path": "dict_dds/dict_dds_s_plant_and_subsidiary.sql",
+      "description": "Заводы/филиалы",
+      "tags": ["dict_dds", "tr2"],
+      "columns": {
+        "unit_balance_code": {
+          "name": "unit_balance_code",
+          "description": "Балансовая единица (код)"
+        },
+        "plant_code": {
+          "name": "plant_code",
+          "description": "Завод (код)"
+        },
+        "plant_short_name": {
+          "name": "plant_short_name",
+          "description": "Завод, короткое наименование"
+        }
+      },
+      "depends_on": {
+        "nodes": [
+          "model.dbt_greenplum_elt.dict_stg_s_tr2_t001w",
+          "model.dbt_greenplum_elt.dict_stg_s_tr2_t001k"
+        ]
+      },
+      "relation_name": "\"dwh\".\"dict_dds\".\"plant_and_subsidiary\"",
+      "raw_code": "SELECT t2.\"BUKRS\" as unit_balance_code, o.\"WERKS\" as plant_code, o.\"NAME1\" as plant_short_name FROM {{ ref('dict_stg_s_tr2_t001w') }} o LEFT JOIN {{ ref('dict_stg_s_tr2_t001k') }} t2 ON o.\"BWKEY\" = t2.\"BWKEY\"",
+      "config": {
+        "materialized": "default_incremental",
+        "tags": ["dict_dds", "tr2"]
+      }
+    },
+    "model.dbt_greenplum_elt.dict_dds_s_unit_balance_valuation_area": {
+      "database": "dwh",
+      "schema": "dict_dds",
+      "name": "dict_dds_s_unit_balance_valuation_area",
+      "resource_type": "model",
+      "alias": "unit_balance_valuation_area",
+      "original_file_path": "models/dict_dds/dict_dds_s_unit_balance_valuation_area.sql",
+      "path": "dict_dds/dict_dds_s_unit_balance_valuation_area.sql",
+      "description": "Данные областей оценки на уровне БЕ",
+      "tags": ["dict_dds", "tr2"],
+      "columns": {
+        "unit_balance_code": {
+          "name": "unit_balance_code",
+          "description": "Балансовая единица (код)"
+        },
+        "valuation_area_code": {
+          "name": "valuation_area_code",
+          "description": "Реальная область оценки (код)"
+        },
+        "valuation_area_currency_code": {
+          "name": "valuation_area_currency_code",
+          "description": "Валюта (код)"
+        }
+      },
+      "depends_on": {
+        "nodes": [
+          "model.dbt_greenplum_elt.dict_ods_s_tr2_t093b"
+        ]
+      },
+      "relation_name": "\"dwh\".\"dict_dds\".\"unit_balance_valuation_area\"",
+      "raw_code": "SELECT t093b.bukrs as unit_balance_code, t093b.afabe as valuation_area_code, t093b.waers as valuation_area_currency_code FROM {{ ref('dict_ods_s_tr2_t093b') }} t093b",
+      "config": {
+        "materialized": "default_incremental",
+        "tags": ["dict_dds", "tr2"]
+      }
+    },
+    "model.dbt_greenplum_elt.dict_dds_s_counterparty": {
+      "database": "dwh",
+      "schema": "dict_dds",
+      "name": "dict_dds_s_counterparty",
+      "resource_type": "model",
+      "alias": "counterparty",
+      "original_file_path": "models/dict_dds/dict_dds_s_counterparty.sql",
+      "path": "dict_dds/dict_dds_s_counterparty.sql",
+      "description": "Контрагенты",
+      "tags": ["dict_dds", "tr2"],
+      "columns": {
+        "counterparty_code": {
+          "name": "counterparty_code",
+          "description": "Код контрагента"
+        },
+        "counterparty_short_name": {
+          "name": "counterparty_short_name",
+          "description": "Краткое имя контрагента"
+        },
+        "counterparty_full_name": {
+          "name": "counterparty_full_name",
+          "description": "Полное имя контрагента"
+        }
+      },
+      "depends_on": {
+        "nodes": [
+          "model.dbt_greenplum_elt.dict_stg_s_tr2_t001w"
+        ]
+      },
+      "relation_name": "\"dwh\".\"dict_dds\".\"counterparty\"",
+      "raw_code": "select '1000'::varchar as counterparty_code, 'Тестовый контрагент'::varchar as counterparty_short_name, 'Тестовый контрагент полный'::varchar as counterparty_full_name",
+      "config": {
+        "materialized": "default_incremental",
+        "tags": ["dict_dds", "tr2"]
+      }
+    }
+  }
+}

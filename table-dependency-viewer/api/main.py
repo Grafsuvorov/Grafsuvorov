@@ -52,6 +52,7 @@ from .config import (
     TABLE_CLICK_LOAD_STAGE,
     CLICK_META_DIR,
     DEV_CLICK_META_DIR,
+    DBT_MANIFEST_DIR,
     ADMIN_CICD_SCRIPT,
     YTRACK_ISSUE_URL,
     DATABASE_URL,
@@ -85,6 +86,12 @@ from .services.dev_meta import (
     save_dev_meta_file,
     trigger_airflow_dev_dag,
     validate_dev_meta_content,
+)
+from .services.dbt_manifest import (
+    build_dbt_fallback_card,
+    get_dbt_graph_snapshot,
+    get_dbt_manifest_model,
+    get_dbt_table_catalog,
 )
 
 
@@ -852,6 +859,42 @@ def _calc_logic_similarity(left: dict, right: dict) -> float:
         "expr_exact_sim": round(expr_exact_sim, 4),
         "expr_token_sim": round(expr_token_sim, 4),
     }
+
+
+def _resolve_sql_path_from_meta(meta_path: Path, meta: dict, field_name: str, fallback_file_name: str) -> Optional[Path]:
+    raw_path = str(meta.get(field_name) or "").strip()
+    candidates = []
+    if raw_path:
+        raw = Path(raw_path)
+        candidates.append(raw)
+        candidates.append(meta_path.parent / raw_path)
+        candidates.append(BASE_DIR / raw_path)
+        candidates.append(BASE_DIR.parent / raw_path)
+    candidates.append(meta_path.parent / fallback_file_name)
+
+    seen = set()
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve(strict=False)
+        except Exception:
+            resolved = candidate
+        key = str(resolved)
+        if key in seen:
+            continue
+        seen.add(key)
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def _read_sql_from_meta(meta_path: Path, meta: dict, field_name: str, fallback_file_name: str) -> str:
+    sql_path = _resolve_sql_path_from_meta(meta_path, meta, field_name, fallback_file_name)
+    if not sql_path:
+        return f"-- {fallback_file_name} not found"
+    try:
+        return sql_path.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"-- failed to read {sql_path}: {exc}"
 
 
 def _build_logic_object(meta_path: Path) -> Optional[dict]:
@@ -1683,6 +1726,13 @@ def get_graph_snapshot():
     return snapshot
 
 
+def _get_table_graph_context(source: str = "current") -> dict:
+    source_name = (source or "current").strip().lower()
+    if source_name and source_name != "current":
+        return get_dbt_graph_snapshot(BASE_DIR, DBT_MANIFEST_DIR, source=source_name)
+    return get_graph_snapshot()
+
+
 def _cap_graph(nodes: dict, edges: list, layout: dict, max_nodes: int, max_edges: int, sort_key: str = None):
     node_list = list(nodes.values())
     if sort_key:
@@ -1917,6 +1967,22 @@ def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
     if not table_norm:
         return table_norm
     return table_norm.replace("/", "").replace("-", "").replace(" ", "")
+
+
+def _resolve_table_key(mapping: dict, schema: str, table: str) -> Optional[str]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    direct = f"{schema_norm}.{table_norm}"
+    if direct in mapping:
+        return direct
+    with_leading_slash = f"{schema_norm}./{table_norm}" if table_norm and not table_norm.startswith("/") else None
+    if with_leading_slash and with_leading_slash in mapping:
+        return with_leading_slash
+    table_clean = _clean_table_name(table_norm)
+    cleaned = f"{schema_norm}.{table_clean}" if table_clean else None
+    if cleaned and cleaned in mapping:
+        return cleaned
+    return direct
 
 @app.on_event("startup")
 def warm_up_cache():
@@ -3446,13 +3512,29 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
 
 
 @router.get("/api/card/{schema}/{table:path}")
-def get_table_card_info_by_path(schema: str, table: str):
+def get_table_card_info_by_path(schema: str, table: str, source: str = Query("current")):
+    source_name = (source or "current").strip().lower()
+    if source_name != "current":
+        dbt_card = build_dbt_fallback_card(
+            base_dir=BASE_DIR,
+            manifest_dir=DBT_MANIFEST_DIR,
+            schema_name=schema,
+            table_name=table,
+            source=source_name,
+        )
+        if dbt_card:
+            return JSONResponse(content=dbt_card, media_type="application/json; charset=utf-8")
+        return JSONResponse(status_code=404, content={"error": "Table not found in dbt manifest"})
+
+    table_clean = _clean_table_name(norm(table))
     for entity_folder in iter_meta_dirs():
         schema_folder = find_path_case_insensitive(entity_folder, schema)
         if not schema_folder:
             continue
 
         table_folder = find_path_case_insensitive(schema_folder, table)
+        if not table_folder and table_clean:
+            table_folder = find_path_case_insensitive(schema_folder, table_clean)
         if not table_folder:
             continue
 
@@ -3466,13 +3548,24 @@ def get_table_card_info_by_path(schema: str, table: str):
         except Exception as e:
             return JSONResponse(status_code=500, content={"error": str(e)})
 
-        def read_sql_file(filename: str) -> str:
-            file_path = table_folder / filename
-            return file_path.read_text(encoding="utf-8") if file_path.exists() else f"-- {filename} not found"
-
-        meta["sql_query_insert_init_sql"] = read_sql_file("sql_query_insert_init.sql")
-        meta["sql_query_recreate_init_sql"] = read_sql_file("sql_query_recreate_init.sql")
-        meta["sql_query_truncate_sql"] = read_sql_file("sql_query_truncate.sql")
+        meta["sql_query_insert_init_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_insert_init",
+            "sql_query_insert_init.sql",
+        )
+        meta["sql_query_recreate_init_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_recreate_init",
+            "sql_query_recreate_init.sql",
+        )
+        meta["sql_query_truncate_sql"] = _read_sql_from_meta(
+            yaml_file,
+            meta,
+            "sql_query_truncate",
+            "sql_query_truncate.sql",
+        )
 
         # метрики
         # метрики
@@ -3557,14 +3650,51 @@ def get_table_card_info_by_path(schema: str, table: str):
         meta["last_success_time"] = last_success_time
         meta["table_size_mb"] = table_size_mb
 
+        dbt_manifest = get_dbt_manifest_model(
+            base_dir=BASE_DIR,
+            manifest_dir=DBT_MANIFEST_DIR,
+            schema_name=schema,
+            table_name=table,
+            source=source_name if source_name != "current" else "ohd",
+        )
+        if dbt_manifest:
+            meta["dbt_manifest"] = dbt_manifest
+
         return JSONResponse(content=meta, media_type="application/json; charset=utf-8")
+
+    dbt_card = build_dbt_fallback_card(
+        base_dir=BASE_DIR,
+        manifest_dir=DBT_MANIFEST_DIR,
+        schema_name=schema,
+        table_name=table,
+        source="ohd",
+    )
+    if dbt_card:
+        return JSONResponse(content=dbt_card, media_type="application/json; charset=utf-8")
 
     print(f"[WARN] Table {schema}.{table} not found in any of TOP_DIRS")
     return JSONResponse(status_code=404, content={"error": "Table not found in any folder"})
 
 
+@router.get("/api/dbt/model/{schema}/{table:path}")
+def get_dbt_model_info(schema: str, table: str, source: str = "ohd"):
+    try:
+        model = get_dbt_manifest_model(
+            base_dir=BASE_DIR,
+            manifest_dir=DBT_MANIFEST_DIR,
+            schema_name=schema,
+            table_name=table,
+            source=source,
+        )
+        if not model:
+            return JSONResponse(status_code=404, content={"error": "dbt model not found"})
+        return JSONResponse(content=model, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @router.get("/api/tables")
-def list_all_tables():
+def list_all_tables(detailed: bool = Query(False)):
     all_meta, _ = get_cached_meta_and_index()
     all_tables = {}
     for meta in all_meta:
@@ -3572,8 +3702,23 @@ def list_all_tables():
         table = meta.get("table_name")
         if schema and table:
             key = f"{schema}.{table}"
-            all_tables.setdefault(key.lower(), key)
-    return JSONResponse(content=sorted(all_tables.values(), key=lambda v: v.lower()))
+            all_tables.setdefault(
+                key.lower(),
+                {
+                    "fqn": key,
+                    "schema": schema,
+                    "table": table,
+                    "label": key,
+                    "source": "current",
+                    "entity_name": meta.get("entity_name"),
+                },
+            )
+    for item in get_dbt_table_catalog(BASE_DIR, DBT_MANIFEST_DIR, source="ohd"):
+        all_tables.setdefault(item["fqn"].lower(), item)
+    rows = sorted(all_tables.values(), key=lambda v: v["fqn"].lower())
+    if detailed:
+        return JSONResponse(content=rows, media_type="application/json; charset=utf-8")
+    return JSONResponse(content=[row["fqn"] for row in rows], media_type="application/json; charset=utf-8")
 
 
 @router.get("/api/graph/overview")
@@ -3737,15 +3882,13 @@ def get_graph_entity(entity_name: str):
     }
 
 
-@router.get("/api/graph/table/{schema}/{table}")
-def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
-    snapshot = get_graph_snapshot()
+@router.get("/api/graph/table/{schema}/{table:path}")
+def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), source: str = Query("current")):
+    snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3846,15 +3989,13 @@ def _traverse_forward(
     return visited, depth_map, truncated
 
 
-@router.get("/api/graph/impact/{schema}/{table}")
-def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
-    snapshot = get_graph_snapshot()
+@router.get("/api/graph/impact/{schema}/{table:path}")
+def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4), source: str = Query("current")):
+    snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3878,21 +4019,20 @@ def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4))
     }
 
 
-@router.get("/api/impact/summary/{schema}/{table}")
+@router.get("/api/impact/summary/{schema}/{table:path}")
 def get_impact_summary(
     schema: str,
     table: str,
     depth: int = Query(3, ge=1, le=5),
     max_nodes: int = Query(800, ge=50, le=5000),
     limit: int = Query(120, ge=0, le=2000),
+    source: str = Query("current"),
 ):
-    snapshot = get_graph_snapshot()
+    snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -3955,20 +4095,19 @@ def get_impact_summary(
     }
 
 
-@router.get("/api/impact/list/{schema}/{table}")
+@router.get("/api/impact/list/{schema}/{table:path}")
 def get_impact_list(
     schema: str,
     table: str,
     depth: int = Query(4, ge=1, le=6),
     max_nodes: int = Query(2500, ge=100, le=10000),
+    source: str = Query("current"),
 ):
-    snapshot = get_graph_snapshot()
+    snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
 
-    schema_norm = norm(schema)
-    table_norm = norm(table)
-    key = f"{schema_norm}.{table_norm}"
+    key = _resolve_table_key(table_nodes, schema, table)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -7630,7 +7769,34 @@ def search_entities(q: str):
                 {"q": like},
             ).mappings().all()
 
-            return {"releases": releases, "tasks": tasks, "tables": tables}
+            table_rows = [
+                {
+                    "schema_name": row.get("schema_name"),
+                    "table_name": row.get("table_name"),
+                    "source": "current",
+                    "label": f"{row.get('schema_name')}.{row.get('table_name')}",
+                }
+                for row in tables
+            ]
+            seen = {(row["schema_name"], row["table_name"], row["source"]) for row in table_rows}
+            term = q.lower()
+            for item in get_dbt_table_catalog(BASE_DIR, DBT_MANIFEST_DIR, source="ohd"):
+                if term in item["fqn"].lower() or term in (item.get("description") or "").lower():
+                    key = (item["schema"], item["table"], item["source"])
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    table_rows.append(
+                        {
+                            "schema_name": item["schema"],
+                            "table_name": item["table"],
+                            "source": item["source"],
+                            "label": item["label"],
+                            "description": item.get("description") or "",
+                        }
+                    )
+
+            return {"releases": releases, "tasks": tasks, "tables": table_rows[:40]}
     except Exception as e:
         print("❌ /api/search error:", e)
         print(traceback.format_exc())

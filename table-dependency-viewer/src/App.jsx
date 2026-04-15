@@ -95,6 +95,35 @@ export default function App() {
     return { schema, table, fqn: `${schema}.${table}` };
   }, []);
 
+  const normalizeTableTarget = useCallback(
+    (value) => {
+      if (!value) return null;
+      if (typeof value === "string") {
+        const parsed = normalizeFqn(value);
+        return parsed ? { ...parsed, source: "current" } : null;
+      }
+      if (typeof value === "object") {
+        if (typeof value.schema === "string" && typeof value.table === "string") {
+          const schema = value.schema.trim();
+          const table = value.table.trim();
+          if (!schema || !table) return null;
+          return {
+            schema,
+            table,
+            fqn: `${schema}.${table}`,
+            source: value.source || "current",
+          };
+        }
+        if (typeof value.table === "string") {
+          const parsed = normalizeFqn(value.table);
+          return parsed ? { ...parsed, source: value.source || "current" } : null;
+        }
+      }
+      return null;
+    },
+    [normalizeFqn]
+  );
+
   const openView = useCallback(
     (target) => {
       if (!target) {
@@ -166,7 +195,7 @@ export default function App() {
           return;
         }
         if (target.view === "table_info") {
-          const parsed = normalizeFqn(target.table);
+          const parsed = normalizeTableTarget(target.table || target);
           if (parsed) {
             sendAuditEvent({
               event_type: "open_table",
@@ -174,14 +203,15 @@ export default function App() {
               object_type: "table",
               object_name: parsed.fqn,
             });
-            navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}`, {
+            const suffix = parsed.source && parsed.source !== "current" ? `?source=${encodeURIComponent(parsed.source)}` : "";
+            navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}${suffix}`, {
               state: { from: location.pathname + location.search },
             });
           }
           return;
         }
         if (target.view === "dependency_graph") {
-          const parsed = normalizeFqn(target.table);
+          const parsed = normalizeTableTarget(target.table || target);
           if (parsed) {
             sendAuditEvent({
               event_type: "open_dependency_graph",
@@ -227,16 +257,30 @@ export default function App() {
         if (parsed) {
           navigate(`/dependencies?table=${encodeURIComponent(parsed.fqn)}`);
         }
+        return;
+      }
+
+      if (typeof target === "object") {
+        const parsed = normalizeTableTarget(target);
+        if (parsed) {
+          const suffix = parsed.source && parsed.source !== "current" ? `?source=${encodeURIComponent(parsed.source)}` : "";
+          navigate(`/table/${encodeURIComponent(parsed.schema)}/${encodeURIComponent(parsed.table)}${suffix}`, {
+            state: { from: location.pathname + location.search },
+          });
+        }
       }
     },
-    [location.pathname, location.search, navigate, normalizeFqn]
+    [location.pathname, location.search, navigate, normalizeFqn, normalizeTableTarget]
   );
 
   const TableRoute = () => {
     const params = useParams();
+    const searchParams = new URLSearchParams(location.search);
+    const source = searchParams.get("source") || "current";
     const handleBack = () => navigate(location.state?.from || "/tables");
     const handleNavigateTable = (schema, table) => {
-      navigate(`/table/${schema}/${table}`, {
+      const suffix = source && source !== "current" ? `?source=${encodeURIComponent(source)}` : "";
+      navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}${suffix}`, {
         state: { from: location.pathname + location.search },
       });
     };
@@ -244,9 +288,17 @@ export default function App() {
       <TableCard
         schema={params.schema}
         tableName={params.table}
+        source={source}
         onBack={handleBack}
         onNavigateTable={handleNavigateTable}
-        onOpenImpact={(s, t) => navigate(`/impact/${s}/${t}`, { state: { from: location.pathname + location.search } })}
+        onOpenImpact={(s, t) =>
+          navigate(
+            `/impact/${encodeURIComponent(s)}/${encodeURIComponent(t)}${source && source !== "current" ? `?source=${encodeURIComponent(source)}` : ""}`,
+            {
+            state: { from: location.pathname + location.search },
+            }
+          )
+        }
         onOpenLogicAudit={(table) => openView({ view: "logic_audit", table })}
       />
     );
@@ -367,7 +419,7 @@ export default function App() {
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
             ) : (
-              <TableSearch onSelectTable={(name) => openView({ view: "table_info", table: name })} />
+              <TableSearch onSelectTable={(table) => openView({ view: "table_info", table })} />
             )
           }
         />

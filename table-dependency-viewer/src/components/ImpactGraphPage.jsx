@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import GraphViewer from "./GraphViewer.jsx";
 import "../style/app.css";
 
@@ -19,9 +19,11 @@ const layerLabelFromSchema = (schema) => {
 
 export default function ImpactGraphPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const params = useParams();
   const schema = params.schema;
   const table = params.table;
+  const source = new URLSearchParams(location.search).get("source") || "current";
   const central = `${schema}.${table}`;
 
   const [depth, setDepth] = useState(3);
@@ -41,7 +43,9 @@ export default function ImpactGraphPage() {
     setLoadingGraph(true);
     setError(null);
 
-    fetch(`${API_BASE}/api/graph/impact/${schema}/${table}?depth=${depth}`)
+    const query = new URLSearchParams({ depth: String(depth) });
+    if (source && source !== "current") query.set("source", source);
+    fetch(`${API_BASE}/api/graph/impact/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?${query.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить граф влияния")))
       .then((data) => {
         if (cancelled) return;
@@ -63,14 +67,16 @@ export default function ImpactGraphPage() {
     return () => {
       cancelled = true;
     };
-  }, [schema, table, depth]);
+  }, [schema, table, depth, source]);
 
   useEffect(() => {
     if (!schema || !table) return;
     let cancelled = false;
     setLoadingSummary(true);
 
-    fetch(`${API_BASE}/api/impact/summary/${schema}/${table}?depth=${depth}&limit=160`)
+    const query = new URLSearchParams({ depth: String(depth), limit: "160" });
+    if (source && source !== "current") query.set("source", source);
+    fetch(`${API_BASE}/api/impact/summary/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?${query.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить сводку влияния")))
       .then((data) => {
         if (!cancelled) setSummary(data);
@@ -85,7 +91,7 @@ export default function ImpactGraphPage() {
     return () => {
       cancelled = true;
     };
-  }, [schema, table, depth]);
+  }, [schema, table, depth, source]);
 
   const availableLayers = useMemo(() => {
     if (!graph?.nodes?.length) return [];
@@ -131,7 +137,9 @@ export default function ImpactGraphPage() {
     if (!schema || !table || exporting) return;
     setExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/impact/list/${schema}/${table}?depth=${depth}`);
+      const query = new URLSearchParams({ depth: String(depth) });
+      if (source && source !== "current") query.set("source", source);
+      const res = await fetch(`${API_BASE}/api/impact/list/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?${query.toString()}`);
       if (!res.ok) throw new Error("Не удалось выгрузить список");
       const data = await res.json();
       const rows = Array.isArray(data.tables) ? data.tables : [];
@@ -168,12 +176,20 @@ export default function ImpactGraphPage() {
     <div className="container cc-page">
       <section className="cc-header-zone">
         <div className="table-head-meta">
-          <button className="btn" onClick={() => navigate(`/table/${schema}/${table}`)}>
+          <button
+            className="btn"
+            onClick={() =>
+              navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}${source && source !== "current" ? `?source=${encodeURIComponent(source)}` : ""}`)
+            }
+          >
             ← Назад к таблице
           </button>
         </div>
         <h1>Граф влияния</h1>
         <div className="cc-subtitle mono">{central}</div>
+        <div className="table-head-meta">
+          <span>Источник {source === "current" ? "current" : source}</span>
+        </div>
       </section>
 
       <section className="cc-surface">
@@ -293,7 +309,12 @@ export default function ImpactGraphPage() {
               edges={filteredGraph.edges}
               nodes={filteredGraph.nodes}
               layout={graph.layout || {}}
-              onNodeClick={(s, t) => navigate(`/table/${s}/${t}`, { state: { from: `/impact/${schema}/${table}` } })}
+              onNodeClick={(s, t) =>
+                navigate(
+                  `/table/${encodeURIComponent(s)}/${encodeURIComponent(t)}`,
+                  { state: { from: `/impact/${encodeURIComponent(schema)}/${encodeURIComponent(table)}` } }
+                )
+              }
             />
           </>
         ) : null}
@@ -320,7 +341,9 @@ export default function ImpactGraphPage() {
               <div key={row.id} className="impact-table-row">
                 <button
                   className="impact-table-link mono"
-                  onClick={() => navigate(`/table/${row.schema}/${row.table}`)}
+                  onClick={() =>
+                    navigate(`/table/${encodeURIComponent(row.schema)}/${encodeURIComponent(row.table)}`)
+                  }
                 >
                   {row.id}
                 </button>

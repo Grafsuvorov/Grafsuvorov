@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "../style/app.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -13,7 +13,7 @@ export default function TableSearch({ onSelectTable }) {
     let cancelled = false;
     setLoading(true);
 
-    fetch(`${API_BASE}/api/tables`)
+    fetch(`${API_BASE}/api/tables?detailed=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить таблицы")))
       .then((data) => {
         if (!cancelled) {
@@ -35,7 +35,19 @@ export default function TableSearch({ onSelectTable }) {
   const filtered = useMemo(() => {
     const lower = query.trim().toLowerCase();
     if (!lower) return tables;
-    return tables.filter((t) => t.toLowerCase().includes(lower));
+    return tables.filter((item) => {
+      const haystack = [
+        item.fqn,
+        item.label,
+        item.entity_name,
+        item.description,
+        ...(Array.isArray(item.tags) ? item.tags : []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(lower);
+    });
   }, [query, tables]);
 
   const handleSelect = (table) => {
@@ -60,7 +72,7 @@ export default function TableSearch({ onSelectTable }) {
           <input
             type="text"
             className="table-search-input"
-            placeholder="Например: stg.lips или ods.sales"
+            placeholder="Например: dict_dds.plant_and_subsidiary или counterparty"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -69,22 +81,29 @@ export default function TableSearch({ onSelectTable }) {
 
       <div className="table-search-results">
         {loading && <div className="muted">Загрузка списка таблиц...</div>}
-        {!loading && error && (
-          <div className="table-search-empty">Не удалось загрузить таблицы</div>
-        )}
+        {!loading && error && <div className="table-search-empty">Не удалось загрузить таблицы</div>}
         {!loading && !error && filtered.length === 0 && (
           <div className="table-search-empty">По запросу ничего не найдено</div>
         )}
 
         {!loading && !error && filtered.length > 0 && (
           <div className="table-search-list">
-            {filtered.map((name) => (
+            {filtered.map((item) => (
               <button
-                key={name}
+                key={`${item.source}:${item.fqn}`}
                 className="table-search-item"
-                onClick={() => handleSelect(name)}
+                onClick={() => handleSelect(item)}
               >
-                <span className="table-search-name mono">{name}</span>
+                <div className="table-search-main">
+                  <span className="table-search-name mono">{item.fqn}</span>
+                  <span className={`table-search-badge ${item.source === "ohd" ? "ohd" : "current"}`}>
+                    {item.source === "ohd" ? "OHD / dbt" : "Current"}
+                  </span>
+                </div>
+                <div className="table-search-meta">
+                  <span>{item.entity_name || "—"}</span>
+                  {item.description ? <span>{item.description}</span> : null}
+                </div>
                 <span className="table-search-action">Открыть</span>
               </button>
             ))}

@@ -3875,6 +3875,16 @@ main.content {
   color: #e2e8f0;
 }
 
+.dbt-manifest-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dbt-manifest-value {
+  max-height: 140px;
+  overflow: auto;
+}
+
 .dbt-manifest-item:not(.static) {
   cursor: pointer;
 }
@@ -3887,6 +3897,12 @@ main.content {
 .dbt-manifest-item:disabled {
   cursor: default;
   opacity: 0.72;
+}
+
+.dbt-manifest-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-start;
 }
 
 .dq-summary-grid {

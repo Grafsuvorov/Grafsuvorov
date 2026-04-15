@@ -80,7 +80,13 @@ export default function TableCard({
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [expandedGpErrors, setExpandedGpErrors] = useState({});
   const [expandedClickErrors, setExpandedClickErrors] = useState({});
+  const [showAllDbtColumns, setShowAllDbtColumns] = useState(false);
+  const [showAllDbtConfig, setShowAllDbtConfig] = useState(false);
+  const [showAllDbtMeta, setShowAllDbtMeta] = useState(false);
   const graphSectionRef = useRef(null);
+  const historyRequestRef = useRef(0);
+  const clickRunsRequestRef = useRef(0);
+  const clickHistoryRequestRef = useRef(0);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -114,15 +120,25 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setHistoryLoading(true);
     setHistoryError(null);
-    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=10`)
+    const requestId = ++historyRequestRef.current;
+    const params = new URLSearchParams({ limit: "10" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
-      .then((data) => setHistoryRows(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (requestId !== historyRequestRef.current) return;
+        setHistoryRows(Array.isArray(data) ? data : []);
+      })
       .catch((err) => {
+        if (requestId !== historyRequestRef.current) return;
         console.error(err);
         setHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю запусков");
       })
-      .finally(() => setHistoryLoading(false));
-  }, [schema, tableName]);
+      .finally(() => {
+        if (requestId !== historyRequestRef.current) return;
+        setHistoryLoading(false);
+      });
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -170,18 +186,26 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickLoading(true);
     setClickError(null);
-    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=6`)
+    const requestId = ++clickRunsRequestRef.current;
+    const params = new URLSearchParams({ limit: "6" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
       .then((data) => {
+        if (requestId !== clickRunsRequestRef.current) return;
         setClickRuns(Array.isArray(data?.runs) ? data.runs : []);
         setClickStages(Array.isArray(data?.stages) ? data.stages : []);
       })
       .catch((err) => {
+        if (requestId !== clickRunsRequestRef.current) return;
         console.error(err);
         setClickError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-логи");
       })
-      .finally(() => setClickLoading(false));
-  }, [schema, tableName]);
+      .finally(() => {
+        if (requestId !== clickRunsRequestRef.current) return;
+        setClickLoading(false);
+      });
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -205,15 +229,25 @@ export default function TableCard({
     if (!schema || !tableName) return;
     setClickHistoryLoading(true);
     setClickHistoryError(null);
-    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
+    const requestId = ++clickHistoryRequestRef.current;
+    const params = new URLSearchParams({ limit: "20" });
+    if (meta?.table_id) params.set("table_id", String(meta.table_id));
+    fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
-      .then((data) => setClickHistory(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (requestId !== clickHistoryRequestRef.current) return;
+        setClickHistory(Array.isArray(data) ? data : []);
+      })
       .catch((err) => {
+        if (requestId !== clickHistoryRequestRef.current) return;
         console.error(err);
         setClickHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю ClickHouse");
       })
-      .finally(() => setClickHistoryLoading(false));
-  }, [schema, tableName]);
+      .finally(() => {
+        if (requestId !== clickHistoryRequestRef.current) return;
+        setClickHistoryLoading(false);
+      });
+  }, [schema, tableName, meta?.table_id]);
 
   useEffect(() => {
     if (!schema || !tableName) return;
@@ -414,7 +448,6 @@ export default function TableCard({
   const dbtMetadata = dbtManifest?.metadata || null;
   const dbtArtifactPaths = dbtManifest
     ? [
-        ["Manifest", dbtManifest.manifest_path],
         ["Model file", dbtManifest.original_file_path || dbtManifest.path],
         ["Patch", dbtManifest.patch_path],
         ["Build", dbtManifest.build_path],
@@ -423,6 +456,23 @@ export default function TableCard({
     : [];
   const dbtConfigEntries = dbtManifest?.config ? Object.entries(dbtManifest.config).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
   const dbtMetaEntries = dbtManifest?.meta ? Object.entries(dbtManifest.meta).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
+  const dbtVisibleColumns = showAllDbtColumns ? dbtManifest?.columns || [] : (dbtManifest?.columns || []).slice(0, 60);
+  const dbtVisibleConfigEntries = showAllDbtConfig ? dbtConfigEntries : dbtConfigEntries.slice(0, 12);
+  const dbtVisibleMetaEntries = showAllDbtMeta ? dbtMetaEntries : dbtMetaEntries.slice(0, 12);
+  const formatDbtTimestamp = (value) => {
+    if (!value) return "—";
+    const normalized = typeof value === "number" ? new Date(value * 1000).toISOString() : value;
+    const parsed = formatLocalDateTime(normalized);
+    if (!parsed || parsed === normalized) {
+      return String(normalized).replace(/\.\d+/, "");
+    }
+    return parsed.replace(/:\d{2}(?=\s|$)/, "");
+  };
+  const renderCompactValue = (value) => {
+    if (value === null || value === undefined || value === "") return "—";
+    if (typeof value === "string") return value;
+    return JSON.stringify(value);
+  };
   const clickStatusLabel = (status) => {
     switch (status) {
       case "SUCCESS":
@@ -1262,20 +1312,16 @@ export default function TableCard({
 
       {dbtManifest && (
         <div className="table-section">
-          <div className="section-title">OHD / dbt Manifest</div>
+          <div className="section-title">DBT Model</div>
           <div className="card">
             <div className="click-meta-grid">
               <div>
-                <div className="click-label">Источник</div>
-                <div className="click-value">{dbtManifest.source || "—"}</div>
-              </div>
-              <div>
                 <div className="click-label">Модель</div>
-                <div className="click-value mono">{dbtManifest.model_name || "—"}</div>
+                <div className="click-value mono dbt-manifest-wrap">{dbtManifest.model_name || "—"}</div>
               </div>
               <div>
                 <div className="click-label">Таблица</div>
-                <div className="click-value mono">{dbtManifest.schema}.{dbtManifest.table_name}</div>
+                <div className="click-value mono dbt-manifest-wrap">{dbtManifest.schema}.{dbtManifest.table_name}</div>
               </div>
               <div>
                 <div className="click-label">Materialized</div>
@@ -1284,14 +1330,6 @@ export default function TableCard({
               <div>
                 <div className="click-label">Package</div>
                 <div className="click-value">{dbtManifest.package_name || "—"}</div>
-              </div>
-              <div>
-                <div className="click-label">Resource type</div>
-                <div className="click-value">{dbtManifest.resource_type || "—"}</div>
-              </div>
-              <div>
-                <div className="click-label">Access</div>
-                <div className="click-value">{dbtManifest.access || "—"}</div>
               </div>
               <div>
                 <div className="click-label">Database</div>
@@ -1317,10 +1355,6 @@ export default function TableCard({
                 <div className="click-label">Metrics</div>
                 <div className="click-value">{dbtManifest.metrics?.length ?? 0}</div>
               </div>
-              <div>
-                <div className="click-label">Unique ID</div>
-                <div className="click-value mono">{dbtManifest.unique_id || "—"}</div>
-              </div>
             </div>
 
             {dbtManifest.description ? (
@@ -1344,70 +1378,46 @@ export default function TableCard({
             ) : null}
 
             <div className="dbt-manifest-block">
-              <div className="section-subtitle">Артефакты и пути</div>
+              <div className="section-subtitle">Файлы модели</div>
               <div className="dbt-manifest-paths">
                 {dbtArtifactPaths.map(([label, value]) => (
                   <div key={label}>
                     <div className="click-label">{label}</div>
-                    <div className="mono">{value}</div>
+                    <div className="mono dbt-manifest-wrap">{value}</div>
                   </div>
                 ))}
               </div>
             </div>
 
             <div className="dbt-manifest-block">
-              <div className="section-subtitle">Идентификация модели</div>
+              <div className="section-subtitle">Детали модели</div>
               <div className="dbt-manifest-paths">
                 <div>
                   <div className="click-label">Relation name</div>
-                  <div className="mono">{dbtManifest.relation_name || "—"}</div>
+                  <div className="mono dbt-manifest-wrap">{dbtManifest.relation_name || "—"}</div>
                 </div>
                 <div>
                   <div className="click-label">Language</div>
                   <div>{dbtManifest.language || "—"}</div>
                 </div>
                 <div>
-                  <div className="click-label">Checksum</div>
-                  <div className="mono">{dbtManifest.checksum || "—"}</div>
+                  <div className="click-label">dbt version</div>
+                  <div>{dbtMetadata?.dbt_version || "—"}</div>
                 </div>
                 <div>
-                  <div className="click-label">Created at</div>
-                  <div>{dbtManifest.created_at || "—"}</div>
+                  <div className="click-label">Generated</div>
+                  <div>{formatDbtTimestamp(dbtMetadata?.generated_at)}</div>
+                </div>
+                <div>
+                  <div className="click-label">Adapter</div>
+                  <div>{dbtMetadata?.adapter_type || "—"}</div>
+                </div>
+                <div>
+                  <div className="click-label">Created</div>
+                  <div>{formatDbtTimestamp(dbtManifest.created_at)}</div>
                 </div>
               </div>
             </div>
-
-            {dbtMetadata ? (
-              <div className="dbt-manifest-block">
-                <div className="section-subtitle">Manifest metadata</div>
-                <div className="dbt-manifest-paths">
-                  <div>
-                    <div className="click-label">dbt version</div>
-                    <div>{dbtMetadata.dbt_version || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="click-label">Generated at</div>
-                    <div>{dbtMetadata.generated_at || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="click-label">Adapter</div>
-                    <div>{dbtMetadata.adapter_type || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="click-label">Project ID</div>
-                    <div className="mono">{dbtMetadata.project_id || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="click-label">User ID</div>
-                    <div className="mono">{dbtMetadata.user_id || "—"}</div>
-                  </div>
-                  <div>
-                    <div className="click-label">Invocation ID</div>
-                    <div className="mono">{dbtMetadata.invocation_id || "—"}</div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
             <div className="dbt-manifest-block">
               <div className="section-subtitle">Upstream зависимости</div>
@@ -1479,7 +1489,7 @@ export default function TableCard({
               <div className="dbt-manifest-block">
                 <div className="section-subtitle">Колонки</div>
                 <div className="dbt-manifest-list">
-                  {dbtManifest.columns.map((column) => (
+                  {dbtVisibleColumns.map((column) => (
                     <div key={column.name} className="dbt-manifest-item static">
                       <span className="mono">
                         {column.name}
@@ -1489,6 +1499,13 @@ export default function TableCard({
                     </div>
                   ))}
                 </div>
+                {dbtManifest.columns.length > 60 ? (
+                  <div className="dbt-manifest-actions">
+                    <button className="btn btn-ghost" onClick={() => setShowAllDbtColumns((value) => !value)}>
+                      {showAllDbtColumns ? "Свернуть колонки" : `Показать все ${dbtManifest.columns.length} колонок`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -1496,13 +1513,20 @@ export default function TableCard({
               <div className="dbt-manifest-block">
                 <div className="section-subtitle">Config</div>
                 <div className="dbt-manifest-list">
-                  {dbtConfigEntries.map(([key, value]) => (
+                  {dbtVisibleConfigEntries.map(([key, value]) => (
                     <div key={key} className="dbt-manifest-item static">
                       <span className="mono">{key}</span>
-                      <span className="muted mono">{typeof value === "string" ? value : JSON.stringify(value)}</span>
+                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value)}</span>
                     </div>
                   ))}
                 </div>
+                {dbtConfigEntries.length > 12 ? (
+                  <div className="dbt-manifest-actions">
+                    <button className="btn btn-ghost" onClick={() => setShowAllDbtConfig((value) => !value)}>
+                      {showAllDbtConfig ? "Свернуть config" : `Показать весь config (${dbtConfigEntries.length})`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -1510,13 +1534,20 @@ export default function TableCard({
               <div className="dbt-manifest-block">
                 <div className="section-subtitle">Meta</div>
                 <div className="dbt-manifest-list">
-                  {dbtMetaEntries.map(([key, value]) => (
+                  {dbtVisibleMetaEntries.map(([key, value]) => (
                     <div key={key} className="dbt-manifest-item static">
                       <span className="mono">{key}</span>
-                      <span className="muted mono">{typeof value === "string" ? value : JSON.stringify(value)}</span>
+                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value)}</span>
                     </div>
                   ))}
                 </div>
+                {dbtMetaEntries.length > 12 ? (
+                  <div className="dbt-manifest-actions">
+                    <button className="btn btn-ghost" onClick={() => setShowAllDbtMeta((value) => !value)}>
+                      {showAllDbtMeta ? "Свернуть meta" : `Показать весь meta (${dbtMetaEntries.length})`}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 

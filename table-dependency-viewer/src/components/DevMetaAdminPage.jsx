@@ -8,7 +8,7 @@ const DEV_META_RUNBOOK = [
     items: [
       "Создавайте новый YAML, если у объекта изменилась структура в DEV или объекта еще нет в списке.",
       "Укажите GP схему, имя объекта и поля для ORDER BY. Поля сортировки должны быть заполнены и не содержать NULL.",
-      "В DAG tags укажите имя направления или домена, к которому относится объект.",
+      "В DAG tags укажите направление к которому относится объект.",
     ],
   },
   {
@@ -628,9 +628,6 @@ export default function DevMetaAdminPage({ userProfile }) {
               <div className="section-subtitle">Как работать с генератором</div>
               <div className="muted">Короткая инструкция для создания и отправки нового файла в DEV.</div>
             </div>
-            <button className="btn btn-secondary" onClick={handleDownloadFile} disabled={!selectedFile || !content}>
-              Скачать файл
-            </button>
           </div>
           <div className="dev-meta-runbook-grid">
             {DEV_META_RUNBOOK.map((section) => (
@@ -753,9 +750,9 @@ export default function DevMetaAdminPage({ userProfile }) {
         <div className="dev-meta-layout">
           <div className="dev-meta-editor-shell">
             <div className="dev-meta-editor-head">
-              <div>
+              <div className="dev-meta-editor-title">
                 <div className="section-subtitle">Редактор</div>
-                <div className="muted">
+                <div className="muted dev-meta-editor-path">
                   {selectedFile ? `${schemaName}/${selectedFile}` : "Сгенерируйте новый YAML или выберите DEV-файл"}
                 </div>
               </div>
@@ -845,6 +842,12 @@ export default function DevMetaAdminPage({ userProfile }) {
               disabled={isLockedByAnother}
               placeholder="Сгенерируйте новый YAML или откройте DEV-файл, чтобы начать работу"
             />
+
+            <div className="dev-meta-editor-tools">
+              <button className="btn btn-secondary" onClick={handleDownloadFile} disabled={!selectedFile || !content}>
+                Скачать файл
+              </button>
+            </div>
 
           </div>
         </div>

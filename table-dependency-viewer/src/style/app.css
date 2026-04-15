@@ -7608,6 +7608,17 @@ main.content {
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
+.dev-meta-editor-title {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dev-meta-editor-path {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
 .dev-meta-actions {
   display: flex;
   gap: 8px;
@@ -7917,6 +7928,12 @@ main.content {
   opacity: 0.68;
 }
 
+.dev-meta-editor-tools {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .dev-meta-validation {
   margin-top: 16px;
   padding: 16px;
@@ -7984,6 +8001,14 @@ main.content {
   .dev-meta-actions {
     width: 100%;
     justify-content: stretch;
+  }
+
+  .dev-meta-editor-tools {
+    justify-content: stretch;
+  }
+
+  .dev-meta-editor-tools .btn {
+    width: 100%;
   }
 
   .dev-meta-actions .btn {

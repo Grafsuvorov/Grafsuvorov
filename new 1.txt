@@ -1,25 +1,14 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# printf '%s' "$MINIO_ACCESS_KEY" | wc -c
-6
-[root@rgm-s-dwhapp01 table-dependency-viewer]# printf '%s' "$MINIO_SECRET_KEY" | wc -c
-15
-[root@rgm-s-dwhapp01 table-dependency-viewer]# cat -vet .env.manifest
- MINIO_HOST=res-s-khs3.resource.local^M$
-  MINIO_PORT=9000^M$
-  MINIO_ACCESS_KEY=gpetl^M$
-  MINIO_SECRET_KEY=password^M$
-  MINIO_SECURE=true^M$
-  DBT_MINIO_BUCKET=dbt-zp-prod^M$
-  DBT_MINIO_PREFIX=dbt_run_manual^M$
-  DBT_MANIFEST_ROOT=config_files/dbt^M$
-  DBT_MANIFEST_SOURCE=ohd^M$
-  DBT_MANIFEST_KEEP=2[root@rgm-s-dwhapp01 table-dependency-viewer]# sed 's/MINIO_SECRET_KEY=.*/MINIO_SECRET_KEY=***/' .env.manifest
- MINIO_HOST=res-s-khs3.resource.local
-  MINIO_PORT=9000
-  MINIO_ACCESS_KEY=gpetl
-  MINIO_SECRET_KEY=***
-  MINIO_SECURE=true
-  DBT_MINIO_BUCKET=dbt-zp-prod
-  DBT_MINIO_PREFIX=dbt_run_manual
-  DBT_MANIFEST_ROOT=config_files/dbt
-  DBT_MANIFEST_SOURCE=ohd
-  DBT_MANIFEST_KEEP=2[root@rgm-s-dwhapp01 table-dependency-viewer]#
+sed -i 's/\r$//' .env.manifest
+
+  Потом снова проверь:
+
+  cat -vet .env.manifest
+
+  ^M исчезнуть должен.
+
+  После этого заново подгрузи env и запусти скрипт:
+
+  set -a
+  . ./.env.manifest
+  set +a
+  python3 scripts/refresh_dbt_manifest.py

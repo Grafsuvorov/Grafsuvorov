@@ -19,6 +19,7 @@ export default function TableCard({
   tableContext = null,
 }) {
   const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
+  const isCurrentSource = source === "current";
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const [error, setError] = useState(null);
@@ -89,7 +90,9 @@ export default function TableCard({
   const clickHistoryRequestRef = useRef(0);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName) {
+      return;
+    }
 
     setLoadingMeta(true);
     setError(null);
@@ -109,15 +112,23 @@ export default function TableCard({
   }, [schema, tableName, source]);
 
   useEffect(() => {
-    if (!meta?.table_id) return;
+    if (!isCurrentSource || !meta?.table_id) {
+      setIsFavorite(false);
+      return;
+    }
     fetch(`${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить статус избранного")))
       .then((data) => setIsFavorite(!!data?.is_favorite))
       .catch(() => setIsFavorite(false));
-  }, [meta?.table_id]);
+  }, [isCurrentSource, meta?.table_id]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setHistoryRows([]);
+      setHistoryError(null);
+      setHistoryLoading(false);
+      return;
+    }
     setHistoryLoading(true);
     setHistoryError(null);
     const requestId = ++historyRequestRef.current;
@@ -138,10 +149,15 @@ export default function TableCard({
         if (requestId !== historyRequestRef.current) return;
         setHistoryLoading(false);
       });
-  }, [schema, tableName, meta?.table_id]);
+  }, [schema, tableName, meta?.table_id, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setVariants([]);
+      setVariantsError(null);
+      setVariantsLoading(false);
+      return;
+    }
     setVariantsLoading(true);
     setVariantsError(null);
     fetch(`${API_BASE}/api/table-variants/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
@@ -152,10 +168,15 @@ export default function TableCard({
         setVariantsError(typeof err === "string" ? err : "Не удалось загрузить варианты таблицы");
       })
       .finally(() => setVariantsLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setDqData(null);
+      setDqError(null);
+      setDqLoading(false);
+      return;
+    }
     setDqLoading(true);
     setDqError(null);
     fetch(`${API_BASE}/api/dq/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
@@ -166,10 +187,15 @@ export default function TableCard({
         setDqError(typeof err === "string" ? err : "Не удалось загрузить качество данных");
       })
       .finally(() => setDqLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setDqHistory([]);
+      setDqHistoryError(null);
+      setDqHistoryLoading(false);
+      return;
+    }
     setDqHistoryLoading(true);
     setDqHistoryError(null);
     fetch(`${API_BASE}/api/dq/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=20`)
@@ -180,10 +206,16 @@ export default function TableCard({
         setDqHistoryError(typeof err === "string" ? err : "Не удалось загрузить историю качества данных");
       })
       .finally(() => setDqHistoryLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setClickRuns([]);
+      setClickStages([]);
+      setClickError(null);
+      setClickLoading(false);
+      return;
+    }
     setClickLoading(true);
     setClickError(null);
     const requestId = ++clickRunsRequestRef.current;
@@ -205,10 +237,15 @@ export default function TableCard({
         if (requestId !== clickRunsRequestRef.current) return;
         setClickLoading(false);
       });
-  }, [schema, tableName, meta?.table_id]);
+  }, [schema, tableName, meta?.table_id, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setClickMeta(null);
+      setClickMetaError(null);
+      setClickMetaLoading(false);
+      return;
+    }
     setClickMetaLoading(true);
     setClickMetaError(null);
     fetch(`${API_BASE}/api/click/meta/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
@@ -223,10 +260,15 @@ export default function TableCard({
         setClickMetaError(typeof err === "string" ? err : "Не удалось загрузить ClickHouse-метаданные");
       })
       .finally(() => setClickMetaLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setClickHistory([]);
+      setClickHistoryError(null);
+      setClickHistoryLoading(false);
+      return;
+    }
     setClickHistoryLoading(true);
     setClickHistoryError(null);
     const requestId = ++clickHistoryRequestRef.current;
@@ -247,10 +289,15 @@ export default function TableCard({
         if (requestId !== clickHistoryRequestRef.current) return;
         setClickHistoryLoading(false);
       });
-  }, [schema, tableName, meta?.table_id]);
+  }, [schema, tableName, meta?.table_id, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setAnalyticsSummary(null);
+      setAnalyticsError(null);
+      setAnalyticsLoading(false);
+      return;
+    }
     setAnalyticsLoading(true);
     setAnalyticsError(null);
     fetch(`${API_BASE}/api/analytics/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?days=90`)
@@ -261,9 +308,15 @@ export default function TableCard({
         setAnalyticsError(typeof err === "string" ? err : "Не удалось загрузить аналитику таблицы");
       })
       .finally(() => setAnalyticsLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   const handleViewSearch = () => {
+    if (!isCurrentSource) {
+      setViewMatches([]);
+      setViewSearchError(null);
+      setViewSearchLoading(false);
+      return;
+    }
     setViewSearchLoading(true);
     setViewSearchError(null);
     fetch(`${API_BASE}/api/click/view/search?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(tableName)}`)
@@ -277,12 +330,17 @@ export default function TableCard({
   };
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) return;
     handleViewSearch();
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setReleaseItems([]);
+      setReleaseError(null);
+      setReleaseLoading(false);
+      return;
+    }
     setReleaseLoading(true);
     setReleaseError(null);
     fetch(`${API_BASE}/api/releases/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?limit=12`)
@@ -293,10 +351,15 @@ export default function TableCard({
         setReleaseError(typeof err === "string" ? err : "Не удалось загрузить релизы по объекту");
       })
       .finally(() => setReleaseLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
-    if (!schema || !tableName) return;
+    if (!schema || !tableName || !isCurrentSource) {
+      setYtData(null);
+      setYtError(null);
+      setYtLoading(false);
+      return;
+    }
     setYtLoading(true);
     setYtError(null);
     fetch(`${API_BASE}/api/ytrek/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}`)
@@ -307,7 +370,7 @@ export default function TableCard({
         setYtError(typeof err === "string" ? err : "Не удалось загрузить данные YouTrack");
       })
       .finally(() => setYtLoading(false));
-  }, [schema, tableName]);
+  }, [schema, tableName, isCurrentSource]);
 
   const status = useMemo(() => {
     if (!meta) return "ok";
@@ -388,7 +451,7 @@ export default function TableCard({
   const visibleTasks = showAllTasks ? (ytData?.tasks || []) : (ytData?.tasks || []).slice(0, 3);
   const visibleTimeline = showAllTimeline ? (ytData?.timeline || []) : (ytData?.timeline || []).slice(0, 3);
 
-  const metrics = !meta
+  const metrics = !meta || !isCurrentSource
     ? []
     : [
         {
@@ -764,49 +827,51 @@ export default function TableCard({
       )}
 
       <div className="table-action-bar">
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            if (!meta?.table_id || favoriteLoading) return;
-            setFavoriteLoading(true);
-            const method = isFavorite ? "DELETE" : "POST";
-            const url = isFavorite
-              ? `${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`
-              : `${API_BASE}/auth/favorites/tables`;
-            const init = isFavorite
-              ? { method }
-              : {
-                  method,
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    table_id: meta.table_id,
-                    table_schema: schema,
-                    table_name: tableName,
-                    entity_name: meta.entity_name || null,
-                  }),
-                };
-            fetch(url, init)
-              .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось обновить избранное")))
-              .then(() => {
-                setIsFavorite(!isFavorite);
-                sendAuditEvent({
-                  event_type: isFavorite ? "remove_favorite_table" : "add_favorite_table",
-                  page: `/table/${schema}/${tableName}`,
-                  object_type: "table",
-                  object_id: String(meta.table_id),
-                  object_name: tableFqn,
-                });
-              })
-              .catch(() => {})
-              .finally(() => setFavoriteLoading(false));
-          }}
-        >
-          {favoriteLoading
-            ? "Сохраняем..."
-            : isFavorite
-              ? "Убрать из избранного"
-              : "В избранное"}
-        </button>
+        {isCurrentSource ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              if (!meta?.table_id || favoriteLoading) return;
+              setFavoriteLoading(true);
+              const method = isFavorite ? "DELETE" : "POST";
+              const url = isFavorite
+                ? `${API_BASE}/auth/favorites/tables/${encodeURIComponent(meta.table_id)}`
+                : `${API_BASE}/auth/favorites/tables`;
+              const init = isFavorite
+                ? { method }
+                : {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      table_id: meta.table_id,
+                      table_schema: schema,
+                      table_name: tableName,
+                      entity_name: meta.entity_name || null,
+                    }),
+                  };
+              fetch(url, init)
+                .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось обновить избранное")))
+                .then(() => {
+                  setIsFavorite(!isFavorite);
+                  sendAuditEvent({
+                    event_type: isFavorite ? "remove_favorite_table" : "add_favorite_table",
+                    page: `/table/${schema}/${tableName}`,
+                    object_type: "table",
+                    object_id: String(meta.table_id),
+                    object_name: tableFqn,
+                  });
+                })
+                .catch(() => {})
+                .finally(() => setFavoriteLoading(false));
+            }}
+          >
+            {favoriteLoading
+              ? "Сохраняем..."
+              : isFavorite
+                ? "Убрать из избранного"
+                : "В избранное"}
+          </button>
+        ) : null}
         <button
           className="btn btn-secondary"
           onClick={() => {
@@ -835,34 +900,38 @@ export default function TableCard({
         >
           Граф влияния
         </button>
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            sendAuditEvent({
-              event_type: showGantt ? "hide_timeline" : "show_timeline",
-              page: `/table/${schema}/${tableName}`,
-              object_type: "table",
-              object_name: tableFqn,
-            });
-            setShowGantt(!showGantt);
-          }}
-        >
-          {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
-        </button>
-        <button
-          className="btn btn-secondary"
-          onClick={() => {
-            sendAuditEvent({
-              event_type: "open_logic_audit",
-              page: `/table/${schema}/${tableName}`,
-              object_type: "table",
-              object_name: tableFqn,
-            });
-            onOpenLogicAudit?.(tableFqn);
-          }}
-        >
-          Аудит логики
-        </button>
+        {isCurrentSource ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              sendAuditEvent({
+                event_type: showGantt ? "hide_timeline" : "show_timeline",
+                page: `/table/${schema}/${tableName}`,
+                object_type: "table",
+                object_name: tableFqn,
+              });
+              setShowGantt(!showGantt);
+            }}
+          >
+            {showGantt ? "Скрыть таймлайн" : "Показать таймлайн"}
+          </button>
+        ) : null}
+        {isCurrentSource ? (
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              sendAuditEvent({
+                event_type: "open_logic_audit",
+                page: `/table/${schema}/${tableName}`,
+                object_type: "table",
+                object_name: tableFqn,
+              });
+              onOpenLogicAudit?.(tableFqn);
+            }}
+          >
+            Аудит логики
+          </button>
+        ) : null}
         <button
           className="btn btn-secondary"
           onClick={copyList}
@@ -875,7 +944,7 @@ export default function TableCard({
         </button>
       </div>
 
-      <div className="table-grid">
+      {isCurrentSource ? <div className="table-grid">
         {metrics.map((metric) => (
           <div key={metric.label} className="table-info-card" title={metric.title || ""}>
             <div className="table-card-label">{metric.label}</div>
@@ -883,9 +952,9 @@ export default function TableCard({
             <div className="table-card-hint muted">{metric.hint}</div>
           </div>
         ))}
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">Качество данных</div>
         <div className="card">
           {dqLoading && <div className="muted">Загрузка качества данных...</div>}
@@ -962,9 +1031,9 @@ export default function TableCard({
             )}
           </div>
         </div>
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">Загрузка в ClickHouse</div>
         <div className="card">
           {clickLoading && <div className="muted">Загрузка ClickHouse-логов...</div>}
@@ -1118,9 +1187,9 @@ export default function TableCard({
             </>
           )}
         </div>
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">Релизы объекта</div>
         <div className="card">
           {releaseLoading && <div className="muted">Загрузка релизов...</div>}
@@ -1177,9 +1246,9 @@ export default function TableCard({
             </>
           )}
         </div>
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">YouTrack: задачи по таблице</div>
         <div className="card">
           {ytLoading && <div className="muted">Загрузка задач...</div>}
@@ -1299,9 +1368,9 @@ export default function TableCard({
             </>
           )}
         </div>
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">SQL-скрипты</div>
         <div className="table-sql-grid">
           {sqlSections.map((block) => {
@@ -1330,7 +1399,7 @@ export default function TableCard({
             );
           })}
         </div>
-      </div>
+      </div> : null}
 
       {dbtManifest && (
         <div className="table-section">
@@ -1591,7 +1660,7 @@ export default function TableCard({
         </div>
       )}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">Последние запуски</div>
         <div className="card">
           <div className="history-toggle">
@@ -1702,9 +1771,9 @@ export default function TableCard({
             </>
           )}
         </div>
-      </div>
+      </div> : null}
 
-      <div className="table-section">
+      {isCurrentSource ? <div className="table-section">
         <div className="section-title">Варианты таблицы (другие сущности)</div>
         <div className="card">
           {variantsLoading && <div className="muted">Загрузка вариантов...</div>}
@@ -1729,7 +1798,7 @@ export default function TableCard({
             </div>
           )}
         </div>
-      </div>
+      </div> : null}
 
       {Array.isArray(meta.key_attributes) && meta.key_attributes.length > 0 && (
         <div className="table-section">

@@ -7,7 +7,6 @@ import shutil
 import sys
 import tempfile
 from contextlib import contextmanager
-from datetime import date
 from pathlib import Path
 
 from minio import Minio
@@ -50,7 +49,7 @@ def load_config() -> dict[str, object]:
         root / "config_files/dbt",
     )
     source = os.getenv("DBT_MANIFEST_SOURCE", "ohd").strip() or "ohd"
-    day = os.getenv("DBT_REFRESH_DAY", date.today().isoformat()).strip()
+    day = os.getenv("DBT_REFRESH_DAY", "").strip() or None
     return {
         "host": os.environ["MINIO_HOST"].strip(),
         "port": env_int("MINIO_PORT", 9000),
@@ -99,7 +98,8 @@ def build_client(config: dict[str, object]) -> Minio:
 
 
 def find_latest_run_prefix(client: Minio, config: dict[str, object]) -> str | None:
-    day_prefix = f"{config['prefix']}/{config['day']}/"
+    day = config["day"]
+    day_prefix = f"{config['prefix']}/{day}/" if day else f"{config['prefix']}/"
     manifests: list[str] = []
     for obj in client.list_objects(
         bucket_name=str(config["bucket"]),
@@ -112,6 +112,13 @@ def find_latest_run_prefix(client: Minio, config: dict[str, object]) -> str | No
         return None
     latest_manifest = sorted(manifests)[-1]
     return str(Path(latest_manifest).parent)
+
+
+def extract_run_day(run_prefix: str) -> str:
+    parts = Path(run_prefix).parts
+    if len(parts) >= 2:
+        return parts[1]
+    raise RuntimeError(f"Cannot extract day from run prefix: {run_prefix}")
 
 
 def download_run_files(client: Minio, config: dict[str, object], run_prefix: str, tmp_dir: Path) -> dict[str, Path]:
@@ -138,10 +145,12 @@ def download_run_files(client: Minio, config: dict[str, object], run_prefix: str
 def install_files(config: dict[str, object], downloaded: dict[str, Path], run_prefix: str) -> None:
     target_dir = Path(config["target_dir"])
     archive_dir = Path(config["archive_dir"])
-    run_name = Path(run_prefix).name.replace(" ", "_").replace(":", "-")
-    archive_run_dir = archive_dir / f"{config['day']}_{run_name}"
+    run_day = extract_run_day(run_prefix)
+    archive_run_dir = archive_dir / run_day
 
     target_dir.mkdir(parents=True, exist_ok=True)
+    if archive_run_dir.exists():
+        shutil.rmtree(archive_run_dir)
     archive_run_dir.mkdir(parents=True, exist_ok=True)
 
     for file_name, local_path in downloaded.items():
@@ -174,17 +183,21 @@ def main() -> int:
         client = build_client(config)
         run_prefix = find_latest_run_prefix(client, config)
         if not run_prefix:
-            print(f"No manifest found for day {config['day']}")
+            if config["day"]:
+                print(f"No manifest found for day {config['day']}")
+            else:
+                print(f"No manifest found under prefix {config['prefix']}")
             return 0
 
         with tempfile.TemporaryDirectory(prefix="tdv_dbt_manifest_") as tmp_name:
             downloaded = download_run_files(client, config, run_prefix, Path(tmp_name))
             install_files(config, downloaded, run_prefix)
         cleanup_archives(config)
+        run_day = extract_run_day(run_prefix)
         print(
             "Updated dbt manifest:",
             f"source={config['source']}",
-            f"day={config['day']}",
+            f"day={run_day}",
             f"run={run_prefix}",
         )
     return 0

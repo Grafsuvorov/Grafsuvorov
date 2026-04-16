@@ -1,61 +1,8 @@
-Скрипт уже лежит в проекте тут: scripts/refresh_dbt_manifest.py. На сервере его отдельно никуда переносить не нужно, если ты деплоишь этот репозиторий целиком. Он
-  должен запускаться из корня проекта, например /opt/table-dependency-viewer.
-
-  Пароль лучше не хардкодить в файл. Нормальный вариант:
-
-  - либо задать env прямо в crontab
-  - либо вынести их в отдельный файл, например /opt/table-dependency-viewer/.env.manifest, и подгружать перед запуском
-
-  Какие env нужны:
-
-  MINIO_HOST=res-s-khs3.resource.local
-  MINIO_PORT=9000
-  MINIO_ACCESS_KEY=gpetl
-  MINIO_SECRET_KEY=твой_пароль
-  MINIO_SECURE=true
-  DBT_MINIO_BUCKET=dbt-zp-prod
-  DBT_MINIO_PREFIX=dbt_run_manual
-  DBT_MANIFEST_ROOT=config_files/dbt
-  DBT_MANIFEST_SOURCE=ohd
-  DBT_MANIFEST_KEEP=2
-
-  Если через файл, то удобно так:
-
-  1. Создаешь файл /opt/table-dependency-viewer/.env.manifest
-
-  MINIO_HOST=res-s-khs3.resource.local
-  MINIO_PORT=9000
-  MINIO_ACCESS_KEY=gpetl
-  MINIO_SECRET_KEY=твой_пароль
-  MINIO_SECURE=true
-  DBT_MINIO_BUCKET=dbt-zp-prod
-  DBT_MINIO_PREFIX=dbt_run_manual
-  DBT_MANIFEST_ROOT=config_files/dbt
-  DBT_MANIFEST_SOURCE=ohd
-  DBT_MANIFEST_KEEP=2
-
-  2. Ставишь права:
-
-  chmod 600 /opt/table-dependency-viewer/.env.manifest
-
-  3. В cron:
-
-  0 9 * * * cd /opt/table-dependency-viewer && set -a && . /opt/table-dependency-viewer/.env.manifest && set +a && /usr/bin/python3 scripts/refresh_dbt_manifest.py
-  >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
-
-  Еще нужно установить зависимость:
-
-  pip install minio
-
-  И один раз проверить руками:
-
-  cd /opt/table-dependency-viewer
-  set -a
-  . /opt/table-dependency-viewer/.env.manifest
-  set +a
-  /usr/bin/python3 scripts/refresh_dbt_manifest.py
-
-  После успешного запуска появятся:
-
-  - текущий файл: config_files/dbt/ohd/manifest.json
-  - архивы: config_files/dbt/.archive/ohd/...
+[root@rgm-s-dwhapp01 table-dependency-viewer]# set -a
+[root@rgm-s-dwhapp01 table-dependency-viewer]# . ./.env.manifest
+[root@rgm-s-dwhapp01 table-dependency-viewer]# set +a
+[root@rgm-s-dwhapp01 table-dependency-viewer]# /usr/bin/python3 scripts/refresh_dbt_manifest.py
+  File "scripts/refresh_dbt_manifest.py", line 2
+    from __future__ import annotations
+    ^
+SyntaxError: future feature annotations is not defined

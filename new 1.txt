@@ -1,36 +1,61 @@
-from pathlib import Path
-from minio import Minio
+Скрипт уже лежит в проекте тут: scripts/refresh_dbt_manifest.py. На сервере его отдельно никуда переносить не нужно, если ты деплоишь этот репозиторий целиком. Он
+  должен запускаться из корня проекта, например /opt/table-dependency-viewer.
 
-host = 'res-s-khs3.resource.local'
-port = 9000
-login = 'gpetl'
-password = ''
-secure = True
+  Пароль лучше не хардкодить в файл. Нормальный вариант:
 
-bucket_name = 'dbt-zp-prod'
-load_dir = 'dbt_run_manual/2026-04-10/2026-04-10 15:57:17.494487/artifacts'
-save_dir = Path('./minio_download')
-needed_files = {'manifest.json', 'run_results.json'}
+  - либо задать env прямо в crontab
+  - либо вынести их в отдельный файл, например /opt/table-dependency-viewer/.env.manifest, и подгружать перед запуском
 
-client = Minio(
-  f'{host}:{port}',
-  access_key=login,
-  secret_key=password,
-  secure=secure,
-  cert_check=False,
-)
+  Какие env нужны:
 
-save_dir.mkdir(parents=True, exist_ok=True)
+  MINIO_HOST=res-s-khs3.resource.local
+  MINIO_PORT=9000
+  MINIO_ACCESS_KEY=gpetl
+  MINIO_SECRET_KEY=твой_пароль
+  MINIO_SECURE=true
+  DBT_MINIO_BUCKET=dbt-zp-prod
+  DBT_MINIO_PREFIX=dbt_run_manual
+  DBT_MANIFEST_ROOT=config_files/dbt
+  DBT_MANIFEST_SOURCE=ohd
+  DBT_MANIFEST_KEEP=2
 
-for obj in client.list_objects(bucket_name=bucket_name, prefix=load_dir, recursive=True):
-  file_name = Path(obj.object_name).name
-  if file_name in needed_files:
-      local_path = save_dir / file_name
-      print(f'Download: {obj.object_name} -> {local_path}')
-      client.fget_object(
-          bucket_name=bucket_name,
-          object_name=obj.object_name,
-          file_path=str(local_path),
-      )
+  Если через файл, то удобно так:
 
-print('Done')
+  1. Создаешь файл /opt/table-dependency-viewer/.env.manifest
+
+  MINIO_HOST=res-s-khs3.resource.local
+  MINIO_PORT=9000
+  MINIO_ACCESS_KEY=gpetl
+  MINIO_SECRET_KEY=твой_пароль
+  MINIO_SECURE=true
+  DBT_MINIO_BUCKET=dbt-zp-prod
+  DBT_MINIO_PREFIX=dbt_run_manual
+  DBT_MANIFEST_ROOT=config_files/dbt
+  DBT_MANIFEST_SOURCE=ohd
+  DBT_MANIFEST_KEEP=2
+
+  2. Ставишь права:
+
+  chmod 600 /opt/table-dependency-viewer/.env.manifest
+
+  3. В cron:
+
+  0 9 * * * cd /opt/table-dependency-viewer && set -a && . /opt/table-dependency-viewer/.env.manifest && set +a && /usr/bin/python3 scripts/refresh_dbt_manifest.py
+  >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
+
+  Еще нужно установить зависимость:
+
+  pip install minio
+
+  И один раз проверить руками:
+
+  cd /opt/table-dependency-viewer
+  set -a
+  . /opt/table-dependency-viewer/.env.manifest
+  set +a
+  /usr/bin/python3 scripts/refresh_dbt_manifest.py
+
+  После успешного запуска появятся:
+
+  - текущий файл: config_files/dbt/ohd/manifest.json
+  - архивы: config_files/dbt/.archive/ohd/...

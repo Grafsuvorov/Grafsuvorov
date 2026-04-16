@@ -1,4 +1,9 @@
-echo "MINIO_HOST=$MINIO_HOST"
-  echo "MINIO_PORT=$MINIO_PORT"
-  echo "MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY"
-  printf 'MINIO_SECRET_KEY=<%s>\n' "$MINIO_SECRET_KEY"
+Сейчас проверь точнее:
+
+  printf '%s' "$MINIO_ACCESS_KEY" | wc -c
+  printf '%s' "$MINIO_SECRET_KEY" | wc -c
+  cat -vet .env.manifest
+
+  И еще покажи сам файл без секрета, но со структурой, например так:
+
+  sed 's/MINIO_SECRET_KEY=.*/MINIO_SECRET_KEY=***/' .env.manifest

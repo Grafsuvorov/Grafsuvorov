@@ -81,6 +81,7 @@ export default function TableCard({
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [expandedGpErrors, setExpandedGpErrors] = useState({});
   const [expandedClickErrors, setExpandedClickErrors] = useState({});
+  const [showAllDbtUpstream, setShowAllDbtUpstream] = useState(false);
   const [showAllDbtColumns, setShowAllDbtColumns] = useState(false);
   const [showAllDbtConfig, setShowAllDbtConfig] = useState(false);
   const [showAllDbtMeta, setShowAllDbtMeta] = useState(false);
@@ -528,6 +529,16 @@ export default function TableCard({
         ([key, value]) => !hiddenDbtFields.has(String(key || "").toLowerCase()) && value !== null && value !== undefined && value !== "",
       )
     : [];
+  const dbtUpstreamModels = useMemo(() => {
+    const seen = new Set();
+    return (dbtManifest?.upstream_models || []).filter((item) => {
+      const key = `${item?.schema || ""}.${item?.table_name || ""}.${item?.model_name || ""}.${item?.unique_id || ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [dbtManifest?.upstream_models]);
+  const dbtVisibleUpstreamModels = showAllDbtUpstream ? dbtUpstreamModels : dbtUpstreamModels.slice(0, 8);
   const dbtVisibleColumns = showAllDbtColumns ? dbtManifest?.columns || [] : (dbtManifest?.columns || []).slice(0, 60);
   const dbtVisibleConfigEntries = showAllDbtConfig ? dbtConfigEntries : dbtConfigEntries.slice(0, 12);
   const dbtVisibleMetaEntries = showAllDbtMeta ? dbtMetaEntries : dbtMetaEntries.slice(0, 12);
@@ -558,6 +569,36 @@ export default function TableCard({
     if (typeof value === "string") return value;
     return JSON.stringify(value);
   };
+  const attributeTypeMap = useMemo(() => {
+    const entries = Array.isArray(meta?.attributes)
+      ? meta.attributes
+      : Array.isArray(meta?.columns)
+      ? meta.columns
+      : Array.isArray(meta?.fields)
+      ? meta.fields
+      : [];
+    const out = new Map();
+    entries.forEach((item) => {
+      if (!item || typeof item !== "object") return;
+      const name = String(item.column_name_click || item.column_name_gp || item.name || item.column || item.field || "").trim();
+      if (!name) return;
+      const type = item.data_type_gp || item.data_type_click || item.data_type || item.type || "";
+      if (type) out.set(name.toLowerCase(), String(type));
+    });
+    return out;
+  }, [meta]);
+  const parsedKeyAttributes = useMemo(() => {
+    return (Array.isArray(meta?.key_attributes) ? meta.key_attributes : []).map((item, idx) => {
+      const raw = String(item || "").trim();
+      const parts = raw.split("|").map((part) => part.trim()).filter(Boolean);
+      const sourceRef = parts.find((part) => part.includes("."));
+      const fieldName = sourceRef ? sourceRef.split(".").slice(-1)[0] : raw;
+      const descriptionCandidates = parts.filter((part) => part !== sourceRef && part !== fieldName);
+      const description = [...new Set(descriptionCandidates)][0] || fieldName || raw || `field_${idx + 1}`;
+      const dataType = attributeTypeMap.get(String(fieldName || "").toLowerCase()) || null;
+      return { raw, fieldName, description, dataType };
+    });
+  }, [attributeTypeMap, meta?.key_attributes]);
   const clickStatusLabel = (status) => {
     switch (status) {
       case "SUCCESS":
@@ -1432,11 +1473,7 @@ export default function TableCard({
               </div>
               <div>
                 <div className="click-label">Upstream refs</div>
-                <div className="click-value">{dbtManifest.upstream_models?.length ?? 0}</div>
-              </div>
-              <div>
-                <div className="click-label">Refs</div>
-                <div className="click-value">{dbtManifest.refs?.length ?? 0}</div>
+                <div className="click-value">{dbtUpstreamModels.length}</div>
               </div>
               <div>
                 <div className="click-label">Sources</div>
@@ -1512,9 +1549,9 @@ export default function TableCard({
 
             <div className="dbt-manifest-block">
               <div className="section-subtitle">Upstream зависимости</div>
-              {dbtManifest.upstream_models?.length ? (
+              {dbtUpstreamModels.length ? (
                 <div className="dbt-manifest-list">
-                  {dbtManifest.upstream_models.map((item) => {
+                  {dbtVisibleUpstreamModels.map((item) => {
                     const label = item.schema && item.table_name
                       ? `${item.schema}.${item.table_name}`
                       : item.model_name || item.unique_id?.split(".").slice(-1)[0] || "DBT model";
@@ -1534,23 +1571,14 @@ export default function TableCard({
               ) : (
                 <div className="muted">Upstream зависимости не найдены.</div>
               )}
-            </div>
-
-            {dbtManifest.refs?.length ? (
-              <div className="dbt-manifest-block">
-                <div className="section-subtitle">Refs</div>
-                <div className="dbt-manifest-list">
-                  {dbtManifest.refs.map((item, idx) => (
-                    <div key={`${item.name || "ref"}-${idx}`} className="dbt-manifest-item static">
-                      <span className="mono">{item.name || "—"}</span>
-                      <span className="muted">
-                        {[item.package, item.version].filter(Boolean).join(" · ") || "Локальный ref"}
-                      </span>
-                    </div>
-                  ))}
+              {dbtUpstreamModels.length > 8 ? (
+                <div className="dbt-manifest-actions">
+                  <button className="btn btn-ghost" onClick={() => setShowAllDbtUpstream((value) => !value)}>
+                    {showAllDbtUpstream ? "Свернуть upstream" : `Показать все ${dbtUpstreamModels.length} upstream`}
+                  </button>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
             {dbtManifest.sources?.length ? (
               <div className="dbt-manifest-block">
@@ -1800,14 +1828,15 @@ export default function TableCard({
         </div>
       </div> : null}
 
-      {Array.isArray(meta.key_attributes) && meta.key_attributes.length > 0 && (
+      {parsedKeyAttributes.length > 0 && (
         <div className="table-section">
           <div className="section-title">Ключевые поля</div>
           <div className="card">
             <div className="table-key-list">
-              {meta.key_attributes.map((key) => (
-                <span key={key} className="table-key-pill mono">
-                  {key}
+              {parsedKeyAttributes.map((key) => (
+                <span key={key.raw} className="table-key-pill">
+                  {key.description}
+                  {key.dataType ? <span className="muted"> · {key.dataType}</span> : null}
                 </span>
               ))}
             </div>

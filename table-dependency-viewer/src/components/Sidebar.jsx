@@ -74,12 +74,23 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   Админка
                 </button>
               )}
-              {authEnabled && userProfile?.role === "admin" && (
+              {authEnabled && ["admin", "engineer"].includes(userProfile?.role || "") && (
                 <button
                   className={isActive("/admin/dev-meta") ? "active" : ""}
                   onClick={() => onChangeView("/admin/dev-meta")}
                 >
                   DEV Meta
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  className={isActive("/admin/engineering") ? "active" : ""}
+                  onClick={() => {
+                    console.log("[Sidebar] open /admin/engineering");
+                    onChangeView("/admin/engineering");
+                  }}
+                >
+                  Эффективность
                 </button>
               )}
               <button

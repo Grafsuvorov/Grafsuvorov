@@ -125,6 +125,53 @@ DEV_META_LOCK_TTL_MIN=30
 - `AIRFLOW_DEV_*` нужны только для кнопки запуска DEV DAG.
 - Для записи файлов из контейнера `api` каталог `config_files` должен быть примонтирован в `/app/config_files`.
 
+## Автообновление dbt manifest
+
+Для `OHD / dbt` приложение читает текущий manifest из `config_files/dbt/ohd/manifest.json`.
+
+Для ежедневного обновления добавлен скрипт:
+
+```bash
+python3 scripts/refresh_dbt_manifest.py
+```
+
+Нужные env:
+
+```env
+MINIO_HOST=res-s-khs3.resource.local
+MINIO_PORT=9000
+MINIO_ACCESS_KEY=gpetl
+MINIO_SECRET_KEY=
+MINIO_SECURE=true
+DBT_MINIO_BUCKET=dbt-zp-prod
+DBT_MINIO_PREFIX=dbt_run_manual
+DBT_MANIFEST_ROOT=config_files/dbt
+DBT_MANIFEST_SOURCE=ohd
+DBT_MANIFEST_KEEP=2
+```
+
+Что делает скрипт:
+
+- ищет последний запуск за текущий день внутри `dbt_run_manual/YYYY-MM-DD/`
+- скачивает `manifest.json` и, если есть, `run_results.json`
+- обновляет текущие файлы в `config_files/dbt/ohd/`
+- сохраняет архив в `config_files/dbt/.archive/ohd/`
+- оставляет только 2 последних архива, остальные удаляет
+
+Если нужно проверить конкретную дату вручную:
+
+```bash
+DBT_REFRESH_DAY=2026-04-10 python3 scripts/refresh_dbt_manifest.py
+```
+
+Пример `cron` на Linux для запуска каждый день в `09:00`:
+
+```cron
+0 9 * * * cd /opt/table-dependency-viewer && /usr/bin/python3 scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
+```
+
+Скрипт использует lock-файл `/tmp/tdv_refresh_dbt_manifest.lock`, поэтому параллельные запуски не пересекутся.
+
 ## Технический долг / куда дальше
 
 - Разбить крупные файлы (`HomePage`, `api/main.py`) на модули по доменам.

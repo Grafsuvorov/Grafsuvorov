@@ -22,6 +22,7 @@ import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
+import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
@@ -175,6 +176,10 @@ export default function App() {
         navigate("/admin/dev-meta");
         return;
       }
+      if (target === "/admin/engineering") {
+        navigate("/admin/engineering");
+        return;
+      }
       if (target === "/account") {
         navigate("/account");
         return;
@@ -325,6 +330,10 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
+  const canUseDevMeta = useMemo(
+    () => ["admin", "engineer"].includes(userProfile?.role || ""),
+    [userProfile]
+  );
 
   return (
     <div className="app">
@@ -375,8 +384,20 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseDevMeta ? (
               <DevMetaAdminPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/engineering"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminEngineeringPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

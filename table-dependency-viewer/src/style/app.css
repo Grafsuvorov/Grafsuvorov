@@ -473,6 +473,9 @@ main.content {
 
 .click-value {
   font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .click-run-error {
@@ -512,6 +515,7 @@ main.content {
 .click-summary-grid > div,
 .click-meta-grid > div,
 .click-stage-card {
+  min-width: 0;
   padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.1);
@@ -3836,12 +3840,16 @@ main.content {
 }
 
 .table-key-pill {
+  min-width: 0;
+  max-width: 100%;
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 11px;
   background: rgba(59, 130, 246, 0.16);
   border: 1px solid rgba(59, 130, 246, 0.35);
   color: #bfdbfe;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dbt-manifest-block {
@@ -3852,13 +3860,13 @@ main.content {
 
 .dbt-manifest-paths {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
   gap: 10px;
 }
 
 .dbt-manifest-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 10px;
   margin-top: 10px;
 }
@@ -3866,6 +3874,7 @@ main.content {
 .dbt-manifest-item {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 6px;
   padding: 12px 14px;
   text-align: left;
@@ -3876,6 +3885,13 @@ main.content {
 }
 
 .dbt-manifest-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dbt-manifest-item > span {
+  min-width: 0;
+  white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
 }

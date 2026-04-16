@@ -454,22 +454,44 @@ export default function TableCard({
         ["Compiled", dbtManifest.compiled_path],
       ].filter(([, value]) => value)
     : [];
-  const dbtConfigEntries = dbtManifest?.config ? Object.entries(dbtManifest.config).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
-  const dbtMetaEntries = dbtManifest?.meta ? Object.entries(dbtManifest.meta).filter(([, value]) => value !== null && value !== undefined && value !== "") : [];
+  const hiddenDbtFields = new Set(["checksum", "user_id", "manifest_path", "unique_id"]);
+  const dbtConfigEntries = dbtManifest?.config
+    ? Object.entries(dbtManifest.config).filter(
+        ([key, value]) => !hiddenDbtFields.has(String(key || "").toLowerCase()) && value !== null && value !== undefined && value !== "",
+      )
+    : [];
+  const dbtMetaEntries = dbtManifest?.meta
+    ? Object.entries(dbtManifest.meta).filter(
+        ([key, value]) => !hiddenDbtFields.has(String(key || "").toLowerCase()) && value !== null && value !== undefined && value !== "",
+      )
+    : [];
   const dbtVisibleColumns = showAllDbtColumns ? dbtManifest?.columns || [] : (dbtManifest?.columns || []).slice(0, 60);
   const dbtVisibleConfigEntries = showAllDbtConfig ? dbtConfigEntries : dbtConfigEntries.slice(0, 12);
   const dbtVisibleMetaEntries = showAllDbtMeta ? dbtMetaEntries : dbtMetaEntries.slice(0, 12);
   const formatDbtTimestamp = (value) => {
     if (!value) return "—";
     const normalized = typeof value === "number" ? new Date(value * 1000).toISOString() : value;
-    const parsed = formatLocalDateTime(normalized);
+    const parsed = formatLocalDateTime(normalized, { withSeconds: false });
     if (!parsed || parsed === normalized) {
-      return String(normalized).replace(/\.\d+/, "");
+      return String(normalized).replace("T", " ").replace(/\.\d+/, "").replace(/Z$/, "");
     }
-    return parsed.replace(/:\d{2}(?=\s|$)/, "");
+    return parsed;
   };
-  const renderCompactValue = (value) => {
+  const renderCompactValue = (value, key = "") => {
     if (value === null || value === undefined || value === "") return "—";
+    const normalizedKey = String(key || "").toLowerCase();
+    const textValue = typeof value === "string" ? value.trim() : value;
+    const looksLikeDate =
+      typeof textValue === "string" &&
+      (/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/.test(textValue) ||
+        /(?:^|_)(created_at|generated_at|updated_at|patch_created_at|start_at|end_at|dttm|timestamp)$/i.test(normalizedKey));
+    if (
+      looksLikeDate ||
+      (typeof value === "number" &&
+        /(?:^|_)(created_at|generated_at|updated_at|patch_created_at|timestamp)$/i.test(normalizedKey))
+    ) {
+      return formatDbtTimestamp(value);
+    }
     if (typeof value === "string") return value;
     return JSON.stringify(value);
   };
@@ -1424,7 +1446,9 @@ export default function TableCard({
               {dbtManifest.upstream_models?.length ? (
                 <div className="dbt-manifest-list">
                   {dbtManifest.upstream_models.map((item) => {
-                    const label = item.schema && item.table_name ? `${item.schema}.${item.table_name}` : item.unique_id;
+                    const label = item.schema && item.table_name
+                      ? `${item.schema}.${item.table_name}`
+                      : item.model_name || item.unique_id?.split(".").slice(-1)[0] || "DBT model";
                     return (
                       <button
                         key={item.unique_id}
@@ -1433,7 +1457,7 @@ export default function TableCard({
                         disabled={!item.schema || !item.table_name}
                       >
                         <span className="mono">{label}</span>
-                        <span className="muted">{item.schema && item.table_name ? "Открыть таблицу" : "Только unique_id"}</span>
+                        <span className="muted">{item.schema && item.table_name ? "Открыть таблицу" : "DBT model без физической таблицы"}</span>
                       </button>
                     );
                   })}
@@ -1516,7 +1540,7 @@ export default function TableCard({
                   {dbtVisibleConfigEntries.map(([key, value]) => (
                     <div key={key} className="dbt-manifest-item static">
                       <span className="mono">{key}</span>
-                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value)}</span>
+                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value, key)}</span>
                     </div>
                   ))}
                 </div>
@@ -1537,7 +1561,7 @@ export default function TableCard({
                   {dbtVisibleMetaEntries.map(([key, value]) => (
                     <div key={key} className="dbt-manifest-item static">
                       <span className="mono">{key}</span>
-                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value)}</span>
+                      <span className="muted mono dbt-manifest-wrap dbt-manifest-value">{renderCompactValue(value, key)}</span>
                     </div>
                   ))}
                 </div>

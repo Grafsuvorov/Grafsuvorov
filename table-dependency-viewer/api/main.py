@@ -3964,16 +3964,6 @@ def get_table_card_info_by_path(schema: str, table: str, source: str = Query("cu
         meta["last_success_time"] = last_success_time
         meta["table_size_mb"] = table_size_mb
 
-        dbt_manifest = get_dbt_manifest_model(
-            base_dir=BASE_DIR,
-            manifest_dir=DBT_MANIFEST_DIR,
-            schema_name=schema,
-            table_name=table,
-            source=source_name if source_name != "current" else "ohd",
-        )
-        if dbt_manifest:
-            meta["dbt_manifest"] = dbt_manifest
-
         return JSONResponse(content=meta, media_type="application/json; charset=utf-8")
 
     dbt_card = build_dbt_fallback_card(
@@ -4016,20 +4006,20 @@ def list_all_tables(detailed: bool = Query(False)):
         table = meta.get("table_name")
         if schema and table:
             key = f"{schema}.{table}"
-            all_tables.setdefault(
-                key.lower(),
-                {
-                    "fqn": key,
-                    "schema": schema,
-                    "table": table,
-                    "label": key,
-                    "source": "current",
-                    "entity_name": meta.get("entity_name"),
-                },
-            )
+            all_tables[f"current:{key.lower()}"] = {
+                "fqn": key,
+                "schema": schema,
+                "table": table,
+                "label": key,
+                "source": "current",
+                "entity_name": meta.get("entity_name"),
+            }
     for item in get_dbt_table_catalog(BASE_DIR, DBT_MANIFEST_DIR, source="ohd"):
-        all_tables.setdefault(item["fqn"].lower(), item)
-    rows = sorted(all_tables.values(), key=lambda v: v["fqn"].lower())
+        all_tables[f"{item['source']}:{item['fqn'].lower()}"] = item
+    rows = sorted(
+        all_tables.values(),
+        key=lambda v: (v["fqn"].lower(), 0 if v.get("source") == "current" else 1, v.get("source") or ""),
+    )
     if detailed:
         return JSONResponse(content=rows, media_type="application/json; charset=utf-8")
     return JSONResponse(content=[row["fqn"] for row in rows], media_type="application/json; charset=utf-8")

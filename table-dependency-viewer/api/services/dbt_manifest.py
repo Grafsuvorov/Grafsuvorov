@@ -146,6 +146,7 @@ def _load_manifest_index(base_dir: Path, manifest_dir: str, source: str = "ohd")
                     "unique_id": dep_unique_id,
                     "schema": dep_node.get("schema"),
                     "table_name": dep_node.get("alias") or dep_node.get("name"),
+                    "model_name": dep_node.get("name"),
                 }
             )
         record["upstream_models"] = upstream_models

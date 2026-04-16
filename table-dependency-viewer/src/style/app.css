@@ -59,14 +59,18 @@ main.content {
   margin: 0 auto;
   padding: 20px var(--container-padding) 28px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
 }
 
 .topnav-right {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .auth-pill {
@@ -1246,6 +1250,9 @@ main.content {
   display: flex;
   align-items: center;
   gap: 28px;
+  flex: 1 1 720px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .topnav-brand {
@@ -1257,11 +1264,14 @@ main.content {
   display: flex;
   align-items: center;
   gap: 24px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .nav-primary {
   display: flex;
   gap: 18px;
+  flex-wrap: wrap;
 }
 
 .nav-secondary {
@@ -1269,6 +1279,8 @@ main.content {
   gap: 14px;
   font-size: 12.5px;
   opacity: 0.6;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .topnav-nav button {

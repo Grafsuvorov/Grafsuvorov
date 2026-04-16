@@ -1,14 +1,6 @@
-sed -i 's/\r$//' .env.manifest
-
-  Потом снова проверь:
-
-  cat -vet .env.manifest
-
-  ^M исчезнуть должен.
-
-  После этого заново подгрузи env и запусти скрипт:
-
-  set -a
-  . ./.env.manifest
-  set +a
-  python3 scripts/refresh_dbt_manifest.py
+[root@rgm-s-dwhapp01 table-dependency-viewer]# python3 scripts/refresh_dbt_manifest.py
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being m            ade to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/e            n/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being m            ade to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/e            n/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+No manifest found for day 2026-04-16

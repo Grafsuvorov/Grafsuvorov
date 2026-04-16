@@ -71,6 +71,15 @@ main.content {
   gap: 12px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.topnav-right > * {
+  pointer-events: auto;
 }
 
 .auth-pill {
@@ -1253,6 +1262,8 @@ main.content {
   flex: 1 1 720px;
   min-width: 0;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 2;
 }
 
 .topnav-brand {
@@ -1266,6 +1277,8 @@ main.content {
   gap: 24px;
   flex-wrap: wrap;
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .nav-primary {
@@ -1281,6 +1294,8 @@ main.content {
   opacity: 0.6;
   flex-wrap: wrap;
   min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .topnav-nav button {
@@ -1289,6 +1304,9 @@ main.content {
   padding: 6px 2px;
   cursor: pointer;
   color: var(--text);
+  position: relative;
+  z-index: 3;
+  pointer-events: auto;
 }
 
 .topnav-nav button.active {

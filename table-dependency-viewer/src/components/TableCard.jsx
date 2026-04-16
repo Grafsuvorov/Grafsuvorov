@@ -542,6 +542,21 @@ export default function TableCard({
   const dbtVisibleColumns = showAllDbtColumns ? dbtManifest?.columns || [] : (dbtManifest?.columns || []).slice(0, 60);
   const dbtVisibleConfigEntries = showAllDbtConfig ? dbtConfigEntries : dbtConfigEntries.slice(0, 12);
   const dbtVisibleMetaEntries = showAllDbtMeta ? dbtMetaEntries : dbtMetaEntries.slice(0, 12);
+  const normalizeDescription = (value, fallback = "—") => {
+    const raw = String(value || "").trim();
+    if (!raw) return fallback;
+    const parts = raw.split("|").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return raw;
+    const filtered = parts.filter((part) => !/[A-Za-z0-9_]+\.[A-Za-z0-9_]+/.test(part));
+    const normalized = [];
+    filtered.forEach((part) => {
+      const key = part.toLowerCase();
+      if (!normalized.some((item) => item.toLowerCase() === key)) {
+        normalized.push(part);
+      }
+    });
+    return normalized[0] || filtered[0] || parts[0] || fallback;
+  };
   const formatDbtTimestamp = (value) => {
     if (!value) return "—";
     const normalized = typeof value === "number" ? new Date(value * 1000).toISOString() : value;
@@ -593,8 +608,7 @@ export default function TableCard({
       const parts = raw.split("|").map((part) => part.trim()).filter(Boolean);
       const sourceRef = parts.find((part) => part.includes("."));
       const fieldName = sourceRef ? sourceRef.split(".").slice(-1)[0] : raw;
-      const descriptionCandidates = parts.filter((part) => part !== sourceRef && part !== fieldName);
-      const description = [...new Set(descriptionCandidates)][0] || fieldName || raw || `field_${idx + 1}`;
+      const description = normalizeDescription(raw, fieldName || raw || `field_${idx + 1}`);
       const dataType = attributeTypeMap.get(String(fieldName || "").toLowerCase()) || null;
       return { raw, fieldName, description, dataType };
     });
@@ -1616,7 +1630,7 @@ export default function TableCard({
                         {column.name}
                         {column.data_type ? <span className="muted"> · {column.data_type}</span> : null}
                       </span>
-                      <span className="muted">{column.description || "Без описания"}</span>
+                      <span className="muted">{normalizeDescription(column.description, "Без описания")}</span>
                     </div>
                   ))}
                 </div>

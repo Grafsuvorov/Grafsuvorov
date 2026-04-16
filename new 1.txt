@@ -1,5 +1,4 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# python3 scripts/refresh_dbt_manifest.py
-/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request i         s being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib         3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
-  warnings.warn(
-refresh_dbt_manifest failed: S3 operation failed; code: SignatureDoesNotMatch, message: The request signature we calculate         d does not match the signature you provided. Check your key and signing method., resource: /dbt-zp-prod, request_id: 18A6D         8C8AAC531D0, host_id: e3d8fbb0065519bfcde4e2f5223dcbc63d2c44ce0d37121ba613f2ae9900ee51, bucket_name: dbt-zp-prod
+echo "MINIO_HOST=$MINIO_HOST"
+  echo "MINIO_PORT=$MINIO_PORT"
+  echo "MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY"
+  printf 'MINIO_SECRET_KEY=<%s>\n' "$MINIO_SECRET_KEY"

@@ -1,21 +1,52 @@
+# config.py
+from dotenv import load_dotenv
+import os
+load_dotenv()
+TABLE_LOADING_HISTORY = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
+TABLE_ENTITIES_META = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
+TABLE_TABLES_META = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
+TABLE_TABLE_COMPARE = os.getenv("TABLE_TABLE_COMPARE", "tech_monitoring.vw_table_compare")
+TABLE_YT_SLA = os.getenv("TABLE_YT_SLA", "tech_etl.yt_sla")
+TABLE_TABLES_META_CLICK = os.getenv("TABLE_TABLES_META_CLICK", "tech_etl.tables_meta_clickhouse_upload")
+DATABASE_URL = os.getenv("DATABASE_URL")
+TABLE_YTREK_INCIDENTS = os.getenv("TABLE_YTREK_INCIDENTS", "tech_etl.ytrek_incidents")
+TABLE_DATA_QUALITY = os.getenv("TABLE_DATA_QUALITY", "dq.data_quality_results")
+YTRACK_ISSUE_URL        = os.getenv("YTRACK_ISSUE_URL", "https://yt.rusal.ru/issue/{id}")
+TABLE_RELEASE_LOG       = os.getenv("TABLE_RELEASE_LOG", "tech_etl.release_log")
+TABLE_RELEASE_OBJECTS   = os.getenv("TABLE_RELEASE_OBJECTS", "tech_etl.release_objects")
+TABLE_YT_ISSUE_SNAPSHOT = os.getenv("TABLE_YT_ISSUE_SNAPSHOT", "tech_etl.yt_issue_snapshot")
+TABLE_YT_ISSUE_CUSTOM   = os.getenv("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field")
+TABLE_YT_ISSUE_TIMELINE = os.getenv("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline")
+TABLE_YT_ISSUE_WORKLOG  = os.getenv("TABLE_YT_ISSUE_WORKLOG", "tech_etl.yt_issue_worklog")
+TABLE_YT_ISSUE_COMMENT  = os.getenv("TABLE_YT_ISSUE_COMMENT", "tech_etl.yt_issue_comment")
 
-CREATE TABLE dc_dbt.model (
-	model_name varchar NOT NULL,
-	model_path varchar NOT NULL,
-	model_type varchar NOT NULL,
-	model_tags varchar NULL,
-	schema_name varchar NULL,
-	table_name varchar NULL,
-	table_full_name varchar NULL,
-	inserted_dttm timestamp NOT NULL,
-	updated_dttm timestamp NOT NULL,
-	deleted_flag bool NOT NULL
-)
-WITH (
-	appendonly=true,
-	blocksize=32768,
-	compresstype=zstd,
-	compresslevel=3,
-	orientation=column
-)
-DISTRIBUTED BY (model_name);
+TABLE_CLICK_LOAD_RUN    = os.getenv("TABLE_CLICK_LOAD_RUN", "tech_etl.click_fact_table_load_run")
+TABLE_CLICK_LOAD_STAGE  = os.getenv("TABLE_CLICK_LOAD_STAGE", "tech_etl.click_fact_table_load_stage")
+
+CLICK_META_DIR          = os.getenv("CLICK_META_DIR", "config_files/meta")
+DEV_CLICK_META_DIR      = os.getenv("DEV_CLICK_META_DIR", "config_files/meta_dev")
+ADMIN_CICD_SCRIPT       = os.getenv("ADMIN_CICD_SCRIPT", "scripts/ci_cd.sh")
+DEV_DATABASE_URL        = os.getenv("DEV_DATABASE_URL", "")
+AIRFLOW_DEV_BASE_URL    = os.getenv("AIRFLOW_DEV_BASE_URL", "")
+AIRFLOW_DEV_DAG_ID      = os.getenv("AIRFLOW_DEV_DAG_ID", "")
+AIRFLOW_DEV_USERNAME    = os.getenv("AIRFLOW_DEV_USERNAME", "")
+AIRFLOW_DEV_PASSWORD    = os.getenv("AIRFLOW_DEV_PASSWORD", "")
+DEV_META_LOCK_TTL_MIN   = int(os.getenv("DEV_META_LOCK_TTL_MIN", "30"))
+DEV_META_DEPLOY_HOST    = os.getenv("DEV_META_DEPLOY_HOST", "")
+DEV_META_DEPLOY_PORT    = int(os.getenv("DEV_META_DEPLOY_PORT", "22"))
+DEV_META_DEPLOY_USER    = os.getenv("DEV_META_DEPLOY_USER", "")
+DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
+DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
+DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
+DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
+DBT_MANIFEST_DIR        = os.getenv("DBT_MANIFEST_DIR", "config_files/dbt")
+
+
+
+
+AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
+AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
+AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))
+AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
+AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
+AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")

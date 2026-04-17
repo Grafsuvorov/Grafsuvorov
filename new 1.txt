@@ -1,52 +1,80 @@
-# config.py
-from dotenv import load_dotenv
-import os
-load_dotenv()
-TABLE_LOADING_HISTORY = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
-TABLE_ENTITIES_META = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
-TABLE_TABLES_META = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
-TABLE_TABLE_COMPARE = os.getenv("TABLE_TABLE_COMPARE", "tech_monitoring.vw_table_compare")
-TABLE_YT_SLA = os.getenv("TABLE_YT_SLA", "tech_etl.yt_sla")
-TABLE_TABLES_META_CLICK = os.getenv("TABLE_TABLES_META_CLICK", "tech_etl.tables_meta_clickhouse_upload")
-DATABASE_URL = os.getenv("DATABASE_URL")
-TABLE_YTREK_INCIDENTS = os.getenv("TABLE_YTREK_INCIDENTS", "tech_etl.ytrek_incidents")
-TABLE_DATA_QUALITY = os.getenv("TABLE_DATA_QUALITY", "dq.data_quality_results")
-YTRACK_ISSUE_URL        = os.getenv("YTRACK_ISSUE_URL", "https://yt.rusal.ru/issue/{id}")
-TABLE_RELEASE_LOG       = os.getenv("TABLE_RELEASE_LOG", "tech_etl.release_log")
-TABLE_RELEASE_OBJECTS   = os.getenv("TABLE_RELEASE_OBJECTS", "tech_etl.release_objects")
-TABLE_YT_ISSUE_SNAPSHOT = os.getenv("TABLE_YT_ISSUE_SNAPSHOT", "tech_etl.yt_issue_snapshot")
-TABLE_YT_ISSUE_CUSTOM   = os.getenv("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field")
-TABLE_YT_ISSUE_TIMELINE = os.getenv("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline")
-TABLE_YT_ISSUE_WORKLOG  = os.getenv("TABLE_YT_ISSUE_WORKLOG", "tech_etl.yt_issue_worklog")
-TABLE_YT_ISSUE_COMMENT  = os.getenv("TABLE_YT_ISSUE_COMMENT", "tech_etl.yt_issue_comment")
 
-TABLE_CLICK_LOAD_RUN    = os.getenv("TABLE_CLICK_LOAD_RUN", "tech_etl.click_fact_table_load_run")
-TABLE_CLICK_LOAD_STAGE  = os.getenv("TABLE_CLICK_LOAD_STAGE", "tech_etl.click_fact_table_load_stage")
-
-CLICK_META_DIR          = os.getenv("CLICK_META_DIR", "config_files/meta")
-DEV_CLICK_META_DIR      = os.getenv("DEV_CLICK_META_DIR", "config_files/meta_dev")
-ADMIN_CICD_SCRIPT       = os.getenv("ADMIN_CICD_SCRIPT", "scripts/ci_cd.sh")
-DEV_DATABASE_URL        = os.getenv("DEV_DATABASE_URL", "")
-AIRFLOW_DEV_BASE_URL    = os.getenv("AIRFLOW_DEV_BASE_URL", "")
-AIRFLOW_DEV_DAG_ID      = os.getenv("AIRFLOW_DEV_DAG_ID", "")
-AIRFLOW_DEV_USERNAME    = os.getenv("AIRFLOW_DEV_USERNAME", "")
-AIRFLOW_DEV_PASSWORD    = os.getenv("AIRFLOW_DEV_PASSWORD", "")
-DEV_META_LOCK_TTL_MIN   = int(os.getenv("DEV_META_LOCK_TTL_MIN", "30"))
-DEV_META_DEPLOY_HOST    = os.getenv("DEV_META_DEPLOY_HOST", "")
-DEV_META_DEPLOY_PORT    = int(os.getenv("DEV_META_DEPLOY_PORT", "22"))
-DEV_META_DEPLOY_USER    = os.getenv("DEV_META_DEPLOY_USER", "")
-DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
-DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
-DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
-DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
-DBT_MANIFEST_DIR        = os.getenv("DBT_MANIFEST_DIR", "config_files/dbt")
-
-
-
-
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
-AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
-AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))
-AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
-AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
-AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+table-dependency-viewer-api-1  |     self.dbapi_connection = connection = pool._invoke_creator(self)
+table-dependency-viewer-api-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+table-dependency-viewer-api-1  |     return dialect.connect(*cargs_tup, **cparams)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+table-dependency-viewer-api-1  |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in connect
+table-dependency-viewer-api-1  |     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | psycopg2.OperationalError: connection to server at "res-s-khgpm01.resource.local" (10.66.229.231), port 5432 failed: Connection timed out
+table-dependency-viewer-api-1  |        Is the server running on that host and accepting TCP/IP connections?
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4033, in get_dbt_model_history
+table-dependency-viewer-api-1  |     payload = get_dbt_model_run_history(
+table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/services/dbt_logs.py", line 98, in get_dbt_model_run_history
+table-dependency-viewer-api-1  |     with engine.connect() as conn:
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+table-dependency-viewer-api-1  |     return self._connection_cls(self)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 145, in __init__
+table-dependency-viewer-api-1  |     Connection._handle_dbapi_exception_noconnection(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2448, in _handle_dbapi_exception_noconnection
+table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+table-dependency-viewer-api-1  |     self._dbapi_connection = engine.raw_connection()
+table-dependency-viewer-api-1  |                              ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+table-dependency-viewer-api-1  |     return self.pool.connect()
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+table-dependency-viewer-api-1  |     return _ConnectionFairy._checkout(self)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+table-dependency-viewer-api-1  |     fairy = _ConnectionRecord.checkout(pool)
+table-dependency-viewer-api-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+table-dependency-viewer-api-1  |     rec = pool._do_get()
+table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+table-dependency-viewer-api-1  |     with util.safe_reraise():
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+table-dependency-viewer-api-1  |     return self._create_connection()
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+table-dependency-viewer-api-1  |     return _ConnectionRecord(self)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+table-dependency-viewer-api-1  |     self.__connect()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+table-dependency-viewer-api-1  |     with util.safe_reraise():
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+table-dependency-viewer-api-1  |     self.dbapi_connection = connection = pool._invoke_creator(self)
+table-dependency-viewer-api-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+table-dependency-viewer-api-1  |     return dialect.connect(*cargs_tup, **cparams)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+table-dependency-viewer-api-1  |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in connect
+table-dependency-viewer-api-1  |     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "res-s-khgpm01.resource.local" (10.66.229.231), port 5432 failed: Connection timed out
+table-dependency-viewer-api-1  |        Is the server running on that host and accepting TCP/IP connections?
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)

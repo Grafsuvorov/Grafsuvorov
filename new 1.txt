@@ -1,19 +1,15 @@
-select * from tech_monitoring.log_dbt_model
 
-
-CREATE TABLE tech_monitoring.log_dbt_model (
-	execution_guid varchar NULL,
-	model_name varchar NULL,
-	model_path varchar NULL,
-	model_type varchar NULL,
-	model_status varchar NULL,
-	"materialized" varchar NULL,
-	start_dttm timestamp NULL,
-	finish_dttm timestamp NULL,
-	duration interval NULL,
-	thread_id varchar NULL,
-	error_message varchar NULL,
-	inserted_dttm timestamp NOT NULL
+CREATE TABLE dc_dbt.model (
+	model_name varchar NOT NULL,
+	model_path varchar NOT NULL,
+	model_type varchar NOT NULL,
+	model_tags varchar NULL,
+	schema_name varchar NULL,
+	table_name varchar NULL,
+	table_full_name varchar NULL,
+	inserted_dttm timestamp NOT NULL,
+	updated_dttm timestamp NOT NULL,
+	deleted_flag bool NOT NULL
 )
 WITH (
 	appendonly=true,
@@ -22,23 +18,4 @@ WITH (
 	compresslevel=3,
 	orientation=column
 )
-DISTRIBUTED BY (execution_guid);
-
-CREATE TABLE tech_monitoring.log_dbt_run (
-	execution_guid varchar NULL,
-	dag_run_id varchar NULL,
-	dag_name varchar NULL,
-	dbt_run_status varchar NULL,
-	total_model_count int4 NULL,
-	success_model_count int4 NULL,
-	failed_model_count int4 NULL,
-	inserted_dttm timestamp NOT NULL
-)
-WITH (
-	appendonly=true,
-	blocksize=32768,
-	compresstype=zstd,
-	compresslevel=3,
-	orientation=column
-)
-DISTRIBUTED BY (execution_guid);
+DISTRIBUTED BY (model_name);

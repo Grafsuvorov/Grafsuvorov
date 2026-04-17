@@ -1,17 +1,18 @@
-﻿import os
+﻿from dotenv import load_dotenv
+import os
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://postgres:0506@localhost:5432/dwh",
-)
-DBT_LOGS_DATABASE_URL = os.getenv("DBT_LOGS_DATABASE_URL", "").strip()
+load_dotenv()
 
-TABLE_LOADING_HISTORY   = "public.log_objects_loading_history"
-TABLE_ENTITIES_META     = "public.entities_meta"
-TABLE_TABLES_META       = "public.tables_meta"
-TABLE_YT_SLA            = "public.yt_sla"
-TABLE_YTREK_INCIDENTS   = "public.ytrek_incidents"
-TABLE_DATA_QUALITY      = "public.data_quality_results"
+TABLE_LOADING_HISTORY   = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
+TABLE_ENTITIES_META     = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
+TABLE_TABLES_META       = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
+TABLE_TABLE_COMPARE     = os.getenv("TABLE_TABLE_COMPARE", "tech_monitoring.vw_table_compare")
+TABLE_YT_SLA            = os.getenv("TABLE_YT_SLA", "tech_etl.yt_sla")
+TABLE_TABLES_META_CLICK = os.getenv("TABLE_TABLES_META_CLICK", "tech_etl.tables_meta_clickhouse_upload")
+DATABASE_URL            = os.getenv("DATABASE_URL")
+DBT_LOGS_DATABASE_URL   = os.getenv("DBT_LOGS_DATABASE_URL", "")
+TABLE_YTREK_INCIDENTS   = os.getenv("TABLE_YTREK_INCIDENTS", "tech_etl.ytrek_incidents")
+TABLE_DATA_QUALITY      = os.getenv("TABLE_DATA_QUALITY", "dq.data_quality_results")
 TABLE_RELEASE_LOG       = os.getenv("TABLE_RELEASE_LOG", "public.release_log")
 TABLE_RELEASE_OBJECTS   = os.getenv("TABLE_RELEASE_OBJECTS", "public.release_objects")
 TABLE_YT_ISSUE_SNAPSHOT = os.getenv("TABLE_YT_ISSUE_SNAPSHOT", "tech_etl.yt_issue_snapshot")
@@ -42,10 +43,6 @@ DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
 DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
 DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
 DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
-
-# PROD ONLY — в локале нет
-TABLE_TABLES_META_CLICK = None
-TABLE_TABLE_COMPARE     = None
 
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")

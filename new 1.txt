@@ -1,6 +1,17 @@
 [root@rgm-s-dwhapp01 table-dependency-viewer]# python3 scripts/refresh_dbt_manifest.py
-/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being m            ade to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/e            n/latest/advanced-usage.html#tls-warnings
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
   warnings.warn(
-/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being m            ade to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/e            n/latest/advanced-usage.html#tls-warnings
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
   warnings.warn(
-No manifest found for day 2026-04-16
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py:1097: InsecureRequestWarning: Unverified HTTPS request is being made to host 'res-s-khs3.resource.local'. Adding certificate verification is strongly advised. See: https://urllib3.readthedocs.io/en/latest/advanced-usage.html#tls-warnings
+  warnings.warn(
+Updated dbt manifest: source=ohd day=2026-04-15 run=dbt_run_manual/2026-04-15/2026-04-15 18:06:29.296932/artifacts
+[root@rgm-s-dwhapp01 table-dependency-viewer]# cd scripts/
+[root@rgm-s-dwhapp01 scripts]# pwd
+/root/table-dependency-viewer/scripts

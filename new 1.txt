@@ -1,7 +1,22 @@
+0 9 * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3 /root/table-dependency-
+  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
 
-[root@rgm-s-dwhapp01 scripts]# /root/.pyenv/shims/python3 --version
-Python 3.12.12
-[root@rgm-s-dwhapp01 scripts]# which -a python3
-/root/.pyenv/shims/python3
-/usr/local/bin/python3
-/usr/bin/python3
+  Что дальше:
+
+  1. crontab -e
+  2. нажать i
+  3. вставить строку
+  4. Esc
+  5. :wq
+  6. проверить:
+
+  crontab -l
+
+  Если хочешь быстро проверить cron без ожидания 9 утра, временно вставь:
+
+  * * * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3 /root/table-dependency-
+  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
+
+  потом посмотри лог:
+
+  tail -f /var/log/tdv_refresh_dbt_manifest.log

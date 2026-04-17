@@ -175,23 +175,16 @@ DBT_REFRESH_DAY=2026-04-10 python3 scripts/refresh_dbt_manifest.py
 
 ## DBT logs
 
-Для отдельной БД с `dbt`-логами и каталога моделей можно задать либо готовый DSN, либо переменные подключения по частям.
+Для отдельной БД с `dbt`-логами нужен отдельный DSN, как и для основной БД.
 
 Пример env:
 
 ```env
-DBT_LOGS_DATABASE_URL=
-DBT_LOGS_DB_HOST=
-DBT_LOGS_DB_PORT=5432
-DBT_LOGS_DB_NAME=
-DBT_LOGS_DB_USER=
-DBT_LOGS_DB_PASSWORD=
+DBT_LOGS_DATABASE_URL=postgresql+psycopg2://user:password@host:5432/db_name
 TABLE_DBT_MODEL_CATALOG=dc_dbt.model
 TABLE_DBT_MODEL_LOG=tech_monitoring.log_dbt_model
 TABLE_DBT_RUN_LOG=tech_monitoring.log_dbt_run
 ```
-
-Если `DBT_LOGS_DATABASE_URL` пустой, backend соберет подключение из `DBT_LOGS_DB_*`.
 
 ## Технический долг / куда дальше
 

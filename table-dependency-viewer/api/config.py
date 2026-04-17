@@ -1,26 +1,10 @@
 ﻿import os
-from urllib.parse import quote_plus
-
-
-def _build_database_url(prefix: str) -> str:
-    host = os.getenv(f"{prefix}_HOST", "").strip()
-    database = os.getenv(f"{prefix}_NAME", "").strip()
-    username = os.getenv(f"{prefix}_USER", "").strip()
-    if not host or not database or not username:
-        return ""
-    password = os.getenv(f"{prefix}_PASSWORD", "")
-    port = os.getenv(f"{prefix}_PORT", "5432").strip() or "5432"
-    scheme = os.getenv(f"{prefix}_SCHEME", "postgresql+psycopg2").strip() or "postgresql+psycopg2"
-    return (
-        f"{scheme}://{quote_plus(username)}:{quote_plus(password)}@"
-        f"{host}:{port}/{database}"
-    )
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+psycopg2://postgres:0506@localhost:5432/dwh",
 )
-DBT_LOGS_DATABASE_URL = os.getenv("DBT_LOGS_DATABASE_URL", "").strip() or _build_database_url("DBT_LOGS_DB")
+DBT_LOGS_DATABASE_URL = os.getenv("DBT_LOGS_DATABASE_URL", "").strip()
 
 TABLE_LOADING_HISTORY   = "public.log_objects_loading_history"
 TABLE_ENTITIES_META     = "public.entities_meta"

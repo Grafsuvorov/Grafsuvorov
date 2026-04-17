@@ -1,27 +1,7 @@
-0 9 * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3.12 /root/table-dependency-
-  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
 
-  Что сделать:
-
-  1. Открыть cron
-
-  crontab -e
-
-  2. Вставить строку выше и сохранить.
-  3. Проверить:
-
-  crontab -l
-
-  4. Смотреть лог:
-
-  tail -f /var/log/tdv_refresh_dbt_manifest.log
-
-  Предупреждение InsecureRequestWarning не мешает работе. Скрипт у тебя уже успешно скачал manifest:
-
-  - день: 2026-04-15
-  - запуск: dbt_run_manual/2026-04-15/2026-04-15 18:06:29.296932/artifacts
-
-  Если хочешь, можно еще сделать тест cron без ожидания 9 утра:
-
-  * * * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3.12 /root/table-dependency-
-  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
+[root@rgm-s-dwhapp01 scripts]# /root/.pyenv/shims/python3 --version
+Python 3.12.12
+[root@rgm-s-dwhapp01 scripts]# which -a python3
+/root/.pyenv/shims/python3
+/usr/local/bin/python3
+/usr/bin/python3

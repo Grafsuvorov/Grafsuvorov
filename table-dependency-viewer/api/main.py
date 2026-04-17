@@ -53,6 +53,10 @@ from .config import (
     CLICK_META_DIR,
     DEV_CLICK_META_DIR,
     DBT_MANIFEST_DIR,
+    DBT_LOGS_DATABASE_URL,
+    TABLE_DBT_MODEL_CATALOG,
+    TABLE_DBT_MODEL_LOG,
+    TABLE_DBT_RUN_LOG,
     ADMIN_CICD_SCRIPT,
     YTRACK_ISSUE_URL,
     DATABASE_URL,
@@ -94,6 +98,7 @@ from .services.dbt_manifest import (
     get_dbt_manifest_model,
     get_dbt_table_catalog,
 )
+from .services.dbt_logs import get_dbt_model_run_history
 
 
 
@@ -116,6 +121,7 @@ app.add_middleware(
 
 # Подключение
 engine = create_engine(DATABASE_URL)
+dbt_logs_engine = create_engine(DBT_LOGS_DATABASE_URL) if DBT_LOGS_DATABASE_URL else None
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -4008,6 +4014,38 @@ def get_dbt_model_info(schema: str, table: str, source: str = "ohd"):
             return JSONResponse(status_code=404, content={"error": "dbt model not found"})
         return JSONResponse(content=model, media_type="application/json; charset=utf-8")
     except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
+@router.get("/api/dbt/history/{schema}/{table:path}")
+def get_dbt_model_history(
+    schema: str,
+    table: str,
+    source: str = "ohd",
+    limit: int = Query(12, ge=1, le=50),
+):
+    if not dbt_logs_engine:
+        return JSONResponse(
+            content={"configured": False, "model": None, "catalog": None, "runs": []},
+            media_type="application/json; charset=utf-8",
+        )
+    try:
+        payload = get_dbt_model_run_history(
+            engine=dbt_logs_engine,
+            base_dir=BASE_DIR,
+            manifest_dir=DBT_MANIFEST_DIR,
+            schema_name=schema,
+            table_name=table,
+            source=source,
+            limit=limit,
+            table_model_catalog=TABLE_DBT_MODEL_CATALOG,
+            table_model_log=TABLE_DBT_MODEL_LOG,
+            table_run_log=TABLE_DBT_RUN_LOG,
+        )
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ /api/dbt/history error:", e)
+        print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 

@@ -41,6 +41,10 @@ export default function TableCard({
   const [historyRows, setHistoryRows] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(null);
+  const [dbtHistory, setDbtHistory] = useState([]);
+  const [dbtHistoryLoading, setDbtHistoryLoading] = useState(false);
+  const [dbtHistoryError, setDbtHistoryError] = useState(null);
+  const [dbtHistoryConfigured, setDbtHistoryConfigured] = useState(true);
   const [variants, setVariants] = useState([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [variantsError, setVariantsError] = useState(null);
@@ -81,6 +85,7 @@ export default function TableCard({
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [expandedGpErrors, setExpandedGpErrors] = useState({});
   const [expandedClickErrors, setExpandedClickErrors] = useState({});
+  const [expandedDbtErrors, setExpandedDbtErrors] = useState({});
   const [showAllDbtUpstream, setShowAllDbtUpstream] = useState(false);
   const [showAllDbtColumns, setShowAllDbtColumns] = useState(false);
   const [showAllDbtConfig, setShowAllDbtConfig] = useState(false);
@@ -89,6 +94,7 @@ export default function TableCard({
   const historyRequestRef = useRef(0);
   const clickRunsRequestRef = useRef(0);
   const clickHistoryRequestRef = useRef(0);
+  const dbtHistoryRequestRef = useRef(0);
 
   useEffect(() => {
     if (!schema || !tableName) {
@@ -151,6 +157,37 @@ export default function TableCard({
         setHistoryLoading(false);
       });
   }, [schema, tableName, meta?.table_id, isCurrentSource]);
+
+  useEffect(() => {
+    if (!schema || !tableName || isCurrentSource) {
+      setDbtHistory([]);
+      setDbtHistoryError(null);
+      setDbtHistoryLoading(false);
+      setDbtHistoryConfigured(true);
+      return;
+    }
+    setDbtHistoryLoading(true);
+    setDbtHistoryError(null);
+    const requestId = ++dbtHistoryRequestRef.current;
+    const params = new URLSearchParams({ limit: "12" });
+    if (source) params.set("source", source);
+    fetch(`${API_BASE}/api/dbt/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить dbt-логи")))
+      .then((data) => {
+        if (requestId !== dbtHistoryRequestRef.current) return;
+        setDbtHistory(Array.isArray(data?.runs) ? data.runs : []);
+        setDbtHistoryConfigured(Boolean(data?.configured ?? true));
+      })
+      .catch((err) => {
+        if (requestId !== dbtHistoryRequestRef.current) return;
+        console.error(err);
+        setDbtHistoryError(typeof err === "string" ? err : "Не удалось загрузить dbt-логи");
+      })
+      .finally(() => {
+        if (requestId !== dbtHistoryRequestRef.current) return;
+        setDbtHistoryLoading(false);
+      });
+  }, [schema, tableName, source, isCurrentSource]);
 
   useEffect(() => {
     if (!schema || !tableName || !isCurrentSource) {
@@ -508,6 +545,7 @@ export default function TableCard({
   }, [meta]);
 
   const clickLastRun = clickRuns[0] || null;
+  const dbtLastRun = dbtHistory[0] || null;
   const dbtManifest = meta?.dbt_manifest || null;
   const dbtMetadata = dbtManifest?.metadata || null;
   const dbtArtifactPaths = dbtManifest
@@ -613,6 +651,17 @@ export default function TableCard({
       return { raw, fieldName, description, dataType };
     });
   }, [attributeTypeMap, meta?.key_attributes]);
+  const normalizedDbtVisibleColumns = useMemo(() => {
+    return dbtVisibleColumns.map((column) => {
+      const name = String(column?.name || "").trim();
+      const dataType = column?.data_type || attributeTypeMap.get(name.toLowerCase()) || null;
+      return {
+        ...column,
+        dataType,
+        normalizedDescription: normalizeDescription(column?.description, "Без описания"),
+      };
+    });
+  }, [attributeTypeMap, dbtVisibleColumns]);
   const clickStatusLabel = (status) => {
     switch (status) {
       case "SUCCESS":
@@ -644,6 +693,9 @@ export default function TableCard({
   };
   const toggleClickError = (key) => {
     setExpandedClickErrors((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+  const toggleDbtError = (key) => {
+    setExpandedDbtErrors((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const openSqlModal = (block) => {
@@ -1085,6 +1137,68 @@ export default function TableCard({
               </>
             )}
           </div>
+        </div>
+      </div> : null}
+
+      {!isCurrentSource ? <div className="table-section">
+        <div className="section-title">Последние dbt-запуски</div>
+        <div className="card">
+          {dbtHistoryLoading && <div className="muted">Загрузка dbt-логов...</div>}
+          {dbtHistoryError && <div className="dep-error-title">{dbtHistoryError}</div>}
+          {!dbtHistoryLoading && !dbtHistoryError && !dbtHistoryConfigured && (
+            <div className="muted">Подключение к dbt logs не настроено.</div>
+          )}
+          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistory.length === 0 && (
+            <div className="muted">dbt-запусков не найдено.</div>
+          )}
+          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistory.length > 0 && (
+            <>
+              {dbtLastRun ? (
+                <div className="section-subtitle muted" style={{ marginBottom: 12 }}>
+                  Последний запуск: {dbtLastRun.model_status || "—"} / {dbtLastRun.dbt_run_status || "—"}
+                </div>
+              ) : null}
+              <div className="history-table gp">
+                <div className="history-table-head">
+                  <span>Статус модели</span>
+                  <span>Запуск dbt</span>
+                  <span>Старт</span>
+                  <span>Финиш</span>
+                  <span>Длит.</span>
+                  <span>Ошибка</span>
+                </div>
+                {dbtHistory.map((row, idx) => (
+                  <div key={`${row.execution_guid || "dbt"}-${idx}`} className="history-row-block">
+                    <div className="history-table-row">
+                      <span className={`history-state history-${String(row.model_status || "unknown").toLowerCase()}`}>
+                        {row.model_status || "UNKNOWN"}
+                      </span>
+                      <span className="history-message">
+                        {row.dbt_run_status || "—"}
+                        {row.dag_run_id ? <span className="muted"> · {row.dag_run_id}</span> : null}
+                      </span>
+                      <span>{row.start_dttm || "—"}</span>
+                      <span>{row.finish_dttm || "—"}</span>
+                      <span>{row.duration_minutes ?? "—"} мин</span>
+                      <span className="history-message">
+                        {row.error_message ? (
+                          <button
+                            className="history-error-toggle compact"
+                            onClick={() => toggleDbtError(`dbt-${idx}`)}
+                          >
+                            {expandedDbtErrors[`dbt-${idx}`] ? "Скрыть" : "Ошибка"}
+                          </button>
+                        ) : "—"}
+                      </span>
+                    </div>
+                    {row.error_message && expandedDbtErrors[`dbt-${idx}`] && (
+                      <pre className="history-error-body">{row.error_message}</pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div> : null}
 
@@ -1624,13 +1738,13 @@ export default function TableCard({
               <div className="dbt-manifest-block">
                 <div className="section-subtitle">Колонки</div>
                 <div className="dbt-manifest-list">
-                  {dbtVisibleColumns.map((column) => (
+                  {normalizedDbtVisibleColumns.map((column) => (
                     <div key={column.name} className="dbt-manifest-item static">
                       <span className="mono">
                         {column.name}
-                        {column.data_type ? <span className="muted"> · {column.data_type}</span> : null}
+                        {column.dataType ? <span className="muted"> · {column.dataType}</span> : null}
                       </span>
-                      <span className="muted">{normalizeDescription(column.description, "Без описания")}</span>
+                      <span className="muted">{column.normalizedDescription}</span>
                     </div>
                   ))}
                 </div>

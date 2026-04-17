@@ -1,22 +1,44 @@
-0 9 * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3 /root/table-dependency-
-  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
+select * from tech_monitoring.log_dbt_model
 
-  Что дальше:
 
-  1. crontab -e
-  2. нажать i
-  3. вставить строку
-  4. Esc
-  5. :wq
-  6. проверить:
+CREATE TABLE tech_monitoring.log_dbt_model (
+	execution_guid varchar NULL,
+	model_name varchar NULL,
+	model_path varchar NULL,
+	model_type varchar NULL,
+	model_status varchar NULL,
+	"materialized" varchar NULL,
+	start_dttm timestamp NULL,
+	finish_dttm timestamp NULL,
+	duration interval NULL,
+	thread_id varchar NULL,
+	error_message varchar NULL,
+	inserted_dttm timestamp NOT NULL
+)
+WITH (
+	appendonly=true,
+	blocksize=32768,
+	compresstype=zstd,
+	compresslevel=3,
+	orientation=column
+)
+DISTRIBUTED BY (execution_guid);
 
-  crontab -l
-
-  Если хочешь быстро проверить cron без ожидания 9 утра, временно вставь:
-
-  * * * * * cd /root/table-dependency-viewer && set -a && . /root/table-dependency-viewer/.env.manifest && set +a && /usr/local/bin/python3 /root/table-dependency-
-  viewer/scripts/refresh_dbt_manifest.py >> /var/log/tdv_refresh_dbt_manifest.log 2>&1
-
-  потом посмотри лог:
-
-  tail -f /var/log/tdv_refresh_dbt_manifest.log
+CREATE TABLE tech_monitoring.log_dbt_run (
+	execution_guid varchar NULL,
+	dag_run_id varchar NULL,
+	dag_name varchar NULL,
+	dbt_run_status varchar NULL,
+	total_model_count int4 NULL,
+	success_model_count int4 NULL,
+	failed_model_count int4 NULL,
+	inserted_dttm timestamp NOT NULL
+)
+WITH (
+	appendonly=true,
+	blocksize=32768,
+	compresstype=zstd,
+	compresslevel=3,
+	orientation=column
+)
+DISTRIBUTED BY (execution_guid);

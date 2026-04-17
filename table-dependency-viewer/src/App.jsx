@@ -330,10 +330,7 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
-  const canUseDevMeta = useMemo(
-    () => ["admin", "engineer"].includes(userProfile?.role || ""),
-    [userProfile]
-  );
+  const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
 
   return (
     <div className="app">

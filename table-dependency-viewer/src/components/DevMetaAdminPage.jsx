@@ -330,7 +330,7 @@ export default function DevMetaAdminPage({ userProfile }) {
   const [dagStatus, setDagStatus] = useState(null);
   const [generating, setGenerating] = useState(false);
 
-  const canUseDevMeta = ["admin", "engineer"].includes(userProfile?.role || "");
+  const canUseDevMeta = Boolean(userProfile);
   const currentUser = userProfile?.email || userProfile?.username || "";
 
   const refreshStatus = async () => {
@@ -602,7 +602,7 @@ export default function DevMetaAdminPage({ userProfile }) {
       <div className="container cc-page">
         <div className="cc-surface">
           <div className="section-title">Доступ запрещён</div>
-          <div className="muted">Раздел доступен только администраторам и инженерам.</div>
+          <div className="muted">Для работы с разделом нужно войти в систему.</div>
         </div>
       </div>
     );

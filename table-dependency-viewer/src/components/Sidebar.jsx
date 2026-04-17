@@ -84,7 +84,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   Админка
                 </button>
               )}
-              {authEnabled && ["admin", "engineer"].includes(userProfile?.role || "") && (
+              {authEnabled && userProfile && (
                 <button
                   type="button"
                   className={isActive("/admin/dev-meta") ? "active" : ""}

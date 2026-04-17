@@ -182,8 +182,8 @@ class DevMetaGeneratePayload(BaseModel):
 
 def _require_dev_meta_role(request: Request):
     user = get_current_user_from_request(request)
-    if user.role not in {"admin", "engineer"}:
-        raise HTTPException(status_code=403, detail="Admin or engineer role required")
+    if not user or not getattr(user, "email", None):
+        raise HTTPException(status_code=403, detail="Authentication required")
     return user
 
 
@@ -625,7 +625,7 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
 
 @router.post("/api/admin/dev-meta/generate")
 def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
-    _require_dev_meta_role(request)
+    user = _require_dev_meta_role(request)
     try:
         result = generate_dev_meta_yaml(
             database_url=DEV_DATABASE_URL or DATABASE_URL,
@@ -638,6 +638,20 @@ def generate_admin_dev_meta(payload: DevMetaGeneratePayload, request: Request):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    payload_data = dict(result.get("payload") or {})
+    attributes = payload_data.pop("attributes", [])
+    payload_data["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    payload_data["created_by"] = user.email or user.username or "unknown"
+    payload_data["created_role"] = user.role or "unknown"
+    payload_data["attributes"] = attributes
+    result["payload"] = payload_data
+    result["content"] = yaml.dump(
+        payload_data,
+        default_flow_style=False,
+        sort_keys=False,
+        allow_unicode=True,
+        width=float("inf"),
+    )
     return {"status": "ok", **result}
 
 

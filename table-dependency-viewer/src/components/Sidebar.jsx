@@ -1,6 +1,8 @@
 import "../style/app.css";
+import { useNavigate } from "react-router-dom";
 
 export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
+  const navigate = useNavigate();
   const isActive = (path) => currentPath === path;
   const roleLabel = userProfile?.role === "admin"
     ? "Админ"
@@ -19,6 +21,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
           <nav className="topnav-nav">
             <div className="nav-primary">
               <button
+                type="button"
                 className={isActive("/") ? "active" : ""}
                 onClick={() => onChangeView(null)}
               >
@@ -26,6 +29,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               </button>
 
               <button
+                type="button"
                 className={isActive("/tables") ? "active" : ""}
                 onClick={() => onChangeView("table_search")}
               >
@@ -35,24 +39,28 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
 
             <div className="nav-secondary">
               <button
+                type="button"
                 className={isActive("/slow-tables") ? "active" : ""}
                 onClick={() => onChangeView("__slowest_tables__")}
               >
                 Производительность
               </button>
               <button
+                type="button"
                 className={isActive("/night-ops") ? "active" : ""}
                 onClick={() => onChangeView("night_ops")}
               >
                 Мониторинг
               </button>
               <button
+                type="button"
                 className={isActive("/entities") ? "active" : ""}
                 onClick={() => onChangeView("__entity_schedule__")}
               >
                 Сущности
               </button>
               <button
+                type="button"
                 className={isActive("/releases") ? "active" : ""}
                 onClick={() => onChangeView("releases")}
               >
@@ -60,6 +68,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               </button>
               {authEnabled && userProfile && (
                 <button
+                  type="button"
                   className={isActive("/account") ? "active" : ""}
                   onClick={() => onChangeView("/account")}
                 >
@@ -68,6 +77,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               )}
               {authEnabled && userProfile?.role === "admin" && (
                 <button
+                  type="button"
                   className={isActive("/admin/users") ? "active" : ""}
                   onClick={() => onChangeView("/admin/users")}
                 >
@@ -76,6 +86,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               )}
               {authEnabled && ["admin", "engineer"].includes(userProfile?.role || "") && (
                 <button
+                  type="button"
                   className={isActive("/admin/dev-meta") ? "active" : ""}
                   onClick={() => onChangeView("/admin/dev-meta")}
                 >
@@ -84,16 +95,18 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               )}
               {authEnabled && userProfile?.role === "admin" && (
                 <button
+                  type="button"
                   className={isActive("/admin/engineering") ? "active" : ""}
                   onClick={() => {
                     console.log("[Sidebar] open /admin/engineering");
-                    onChangeView("/admin/engineering");
+                    navigate("/admin/engineering");
                   }}
                 >
                   Эффективность
                 </button>
               )}
               <button
+                type="button"
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >
@@ -112,7 +125,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               </div>
               <div className="auth-role">{roleLabel}</div>
             </div>
-            <button className="auth-logout" onClick={onLogout}>
+            <button type="button" className="auth-logout" onClick={onLogout}>
               Выйти
             </button>
           </div>

@@ -1,80 +1,77 @@
+Gather Motion 8:1  (slice6; segments: 8)  (cost=0.00..211589.28 rows=357598592 width=68)
+  ->  Hash Left Join  (cost=0.00..144171.22 rows=44699824 width=68)
+        Hash Cond: ((((CASE WHEN ((sd_sales_main_scm.plant_producer_code)::text = '5302'::text) THEN '5301'::character varying ELSE sd_sales_main_scm.plant_producer_code END))::text = (production_melt.plant_code)::text) AND ((production_bundle.melt_code)::text = (production_melt.melt_code)::text))
+        ->  Hash Left Join  (cost=0.00..115796.13 rows=44699824 width=61)
+              Hash Cond: ((((CASE WHEN ((sd_sales_main_scm.plant_producer_code)::text = '5302'::text) THEN '5301'::character varying ELSE sd_sales_main_scm.plant_producer_code END))::text = (production_bundle.plant_code)::text) AND (("substring"((sales_bundle.production_bundle_reference_code)::text, 28, 10)) = "substring"((production_bundle.production_bundle_code)::text, 9, 10)))
+              ->  Redistribute Motion 8:8  (slice3; segments: 8)  (cost=0.00..59991.37 rows=44257252 width=48)
+                    Hash Key: (CASE WHEN ((sd_sales_main_scm.plant_producer_code)::text = '5302'::text) THEN '5301'::character varying ELSE sd_sales_main_scm.plant_producer_code END)
+                    ->  Result  (cost=0.00..53342.16 rows=44257252 width=48)
+                          ->  Result  (cost=0.00..53342.16 rows=44257252 width=48)
+                                ->  Hash Left Join  (cost=0.00..46792.09 rows=44257252 width=70)
+                                      Hash Cond: ((sales_bundle_and_delivery_relationship.sales_bundle_code)::text = (sales_bundle.sales_bundle_code)::text)
+                                      ->  Redistribute Motion 8:8  (slice2; segments: 8)  (cost=0.00..14140.24 rows=22128626 width=27)
+                                            Hash Key: sales_bundle_and_delivery_relationship.sales_bundle_code
+                                            ->  Hash Join  (cost=0.00..12270.15 rows=22128626 width=27)
+                                                  Hash Cond: ((sales_bundle_and_delivery_relationship.delivery_code)::text = (sd_sales_main_scm.delivery_number_sales)::text)
+                                                  ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..6063.24 rows=18368622 width=22)
+                                                        Hash Key: sales_bundle_and_delivery_relationship.delivery_code
+                                                        ->  Seq Scan on sales_bundle_and_delivery_relationship  (cost=0.00..4798.38 rows=18368622 width=22)
+                                                              Filter: (is_deleted_code IS NULL)
+                                                  ->  Hash  (cost=624.49..624.49 rows=106899 width=16)
+                                                        ->  Seq Scan on sd_sales_main_scm  (cost=0.00..624.49 rows=106899 width=16)
+                                      ->  Hash  (cost=1803.32..1803.32 rows=5980321 width=54)
+                                            ->  Seq Scan on sales_bundle  (cost=0.00..1803.32 rows=5980321 width=54)
+                                                  Filter: (is_deleted_code IS NULL)
+              ->  Hash  (cost=1102.21..1102.21 rows=2935787 width=37)
+                    ->  Redistribute Motion 8:8  (slice4; segments: 8)  (cost=0.00..1102.21 rows=2935787 width=37)
+                          Hash Key: production_bundle.plant_code
+                          ->  Seq Scan on production_bundle  (cost=0.00..560.17 rows=2935787 width=37)
+        ->  Hash  (cost=449.61..449.61 rows=115570 width=25)
+              ->  Redistribute Motion 8:8  (slice5; segments: 8)  (cost=0.00..449.61 rows=115570 width=25)
+                    Hash Key: production_melt.plant_code
+                    ->  Seq Scan on production_melt  (cost=0.00..435.20 rows=115570 width=25)
+Optimizer: Pivotal Optimizer (GPORCA)
 
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
-table-dependency-viewer-api-1  |     self.dbapi_connection = connection = pool._invoke_creator(self)
-table-dependency-viewer-api-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 667, in connect
-table-dependency-viewer-api-1  |     return dialect.connect(*cargs_tup, **cparams)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 630, in connect
-table-dependency-viewer-api-1  |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in connect
-table-dependency-viewer-api-1  |     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  | psycopg2.OperationalError: connection to server at "res-s-khgpm01.resource.local" (10.66.229.231), port 5432 failed: Connection timed out
-table-dependency-viewer-api-1  |        Is the server running on that host and accepting TCP/IP connections?
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | The above exception was the direct cause of the following exception:
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 4033, in get_dbt_model_history
-table-dependency-viewer-api-1  |     payload = get_dbt_model_run_history(
-table-dependency-viewer-api-1  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/dbt_logs.py", line 98, in get_dbt_model_run_history
-table-dependency-viewer-api-1  |     with engine.connect() as conn:
-table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
-table-dependency-viewer-api-1  |     return self._connection_cls(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 145, in __init__
-table-dependency-viewer-api-1  |     Connection._handle_dbapi_exception_noconnection(
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 2448, in _handle_dbapi_exception_noconnection
-table-dependency-viewer-api-1  |     raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
-table-dependency-viewer-api-1  |     self._dbapi_connection = engine.raw_connection()
-table-dependency-viewer-api-1  |                              ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
-table-dependency-viewer-api-1  |     return self.pool.connect()
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 448, in connect
-table-dependency-viewer-api-1  |     return _ConnectionFairy._checkout(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
-table-dependency-viewer-api-1  |     fairy = _ConnectionRecord.checkout(pool)
-table-dependency-viewer-api-1  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
-table-dependency-viewer-api-1  |     rec = pool._do_get()
-table-dependency-viewer-api-1  |           ^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
-table-dependency-viewer-api-1  |     with util.safe_reraise():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
-table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
-table-dependency-viewer-api-1  |     return self._create_connection()
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
-table-dependency-viewer-api-1  |     return _ConnectionRecord(self)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
-table-dependency-viewer-api-1  |     self.__connect()
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
-table-dependency-viewer-api-1  |     with util.safe_reraise():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
-table-dependency-viewer-api-1  |     raise exc_value.with_traceback(exc_tb)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
-table-dependency-viewer-api-1  |     self.dbapi_connection = connection = pool._invoke_creator(self)
-table-dependency-viewer-api-1  |                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/create.py", line 667, in connect
-table-dependency-viewer-api-1  |     return dialect.connect(*cargs_tup, **cparams)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/sqlalchemy/engine/default.py", line 630, in connect
-table-dependency-viewer-api-1  |     return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/psycopg2/__init__.py", line 122, in connect
-table-dependency-viewer-api-1  |     conn = _connect(dsn, connection_factory=connection_factory, **kwasync)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  | sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) connection to server at "res-s-khgpm01.resource.local" (10.66.229.231), port 5432 failed: Connection timed out
-table-dependency-viewer-api-1  |        Is the server running on that host and accepting TCP/IP connections?
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | (Background on this error at: https://sqlalche.me/e/20/e3q8)
+[2026-04-18, 03:26:33 MSK] {logging_mixin.py:154} INFO - number of workfiles per query limit exceeded  (seg5 slice6 10.66.229.205:10001 pid=42091)
+[2026-04-18, 03:26:33 MSK] {base.py:73} INFO - Using connection ID 'gp_connection' for task execution.
+
+
+insert into dm_calc.carbon_footprint_by_bundle_sd0010 (sales_bundle_code,
+sales_delivery_code,
+production_bundle_reference_code,
+plant_code, 
+sales_bundle_net_weight,
+production_bundle_code,
+melt_code,
+melt_name)
+
+select sales_bundle_code,
+sales_delivery_code,
+production_bundle_reference_code,
+plant_code, 
+sales_bundle_net_weight,
+production_bundle_code,
+melt_code,
+melt_name from  (select 
+o.sales_bundle_code,
+o.sales_delivery_code, 
+o.production_bundle_reference_code,
+o.plant_code,
+o.sales_bundle_net_weight, 
+o.production_bundle_code,
+		t4."melt_code", 
+		t5."melt_name" 
+		from
+			(select 
+			t0."sales_bundle_code",
+			t1."delivery_number_sales" as "sales_delivery_code", 
+			"production_bundle_reference_code",
+			case when t1."plant_producer_code"='5302' then '5301' else t1."plant_producer_code" end as "plant_code", 
+			t3."sales_bundle_net_weight" as "sales_bundle_net_weight",
+			substring ("production_bundle_reference_code",28,10) as "production_bundle_code"
+		    from  dds.sales_bundle_and_delivery_relationship t0
+		    join  dm_calc.sd_sales_main_scm t1 on t1."delivery_number_sales"=t0."delivery_code" and t0."is_deleted_code" is null
+			left join dds."sales_bundle" t3 on t0."sales_bundle_code"=t3."sales_bundle_code" and t3."is_deleted_code" is null
+			 ) as o
+left join dds."production_bundle" t4 on o."plant_code"=t4."plant_code" and o."production_bundle_code"= substring(t4."production_bundle_code",9,10) 
+left join dds."production_melt" t5 on o."plant_code"=t5."plant_code" and t4."melt_code"=t5."melt_code") p;

@@ -2459,6 +2459,59 @@ def _assistant_extract_terms(value: str) -> list[str]:
     return terms
 
 
+def _assistant_compact_description(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    parts = [part.strip() for part in raw.split("|") if str(part).strip()]
+    if not parts:
+        return raw
+    filtered = [
+        part for part in parts
+        if not re.search(r"[A-Za-z0-9_/$]+\.[A-Za-z0-9_/$\"]+", part)
+    ]
+    normalized: list[str] = []
+    for part in (filtered or parts):
+        key = part.lower()
+        if key not in {item.lower() for item in normalized}:
+            normalized.append(part)
+    return normalized[0] if normalized else raw
+
+
+def _assistant_parse_recreate_comments(meta_path: Path, meta: dict) -> tuple[str, list[str]]:
+    sql_text = _read_sql_from_meta(meta_path, meta, "sql_query_recreate_init", "sql_query_recreate_init.sql")
+    if not sql_text or sql_text.lstrip().startswith("--"):
+        return "", []
+
+    table_match = re.search(
+        r"COMMENT\s+ON\s+TABLE\s+.+?\s+IS\s+'((?:''|[^'])*)'\s*;",
+        sql_text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    table_comment = table_match.group(1).replace("''", "'").strip() if table_match else ""
+
+    column_comments: list[str] = []
+    column_pattern = re.compile(
+        r"COMMENT\s+ON\s+COLUMN\s+.+?\.(?:\"[^\"]+\"|[A-Za-z_][A-Za-z0-9_/$]*)\s+IS\s+'((?:''|[^'])*)'\s*;",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for match in column_pattern.finditer(sql_text):
+        comment = match.group(1).replace("''", "'").strip()
+        compact = _assistant_compact_description(comment)
+        if compact:
+            column_comments.append(compact)
+
+    deduped_columns: list[str] = []
+    seen: set[str] = set()
+    for item in column_comments:
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped_columns.append(item)
+    return _assistant_compact_description(table_comment), deduped_columns
+
+
 def _assistant_build_current_description(meta: dict) -> str:
     parts: list[str] = []
     for key in ("table_comment", "description", "entity_name"):
@@ -2498,8 +2551,17 @@ def _build_assistant_table_index() -> list[dict[str, Any]]:
             if key in seen:
                 continue
             seen.add(key)
-            description = _assistant_build_current_description(meta)
+            sql_table_comment, sql_column_comments = _assistant_parse_recreate_comments(path, meta)
+            yaml_description = _assistant_build_current_description(meta)
+            description = sql_table_comment or yaml_description
             depends_on = meta.get("depends_on") or {}
+            search_parts = [
+                f"{schema}.{table}",
+                str(meta.get("entity_name") or ""),
+                description,
+                " ".join(sql_column_comments[:20]),
+                " ".join(str(x) for x in (meta.get("key_attributes") or [])),
+            ]
             rows.append(
                 {
                     "source": "current",
@@ -2511,14 +2573,7 @@ def _build_assistant_table_index() -> list[dict[str, Any]]:
                     "depends_on": depends_on,
                     "key_attributes": list(meta.get("key_attributes") or []),
                     "search_blob": _assistant_normalize_text(
-                        " ".join(
-                            [
-                                f"{schema}.{table}",
-                                str(meta.get("entity_name") or ""),
-                                description,
-                                " ".join(str(x) for x in (meta.get("key_attributes") or [])),
-                            ]
-                        )
+                        " ".join(search_parts)
                     ),
                 }
             )
@@ -2657,7 +2712,7 @@ def _assistant_answer_summary(schema: str, table: str, source: str) -> dict[str,
             "answer": "Не удалось найти таблицу в текущем контексте.",
             "tables": [],
             "stats": [],
-            "suggestions": ["Найди таблицы с остатками", "Самая долгая загрузка", "От чего зависит таблица?"],
+            "suggestions": ["Самая долгая загрузка", "От чего зависит таблица?", "На что влияет таблица?"],
         }
 
     stats = [
@@ -2841,7 +2896,7 @@ def _assistant_answer_slowest(question: str, context: AssistantContextPayload | 
         "answer": answer,
         "tables": _assistant_format_table_refs(tables),
         "stats": [{"label": "Слой", "value": (layer or "Все").upper()}, {"label": "Период", "value": f"{days} дн"}],
-        "suggestions": ["Самая долгая загрузка на слое dm", "Найди таблицы с остатками", "На что влияет таблица?"],
+        "suggestions": ["Самая долгая загрузка на слое dm", "От чего зависит таблица?", "На что влияет таблица?"],
     }
 
 
@@ -2854,7 +2909,7 @@ def _assistant_answer_search(question: str) -> dict[str, Any]:
             "answer": "По запросу ничего не нашел в описаниях таблиц и dbt-моделей.",
             "tables": [],
             "stats": [],
-            "suggestions": ["Найди таблицы с остатками", "Найди таблицы с сальдо", "Найди таблицы с отгрузками"],
+            "suggestions": ["Самая долгая загрузка", "От чего зависит таблица?", "На что влияет таблица?"],
         }
     return {
         "mode": "search",

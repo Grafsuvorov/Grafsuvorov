@@ -2,9 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { assistantApi } from "../api/assistant.js";
 
 const QUICK_ACTIONS = [
-  "Найди таблицы с остатками",
-  "Найди таблицы с сальдо",
-  "Найди таблицы с отгрузками",
   "Самая долгая загрузка",
   "Самая долгая загрузка на слое dm",
 ];

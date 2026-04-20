@@ -215,10 +215,12 @@ body {
   display: grid;
   gap: 14px;
   padding-right: 4px;
+  min-width: 0;
 }
 
 .assistant-message {
   display: flex;
+  min-width: 0;
 }
 
 .assistant-message.user {
@@ -230,6 +232,8 @@ body {
   max-width: 100%;
   border-radius: 18px;
   padding: 14px 16px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .assistant-user-bubble {
@@ -254,6 +258,7 @@ body {
   font-size: 13px;
   line-height: 1.55;
   color: rgba(226, 232, 240, 0.88);
+  overflow-wrap: anywhere;
 }
 
 .assistant-stats {
@@ -297,6 +302,9 @@ body {
   border-radius: 14px;
   padding: 10px 12px;
   cursor: pointer;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .assistant-table-item:hover {
@@ -308,6 +316,7 @@ body {
   display: block;
   font-size: 12px;
   color: #f8fbff;
+  overflow-wrap: anywhere;
 }
 
 .assistant-table-meta {
@@ -315,6 +324,7 @@ body {
   margin-top: 4px;
   font-size: 12px;
   color: rgba(148, 163, 184, 0.9);
+  overflow-wrap: anywhere;
 }
 
 .assistant-loading {

@@ -2900,6 +2900,235 @@ def _assistant_answer_slowest(question: str, context: AssistantContextPayload | 
     }
 
 
+def _assistant_answer_click_slowest(question: str, context: AssistantContextPayload | None = None, days: int = 30) -> dict[str, Any]:
+    layer = _assistant_extract_layer(question, context)
+    query = (
+        _clickhouse_run_agg_cte(
+            run_filter_sql="AND r.start_dttm >= now() - (:days || ' days')::interval",
+            stage_filter_sql="",
+        )
+        + """
+        SELECT
+            lower(schema_name) AS table_schema,
+            lower(table_name) AS table_name,
+            COUNT(*) AS runs_count,
+            AVG(actual_duration_seconds) / 60.0 AS avg_duration,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY actual_duration_seconds / 60.0) AS p95_duration,
+            MAX(actual_duration_seconds) / 60.0 AS max_duration
+        FROM run_agg
+        WHERE (:layer IS NULL OR lower(schema_name) = :layer)
+        GROUP BY lower(schema_name), lower(table_name)
+        ORDER BY p95_duration DESC NULLS LAST, max_duration DESC NULLS LAST
+        LIMIT 8
+        """
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"days": days, "layer": layer}).mappings().all()
+    tables = [
+        {
+            "schema": row.get("table_schema"),
+            "table": row.get("table_name"),
+            "source": "current",
+            "fqn": f"{row.get('table_schema')}.{row.get('table_name')}",
+            "description": f"ClickHouse P95 {round(float(row.get('p95_duration') or 0), 2)} мин · runs {int(row.get('runs_count') or 0)}",
+        }
+        for row in rows
+        if row.get("table_schema") and row.get("table_name")
+    ]
+    layer_text = f" на слое {layer}" if layer else ""
+    answer = (
+        f"Показываю самые долгие загрузки в ClickHouse{layer_text} за последние {days} дней по P95 длительности."
+        if rows else f"Не нашел длительных загрузок в ClickHouse{layer_text} за последние {days} дней."
+    )
+    return {
+        "mode": "slowest_click",
+        "title": "Самые долгие загрузки ClickHouse",
+        "answer": answer,
+        "tables": _assistant_format_table_refs(tables),
+        "stats": [{"label": "Контур", "value": "ClickHouse"}, {"label": "Слой", "value": (layer or "Все").upper()}],
+        "suggestions": ["Самая долгая загрузка", "Покажи последние ошибки", "На что влияет таблица?"],
+    }
+
+
+def _assistant_answer_primary_key(schema: str, table: str, source: str) -> dict[str, Any]:
+    item = _assistant_find_table(schema, table, source)
+    key_attributes = list((item or {}).get("key_attributes") or [])
+    if not key_attributes:
+        return {
+            "mode": "primary_key",
+            "title": "Первичный ключ",
+            "answer": f"Для таблицы {schema}.{table} первичный ключ или ключевые атрибуты в метаданных не заданы.",
+            "tables": _assistant_format_table_refs([item]) if item else [],
+            "stats": [{"label": "Ключей", "value": 0}],
+            "suggestions": ["Что это за таблица?", "От чего зависит таблица?", "Покажи последние ошибки"],
+        }
+
+    formatted = []
+    for raw in key_attributes:
+        raw_text = str(raw or "").strip()
+        parts = [part.strip() for part in raw_text.split("|") if part.strip()]
+        source_ref = next((part for part in parts if "." in part), "")
+        field_name = source_ref.split(".")[-1] if source_ref else raw_text
+        formatted.append({"schema": schema, "table": table, "source": source, "fqn": f"{schema}.{table}", "description": f"{field_name} · {_assistant_compact_description(raw_text)}"})
+
+    return {
+        "mode": "primary_key",
+        "title": "Первичный ключ / key attributes",
+        "answer": f"Для таблицы {schema}.{table} найдено {len(key_attributes)} ключевых атрибутов.",
+        "tables": formatted[:8],
+        "stats": [{"label": "Ключей", "value": len(key_attributes)}],
+        "suggestions": ["Что это за таблица?", "От чего зависит таблица?", "На что влияет таблица?"],
+    }
+
+
+def _assistant_answer_recent_errors(schema: str | None, table: str | None, source: str, limit: int = 6) -> dict[str, Any]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    if source != "current" and schema_norm and table_norm and dbt_logs_engine:
+        try:
+            payload = get_dbt_model_run_history(
+                engine=dbt_logs_engine,
+                base_dir=BASE_DIR,
+                manifest_dir=DBT_MANIFEST_DIR,
+                schema_name=schema_norm,
+                table_name=table_norm,
+                source=source,
+                limit=limit,
+                table_model_catalog=TABLE_DBT_MODEL_CATALOG,
+                table_model_log=TABLE_DBT_MODEL_LOG,
+                table_run_log=TABLE_DBT_RUN_LOG,
+            )
+            runs = [row for row in (payload.get("runs") or []) if str(row.get("model_status") or "").upper() == "FAILED"][:limit]
+        except Exception:
+            runs = []
+        return {
+            "mode": "errors",
+            "title": "Последние ошибки dbt",
+            "answer": (
+                f"Для {schema_norm}.{table_norm} нашел {len(runs)} последних ошибок dbt."
+                if runs else f"Для {schema_norm}.{table_norm} ошибок dbt не найдено."
+            ),
+            "tables": [
+                {
+                    "schema": schema_norm,
+                    "table": table_norm,
+                    "source": source,
+                    "fqn": f"{schema_norm}.{table_norm}",
+                    "description": f"dbt FAILED · {serialize_datetime(row.get('finish_dttm')) or row.get('finish_dttm') or '—'} · {str(row.get('error_message') or '')[:180]}",
+                }
+                for row in runs
+            ],
+            "stats": [{"label": "Источник", "value": "dbt"}, {"label": "Ошибок", "value": len(runs)}],
+            "suggestions": ["Что это за таблица?", "От чего зависит таблица?", "На что влияет таблица?"],
+        }
+
+    gp_rows: list[dict[str, Any]] = []
+    click_rows: list[dict[str, Any]] = []
+    with engine.connect() as conn:
+        if schema_norm and table_norm:
+            table_clean = _clean_table_name(table_norm)
+            gp_query = f"""
+                SELECT
+                    :schema AS table_schema,
+                    :table AS table_name,
+                    loading_finish_dttm AS error_time,
+                    message
+                FROM {TABLE_LOADING_HISTORY}
+                WHERE object_type = 'table'
+                  AND loading_state = 'FAILED'
+                  AND (
+                    lower(object_name) = :table_fqn
+                    OR lower(object_name) = :table_fqn_clean
+                    OR lower(object_name) = :table_name
+                    OR lower(object_name) = :table_name_clean
+                  )
+                ORDER BY loading_finish_dttm DESC NULLS LAST
+                LIMIT :limit
+            """
+            gp_rows = conn.execute(
+                text(gp_query),
+                {
+                    "schema": schema_norm,
+                    "table": table_norm,
+                    "table_fqn": f"{schema_norm}.{table_norm}",
+                    "table_fqn_clean": f"{schema_norm}.{table_clean}" if table_clean else None,
+                    "table_name": table_norm,
+                    "table_name_clean": table_clean,
+                    "limit": limit,
+                },
+            ).mappings().all()
+
+            click_query = (
+                _clickhouse_run_agg_cte(
+                    run_filter_sql="",
+                    stage_filter_sql="""
+                      AND (lower(s.table_name) = lower(:table) OR lower(s.table_name) = lower(:table_clean))
+                      AND lower(r.schema_name) = lower(:schema)
+                    """,
+                )
+                + """
+                SELECT *
+                FROM run_agg
+                WHERE upper(status) = 'FAILED'
+                ORDER BY end_dttm DESC NULLS LAST
+                LIMIT :limit
+                """
+            )
+            click_rows = conn.execute(
+                text(click_query),
+                {"schema": schema_norm, "table": table_norm, "table_clean": table_clean, "limit": limit},
+            ).mappings().all()
+        else:
+            gp_query = f"""
+                SELECT
+                    COALESCE(split_part(lower(object_name), '.', 1), '') AS table_schema,
+                    COALESCE(NULLIF(split_part(lower(object_name), '.', 2), ''), lower(object_name)) AS table_name,
+                    loading_finish_dttm AS error_time,
+                    message
+                FROM {TABLE_LOADING_HISTORY}
+                WHERE object_type = 'table'
+                  AND loading_state = 'FAILED'
+                ORDER BY loading_finish_dttm DESC NULLS LAST
+                LIMIT :limit
+            """
+            gp_rows = conn.execute(text(gp_query), {"limit": limit}).mappings().all()
+
+    tables = [
+        {
+            "schema": row.get("table_schema") or schema_norm,
+            "table": row.get("table_name") or table_norm,
+            "source": "current",
+            "fqn": f"{row.get('table_schema') or schema_norm}.{row.get('table_name') or table_norm}",
+            "description": f"GP · {serialize_datetime(row.get('error_time')) or '—'} · {str(row.get('message') or '')[:180]}",
+        }
+        for row in gp_rows
+        if (row.get("table_schema") or schema_norm) and (row.get("table_name") or table_norm)
+    ]
+    tables.extend(
+        {
+            "schema": row.get("schema_name") or schema_norm,
+            "table": row.get("table_name") or table_norm,
+            "source": "current",
+            "fqn": f"{row.get('schema_name') or schema_norm}.{row.get('table_name') or table_norm}",
+            "description": f"ClickHouse · {serialize_datetime(row.get('end_dttm')) or '—'} · {str(row.get('error_text') or '')[:180]}",
+        }
+        for row in click_rows
+        if (row.get("schema_name") or schema_norm) and (row.get("table_name") or table_norm)
+    )
+    title_target = f" для {schema_norm}.{table_norm}" if schema_norm and table_norm else ""
+    return {
+        "mode": "errors",
+        "title": f"Последние ошибки{title_target}",
+        "answer": (
+            f"Нашел {len(tables)} последних ошибок{title_target}."
+            if tables else f"Последние ошибки{title_target} не найдены."
+        ),
+        "tables": _assistant_format_table_refs(tables[:limit]),
+        "stats": [{"label": "Ошибок", "value": len(tables)}, {"label": "Контекст", "value": "Таблица" if schema_norm and table_norm else "Глобально"}],
+        "suggestions": ["Самая долгая загрузка", "От чего зависит таблица?", "На что влияет таблица?"],
+    }
+
+
 def _assistant_answer_search(question: str) -> dict[str, Any]:
     tables = _assistant_search_tables(question, limit=10)
     if not tables:
@@ -2934,6 +3163,22 @@ def _assistant_answer(question: str, context: AssistantContextPayload | None = N
     normalized = _assistant_normalize_text(question)
     if not normalized and ctx_schema and ctx_table:
         return _assistant_answer_summary(ctx_schema, ctx_table, source)
+    if ("последние ошибки" in normalized or "покажи ошибки" in normalized or "ошибк" in normalized):
+        return _assistant_answer_recent_errors(ctx_schema, ctx_table, source)
+    if ("первич" in normalized and "ключ" in normalized) or "key attributes" in normalized or "ключевые атрибуты" in normalized:
+        if ctx_schema and ctx_table:
+            return _assistant_answer_primary_key(ctx_schema, ctx_table, source)
+        return {
+            "mode": "primary_key",
+            "title": "Первичный ключ",
+            "answer": "Укажи таблицу или открой карточку таблицы, и я покажу key attributes.",
+            "tables": [],
+            "stats": [],
+            "suggestions": ["Что это за таблица?", "От чего зависит таблица?", "Покажи последние ошибки"],
+        }
+    if "клик" in normalized or "clickhouse" in normalized:
+        if "долг" in normalized and "загруз" in normalized:
+            return _assistant_answer_click_slowest(question, context=context)
     if ("от чего зависит" in normalized or "upstream" in normalized or "зависимости" in normalized) and ctx_schema and ctx_table:
         return _assistant_answer_upstream(ctx_schema, ctx_table, source)
     if ("на что влияет" in normalized or "impact" in normalized or "влияет" in normalized) and ctx_schema and ctx_table:

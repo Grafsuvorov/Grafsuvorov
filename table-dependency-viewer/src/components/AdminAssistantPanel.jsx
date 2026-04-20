@@ -141,11 +141,17 @@ export default function AdminAssistantPanel({
                 <button type="button" className="assistant-chip" onClick={() => submitQuestion("Что это за таблица?")}>
                   Что это за таблица?
                 </button>
+                <button type="button" className="assistant-chip" onClick={() => submitQuestion("Покажи первичный ключ таблицы")}>
+                  Первичный ключ
+                </button>
                 <button type="button" className="assistant-chip" onClick={() => submitQuestion("От чего зависит таблица?")}>
                   От чего зависит?
                 </button>
                 <button type="button" className="assistant-chip" onClick={() => submitQuestion("На что влияет таблица?")}>
                   На что влияет?
+                </button>
+                <button type="button" className="assistant-chip" onClick={() => submitQuestion("Покажи последние ошибки")}>
+                  Последние ошибки
                 </button>
               </>
             ) : null}

@@ -1,37 +1,20 @@
-import os
-  import json
-  import requests
-  import urllib3
-
-  urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-  API_URL = os.getenv("AI_URL", "").rstrip("/")
-  API_KEY = os.getenv("AI_API_KEY", "")
-  MODEL = os.getenv("AI_MODEL", "")
-
-  payload = {
-      "model": MODEL,
-      "messages": [
-          {"role": "user", "content": "Привет, ответь одним коротким предложением"}
-      ],
-      "temperature": 0.1,
-  }
-
-  headers = {
-      "Content-Type": "application/json",
-      "Authorization": f"Bearer {API_KEY}",
-  }
-
-  resp = requests.post(
-      f"{API_URL}/api/v1/chat/completions",
-      headers=headers,
-      json=payload,
-      timeout=60,
-      verify=False,
-  )
-
-  print("STATUS:", resp.status_code)
-  try:
-      print(json.dumps(resp.json(), ensure_ascii=False, indent=2))
-  except Exception:
-      print(resp.text)
+import requests
+import json
+BASE_URL = "https://ds.rusal.com"
+CHAT_URL = f"{BASE_URL}/api/chat/completions"
+TOKEN = "******"
+headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/json"
+}
+print("=== Тестирование API с твоим токеном и известной моделью ===")
+print("\n1. Отправляем запрос к ИИ с моделью Qwen2.5-VL-72B-Instruct-AWQ...")
+chat_data = {
+    "model": "Qwen2.5-VL-72B-Instruct-AWQ",
+    "messages": [
+        {
+            "role": "user",
+            "content": "Почему небо синее?"
+        }
+    ]
+}

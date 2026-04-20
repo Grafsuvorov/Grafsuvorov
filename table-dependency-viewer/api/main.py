@@ -21,6 +21,7 @@ import time
 from typing import List, Dict, Tuple
 from datetime import datetime
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 import re
 import json
 import hashlib
@@ -186,10 +187,30 @@ class DevMetaGeneratePayload(BaseModel):
     dag_tags: List[str]
 
 
+class AssistantContextPayload(BaseModel):
+    page: Optional[str] = None
+    schema: Optional[str] = None
+    table: Optional[str] = None
+    source: Optional[str] = "current"
+    fqn: Optional[str] = None
+
+
+class AssistantQueryPayload(BaseModel):
+    question: str
+    context: Optional[AssistantContextPayload] = None
+
+
 def _require_dev_meta_role(request: Request):
     user = get_current_user_from_request(request)
     if not user or not getattr(user, "email", None):
         raise HTTPException(status_code=403, detail="Authentication required")
+    return user
+
+
+def _require_admin(request: Request):
+    user = get_current_user_from_request(request)
+    if not user or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
     return user
 
 
@@ -219,6 +240,8 @@ def refresh_cache(request: Request):
     globals()["_graph_cache_meta_ts"] = 0
     globals()["_logic_audit_cache_payload"] = None
     globals()["_logic_audit_cache_ts"] = 0
+    globals()["_assistant_index_cache"] = None
+    globals()["_assistant_index_ts"] = 0
 
     try:
         get_cached_meta_and_index()
@@ -283,6 +306,18 @@ def run_ci_cd(request: Request):
     if result.returncode != 0:
         raise HTTPException(status_code=500, detail=response)
     return response
+
+
+@router.post("/api/admin/assistant/query")
+def assistant_query(payload: AssistantQueryPayload, request: Request):
+    _require_admin(request)
+    try:
+        response = _assistant_answer(payload.question, payload.context)
+        return JSONResponse(content=response, media_type="application/json; charset=utf-8")
+    except Exception as exc:
+        print("❌ /api/admin/assistant/query error:", exc)
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Не удалось получить ответ ассистента")
 
 
 @router.get("/api/admin/ci-cd/status")
@@ -2333,6 +2368,16 @@ META_PARENT_DIRS = [Path(os.getenv("META_PARENT_DIR", BASE_DIR / "etl_loads_enti
 _click_meta_cache = None
 _click_meta_ts = 0
 _CLICK_META_TTL = 86400  # 24 часа
+_assistant_index_cache = None
+_assistant_index_ts = 0
+_ASSISTANT_INDEX_TTL = 900
+_ASSISTANT_LAYER_NAMES = {"stg", "ods", "dds", "dict_stg", "dict_dds", "dm", "dm_view", "dm_calc"}
+_ASSISTANT_STOPWORDS = {
+    "и", "или", "что", "где", "как", "какие", "какая", "какой", "покажи", "найди", "нужны",
+    "нужно", "есть", "для", "про", "это", "таблица", "таблицы", "слой", "слое", "самая",
+    "самые", "долгая", "долгие", "загрузка", "загрузки", "зависит", "влияет", "от", "на",
+    "она", "него", "нее", "по", "описанию", "частично", "мне", "с", "со",
+}
 
 
 def _load_click_meta_index():
@@ -2396,6 +2441,453 @@ def get_click_meta_index():
     _click_meta_cache = _load_click_meta_index()
     _click_meta_ts = now
     return _click_meta_cache
+
+
+def _assistant_normalize_text(value: Any) -> str:
+    text_value = str(value or "").lower()
+    text_value = re.sub(r"[^a-zа-я0-9_.]+", " ", text_value, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text_value).strip()
+
+
+def _assistant_extract_terms(value: str) -> list[str]:
+    terms: list[str] = []
+    for token in _assistant_normalize_text(value).split():
+        if len(token) < 2 or token in _ASSISTANT_STOPWORDS:
+            continue
+        if token not in terms:
+            terms.append(token)
+    return terms
+
+
+def _assistant_build_current_description(meta: dict) -> str:
+    parts: list[str] = []
+    for key in ("table_comment", "description", "entity_name"):
+        raw = str(meta.get(key) or "").strip()
+        if raw:
+            parts.append(raw)
+    for item in (meta.get("attributes") or [])[:12]:
+        if not isinstance(item, dict):
+            continue
+        descr = str(item.get("description") or "").strip()
+        if descr:
+            parts.append(descr)
+    for item in _extract_field_descriptions(meta)[:12]:
+        descr = str(item.get("description") or "").strip()
+        if descr:
+            parts.append(descr)
+    return " ".join(parts).strip()
+
+
+def _build_assistant_table_index() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for entity_root in iter_meta_dirs():
+        for root, _, files in os.walk(entity_root):
+            if "meta_data_file.yaml" not in files:
+                continue
+            path = Path(root) / "meta_data_file.yaml"
+            try:
+                meta = yaml.safe_load(path.read_text("utf-8")) or {}
+            except Exception:
+                continue
+            schema = norm(meta.get("table_schema"))
+            table = norm(meta.get("table_name"))
+            if not schema or not table:
+                continue
+            key = ("current", f"{schema}.{table}")
+            if key in seen:
+                continue
+            seen.add(key)
+            description = _assistant_build_current_description(meta)
+            depends_on = meta.get("depends_on") or {}
+            rows.append(
+                {
+                    "source": "current",
+                    "schema": schema,
+                    "table": table,
+                    "fqn": f"{schema}.{table}",
+                    "entity_name": meta.get("entity_name"),
+                    "description": description,
+                    "depends_on": depends_on,
+                    "key_attributes": list(meta.get("key_attributes") or []),
+                    "search_blob": _assistant_normalize_text(
+                        " ".join(
+                            [
+                                f"{schema}.{table}",
+                                str(meta.get("entity_name") or ""),
+                                description,
+                                " ".join(str(x) for x in (meta.get("key_attributes") or [])),
+                            ]
+                        )
+                    ),
+                }
+            )
+
+    for item in get_dbt_table_catalog(BASE_DIR, DBT_MANIFEST_DIR, source="ohd"):
+        key = ("ohd", item["fqn"].lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        description = str(item.get("description") or "").strip()
+        rows.append(
+            {
+                "source": "ohd",
+                "schema": str(item.get("schema") or "").lower(),
+                "table": str(item.get("table") or "").lower(),
+                "fqn": str(item.get("fqn") or "").lower(),
+                "entity_name": item.get("entity_name"),
+                "description": description,
+                "depends_on": {},
+                "key_attributes": [],
+                "search_blob": _assistant_normalize_text(
+                    " ".join(
+                        [
+                            str(item.get("fqn") or ""),
+                            str(item.get("label") or ""),
+                            description,
+                            str(item.get("entity_name") or ""),
+                        ]
+                    )
+                ),
+            }
+        )
+    return rows
+
+
+def get_assistant_table_index() -> list[dict[str, Any]]:
+    global _assistant_index_cache, _assistant_index_ts
+    now = time.time()
+    if _assistant_index_cache and now - _assistant_index_ts < _ASSISTANT_INDEX_TTL:
+        return _assistant_index_cache
+    _assistant_index_cache = _build_assistant_table_index()
+    _assistant_index_ts = now
+    return _assistant_index_cache
+
+
+def _assistant_find_table(schema: str | None, table: str | None, source: str = "current") -> Optional[dict[str, Any]]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    if not schema_norm or not table_norm:
+        return None
+    for item in get_assistant_table_index():
+        if item.get("source") == source and item.get("schema") == schema_norm and item.get("table") == table_norm:
+            return item
+    return None
+
+
+def _assistant_extract_fqn(question: str) -> tuple[Optional[str], Optional[str]]:
+    match = re.search(r"\b([a-z_][a-z0-9_]*)\.([a-z_][a-z0-9_]*)\b", _assistant_normalize_text(question))
+    if not match:
+        return None, None
+    return match.group(1), match.group(2)
+
+
+def _assistant_extract_layer(question: str, context: AssistantContextPayload | None = None) -> Optional[str]:
+    normalized = _assistant_normalize_text(question)
+    for layer in _ASSISTANT_LAYER_NAMES:
+        if re.search(rf"(^|\s){re.escape(layer)}($|\s)", normalized):
+            return layer
+    if "слое" in normalized or "слой" in normalized:
+        candidate = norm(getattr(context, "schema", None))
+        if candidate in _ASSISTANT_LAYER_NAMES:
+            return candidate
+    return None
+
+
+def _assistant_search_tables(question: str, limit: int = 8) -> list[dict[str, Any]]:
+    terms = _assistant_extract_terms(question)
+    if not terms:
+        return []
+    results: list[tuple[float, dict[str, Any]]] = []
+    for item in get_assistant_table_index():
+        blob = item.get("search_blob") or ""
+        score = 0.0
+        for term in terms:
+            if term in (item.get("fqn") or ""):
+                score += 3.0
+            if term in str(item.get("entity_name") or "").lower():
+                score += 2.0
+            if term in blob:
+                score += 1.0
+        if score <= 0:
+            continue
+        results.append((score, item))
+    results.sort(key=lambda row: (-row[0], row[1].get("fqn") or "", row[1].get("source") or ""))
+    out = []
+    for _, item in results[:limit]:
+        out.append(
+            {
+                "schema": item.get("schema"),
+                "table": item.get("table"),
+                "source": item.get("source"),
+                "fqn": item.get("fqn"),
+                "entity_name": item.get("entity_name"),
+                "description": str(item.get("description") or "")[:280],
+            }
+        )
+    return out
+
+
+def _assistant_format_table_refs(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items:
+        schema = item.get("schema")
+        table = item.get("table")
+        if not schema or not table:
+            continue
+        out.append(
+            {
+                "schema": schema,
+                "table": table,
+                "source": item.get("source") or "current",
+                "fqn": item.get("fqn") or f"{schema}.{table}",
+                "entity_name": item.get("entity_name"),
+                "description": item.get("description"),
+            }
+        )
+    return out
+
+
+def _assistant_answer_summary(schema: str, table: str, source: str) -> dict[str, Any]:
+    item = _assistant_find_table(schema, table, source)
+    if not item:
+        return {
+            "mode": "summary",
+            "title": "Контекст не найден",
+            "answer": "Не удалось найти таблицу в текущем контексте.",
+            "tables": [],
+            "stats": [],
+            "suggestions": ["Найди таблицы с остатками", "Самая долгая загрузка", "От чего зависит таблица?"],
+        }
+
+    stats = [
+        {"label": "Источник", "value": "OHD / dbt" if source != "current" else "Current"},
+        {"label": "Слой", "value": str(item.get("schema") or "—").upper()},
+    ]
+    if item.get("entity_name"):
+        stats.append({"label": "Сущность", "value": item.get("entity_name")})
+    if item.get("key_attributes"):
+        stats.append({"label": "Ключи", "value": ", ".join(item.get("key_attributes")[:3])})
+
+    answer = f"Текущий контекст: {item.get('fqn')}."
+    if item.get("description"):
+        answer += f" Описание: {str(item.get('description'))[:320]}"
+    else:
+        answer += " Описание в метаданных почти отсутствует."
+    return {
+        "mode": "summary",
+        "title": f"Контекст {item.get('fqn')}",
+        "answer": answer,
+        "tables": _assistant_format_table_refs([item]),
+        "stats": stats,
+        "suggestions": ["От чего зависит таблица?", "На что влияет таблица?", "Что есть по похожему описанию?"],
+    }
+
+
+def _assistant_answer_upstream(schema: str, table: str, source: str) -> dict[str, Any]:
+    schema_norm = norm(schema)
+    table_norm = norm(table)
+    if source != "current":
+        model = get_dbt_manifest_model(
+            base_dir=BASE_DIR,
+            manifest_dir=DBT_MANIFEST_DIR,
+            schema_name=schema_norm,
+            table_name=table_norm,
+            source=source,
+        )
+        upstream = [
+            {
+                "schema": item.get("schema"),
+                "table": item.get("table_name"),
+                "source": source,
+                "fqn": f"{item.get('schema')}.{item.get('table_name')}" if item.get("schema") and item.get("table_name") else item.get("unique_id"),
+                "entity_name": item.get("model_name"),
+            }
+            for item in (model or {}).get("upstream_models") or []
+            if item.get("schema") and item.get("table_name")
+        ]
+        answer = (
+            f"У модели {schema_norm}.{table_norm} найдено {len(upstream)} upstream-зависимостей."
+            if upstream else f"Для модели {schema_norm}.{table_norm} upstream-зависимости не найдены."
+        )
+        return {
+            "mode": "upstream",
+            "title": "Upstream зависимости",
+            "answer": answer,
+            "tables": _assistant_format_table_refs(upstream[:12]),
+            "stats": [{"label": "Upstream", "value": len(upstream)}, {"label": "Источник", "value": "OHD / dbt"}],
+            "suggestions": ["На что влияет таблица?", "Найди похожие таблицы"],
+        }
+
+    item = _assistant_find_table(schema_norm, table_norm, source)
+    upstream_rows = []
+    for src_schema, tables in (item or {}).get("depends_on", {}).items():
+        for src_table in tables or []:
+            upstream_rows.append(
+                {
+                    "schema": src_schema,
+                    "table": src_table,
+                    "source": "current",
+                    "fqn": f"{src_schema}.{src_table}",
+                }
+            )
+    answer = (
+        f"У таблицы {schema_norm}.{table_norm} найдено {len(upstream_rows)} upstream-зависимостей."
+        if upstream_rows else f"Для таблицы {schema_norm}.{table_norm} upstream-зависимости не найдены."
+    )
+    return {
+        "mode": "upstream",
+        "title": "Зависимости вверх по потоку",
+        "answer": answer,
+        "tables": _assistant_format_table_refs(upstream_rows[:12]),
+        "stats": [{"label": "Upstream", "value": len(upstream_rows)}, {"label": "Источник", "value": "Current"}],
+        "suggestions": ["На что влияет таблица?", "Что это за таблица?"],
+    }
+
+
+def _assistant_answer_impact(schema: str, table: str, source: str) -> dict[str, Any]:
+    summary = get_impact_summary(schema, table, depth=3, max_nodes=300, limit=12, source=source)
+    if isinstance(summary, JSONResponse):
+        return {
+            "mode": "impact",
+            "title": "Влияние не найдено",
+            "answer": "Не удалось построить граф влияния для этой таблицы.",
+            "tables": [],
+            "stats": [],
+            "suggestions": ["От чего зависит таблица?", "Найди похожие таблицы"],
+        }
+    tables = [
+        {
+            "schema": row.get("schema"),
+            "table": row.get("table"),
+            "source": source,
+            "fqn": f"{row.get('schema')}.{row.get('table')}" if row.get("schema") and row.get("table") else row.get("id"),
+            "entity_name": row.get("entity"),
+            "description": f"Depth {row.get('depth')}" if row.get("depth") is not None else None,
+        }
+        for row in summary.get("tables") or []
+    ]
+    return {
+        "mode": "impact",
+        "title": "Влияние вниз по потоку",
+        "answer": (
+            f"Таблица {schema}.{table} влияет на {summary.get('total_tables') or 0} таблиц "
+            f"и {summary.get('total_entities') or 0} сущностей."
+        ),
+        "tables": _assistant_format_table_refs(tables[:12]),
+        "stats": [
+            {"label": "Таблиц", "value": summary.get("total_tables") or 0},
+            {"label": "Сущностей", "value": summary.get("total_entities") or 0},
+            {"label": "Глубина", "value": summary.get("depth") or 0},
+        ],
+        "suggestions": ["От чего зависит таблица?", "Что это за таблица?"],
+    }
+
+
+def _assistant_answer_slowest(question: str, context: AssistantContextPayload | None = None, days: int = 30) -> dict[str, Any]:
+    layer = _assistant_extract_layer(question, context)
+    query = f"""
+        WITH base AS (
+            SELECT
+                COALESCE(t.table_schema, NULLIF(split_part(l.object_name, '.', 1), '')) AS table_schema,
+                COALESCE(t.table_name, NULLIF(split_part(l.object_name, '.', 2), ''), l.object_name) AS table_name,
+                e.entity_name,
+                EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration
+            FROM {TABLE_LOADING_HISTORY} l
+            LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
+            LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
+            WHERE l.object_type = 'table'
+              AND l.loading_state = 'SUCCESS'
+              AND l.loading_start_dttm IS NOT NULL
+              AND l.loading_finish_dttm IS NOT NULL
+              AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
+        )
+        SELECT
+            table_schema,
+            table_name,
+            entity_name,
+            COUNT(*) AS runs_count,
+            AVG(duration) AS avg_duration,
+            percentile_cont(0.95) WITHIN GROUP (ORDER BY duration) AS p95_duration,
+            MAX(duration) AS max_duration
+        FROM base
+        WHERE (:layer IS NULL OR lower(table_schema) = :layer)
+        GROUP BY table_schema, table_name, entity_name
+        ORDER BY p95_duration DESC NULLS LAST, max_duration DESC NULLS LAST
+        LIMIT 8
+    """
+    with engine.connect() as conn:
+        rows = conn.execute(text(query), {"days": days, "layer": layer}).mappings().all()
+    tables = [
+        {
+            "schema": row.get("table_schema"),
+            "table": row.get("table_name"),
+            "source": "current",
+            "fqn": f"{row.get('table_schema')}.{row.get('table_name')}",
+            "entity_name": row.get("entity_name"),
+            "description": f"P95 {round(float(row.get('p95_duration') or 0), 2)} мин · runs {int(row.get('runs_count') or 0)}",
+        }
+        for row in rows
+        if row.get("table_schema") and row.get("table_name")
+    ]
+    layer_text = f" на слое {layer}" if layer else ""
+    answer = (
+        f"Показываю самые долгие загрузки{layer_text} за последние {days} дней по P95 длительности."
+        if rows else f"Не нашел долгих загрузок{layer_text} за последние {days} дней."
+    )
+    return {
+        "mode": "slowest",
+        "title": "Самые долгие загрузки",
+        "answer": answer,
+        "tables": _assistant_format_table_refs(tables),
+        "stats": [{"label": "Слой", "value": (layer or "Все").upper()}, {"label": "Период", "value": f"{days} дн"}],
+        "suggestions": ["Самая долгая загрузка на слое dm", "Найди таблицы с остатками", "На что влияет таблица?"],
+    }
+
+
+def _assistant_answer_search(question: str) -> dict[str, Any]:
+    tables = _assistant_search_tables(question, limit=10)
+    if not tables:
+        return {
+            "mode": "search",
+            "title": "Поиск по описанию",
+            "answer": "По запросу ничего не нашел в описаниях таблиц и dbt-моделей.",
+            "tables": [],
+            "stats": [],
+            "suggestions": ["Найди таблицы с остатками", "Найди таблицы с сальдо", "Найди таблицы с отгрузками"],
+        }
+    return {
+        "mode": "search",
+        "title": "Подходящие таблицы",
+        "answer": f"Нашел {len(tables)} таблиц, которые похожи по описанию или названию.",
+        "tables": tables,
+        "stats": [{"label": "Совпадений", "value": len(tables)}],
+        "suggestions": ["От чего зависит таблица?", "На что влияет таблица?", "Самая долгая загрузка"],
+    }
+
+
+def _assistant_answer(question: str, context: AssistantContextPayload | None = None) -> dict[str, Any]:
+    question = (question or "").strip()
+    source = (getattr(context, "source", None) or "current").strip() or "current"
+    ctx_schema = norm(getattr(context, "schema", None))
+    ctx_table = norm(getattr(context, "table", None))
+    if (not ctx_schema or not ctx_table) and question:
+        parsed_schema, parsed_table = _assistant_extract_fqn(question)
+        ctx_schema = ctx_schema or parsed_schema
+        ctx_table = ctx_table or parsed_table
+
+    normalized = _assistant_normalize_text(question)
+    if not normalized and ctx_schema and ctx_table:
+        return _assistant_answer_summary(ctx_schema, ctx_table, source)
+    if ("от чего зависит" in normalized or "upstream" in normalized or "зависимости" in normalized) and ctx_schema and ctx_table:
+        return _assistant_answer_upstream(ctx_schema, ctx_table, source)
+    if ("на что влияет" in normalized or "impact" in normalized or "влияет" in normalized) and ctx_schema and ctx_table:
+        return _assistant_answer_impact(ctx_schema, ctx_table, source)
+    if "долг" in normalized and "загруз" in normalized:
+        return _assistant_answer_slowest(question, context=context)
+    if ("что это" in normalized or "опиши" in normalized or "описание" in normalized) and ctx_schema and ctx_table:
+        return _assistant_answer_summary(ctx_schema, ctx_table, source)
+    return _assistant_answer_search(question)
 
 
 def iter_meta_dirs(targets: Optional[List[str]] = None):
@@ -4043,6 +4535,19 @@ def get_dbt_model_history(
             table_run_log=TABLE_DBT_RUN_LOG,
         )
         return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except OperationalError as e:
+        print("❌ /api/dbt/history db unavailable:", e)
+        return JSONResponse(
+            content={
+                "configured": True,
+                "available": False,
+                "message": "DBT logs database is unavailable",
+                "model": None,
+                "catalog": None,
+                "runs": [],
+            },
+            media_type="application/json; charset=utf-8",
+        )
     except Exception as e:
         print("❌ /api/dbt/history error:", e)
         print(traceback.format_exc())

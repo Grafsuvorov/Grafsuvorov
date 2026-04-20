@@ -25,6 +25,7 @@ import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
+import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
@@ -48,6 +49,7 @@ export default function App() {
       return null;
     }
   });
+  const [assistantOpen, setAssistantOpen] = useState(false);
 
   useEffect(() => {
     if (!AUTH_ENABLED) return;
@@ -331,6 +333,34 @@ export default function App() {
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
+  const assistantContext = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const source = params.get("source") || "current";
+    const tableRoute = location.pathname.match(/^\/table\/([^/]+)\/(.+)$/);
+    if (tableRoute) {
+      return {
+        page: "table",
+        schema: decodeURIComponent(tableRoute[1]),
+        table: decodeURIComponent(tableRoute[2]),
+        source,
+      };
+    }
+    const impactRoute = location.pathname.match(/^\/impact\/([^/]+)\/(.+)$/);
+    if (impactRoute) {
+      return {
+        page: "impact",
+        schema: decodeURIComponent(impactRoute[1]),
+        table: decodeURIComponent(impactRoute[2]),
+        source,
+      };
+    }
+    const depsTable = params.get("table");
+    if (location.pathname === "/dependencies" && depsTable && depsTable.includes(".")) {
+      const [schema, table] = depsTable.split(".", 2);
+      return { page: "dependencies", schema, table, source: "current" };
+    }
+    return { page: location.pathname, source: "current" };
+  }, [location.pathname, location.search]);
 
   return (
     <div className="app">
@@ -352,6 +382,25 @@ export default function App() {
           navigate("/login");
         }}
       />
+      {isAdmin ? (
+        <AdminAssistantPanel
+          open={assistantOpen}
+          onOpen={() => setAssistantOpen(true)}
+          onClose={() => setAssistantOpen(false)}
+          context={assistantContext}
+          onOpenTable={(item) => {
+            setAssistantOpen(false);
+            openView({
+              view: "table_info",
+              table: {
+                schema: item.schema,
+                table: item.table,
+                source: item.source || "current",
+              },
+            });
+          }}
+        />
+      ) : null}
         <Routes>
         <Route
           path="/login"

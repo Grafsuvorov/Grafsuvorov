@@ -1,119 +1,41 @@
--- 🔧 память (опционально)
-SET statement_mem = '1GB';
+import os
+  import json
+  import requests
 
---------------------------------------------------
--- 1. БАЗА: связи + продажи + bundle
---------------------------------------------------
-DROP TABLE IF EXISTS tmp_sd_base;
+  API_URL = os.getenv("AI_URL", "").rstrip("/")
+  API_KEY = os.getenv("AI_API_KEY", "")
+  MODEL = os.getenv("AI_MODEL", "")
 
-CREATE TEMP TABLE tmp_sd_base AS
-SELECT
-    t0.sales_bundle_code,
-    t1.delivery_number_sales AS sales_delivery_code,
-    t0.production_bundle_reference_code,
-    
-    CASE 
-        WHEN t1.plant_producer_code = '5302' THEN '5301'
-        ELSE t1.plant_producer_code
-    END AS plant_code,
+  payload = {
+      "model": MODEL,
+      "messages": [
+          {"role": "user", "content": "Привет, ответь одним коротким предложением"}
+      ],
+      "temperature": 0.1,
+  }
 
-    t3.sales_bundle_net_weight,
+  headers = {
+      "Content-Type": "application/json",
+      "Authorization": f"Bearer {API_KEY}",
+  }
 
-    -- 💥 ВАЖНО: считаем substring ЗДЕСЬ, а не в JOIN
-    substring(t0.production_bundle_reference_code, 28, 10) AS production_bundle_code
-FROM dds.sales_bundle_and_delivery_relationship t0
-JOIN dm_calc.sd_sales_main_scm t1 
-    ON t1.delivery_number_sales = t0.delivery_code
-    AND t0.is_deleted_code IS NULL
-LEFT JOIN dds.sales_bundle t3 
-    ON t0.sales_bundle_code = t3.sales_bundle_code
-    AND t3.is_deleted_code IS NULL
-DISTRIBUTED BY (plant_code, production_bundle_code);
+  resp = requests.post(
+      f"{API_URL}/v1/chat/completions",
+      headers=headers,
+      json=payload,
+      timeout=60,
+  )
 
-ANALYZE tmp_sd_base;
+  print("STATUS:", resp.status_code)
+  print("BODY:")
+  try:
+      print(json.dumps(resp.json(), ensure_ascii=False, indent=2))
+  except Exception:
+      print(resp.text)
 
---------------------------------------------------
--- 2. PRODUCTION_BUNDLE подготовка
---------------------------------------------------
-DROP TABLE IF EXISTS tmp_production_bundle;
+  Как запускать:
 
-CREATE TEMP TABLE tmp_production_bundle AS
-SELECT
-    plant_code,
-    melt_code,
-
-    -- 💥 substring заранее
-    substring(production_bundle_code, 9, 10) AS production_bundle_code
-FROM dds.production_bundle
-DISTRIBUTED BY (plant_code, production_bundle_code);
-
-ANALYZE tmp_production_bundle;
-
---------------------------------------------------
--- 3. JOIN с production_bundle
---------------------------------------------------
-DROP TABLE IF EXISTS tmp_join_bundle;
-
-CREATE TEMP TABLE tmp_join_bundle AS
-SELECT
-    o.sales_bundle_code,
-    o.sales_delivery_code,
-    o.production_bundle_reference_code,
-    o.plant_code,
-    o.sales_bundle_net_weight,
-    o.production_bundle_code,
-    pb.melt_code
-FROM tmp_sd_base o
-LEFT JOIN tmp_production_bundle pb
-    ON o.plant_code = pb.plant_code
-    AND o.production_bundle_code = pb.production_bundle_code
-DISTRIBUTED BY (plant_code, melt_code);
-
-ANALYZE tmp_join_bundle;
-
---------------------------------------------------
--- 4. JOIN с production_melt
---------------------------------------------------
-DROP TABLE IF EXISTS tmp_final;
-
-CREATE TEMP TABLE tmp_final AS
-SELECT
-    jb.sales_bundle_code,
-    jb.sales_delivery_code,
-    jb.production_bundle_reference_code,
-    jb.plant_code,
-    jb.sales_bundle_net_weight,
-    jb.production_bundle_code,
-    jb.melt_code,
-    pm.melt_name
-FROM tmp_join_bundle jb
-LEFT JOIN dds.production_melt pm
-    ON jb.plant_code = pm.plant_code
-    AND jb.melt_code = pm.melt_code
-DISTRIBUTED BY (plant_code);
-
-ANALYZE tmp_final;
-
---------------------------------------------------
--- 5. INSERT
---------------------------------------------------
-INSERT INTO dm_calc.carbon_footprint_by_bundle_sd0010 (
-    sales_bundle_code,
-    sales_delivery_code,
-    production_bundle_reference_code,
-    plant_code,
-    sales_bundle_net_weight,
-    production_bundle_code,
-    melt_code,
-    melt_name
-)
-SELECT
-    sales_bundle_code,
-    sales_delivery_code,
-    production_bundle_reference_code,
-    plant_code,
-    sales_bundle_net_weight,
-    production_bundle_code,
-    melt_code,
-    melt_name
-FROM tmp_final;
+  export AI_URL='https://your-llm-host'
+  export AI_API_KEY='your_key'
+  export AI_MODEL='your_model'
+  python3 test_llm.py

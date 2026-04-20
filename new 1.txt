@@ -1,16 +1,37 @@
-During handling of the above exception, another exception occurred:
+import os
+  import json
+  import requests
+  import urllib3
 
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\ai.py", line 22, in <module>
-    resp = requests.post(
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\api.py", line 115, in post
-    return request("post", url, data=data, json=json, **kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\api.py", line 59, in request
-    return session.request(method=method, url=url, **kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\sessions.py", line 589, in request
-    resp = self.send(prep, **send_kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\sessions.py", line 703, in send
-    r = adapter.send(request, **kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\site-packages\requests\adapters.py", line 698, in send
-    raise SSLError(e, request=request)
-requests.exceptions.SSLError: HTTPSConnectionPool(host='ds.rusal.com', port=443): Max retries exceeded with url: /api/v1/chat/completions (Caused by SSLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1122)')))
+  urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+  API_URL = os.getenv("AI_URL", "").rstrip("/")
+  API_KEY = os.getenv("AI_API_KEY", "")
+  MODEL = os.getenv("AI_MODEL", "")
+
+  payload = {
+      "model": MODEL,
+      "messages": [
+          {"role": "user", "content": "Привет, ответь одним коротким предложением"}
+      ],
+      "temperature": 0.1,
+  }
+
+  headers = {
+      "Content-Type": "application/json",
+      "Authorization": f"Bearer {API_KEY}",
+  }
+
+  resp = requests.post(
+      f"{API_URL}/api/v1/chat/completions",
+      headers=headers,
+      json=payload,
+      timeout=60,
+      verify=False,
+  )
+
+  print("STATUS:", resp.status_code)
+  try:
+      print(json.dumps(resp.json(), ensure_ascii=False, indent=2))
+  except Exception:
+      print(resp.text)

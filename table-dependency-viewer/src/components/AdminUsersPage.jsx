@@ -58,6 +58,7 @@ export default function AdminUsersPage({ userProfile }) {
   const [lastDeployAt, setLastDeployAt] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
+  const [roleUpdatingId, setRoleUpdatingId] = useState(null);
   const [form, setForm] = useState({
     email: "",
     username: "",
@@ -208,6 +209,22 @@ export default function AdminUsersPage({ userProfile }) {
       setError(err.message || "Не удалось изменить статус пользователя");
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const handleChangeRole = async (userId, email, role) => {
+    const nextRole = String(role || "").toLowerCase();
+    if (!nextRole) return;
+    if (!window.confirm(`Изменить роль пользователя ${email} на ${formatRole(nextRole)}?`)) return;
+    setRoleUpdatingId(userId);
+    setError(null);
+    try {
+      await adminApi.updateUser(userId, { role: nextRole });
+      await fetchUsers();
+    } catch (err) {
+      setError(err.message || "Не удалось изменить роль пользователя");
+    } finally {
+      setRoleUpdatingId(null);
     }
   };
 
@@ -535,7 +552,7 @@ export default function AdminUsersPage({ userProfile }) {
         {loading && <div className="muted">Загрузка...</div>}
         {!loading && (
           <div className="admin-table">
-            <div className="admin-row admin-header">
+            <div className="admin-row admin-header admin-users-head">
               <div>Email</div>
               <div>Логин</div>
               <div>Роль</div>
@@ -543,10 +560,23 @@ export default function AdminUsersPage({ userProfile }) {
               <div>Действия</div>
             </div>
             {users.map((user) => (
-              <div className="admin-row" key={user.id}>
+              <div className="admin-row admin-users-row" key={user.id}>
                 <div>{user.email}</div>
                 <div>{user.username}</div>
-                <div>{user.role}</div>
+                <div>
+                  <select
+                    className="admin-role-select"
+                    value={user.role}
+                    disabled={roleUpdatingId === user.id}
+                    onChange={(event) => handleChangeRole(user.id, user.email, event.target.value)}
+                  >
+                    {ROLE_OPTIONS.map((role) => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div>{user.is_active ? "Активен" : "Отключён"}</div>
                 <div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

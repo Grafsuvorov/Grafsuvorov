@@ -214,6 +214,13 @@ def _require_admin(request: Request):
     return user
 
 
+def _require_authenticated(request: Request):
+    user = get_current_user_from_request(request)
+    if not user or not getattr(user, "email", None):
+        raise HTTPException(status_code=403, detail="Authentication required")
+    return user
+
+
 
 
 
@@ -310,7 +317,7 @@ def run_ci_cd(request: Request):
 
 @router.post("/api/admin/assistant/query")
 def assistant_query(payload: AssistantQueryPayload, request: Request):
-    _require_admin(request)
+    _require_authenticated(request)
     try:
         response = _assistant_answer(payload.question, payload.context)
         return JSONResponse(content=response, media_type="application/json; charset=utf-8")

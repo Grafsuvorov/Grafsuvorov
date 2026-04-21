@@ -62,6 +62,10 @@ class UserCreate(BaseModel):
     role: str
 
 
+class UserUpdate(BaseModel):
+    role: str
+
+
 class ChangePassword(BaseModel):
     current_password: str
     new_password: str
@@ -261,6 +265,20 @@ def _set_user_active(user_id: int, is_active: bool) -> None:
                 """
             ),
             {"user_id": user_id, "is_active": is_active},
+        )
+
+
+def _set_user_role(user_id: int, role: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE tech_etl.app_users
+                SET role = :role
+                WHERE id = :user_id
+                """
+            ),
+            {"user_id": user_id, "role": role},
         )
 
 
@@ -910,6 +928,28 @@ def enable_user(user_id: int, request: Request):
         page="/auth/users",
         object_type="user",
         object_id=str(user_id),
+    )
+    return UserActionResponse(status="ok")
+
+
+@router.put("/users/{user_id}", response_model=UserActionResponse)
+def update_user(user_id: int, payload: UserUpdate, request: Request):
+    admin = get_current_user_from_request(request)
+    if admin.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    role = payload.role.lower()
+    if role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    _set_user_role(user_id, role)
+    _write_audit_event(
+        event_type="admin_update_user_role",
+        request=request,
+        user=admin,
+        status_value="success",
+        page="/auth/users",
+        object_type="user",
+        object_id=str(user_id),
+        details={"role": role},
     )
     return UserActionResponse(status="ok")
 

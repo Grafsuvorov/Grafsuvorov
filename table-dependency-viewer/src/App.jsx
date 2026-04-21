@@ -382,7 +382,7 @@ export default function App() {
           navigate("/login");
         }}
       />
-      {isAdmin ? (
+      {userProfile ? (
         <AdminAssistantPanel
           open={assistantOpen}
           onOpen={() => setAssistantOpen(true)}

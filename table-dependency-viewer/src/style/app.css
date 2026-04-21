@@ -1262,6 +1262,21 @@ main.content {
   align-items: center;
 }
 
+.admin-role-select {
+  width: 100%;
+  min-width: 120px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--text);
+  padding: 8px 10px;
+}
+
+.admin-role-select:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .engineering-page {
   display: grid;
   gap: 18px;

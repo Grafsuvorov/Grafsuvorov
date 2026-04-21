@@ -102,7 +102,7 @@ export default function AdminAssistantPanel({
           <div className="assistant-head">
             <div>
               <div className="assistant-kicker-row">
-                <div className="assistant-kicker">Admin only</div>
+                <div className="assistant-kicker">DWH assistant</div>
                 <div className="assistant-head-badge">DWH Navigator</div>
               </div>
               <div className="assistant-title">Ассистент DWH</div>

@@ -1,20 +1,20 @@
-import requests
-import json
-BASE_URL = "https://ds.rusal.com"
-CHAT_URL = f"{BASE_URL}/api/chat/completions"
-TOKEN = "******"
-headers = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": "application/json"
-}
-print("=== Тестирование API с твоим токеном и известной моделью ===")
-print("\n1. Отправляем запрос к ИИ с моделью Qwen2.5-VL-72B-Instruct-AWQ...")
-chat_data = {
-    "model": "Qwen2.5-VL-72B-Instruct-AWQ",
-    "messages": [
-        {
-            "role": "user",
-            "content": "Почему небо синее?"
-        }
-    ]
-}
+Корниенко Александр Валерьевич (KornienkoAV)requested to merge
+release/2026-04-15
+into
+main
+6 days ago
+
+путь к ямлам для клика
+ config_files/meta/dm/dm_alverse_mlc_mes_metal_movement_meta.yaml 
+должны быть указаны 
+dag_tags:
+  - ALVERSE
+task_pool: dm_pool
+
+пример вью где лежит проверяй
+config_files/meta/dm_view/consolidated_documents_odo_dfk_dtil.sql
+
+в ямле объекте вот указаны пути, нужно проверять что они соответсвуют
+ql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_truncate.sql

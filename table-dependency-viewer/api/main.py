@@ -3129,6 +3129,104 @@ def _assistant_answer_recent_errors(schema: str | None, table: str | None, sourc
     }
 
 
+def _assistant_find_entity_name(question: str) -> Optional[str]:
+    normalized_question = _assistant_normalize_text(question)
+    if not normalized_question:
+        return None
+    snapshot = get_graph_snapshot()
+    entities = sorted({entity for values in snapshot.get("table_entity_map", {}).values() for entity in values if entity})
+    normalized_entities = [(_assistant_normalize_text(entity), entity) for entity in entities]
+    for normalized_entity, entity in normalized_entities:
+        if normalized_entity and normalized_entity in normalized_question:
+            return entity
+
+    terms = _assistant_extract_terms(question)
+    best: tuple[int, str] | None = None
+    for normalized_entity, entity in normalized_entities:
+        if not normalized_entity:
+            continue
+        score = sum(1 for term in terms if term in normalized_entity)
+        if score and (best is None or score > best[0] or (score == best[0] and len(entity) < len(best[1]))):
+            best = (score, entity)
+    return best[1] if best else None
+
+
+def _assistant_answer_entity_usage(question: str) -> dict[str, Any]:
+    entity_name = _assistant_find_entity_name(question)
+    if not entity_name:
+        return {
+            "mode": "entity_usage",
+            "title": "Влияние сущности",
+            "answer": "Не понял название сущности. Напиши его полностью или открой граф сущности и повтори вопрос.",
+            "tables": [],
+            "stats": [],
+            "suggestions": ["Влияет ли сущность TRANSPORTATION на другие сущности?", "Есть зависимости у сущности BI_FI?"],
+        }
+
+    snapshot = get_graph_snapshot()
+    table_edges = snapshot["table_graph"]["edges"]
+    table_nodes = snapshot["table_graph"]["nodes"]
+    table_entity_map = {key: set(values or []) for key, values in snapshot["table_entity_map"].items()}
+    entity_tables = {table_id for table_id, entities in table_entity_map.items() if entity_name in entities}
+    downstream: dict[str, set[str]] = {}
+    upstream: dict[str, set[str]] = {}
+
+    for edge in table_edges:
+        source = edge.get("source")
+        target = edge.get("target")
+        if not source or not target:
+            continue
+        source_entities = table_entity_map.get(source) or set()
+        target_entities = table_entity_map.get(target) or set()
+        if source in entity_tables:
+            for target_entity in target_entities:
+                if target_entity and target_entity != entity_name:
+                    downstream.setdefault(target_entity, set()).add(target)
+        if target in entity_tables:
+            for source_entity in source_entities:
+                if source_entity and source_entity != entity_name:
+                    upstream.setdefault(source_entity, set()).add(source)
+
+    downstream_rows = sorted(downstream.items(), key=lambda item: (-len(item[1]), item[0]))[:8]
+    upstream_rows = sorted(upstream.items(), key=lambda item: (-len(item[1]), item[0]))[:6]
+    tables = []
+    for target_entity, table_ids in downstream_rows:
+        sample_id = sorted(table_ids)[0]
+        node = table_nodes.get(sample_id) or {}
+        tables.append(
+            {
+                "schema": node.get("schema"),
+                "table": node.get("table"),
+                "source": "current",
+                "fqn": sample_id,
+                "entity_name": target_entity,
+                "description": f"Используется в сущности: {target_entity} · таблиц: {len(table_ids)}",
+            }
+        )
+
+    if downstream_rows:
+        downstream_text = ", ".join(f"{name} ({len(table_ids)})" for name, table_ids in downstream_rows)
+        answer = f"Таблицы сущности {entity_name} используются в других сущностях: {downstream_text}."
+    else:
+        answer = f"Не нашел, что таблицы сущности {entity_name} используются в других сущностях."
+    if upstream_rows:
+        upstream_text = ", ".join(f"{name} ({len(table_ids)})" for name, table_ids in upstream_rows)
+        answer += f" Также эта сущность зависит от: {upstream_text}."
+
+    return {
+        "mode": "entity_usage",
+        "title": f"Связи сущности {entity_name}",
+        "answer": answer,
+        "tables": _assistant_format_table_refs(tables),
+        "stats": [
+            {"label": "Таблиц сущности", "value": len(entity_tables)},
+            {"label": "Куда влияет", "value": len(downstream)},
+            {"label": "От кого зависит", "value": len(upstream)},
+        ],
+        "suggestions": ["Покажи последние ошибки", "Самая долгая загрузка", "Найди таблицы по описанию"],
+    }
+
+
 def _assistant_answer_search(question: str) -> dict[str, Any]:
     tables = _assistant_search_tables(question, limit=10)
     if not tables:
@@ -3165,6 +3263,8 @@ def _assistant_answer(question: str, context: AssistantContextPayload | None = N
         return _assistant_answer_summary(ctx_schema, ctx_table, source)
     if ("последние ошибки" in normalized or "покажи ошибки" in normalized or "ошибк" in normalized):
         return _assistant_answer_recent_errors(ctx_schema, ctx_table, source)
+    if ("сущност" in normalized or "entity" in normalized) and ("влия" in normalized or "завис" in normalized or "использ" in normalized):
+        return _assistant_answer_entity_usage(question)
     if ("первич" in normalized and "ключ" in normalized) or "key attributes" in normalized or "ключевые атрибуты" in normalized:
         if ctx_schema and ctx_table:
             return _assistant_answer_primary_key(ctx_schema, ctx_table, source)

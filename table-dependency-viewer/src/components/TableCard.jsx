@@ -45,6 +45,7 @@ export default function TableCard({
   const [dbtHistoryLoading, setDbtHistoryLoading] = useState(false);
   const [dbtHistoryError, setDbtHistoryError] = useState(null);
   const [dbtHistoryConfigured, setDbtHistoryConfigured] = useState(true);
+  const [dbtHistoryAvailable, setDbtHistoryAvailable] = useState(true);
   const [variants, setVariants] = useState([]);
   const [variantsLoading, setVariantsLoading] = useState(false);
   const [variantsError, setVariantsError] = useState(null);
@@ -164,6 +165,7 @@ export default function TableCard({
       setDbtHistoryError(null);
       setDbtHistoryLoading(false);
       setDbtHistoryConfigured(true);
+      setDbtHistoryAvailable(true);
       return;
     }
     setDbtHistoryLoading(true);
@@ -177,6 +179,8 @@ export default function TableCard({
         if (requestId !== dbtHistoryRequestRef.current) return;
         setDbtHistory(Array.isArray(data?.runs) ? data.runs : []);
         setDbtHistoryConfigured(Boolean(data?.configured ?? true));
+        setDbtHistoryAvailable(Boolean(data?.available ?? true));
+        setDbtHistoryError(data?.available === false ? null : null);
       })
       .catch((err) => {
         if (requestId !== dbtHistoryRequestRef.current) return;
@@ -546,6 +550,7 @@ export default function TableCard({
 
   const clickLastRun = clickRuns[0] || null;
   const dbtLastRun = dbtHistory[0] || null;
+  const dbtHistoryHasErrors = dbtHistory.some((row) => Boolean(row?.error_message));
   const dbtManifest = meta?.dbt_manifest || null;
   const dbtMetadata = dbtManifest?.metadata || null;
   const dbtArtifactPaths = dbtManifest
@@ -1148,24 +1153,27 @@ export default function TableCard({
           {!dbtHistoryLoading && !dbtHistoryError && !dbtHistoryConfigured && (
             <div className="muted">Подключение к dbt logs не настроено.</div>
           )}
-          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistory.length === 0 && (
+          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && !dbtHistoryAvailable && (
+            <div className="muted">База dbt logs сейчас недоступна.</div>
+          )}
+          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistoryAvailable && dbtHistory.length === 0 && (
             <div className="muted">dbt-запусков не найдено.</div>
           )}
-          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistory.length > 0 && (
+          {!dbtHistoryLoading && !dbtHistoryError && dbtHistoryConfigured && dbtHistoryAvailable && dbtHistory.length > 0 && (
             <>
               {dbtLastRun ? (
                 <div className="section-subtitle muted" style={{ marginBottom: 12 }}>
                   Последний запуск: {dbtLastRun.model_status || "—"} / {dbtLastRun.dbt_run_status || "—"}
                 </div>
               ) : null}
-              <div className="history-table gp">
+              <div className={`history-table dbt ${dbtHistoryHasErrors ? "with-errors" : ""}`}>
                 <div className="history-table-head">
                   <span>Статус модели</span>
                   <span>Запуск dbt</span>
                   <span>Старт</span>
                   <span>Финиш</span>
                   <span>Длит.</span>
-                  <span>Ошибка</span>
+                  {dbtHistoryHasErrors ? <span>Ошибка</span> : null}
                 </div>
                 {dbtHistory.map((row, idx) => (
                   <div key={`${row.execution_guid || "dbt"}-${idx}`} className="history-row-block">
@@ -1177,19 +1185,21 @@ export default function TableCard({
                         {row.dbt_run_status || "—"}
                         {row.dag_run_id ? <span className="muted"> · {row.dag_run_id}</span> : null}
                       </span>
-                      <span>{row.start_dttm || "—"}</span>
-                      <span>{row.finish_dttm || "—"}</span>
+                      <span className="history-time">{formatLocalDateTime(row.start_dttm, { withSeconds: false }) || row.start_dttm || "—"}</span>
+                      <span className="history-time">{formatLocalDateTime(row.finish_dttm, { withSeconds: false }) || row.finish_dttm || "—"}</span>
                       <span>{row.duration_minutes ?? "—"} мин</span>
-                      <span className="history-message">
-                        {row.error_message ? (
+                      {dbtHistoryHasErrors ? (
+                        <span className="history-message">
+                          {row.error_message ? (
                           <button
                             className="history-error-toggle compact"
                             onClick={() => toggleDbtError(`dbt-${idx}`)}
                           >
-                            {expandedDbtErrors[`dbt-${idx}`] ? "Скрыть" : "Ошибка"}
+                            {expandedDbtErrors[`dbt-${idx}`] ? "Скрыть" : "Показать"}
                           </button>
-                        ) : "—"}
-                      </span>
+                          ) : "—"}
+                        </span>
+                      ) : null}
                     </div>
                     {row.error_message && expandedDbtErrors[`dbt-${idx}`] && (
                       <pre className="history-error-body">{row.error_message}</pre>

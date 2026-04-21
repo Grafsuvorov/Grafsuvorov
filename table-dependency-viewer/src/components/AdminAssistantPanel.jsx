@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { assistantApi } from "../api/assistant.js";
 
-const QUICK_ACTIONS = [
-  "Самая долгая загрузка",
-  "Самая долгая загрузка на слое dm",
-];
-
 function renderContextLabel(context) {
   if (context?.schema && context?.table) {
     return `${context.schema}.${context.table}${context?.source && context.source !== "current" ? ` · ${context.source}` : ""}`;
@@ -54,13 +49,6 @@ export default function AdminAssistantPanel({
   }, [context?.schema, context?.table, context?.source, context?.page]);
 
   const contextLabel = useMemo(() => renderContextLabel(context), [context]);
-  const quickActions = useMemo(() => {
-    const items = [...QUICK_ACTIONS];
-    if (context?.schema) {
-      items.push(`Самая долгая загрузка на слое ${context.schema}`);
-    }
-    return Array.from(new Set(items));
-  }, [context?.schema]);
 
   const submitQuestion = async (rawQuestion) => {
     const text = String(rawQuestion || question).trim();
@@ -121,40 +109,6 @@ export default function AdminAssistantPanel({
               <div className="assistant-context">{contextLabel}</div>
             </div>
             <button type="button" className="assistant-close" onClick={onClose}>Закрыть</button>
-          </div>
-
-          <div className="assistant-hero-card">
-            <div className="assistant-hero-title">Что умеет сейчас</div>
-            <div className="assistant-hero-text">
-              Поиск по описанию и названиям, самые долгие загрузки, upstream/downstream и быстрый разбор текущей таблицы без выхода со страницы.
-            </div>
-          </div>
-
-          <div className="assistant-quick-actions">
-            {quickActions.map((item) => (
-              <button key={item} type="button" className="assistant-chip" onClick={() => submitQuestion(item)}>
-                {item}
-              </button>
-            ))}
-            {context?.schema && context?.table ? (
-              <>
-                <button type="button" className="assistant-chip" onClick={() => submitQuestion("Что это за таблица?")}>
-                  Что это за таблица?
-                </button>
-                <button type="button" className="assistant-chip" onClick={() => submitQuestion("Покажи первичный ключ таблицы")}>
-                  Первичный ключ
-                </button>
-                <button type="button" className="assistant-chip" onClick={() => submitQuestion("От чего зависит таблица?")}>
-                  От чего зависит?
-                </button>
-                <button type="button" className="assistant-chip" onClick={() => submitQuestion("На что влияет таблица?")}>
-                  На что влияет?
-                </button>
-                <button type="button" className="assistant-chip" onClick={() => submitQuestion("Покажи последние ошибки")}>
-                  Последние ошибки
-                </button>
-              </>
-            ) : null}
           </div>
 
           <div className="assistant-feed">

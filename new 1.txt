@@ -1,54 +1,40 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --base 6286dfe96^1 --head 6286dfe96  --diff-mode two-dot                                                                                    
-Exception in thread Thread-3:
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 950, in _bootstrap_inner
-    self.run()
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 888, in run
-    self._target(*self._args, **self._kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\subprocess.py", line 1475, in _readerthread
-    buffer.append(fh.read())
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\encodings\cp1251.py", line 23, in decode
-    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
-UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 13999: character maps to <undefined>
-Exception in thread Thread-5:
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 950, in _bootstrap_inner
-    self.run()
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 888, in run
-    self._target(*self._args, **self._kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\subprocess.py", line 1475, in _readerthread
-    buffer.append(fh.read())
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\encodings\cp1251.py", line 23, in decode
-    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
-UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 1405: character maps to <undefined>
-Exception in thread Thread-7:
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 950, in _bootstrap_inner
-    self.run()
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 888, in run
-    self._target(*self._args, **self._kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\subprocess.py", line 1475, in _readerthread
-    buffer.append(fh.read())
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\encodings\cp1251.py", line 23, in decode
-    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
-UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 13999: character maps to <undefined>
-Exception in thread Thread-9:
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 950, in _bootstrap_inner
-    self.run()
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\threading.py", line 888, in run
-    self._target(*self._args, **self._kwargs)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\subprocess.py", line 1475, in _readerthread
-    buffer.append(fh.read())
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\encodings\cp1251.py", line 23, in decode
-    return codecs.charmap_decode(input,self.errors,decoding_table)[0]
-UnicodeDecodeError: 'charmap' codec can't decode byte 0x98 in position 1405: character maps to <undefined>
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --base 6286dfe96^1 --head 6286dfe96  --diff-mode two-dot
 # Release Validation Report
 
 Changed files checked: 2
 Findings: 2
 
-## BLOCKER (2)
+## BLOCKER (1)
 
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/exp_toro_complex_equipment_technical_readiness/sql_query_insert_init.sql` [git-show]: Не удалось прочитать файл из `6286dfe96`: list index out of range
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/exp_toro_complex_equipment_technical_readiness/sql_query_recreate_init.sql` [git-show]: Не удалось прочитать файл из `6286dfe96`: list index out of range
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/exp_toro_complex_equipment_technical_readiness/sql_query_recreate_init.sql` [drop-cascade]: `DROP ... CASCADE` запрещен: может удалить downstream view.
+
+## WARNING (1)
+
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/exp_toro_complex_equipment_technical_readiness/sql_query_recreate_init.sql` [table-comment]: Не найден `COMMENT ON TABLE`.
+
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> git log --oneline --since="2026-04-14" --until="2026-04-15" origin/main                                                                                                  
+946bc64cb Merge branch 'main' into 'release/2026-04-16'
+8f1f054e6 Merge branch 'release/2026-04-15' into 'main'
+c91989867 Merge branch 'DWH-11672' into 'release/2026-04-15'
+032cb389a DWH-11672. Правка имени директории
+26e8124e9 DWH-11922 dm.exp_toro_complex_equipment_technical_readiness TORO
+00cfe9f7c DWH-11416 Изменение ямла, замена оператора на ApiS3Operator
+e3d1e07c4 DWH-11975 dds.toro_service_message_header TORO
+d5c8e92bf DWH-11416 Обновление сущности
+ecc5acbe3 DWH-11828 dds.toro_diesel_equipment_unit_plan_vs_actual TORO
+8ced5fc6d Merge branch 'release/2026-04-15' into 'main'
+4ba54f2ee Merge branch 'feature/DWH-11954' into 'release/2026-04-15'
+e8023596d Merge branch 'release/2026-04-15' into 'feature/DWH-11954'
+932a62722 DWH-11672
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --base 8f1f054e6^1 --head 8f1f054e6  --diff-mode two-dot
+# Release Validation Report
+
+Changed files checked: 3
+Findings: 4
+
+## BLOCKER (4)
+
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_recreate_init` не найден в ветке: `etl_loads_entity/DQ/dm_view/dq_sd0010/sql_query_recreate_init.sql`.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует структуре. Ожидалось `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/sql_query_recreate_init.sql`.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_insert_init` не найден в ветке: `etl_loads_entity/DQ/dm_view/dq_sd0010/sql_query_recreate_init.sql`.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DQ/dm_view/dq_sd0010/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_truncate` не найден в ветке: `etl_loads_entity/DQ/dm_view/dq_sd0010/sql_query_truncate.sql`.

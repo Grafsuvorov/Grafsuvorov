@@ -133,6 +133,21 @@ def has_select_star(sql: str) -> bool:
     return bool(re.search(r"\bselect\s+\*", normalized) or re.search(r",\s*\*", normalized))
 
 
+def has_dm_view_select_star_from_dm_view(sql: str) -> bool:
+    normalized = normalize_sql(sql)
+    return bool(
+        re.search(
+            r"\bcreate\s+(?:or\s+replace\s+)?view\b.*?\bas\s+select\s+\*.*?\bfrom\s+(?:\"?dm_view\"?\.)",
+            normalized,
+        )
+    )
+
+
+def has_drop_view_cascade(sql: str) -> bool:
+    normalized = normalize_sql(sql)
+    return bool(re.search(r"\bdrop\s+view\b[^;]*\bcascade\b", normalized))
+
+
 def load_yaml(text: str, path: str, findings: list[Finding]) -> dict[str, Any]:
     if yaml is None:
         findings.append(
@@ -258,10 +273,19 @@ def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]
 
 def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
     normalized = normalize_sql(sql)
-    if re.search(r"\bdrop\s+(?:table|view)\b[^;]*\bcascade\b", normalized):
-        findings.append(Finding(BLOCKER, path, "drop-cascade", "`DROP ... CASCADE` запрещен: может удалить downstream view."))
+    if has_drop_view_cascade(sql):
+        findings.append(Finding(BLOCKER, path, "drop-view-cascade", "`DROP VIEW ... CASCADE` запрещен: может удалить downstream view."))
     if has_select_star(sql):
         findings.append(Finding(WARNING, path, "select-star", "`SELECT *` нежелателен: downstream может сломаться при изменении колонок."))
+    if "dm_view" in path and has_dm_view_select_star_from_dm_view(sql):
+        findings.append(
+            Finding(
+                BLOCKER,
+                path,
+                "dm-view-select-star",
+                "В `dm_view` запрещено `CREATE VIEW ... AS SELECT * FROM dm_view...`: явно перечисли колонки.",
+            )
+        )
     if re.search(r"\bcreate\s+(?:or\s+replace\s+)?view\b", normalized):
         if not re.search(r"\bdrop\s+view\s+if\s+exists\b", normalized):
             findings.append(Finding(WARNING, path, "view-drop", "Для view не найден явный `DROP VIEW IF EXISTS`."))

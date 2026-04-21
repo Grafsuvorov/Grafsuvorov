@@ -118,6 +118,18 @@ def extract_created_object(sql: str) -> tuple[str, str] | None:
     return match.group(1), strip_quotes(match.group(2))
 
 
+def expected_object_fqn(meta: dict[str, Any]) -> str | None:
+    schema = str(meta.get("table_schema") or "").strip().lower()
+    table = str(meta.get("table_name") or "").strip().lower()
+    if not schema or not table:
+        return None
+    return f"{schema}.{table}"
+
+
+def normalize_object_fqn(value: str) -> str:
+    return strip_quotes(value).replace('"."', ".").replace("`", "").replace('"', "").lower()
+
+
 def extract_sources(sql: str) -> set[str]:
     normalized = normalize_sql(sql)
     sources = set()
@@ -146,6 +158,41 @@ def has_dm_view_select_star_from_dm_view(sql: str) -> bool:
 def has_drop_view_cascade(sql: str) -> bool:
     normalized = normalize_sql(sql)
     return bool(re.search(r"\bdrop\s+view\b[^;]*\bcascade\b", normalized))
+
+
+def has_create_view_if_not_exists(sql: str) -> bool:
+    return bool(re.search(r"\bcreate\s+view\s+if\s+not\s+exists\b", normalize_sql(sql)))
+
+
+def has_drop_view_if_exists(sql: str) -> bool:
+    return bool(re.search(r"\bdrop\s+view\s+if\s+exists\b", normalize_sql(sql)))
+
+
+def validate_recreate_sql_matches_yaml(path: str, sql: str, meta: dict[str, Any], findings: list[Finding]) -> None:
+    expected = expected_object_fqn(meta)
+    if not expected:
+        return
+    created = extract_created_object(sql)
+    if not created:
+        findings.append(
+            Finding(
+                WARNING,
+                path,
+                "ddl-object",
+                "В recreate SQL не найден `CREATE TABLE` или `CREATE VIEW`; проверь, что файл действительно создает объект из YAML.",
+            )
+        )
+        return
+    actual = normalize_object_fqn(created[1])
+    if actual != expected:
+        findings.append(
+            Finding(
+                BLOCKER,
+                path,
+                "ddl-object",
+                f"DDL создает `{actual}`, а YAML описывает `{expected}`. Это часто означает ошибку имени файла, схемы или копипаст.",
+            )
+        )
 
 
 def load_yaml(text: str, path: str, findings: list[Finding]) -> dict[str, Any]:
@@ -288,7 +335,7 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
                         WARNING,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` не найден: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет.",
+                        f"Файл из `{field}` отсутствует: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет; иначе проверь опечатку в имени/пути или добавление файла в MR.",
                     )
                 )
             else:
@@ -297,9 +344,18 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
                         BLOCKER,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` не найден в ветке: `{repo_path}`. Проверь, что файл добавлен в MR или путь в YAML указан верно.",
+                        f"Файл из `{field}` отсутствует в ветке: `{repo_path}`. Скорее всего файл не добавлен в MR или в YAML опечатка в имени/пути.",
                     )
                 )
+                continue
+
+        if field == "sql_query_recreate_init" and repo_path and git_file_exists(head, repo_path, cwd):
+            try:
+                recreate_sql = git_show_text(head, repo_path, cwd)
+            except Exception as exc:
+                findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать recreate SQL `{repo_path}`: {exc}"))
+                continue
+            validate_recreate_sql_matches_yaml(path, recreate_sql, meta, findings)
 
 
 def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]) -> None:
@@ -316,6 +372,9 @@ def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]
 
 def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
     normalized = normalize_sql(sql)
+    if not normalized:
+        findings.append(Finding(BLOCKER, path, "empty-sql", "SQL-файл пустой или содержит только комментарии."))
+        return
     if has_drop_view_cascade(sql):
         findings.append(Finding(BLOCKER, path, "drop-view-cascade", "`DROP VIEW ... CASCADE` запрещен: может удалить downstream view."))
     if has_select_star(sql):
@@ -332,6 +391,15 @@ def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
     if re.search(r"\bcreate\s+(?:or\s+replace\s+)?view\b", normalized):
         if not re.search(r"\bdrop\s+view\s+if\s+exists\b", normalized):
             findings.append(Finding(WARNING, path, "view-drop", "Для view не найден явный `DROP VIEW IF EXISTS`."))
+        if has_drop_view_if_exists(sql) and has_create_view_if_not_exists(sql):
+            findings.append(
+                Finding(
+                    WARNING,
+                    path,
+                    "view-create-if-not-exists",
+                    "`DROP VIEW IF EXISTS` + `CREATE VIEW IF NOT EXISTS` выглядит избыточно: после drop лучше обычный `CREATE VIEW`, чтобы ошибка создания не скрылась.",
+                )
+            )
         if " on cluster " in normalized and " sync" not in normalized:
             findings.append(Finding(WARNING, path, "click-view-sync", "Для ClickHouse view с `ON CLUSTER` желательно использовать `SYNC` при drop."))
     if re.search(r"\bcreate\s+table\b", normalized):

@@ -239,24 +239,67 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
     if key_attributes is not None and not isinstance(key_attributes, list):
         findings.append(Finding(BLOCKER, path, "key-attributes", "`key_attributes` должен быть списком."))
 
+    object_type = str(meta.get("object_type") or "").strip().lower()
+    schema = str(meta.get("table_schema") or "").strip().lower()
+    is_view_meta = object_type == "view" or schema.endswith("_view") or "/dm_view/" in path.lower()
+
+    recreate_value = str(meta.get("sql_query_recreate_init") or "").strip()
+
     for field, file_name in SQL_PATH_FIELDS.items():
         value = str(meta.get(field) or "").strip()
         if not value:
-            findings.append(Finding(BLOCKER, path, "sql-path", f"Не указан `{field}`."))
+            severity = WARNING if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"} else BLOCKER
+            findings.append(
+                Finding(
+                    severity,
+                    path,
+                    "sql-path",
+                    f"Не указан `{field}`. Для view insert/truncate могут отсутствовать, для table обычно обязательны.",
+                )
+            )
             continue
         expected = expected_entity_sql_path(path, meta, file_name)
         if expected and value != expected:
-            findings.append(
-                Finding(
-                    BLOCKER,
-                    path,
-                    "sql-path",
-                    f"`{field}` не соответствует структуре. Ожидалось `{expected}`, указано `{value}`.",
+            if is_view_meta and field == "sql_query_insert_init" and value == recreate_value:
+                findings.append(
+                    Finding(
+                        INFO,
+                        path,
+                        "view-insert-reuses-recreate",
+                        "`sql_query_insert_init` ссылается на тот же файл, что и `sql_query_recreate_init`. Для view это допустимо, если отдельного insert-файла нет.",
+                    )
                 )
-            )
+            else:
+                severity = WARNING if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"} else BLOCKER
+                findings.append(
+                    Finding(
+                        severity,
+                        path,
+                        "sql-path",
+                        f"`{field}` не соответствует стандартному пути. Ожидалось `{expected}`, указано `{value}`. "
+                        "Если объект намеренно лежит в другом месте, это нужно добавить в allowlist/исключения валидатора.",
+                    )
+                )
         repo_path = repo_sql_path_from_meta_path(path, value)
         if repo_path and not git_file_exists(head, repo_path, cwd):
-            findings.append(Finding(BLOCKER, path, "sql-path-exists", f"Файл из `{field}` не найден в ветке: `{repo_path}`."))
+            if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"}:
+                findings.append(
+                    Finding(
+                        WARNING,
+                        path,
+                        "sql-path-exists",
+                        f"Файл из `{field}` не найден: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет.",
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        BLOCKER,
+                        path,
+                        "sql-path-exists",
+                        f"Файл из `{field}` не найден в ветке: `{repo_path}`. Проверь, что файл добавлен в MR или путь в YAML указан верно.",
+                    )
+                )
 
 
 def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]) -> None:

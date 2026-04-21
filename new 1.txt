@@ -1,20 +1,13 @@
-Корниенко Александр Валерьевич (KornienkoAV)requested to merge
-release/2026-04-15
-into
-main
-6 days ago
-
-путь к ямлам для клика
- config_files/meta/dm/dm_alverse_mlc_mes_metal_movement_meta.yaml 
-должны быть указаны 
-dag_tags:
-  - ALVERSE
-task_pool: dm_pool
-
-пример вью где лежит проверяй
-config_files/meta/dm_view/consolidated_documents_odo_dfk_dtil.sql
-
-в ямле объекте вот указаны пути, нужно проверять что они соответсвуют
-ql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/accounting_documents_header_working_capital/sql_query_truncate.sql
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --base origin/main --head origin/release/2026-04-15
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 376, in <module>
+    sys.exit(main())
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 340, in main
+    files = changed_files(args.base, args.head, args.diff_mode, cwd)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 66, in changed_files
+    raw = run_git(["diff", "--name-status", "--diff-filter=ACMRT", range_expr], cwd)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 46, in run_git
+    raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or f"git {' '.join(args)} failed")
+RuntimeError: fatal: ambiguous argument 'origin/main...origin/release/2026-04-15': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'

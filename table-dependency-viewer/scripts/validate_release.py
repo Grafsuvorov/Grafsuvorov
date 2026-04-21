@@ -38,9 +38,11 @@ def run_git(args: list[str], cwd: Path) -> str:
     proc = subprocess.run(
         ["git", *args],
         cwd=cwd,
-        text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or f"git {' '.join(args)} failed")

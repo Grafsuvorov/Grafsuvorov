@@ -41,6 +41,7 @@ class ReleaseContext:
     base_ref: str
     head_ref: str
     diff_mode: str
+    resolution: str
 
 
 def run_git(args: list[str], cwd: Path) -> str:
@@ -117,6 +118,7 @@ def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> R
                 base_ref=f"{commit_hash}^1",
                 head_ref=commit_hash,
                 diff_mode="two-dot",
+                resolution="merged",
             )
 
     available = sorted({branch for _, branch, _ in release_merges if branch.lower().startswith("release/")}, reverse=True)
@@ -125,6 +127,68 @@ def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> R
         preview = ", ".join(f"`{item}`" for item in available[:10])
         hint = f" Доступные release merge в `{main_ref}`: {preview}."
     raise RuntimeError(f"Не найден merge commit для release-ветки `{release_name}` в `{main_ref}`.{hint}")
+
+
+def git_ref_exists(ref: str, cwd: Path) -> bool:
+    proc = subprocess.run(
+        ["git", "rev-parse", "--verify", ref],
+        cwd=cwd,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return proc.returncode == 0
+
+
+def find_release_branch_context(release_name: str, main_ref: str, cwd: Path) -> ReleaseContext:
+    target = release_name.strip()
+    remote_ref = f"origin/{target}"
+    if git_ref_exists(remote_ref, cwd):
+        return ReleaseContext(
+            release_name=target,
+            merge_commit="",
+            base_ref=main_ref,
+            head_ref=remote_ref,
+            diff_mode="three-dot",
+            resolution="branch",
+        )
+
+    raw = run_git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], cwd)
+    matches = [ref.strip() for ref in raw.splitlines() if ref.strip().lower() == remote_ref.lower()]
+    if matches:
+        return ReleaseContext(
+            release_name=matches[0].removeprefix("origin/"),
+            merge_commit="",
+            base_ref=main_ref,
+            head_ref=matches[0],
+            diff_mode="three-dot",
+            resolution="branch",
+        )
+
+    available = sorted(
+        {
+            ref.removeprefix("origin/")
+            for ref in raw.splitlines()
+            if ref.strip().lower().startswith("origin/release/")
+        },
+        reverse=True,
+    )
+    hint = ""
+    if available:
+        preview = ", ".join(f"`{item}`" for item in available[:10])
+        hint = f" Доступные remote release-ветки: {preview}."
+    raise RuntimeError(
+        f"Не найдена release-ветка `{release_name}` ни как merge в `{main_ref}`, ни как remote ref `origin/{release_name}`.{hint}"
+    )
+
+
+def resolve_release_context(release_name: str, main_ref: str, cwd: Path) -> ReleaseContext:
+    try:
+        return find_release_merge_context(release_name, main_ref, cwd)
+    except RuntimeError as merge_exc:
+        try:
+            return find_release_branch_context(release_name, main_ref, cwd)
+        except RuntimeError:
+            raise merge_exc
 
 
 def merged_branches(base: str, head: str, diff_mode: str, cwd: Path) -> list[str]:
@@ -153,6 +217,8 @@ def merged_branches(base: str, head: str, diff_mode: str, cwd: Path) -> list[str
 
 
 def merged_branches_for_release(context: ReleaseContext, cwd: Path) -> list[str]:
+    if context.resolution != "merged" or not context.merge_commit:
+        return merged_branches(context.base_ref, context.head_ref, context.diff_mode, cwd)
     raw = run_git(["log", "--merges", "--pretty=%s", f"{context.merge_commit}^1..{context.merge_commit}^2"], cwd)
     branches: list[str] = []
     seen: set[str] = set()
@@ -562,7 +628,8 @@ def format_report(
         lines.extend(
             [
                 f"Release branch: `{context.release_name}`",
-                f"Release merge commit: `{context.merge_commit}`",
+                f"Release source: `merge into main`" if context.resolution == "merged" else f"Release source: `remote branch`",
+                f"Release merge commit: `{context.merge_commit}`" if context.merge_commit else f"Release head ref: `{context.head_ref}`",
                 "",
             ]
         )
@@ -611,7 +678,7 @@ def main() -> int:
     cwd = Path(__file__).resolve().parents[1]
     release_context: ReleaseContext | None = None
     if args.release:
-        release_context = find_release_merge_context(args.release, args.main_ref, cwd)
+        release_context = resolve_release_context(args.release, args.main_ref, cwd)
         args.base = release_context.base_ref
         args.head = release_context.head_ref
         args.diff_mode = release_context.diff_mode

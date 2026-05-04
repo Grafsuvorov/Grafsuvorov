@@ -77,6 +77,35 @@ def changed_files(base: str, head: str, diff_mode: str, cwd: Path) -> list[tuple
     return out
 
 
+def commit_range(base: str, head: str, diff_mode: str) -> str:
+    return f"{base}...{head}" if diff_mode == "three-dot" else f"{base}..{head}"
+
+
+def merged_branches(base: str, head: str, diff_mode: str, cwd: Path) -> list[str]:
+    raw = run_git(["log", "--merges", "--pretty=%s", commit_range(base, head, diff_mode)], cwd)
+    branches: list[str] = []
+    seen: set[str] = set()
+
+    for subject in raw.splitlines():
+        match = re.search(r"Merge branch '([^']+)' into '([^']+)'", subject)
+        if not match:
+            match = re.search(r"Merge branch '([^']+)'", subject)
+        if not match:
+            match = re.search(r"Merge remote-tracking branch '([^']+)'", subject)
+        if not match:
+            continue
+
+        source = match.group(1).strip()
+        source_key = source.lower()
+        if source_key in {"main", "master"}:
+            continue
+        if source_key not in seen:
+            seen.add(source_key)
+            branches.append(source)
+
+    return branches
+
+
 def is_yaml(path: str) -> bool:
     return path.endswith((".yaml", ".yml"))
 
@@ -441,7 +470,7 @@ def validate_view_on_view(path: str, sql: str, view_index: dict[str, str], findi
             )
 
 
-def format_report(findings: list[Finding], files: list[tuple[str, str]]) -> str:
+def format_report(findings: list[Finding], files: list[tuple[str, str]], branches: list[str]) -> str:
     lines = [
         "# Release Validation Report",
         "",
@@ -449,6 +478,15 @@ def format_report(findings: list[Finding], files: list[tuple[str, str]]) -> str:
         f"Findings: {len(findings)}",
         "",
     ]
+    if branches:
+        lines.append(f"Merged branches found: {len(branches)}")
+        lines.append("")
+        lines.append("## Merged Branches")
+        lines.append("")
+        for branch in branches:
+            lines.append(f"- `{branch}`")
+        lines.append("")
+
     if not findings:
         lines.append("No findings.")
         return "\n".join(lines)
@@ -475,6 +513,7 @@ def main() -> int:
 
     cwd = Path(__file__).resolve().parents[1]
     files = changed_files(args.base, args.head, args.diff_mode, cwd)
+    branches = merged_branches(args.base, args.head, args.diff_mode, cwd)
     relevant = [
         item for item in files
         if is_yaml(item[1]) or is_sql(item[1])
@@ -501,7 +540,7 @@ def main() -> int:
             if is_click_view_sql(path) or "dm_view" in path:
                 validate_view_on_view(path, text, view_index, findings)
 
-    report = format_report(findings, relevant)
+    report = format_report(findings, relevant, branches)
     print(report)
     if args.report:
         Path(args.report).write_text(report, encoding="utf-8")

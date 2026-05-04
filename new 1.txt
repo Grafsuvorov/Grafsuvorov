@@ -1,17 +1,18 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-05-06
+S C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-04-29
 # Release Validation Report
 
-Release branch: `release/2026-05-06`
-Release source: `remote branch`
-Release head ref: `origin/release/2026-05-06`
+Release branch: `release/2026-04-29`
+Release source: `merge into main`
+Release merge commit: `abf15b6c7096e87f7f77ff9833638612f4cf5d4a`
 
-Changed files checked: 0
-Findings: 0
+Changed files checked: 4
+Findings: 21
 
 Merged branches found: 1
 
 ## Merged Branches
 
-- `hotfix/2026-04-30`
+- `DWH-11940`
 
-No findings.
+## BLOCKER (21)
+

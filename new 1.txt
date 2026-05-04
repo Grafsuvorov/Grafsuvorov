@@ -1,18 +1,7 @@
-S C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-04-29
-# Release Validation Report
-
-Release branch: `release/2026-04-29`
-Release source: `merge into main`
-Release merge commit: `abf15b6c7096e87f7f77ff9833638612f4cf5d4a`
-
-Changed files checked: 4
-Findings: 21
-
-Merged branches found: 1
-
-## Merged Branches
-
-- `DWH-11940`
-
-## BLOCKER (21)
-
+SELECT 
+    sotdschemaname AS schema_name,
+    sotdtablename  AS table_name,
+    ROUND(sotdsize / 1024.0 / 1024.0 / 1024.0, 2) AS size_gb
+FROM gp_toolkit.gp_size_of_table_disk
+WHERE sotdschemaname = 'your_schema'
+  AND sotdtablename = 'your_table';

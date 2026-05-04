@@ -1,14 +1,9 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> git log --oneline --merges origin/main
-e3bc0ac1b (origin/main, origin/HEAD) Merge branch 'hotfix/2026-04-30' into 'main'
-abf15b6c7 (origin/release/2026-05-06) Merge branch 'release/2026-04-29' into 'main'
-4e37757db Merge branch 'DWH-11940' into 'release/2026-04-29'
-d05337fe9 Merge branch 'release/2026-04-29' into 'main'
-584993c5d Merge branch 'hotfix/2026-04-26' into 'release/2026-04-29'
-99bdc7f68 Merge branch 'feature/DWH-12409' into 'hotfix/2026-04-26'
-e8734ce9f Merge branch 'release/2026-04-29' into 'main'
-c6c5f6e73 Merge branch 'hotfix/2026-04-29_add_clickhouse' into 'release/2026-04-29'
-56fab35d3 Merge branch 'feature/DWH-12230' into 'release/2026-04-29'
-6d8f199cd Merge branch 'DWH-12290' into 'release/2026-04-29'
-ae258f073 Merge branch 'release/2026-04-29' into 'main'
-978d4a9cc Merge branch 'DWH-12113' into 'release/2026-04-29'
-fa486fdb0 Merge branch 'DWH-12322' into 'release/2026-04-29'
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-05-06                            
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 660, in <module>
+    sys.exit(main())
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 614, in main
+    release_context = find_release_merge_context(args.release, args.main_ref, cwd)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 127, in find_release_merge_context
+    raise RuntimeError(f"Не найден merge commit для release-ветки `{release_name}` в `{main_ref}`.{hint}")
+RuntimeError: Не найден merge commit для release-ветки `release/2026-05-06` в `origin/main`. Доступные release merge в `origin/main`: `release/version_1.0`, `release/tech_release_2025-12-16`, `release/tech_release_190126`, `release/tech_release_150126`, `release/tech_release_140126`, `release/tech_etl-2025-12-17`, `release/tech_etl`, `release/tech-release-2025-12-17`, `release/tech-2025-07-14`, `release/release_2026_03_04_fix`.

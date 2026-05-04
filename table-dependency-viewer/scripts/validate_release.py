@@ -20,6 +20,8 @@ SQL_PATH_FIELDS = {
     "sql_query_insert_init": "sql_query_insert_init.sql",
     "sql_query_truncate": "sql_query_truncate.sql",
 }
+DEPENDENCY_IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
+DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext"}
 
 BLOCKER = "BLOCKER"
 WARNING = "WARNING"
@@ -323,6 +325,60 @@ def extract_sources(sql: str) -> set[str]:
     return sources
 
 
+def extract_schema_table_refs(sql: str, known_schemas: set[str] | None = None) -> set[tuple[str, str]]:
+    refs: set[tuple[str, str]] = set()
+    pattern = re.compile(
+        r"\b(?:from|join)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.\s*(\"[^\"]+\"|[A-Za-z_][\w]*)",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(strip_sql_comments(sql)):
+        schema = normalize_object_fqn(match.group(1))
+        table = normalize_object_fqn(match.group(2))
+        if not schema or not table or schema in DEPENDENCY_IGNORE_SCHEMAS:
+            continue
+        if known_schemas is not None and schema not in known_schemas:
+            continue
+        refs.add((schema, table))
+    return refs
+
+
+def strip_sql_comments(sql: str) -> str:
+    sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
+    sql = re.sub(r"(?m)--.*?$", " ", sql)
+    return sql
+
+
+def flatten_depends_on(depends_on: Any) -> set[tuple[str, str]]:
+    flat: set[tuple[str, str]] = set()
+    if not isinstance(depends_on, dict):
+        return flat
+    for schema, tables in depends_on.items():
+        schema_norm = normalize_object_fqn(str(schema))
+        if not schema_norm or not isinstance(tables, list):
+            continue
+        for table in tables:
+            table_norm = normalize_object_fqn(str(table))
+            if table_norm:
+                flat.add((schema_norm, table_norm))
+    return flat
+
+
+def collect_known_schemas_from_repo(cwd: Path) -> set[str]:
+    root = cwd / "meta_info" / "database" / "greenplum" / "schema_name" / "tech_etl" / "etl_loads_entity"
+    schemas: set[str] = set(DEPENDENCY_EXTRA_SCHEMAS)
+    if not root.exists():
+        return schemas
+    for meta_path in root.rglob("meta_data_file.yaml"):
+        try:
+            data = load_yaml(meta_path.read_text(encoding="utf-8", errors="ignore"), str(meta_path), [])
+        except Exception:
+            continue
+        schema = normalize_object_fqn(str(data.get("table_schema") or ""))
+        if schema:
+            schemas.add(schema)
+    return schemas
+
+
 def has_select_star(sql: str) -> bool:
     normalized = normalize_sql(sql)
     return bool(re.search(r"\bselect\s+\*", normalized) or re.search(r",\s*\*", normalized))
@@ -450,14 +506,52 @@ def expected_entity_sql_path(meta_path: str, meta: dict[str, Any], file_name: st
 
 
 def repo_sql_path_from_meta_path(meta_path: str, field_value: str) -> str | None:
-    marker = "etl_loads_entity/"
-    if marker in field_value:
-        return field_value[field_value.index(marker):]
+    value = str(field_value or "").strip()
+    if not value:
+        return None
+    if value.startswith("meta_info/") or value.startswith("config_files/"):
+        return value
     parent = str(Path(meta_path).parent)
-    return f"{parent}/{Path(field_value).name}" if field_value else None
+    return f"{parent}/{Path(value).name}"
 
 
-def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, findings: list[Finding]) -> None:
+def git_find_case_insensitive_path(ref: str, path: str, cwd: Path) -> str | None:
+    if git_file_exists(ref, path, cwd):
+        return path
+
+    parent = str(Path(path).parent).replace("\\", "/")
+    file_name = Path(path).name.lower()
+    try:
+        raw = run_git(["ls-tree", "-r", "--name-only", ref, "--", parent], cwd)
+    except RuntimeError:
+        return None
+
+    exact_casefold: list[str] = []
+    basename_casefold: list[str] = []
+    target_casefold = path.lower()
+
+    for candidate in (line.strip() for line in raw.splitlines() if line.strip()):
+        candidate_casefold = candidate.lower()
+        if candidate_casefold == target_casefold:
+            exact_casefold.append(candidate)
+        elif Path(candidate).name.lower() == file_name:
+            basename_casefold.append(candidate)
+
+    if exact_casefold:
+        return exact_casefold[0]
+    if len(basename_casefold) == 1:
+        return basename_casefold[0]
+    return None
+
+
+def validate_entity_meta(
+    path: str,
+    meta: dict[str, Any],
+    head: str,
+    cwd: Path,
+    findings: list[Finding],
+    known_schemas: set[str],
+) -> None:
     for key in ("table_name", "table_schema", "entity_name", "object_type", "table_load_mode"):
         if not meta.get(key):
             findings.append(Finding(BLOCKER, path, "required-yaml-field", f"Не заполнено обязательное поле `{key}`."))
@@ -489,6 +583,8 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
             )
             continue
         expected = expected_entity_sql_path(path, meta, file_name)
+        repo_path = repo_sql_path_from_meta_path(path, value)
+        resolved_repo_path = git_find_case_insensitive_path(head, repo_path, cwd) if repo_path else None
         if expected and value != expected:
             if is_view_meta and field == "sql_query_insert_init" and value == recreate_value:
                 findings.append(
@@ -500,25 +596,24 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
                     )
                 )
             else:
-                severity = WARNING if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"} else BLOCKER
+                severity = INFO if resolved_repo_path else (WARNING if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"} else BLOCKER)
                 findings.append(
                     Finding(
                         severity,
                         path,
                         "sql-path",
                         f"`{field}` не соответствует стандартному пути. Ожидалось `{expected}`, указано `{value}`. "
-                        "Если объект намеренно лежит в другом месте, это нужно добавить в allowlist/исключения валидатора.",
+                        "Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.",
                     )
                 )
-        repo_path = repo_sql_path_from_meta_path(path, value)
-        if repo_path and not git_file_exists(head, repo_path, cwd):
+        if repo_path and not resolved_repo_path:
             if is_view_meta and field in {"sql_query_insert_init", "sql_query_truncate"}:
                 findings.append(
                     Finding(
                         WARNING,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` отсутствует: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет; иначе проверь опечатку в имени/пути или добавление файла в MR.",
+                        f"Файл из `{field}` отсутствует: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет; иначе проверь опечатку в имени/пути, регистр букв в каталоге или добавление файла в MR.",
                     )
                 )
             else:
@@ -527,18 +622,55 @@ def validate_entity_meta(path: str, meta: dict[str, Any], head: str, cwd: Path, 
                         BLOCKER,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` отсутствует в ветке: `{repo_path}`. Скорее всего файл не добавлен в MR или в YAML опечатка в имени/пути.",
+                        f"Файл из `{field}` отсутствует в ветке: `{repo_path}`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.",
                     )
                 )
                 continue
 
-        if field == "sql_query_recreate_init" and repo_path and git_file_exists(head, repo_path, cwd):
+        if field == "sql_query_recreate_init" and resolved_repo_path:
             try:
-                recreate_sql = git_show_text(head, repo_path, cwd)
+                recreate_sql = git_show_text(head, resolved_repo_path, cwd)
             except Exception as exc:
-                findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать recreate SQL `{repo_path}`: {exc}"))
+                findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать recreate SQL `{resolved_repo_path}`: {exc}"))
                 continue
             validate_recreate_sql_matches_yaml(path, recreate_sql, meta, findings)
+
+        if field == "sql_query_insert_init" and resolved_repo_path:
+            try:
+                insert_sql = git_show_text(head, resolved_repo_path, cwd)
+            except Exception as exc:
+                findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать insert SQL `{resolved_repo_path}`: {exc}"))
+                continue
+            target_schema = normalize_object_fqn(str(meta.get("table_schema") or ""))
+            target_table = normalize_object_fqn(str(meta.get("table_name") or ""))
+            refs = extract_schema_table_refs(insert_sql, known_schemas=known_schemas)
+            if target_schema and target_table:
+                refs = {
+                    (schema_name, table_name)
+                    for schema_name, table_name in refs
+                    if not (schema_name == target_schema and table_name == target_table)
+                }
+            depends_on = flatten_depends_on(meta.get("depends_on"))
+            missing = sorted(refs - depends_on)
+            extra = sorted(depends_on - refs)
+            if missing:
+                findings.append(
+                    Finding(
+                        WARNING,
+                        path,
+                        "depends-on-missing",
+                        "В `depends_on` не хватает зависимостей из SQL: " + ", ".join(f"{schema_name}.{table_name}" for schema_name, table_name in missing),
+                    )
+                )
+            if extra:
+                findings.append(
+                    Finding(
+                        INFO,
+                        path,
+                        "depends-on-extra",
+                        "В `depends_on` есть лишние записи, которых нет в SQL: " + ", ".join(f"{schema_name}.{table_name}" for schema_name, table_name in extra),
+                    )
+                )
 
 
 def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]) -> None:
@@ -702,6 +834,7 @@ def main() -> int:
         if release_context
         else merged_branches(args.base, args.head, args.diff_mode, cwd)
     )
+    known_schemas = collect_known_schemas_from_repo(cwd)
     relevant = [
         item for item in files
         if is_yaml(item[1]) or is_sql(item[1])
@@ -720,7 +853,7 @@ def main() -> int:
         if is_yaml(path):
             meta = load_yaml(text, path, findings)
             if is_entity_meta_yaml(path):
-                validate_entity_meta(path, meta, args.head, cwd, findings)
+                validate_entity_meta(path, meta, args.head, cwd, findings, known_schemas)
             if is_click_meta_yaml(path):
                 validate_click_meta(path, meta, findings)
         elif is_sql(path):

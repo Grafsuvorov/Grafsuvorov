@@ -1,9 +1,17 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-05-06                            
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 660, in <module>
-    sys.exit(main())
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 614, in main
-    release_context = find_release_merge_context(args.release, args.main_ref, cwd)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\validate_release.py", line 127, in find_release_merge_context
-    raise RuntimeError(f"Не найден merge commit для release-ветки `{release_name}` в `{main_ref}`.{hint}")
-RuntimeError: Не найден merge commit для release-ветки `release/2026-05-06` в `origin/main`. Доступные release merge в `origin/main`: `release/version_1.0`, `release/tech_release_2025-12-16`, `release/tech_release_190126`, `release/tech_release_150126`, `release/tech_release_140126`, `release/tech_etl-2025-12-17`, `release/tech_etl`, `release/tech-release-2025-12-17`, `release/tech-2025-07-14`, `release/release_2026_03_04_fix`.
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\validate_release.py --release release/2026-05-06
+# Release Validation Report
+
+Release branch: `release/2026-05-06`
+Release source: `remote branch`
+Release head ref: `origin/release/2026-05-06`
+
+Changed files checked: 0
+Findings: 0
+
+Merged branches found: 1
+
+## Merged Branches
+
+- `hotfix/2026-04-30`
+
+No findings.

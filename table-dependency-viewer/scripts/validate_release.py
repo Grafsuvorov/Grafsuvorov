@@ -42,6 +42,7 @@ class ReleaseContext:
     head_ref: str
     diff_mode: str
     resolution: str
+    merge_pick: str
 
 
 def run_git(args: list[str], cwd: Path) -> str:
@@ -91,7 +92,7 @@ def commit_range(base: str, head: str, diff_mode: str) -> str:
     return f"{base}...{head}" if diff_mode == "three-dot" else f"{base}..{head}"
 
 
-def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> ReleaseContext:
+def find_release_merge_context(release_name: str, main_ref: str, merge_pick: str, cwd: Path) -> ReleaseContext:
     target = release_name.strip().lower()
     try:
         raw = run_git(["log", "--merges", "--pretty=%H\t%s", main_ref], cwd)
@@ -101,6 +102,8 @@ def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> R
             f"Проверь `git fetch origin` или передай правильный ref через `--main-ref`."
         ) from exc
     release_merges: list[tuple[str, str, str]] = []
+
+    matching_merges: list[tuple[str, str]] = []
 
     for line in raw.splitlines():
         if "\t" not in line:
@@ -112,14 +115,19 @@ def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> R
         branch_name = match.group(1).strip()
         release_merges.append((commit_hash, branch_name, subject))
         if branch_name.lower() == target:
-            return ReleaseContext(
-                release_name=branch_name,
-                merge_commit=commit_hash,
-                base_ref=f"{commit_hash}^1",
-                head_ref=commit_hash,
-                diff_mode="two-dot",
-                resolution="merged",
-            )
+            matching_merges.append((commit_hash, branch_name))
+
+    if matching_merges:
+        selected_commit, selected_branch = matching_merges[-1] if merge_pick == "first" else matching_merges[0]
+        return ReleaseContext(
+            release_name=selected_branch,
+            merge_commit=selected_commit,
+            base_ref=f"{selected_commit}^1",
+            head_ref=selected_commit,
+            diff_mode="two-dot",
+            resolution="merged",
+            merge_pick=merge_pick,
+        )
 
     available = sorted({branch for _, branch, _ in release_merges if branch.lower().startswith("release/")}, reverse=True)
     hint = ""
@@ -150,6 +158,7 @@ def find_release_branch_context(release_name: str, main_ref: str, cwd: Path) -> 
             head_ref=remote_ref,
             diff_mode="three-dot",
             resolution="branch",
+            merge_pick="",
         )
 
     raw = run_git(["for-each-ref", "--format=%(refname:short)", "refs/remotes/origin"], cwd)
@@ -162,6 +171,7 @@ def find_release_branch_context(release_name: str, main_ref: str, cwd: Path) -> 
             head_ref=matches[0],
             diff_mode="three-dot",
             resolution="branch",
+            merge_pick="",
         )
 
     available = sorted(
@@ -181,9 +191,9 @@ def find_release_branch_context(release_name: str, main_ref: str, cwd: Path) -> 
     )
 
 
-def resolve_release_context(release_name: str, main_ref: str, cwd: Path) -> ReleaseContext:
+def resolve_release_context(release_name: str, main_ref: str, merge_pick: str, cwd: Path) -> ReleaseContext:
     try:
-        return find_release_merge_context(release_name, main_ref, cwd)
+        return find_release_merge_context(release_name, main_ref, merge_pick, cwd)
     except RuntimeError as merge_exc:
         try:
             return find_release_branch_context(release_name, main_ref, cwd)
@@ -629,10 +639,12 @@ def format_report(
             [
                 f"Release branch: `{context.release_name}`",
                 f"Release source: `merge into main`" if context.resolution == "merged" else f"Release source: `remote branch`",
+                f"Release merge pick: `{context.merge_pick}`" if context.resolution == "merged" and context.merge_pick else None,
                 f"Release merge commit: `{context.merge_commit}`" if context.merge_commit else f"Release head ref: `{context.head_ref}`",
                 "",
             ]
         )
+        lines = [line for line in lines if line is not None]
     lines.extend(
         [
         f"Changed files checked: {len(files)}",
@@ -669,6 +681,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Validate release SQL/YAML changes before merge/deploy.")
     parser.add_argument("--release", default="", help="Release branch name, e.g. release/2026-04-15. Case-insensitive; auto-resolves merge into main ref.")
     parser.add_argument("--main-ref", default="origin/main", help="Mainline ref used to search release merge commits, default origin/main.")
+    parser.add_argument("--release-merge-pick", choices=["first", "last"], default="last", help="Which merge into main to use if the same release branch was merged multiple times.")
     parser.add_argument("--base", default="origin/main", help="Base ref, e.g. origin/main or previous release tag.")
     parser.add_argument("--head", default="HEAD", help="Head ref, e.g. HEAD or origin/release/2026-04-15.")
     parser.add_argument("--diff-mode", choices=["three-dot", "two-dot"], default="three-dot")
@@ -678,7 +691,7 @@ def main() -> int:
     cwd = Path(__file__).resolve().parents[1]
     release_context: ReleaseContext | None = None
     if args.release:
-        release_context = resolve_release_context(args.release, args.main_ref, cwd)
+        release_context = resolve_release_context(args.release, args.main_ref, args.release_merge_pick, cwd)
         args.base = release_context.base_ref
         args.head = release_context.head_ref
         args.diff_mode = release_context.diff_mode

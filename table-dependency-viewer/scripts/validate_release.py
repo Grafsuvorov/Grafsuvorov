@@ -34,6 +34,15 @@ class Finding:
     message: str
 
 
+@dataclass
+class ReleaseContext:
+    release_name: str
+    merge_commit: str
+    base_ref: str
+    head_ref: str
+    diff_mode: str
+
+
 def run_git(args: list[str], cwd: Path) -> str:
     proc = subprocess.run(
         ["git", *args],
@@ -81,6 +90,43 @@ def commit_range(base: str, head: str, diff_mode: str) -> str:
     return f"{base}...{head}" if diff_mode == "three-dot" else f"{base}..{head}"
 
 
+def find_release_merge_context(release_name: str, main_ref: str, cwd: Path) -> ReleaseContext:
+    target = release_name.strip().lower()
+    try:
+        raw = run_git(["log", "--merges", "--pretty=%H\t%s", main_ref], cwd)
+    except RuntimeError as exc:
+        raise RuntimeError(
+            f"Не удалось прочитать merge history из `{main_ref}`: {exc}. "
+            f"Проверь `git fetch origin` или передай правильный ref через `--main-ref`."
+        ) from exc
+    release_merges: list[tuple[str, str, str]] = []
+
+    for line in raw.splitlines():
+        if "\t" not in line:
+            continue
+        commit_hash, subject = line.split("\t", 1)
+        match = re.search(r"Merge branch '([^']+)' into 'main'", subject, flags=re.IGNORECASE)
+        if not match:
+            continue
+        branch_name = match.group(1).strip()
+        release_merges.append((commit_hash, branch_name, subject))
+        if branch_name.lower() == target:
+            return ReleaseContext(
+                release_name=branch_name,
+                merge_commit=commit_hash,
+                base_ref=f"{commit_hash}^1",
+                head_ref=commit_hash,
+                diff_mode="two-dot",
+            )
+
+    available = sorted({branch for _, branch, _ in release_merges if branch.lower().startswith("release/")}, reverse=True)
+    hint = ""
+    if available:
+        preview = ", ".join(f"`{item}`" for item in available[:10])
+        hint = f" Доступные release merge в `{main_ref}`: {preview}."
+    raise RuntimeError(f"Не найден merge commit для release-ветки `{release_name}` в `{main_ref}`.{hint}")
+
+
 def merged_branches(base: str, head: str, diff_mode: str, cwd: Path) -> list[str]:
     raw = run_git(["log", "--merges", "--pretty=%s", commit_range(base, head, diff_mode)], cwd)
     branches: list[str] = []
@@ -98,6 +144,38 @@ def merged_branches(base: str, head: str, diff_mode: str, cwd: Path) -> list[str
         source = match.group(1).strip()
         source_key = source.lower()
         if source_key in {"main", "master"}:
+            continue
+        if source_key not in seen:
+            seen.add(source_key)
+            branches.append(source)
+
+    return branches
+
+
+def merged_branches_for_release(context: ReleaseContext, cwd: Path) -> list[str]:
+    raw = run_git(["log", "--merges", "--pretty=%s", f"{context.merge_commit}^1..{context.merge_commit}^2"], cwd)
+    branches: list[str] = []
+    seen: set[str] = set()
+    release_name = context.release_name.lower()
+
+    for subject in raw.splitlines():
+        match = re.search(r"Merge branch '([^']+)' into '([^']+)'", subject, flags=re.IGNORECASE)
+        if not match:
+            match = re.search(r"Merge branch '([^']+)'", subject, flags=re.IGNORECASE)
+            target_branch = ""
+        else:
+            target_branch = match.group(2).strip().lower()
+        if not match:
+            match = re.search(r"Merge remote-tracking branch '([^']+)'", subject, flags=re.IGNORECASE)
+            target_branch = ""
+        if not match:
+            continue
+
+        source = match.group(1).strip()
+        source_key = source.lower()
+        if source_key in {"main", "master", release_name}:
+            continue
+        if target_branch and target_branch != release_name:
             continue
         if source_key not in seen:
             seen.add(source_key)
@@ -470,14 +548,31 @@ def validate_view_on_view(path: str, sql: str, view_index: dict[str, str], findi
             )
 
 
-def format_report(findings: list[Finding], files: list[tuple[str, str]], branches: list[str]) -> str:
+def format_report(
+    findings: list[Finding],
+    files: list[tuple[str, str]],
+    branches: list[str],
+    context: ReleaseContext | None,
+) -> str:
     lines = [
         "# Release Validation Report",
         "",
+    ]
+    if context:
+        lines.extend(
+            [
+                f"Release branch: `{context.release_name}`",
+                f"Release merge commit: `{context.merge_commit}`",
+                "",
+            ]
+        )
+    lines.extend(
+        [
         f"Changed files checked: {len(files)}",
         f"Findings: {len(findings)}",
         "",
-    ]
+        ]
+    )
     if branches:
         lines.append(f"Merged branches found: {len(branches)}")
         lines.append("")
@@ -505,6 +600,8 @@ def format_report(findings: list[Finding], files: list[tuple[str, str]], branche
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate release SQL/YAML changes before merge/deploy.")
+    parser.add_argument("--release", default="", help="Release branch name, e.g. release/2026-04-15. Case-insensitive; auto-resolves merge into main ref.")
+    parser.add_argument("--main-ref", default="origin/main", help="Mainline ref used to search release merge commits, default origin/main.")
     parser.add_argument("--base", default="origin/main", help="Base ref, e.g. origin/main or previous release tag.")
     parser.add_argument("--head", default="HEAD", help="Head ref, e.g. HEAD or origin/release/2026-04-15.")
     parser.add_argument("--diff-mode", choices=["three-dot", "two-dot"], default="three-dot")
@@ -512,8 +609,19 @@ def main() -> int:
     args = parser.parse_args()
 
     cwd = Path(__file__).resolve().parents[1]
+    release_context: ReleaseContext | None = None
+    if args.release:
+        release_context = find_release_merge_context(args.release, args.main_ref, cwd)
+        args.base = release_context.base_ref
+        args.head = release_context.head_ref
+        args.diff_mode = release_context.diff_mode
+
     files = changed_files(args.base, args.head, args.diff_mode, cwd)
-    branches = merged_branches(args.base, args.head, args.diff_mode, cwd)
+    branches = (
+        merged_branches_for_release(release_context, cwd)
+        if release_context
+        else merged_branches(args.base, args.head, args.diff_mode, cwd)
+    )
     relevant = [
         item for item in files
         if is_yaml(item[1]) or is_sql(item[1])
@@ -540,7 +648,7 @@ def main() -> int:
             if is_click_view_sql(path) or "dm_view" in path:
                 validate_view_on_view(path, text, view_index, findings)
 
-    report = format_report(findings, relevant, branches)
+    report = format_report(findings, relevant, branches, release_context)
     print(report)
     if args.report:
         Path(args.report).write_text(report, encoding="utf-8")

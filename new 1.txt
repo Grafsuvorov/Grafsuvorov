@@ -1,11 +1,53 @@
-## INFO (4)
+Проект
 
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ttzr_read
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_class_read
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_group_read
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_var_read
+КХД
+User avatar
+Тип карточки
 
-INSERT INTO dict_stg."RAL_TTZR"
-("CLIENT", "ZONERULE", "UTCDIFF", "UTCSIGN", "FLAGACTIVE", "RN")
-SELECT "CLIENT", "ZONERULE", "UTCDIFF", "UTCSIGN", "FLAGACTIVE", "RN"
-FROM dict_raw_ext."RAL_TTZR_READ";
+Release Slot
+R
+Приоритет
+
+Normal⁠
+N
+Состояние
+
+Зарегистрирована
+З
+Исполнитель
+
+Aleksandr Kornienko
+User avatar
+Команда (Подсистема)
+
+DE (Data Engineer)⁠
+D
+Направление
+
+Управление запасами
+У
+Spent time
+
+?
+Фактические трудозатраты
+
+?
+Дашборд КХД/Направление
+
+Нет: дашборд
+Фактическая дата релиза
+6 мая 2026
+Дежурный аналитик КХД
+
+Анастасия Семенова
+User avatar
+Номер релиза КХД
+
+MM-07-26
+M
+Экономия за счет ИИ
+
+?
+Оценка трудозатрат
+
+?

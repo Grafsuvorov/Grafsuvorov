@@ -21,7 +21,7 @@ SQL_PATH_FIELDS = {
     "sql_query_truncate": "sql_query_truncate.sql",
 }
 DEPENDENCY_IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
-DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext"}
+DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext"}
 
 BLOCKER = "BLOCKER"
 WARNING = "WARNING"

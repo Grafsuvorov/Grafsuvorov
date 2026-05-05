@@ -7,7 +7,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 try:
     import yaml
@@ -74,6 +74,23 @@ def git_file_exists(ref: str, path: str, cwd: Path) -> bool:
         stderr=subprocess.DEVNULL,
     )
     return proc.returncode == 0
+
+
+def detect_git_root(start: Path) -> Path | None:
+    probe = start if start.is_dir() else start.parent
+    proc = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        cwd=probe,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if proc.returncode != 0:
+        return None
+    value = proc.stdout.strip()
+    return Path(value).resolve() if value else None
 
 
 def changed_files(base: str, head: str, diff_mode: str, cwd: Path) -> list[tuple[str, str]]:
@@ -379,6 +396,30 @@ def collect_known_schemas_from_repo(cwd: Path) -> set[str]:
     return schemas
 
 
+def iter_sql_repo_candidates(meta_path: str, field_value: str) -> Iterable[str]:
+    value = str(field_value or "").strip().replace("\\", "/")
+    if not value:
+        return
+
+    seen: set[str] = set()
+
+    def push(candidate: str) -> Iterable[str]:
+        normalized = candidate.strip().replace("\\", "/")
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            yield normalized
+
+    yield from push(value)
+
+    meta_parent = str(Path(meta_path).parent).replace("\\", "/")
+    if not (value.startswith("meta_info/") or value.startswith("config_files/")):
+        yield from push(f"{meta_parent}/{Path(value).name}")
+
+    marker = "etl_loads_entity/"
+    if marker in value:
+        yield from push(value.split(marker, 1)[1])
+
+
 def has_select_star(sql: str) -> bool:
     normalized = normalize_sql(sql)
     return bool(re.search(r"\bselect\s+\*", normalized) or re.search(r",\s*\*", normalized))
@@ -505,16 +546,6 @@ def expected_entity_sql_path(meta_path: str, meta: dict[str, Any], file_name: st
     return f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/{entity}/{schema}/{table}/{file_name}"
 
 
-def repo_sql_path_from_meta_path(meta_path: str, field_value: str) -> str | None:
-    value = str(field_value or "").strip()
-    if not value:
-        return None
-    if value.startswith("meta_info/") or value.startswith("config_files/"):
-        return value
-    parent = str(Path(meta_path).parent)
-    return f"{parent}/{Path(value).name}"
-
-
 def git_find_case_insensitive_path(ref: str, path: str, cwd: Path) -> str | None:
     if git_file_exists(ref, path, cwd):
         return path
@@ -541,6 +572,14 @@ def git_find_case_insensitive_path(ref: str, path: str, cwd: Path) -> str | None
         return exact_casefold[0]
     if len(basename_casefold) == 1:
         return basename_casefold[0]
+    return None
+
+
+def resolve_repo_sql_path(ref: str, meta_path: str, field_value: str, cwd: Path) -> str | None:
+    for candidate in iter_sql_repo_candidates(meta_path, field_value):
+        resolved = git_find_case_insensitive_path(ref, candidate, cwd)
+        if resolved:
+            return resolved
     return None
 
 
@@ -583,8 +622,9 @@ def validate_entity_meta(
             )
             continue
         expected = expected_entity_sql_path(path, meta, file_name)
-        repo_path = repo_sql_path_from_meta_path(path, value)
-        resolved_repo_path = git_find_case_insensitive_path(head, repo_path, cwd) if repo_path else None
+        repo_candidates = list(iter_sql_repo_candidates(path, value))
+        repo_path = repo_candidates[0] if repo_candidates else None
+        resolved_repo_path = resolve_repo_sql_path(head, path, value, cwd) if repo_path else None
         if expected and value != expected:
             if is_view_meta and field == "sql_query_insert_init" and value == recreate_value:
                 findings.append(
@@ -613,7 +653,7 @@ def validate_entity_meta(
                         WARNING,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` отсутствует: `{repo_path}`. Для view это может быть допустимо, если отдельного insert/truncate нет; иначе проверь опечатку в имени/пути, регистр букв в каталоге или добавление файла в MR.",
+                        f"Файл из `{field}` отсутствует. Проверены варианты: {', '.join(f'`{item}`' for item in repo_candidates) or '`<empty>`'}. Для view это может быть допустимо, если отдельного insert/truncate нет; иначе проверь опечатку в имени/пути, регистр букв в каталоге или добавление файла в MR.",
                     )
                 )
             else:
@@ -622,7 +662,7 @@ def validate_entity_meta(
                         BLOCKER,
                         path,
                         "sql-path-exists",
-                        f"Файл из `{field}` отсутствует в ветке: `{repo_path}`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.",
+                        f"Файл из `{field}` отсутствует в ветке. Проверены варианты: {', '.join(f'`{item}`' for item in repo_candidates) or '`<empty>`'}. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.",
                     )
                 )
                 continue
@@ -651,8 +691,13 @@ def validate_entity_meta(
                     if not (schema_name == target_schema and table_name == target_table)
                 }
             depends_on = flatten_depends_on(meta.get("depends_on"))
-            missing = sorted(refs - depends_on)
-            extra = sorted(depends_on - refs)
+            refs_with_extra = refs | {
+                pair
+                for pair in depends_on
+                if pair[0] not in known_schemas and pair[0] in DEPENDENCY_EXTRA_SCHEMAS
+            }
+            missing = sorted(refs_with_extra - depends_on)
+            extra = sorted(depends_on - refs_with_extra)
             if missing:
                 findings.append(
                     Finding(
@@ -818,9 +863,15 @@ def main() -> int:
     parser.add_argument("--head", default="HEAD", help="Head ref, e.g. HEAD or origin/release/2026-04-15.")
     parser.add_argument("--diff-mode", choices=["three-dot", "two-dot"], default="three-dot")
     parser.add_argument("--report", default="", help="Optional path to write markdown report.")
+    parser.add_argument("--repo-root", default="", help="Path to the repository being validated. By default tries current git root, then script repo root.")
     args = parser.parse_args()
 
-    cwd = Path(__file__).resolve().parents[1]
+    script_repo_root = Path(__file__).resolve().parents[1]
+    cwd = (
+        Path(args.repo_root).resolve()
+        if args.repo_root
+        else detect_git_root(Path.cwd()) or detect_git_root(script_repo_root) or script_repo_root
+    )
     release_context: ReleaseContext | None = None
     if args.release:
         release_context = resolve_release_context(args.release, args.main_ref, args.release_merge_pick, cwd)

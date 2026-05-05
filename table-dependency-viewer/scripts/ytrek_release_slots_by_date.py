@@ -28,6 +28,13 @@ RELEASE_DATE_FIELD_NAMES = {
     "фактическая дата релиза",
     "actual release date",
 }
+ISSUE_TYPE_FIELD_NAMES = {
+    "тип карточки",
+    "type",
+}
+RELEASE_SLOT_TYPE_NAMES = {
+    "release slot",
+}
 ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_]+-\d+$")
 
 
@@ -42,8 +49,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--query",
-        default="Type: {Release Slot}",
-        help="Базовый YouTrack query. По умолчанию ищет карточки типа Release Slot.",
+        default="",
+        help="Необязательный YouTrack query. Если пусто, скрипт сам попробует несколько вариантов поиска release slot.",
     )
     parser.add_argument(
         "--top",
@@ -98,6 +105,19 @@ def search_issues(query: str, top_limit: int) -> list[dict]:
     return issues[:top_limit]
 
 
+def merge_unique_issues(*groups: list[dict]) -> list[dict]:
+    seen: set[str] = set()
+    merged: list[dict] = []
+    for group in groups:
+        for issue in group:
+            key = str(issue.get("id") or issue.get("idReadable") or "").strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(issue)
+    return merged
+
+
 def normalize_cf_name(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -134,6 +154,27 @@ def issue_release_date(issue: dict) -> str | None:
     return None
 
 
+def issue_type_name(issue: dict) -> str | None:
+    for field in issue.get("customFields") or []:
+        if normalize_cf_name(field.get("name")) in ISSUE_TYPE_FIELD_NAMES:
+            value = field.get("value")
+            if isinstance(value, dict):
+                text = str(value.get("name") or value.get("text") or value.get("presentation") or "").strip()
+                return text.lower() if text else None
+            if isinstance(value, str):
+                text = value.strip()
+                return text.lower() if text else None
+    return None
+
+
+def is_release_slot(issue: dict) -> bool:
+    issue_type = issue_type_name(issue)
+    if issue_type and issue_type in RELEASE_SLOT_TYPE_NAMES:
+        return True
+    summary = str(issue.get("summary") or "").lower()
+    return "релиз" in summary
+
+
 def extract_linked_issue_ids(issue: dict) -> list[str]:
     found: set[str] = set()
     for link in issue.get("links") or []:
@@ -144,6 +185,28 @@ def extract_linked_issue_ids(issue: dict) -> list[str]:
     return sorted(found)
 
 
+def fetch_candidate_release_slots(query: str, top_limit: int) -> tuple[list[dict], list[str]]:
+    if query.strip():
+        return search_issues(query.strip(), top_limit), [query.strip()]
+
+    candidates = [
+        "Type: {Release Slot}",
+        "Тип карточки: {Release Slot}",
+        'summary: Релиз',
+        'summary: Release',
+    ]
+    batches: list[list[dict]] = []
+    used_queries: list[str] = []
+    for candidate in candidates:
+        try:
+            batch = search_issues(candidate, top_limit)
+        except Exception:
+            continue
+        used_queries.append(candidate)
+        batches.append(batch)
+    return merge_unique_issues(*batches), used_queries
+
+
 def main() -> int:
     args = parse_args()
     try:
@@ -151,10 +214,13 @@ def main() -> int:
     except ValueError as exc:
         raise SystemExit(f"Неверная дата `{args.date}`. Нужен формат YYYY-MM-DD.") from exc
 
-    issues = search_issues(args.query, args.top)
-    matched = [issue for issue in issues if issue_release_date(issue) == target_date]
+    issues, used_queries = fetch_candidate_release_slots(args.query, args.top)
+    matched = [issue for issue in issues if is_release_slot(issue) and issue_release_date(issue) == target_date]
 
     print(f"Дата релиза: {target_date}")
+    if used_queries:
+        print(f"Использованы query: {', '.join(used_queries)}")
+    print(f"Кандидатов найдено: {len(issues)}")
     print(f"Найдено Release Slot карточек: {len(matched)}")
     print("")
 

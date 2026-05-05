@@ -1,125 +1,10 @@
---Вовлеченность персонала в кайзен-деятельность
-
-insert into dds.kaizen_personnel_involvement (
-	dt_report,
-	kaizen_counterparty_rims_code,
-	kaizen_counterparty_mdm_code,
-	kaizen_personnel_involved_actual_quantity
-)
-select
-	t.dt_report,
-	t.kaizen_counterparty_rims_code,
-	t.kaizen_counterparty_mdm_code,
-	t.kaizen_personnel_involved_actual_quantity
-	from (
-with cte as (
-	select
-		c.counterparty_mdm_code,
-		c.counterparty_rims_code,
-		c.counterparty_code,
-		c.counterparty_full_name,
-		c.counterparty_truncated_code,
-		c.counterparty_search_name,
-		c.is_deleted
-		from (
-			select
-				counterparty_mdm_code,
-				counterparty_rims_code,
-				counterparty_code,
-				counterparty_full_name,
-				counterparty_truncated_code,
-				counterparty_search_name,
-				is_deleted,
-				DENSE_RANK () OVER (partition by counterparty_mdm_code order by is_deleted desc, counterparty_account_group_code asc) as ranks
-				from dict_dds.counterparty ) c
-		where c.ranks = 1
-),
-hr as (
-	select 
-		dt_report, 
-		kaizen_counterparty_rims_code,
-		count(dt_report) as kaizen_personnel_involved_actual_quantity
-		from (
-			select
-				us.userid,
-				res.companyid as kaizen_counterparty_rims_code,
-				min(datecreated) as dt_report,
-				res.datecreated_yyyy
-				from (
-					select
-						userid,
-						kaizenid
-						from ods.sapxi_web_kaizen_authors
-					union all
-					select
-						userid,
-						kaizenid
-						from ods.sapxi_web_kaizen_performers
-				) us,
-				( 	select
-						ks.kaizenid,
-				        k.companyid,
-						min(ks.datecreated::date) as datecreated,
-						extract(year from ks.datecreated::date) as datecreated_yyyy
-						from ods.sapxi_web_kaizen_states as ks
-						join ods.sapxi_web_kaizens as k on k.id = ks.kaizenid
-					 	where ks.state = '4' and ks.datedeleted is null and k.isproject = '0'
-					 	group by ks.kaizenid, k.companyid, extract(year from ks.datecreated::date)
-				) res
-				where us.kaizenid = res.kaizenid
-				group by us.userid, res.companyid, res.datecreated_yyyy ) t
-		group by dt_report, kaizen_counterparty_rims_code
-)
-select
-	hr.dt_report,
-	hr.kaizen_counterparty_rims_code,
-	cte.counterparty_mdm_code as kaizen_counterparty_mdm_code,
-	hr.kaizen_personnel_involved_actual_quantity
-	from hr
-	left join cte on hr.kaizen_counterparty_rims_code = cte.counterparty_rims_code
-) t;
-
-
-table_name: kaizen_personnel_involvement
-table_schema: dds
-table_id: 6235
-source_id: 1
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 65
-entity_name: KAIZEN_LOADER
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2025-12-01 02:45:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_personnel_involvement/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_personnel_involvement/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_personnel_involvement/sql_query_truncate.sql
-depends_on:
-  ods:
-    - sapxi_web_kaizen_authors
-    - sapxi_web_kaizen_performers
-    - sapxi_web_kaizen_states
-    - sapxi_web_kaizens
-  dict_dds:
-    - counterparty
-
-
 Release branch: `release/2026-04-29`
 Release source: `merge into main`
 Release merge pick: `first`
 Release merge commit: `ae258f0732c2128ba9868c2e81f058c81d2eeb85`
 
 Changed files checked: 102
-Findings: 62
+Findings: 52
 
 Merged branches found: 21
 
@@ -151,18 +36,21 @@ Merged branches found: 21
 
 - `config_files/meta/dm/dm_kaizen_personnel_involvement_meta.yaml` [click-dag-tags]: `dag_tags` должен быть непустым списком.
 - `config_files/meta/dm/dm_kaizen_submitted_and_implemented_meta.yaml` [click-dag-tags]: `dag_tags` должен быть непустым списком.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_recreate_init` отсутствует в ветке: `me
-ta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_recreate_init.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_insert_init` отсутствует в ветке: `meta
-_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_insert_init.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_truncate` отсутствует в ветке: `meta_in
-fo/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_truncate.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_recreate_init` отсутствует в ветке. Про
+верены варианты: `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_recreate_init.sql`, `MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_recreate_init.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_insert_init` отсутствует в ветке. Прове
+рены варианты: `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_insert_init.sql`, `MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_insert_init.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml` [sql-path-exists]: Файл из `sql_query_truncate` отсутствует в ветке. Проверен
+ы варианты: `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_truncate.sql`, `MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_truncate.sql`. Скорее всего файл не добавлен в MR, в YAML опечатка в имени/пути или не совпадает регистр каталога/файла.
 
-## WARNING (19)
+## WARNING (22)
 
 - `config_files/meta/dm_view/kpi_indicators_actual_daily_report_ad.sql` [view-on-view]: View читает из другой view `dm_view.production_aluminium_finish_goods` (meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dm_view/production_aluminium_finish_goods/sql_query_recreate_init.sql). Проверь порядок пересоздания и отсутствие CASCADE.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_submitted_and_implemented/meta_data_file.yaml` [depends-on-missing]: В `depends_on` не хватает зависимостей из SQL: ods.sapxi_web_kaizens
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_personnel_involvement/meta_data_file.yaml` [depends-on-missing]: В `depends_on` не хватает зависимостей из SQL: dds.kaizen_personnel_involvement
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_personnel_involvement/sql_query_recreate_init.sql` [table-comment]: Не найден `COMMENT ON TABLE`.
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_personnel_involvement/sql_query_recreate_init.sql` [column-comments]: Не найдены `COMMENT ON COLUMN`.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_submitted_and_implemented/meta_data_file.yaml` [depends-on-missing]: В `depends_on` не хватает зависимостей из SQL: dict_dds.map_kpi_report_account_to_entity
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_submitted_and_implemented/sql_query_recreate_init.sql` [table-comment]: Не найден `COMMENT ON TABLE`.
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dm_calc/kaizen_submitted_and_implemented/sql_query_recreate_init.sql` [column-comments]: Не найдены `COMMENT ON COLUMN`.
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dm/production_aluminium_remelt/sql_query_recreate_init.sql` [table-comment]: Не найден `COMMENT ON TABLE`.
@@ -180,45 +68,51 @@ fo/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/meta_data_file.yaml` [ddl-object]: В recreate SQL не найден `CREATE TABLE` или `CREATE VIEW`; проверь, что файл действительно создает объект из YAML.
 - `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/meta_data_file.yaml` [ddl-object]: В recreate SQL не найден `CREATE TABLE` или `CREATE VIEW`; проверь, что файл действительно создает объект из YAML.
 
-## INFO (38)
+## INFO (25)
 
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_personnel_involvement/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_dds.counterparty, ods.sapxi_web_kaizen_authors, ods.sapxi_web_kaizen_performers, ods.sapxi_web_kaizen_states, ods.sapxi_web_kaizens
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/KAIZEN_LOADER/dds/kaizen_submitted_and_implemented/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_dds.counterparty, ods.sapxi_web_kaizen_states
-
-
-
-тут верный путь
- meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_2/ods/sapxi_en_plus_personnel_turnover/meta_data_file.yaml  0 → 100644
-+
-26
-−
-0
-
-Viewed
-table_name: sapxi_en_plus_personnel_turnover
-table_schema: ods
-table_id: 6232
-source_id: 6
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 298
-job_name: STG_LOADER
-table_loading_index: 1
-entity_id: 42
-entity_name: MANAGEMENT_REPORTING_1
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/ods/sapxi_en_plus_personnel_turnover/sql_query_truncate.sql
-depends_on:
-  stg:
-    - sapxi_en_plus_personnel_turnover
-
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/g
+reenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TORO2_IMP_HDR/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gre
+enplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TORO2_IMP_HDR/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/greenp
+lum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TORO2_IMP_HDR/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_toro2_imp_hdr/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/greenplum/
+schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TTZR/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/greenplum/sc
+hema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TTZR/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ttzr_read
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/greenplum/schem
+a_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_TTZR/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ttzr/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/
+greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_CLASS/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gr
+eenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_CLASS/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_class_read
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/green
+plum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_CLASS/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_class/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/
+greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_GROUP/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gr
+eenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_GROUP/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_group_read
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/green
+plum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_GROUP/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_group/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gr
+eenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_VAR/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gree
+nplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_VAR/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/meta_data_file.yaml` [depends-on-extra]: В `depends_on` есть лишние записи, которых нет в SQL: dict_raw_ext.ral_ztcs_dfl_var_read
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/greenpl
+um/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/RAL_ZTCS_DFL_VAR/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dict_stg/ral_ztcs_dfl_var/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gre
+enplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KPI/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/green
+plum/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KPI/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/greenplu
+m/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KPI/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_kpi/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/meta_data_file.yaml` [sql-path]: `sql_query_recreate_init` не соответствует стандартному пути. Ожидалось `meta_info/database/gre
+enplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KTG/sql_query_recreate_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/sql_query_recreate_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/meta_data_file.yaml` [sql-path]: `sql_query_insert_init` не соответствует стандартному пути. Ожидалось `meta_info/database/green
+plum/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KTG/sql_query_insert_init.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/sql_query_insert_init.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.
+- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/meta_data_file.yaml` [sql-path]: `sql_query_truncate` не соответствует стандартному пути. Ожидалось `meta_info/database/greenplu
+m/schema_name/tech_etl/etl_loads_entity/TORO/stg/RAL_ZTCS266_PURP_KTG/sql_query_truncate.sql`, указано `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/stg/ral_ztcs266_purp_ktg/sql_query_truncate.sql`. Если файл по указанному пути существует, это допустимо; сообщение нужно только для контроля структуры.

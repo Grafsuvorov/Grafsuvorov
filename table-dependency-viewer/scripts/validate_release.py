@@ -435,6 +435,11 @@ def has_dm_view_select_star_from_dm_view(sql: str) -> bool:
     )
 
 
+def has_dm_view_source_from_dm(sql: str) -> bool:
+    normalized = normalize_sql(sql)
+    return bool(re.search(r"\b(?:from|join)\s+(?:\"?dm\"?\.)", normalized))
+
+
 def has_drop_view_cascade(sql: str) -> bool:
     normalized = normalize_sql(sql)
     return bool(re.search(r"\bdrop\s+view\b[^;]*\bcascade\b", normalized))
@@ -454,6 +459,9 @@ def validate_recreate_sql_matches_yaml(path: str, sql: str, meta: dict[str, Any]
         return
     created = extract_created_object(sql)
     if not created:
+        lowered = path.lower()
+        if any(marker in lowered for marker in ("/stg/", "/dict_stg/", "/landing/")):
+            return
         findings.append(
             Finding(
                 WARNING,
@@ -539,8 +547,8 @@ def parse_simple_yaml(text: str) -> dict[str, Any]:
 
 def expected_entity_sql_path(meta_path: str, meta: dict[str, Any], file_name: str) -> str | None:
     entity = str(meta.get("entity_name") or "").strip()
-    schema = str(meta.get("table_schema") or "").strip()
-    table = str(meta.get("table_name") or "").strip()
+    schema = str(meta.get("table_schema") or "").strip().lower()
+    table = str(meta.get("table_name") or "").strip().lower()
     if not entity or not schema or not table:
         return None
     return f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/{entity}/{schema}/{table}/{file_name}"
@@ -701,7 +709,7 @@ def validate_entity_meta(
             if missing:
                 findings.append(
                     Finding(
-                        WARNING,
+                        BLOCKER,
                         path,
                         "depends-on-missing",
                         "В `depends_on` не хватает зависимостей из SQL: " + ", ".join(f"{schema_name}.{table_name}" for schema_name, table_name in missing),
@@ -739,13 +747,13 @@ def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
         findings.append(Finding(BLOCKER, path, "drop-view-cascade", "`DROP VIEW ... CASCADE` запрещен: может удалить downstream view."))
     if has_select_star(sql):
         findings.append(Finding(WARNING, path, "select-star", "`SELECT *` нежелателен: downstream может сломаться при изменении колонок."))
-    if "dm_view" in path and has_dm_view_select_star_from_dm_view(sql):
+    if path.startswith("config_files/meta/dm_view/") and has_dm_view_source_from_dm(sql):
         findings.append(
             Finding(
                 BLOCKER,
                 path,
-                "dm-view-select-star",
-                "В `dm_view` запрещено `CREATE VIEW ... AS SELECT * FROM dm_view...`: явно перечисли колонки.",
+                "dm-view-source",
+                "В `config_files/meta/dm_view` запрещено использовать источники из `dm.`; здесь должны использоваться только `dm_view.`.",
             )
         )
     if re.search(r"\bcreate\s+(?:or\s+replace\s+)?view\b", normalized):
@@ -909,7 +917,7 @@ def main() -> int:
                 validate_click_meta(path, meta, findings)
         elif is_sql(path):
             validate_sql(path, text, findings)
-            if is_click_view_sql(path) or "dm_view" in path:
+            if (is_click_view_sql(path) and not path.startswith("config_files/meta/dm_view/")) or "etl_loads_entity/" in path.lower() and "/dm_view/" in path.lower():
                 validate_view_on_view(path, text, view_index, findings)
 
     report = format_report(findings, relevant, branches, release_context)

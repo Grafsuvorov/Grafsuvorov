@@ -10,6 +10,19 @@ from pathlib import Path
 from typing import Any, Iterable
 
 try:
+    from ytrek_release_slots_by_date import (
+        extract_linked_issue_ids as yt_extract_linked_issue_ids,
+        fetch_candidate_release_slots as yt_fetch_candidate_release_slots,
+        is_release_slot as yt_is_release_slot,
+        issue_release_date as yt_issue_release_date,
+    )
+except Exception:  # pragma: no cover - optional helper import
+    yt_extract_linked_issue_ids = None
+    yt_fetch_candidate_release_slots = None
+    yt_is_release_slot = None
+    yt_issue_release_date = None
+
+try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover - fallback for bare system Python
     yaml = None
@@ -45,6 +58,13 @@ class ReleaseContext:
     diff_mode: str
     resolution: str
     merge_pick: str
+
+
+@dataclass
+class ReleaseSlotMatch:
+    issue_id: str
+    summary: str
+    tasks: list[str]
 
 
 def run_git(args: list[str], cwd: Path) -> str:
@@ -277,6 +297,86 @@ def merged_branches_for_release(context: ReleaseContext, cwd: Path) -> list[str]
             branches.append(source)
 
     return branches
+
+
+def normalize_branch_to_task_id(branch: str) -> str | None:
+    match = re.search(r"(DWH-\d+)", branch, flags=re.IGNORECASE)
+    return match.group(1).upper() if match else None
+
+
+def merged_task_ids(branches: list[str]) -> list[str]:
+    seen: set[str] = set()
+    tasks: list[str] = []
+    for branch in branches:
+        task_id = normalize_branch_to_task_id(branch)
+        if task_id and task_id not in seen:
+            seen.add(task_id)
+            tasks.append(task_id)
+    return tasks
+
+
+def release_date_from_name(release_name: str) -> str | None:
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", release_name)
+    return match.group(1) if match else None
+
+
+def fetch_release_slot_matches(release_name: str) -> tuple[str | None, list[ReleaseSlotMatch]]:
+    if not all((yt_fetch_candidate_release_slots, yt_is_release_slot, yt_issue_release_date, yt_extract_linked_issue_ids)):
+        return None, []
+    release_date = release_date_from_name(release_name)
+    if not release_date:
+        return None, []
+
+    issues, _used_queries = yt_fetch_candidate_release_slots("", 500)
+    matched: list[ReleaseSlotMatch] = []
+    for issue in issues:
+        if not yt_is_release_slot(issue):
+            continue
+        if yt_issue_release_date(issue) != release_date:
+            continue
+        issue_id = str(issue.get("idReadable") or "").strip()
+        summary = str(issue.get("summary") or "").strip()
+        tasks = sorted(
+            {
+                task_id.upper()
+                for task_id in yt_extract_linked_issue_ids(issue)
+                if normalize_branch_to_task_id(task_id)
+            }
+        )
+        matched.append(ReleaseSlotMatch(issue_id=issue_id, summary=summary, tasks=tasks))
+    return release_date, matched
+
+
+def add_release_slot_comparison(findings: list[Finding], release_name: str, merged_tasks: list[str]) -> None:
+    release_date, matches = fetch_release_slot_matches(release_name)
+    if not release_date or not matches:
+        return
+
+    merged_set = set(merged_tasks)
+    planned_set = {task for match in matches for task in match.tasks}
+
+    for match in matches:
+        missing = [task for task in match.tasks if task not in merged_set]
+        if missing:
+            findings.append(
+                Finding(
+                    WARNING,
+                    match.issue_id or release_name,
+                    "release-slot-missing",
+                    f"В Release Slot `{match.issue_id}` ({match.summary}) есть задачи, которых нет в merged tasks: {', '.join(missing)}.",
+                )
+            )
+
+    extra = sorted(merged_set - planned_set)
+    if extra:
+        findings.append(
+            Finding(
+                WARNING,
+                release_name,
+                "release-slot-extra",
+                f"В merged tasks есть задачи, которых нет ни в одном Release Slot за {release_date}: {', '.join(extra)}.",
+            )
+        )
 
 
 def is_yaml(path: str) -> bool:
@@ -812,7 +912,7 @@ def validate_view_on_view(path: str, sql: str, view_index: dict[str, str], findi
 def format_report(
     findings: list[Finding],
     files: list[tuple[str, str]],
-    branches: list[str],
+    merged_tasks_list: list[str],
     context: ReleaseContext | None,
 ) -> str:
     lines = [
@@ -837,13 +937,13 @@ def format_report(
         "",
         ]
     )
-    if branches:
-        lines.append(f"Merged branches found: {len(branches)}")
+    if merged_tasks_list:
+        lines.append(f"Merged tasks found: {len(merged_tasks_list)}")
         lines.append("")
-        lines.append("## Merged Branches")
+        lines.append("## Merged Tasks")
         lines.append("")
-        for branch in branches:
-            lines.append(f"- `{branch}`")
+        for task_id in merged_tasks_list:
+            lines.append(f"- `{task_id}`")
         lines.append("")
 
     if not findings:
@@ -893,6 +993,7 @@ def main() -> int:
         if release_context
         else merged_branches(args.base, args.head, args.diff_mode, cwd)
     )
+    merged_tasks_list = merged_task_ids(branches)
     known_schemas = collect_known_schemas_from_repo(cwd)
     relevant = [
         item for item in files
@@ -920,7 +1021,10 @@ def main() -> int:
             if (is_click_view_sql(path) and not path.startswith("config_files/meta/dm_view/")) or "etl_loads_entity/" in path.lower() and "/dm_view/" in path.lower():
                 validate_view_on_view(path, text, view_index, findings)
 
-    report = format_report(findings, relevant, branches, release_context)
+    if release_context:
+        add_release_slot_comparison(findings, release_context.release_name, merged_tasks_list)
+
+    report = format_report(findings, relevant, merged_tasks_list, release_context)
     print(report)
     if args.report:
         Path(args.report).write_text(report, encoding="utf-8")

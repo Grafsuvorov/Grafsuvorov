@@ -1,14 +1,222 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python build_depends_on.py --file etl_loads_entity/TORO/dm/exp_toro_complex_equipment_technical_readiness/meta_data_file.yaml --write
-[INFO] Known schemas (1): raw_ext
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\build_depends_on.py", line 262, in <module>
-    raise SystemExit(main())
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\build_depends_on.py", line 202, in main
-    data = load_yaml(meta_path)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\build_depends_on.py", line 116, in load_yaml
-    with path.open("r", encoding="utf-8") as fh:
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\pathlib.py", line 1241, in open
-    return io.open(self, mode, buffering, encoding, errors, newline,
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\pathlib.py", line 1109, in _opener
-    return self._accessor.open(self, flags, mode)
-FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\SuvorovND\\GIT\\table-dependency-viewer\\etl_loads_entity\\TORO\\dm\\exp_toro_complex_equipment_technical_readiness\\meta_data_file.yam
+INSERT INTO stg.s1c_debt_for_working_capital
+	(
+	    sender,
+	    receiver,
+	    create_date_time,
+	    dt_report,
+	    database_code_1c,
+	    database_name_1c,
+	    unit_balance_mdm_code_1c,
+	    posting_uid_code_1c,
+	    invoice_registration_number,
+	    counterparty_role_name,
+	    debit_or_credit_name,
+	    accounting_document_descriprion_text,
+	    document_1c_code,
+	    responsibility_center_hfm_code,
+	    region_of_end_user_code,
+	    country_of_end_user_code,
+	    counterparty_mdm_code,
+	    counterparty_annual_turnover_amount,
+	    finish_goods_group_name,
+	    contract_number,
+	    paydox_document_url,
+	    contract_type_name,
+	    contract_amount,
+	    contract_currency_code,
+	    dt_contract_start,
+	    dt_contract_end,
+	    terms_of_payment_name,
+	    dt_overdue,
+	    debt_coverage_type_name,
+	    coverage_amount,
+	    coverage_currency_code,
+	    dt_debt,
+	    document_currency_code,
+	    debt_balance_document_currency_amount,
+	    debt_balance_rub_currency_amount,
+	    debt_balance_usd_currency_amount,
+	    debt_overdue_document_currency_amount,
+	    debt_overdue_rub_currency_amount,
+	    debt_overdue_usd_currency_amount,
+	    bank_receiver_name,
+	    receivable_claim_paydox_url,
+	    dt_receivable_claim,
+	    dt_claim_send_to_law_court,
+	    contract_supervisor_name,
+	    contract_supervisor_ad_login_code,
+	    general_ledger_account_code,
+	    general_ledger_account_name,
+	    dt_contract_registration,
+	    document_currency_amount,
+	    contract_supervisor_employee_1c_number,
+	    contract_supervisor_employee_sap_number,
+	    sales_market_code,
+	    sales_market_name,
+	    bad_debt_provision_amount,
+	    bad_debt_provision_currency_code,
+	    credit_limit_rub_currency_amount,
+	    dt_credit_limit_valid_to,
+	    paydox_credit_limit_url,
+	    insured_amount,
+	    insurance_currency_code,
+	    dt_insurance_valid_to,
+	    insurance_company_mdm_code,
+	    bank_guarantee_amount,
+	    bank_guarantee_currency_code,
+	    dt_bank_guarantee_valid_to,
+	    bank_guarantee_mdm_code,
+	    third_party_guarantee_amount,
+	    third_party_guarantee_currency_code,
+	    dt_third_party_guarantee_valid_to,
+	    third_party_guarantee_mdm_code,
+        counterparty_out_of_mdm_text,
+	    uuid,
+	    dt_insert
+	)
+
+	WITH src AS (
+	    SELECT
+	        t.uuid,
+	        t.dt_insert,
+	        t.document_xml,
+	        (xpath('Header/Sender/text()', document_xml))[1]::varchar AS sender,
+	        (xpath('Header/Receiver/text()', document_xml))[1]::varchar AS receiver,
+	        ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp AS create_date_time
+	    FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
+	    WHERE t.flow_id = 'SI_WorkingCapital_AI'
+		and not exists (select 1 from stg.s1c_debt_for_working_capital as s where t.uuid = s.uuid)
+	),
+
+	items AS (
+	    SELECT
+	        uuid,
+	        dt_insert,
+	        sender,
+	        receiver,
+	        create_date_time,
+	        item_xml,
+	        (xpath('dtRp/text()', item_xml))[1]::varchar::date AS dt_report,
+	        (xpath('dbCd/text()', item_xml))[1]::varchar AS database_code_1c,
+	        (xpath('dbName/text()', item_xml))[1]::varchar AS database_name_1c,
+	        (xpath('unitMd/text()', item_xml))[1]::varchar AS unit_balance_mdm_code_1c,
+	        (xpath('tz/text()', item_xml))[1]::varchar AS timezone_1c
+	    FROM (
+	        SELECT
+	            uuid,
+	            dt_insert,
+	            sender,
+	            receiver,
+	            create_date_time,
+	            unnest(xpath('Body/Item', document_xml)) AS item_xml
+	        FROM src
+	    ) t
+	),
+
+	entrys AS (
+	    SELECT
+	        uuid,
+	        dt_insert,
+	        sender,
+	        receiver,
+	        create_date_time,
+	        dt_report,
+	        database_code_1c,
+	        database_name_1c,
+	        unit_balance_mdm_code_1c,
+	        timezone_1c,
+	        entry_xml
+	    FROM (
+	        SELECT
+	            *,
+	            unnest(xpath('entry', item_xml)) AS entry_xml
+	        FROM items
+	    ) t
+	)
+
+	SELECT
+	    sender,
+	    receiver,
+	    create_date_time,
+	    dt_report,
+	    database_code_1c,
+	    database_name_1c,
+	    unit_balance_mdm_code_1c,
+
+	    (xpath('id/text()', entry_xml))[1]::varchar,
+	    (xpath('invNum/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrpRole/text()', entry_xml))[1]::varchar,
+	    (xpath('dcName/text()', entry_xml))[1]::varchar,
+	    (xpath('docDesc/text()', entry_xml))[1]::varchar,
+	    (xpath('docNum/text()', entry_xml))[1]::varchar,
+	    (xpath('respCntr/text()', entry_xml))[1]::varchar,
+	    (xpath('regEndUsr/text()', entry_xml))[1]::varchar,
+	    (xpath('cntEndUsr/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrpMd/text()', entry_xml))[1]::varchar,
+
+	    (xpath('ctrpTurnov/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('fgGrName/text()', entry_xml))[1]::varchar,
+	    (xpath('ctNum/text()', entry_xml))[1]::varchar,
+	    (xpath('pdUrl/text()', entry_xml))[1]::varchar,
+	    (xpath('ctType/text()', entry_xml))[1]::varchar,
+	    (xpath('ctAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('ctCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtCtStart/text()', entry_xml))[1]::varchar::date,
+	    (xpath('dtCtEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('payTerm/text()', entry_xml))[1]::varchar,
+	    (xpath('dtOverdue/text()', entry_xml))[1]::varchar::date,
+	    (xpath('covTypeName/text()', entry_xml))[1]::varchar,
+	    (xpath('covAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('covCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtDebt/text()', entry_xml))[1]::varchar::date,
+	    (xpath('docCurCd/text()', entry_xml))[1]::varchar,
+
+	    (xpath('dbDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dbRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dbUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('odUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+
+	    (xpath('bankRecName/text()', entry_xml))[1]::varchar,
+	    (xpath('recClmUrl/text()', entry_xml))[1]::varchar,
+	    (xpath('dtRecClm/text()', entry_xml))[1]::varchar::date,
+	    (xpath('dtLawCrt/text()', entry_xml))[1]::varchar::date,
+	    (xpath('ctrSupName/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrSupId/text()', entry_xml))[1]::varchar,
+	    (xpath('glAccCd/text()', entry_xml))[1]::varchar,
+	    (xpath('glAccName/text()', entry_xml))[1]::varchar,
+	    (xpath('dtCtReg/text()', entry_xml))[1]::varchar::date,
+	    (xpath('docCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+
+	    (xpath('ctrSup1c/text()', entry_xml))[1]::varchar,
+	    (xpath('ctrSupSap/text()', entry_xml))[1]::varchar,
+	    (xpath('smCode/text()', entry_xml))[1]::varchar,
+	    (xpath('smName/text()', entry_xml))[1]::varchar,
+
+	    (xpath('badDbAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('badDbCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('crLimRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('dtCrLimEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('crUrlPd/text()', entry_xml))[1]::varchar,
+
+	    (xpath('insAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('insCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtInsEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('insCoMd/text()', entry_xml))[1]::varchar,
+
+	    (xpath('bgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('bgCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtBgEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('bgMd/text()', entry_xml))[1]::varchar,
+
+	    (xpath('thpgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+	    (xpath('thpgCurCd/text()', entry_xml))[1]::varchar,
+	    (xpath('dtThpgEnd/text()', entry_xml))[1]::varchar::date,
+	    (xpath('thpgMd/text()', entry_xml))[1]::varchar,
+        (xpath('ctrpName/text()', entry_xml))[1]::varchar,
+
+	    uuid,
+	    dt_insert
+
+	FROM entrys;

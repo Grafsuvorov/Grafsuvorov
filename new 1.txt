@@ -1,9 +1,5 @@
-date_trunc('MONTH', itaoma.dt_material_document_posting) AS dt_month
-
-на:
-
-date_trunc('MONTH', toDate(itaoma.dt_material_document_posting)) AS dt_month
-
-или лучше для ClickHouse:
-
-toStartOfMonth(toDate(itaoma.dt_material_document_posting)) AS dt_month
+SELECT
+    min(dt_material_document_posting),
+    max(dt_material_document_posting),
+    toTypeName(dt_material_document_posting)
+FROM dm_view.invoice_to_act_of_material_acceptence;

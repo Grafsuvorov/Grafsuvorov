@@ -1,16 +1,25 @@
-python build_depends_on.py --file C:
-  \Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml --write
+import csv
+import io
+import sys
+import decimal
+import datetime
+import traceback
+import xml.etree.ElementTree as ET
 
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\landing.py
-FATAL ERROR
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 479, in main
-    inserted_rows = copy_rows_to_stg(write_conn, batch_rows)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 363, in copy_rows_to_stg
-    cur.copy_expert(copy_sql, buffer)
-psycopg2.errors.InvalidDatetimeFormat: invalid input syntax for type date: "\N"
-CONTEXT:  COPY s1c_debt_for_working_capital_v2, line 1, column dt_contract_start: "\N"
+import psycopg2
 
+
+# =========================
+# Настройки подключения
+# =========================
+
+GP_CONN = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "dwh",
+    "user": "postgres",
+    "password": "password",
+}
 
 FLOW_ID = "SI_WorkingCapital_AI"
 
@@ -69,7 +78,9 @@ def to_date(value):
     if value is None:
         return None
 
-
+    # Иногда SAP присылает дату как datetime:
+    # 2023-05-26T12:00:00
+    # Для date-поля берём только YYYY-MM-DD
     if "T" in value:
         value = value.split("T")[0]
 
@@ -94,7 +105,7 @@ def to_timestamp(value):
 def parse_xml_row(uuid, dt_insert, document_xml):
     """
     На вход одно XML-сообщение из landing.
-    На выход список строк для stg.s1c_debt_for_working_capital.
+    На выход список строк для stg.s1c_debt_for_working_capital_v2.
     """
 
     if document_xml is None:
@@ -219,11 +230,11 @@ def parse_xml_row(uuid, dt_insert, document_xml):
 def value_for_copy(value):
     """
     Для COPY CSV.
-    None грузим как \\N.
-    Остальное приводим к строке.
+    None грузим как пустое значение.
+    В COPY указано NULL '', поэтому Greenplum воспримет пустое значение как NULL.
     """
     if value is None:
-        return r"\N"
+        return ""
 
     if isinstance(value, decimal.Decimal):
         return str(value)
@@ -344,7 +355,7 @@ def copy_rows_to_stg(conn, rows):
         WITH (
             FORMAT csv,
             DELIMITER E'\\t',
-            NULL '\\N',
+            NULL '',
             QUOTE '"',
             ESCAPE '\\'
         )
@@ -357,7 +368,7 @@ def copy_rows_to_stg(conn, rows):
 
 
 # =========================
-# COPY в таблицу загруженных uuid
+# COPY в таблицу загруженных UUID
 # =========================
 
 def copy_loaded_uuid(conn, uuid_rows):
@@ -393,7 +404,7 @@ def copy_loaded_uuid(conn, uuid_rows):
         WITH (
             FORMAT csv,
             DELIMITER E'\\t',
-            NULL '\\N',
+            NULL '',
             QUOTE '"',
             ESCAPE '\\'
         )

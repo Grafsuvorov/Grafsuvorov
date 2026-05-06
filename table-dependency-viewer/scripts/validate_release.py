@@ -5,7 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -34,7 +34,7 @@ SQL_PATH_FIELDS = {
     "sql_query_truncate": "sql_query_truncate.sql",
 }
 DEPENDENCY_IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
-DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext"}
+DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
 
 BLOCKER = "BLOCKER"
 WARNING = "WARNING"
@@ -47,6 +47,7 @@ class Finding:
     path: str
     rule: str
     message: str
+    task_ids: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -315,6 +316,32 @@ def merged_task_ids(branches: list[str]) -> list[str]:
     return tasks
 
 
+def changed_file_task_ids(base: str, head: str, diff_mode: str, cwd: Path, paths: Iterable[str]) -> dict[str, list[str]]:
+    range_expr = commit_range(base, head, diff_mode)
+    result: dict[str, list[str]] = {}
+    for path in sorted(set(paths)):
+        try:
+            raw = run_git(["log", "--pretty=%s", range_expr, "--", path], cwd)
+        except RuntimeError:
+            result[path] = []
+            continue
+        seen: set[str] = set()
+        task_ids: list[str] = []
+        for line in raw.splitlines():
+            for match in re.finditer(r"(DWH-\d+)", line, flags=re.IGNORECASE):
+                task_id = match.group(1).upper()
+                if task_id not in seen:
+                    seen.add(task_id)
+                    task_ids.append(task_id)
+        result[path] = task_ids
+    return result
+
+
+def enrich_findings_with_task_ids(findings: list[Finding], path_task_map: dict[str, list[str]]) -> None:
+    for item in findings:
+        item.task_ids = path_task_map.get(item.path, [])
+
+
 def release_date_from_name(release_name: str) -> str | None:
     match = re.search(r"(\d{4}-\d{2}-\d{2})", release_name)
     return match.group(1) if match else None
@@ -396,7 +423,14 @@ def is_click_view_sql(path: str) -> bool:
 
 
 def is_entity_meta_yaml(path: str) -> bool:
-    return path.endswith("meta_data_file.yaml") and "etl_loads_entity/" in path
+    if not (path.endswith("meta_data_file.yaml") and "etl_loads_entity/" in path):
+        return False
+    parts = Path(path).parts
+    try:
+        idx = parts.index("etl_loads_entity")
+    except ValueError:
+        return False
+    return len(parts) - idx >= 5
 
 
 def normalize_sql(sql: str) -> str:
@@ -734,7 +768,7 @@ def validate_entity_meta(
         repo_path = repo_candidates[0] if repo_candidates else None
         resolved_repo_path = resolve_repo_sql_path(head, path, value, cwd) if repo_path else None
         if expected and value != expected:
-            if is_view_meta and field == "sql_query_insert_init" and value == recreate_value:
+            if is_view_meta and "/dm_view/" not in path.lower() and field == "sql_query_insert_init" and value == recreate_value:
                 findings.append(
                     Finding(
                         INFO,
@@ -957,7 +991,8 @@ def format_report(
         lines.append(f"## {severity} ({len(group)})")
         lines.append("")
         for item in group:
-            lines.append(f"- `{item.path}` [{item.rule}]: {item.message}")
+            task_suffix = f" [tasks: {', '.join(f'`{task_id}`' for task_id in item.task_ids)}]" if item.task_ids else ""
+            lines.append(f"- `{item.path}` [{item.rule}]{task_suffix}: {item.message}")
         lines.append("")
     return "\n".join(lines)
 
@@ -1024,6 +1059,8 @@ def main() -> int:
     if release_context:
         add_release_slot_comparison(findings, release_context.release_name, merged_tasks_list)
 
+    path_task_map = changed_file_task_ids(args.base, args.head, args.diff_mode, cwd, [path for _, path in relevant])
+    enrich_findings_with_task_ids(findings, path_task_map)
     report = format_report(findings, relevant, merged_tasks_list, release_context)
     print(report)
     if args.report:

@@ -1,222 +1,249 @@
+DROP TABLE IF EXISTS tmp_s1c_wc_landing_uuid;
+DROP TABLE IF EXISTS tmp_s1c_wc_processed_uuid;
+DROP TABLE IF EXISTS tmp_s1c_wc_src;
+DROP TABLE IF EXISTS tmp_s1c_wc_items;
+DROP TABLE IF EXISTS tmp_s1c_wc_entries;
+
+-- 1. Сначала берём только uuid нужного потока из landing
+CREATE TEMP TABLE tmp_s1c_wc_landing_uuid AS
+SELECT DISTINCT
+    t.uuid
+FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
+WHERE t.flow_id = 'SI_WorkingCapital_AI'
+DISTRIBUTED BY (uuid);
+
+ANALYZE tmp_s1c_wc_landing_uuid;
+
+
+-- 2. Находим, какие uuid уже были загружены в stg
+-- Так мы не делаем NOT EXISTS на каждую строку landing напрямую
+CREATE TEMP TABLE tmp_s1c_wc_processed_uuid AS
+SELECT DISTINCT
+    s.uuid
+FROM stg.s1c_debt_for_working_capital s
+JOIN tmp_s1c_wc_landing_uuid l
+    ON l.uuid = s.uuid
+DISTRIBUTED BY (uuid);
+
+ANALYZE tmp_s1c_wc_processed_uuid;
+
+
+-- 3. Забираем только новые XML
+CREATE TEMP TABLE tmp_s1c_wc_src AS
+SELECT
+    t.uuid,
+    t.dt_insert,
+    t.document_xml,
+    (xpath('Header/Sender/text()', t.document_xml))[1]::varchar AS sender,
+    (xpath('Header/Receiver/text()', t.document_xml))[1]::varchar AS receiver,
+    NULLIF(trim((xpath('Header/CreatedDateTime/text()', t.document_xml))[1]::varchar), '')::timestamp AS create_date_time
+FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
+JOIN tmp_s1c_wc_landing_uuid l
+    ON l.uuid = t.uuid
+LEFT JOIN tmp_s1c_wc_processed_uuid p
+    ON p.uuid = t.uuid
+WHERE t.flow_id = 'SI_WorkingCapital_AI'
+  AND p.uuid IS NULL
+DISTRIBUTED BY (uuid);
+
+ANALYZE tmp_s1c_wc_src;
+
+
+-- 4. Раскрываем Body/Item отдельно
+CREATE TEMP TABLE tmp_s1c_wc_items AS
+SELECT
+    s.uuid,
+    s.dt_insert,
+    s.sender,
+    s.receiver,
+    s.create_date_time,
+    unnest(xpath('Body/Item', s.document_xml)) AS item_xml
+FROM tmp_s1c_wc_src s
+DISTRIBUTED BY (uuid);
+
+ANALYZE tmp_s1c_wc_items;
+
+
+-- 5. Вытаскиваем поля уровня Item и раскрываем entry
+CREATE TEMP TABLE tmp_s1c_wc_entries AS
+SELECT
+    i.uuid,
+    i.dt_insert,
+    i.sender,
+    i.receiver,
+    i.create_date_time,
+
+    NULLIF(trim((xpath('dtRp/text()', i.item_xml))[1]::varchar), '')::date AS dt_report,
+    NULLIF(trim((xpath('dbCd/text()', i.item_xml))[1]::varchar), '') AS database_code_1c,
+    NULLIF(trim((xpath('dbName/text()', i.item_xml))[1]::varchar), '') AS database_name_1c,
+    NULLIF(trim((xpath('unitMd/text()', i.item_xml))[1]::varchar), '') AS unit_balance_mdm_code_1c,
+
+    unnest(xpath('entry', i.item_xml)) AS entry_xml
+FROM tmp_s1c_wc_items i
+DISTRIBUTED BY (uuid);
+
+ANALYZE tmp_s1c_wc_entries;
+
+
+-- 6. Финальная вставка
 INSERT INTO stg.s1c_debt_for_working_capital
-	(
-	    sender,
-	    receiver,
-	    create_date_time,
-	    dt_report,
-	    database_code_1c,
-	    database_name_1c,
-	    unit_balance_mdm_code_1c,
-	    posting_uid_code_1c,
-	    invoice_registration_number,
-	    counterparty_role_name,
-	    debit_or_credit_name,
-	    accounting_document_descriprion_text,
-	    document_1c_code,
-	    responsibility_center_hfm_code,
-	    region_of_end_user_code,
-	    country_of_end_user_code,
-	    counterparty_mdm_code,
-	    counterparty_annual_turnover_amount,
-	    finish_goods_group_name,
-	    contract_number,
-	    paydox_document_url,
-	    contract_type_name,
-	    contract_amount,
-	    contract_currency_code,
-	    dt_contract_start,
-	    dt_contract_end,
-	    terms_of_payment_name,
-	    dt_overdue,
-	    debt_coverage_type_name,
-	    coverage_amount,
-	    coverage_currency_code,
-	    dt_debt,
-	    document_currency_code,
-	    debt_balance_document_currency_amount,
-	    debt_balance_rub_currency_amount,
-	    debt_balance_usd_currency_amount,
-	    debt_overdue_document_currency_amount,
-	    debt_overdue_rub_currency_amount,
-	    debt_overdue_usd_currency_amount,
-	    bank_receiver_name,
-	    receivable_claim_paydox_url,
-	    dt_receivable_claim,
-	    dt_claim_send_to_law_court,
-	    contract_supervisor_name,
-	    contract_supervisor_ad_login_code,
-	    general_ledger_account_code,
-	    general_ledger_account_name,
-	    dt_contract_registration,
-	    document_currency_amount,
-	    contract_supervisor_employee_1c_number,
-	    contract_supervisor_employee_sap_number,
-	    sales_market_code,
-	    sales_market_name,
-	    bad_debt_provision_amount,
-	    bad_debt_provision_currency_code,
-	    credit_limit_rub_currency_amount,
-	    dt_credit_limit_valid_to,
-	    paydox_credit_limit_url,
-	    insured_amount,
-	    insurance_currency_code,
-	    dt_insurance_valid_to,
-	    insurance_company_mdm_code,
-	    bank_guarantee_amount,
-	    bank_guarantee_currency_code,
-	    dt_bank_guarantee_valid_to,
-	    bank_guarantee_mdm_code,
-	    third_party_guarantee_amount,
-	    third_party_guarantee_currency_code,
-	    dt_third_party_guarantee_valid_to,
-	    third_party_guarantee_mdm_code,
-        counterparty_out_of_mdm_text,
-	    uuid,
-	    dt_insert
-	)
+(
+    sender,
+    receiver,
+    create_date_time,
+    dt_report,
+    database_code_1c,
+    database_name_1c,
+    unit_balance_mdm_code_1c,
+    posting_uid_code_1c,
+    invoice_registration_number,
+    counterparty_role_name,
+    debit_or_credit_name,
+    accounting_document_descriprion_text,
+    document_1c_code,
+    responsibility_center_hfm_code,
+    region_of_end_user_code,
+    country_of_end_user_code,
+    counterparty_mdm_code,
+    counterparty_annual_turnover_amount,
+    finish_goods_group_name,
+    contract_number,
+    paydox_document_url,
+    contract_type_name,
+    contract_amount,
+    contract_currency_code,
+    dt_contract_start,
+    dt_contract_end,
+    terms_of_payment_name,
+    dt_overdue,
+    debt_coverage_type_name,
+    coverage_amount,
+    coverage_currency_code,
+    dt_debt,
+    document_currency_code,
+    debt_balance_document_currency_amount,
+    debt_balance_rub_currency_amount,
+    debt_balance_usd_currency_amount,
+    debt_overdue_document_currency_amount,
+    debt_overdue_rub_currency_amount,
+    debt_overdue_usd_currency_amount,
+    bank_receiver_name,
+    receivable_claim_paydox_url,
+    dt_receivable_claim,
+    dt_claim_send_to_law_court,
+    contract_supervisor_name,
+    contract_supervisor_ad_login_code,
+    general_ledger_account_code,
+    general_ledger_account_name,
+    dt_contract_registration,
+    document_currency_amount,
+    contract_supervisor_employee_1c_number,
+    contract_supervisor_employee_sap_number,
+    sales_market_code,
+    sales_market_name,
+    bad_debt_provision_amount,
+    bad_debt_provision_currency_code,
+    credit_limit_rub_currency_amount,
+    dt_credit_limit_valid_to,
+    paydox_credit_limit_url,
+    insured_amount,
+    insurance_currency_code,
+    dt_insurance_valid_to,
+    insurance_company_mdm_code,
+    bank_guarantee_amount,
+    bank_guarantee_currency_code,
+    dt_bank_guarantee_valid_to,
+    bank_guarantee_mdm_code,
+    third_party_guarantee_amount,
+    third_party_guarantee_currency_code,
+    dt_third_party_guarantee_valid_to,
+    third_party_guarantee_mdm_code,
+    counterparty_out_of_mdm_text,
+    uuid,
+    dt_insert
+)
+SELECT
+    e.sender,
+    e.receiver,
+    e.create_date_time,
+    e.dt_report,
+    e.database_code_1c,
+    e.database_name_1c,
+    e.unit_balance_mdm_code_1c,
 
-	WITH src AS (
-	    SELECT
-	        t.uuid,
-	        t.dt_insert,
-	        t.document_xml,
-	        (xpath('Header/Sender/text()', document_xml))[1]::varchar AS sender,
-	        (xpath('Header/Receiver/text()', document_xml))[1]::varchar AS receiver,
-	        ((xpath('Header/CreatedDateTime/text()', document_xml))[1]::varchar)::timestamp AS create_date_time
-	    FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
-	    WHERE t.flow_id = 'SI_WorkingCapital_AI'
-		and not exists (select 1 from stg.s1c_debt_for_working_capital as s where t.uuid = s.uuid)
-	),
+    NULLIF(trim((xpath('id/text()', e.entry_xml))[1]::varchar), '') AS posting_uid_code_1c,
+    NULLIF(trim((xpath('invNum/text()', e.entry_xml))[1]::varchar), '') AS invoice_registration_number,
+    NULLIF(trim((xpath('ctrpRole/text()', e.entry_xml))[1]::varchar), '') AS counterparty_role_name,
+    NULLIF(trim((xpath('dcName/text()', e.entry_xml))[1]::varchar), '') AS debit_or_credit_name,
+    NULLIF(trim((xpath('docDesc/text()', e.entry_xml))[1]::varchar), '') AS accounting_document_descriprion_text,
+    NULLIF(trim((xpath('docNum/text()', e.entry_xml))[1]::varchar), '') AS document_1c_code,
+    NULLIF(trim((xpath('respCntr/text()', e.entry_xml))[1]::varchar), '') AS responsibility_center_hfm_code,
+    NULLIF(trim((xpath('regEndUsr/text()', e.entry_xml))[1]::varchar), '') AS region_of_end_user_code,
+    NULLIF(trim((xpath('cntEndUsr/text()', e.entry_xml))[1]::varchar), '') AS country_of_end_user_code,
+    NULLIF(trim((xpath('ctrpMd/text()', e.entry_xml))[1]::varchar), '') AS counterparty_mdm_code,
 
-	items AS (
-	    SELECT
-	        uuid,
-	        dt_insert,
-	        sender,
-	        receiver,
-	        create_date_time,
-	        item_xml,
-	        (xpath('dtRp/text()', item_xml))[1]::varchar::date AS dt_report,
-	        (xpath('dbCd/text()', item_xml))[1]::varchar AS database_code_1c,
-	        (xpath('dbName/text()', item_xml))[1]::varchar AS database_name_1c,
-	        (xpath('unitMd/text()', item_xml))[1]::varchar AS unit_balance_mdm_code_1c,
-	        (xpath('tz/text()', item_xml))[1]::varchar AS timezone_1c
-	    FROM (
-	        SELECT
-	            uuid,
-	            dt_insert,
-	            sender,
-	            receiver,
-	            create_date_time,
-	            unnest(xpath('Body/Item', document_xml)) AS item_xml
-	        FROM src
-	    ) t
-	),
+    NULLIF(trim((xpath('ctrpTurnov/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS counterparty_annual_turnover_amount,
+    NULLIF(trim((xpath('fgGrName/text()', e.entry_xml))[1]::varchar), '') AS finish_goods_group_name,
+    NULLIF(trim((xpath('ctNum/text()', e.entry_xml))[1]::varchar), '') AS contract_number,
+    NULLIF(trim((xpath('pdUrl/text()', e.entry_xml))[1]::varchar), '') AS paydox_document_url,
+    NULLIF(trim((xpath('ctType/text()', e.entry_xml))[1]::varchar), '') AS contract_type_name,
+    NULLIF(trim((xpath('ctAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS contract_amount,
+    NULLIF(trim((xpath('ctCurCd/text()', e.entry_xml))[1]::varchar), '') AS contract_currency_code,
+    NULLIF(trim((xpath('dtCtStart/text()', e.entry_xml))[1]::varchar), '')::date AS dt_contract_start,
+    NULLIF(trim((xpath('dtCtEnd/text()', e.entry_xml))[1]::varchar), '')::date AS dt_contract_end,
+    NULLIF(trim((xpath('payTerm/text()', e.entry_xml))[1]::varchar), '') AS terms_of_payment_name,
+    NULLIF(trim((xpath('dtOverdue/text()', e.entry_xml))[1]::varchar), '')::date AS dt_overdue,
+    NULLIF(trim((xpath('covTypeName/text()', e.entry_xml))[1]::varchar), '') AS debt_coverage_type_name,
+    NULLIF(trim((xpath('covAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS coverage_amount,
+    NULLIF(trim((xpath('covCurCd/text()', e.entry_xml))[1]::varchar), '') AS coverage_currency_code,
+    NULLIF(trim((xpath('dtDebt/text()', e.entry_xml))[1]::varchar), '')::date AS dt_debt,
+    NULLIF(trim((xpath('docCurCd/text()', e.entry_xml))[1]::varchar), '') AS document_currency_code,
 
-	entrys AS (
-	    SELECT
-	        uuid,
-	        dt_insert,
-	        sender,
-	        receiver,
-	        create_date_time,
-	        dt_report,
-	        database_code_1c,
-	        database_name_1c,
-	        unit_balance_mdm_code_1c,
-	        timezone_1c,
-	        entry_xml
-	    FROM (
-	        SELECT
-	            *,
-	            unnest(xpath('entry', item_xml)) AS entry_xml
-	        FROM items
-	    ) t
-	)
+    NULLIF(trim((xpath('dbDocCurAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_balance_document_currency_amount,
+    NULLIF(trim((xpath('dbRubAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_balance_rub_currency_amount,
+    NULLIF(trim((xpath('dbUsdAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_balance_usd_currency_amount,
+    NULLIF(trim((xpath('odDocCurAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_overdue_document_currency_amount,
+    NULLIF(trim((xpath('odRubAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_overdue_rub_currency_amount,
+    NULLIF(trim((xpath('odUsdAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS debt_overdue_usd_currency_amount,
 
-	SELECT
-	    sender,
-	    receiver,
-	    create_date_time,
-	    dt_report,
-	    database_code_1c,
-	    database_name_1c,
-	    unit_balance_mdm_code_1c,
+    NULLIF(trim((xpath('bankRecName/text()', e.entry_xml))[1]::varchar), '') AS bank_receiver_name,
+    NULLIF(trim((xpath('recClmUrl/text()', e.entry_xml))[1]::varchar), '') AS receivable_claim_paydox_url,
+    NULLIF(trim((xpath('dtRecClm/text()', e.entry_xml))[1]::varchar), '')::date AS dt_receivable_claim,
+    NULLIF(trim((xpath('dtLawCrt/text()', e.entry_xml))[1]::varchar), '')::date AS dt_claim_send_to_law_court,
+    NULLIF(trim((xpath('ctrSupName/text()', e.entry_xml))[1]::varchar), '') AS contract_supervisor_name,
+    NULLIF(trim((xpath('ctrSupId/text()', e.entry_xml))[1]::varchar), '') AS contract_supervisor_ad_login_code,
+    NULLIF(trim((xpath('glAccCd/text()', e.entry_xml))[1]::varchar), '') AS general_ledger_account_code,
+    NULLIF(trim((xpath('glAccName/text()', e.entry_xml))[1]::varchar), '') AS general_ledger_account_name,
+    NULLIF(trim((xpath('dtCtReg/text()', e.entry_xml))[1]::varchar), '')::date AS dt_contract_registration,
+    NULLIF(trim((xpath('docCurAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS document_currency_amount,
 
-	    (xpath('id/text()', entry_xml))[1]::varchar,
-	    (xpath('invNum/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrpRole/text()', entry_xml))[1]::varchar,
-	    (xpath('dcName/text()', entry_xml))[1]::varchar,
-	    (xpath('docDesc/text()', entry_xml))[1]::varchar,
-	    (xpath('docNum/text()', entry_xml))[1]::varchar,
-	    (xpath('respCntr/text()', entry_xml))[1]::varchar,
-	    (xpath('regEndUsr/text()', entry_xml))[1]::varchar,
-	    (xpath('cntEndUsr/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrpMd/text()', entry_xml))[1]::varchar,
+    NULLIF(trim((xpath('ctrSup1c/text()', e.entry_xml))[1]::varchar), '') AS contract_supervisor_employee_1c_number,
+    NULLIF(trim((xpath('ctrSupSap/text()', e.entry_xml))[1]::varchar), '') AS contract_supervisor_employee_sap_number,
+    NULLIF(trim((xpath('smCode/text()', e.entry_xml))[1]::varchar), '') AS sales_market_code,
+    NULLIF(trim((xpath('smName/text()', e.entry_xml))[1]::varchar), '') AS sales_market_name,
 
-	    (xpath('ctrpTurnov/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('fgGrName/text()', entry_xml))[1]::varchar,
-	    (xpath('ctNum/text()', entry_xml))[1]::varchar,
-	    (xpath('pdUrl/text()', entry_xml))[1]::varchar,
-	    (xpath('ctType/text()', entry_xml))[1]::varchar,
-	    (xpath('ctAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('ctCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtCtStart/text()', entry_xml))[1]::varchar::date,
-	    (xpath('dtCtEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('payTerm/text()', entry_xml))[1]::varchar,
-	    (xpath('dtOverdue/text()', entry_xml))[1]::varchar::date,
-	    (xpath('covTypeName/text()', entry_xml))[1]::varchar,
-	    (xpath('covAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('covCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtDebt/text()', entry_xml))[1]::varchar::date,
-	    (xpath('docCurCd/text()', entry_xml))[1]::varchar,
+    NULLIF(trim((xpath('badDbAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS bad_debt_provision_amount,
+    NULLIF(trim((xpath('badDbCurCd/text()', e.entry_xml))[1]::varchar), '') AS bad_debt_provision_currency_code,
+    NULLIF(trim((xpath('crLimRubAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS credit_limit_rub_currency_amount,
+    NULLIF(trim((xpath('dtCrLimEnd/text()', e.entry_xml))[1]::varchar), '')::date AS dt_credit_limit_valid_to,
+    NULLIF(trim((xpath('crUrlPd/text()', e.entry_xml))[1]::varchar), '') AS paydox_credit_limit_url,
 
-	    (xpath('dbDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dbRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dbUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odDocCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('odUsdAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+    NULLIF(trim((xpath('insAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS insured_amount,
+    NULLIF(trim((xpath('insCurCd/text()', e.entry_xml))[1]::varchar), '') AS insurance_currency_code,
+    NULLIF(trim((xpath('dtInsEnd/text()', e.entry_xml))[1]::varchar), '')::date AS dt_insurance_valid_to,
+    NULLIF(trim((xpath('insCoMd/text()', e.entry_xml))[1]::varchar), '') AS insurance_company_mdm_code,
 
-	    (xpath('bankRecName/text()', entry_xml))[1]::varchar,
-	    (xpath('recClmUrl/text()', entry_xml))[1]::varchar,
-	    (xpath('dtRecClm/text()', entry_xml))[1]::varchar::date,
-	    (xpath('dtLawCrt/text()', entry_xml))[1]::varchar::date,
-	    (xpath('ctrSupName/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrSupId/text()', entry_xml))[1]::varchar,
-	    (xpath('glAccCd/text()', entry_xml))[1]::varchar,
-	    (xpath('glAccName/text()', entry_xml))[1]::varchar,
-	    (xpath('dtCtReg/text()', entry_xml))[1]::varchar::date,
-	    (xpath('docCurAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
+    NULLIF(trim((xpath('bgAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS bank_guarantee_amount,
+    NULLIF(trim((xpath('bgCurCd/text()', e.entry_xml))[1]::varchar), '') AS bank_guarantee_currency_code,
+    NULLIF(trim((xpath('dtBgEnd/text()', e.entry_xml))[1]::varchar), '')::date AS dt_bank_guarantee_valid_to,
+    NULLIF(trim((xpath('bgMd/text()', e.entry_xml))[1]::varchar), '') AS bank_guarantee_mdm_code,
 
-	    (xpath('ctrSup1c/text()', entry_xml))[1]::varchar,
-	    (xpath('ctrSupSap/text()', entry_xml))[1]::varchar,
-	    (xpath('smCode/text()', entry_xml))[1]::varchar,
-	    (xpath('smName/text()', entry_xml))[1]::varchar,
+    NULLIF(trim((xpath('thpgAmt/text()', e.entry_xml))[1]::varchar), '')::decimal(20,6) AS third_party_guarantee_amount,
+    NULLIF(trim((xpath('thpgCurCd/text()', e.entry_xml))[1]::varchar), '') AS third_party_guarantee_currency_code,
+    NULLIF(trim((xpath('dtThpgEnd/text()', e.entry_xml))[1]::varchar), '')::date AS dt_third_party_guarantee_valid_to,
+    NULLIF(trim((xpath('thpgMd/text()', e.entry_xml))[1]::varchar), '') AS third_party_guarantee_mdm_code,
+    NULLIF(trim((xpath('ctrpName/text()', e.entry_xml))[1]::varchar), '') AS counterparty_out_of_mdm_text,
 
-	    (xpath('badDbAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('badDbCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('crLimRubAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('dtCrLimEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('crUrlPd/text()', entry_xml))[1]::varchar,
-
-	    (xpath('insAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('insCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtInsEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('insCoMd/text()', entry_xml))[1]::varchar,
-
-	    (xpath('bgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('bgCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtBgEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('bgMd/text()', entry_xml))[1]::varchar,
-
-	    (xpath('thpgAmt/text()', entry_xml))[1]::varchar::decimal(20,6),
-	    (xpath('thpgCurCd/text()', entry_xml))[1]::varchar,
-	    (xpath('dtThpgEnd/text()', entry_xml))[1]::varchar::date,
-	    (xpath('thpgMd/text()', entry_xml))[1]::varchar,
-        (xpath('ctrpName/text()', entry_xml))[1]::varchar,
-
-	    uuid,
-	    dt_insert
-
-	FROM entrys;
+    e.uuid,
+    e.dt_insert
+FROM tmp_s1c_wc_entries e;

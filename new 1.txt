@@ -1,6 +1,16 @@
 python build_depends_on.py --file C:
   \Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml --write
 
+PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\landing.py
+FATAL ERROR
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 479, in main
+    inserted_rows = copy_rows_to_stg(write_conn, batch_rows)
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 363, in copy_rows_to_stg
+    cur.copy_expert(copy_sql, buffer)
+psycopg2.errors.InvalidDatetimeFormat: invalid input syntax for type date: "\N"
+CONTEXT:  COPY s1c_debt_for_working_capital_v2, line 1, column dt_contract_start: "\N"
+
 
 FLOW_ID = "SI_WorkingCapital_AI"
 

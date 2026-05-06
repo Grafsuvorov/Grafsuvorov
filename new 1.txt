@@ -1,528 +1,100 @@
-import csv
-import io
-import sys
-import decimal
-import datetime
-import traceback
-import xml.etree.ElementTree as ET
-
-import psycopg2
-
-
-# =========================
-# Настройки подключения
-# =========================
-
-GP_CONN = {
-    "host": "localhost",
-    "port": 5432,
-    "dbname": "dwh",
-    "user": "postgres",
-    "password": "password",
-}
-
-FLOW_ID = "SI_WorkingCapital_AI"
-
-# Сколько XML-сообщений читать за один проход курсора
-FETCH_BATCH_SIZE = 500
-
-# Сколько распарсенных строк грузить одним COPY
-COPY_ROWS_LIMIT = 50_000
-
-
-# =========================
-# Вспомогательные функции
-# =========================
-
-def clean_text(value):
-    if value is None:
-        return None
-
-    value = str(value).strip()
-
-    if value == "":
-        return None
-
-    return value
-
-
-def text_or_none(node, path):
-    if node is None:
-        return None
-
-    found = node.find(path)
-
-    if found is None:
-        return None
-
-    return clean_text(found.text)
-
-
-def to_decimal(value):
-    value = clean_text(value)
-
-    if value is None:
-        return None
-
-    value = value.replace(" ", "").replace(",", ".")
-
-    if value == "":
-        return None
-
-    return decimal.Decimal(value)
-
-
-def to_date(value):
-    value = clean_text(value)
-
-    if value is None:
-        return None
-
-    # Иногда SAP присылает дату как datetime:
-    # 2023-05-26T12:00:00
-    # Для date-поля берём только YYYY-MM-DD
-    if "T" in value:
-        value = value.split("T")[0]
-
-    if " " in value:
-        value = value.split(" ")[0]
-
-    return datetime.date.fromisoformat(value)
-
-
-def to_timestamp(value):
-    value = clean_text(value)
-
-    if value is None:
-        return None
-
-    value = value.replace("T", " ")
-    value = value.replace("Z", "")
-
-    return datetime.datetime.fromisoformat(value)
-
-
-def parse_xml_row(uuid, dt_insert, document_xml):
-    """
-    На вход одно XML-сообщение из landing.
-    На выход список строк для stg.s1c_debt_for_working_capital_v2.
-    """
-
-    if document_xml is None:
-        return []
-
-    if not isinstance(document_xml, str):
-        document_xml = str(document_xml)
-
-    root = ET.fromstring(document_xml)
-
-    header = root.find("Header")
-    body = root.find("Body")
-
-    sender = text_or_none(header, "Sender")
-    receiver = text_or_none(header, "Receiver")
-    create_date_time = to_timestamp(text_or_none(header, "CreatedDateTime"))
-
-    if body is None:
-        return []
-
-    result_rows = []
-
-    for item in body.findall("Item"):
-        dt_report = to_date(text_or_none(item, "dtRp"))
-        database_code_1c = text_or_none(item, "dbCd")
-        database_name_1c = text_or_none(item, "dbName")
-        unit_balance_mdm_code_1c = text_or_none(item, "unitMd")
-
-        for entry in item.findall("entry"):
-            row = [
-                sender,
-                receiver,
-                create_date_time,
-                dt_report,
-                database_code_1c,
-                database_name_1c,
-                unit_balance_mdm_code_1c,
-
-                text_or_none(entry, "id"),
-                text_or_none(entry, "invNum"),
-                text_or_none(entry, "ctrpRole"),
-                text_or_none(entry, "dcName"),
-                text_or_none(entry, "docDesc"),
-                text_or_none(entry, "docNum"),
-                text_or_none(entry, "respCntr"),
-                text_or_none(entry, "regEndUsr"),
-                text_or_none(entry, "cntEndUsr"),
-                text_or_none(entry, "ctrpMd"),
-
-                to_decimal(text_or_none(entry, "ctrpTurnov")),
-                text_or_none(entry, "fgGrName"),
-                text_or_none(entry, "ctNum"),
-                text_or_none(entry, "pdUrl"),
-                text_or_none(entry, "ctType"),
-                to_decimal(text_or_none(entry, "ctAmt")),
-                text_or_none(entry, "ctCurCd"),
-                to_date(text_or_none(entry, "dtCtStart")),
-                to_date(text_or_none(entry, "dtCtEnd")),
-                text_or_none(entry, "payTerm"),
-                to_date(text_or_none(entry, "dtOverdue")),
-                text_or_none(entry, "covTypeName"),
-                to_decimal(text_or_none(entry, "covAmt")),
-                text_or_none(entry, "covCurCd"),
-                to_date(text_or_none(entry, "dtDebt")),
-                text_or_none(entry, "docCurCd"),
-
-                to_decimal(text_or_none(entry, "dbDocCurAmt")),
-                to_decimal(text_or_none(entry, "dbRubAmt")),
-                to_decimal(text_or_none(entry, "dbUsdAmt")),
-                to_decimal(text_or_none(entry, "odDocCurAmt")),
-                to_decimal(text_or_none(entry, "odRubAmt")),
-                to_decimal(text_or_none(entry, "odUsdAmt")),
-
-                text_or_none(entry, "bankRecName"),
-                text_or_none(entry, "recClmUrl"),
-                to_date(text_or_none(entry, "dtRecClm")),
-                to_date(text_or_none(entry, "dtLawCrt")),
-                text_or_none(entry, "ctrSupName"),
-                text_or_none(entry, "ctrSupId"),
-                text_or_none(entry, "glAccCd"),
-                text_or_none(entry, "glAccName"),
-                to_date(text_or_none(entry, "dtCtReg")),
-                to_decimal(text_or_none(entry, "docCurAmt")),
-
-                text_or_none(entry, "ctrSup1c"),
-                text_or_none(entry, "ctrSupSap"),
-                text_or_none(entry, "smCode"),
-                text_or_none(entry, "smName"),
-
-                to_decimal(text_or_none(entry, "badDbAmt")),
-                text_or_none(entry, "badDbCurCd"),
-                to_decimal(text_or_none(entry, "crLimRubAmt")),
-                to_date(text_or_none(entry, "dtCrLimEnd")),
-                text_or_none(entry, "crUrlPd"),
-
-                to_decimal(text_or_none(entry, "insAmt")),
-                text_or_none(entry, "insCurCd"),
-                to_date(text_or_none(entry, "dtInsEnd")),
-                text_or_none(entry, "insCoMd"),
-
-                to_decimal(text_or_none(entry, "bgAmt")),
-                text_or_none(entry, "bgCurCd"),
-                to_date(text_or_none(entry, "dtBgEnd")),
-                text_or_none(entry, "bgMd"),
-
-                to_decimal(text_or_none(entry, "thpgAmt")),
-                text_or_none(entry, "thpgCurCd"),
-                to_date(text_or_none(entry, "dtThpgEnd")),
-                text_or_none(entry, "thpgMd"),
-
-                text_or_none(entry, "ctrpName"),
-
-                uuid,
-                dt_insert,
-            ]
-
-            result_rows.append(row)
-
-    return result_rows
-
-
-def value_for_copy(value):
-    """
-    Для COPY CSV.
-    None грузим как пустое значение.
-    В COPY указано NULL '', поэтому Greenplum воспримет пустое значение как NULL.
-    """
-    if value is None:
-        return ""
-
-    if isinstance(value, decimal.Decimal):
-        return str(value)
-
-    if isinstance(value, datetime.datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S")
-
-    if isinstance(value, datetime.date):
-        return value.strftime("%Y-%m-%d")
-
-    return str(value)
-
-
-# =========================
-# COPY в основную STG
-# =========================
-
-def copy_rows_to_stg(conn, rows):
-    if not rows:
-        return 0
-
-    buffer = io.StringIO()
-
-    writer = csv.writer(
-        buffer,
-        delimiter="\t",
-        quotechar='"',
-        quoting=csv.QUOTE_MINIMAL,
-        lineterminator="\n",
-        escapechar="\\"
-    )
-
-    for row in rows:
-        writer.writerow([value_for_copy(v) for v in row])
-
-    buffer.seek(0)
-
-    columns = """
-        sender,
-        receiver,
-        create_date_time,
-        dt_report,
-        database_code_1c,
-        database_name_1c,
-        unit_balance_mdm_code_1c,
-        posting_uid_code_1c,
-        invoice_registration_number,
-        counterparty_role_name,
-        debit_or_credit_name,
-        accounting_document_descriprion_text,
-        document_1c_code,
-        responsibility_center_hfm_code,
-        region_of_end_user_code,
-        country_of_end_user_code,
-        counterparty_mdm_code,
-        counterparty_annual_turnover_amount,
-        finish_goods_group_name,
-        contract_number,
-        paydox_document_url,
-        contract_type_name,
-        contract_amount,
-        contract_currency_code,
-        dt_contract_start,
-        dt_contract_end,
-        terms_of_payment_name,
-        dt_overdue,
-        debt_coverage_type_name,
-        coverage_amount,
-        coverage_currency_code,
-        dt_debt,
-        document_currency_code,
-        debt_balance_document_currency_amount,
-        debt_balance_rub_currency_amount,
-        debt_balance_usd_currency_amount,
-        debt_overdue_document_currency_amount,
-        debt_overdue_rub_currency_amount,
-        debt_overdue_usd_currency_amount,
-        bank_receiver_name,
-        receivable_claim_paydox_url,
-        dt_receivable_claim,
-        dt_claim_send_to_law_court,
-        contract_supervisor_name,
-        contract_supervisor_ad_login_code,
-        general_ledger_account_code,
-        general_ledger_account_name,
-        dt_contract_registration,
-        document_currency_amount,
-        contract_supervisor_employee_1c_number,
-        contract_supervisor_employee_sap_number,
-        sales_market_code,
-        sales_market_name,
-        bad_debt_provision_amount,
-        bad_debt_provision_currency_code,
-        credit_limit_rub_currency_amount,
-        dt_credit_limit_valid_to,
-        paydox_credit_limit_url,
-        insured_amount,
-        insurance_currency_code,
-        dt_insurance_valid_to,
-        insurance_company_mdm_code,
-        bank_guarantee_amount,
-        bank_guarantee_currency_code,
-        dt_bank_guarantee_valid_to,
-        bank_guarantee_mdm_code,
-        third_party_guarantee_amount,
-        third_party_guarantee_currency_code,
-        dt_third_party_guarantee_valid_to,
-        third_party_guarantee_mdm_code,
-        counterparty_out_of_mdm_text,
-        uuid,
-        dt_insert
-    """
-
-    copy_sql = f"""
-        COPY stg.s1c_debt_for_working_capital_v2
-        ({columns})
-        FROM STDIN
-        WITH (
-            FORMAT csv,
-            DELIMITER E'\\t',
-            NULL '',
-            QUOTE '"',
-            ESCAPE '\\'
-        )
-    """
-
-    with conn.cursor() as cur:
-        cur.copy_expert(copy_sql, buffer)
-
-    return len(rows)
-
-
-# =========================
-# COPY в таблицу загруженных UUID
-# =========================
-
-def copy_loaded_uuid(conn, uuid_rows):
-    if not uuid_rows:
-        return 0
-
-    buffer = io.StringIO()
-
-    writer = csv.writer(
-        buffer,
-        delimiter="\t",
-        quotechar='"',
-        quoting=csv.QUOTE_MINIMAL,
-        lineterminator="\n",
-        escapechar="\\"
-    )
-
-    for uuid, dt_insert in uuid_rows:
-        writer.writerow([
-            value_for_copy(uuid),
-            value_for_copy(dt_insert),
-        ])
-
-    buffer.seek(0)
-
-    copy_sql = """
-        COPY stg.s1c_debt_for_working_capital_loaded_uuid
-        (
-            uuid,
-            dt_insert
-        )
-        FROM STDIN
-        WITH (
-            FORMAT csv,
-            DELIMITER E'\\t',
-            NULL '',
-            QUOTE '"',
-            ESCAPE '\\'
-        )
-    """
-
-    with conn.cursor() as cur:
-        cur.copy_expert(copy_sql, buffer)
-
-    return len(uuid_rows)
-
-
-# =========================
-# Основной процесс
-# =========================
-
-def main():
-    read_conn = psycopg2.connect(**GP_CONN)
-    write_conn = psycopg2.connect(**GP_CONN)
-
-    read_conn.autocommit = False
-    write_conn.autocommit = False
-
-    total_xml = 0
-    total_rows = 0
-    total_uuid_loaded = 0
-    error_count = 0
-
-    batch_rows = []
-    batch_uuid_rows = []
-    seen_uuid = set()
-
-    select_sql = """
-        SELECT
-            t.uuid::varchar AS uuid,
-            t.dt_insert,
-            t.document_xml::text AS document_xml
-        FROM landing."INPUT_DATA_FROM_SAPXI_IN" t
-        WHERE t.flow_id = %s
-          AND NOT EXISTS (
-              SELECT 1
-              FROM stg.s1c_debt_for_working_capital_loaded_uuid u
-              WHERE u.uuid = t.uuid
-          )
-        ORDER BY t.dt_insert
-    """
-
-    try:
-        with read_conn.cursor(name="s1c_wc_xml_cursor") as cur:
-            cur.itersize = FETCH_BATCH_SIZE
-            cur.execute(select_sql, (FLOW_ID,))
-
-            for uuid, dt_insert, document_xml in cur:
-                if uuid in seen_uuid:
-                    continue
-
-                seen_uuid.add(uuid)
-                total_xml += 1
-
-                try:
-                    parsed_rows = parse_xml_row(uuid, dt_insert, document_xml)
-
-                    batch_rows.extend(parsed_rows)
-                    batch_uuid_rows.append((uuid, dt_insert))
-
-                except Exception as e:
-                    error_count += 1
-                    print("=" * 100)
-                    print(f"ERROR while parsing uuid={uuid}, dt_insert={dt_insert}")
-                    print(str(e))
-                    print(traceback.format_exc())
-                    print("=" * 100)
-
-                if len(batch_rows) >= COPY_ROWS_LIMIT:
-                    inserted_rows = copy_rows_to_stg(write_conn, batch_rows)
-                    inserted_uuids = copy_loaded_uuid(write_conn, batch_uuid_rows)
-
-                    write_conn.commit()
-
-                    total_rows += inserted_rows
-                    total_uuid_loaded += inserted_uuids
-
-                    print(
-                        f"XML processed: {total_xml}, "
-                        f"rows inserted: {total_rows}, "
-                        f"uuid loaded: {total_uuid_loaded}, "
-                        f"errors: {error_count}"
-                    )
-
-                    batch_rows = []
-                    batch_uuid_rows = []
-
-            if batch_rows or batch_uuid_rows:
-                inserted_rows = copy_rows_to_stg(write_conn, batch_rows)
-                inserted_uuids = copy_loaded_uuid(write_conn, batch_uuid_rows)
-
-                write_conn.commit()
-
-                total_rows += inserted_rows
-                total_uuid_loaded += inserted_uuids
-
-        print("=" * 100)
-        print("DONE")
-        print(f"Total XML processed: {total_xml}")
-        print(f"Total rows inserted: {total_rows}")
-        print(f"Total uuid loaded: {total_uuid_loaded}")
-        print(f"Errors: {error_count}")
-        print("=" * 100)
-
-    except Exception:
-        write_conn.rollback()
-        print("FATAL ERROR")
-        print(traceback.format_exc())
-        sys.exit(1)
-
-    finally:
-        read_conn.close()
-        write_conn.close()
-
-
-if __name__ == "__main__":
-    main()
+SELECT
+  "unit_balance_code" AS "unit_balance_code_eb796a",
+  "plant_code" AS "plant_code_62a6a8",
+  "counterparty_tin_code" AS "counterparty_tin_code_144c7f",
+  "counterparty_code" AS "counterparty_code_37032d",
+  "counterparty_name" AS "counterparty_name_684e93",
+  "purchase_contract_code" AS "purchase_contract_code_33833a",
+  "dt_purchase_contract" AS "dt_purchase_contract_ac2982",
+  "purchase_contract_name" AS "purchase_contract_name_b3cc39",
+  "invoice_code" AS "invoice_code_e24190",
+  "fiscal_year" AS "fiscal_year_4dd142",
+  "invoice_type_code" AS "invoice_type_code_67e2d3",
+  "accounting_document_code" AS "accounting_document_code_58568c",
+  "supplier_invoice_number" AS "supplier_invoice_number_8ade79",
+  "invoice_currency_code" AS "invoice_currency_code_0cec85",
+  "dt_invoice" AS "dt_invoice_32e842",
+  "dt_invoice_posting" AS "dt_invoice_posting_8f1417",
+  "temporary_general_ledger_account_code" AS "temporary_general_ledger_account_code_0a2f6b",
+  "expense_general_ledger_account_code" AS "expense_general_ledger_account_code_953393",
+  "contractor_general_ledger_account_code" AS "contractor_general_ledger_account_code_ddc7c1",
+  "general_ledger_account_code" AS "general_ledger_account_code_dfcc91",
+  "invoice_position_line_item_text_description" AS "invoice_position_line_item_text_description_267947",
+  "minor_adjusted_external_invoice_number" AS "minor_adjusted_external_invoice_number_4b2994",
+  "major_adjusted_external_invoice_number" AS "major_adjusted_external_invoice_number_36518d",
+  ROUND(local_currency_amount, 2) AS "Сумма во внутренней валюте_749b1c",
+  ROUND(document_currency_amount, 2) AS "Сумма в валюте документа_92136d",
+  ROUND(vat_document_currency_amount, 2) AS "Сумма НДС_acb4f6",
+  "tax_code" AS "tax_code_962cc2",
+  ROUND(document_currency_total_amount, 2) AS "Сумма с НДС_067add",
+  "transportation_and_procurement_position_cost_amount" AS "transportation_and_procurement_position_cost_amount_0ab0ff",
+  "reference_document_code" AS "reference_document_code_7f01fb",
+  "reference_document_fiscal_year" AS "reference_document_fiscal_year_25822b",
+  "reference_document_position_line_item_code" AS "reference_document_position_line_item_code_eb1409",
+  "accounting_receipt_document_code" AS "accounting_receipt_document_code_98c67e",
+  "bill_or_receipt_document_number" AS "bill_or_receipt_document_number_548203",
+  "railway_bill_number" AS "railway_bill_number_6ea07c",
+  "customs_declaration_number" AS "customs_declaration_number_399e20",
+  "dt_material_document" AS "dt_material_document_a87d8c",
+  "dt_material_document_posting" AS "dt_material_document_posting_728877",
+  "purchase_document_code" AS "purchase_document_code_b466e8",
+  "purchase_document_position_line_item_code" AS "purchase_document_position_line_item_code_c50079",
+  "supplier_code" AS "supplier_code_f92bfe",
+  "supplier_name" AS "supplier_name_c17cfa",
+  "purchase_responsible_department_code" AS "purchase_responsible_department_code_a36bcb",
+  "purchase_responsible_department_name" AS "purchase_responsible_department_name_b1fd1c",
+  "material_code" AS "material_code_87485b",
+  "material_name" AS "material_name_caf93c",
+  "material_quantity" AS "material_quantity_2f4aa1",
+  "purchase_order_uom_name" AS "purchase_order_uom_name_42ed08",
+  "valuation_type_code" AS "valuation_type_code_88411b",
+  "cost_center_code" AS "cost_center_code_0a55ee",
+  "cost_center_name" AS "cost_center_name_94c97d",
+  "order_code" AS "order_code_9902ae",
+  "order_name" AS "order_name_42102b",
+  "wbs_element_number" AS "wbs_element_number_9ae543",
+  "wbs_element_name" AS "wbs_element_name_5b4011",
+  "incoterms_code" AS "incoterms_code_e39932",
+  "agent_invoice_number" AS "agent_invoice_number_7a3bd3",
+  "agent_code" AS "agent_code_f07259",
+  "agent_name" AS "agent_name_c106d1",
+  "is_material_form_006_exist" AS "is_material_form_006_exist_8cbbd0",
+  "material_form_006_quantity" AS "material_form_006_quantity_2cb350",
+  "material_form_006_uom_code" AS "material_form_006_uom_code_250d91",
+  "tax_classification_code" AS "tax_classification_code_cab474",
+  "purchase_type_name" AS "purchase_type_name_133a2c",
+  "sales_document_code" AS "sales_document_code_b395f4",
+  "sales_document_position_code" AS "sales_document_position_code_30b538"
+FROM (
+  /* Параметр дата_по */ /* Параметр дата_с */ /* Параметр дата_по */
+  SELECT
+    *,
+    rls.user_id AS active_directory_user,
+    date_trunc('MONTH', itaoma.dt_material_document_posting) AS dt_month
+  FROM dm_view.invoice_to_act_of_material_acceptence AS itaoma
+  JOIN (
+    SELECT
+      unit_id,
+      user_id
+    FROM dm.rls_t
+    WHERE
+      source_system IN ('SAP')
+      AND business_area_type IN ('MM', 'BI')
+      AND rls_type = 'user_to_plant_code'
+  ) AS rls
+    ON itaoma.plant_code = rls.unit_id
+  WHERE
+    1 = 1
+) AS "virtual_table"
+WHERE
+  (
+    lower(active_directory_user) = lower('suvorovnd')
+  )
+ORDER BY
+  "counterparty_code" ASC,
+  "purchase_contract_code" ASC
+LIMIT 50000
+
+
+SQL Error [43] [07000]: Code: 43. DB::Exception: Illegal type Date32 of 2nd argument of function dateTrunc. Should be a date or a date with time: In scope SELECT *, rls.user_id AS active_directory_user, date_trunc('MONTH', itaoma.dt_material_document_posting) AS dt_month FROM dm_view.invoice_to_act_of_material_acceptence AS itaoma INNER JOIN (SELECT unit_id, user_id FROM dm.rls_t WHERE (source_system IN ('SAP')) AND (business_area_type IN ('MM', 'BI')) AND (rls_type = 'user_to_plant_code')) AS rls ON itaoma.plant_code = rls.unit_id WHERE 1 = 1. (ILLEGAL_TYPE_OF_ARGUMENT) (version 24.3.3.102 (official build))
+, server ClickHouseNode(addr=http:10.66.229.219/<unresolved>:443, db=dm)@1987557868

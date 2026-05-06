@@ -2,27 +2,19 @@ python build_depends_on.py --file C:
   \Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml --write
 
 
-====================================================================================================
-ERROR while parsing uuid=51e62e07-da8f-11f0-952e-000017fc2780, dt_insert=2025-12-16 17:55:55.213889
-Invalid isoformat string: '2023-05-26T12:00:00'
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 458, in main
-    parsed_rows = parse_xml_row(uuid, dt_insert, document_xml)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 163, in parse_xml_row
-    to_date(text_or_none(entry, "dtDebt")),
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 81, in to_date
-    return datetime.date.fromisoformat(value)
-ValueError: Invalid isoformat string: '2023-05-26T12:00:00'
+def to_date(value):
+    value = clean_text(value)
 
-====================================================================================================
-====================================================================================================
-ERROR while parsing uuid=5b64aab2-da8f-11f0-c7bb-000017fc2780, dt_insert=2025-12-16 17:56:11.504111
-Invalid isoformat string: '2025-10-06T04:31:58'
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 458, in main
-    parsed_rows = parse_xml_row(uuid, dt_insert, document_xml)
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 163, in parse_xml_row
-    to_date(text_or_none(entry, "dtDebt")),
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\landing.py", line 81, in to_date
+    if value is None:
+        return None
+
+    # Иногда из SAP приходит дата-время вместо даты:
+    # 2023-05-26T12:00:00
+    # Для date-поля берём только YYYY-MM-DD
+    if "T" in value:
+        value = value.split("T")[0]
+
+    if " " in value:
+        value = value.split(" ")[0]
+
     return datetime.date.fromisoformat(value)
-ValueError: Invalid isoformat string: '2025-10-06T04:31:58'

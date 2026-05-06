@@ -1,3 +1,2 @@
-PS C:\Users\SuvorovND\GIT> cd .\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml
-
- C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> 
+python build_depends_on.py --file C:
+  \Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml --write

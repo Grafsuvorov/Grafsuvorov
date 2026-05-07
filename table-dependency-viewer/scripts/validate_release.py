@@ -35,6 +35,7 @@ SQL_PATH_FIELDS = {
 }
 DEPENDENCY_IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
 DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
+REQUIRED_SYSTEM_FIELDS = ("dttm_inserted", "dttm_updated", "deleted_flag")
 
 BLOCKER = "BLOCKER"
 WARNING = "WARNING"
@@ -587,6 +588,32 @@ def has_drop_view_if_exists(sql: str) -> bool:
     return bool(re.search(r"\bdrop\s+view\s+if\s+exists\b", normalize_sql(sql)))
 
 
+def find_missing_system_fields_in_sql(sql: str) -> list[str]:
+    normalized = normalize_sql(sql)
+    missing: list[str] = []
+    for field in REQUIRED_SYSTEM_FIELDS:
+        if not re.search(rf"\b{re.escape(field)}\b", normalized):
+            missing.append(field)
+    return missing
+
+
+def find_missing_system_fields_in_click_attributes(meta: dict[str, Any]) -> list[str]:
+    attributes = meta.get("attributes")
+    if not isinstance(attributes, list):
+        return list(REQUIRED_SYSTEM_FIELDS)
+
+    present: set[str] = set()
+    for item in attributes:
+        if not isinstance(item, dict):
+            continue
+        for key in ("column_name_click", "column_name_gp"):
+            value = normalize_object_fqn(str(item.get(key) or ""))
+            if value:
+                present.add(value)
+
+    return [field for field in REQUIRED_SYSTEM_FIELDS if field not in present]
+
+
 def validate_recreate_sql_matches_yaml(path: str, sql: str, meta: dict[str, Any], findings: list[Finding]) -> None:
     expected = expected_object_fqn(meta)
     if not expected:
@@ -816,6 +843,17 @@ def validate_entity_meta(
                 findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать recreate SQL `{resolved_repo_path}`: {exc}"))
                 continue
             validate_recreate_sql_matches_yaml(path, recreate_sql, meta, findings)
+            missing_system_fields = find_missing_system_fields_in_sql(recreate_sql)
+            if missing_system_fields:
+                findings.append(
+                    Finding(
+                        BLOCKER,
+                        path,
+                        "system-fields",
+                        "В recreate SQL отсутствуют обязательные системные поля: "
+                        + ", ".join(f"`{field}`" for field in missing_system_fields),
+                    )
+                )
 
         if field == "sql_query_insert_init" and resolved_repo_path:
             try:
@@ -871,6 +909,20 @@ def validate_click_meta(path: str, meta: dict[str, Any], findings: list[Finding]
     if meta.get("object_type") == "table" and not meta.get("order_by"):
         findings.append(Finding(WARNING, path, "click-order-by", "Для ClickHouse table желательно явно указать `order_by`."))
 
+    schema_name_click = normalize_object_fqn(str(meta.get("schema_name_click") or ""))
+    if schema_name_click == "dm":
+        missing_system_fields = find_missing_system_fields_in_click_attributes(meta)
+        if missing_system_fields:
+            findings.append(
+                Finding(
+                    BLOCKER,
+                    path,
+                    "system-fields",
+                    "В ClickHouse-конфиге отсутствуют обязательные системные поля в `attributes`: "
+                    + ", ".join(f"`{field}`" for field in missing_system_fields),
+                )
+            )
+
 
 def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
     normalized = normalize_sql(sql)
@@ -890,6 +942,18 @@ def validate_sql(path: str, sql: str, findings: list[Finding]) -> None:
                 "В `config_files/meta/dm_view` запрещено использовать источники из `dm.`; здесь должны использоваться только `dm_view.`.",
             )
         )
+    if path.startswith("config_files/meta/dm_view/"):
+        missing_system_fields = find_missing_system_fields_in_sql(sql)
+        if missing_system_fields:
+            findings.append(
+                Finding(
+                    BLOCKER,
+                    path,
+                    "system-fields",
+                    "В SQL для `config_files/meta/dm_view` отсутствуют обязательные системные поля: "
+                    + ", ".join(f"`{field}`" for field in missing_system_fields),
+                )
+            )
     if re.search(r"\bcreate\s+(?:or\s+replace\s+)?view\b", normalized):
         if not re.search(r"\bdrop\s+view\s+if\s+exists\b", normalized):
             findings.append(Finding(WARNING, path, "view-drop", "Для view не найден явный `DROP VIEW IF EXISTS`."))

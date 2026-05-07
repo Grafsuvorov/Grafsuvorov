@@ -165,6 +165,14 @@ def _detect_root(repo_root: Path, arg_root: str) -> Path:
     return candidates[0]
 
 
+def _detect_root_from_meta_path(meta_path: Path) -> Optional[Path]:
+    meta_path = meta_path.resolve()
+    for parent in meta_path.parents:
+        if parent.name == "etl_loads_entity":
+            return parent
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build depends_on from sql_query_insert_init.sql")
     parser.add_argument("--root", default="", help="Root directory with meta_data_file.yaml")
@@ -178,14 +186,6 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[1]
     root = _detect_root(repo_root, args.root)
 
-    count = 0
-    updated = 0
-    unchanged: List[str] = []
-    skipped: List[str] = []
-    known_schemas = collect_known_schemas(root) | EXTRA_SCHEMAS
-    if args.limit == 0:
-        print(f"[INFO] Known schemas ({len(known_schemas)}): {', '.join(sorted(known_schemas))}")
-
     if args.file:
         file_arg = Path(args.file)
         if file_arg.is_absolute():
@@ -195,8 +195,26 @@ def main() -> int:
                 meta_paths = [(repo_root / file_arg).resolve()]
             else:
                 meta_paths = [(root / file_arg).resolve()]
+
+        if args.root:
+            root = _detect_root(repo_root, args.root)
+        else:
+            detected_root = _detect_root_from_meta_path(meta_paths[0])
+            if detected_root is None:
+                raise SystemExit(
+                    f"Could not detect etl_loads_entity root from file path: {meta_paths[0]}"
+                )
+            root = detected_root
     else:
         meta_paths = list(iter_meta_files(root))
+
+    count = 0
+    updated = 0
+    unchanged: List[str] = []
+    skipped: List[str] = []
+    known_schemas = collect_known_schemas(root) | EXTRA_SCHEMAS
+    if args.limit == 0:
+        print(f"[INFO] Known schemas ({len(known_schemas)}): {', '.join(sorted(known_schemas))}")
 
     for meta_path in meta_paths:
         data = load_yaml(meta_path)
@@ -239,7 +257,7 @@ def main() -> int:
             updated += 1
         else:
             if has_deps:
-                print(f"\n== {meta_path.relative_to(repo_root)} ==")
+                print(f"\n== {_safe_rel(meta_path, root)} ==")
                 print(yaml.safe_dump({"depends_on": depends_on}, sort_keys=False, allow_unicode=True))
 
         if args.limit and count >= args.limit:

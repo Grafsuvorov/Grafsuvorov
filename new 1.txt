@@ -1,5 +1,3 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python build_depends_on.py --file C:\Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml --write
-[INFO] Known schemas (1): raw_ext
-[WARN] sql_query_insert_init path not found, used local file: C:\Users\SuvorovND\GIT\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\TRANSPORTATION\dds\transport_bill\meta_data_file.yaml
-
-Updated 0 file(s).
+dttm_inserted 
+dttm_updated 
+deleted_flag 

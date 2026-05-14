@@ -26,6 +26,7 @@ import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
+import EntityDevMetaWorkspace from "./components/EntityDevMetaWorkspace.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
@@ -176,6 +177,10 @@ export default function App() {
       }
       if (target === "/admin/dev-meta") {
         navigate("/admin/dev-meta");
+        return;
+      }
+      if (target === "/admin/entity-meta") {
+        navigate("/admin/entity-meta");
         return;
       }
       if (target === "/admin/engineering") {
@@ -432,6 +437,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : canUseDevMeta ? (
               <DevMetaAdminPage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/entity-meta"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <EntityDevMetaWorkspace userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

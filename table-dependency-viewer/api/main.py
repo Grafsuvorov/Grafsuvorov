@@ -53,6 +53,8 @@ from .config import (
     TABLE_CLICK_LOAD_STAGE,
     CLICK_META_DIR,
     DEV_CLICK_META_DIR,
+    ENTITY_META_DIR,
+    DEV_ENTITY_META_DIR,
     DBT_MANIFEST_DIR,
     DBT_LOGS_DATABASE_URL,
     TABLE_DBT_MODEL_CATALOG,
@@ -92,6 +94,16 @@ from .services.dev_meta import (
     save_dev_meta_file,
     trigger_airflow_dev_dag,
     validate_dev_meta_content,
+)
+from .services.entity_dev_meta import (
+    get_entity_dev_meta_status,
+    init_entity_dev_meta_bundle,
+    list_entity_reference_rows,
+    list_entity_dev_catalog,
+    lock_entity_dev_meta,
+    save_entity_dev_meta_bundle,
+    unlock_entity_dev_meta,
+    validate_entity_dev_meta_bundle,
 )
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
@@ -185,6 +197,29 @@ class DevMetaGeneratePayload(BaseModel):
     greenplum_table_name: Optional[str] = None
     order_by: List[str]
     dag_tags: List[str]
+
+
+class EntityMetaInitPayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+
+
+class EntityMetaLockPayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+
+
+class EntityMetaSavePayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+    task_id: str
+    yaml_content: str
+    recreate_sql: str
+    insert_sql: str
+    truncate_sql: str = ""
 
 
 class AssistantContextPayload(BaseModel):
@@ -826,6 +861,119 @@ def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
             remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
             ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
             strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.get("/api/admin/entity-meta/status")
+def get_admin_entity_meta_status(request: Request):
+    _require_admin(request)
+    return get_entity_dev_meta_status(
+        engine=engine,
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
+    )
+
+
+@router.get("/api/admin/entity-meta/catalog")
+def get_admin_entity_meta_catalog(request: Request):
+    _require_admin(request)
+    return list_entity_dev_catalog(
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+    )
+
+
+@router.get("/api/admin/entity-meta/reference/entities")
+def get_admin_entity_meta_reference_entities(request: Request):
+    _require_admin(request)
+    return {"items": list_entity_reference_rows(engine=engine)}
+
+
+@router.post("/api/admin/entity-meta/init")
+def init_admin_entity_meta(payload: EntityMetaInitPayload, request: Request):
+    _require_admin(request)
+    return init_entity_dev_meta_bundle(
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        entity_name=payload.entity_name,
+        schema_name=payload.schema_name,
+        table_name=payload.table_name,
+    )
+
+
+@router.post("/api/admin/entity-meta/lock")
+def lock_admin_entity_meta(payload: EntityMetaLockPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        return lock_entity_dev_meta(
+            engine=engine,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
+            author=user.email,
+            ttl_minutes=DEV_META_LOCK_TTL_MIN,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@router.post("/api/admin/entity-meta/unlock")
+def unlock_admin_entity_meta(payload: EntityMetaLockPayload, request: Request):
+    user = _require_admin(request)
+    unlock_entity_dev_meta(
+        engine=engine,
+        entity_name=payload.entity_name,
+        schema_name=payload.schema_name,
+        table_name=payload.table_name,
+        author=user.email,
+    )
+    return {"status": "ok"}
+
+
+@router.post("/api/admin/entity-meta/validate")
+def validate_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
+    _require_admin(request)
+    return validate_entity_dev_meta_bundle(
+        base_dir=BASE_DIR,
+        prod_root_value=ENTITY_META_DIR,
+        dev_root_value=DEV_ENTITY_META_DIR,
+        entity_name=payload.entity_name,
+        schema_name=payload.schema_name,
+        table_name=payload.table_name,
+        yaml_content=payload.yaml_content,
+        recreate_sql=payload.recreate_sql,
+        insert_sql=payload.insert_sql,
+        truncate_sql=payload.truncate_sql,
+    )
+
+
+@router.post("/api/admin/entity-meta/save")
+def save_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = save_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
+            task_id=payload.task_id,
+            yaml_content=payload.yaml_content,
+            recreate_sql=payload.recreate_sql,
+            insert_sql=payload.insert_sql,
+            truncate_sql=payload.truncate_sql,
+            author=user.email,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

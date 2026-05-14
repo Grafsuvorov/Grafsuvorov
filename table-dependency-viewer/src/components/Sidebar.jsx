@@ -96,6 +96,15 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
+                  className={isActive("/admin/entity-meta") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/entity-meta")}
+                >
+                  GP Meta
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  type="button"
                   className={isActive("/admin/engineering") ? "active" : ""}
                   onClick={() => {
                     console.log("[Sidebar] open /admin/engineering");

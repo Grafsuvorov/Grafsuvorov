@@ -8439,6 +8439,21 @@ main.content {
   justify-content: flex-end;
 }
 
+.entity-dev-editors {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.entity-dev-editor-field {
+  gap: 8px;
+}
+
+.entity-dev-editor {
+  min-height: 240px;
+  margin-top: 8px;
+}
+
 .dev-meta-validation {
   margin-top: 16px;
   padding: 16px;

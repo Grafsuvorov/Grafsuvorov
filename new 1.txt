@@ -1,43 +1,51 @@
-services:
-    frontend:
-      build: .
-      ports:
-        - "15312:80"
+огда в docker-compose добавить volume:
 
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - DATABASE_URL=
-        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
-        - DEV_DATABASE_URL=
-        - DEV_META_DEPLOY_HOST=10.66.129.237
-        - DEV_META_DEPLOY_PORT=22
-        - DEV_META_DEPLOY_USER=root
-        - DEV_META_DEPLOY_PASSWORD=
-        - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
-        - DEV_META_DEPLOY_SSH_KEY_PATH=
-        - DEV_META_DEPLOY_STRICT_HOST_KEY=false
-        - AIRFLOW_DEV_BASE_URL=
-        - AIRFLOW_DEV_DAG_ID=
-        - AIRFLOW_DEV_USERNAME=
-        - AIRFLOW_DEV_PASSWORD=
-        - DEV_META_LOCK_TTL_MIN=30
-        - AUTH_ENABLED=true
-        - AUTH_SECRET_KEY=change_me_please
-        - AUTH_ACCESS_TTL_MIN=7200
-        - AUTH_ALLOW_REGISTER=false
-        - AUTH_BOOTSTRAP_ADMIN_EMAIL=
-        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
+  - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+
+  И env:
+
+  - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+  - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+
+  Итоговый кусок будет таким:
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/meta_info:/app/meta_info
+      - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+      - /root/table-dependency-viewer/config_files:/app/config_files
+      - /root/git_dir:/root/git_dir
+    ports:
+      - "5312:8000"
+    env_file:
+      - ./api/.env
+    environment:
+      - DATABASE_URL=
+      - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - CLICK_META_DIR=/app/config_files/meta
+      - DEV_CLICK_META_DIR=/app/config_files/meta_dev
+
+  Что важно:
+
+  - META_PARENT_DIR у вас уже используется старой логикой чтения меты
+  - ENTITY_META_DIR можно поставить туда же
+  - DEV_ENTITY_META_DIR должен быть отдельным, не указывать на prod-папку
+
+  Какой каталог лучше:
+
+  - лучший вариант: отдельное дерево meta_info_dev
+  - не советую класть dev внутрь prod meta_info, чтобы не смешивать боевые и черновые файлы
+
+  Что надо сделать на сервере:
+
+  mkdir -p /root/table-dependency-viewer/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+
+  Потом перезапустить:
+
+  docker compose up -d --build

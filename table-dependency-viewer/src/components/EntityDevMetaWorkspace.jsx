@@ -357,7 +357,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <label className="admin-field">
               <span>Сущность</span>
               <input
-                className="admin-select"
+                className="admin-combo"
                 list="entity-meta-entities"
                 value={selection.entity_name}
                 onChange={(e) => setSelection((prev) => ({ ...prev, entity_name: e.target.value }))}
@@ -424,7 +424,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <label className="admin-field dev-meta-generator-wide">
               <span>Размножить в сущности</span>
               <input
-                className="admin-select"
+                className="admin-combo"
                 list="entity-meta-replicas"
                 value={replicaEntitiesText}
                 onChange={(e) => setReplicaEntitiesText(e.target.value)}
@@ -452,7 +452,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               <label className="admin-field">
                 <span>Новая сущность</span>
                 <input
-                  className="admin-select"
+                  className="admin-combo"
                   list="entity-meta-move-entities"
                   value={moveTarget.entity_name}
                   onChange={(e) => setMoveTarget((prev) => ({ ...prev, entity_name: e.target.value }))}

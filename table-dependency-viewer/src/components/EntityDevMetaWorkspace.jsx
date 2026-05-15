@@ -20,10 +20,18 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     schema_name: "dm",
     table_name: "",
   });
+  const [moveTarget, setMoveTarget] = useState({
+    entity_name: "",
+    schema_name: "dm",
+    table_name: "",
+  });
   const [taskId, setTaskId] = useState("");
+  const [keyAttributesText, setKeyAttributesText] = useState("");
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
@@ -53,6 +61,10 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const selectedEntity = useMemo(
     () => (catalog.entities || []).find((item) => item.entity_name === selection.entity_name) || null,
     [catalog.entities, selection.entity_name]
+  );
+  const selectedMoveEntity = useMemo(
+    () => (catalog.entities || []).find((item) => item.entity_name === moveTarget.entity_name) || null,
+    [catalog.entities, moveTarget.entity_name]
   );
   const branchPreview = useMemo(() => {
     const taskNorm = String(taskId || "").trim().toUpperCase();
@@ -91,6 +103,12 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         schema_name: target.schema_name,
         table_name: target.table_name,
       });
+      setMoveTarget({
+        entity_name: target.entity_name,
+        schema_name: target.schema_name,
+        table_name: target.table_name,
+      });
+      setKeyAttributesText(Array.isArray(data?.key_attributes) ? data.key_attributes.join(", ") : "");
       setBundle(data || null);
       setValidatedFingerprint("");
       setMessageType("success");
@@ -122,6 +140,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         schema_name: selection.schema_name,
         table_name: selection.table_name,
         task_id: taskId,
+        key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
         yaml_content: bundle.yaml_content,
         recreate_sql: bundle.recreate_sql,
         insert_sql: bundle.insert_sql,
@@ -133,6 +152,9 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           ...prev,
           yaml_content: data.normalized.yaml_content,
         }));
+      }
+      if (Array.isArray(data?.normalized?.key_attributes)) {
+        setKeyAttributesText(data.normalized.key_attributes.join(", "));
       }
       const nextFingerprint = bundleFingerprint({
         ...bundle,
@@ -171,6 +193,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         schema_name: selection.schema_name,
         table_name: selection.table_name,
         task_id: taskId,
+        key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
         yaml_content: bundle.yaml_content,
         recreate_sql: bundle.recreate_sql,
         insert_sql: bundle.insert_sql,
@@ -181,6 +204,9 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           ...prev,
           yaml_content: data.validation.normalized.yaml_content,
         }));
+      }
+      if (Array.isArray(data?.validation?.normalized?.key_attributes)) {
+        setKeyAttributesText(data.validation.normalized.key_attributes.join(", "));
       }
       setValidation(data?.validation || null);
       setValidatedFingerprint(bundleFingerprint({
@@ -194,6 +220,97 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setError(err.message || "Не удалось сохранить bundle");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!bundle) return;
+    if (!taskIdValid) {
+      setMessageType("warning");
+      setMessage("Перед удалением укажите номер задачи в формате DWH-12345.");
+      setError(null);
+      return;
+    }
+    const confirmed = window.confirm(`Удалить DEV bundle ${bundle.object_key}?`);
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await entityMetaApi.delete({
+        entity_name: selection.entity_name,
+        schema_name: selection.schema_name,
+        table_name: selection.table_name,
+        task_id: taskId,
+      });
+      setBundle(null);
+      setValidation(null);
+      setValidatedFingerprint("");
+      setLockInfo(null);
+      await refreshAll();
+      setMessageType("success");
+      setMessage("DEV bundle удален.");
+    } catch (err) {
+      setError(err.message || "Не удалось удалить bundle");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleMove = async () => {
+    if (!bundle) return;
+    if (!taskIdValid) {
+      setMessageType("warning");
+      setMessage("Перед переносом укажите номер задачи в формате DWH-12345.");
+      setError(null);
+      return;
+    }
+    if (!moveTarget.entity_name || !moveTarget.schema_name || !moveTarget.table_name) {
+      setError("Для переноса нужно заполнить целевую сущность, схему и таблицу");
+      return;
+    }
+    setMoving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await entityMetaApi.move({
+        source_entity_name: selection.entity_name,
+        source_schema_name: selection.schema_name,
+        source_table_name: selection.table_name,
+        target_entity_name: moveTarget.entity_name,
+        target_schema_name: moveTarget.schema_name,
+        target_table_name: moveTarget.table_name,
+        task_id: taskId,
+      });
+      if (data?.bundle) {
+        setBundle(data.bundle);
+        setSelection({
+          entity_name: data.bundle.entity_name,
+          schema_name: data.bundle.schema_name,
+          table_name: data.bundle.table_name,
+        });
+        setMoveTarget({
+          entity_name: data.bundle.entity_name,
+          schema_name: data.bundle.schema_name,
+          table_name: data.bundle.table_name,
+        });
+        setKeyAttributesText(Array.isArray(data.bundle.key_attributes) ? data.bundle.key_attributes.join(", ") : "");
+      }
+      setValidation(null);
+      setValidatedFingerprint("");
+      await acquireLock({
+        entity_name: moveTarget.entity_name,
+        schema_name: moveTarget.schema_name,
+        table_name: moveTarget.table_name,
+      });
+      await refreshAll();
+      setMessageType("success");
+      setMessage(`DEV bundle перемещен: ${data?.object_key || ""}`);
+    } catch (err) {
+      setError(err.message || "Не удалось переместить bundle");
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -268,6 +385,14 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                 placeholder="DWH-12345"
               />
             </label>
+            <label className="admin-field dev-meta-generator-wide">
+              <span>Ключи</span>
+              <input
+                value={keyAttributesText}
+                onChange={(e) => setKeyAttributesText(e.target.value)}
+                placeholder="delivery_number_sales, batch, dt_report"
+              />
+            </label>
           </div>
           <div className="dev-meta-generator-actions">
             <button className="btn btn-primary" onClick={handleOpenCurrentSelection} disabled={loading}>
@@ -276,6 +401,59 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <span className="muted">{branchPreview ? `Ветка: ${branchPreview}` : "Укажите задачу, сущность, схему и таблицу"}</span>
           </div>
         </div>
+
+        {bundle && (
+          <div className="dev-meta-generator">
+            <div className="section-subtitle">Перемещение и удаление</div>
+            <div className="dev-meta-generator-grid">
+              <label className="admin-field">
+                <span>Новая сущность</span>
+                <select
+                  className="admin-select"
+                  value={moveTarget.entity_name}
+                  onChange={(e) => setMoveTarget((prev) => ({ ...prev, entity_name: e.target.value }))}
+                >
+                  <option value="">Выберите сущность</option>
+                  {entityOptions.map((item) => (
+                    <option key={`move-${item.entity_id}-${item.entity_name}`} value={item.entity_name}>
+                      {item.entity_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>Новая схема</span>
+                <input
+                  list="entity-dev-move-schemas"
+                  value={moveTarget.schema_name}
+                  onChange={(e) => setMoveTarget((prev) => ({ ...prev, schema_name: e.target.value }))}
+                  placeholder="dm"
+                />
+                <datalist id="entity-dev-move-schemas">
+                  {(selectedMoveEntity?.schemas || []).map((item) => (
+                    <option key={item} value={item} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="admin-field">
+                <span>Новая таблица</span>
+                <input
+                  value={moveTarget.table_name}
+                  onChange={(e) => setMoveTarget((prev) => ({ ...prev, table_name: e.target.value }))}
+                  placeholder="sb_wuc"
+                />
+              </label>
+            </div>
+            <div className="dev-meta-generator-actions">
+              <button className="btn btn-secondary" onClick={handleMove} disabled={!bundle || moving}>
+                {moving ? "Перемещаем..." : "Переместить bundle"}
+              </button>
+              <button className="btn btn-danger" onClick={handleDelete} disabled={!bundle || deleting}>
+                {deleting ? "Удаляем..." : "Удалить DEV bundle"}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="dev-meta-browser">
           <div className="dev-meta-file-block">
@@ -352,6 +530,13 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                   <ul className="dev-meta-validation-list warning">
                     {validation.warnings.map((item, idx) => (
                       <li key={`entity-dev-warn-${idx}`}>{item}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {validation.checks?.length ? (
+                  <ul className="dev-meta-validation-list info">
+                    {validation.checks.map((item, idx) => (
+                      <li key={`entity-dev-check-${idx}`}>{item}</li>
                     ))}
                   </ul>
                 ) : null}

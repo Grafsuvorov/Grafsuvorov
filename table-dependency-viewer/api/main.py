@@ -96,11 +96,13 @@ from .services.dev_meta import (
     validate_dev_meta_content,
 )
 from .services.entity_dev_meta import (
+    delete_entity_dev_meta_bundle,
     get_entity_dev_meta_status,
     init_entity_dev_meta_bundle,
     list_entity_reference_rows,
     list_entity_dev_catalog,
     lock_entity_dev_meta,
+    move_entity_dev_meta_bundle,
     save_entity_dev_meta_bundle,
     unlock_entity_dev_meta,
     validate_entity_dev_meta_bundle,
@@ -216,10 +218,28 @@ class EntityMetaSavePayload(BaseModel):
     schema_name: str
     table_name: str
     task_id: str
+    key_attributes: Optional[List[str]] = None
     yaml_content: str
     recreate_sql: str
     insert_sql: str
     truncate_sql: str = ""
+
+
+class EntityMetaDeletePayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+    task_id: str
+
+
+class EntityMetaMovePayload(BaseModel):
+    source_entity_name: str
+    source_schema_name: str
+    source_table_name: str
+    target_entity_name: str
+    target_schema_name: str
+    target_table_name: str
+    task_id: str
 
 
 class AssistantContextPayload(BaseModel):
@@ -950,10 +970,12 @@ def validate_admin_entity_meta(payload: EntityMetaSavePayload, request: Request)
         entity_name=payload.entity_name,
         schema_name=payload.schema_name,
         table_name=payload.table_name,
+        key_attributes=payload.key_attributes,
         yaml_content=payload.yaml_content,
         recreate_sql=payload.recreate_sql,
         insert_sql=payload.insert_sql,
         truncate_sql=payload.truncate_sql,
+        dev_database_url=DEV_DATABASE_URL,
     )
 
 
@@ -970,10 +992,58 @@ def save_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
             schema_name=payload.schema_name,
             table_name=payload.table_name,
             task_id=payload.task_id,
+            key_attributes=payload.key_attributes,
             yaml_content=payload.yaml_content,
             recreate_sql=payload.recreate_sql,
             insert_sql=payload.insert_sql,
             truncate_sql=payload.truncate_sql,
+            author=user.email,
+            dev_database_url=DEV_DATABASE_URL,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.post("/api/admin/entity-meta/delete")
+def delete_admin_entity_meta(payload: EntityMetaDeletePayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = delete_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
+            task_id=payload.task_id,
+            author=user.email,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.post("/api/admin/entity-meta/move")
+def move_admin_entity_meta(payload: EntityMetaMovePayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = move_entity_dev_meta_bundle(
+            engine=engine,
+            base_dir=BASE_DIR,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            source_entity_name=payload.source_entity_name,
+            source_schema_name=payload.source_schema_name,
+            source_table_name=payload.source_table_name,
+            target_entity_name=payload.target_entity_name,
+            target_schema_name=payload.target_schema_name,
+            target_table_name=payload.target_table_name,
+            task_id=payload.task_id,
             author=user.email,
         )
     except PermissionError as exc:

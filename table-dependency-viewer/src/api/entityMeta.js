@@ -9,4 +9,6 @@ export const entityMetaApi = {
   unlock: (body) => apiClient.post("/api/admin/entity-meta/unlock", body),
   validate: (body) => apiClient.post("/api/admin/entity-meta/validate", body),
   save: (body) => apiClient.post("/api/admin/entity-meta/save", body),
+  delete: (body) => apiClient.post("/api/admin/entity-meta/delete", body),
+  move: (body) => apiClient.post("/api/admin/entity-meta/move", body),
 };

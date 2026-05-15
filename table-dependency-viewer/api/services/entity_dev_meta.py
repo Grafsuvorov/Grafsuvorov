@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
 import yaml
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 from ..config import TABLE_ENTITIES_META
 from .dev_meta import (
@@ -34,10 +35,15 @@ IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
 EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
 TABLE_ID_MAX_NORMAL = 100000
 DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
+SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
+
+
+def _is_safe_identifier(value: str) -> bool:
+    return bool(SAFE_IDENTIFIER_RE.fullmatch(str(value or "").strip()))
 
 
 def _strip_sql_comments(sql: str) -> str:
@@ -92,6 +98,13 @@ def _dump_yaml(data: dict[str, Any]) -> str:
     )
 
 
+def _normalize_key_attributes(items: Optional[list[str]]) -> Optional[list[str]]:
+    if items is None:
+        return None
+    normalized = [str(item).strip() for item in items if str(item).strip()]
+    return normalized or []
+
+
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
     schema_norm = _normalize_name(schema_name)
     return {
@@ -138,6 +151,13 @@ def _iter_yaml_paths(root: Path) -> Iterable[Path]:
 def _load_yaml_file(path: Path) -> dict[str, Any]:
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _load_yaml_text(yaml_content: str) -> dict[str, Any]:
+    try:
+        return yaml.safe_load(yaml_content) or {}
     except Exception:
         return {}
 
@@ -292,6 +312,44 @@ def _extract_created_object(sql: str) -> tuple[str, str] | None:
     return match.group(1), match.group(2).replace('"', "").lower()
 
 
+def _extract_insert_target(sql: str) -> Optional[str]:
+    normalized = _normalize_sql(sql)
+    match = re.search(
+        r"\binsert\s+into\s+([a-z0-9_\".]+)",
+        normalized,
+    )
+    if not match:
+        return None
+    return match.group(1).replace('"', "").lower()
+
+
+def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
+    normalized = _normalize_sql(sql)
+    targets: list[tuple[str, str]] = []
+    patterns = (
+        (r"\btruncate\s+table\s+([a-z0-9_\".]+)", "truncate"),
+        (r"\bdelete\s+from\s+([a-z0-9_\".]+)", "delete"),
+    )
+    for pattern, kind in patterns:
+        for match in re.finditer(pattern, normalized):
+            target = match.group(1).replace('"', "").lower()
+            targets.append((kind, target))
+    return targets
+
+
+def _extract_all_schema_refs(sql: str) -> set[str]:
+    schemas: set[str] = set()
+    pattern = re.compile(
+        r"\b(?:from|join|insert\s+into|truncate\s+table|delete\s+from)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(_strip_sql_comments(sql)):
+        schema_name = _normalize_name(match.group(1))
+        if schema_name:
+            schemas.add(schema_name)
+    return schemas
+
+
 def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[str, str]]:
     refs: set[tuple[str, str]] = set()
     pattern = re.compile(
@@ -347,6 +405,90 @@ def _build_depends_on(sql: str, target_schema: str, target_table: str, known_sch
             continue
         grouped.setdefault(schema_name, set()).add(table_name)
     return {schema_name: sorted(table_names) for schema_name, table_names in sorted(grouped.items())}
+
+
+def _apply_bundle_identity(
+    *,
+    yaml_content: str,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+) -> str:
+    payload = _load_yaml_text(yaml_content)
+    if not isinstance(payload, dict):
+        payload = _build_default_yaml(entity_name, schema_name, table_name)
+    payload["entity_name"] = entity_name
+    payload["table_schema"] = _normalize_name(schema_name)
+    payload["table_name"] = _normalize_name(table_name)
+    payload["sql_query_recreate_init"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
+    )
+    payload["sql_query_insert_init"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
+    )
+    payload["sql_query_truncate"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+    )
+    return _dump_yaml(payload)
+
+
+def _dev_object_exists(dev_database_url: str, schema_name: str, table_name: str) -> tuple[bool, Optional[str]]:
+    if not dev_database_url:
+        return False, "Не настроен DEV_DATABASE_URL для проверки объекта в DEV"
+    dev_engine = create_engine(dev_database_url)
+    try:
+        with dev_engine.connect() as conn:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE lower(table_schema) = lower(:schema_name)
+                      AND lower(table_name) = lower(:table_name)
+                    LIMIT 1
+                    """
+                ),
+                {"schema_name": schema_name, "table_name": table_name},
+            ).scalar()
+    except Exception as exc:
+        return False, f"Не удалось проверить DEV Greenplum: {exc}"
+    return bool(exists), None
+
+
+def _dev_table_has_duplicates(
+    dev_database_url: str,
+    schema_name: str,
+    table_name: str,
+    key_attributes: list[str],
+) -> tuple[Optional[bool], Optional[str]]:
+    if not dev_database_url:
+        return None, None
+    if not key_attributes:
+        return None, None
+    identifiers = [schema_name, table_name, *key_attributes]
+    if not all(_is_safe_identifier(item) for item in identifiers):
+        return None, "Не удалось проверить дубли: schema/table/key_attributes содержат недопустимые символы"
+
+    dev_engine = create_engine(dev_database_url)
+    group_by = ", ".join(f'"{column}"' for column in key_attributes)
+    duplicate_sql = text(
+        f"""
+        SELECT 1
+        FROM "{schema_name}"."{table_name}"
+        GROUP BY {group_by}
+        HAVING COUNT(*) > 1
+        LIMIT 1
+        """
+    )
+    try:
+        with dev_engine.connect() as conn:
+            exists = conn.execute(duplicate_sql).scalar()
+    except Exception as exc:
+        return None, f"Не удалось проверить дубли в DEV Greenplum: {exc}"
+    return bool(exists), None
 
 
 def get_entity_dev_meta_status(*, engine, base_dir: Path, prod_root_value: str, dev_root_value: str, lock_ttl_minutes: int) -> dict[str, Any]:
@@ -448,6 +590,7 @@ def read_entity_dev_meta_bundle(
         "table_name": table_name,
         "object_key": _build_object_key(entity_name, schema_name, table_name),
         "yaml_content": _read_text_if_exists(yaml_path),
+        "key_attributes": (_load_yaml_file(yaml_path).get("key_attributes") if isinstance(_load_yaml_file(yaml_path).get("key_attributes"), list) else []),
         "recreate_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["recreate_sql"]),
         "insert_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["insert_sql"]),
         "truncate_sql": _read_text_if_exists(object_dir / SQL_FILE_NAMES["truncate_sql"]),
@@ -509,6 +652,7 @@ def init_entity_dev_meta_bundle(
         "table_name": table_name,
         "object_key": _build_object_key(entity_name, schema_name, table_name),
         "yaml_content": _dump_yaml(yaml_payload),
+        "key_attributes": [],
         "recreate_sql": "",
         "insert_sql": "",
         "truncate_sql": "",
@@ -526,13 +670,16 @@ def validate_entity_dev_meta_bundle(
     entity_name: str,
     schema_name: str,
     table_name: str,
+    key_attributes: Optional[list[str]],
     yaml_content: str,
     recreate_sql: str,
     insert_sql: str,
     truncate_sql: str,
+    dev_database_url: str = "",
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+    checks: list[str] = []
     normalized_schema = _normalize_name(schema_name)
     normalized_table = _normalize_name(table_name)
 
@@ -543,6 +690,13 @@ def validate_entity_dev_meta_bundle(
 
     if not isinstance(payload, dict):
         return {"valid": False, "errors": ["Корневой YAML должен быть объектом"], "warnings": [], "normalized": None}
+
+    normalized_keys = _normalize_key_attributes(key_attributes)
+    if normalized_keys is not None:
+        if normalized_keys:
+            payload["key_attributes"] = normalized_keys
+        else:
+            payload.pop("key_attributes", None)
 
     for field in REQUIRED_YAML_FIELDS:
         if not payload.get(field):
@@ -594,9 +748,50 @@ def validate_entity_dev_meta_bundle(
 
     if object_type != "view" and not insert_sql.strip():
         errors.append("Insert SQL не должен быть пустым для table")
+    elif insert_sql.strip():
+        insert_target = _extract_insert_target(insert_sql)
+        expected_fqn = f"{normalized_schema}.{normalized_table}"
+        if not insert_target:
+            errors.append("В insert SQL не найден `INSERT INTO schema.table`")
+        elif insert_target != expected_fqn:
+            errors.append(f"Insert SQL пишет в `{insert_target}`, а ожидается `{expected_fqn}`")
+
+        if re.search(r"\bselect\s+\*", _normalize_sql(insert_sql)):
+            warnings.append("В insert SQL найден `SELECT *`")
+        if re.search(r"\bdrop\s+(table|view)\b", _normalize_sql(insert_sql)):
+            errors.append("В insert SQL запрещены `DROP TABLE/VIEW`")
+        if re.search(r"\btruncate\s+table\b", _normalize_sql(insert_sql)):
+            warnings.append("В insert SQL найден `TRUNCATE TABLE`; проверьте, что это действительно нужно")
+
+        known_schemas = _collect_known_schemas(_resolve_root(base_dir, prod_root_value)) | _collect_known_schemas(_resolve_root(base_dir, dev_root_value))
+        unknown_schemas = sorted(
+            schema_name
+            for schema_name in _extract_all_schema_refs(insert_sql)
+            if schema_name not in known_schemas
+            and schema_name not in IGNORE_SCHEMAS
+            and schema_name not in EXTRA_SCHEMAS
+            and schema_name != normalized_schema
+        )
+        if unknown_schemas:
+            errors.extend([f"Неизвестная схема в insert SQL: `{schema_name}`" for schema_name in unknown_schemas])
 
     if object_type != "view" and not truncate_sql.strip():
         warnings.append("Truncate SQL пустой. Если это допустимо, проверьте руками")
+    elif truncate_sql.strip():
+        normalized_truncate = _normalize_sql(truncate_sql)
+        mutation_targets = _extract_mutation_targets(truncate_sql)
+        expected_fqn = f"{normalized_schema}.{normalized_table}"
+        if normalized_truncate == "select 1;" or normalized_truncate == "select 1":
+            warnings.append("Truncate SQL содержит только `SELECT 1`")
+        elif not mutation_targets:
+            warnings.append("В truncate SQL не найдены `TRUNCATE TABLE` или `DELETE FROM`")
+        else:
+            wrong_targets = [target for _kind, target in mutation_targets if target != expected_fqn]
+            if wrong_targets:
+                errors.append(
+                    "Truncate SQL обращается не к целевой таблице: "
+                    + ", ".join(f"`{target}`" for target in wrong_targets)
+                )
 
     for field_name in SYSTEM_FIELDS:
         if not re.search(rf"\b{re.escape(field_name)}\b", _normalize_sql(recreate_sql)):
@@ -618,12 +813,40 @@ def validate_entity_dev_meta_bundle(
     if insert_sql.strip():
         normalized_payload["depends_on"] = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
 
+    if normalized_keys is not None:
+        if normalized_keys:
+            normalized_payload["key_attributes"] = normalized_keys
+        else:
+            normalized_payload.pop("key_attributes", None)
+
+    dev_exists, dev_error = _dev_object_exists(dev_database_url, normalized_schema, normalized_table)
+    if dev_error:
+        errors.append(dev_error)
+    elif not dev_exists:
+        errors.append(f"Объект `{normalized_schema}.{normalized_table}` не найден в DEV Greenplum")
+    else:
+        checks.append(f"Объект `{normalized_schema}.{normalized_table}` найден в DEV Greenplum")
+        duplicate_status, duplicate_error = _dev_table_has_duplicates(
+            dev_database_url,
+            normalized_schema,
+            normalized_table,
+            normalized_keys or [],
+        )
+        if duplicate_error:
+            warnings.append(duplicate_error)
+        elif duplicate_status is True:
+            warnings.append("В таблице имеются дубли, уточнить у аналитика")
+        elif duplicate_status is False:
+            checks.append("Дубли по key_attributes не найдены")
+
     return {
         "valid": not errors,
         "errors": errors,
         "warnings": warnings,
+        "checks": checks,
         "normalized": {
             "yaml_content": _dump_yaml(normalized_payload),
+            "key_attributes": normalized_keys if normalized_keys is not None else normalized_payload.get("key_attributes", []),
             "recreate_sql": recreate_sql,
             "insert_sql": insert_sql,
             "truncate_sql": truncate_sql,
@@ -641,11 +864,13 @@ def save_entity_dev_meta_bundle(
     schema_name: str,
     table_name: str,
     task_id: str,
+    key_attributes: Optional[list[str]],
     yaml_content: str,
     recreate_sql: str,
     insert_sql: str,
     truncate_sql: str,
     author: str,
+    dev_database_url: str = "",
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
@@ -664,10 +889,12 @@ def save_entity_dev_meta_bundle(
         entity_name=entity_name,
         schema_name=schema_name,
         table_name=table_name,
+        key_attributes=key_attributes,
         yaml_content=yaml_content,
         recreate_sql=recreate_sql,
         insert_sql=insert_sql,
         truncate_sql=truncate_sql,
+        dev_database_url=dev_database_url,
     )
     if not validation["valid"]:
         raise ValueError("; ".join(validation["errors"]))
@@ -728,6 +955,209 @@ def save_entity_dev_meta_bundle(
         "validation": {
             **validation,
             "warnings": [*validation["warnings"], *warnings],
+        },
+    }
+
+
+def delete_entity_dev_meta_bundle(
+    *,
+    engine,
+    base_dir: Path,
+    dev_root_value: str,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    task_id_norm = str(task_id or "").strip().upper()
+    if not re.fullmatch(r"DWH-\d+", task_id_norm):
+        raise ValueError("Номер задачи должен быть в формате DWH-12345")
+
+    object_key = _build_object_key(entity_name, schema_name, table_name)
+    assert_dev_meta_lock_owner(
+        engine=engine,
+        schema_name=ENTITY_LOCK_SCHEMA,
+        file_name=object_key,
+        author=author,
+    )
+
+    root = _resolve_root(base_dir, dev_root_value)
+    object_dir = _resolve_object_dir(root, entity_name, schema_name, table_name)
+    if not object_dir.exists():
+        raise ValueError("DEV bundle не найден, удалять нечего")
+
+    shutil.rmtree(object_dir)
+
+    parent = object_dir.parent
+    while parent != root and parent.exists():
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+        parent = parent.parent
+
+    _audit_dev_meta(
+        engine,
+        ENTITY_LOCK_SCHEMA,
+        object_key,
+        author,
+        "delete",
+        "",
+        {
+            "path": str(object_dir),
+            "entity_name": entity_name,
+            "schema_name": schema_name,
+            "table_name": table_name,
+            "task_id": task_id_norm,
+            "branch_name": task_id_norm,
+        },
+    )
+    release_dev_meta_lock(
+        engine=engine,
+        schema_name=ENTITY_LOCK_SCHEMA,
+        file_name=object_key,
+        author=author,
+    )
+    return {
+        "path": str(object_dir),
+        "object_key": object_key,
+        "task_id": task_id_norm,
+        "branch_name": task_id_norm,
+    }
+
+
+def move_entity_dev_meta_bundle(
+    *,
+    engine,
+    base_dir: Path,
+    prod_root_value: str,
+    dev_root_value: str,
+    source_entity_name: str,
+    source_schema_name: str,
+    source_table_name: str,
+    target_entity_name: str,
+    target_schema_name: str,
+    target_table_name: str,
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    task_id_norm = str(task_id or "").strip().upper()
+    if not re.fullmatch(r"DWH-\d+", task_id_norm):
+        raise ValueError("Номер задачи должен быть в формате DWH-12345")
+
+    source_key = _build_object_key(source_entity_name, source_schema_name, source_table_name)
+    target_key = _build_object_key(target_entity_name, target_schema_name, target_table_name)
+    assert_dev_meta_lock_owner(
+        engine=engine,
+        schema_name=ENTITY_LOCK_SCHEMA,
+        file_name=source_key,
+        author=author,
+    )
+
+    prod_root = _resolve_root(base_dir, prod_root_value)
+    dev_root = _resolve_root(base_dir, dev_root_value)
+    source_dev_dir = _resolve_object_dir(dev_root, source_entity_name, source_schema_name, source_table_name)
+    target_dev_dir = _resolve_object_dir(dev_root, target_entity_name, target_schema_name, target_table_name)
+    target_prod_dir = _resolve_object_dir(prod_root, target_entity_name, target_schema_name, target_table_name)
+    source_path_for_audit = str(source_dev_dir if source_dev_dir.exists() else _resolve_object_dir(prod_root, source_entity_name, source_schema_name, source_table_name))
+
+    if target_dev_dir.exists() or target_prod_dir.exists():
+        raise ValueError(f"Целевой объект `{target_key}` уже существует")
+
+    if source_dev_dir.exists():
+        bundle = read_entity_dev_meta_bundle(
+            base_dir=base_dir,
+            root_value=dev_root_value,
+            entity_name=source_entity_name,
+            schema_name=source_schema_name,
+            table_name=source_table_name,
+        )
+    else:
+        bundle = read_entity_dev_meta_bundle(
+            base_dir=base_dir,
+            root_value=prod_root_value,
+            entity_name=source_entity_name,
+            schema_name=source_schema_name,
+            table_name=source_table_name,
+        )
+
+    target_dev_dir.mkdir(parents=True, exist_ok=True)
+    normalized_yaml = _apply_bundle_identity(
+        yaml_content=bundle.get("yaml_content", ""),
+        entity_name=target_entity_name,
+        schema_name=target_schema_name,
+        table_name=target_table_name,
+    )
+    (target_dev_dir / SQL_FILE_NAMES["yaml"]).write_text(normalized_yaml, encoding="utf-8")
+    (target_dev_dir / SQL_FILE_NAMES["recreate_sql"]).write_text(bundle.get("recreate_sql", ""), encoding="utf-8")
+
+    insert_sql = bundle.get("insert_sql", "")
+    truncate_sql = bundle.get("truncate_sql", "")
+    if str(insert_sql).strip():
+        (target_dev_dir / SQL_FILE_NAMES["insert_sql"]).write_text(insert_sql, encoding="utf-8")
+    if str(truncate_sql).strip():
+        (target_dev_dir / SQL_FILE_NAMES["truncate_sql"]).write_text(truncate_sql, encoding="utf-8")
+
+    warnings = []
+    for file_path in target_dev_dir.glob("*"):
+        if file_path.is_file():
+            warnings.extend(_ensure_meta_permissions(file_path, dev_root))
+
+    if source_dev_dir.exists():
+        shutil.rmtree(source_dev_dir)
+        parent = source_dev_dir.parent
+        while parent != dev_root and parent.exists():
+            try:
+                parent.rmdir()
+            except OSError:
+                break
+            parent = parent.parent
+
+    _audit_dev_meta(
+        engine,
+        ENTITY_LOCK_SCHEMA,
+        source_key,
+        author,
+        "move",
+        normalized_yaml,
+        {
+            "task_id": task_id_norm,
+            "branch_name": task_id_norm,
+            "source_path": source_path_for_audit,
+            "target_path": str(target_dev_dir),
+            "source_object_key": source_key,
+            "target_object_key": target_key,
+            "warnings": warnings,
+        },
+    )
+    release_dev_meta_lock(
+        engine=engine,
+        schema_name=ENTITY_LOCK_SCHEMA,
+        file_name=source_key,
+        author=author,
+    )
+    moved_payload = _load_yaml_text(normalized_yaml)
+    return {
+        "path": str(target_dev_dir),
+        "object_key": target_key,
+        "source_object_key": source_key,
+        "task_id": task_id_norm,
+        "branch_name": task_id_norm,
+        "warnings": warnings,
+        "bundle": {
+            "entity_name": target_entity_name,
+            "schema_name": target_schema_name,
+            "table_name": target_table_name,
+            "object_key": target_key,
+            "yaml_content": normalized_yaml,
+            "key_attributes": (moved_payload.get("key_attributes") if isinstance(moved_payload.get("key_attributes"), list) else []),
+            "recreate_sql": bundle.get("recreate_sql", ""),
+            "insert_sql": bundle.get("insert_sql", ""),
+            "truncate_sql": bundle.get("truncate_sql", ""),
+            "source": "dev",
+            "exists": True,
+            "path": str(target_dev_dir),
         },
     }
 

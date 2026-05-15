@@ -1,57 +1,17 @@
-Есть ошибки
-Recreate SQL создает `dm.account_debt`, а ожидается `dm.account_debt3`
-В `depends_on` не хватает зависимостей из insert SQL: dm.account_debt, dm.account_debt_for_working_capital_final
+123135
+123133
+123132
+123131
+123130
+123129
+123128
+123127
+123126
+123125
+123124
+123123
+6360
 
-Ветка: DWH-1111/bi_fi/dm/account_debt3
-
-entity_name: BI_FI
-table_schema: dm
-table_name: account_debt3
-object_type: table
-table_load_mode: full_reload
-sql_query_recreate_init: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_recreate_init.sql
-sql_query_insert_init: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_insert_init.sql
-sql_query_truncate: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_truncate.sql
-depends_on:
-  dm:
-  - account_debt
-  - account_debt_for_working_capital_final
-
-
-table_name: account_debt
-table_schema: dm
-table_id: 3119
-source_id: 15
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 36
-entity_name: BI_FI
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_truncate.sql
-depends_on:
-  dm_calc:
-    - operating_periods_for_account_debt
-  dm:
-    - account_debt_for_working_capital
-verification:
-  - duplicate_check
 key_attributes:
-  - dt
-  - unit_balance_code
-  - fiscal_year
-  - accounting_document_code
-  - position_line_item
-  - debt_subposition_number
+
+Ветка: DWH-12345/bi_sb_wuc/dm/sb_wuc_test

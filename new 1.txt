@@ -1,51 +1,57 @@
-огда в docker-compose добавить volume:
+Есть ошибки
+Recreate SQL создает `dm.account_debt`, а ожидается `dm.account_debt3`
+В `depends_on` не хватает зависимостей из insert SQL: dm.account_debt, dm.account_debt_for_working_capital_final
 
-  - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+Ветка: DWH-1111/bi_fi/dm/account_debt3
 
-  И env:
+entity_name: BI_FI
+table_schema: dm
+table_name: account_debt3
+object_type: table
+table_load_mode: full_reload
+sql_query_recreate_init: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_recreate_init.sql
+sql_query_insert_init: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_insert_init.sql
+sql_query_truncate: etl_loads_entity/BI_FI/dm/account_debt3/sql_query_truncate.sql
+depends_on:
+  dm:
+  - account_debt
+  - account_debt_for_working_capital_final
 
-  - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-  - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
 
-  Итоговый кусок будет таким:
-
-  api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
-    volumes:
-      - /root/table-dependency-viewer/scripts:/app/scripts:ro
-      - /root/table-dependency-viewer/meta_info:/app/meta_info
-      - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
-      - /root/table-dependency-viewer/config_files:/app/config_files
-      - /root/git_dir:/root/git_dir
-    ports:
-      - "5312:8000"
-    env_file:
-      - ./api/.env
-    environment:
-      - DATABASE_URL=
-      - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-      - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-      - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
-      - CLICK_META_DIR=/app/config_files/meta
-      - DEV_CLICK_META_DIR=/app/config_files/meta_dev
-
-  Что важно:
-
-  - META_PARENT_DIR у вас уже используется старой логикой чтения меты
-  - ENTITY_META_DIR можно поставить туда же
-  - DEV_ENTITY_META_DIR должен быть отдельным, не указывать на prod-папку
-
-  Какой каталог лучше:
-
-  - лучший вариант: отдельное дерево meta_info_dev
-  - не советую класть dev внутрь prod meta_info, чтобы не смешивать боевые и черновые файлы
-
-  Что надо сделать на сервере:
-
-  mkdir -p /root/table-dependency-viewer/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
-
-  Потом перезапустить:
-
-  docker compose up -d --build
+table_name: account_debt
+table_schema: dm
+table_id: 3119
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 36
+entity_name: BI_FI
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 03:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm/account_debt/sql_query_truncate.sql
+depends_on:
+  dm_calc:
+    - operating_periods_for_account_debt
+  dm:
+    - account_debt_for_working_capital
+verification:
+  - duplicate_check
+key_attributes:
+  - dt
+  - unit_balance_code
+  - fiscal_year
+  - accounting_document_code
+  - position_line_item
+  - debt_subposition_number

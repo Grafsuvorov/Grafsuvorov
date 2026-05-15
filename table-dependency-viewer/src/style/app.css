@@ -1086,7 +1086,18 @@ main.content {
 }
 
 .admin-combo {
+  appearance: none;
+  -webkit-appearance: none;
   background-color: rgba(15, 23, 42, 0.92) !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(226, 232, 240, 0.9) 50%),
+    linear-gradient(135deg, rgba(226, 232, 240, 0.9) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px !important;
   color: #f4f7ff !important;
   border-color: rgba(255, 255, 255, 0.15) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
@@ -1096,6 +1107,14 @@ main.content {
   outline: none;
   border-color: rgba(96, 165, 250, 0.7) !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.admin-combo:-webkit-autofill,
+.admin-combo:-webkit-autofill:hover,
+.admin-combo:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f4f7ff;
+  -webkit-box-shadow: 0 0 0 1000px rgba(15, 23, 42, 0.92) inset;
+  transition: background-color 9999s ease-out 0s;
 }
 
 .admin-select:focus {
@@ -8036,6 +8055,12 @@ main.content {
   align-items: center;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.dev-meta-replica-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
 }
 
 .dev-meta-browser {

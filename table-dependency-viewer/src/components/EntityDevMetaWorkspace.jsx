@@ -33,6 +33,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const [taskId, setTaskId] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
+  const [replicaPicker, setReplicaPicker] = useState("");
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -99,6 +100,20 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
 
   const currentFingerprint = useMemo(() => (bundle ? objectFingerprint(bundle) : ""), [bundle]);
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
+
+  const appendReplicaEntity = () => {
+    const nextValue = String(replicaPicker || "").trim();
+    if (!nextValue) return;
+    const current = replicaEntitiesText
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (current.includes(nextValue) || nextValue === selection.entity_name) {
+      return;
+    }
+    setReplicaEntitiesText([...current, nextValue].join(", "));
+    setReplicaPicker("");
+  };
 
   const acquireLock = async (target) => {
     const lock = await entityMetaApi.lock(target);
@@ -423,18 +438,30 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             </label>
             <label className="admin-field dev-meta-generator-wide">
               <span>Размножить в сущности</span>
+              <div className="dev-meta-replica-picker">
+                <select
+                  className="admin-select"
+                  value={replicaPicker}
+                  onChange={(e) => setReplicaPicker(e.target.value)}
+                >
+                  <option value="">Выберите сущность</option>
+                  {entityOptions
+                    .filter((item) => item.entity_name !== selection.entity_name)
+                    .map((item) => (
+                      <option key={`replica-${item.entity_id}-${item.entity_name}`} value={item.entity_name}>
+                        {item.entity_name}
+                      </option>
+                    ))}
+                </select>
+                <button type="button" className="btn btn-secondary" onClick={appendReplicaEntity} disabled={!replicaPicker}>
+                  Добавить
+                </button>
+              </div>
               <input
-                className="admin-combo"
-                list="entity-meta-replicas"
                 value={replicaEntitiesText}
                 onChange={(e) => setReplicaEntitiesText(e.target.value)}
                 placeholder="BI_FI, BI_SB_WUC_COPY"
               />
-              <datalist id="entity-meta-replicas">
-                {entityOptions.map((item) => (
-                  <option key={`replica-${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
-                ))}
-              </datalist>
             </label>
           </div>
           <div className="dev-meta-generator-actions">

@@ -7975,6 +7975,10 @@ main.content {
   background: rgba(12, 74, 110, 0.26);
 }
 
+.dev-meta-feedback.inline {
+  margin-top: 16px;
+}
+
 .dev-meta-feedback-title {
   font-size: 13px;
   font-weight: 700;
@@ -8070,7 +8074,7 @@ main.content {
 
 .dev-meta-file-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
   max-height: 420px;
   overflow: auto;
@@ -8079,7 +8083,7 @@ main.content {
 }
 
 .dev-meta-file-list.compact {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   max-height: none;
   overflow: visible;
 }
@@ -8088,7 +8092,7 @@ main.content {
   display: grid;
   gap: 6px;
   text-align: left;
-  min-height: 92px;
+  min-height: 104px;
   padding: 14px 15px;
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.14);
@@ -8109,6 +8113,8 @@ main.content {
 .dev-meta-file-short {
   font-size: 15px;
   color: #f8fafc;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .dev-meta-file-path {

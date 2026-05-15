@@ -63,14 +63,6 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     refreshAll().catch((err) => setError(err.message || "Не удалось загрузить каталог entity meta"));
   }, []);
 
-  const selectedEntity = useMemo(
-    () => (catalog.entities || []).find((item) => item.entity_name === selection.entity_name) || null,
-    [catalog.entities, selection.entity_name]
-  );
-  const selectedMoveEntity = useMemo(
-    () => (catalog.entities || []).find((item) => item.entity_name === moveTarget.entity_name) || null,
-    [catalog.entities, moveTarget.entity_name]
-  );
   const branchPreview = useMemo(() => {
     const taskNorm = String(taskId || "").trim().toUpperCase();
     return taskNorm || "";
@@ -258,7 +250,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setError(null);
       return;
     }
-    const confirmed = window.confirm(`Удалить DEV bundle ${bundle.object_key}?`);
+    const confirmed = window.confirm(`Удалить DEV объект ${bundle.object_key}?`);
     if (!confirmed) return;
 
     setDeleting(true);
@@ -277,7 +269,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setLockInfo(null);
       await refreshAll();
       setMessageType("success");
-      setMessage("DEV bundle удален.");
+      setMessage("DEV объект удален.");
     } catch (err) {
       setError(err.message || "Не удалось удалить bundle");
     } finally {
@@ -335,7 +327,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       });
       await refreshAll();
       setMessageType("success");
-      setMessage(`DEV bundle перемещен: ${data?.object_key || ""}`);
+      setMessage(`Объект перемещен: ${data?.object_key || ""}`);
     } catch (err) {
       setError(err.message || "Не удалось переместить bundle");
     } finally {
@@ -357,32 +349,22 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           </div>
         </div>
 
-        {(message || error) && (
-          <div className={`dev-meta-feedback ${error ? "error" : messageType}`}>
-            <div className="dev-meta-feedback-title">
-              {error ? "Операция не выполнена" : messageType === "success" ? "Успешно" : messageType === "warning" ? "Нужно исправить" : "Статус"}
-            </div>
-            <div className="dev-meta-feedback-text">{error || message}</div>
-          </div>
-        )}
-
         <div className="dev-meta-generator">
           <div className="section-subtitle">Открыть объект или создать DEV-черновик</div>
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
               <span>Сущность</span>
-              <select
-                className="admin-select"
+              <input
+                list="entity-meta-entities"
                 value={selection.entity_name}
                 onChange={(e) => setSelection((prev) => ({ ...prev, entity_name: e.target.value }))}
-              >
-                <option value="">Выберите сущность</option>
+                placeholder="BI_SB_WUC"
+              />
+              <datalist id="entity-meta-entities">
                 {entityOptions.map((item) => (
-                  <option key={`${item.entity_id}-${item.entity_name}`} value={item.entity_name}>
-                    {item.entity_name}
-                  </option>
+                  <option key={`${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
                 ))}
-              </select>
+              </datalist>
             </label>
             <label className="admin-field">
               <span>Схема</span>
@@ -451,18 +433,17 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <div className="dev-meta-generator-grid">
               <label className="admin-field">
                 <span>Новая сущность</span>
-                <select
-                  className="admin-select"
+                <input
+                  list="entity-meta-move-entities"
                   value={moveTarget.entity_name}
                   onChange={(e) => setMoveTarget((prev) => ({ ...prev, entity_name: e.target.value }))}
-                >
-                  <option value="">Выберите сущность</option>
+                  placeholder="BI_FI"
+                />
+                <datalist id="entity-meta-move-entities">
                   {entityOptions.map((item) => (
-                    <option key={`move-${item.entity_id}-${item.entity_name}`} value={item.entity_name}>
-                      {item.entity_name}
-                    </option>
+                    <option key={`move-${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
                   ))}
-                </select>
+                </datalist>
               </label>
               <label className="admin-field">
                 <span>Новая схема</span>
@@ -503,10 +484,10 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             </div>
             <div className="dev-meta-generator-actions">
               <button className="btn btn-secondary" onClick={handleMove} disabled={!bundle || moving}>
-                {moving ? "Перемещаем..." : "Переместить bundle"}
+                {moving ? "Перемещаем..." : "Переместить объект"}
               </button>
               <button className="btn btn-danger" onClick={handleDelete} disabled={!bundle || deleting}>
-                {deleting ? "Удаляем..." : "Удалить DEV bundle"}
+                {deleting ? "Удаляем..." : "Удалить объект"}
               </button>
             </div>
           </div>
@@ -600,6 +581,15 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                 {lockInfo?.expires_at ? `до ${formatRuDateTime(lockInfo.expires_at)}` : ""}
               </span>
             </div>
+
+            {(message || error) && (
+              <div className={`dev-meta-feedback inline ${error ? "error" : messageType}`}>
+                <div className="dev-meta-feedback-title">
+                  {error ? "Операция не выполнена" : messageType === "success" ? "Успешно" : messageType === "warning" ? "Нужно исправить" : "Статус"}
+                </div>
+                <div className="dev-meta-feedback-text">{error || message}</div>
+              </div>
+            )}
 
             {validation && (
               <div className="dev-meta-validation">

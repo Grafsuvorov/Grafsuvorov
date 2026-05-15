@@ -1001,6 +1001,7 @@ def save_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
             truncate_sql=payload.truncate_sql,
             author=user.email,
             dev_database_url=DEV_DATABASE_URL,
+            lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -1022,6 +1023,7 @@ def delete_admin_entity_meta(payload: EntityMetaDeletePayload, request: Request)
             table_name=payload.table_name,
             task_id=payload.task_id,
             author=user.email,
+            lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -1047,6 +1049,7 @@ def move_admin_entity_meta(payload: EntityMetaMovePayload, request: Request):
             target_table_name=payload.target_table_name,
             task_id=payload.task_id,
             author=user.email,
+            lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

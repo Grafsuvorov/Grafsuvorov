@@ -491,6 +491,26 @@ def _dev_table_has_duplicates(
     return bool(exists), None
 
 
+def _ensure_entity_lock(*, engine, object_key: str, author: str, ttl_minutes: int) -> None:
+    try:
+        assert_dev_meta_lock_owner(
+            engine=engine,
+            schema_name=ENTITY_LOCK_SCHEMA,
+            file_name=object_key,
+            author=author,
+        )
+    except PermissionError as exc:
+        if str(exc) != "Перед сохранением возьмите файл в работу":
+            raise
+        acquire_dev_meta_lock(
+            engine=engine,
+            schema_name=ENTITY_LOCK_SCHEMA,
+            file_name=object_key,
+            author=author,
+            ttl_minutes=ttl_minutes,
+        )
+
+
 def get_entity_dev_meta_status(*, engine, base_dir: Path, prod_root_value: str, dev_root_value: str, lock_ttl_minutes: int) -> dict[str, Any]:
     return get_dev_meta_status(
         engine=engine,
@@ -877,17 +897,13 @@ def save_entity_dev_meta_bundle(
     truncate_sql: str,
     author: str,
     dev_database_url: str = "",
+    lock_ttl_minutes: int = 30,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
         raise ValueError("Номер задачи должен быть в формате DWH-12345")
     object_key = _build_object_key(entity_name, schema_name, table_name)
-    assert_dev_meta_lock_owner(
-        engine=engine,
-        schema_name=ENTITY_LOCK_SCHEMA,
-        file_name=object_key,
-        author=author,
-    )
+    _ensure_entity_lock(engine=engine, object_key=object_key, author=author, ttl_minutes=lock_ttl_minutes)
     validation = validate_entity_dev_meta_bundle(
         base_dir=base_dir,
         prod_root_value=prod_root_value,
@@ -975,18 +991,14 @@ def delete_entity_dev_meta_bundle(
     table_name: str,
     task_id: str,
     author: str,
+    lock_ttl_minutes: int = 30,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
         raise ValueError("Номер задачи должен быть в формате DWH-12345")
 
     object_key = _build_object_key(entity_name, schema_name, table_name)
-    assert_dev_meta_lock_owner(
-        engine=engine,
-        schema_name=ENTITY_LOCK_SCHEMA,
-        file_name=object_key,
-        author=author,
-    )
+    _ensure_entity_lock(engine=engine, object_key=object_key, author=author, ttl_minutes=lock_ttl_minutes)
 
     root = _resolve_root(base_dir, dev_root_value)
     object_dir = _resolve_object_dir(root, entity_name, schema_name, table_name)
@@ -1047,6 +1059,7 @@ def move_entity_dev_meta_bundle(
     target_table_name: str,
     task_id: str,
     author: str,
+    lock_ttl_minutes: int = 30,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
@@ -1054,12 +1067,7 @@ def move_entity_dev_meta_bundle(
 
     source_key = _build_object_key(source_entity_name, source_schema_name, source_table_name)
     target_key = _build_object_key(target_entity_name, target_schema_name, target_table_name)
-    assert_dev_meta_lock_owner(
-        engine=engine,
-        schema_name=ENTITY_LOCK_SCHEMA,
-        file_name=source_key,
-        author=author,
-    )
+    _ensure_entity_lock(engine=engine, object_key=source_key, author=author, ttl_minutes=lock_ttl_minutes)
 
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)

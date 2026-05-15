@@ -56,12 +56,8 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   );
   const branchPreview = useMemo(() => {
     const taskNorm = String(taskId || "").trim().toUpperCase();
-    const entityPart = String(selection.entity_name || "").trim().toLowerCase();
-    const schemaPart = String(selection.schema_name || "").trim().toLowerCase();
-    const tablePart = String(selection.table_name || "").trim().toLowerCase();
-    if (!taskNorm || !entityPart || !schemaPart || !tablePart) return "";
-    return `${taskNorm}/${entityPart}/${schemaPart}/${tablePart}`;
-  }, [taskId, selection.entity_name, selection.schema_name, selection.table_name]);
+    return taskNorm || "";
+  }, [taskId]);
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
 
   const filteredDevFiles = useMemo(() => {

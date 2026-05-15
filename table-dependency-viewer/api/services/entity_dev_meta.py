@@ -32,7 +32,7 @@ SQL_FILE_NAMES = {
 SYSTEM_FIELDS = ("dttm_inserted", "dttm_updated", "deleted_flag")
 IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
 EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
-TABLE_ID_GAP_LIMIT = 10000
+TABLE_ID_MAX_NORMAL = 100000
 DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
 
 
@@ -179,13 +179,10 @@ def _collect_used_table_ids(*roots: Path) -> set[int]:
 
 def _next_table_id(*roots: Path) -> int:
     used_ids = _collect_used_table_ids(*roots)
-    for candidate in range(1, TABLE_ID_GAP_LIMIT):
-        if candidate not in used_ids:
-            return candidate
-    low_ids = [value for value in used_ids if value < TABLE_ID_GAP_LIMIT]
-    if low_ids:
-        return max(low_ids) + 1
-    return (max(used_ids) + 1) if used_ids else 1
+    normal_ids = [value for value in used_ids if 0 < value <= TABLE_ID_MAX_NORMAL]
+    if normal_ids:
+        return max(normal_ids) + 1
+    return 1
 
 
 def _lookup_entity_id(engine, entity_name: str) -> Optional[int]:
@@ -267,8 +264,7 @@ def _build_generated_yaml(
 
     if not isinstance(payload.get("verification"), list):
         payload["verification"] = []
-    if not isinstance(payload.get("key_attributes"), list):
-        payload["key_attributes"] = []
+    payload["key_attributes"] = []
 
     payload["sql_query_recreate_init"] = (
         f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
@@ -719,7 +715,7 @@ def save_entity_dev_meta_bundle(
             "schema_name": schema_name,
             "table_name": table_name,
             "task_id": task_id_norm,
-            "branch_name": f"{task_id_norm}/{_normalize_name(entity_name)}/{_normalize_name(schema_name)}/{_normalize_name(table_name)}",
+            "branch_name": task_id_norm,
             "warnings": [*validation["warnings"], *warnings],
         },
     )
@@ -728,7 +724,7 @@ def save_entity_dev_meta_bundle(
         "path": str(object_dir),
         "object_key": object_key,
         "task_id": task_id_norm,
-        "branch_name": f"{task_id_norm}/{_normalize_name(entity_name)}/{_normalize_name(schema_name)}/{_normalize_name(table_name)}",
+        "branch_name": task_id_norm,
         "validation": {
             **validation,
             "warnings": [*validation["warnings"], *warnings],

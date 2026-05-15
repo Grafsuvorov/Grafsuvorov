@@ -2,6 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { entityMetaApi } from "../api/entityMeta.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 
+const COMMON_SCHEMAS = ["stg", "ods", "dict_dds", "dict_stg", "dq", "dm", "dm_calc", "dm_view", "dds"];
+const CUSTOM_SCHEMA_OPTION = "__custom__";
+
 function bundleFingerprint(bundle) {
   return JSON.stringify({
     yaml_content: bundle.yaml_content || "",
@@ -25,6 +28,8 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     schema_name: "dm",
     table_name: "",
   });
+  const [schemaMode, setSchemaMode] = useState("dm");
+  const [moveSchemaMode, setMoveSchemaMode] = useState("dm");
   const [taskId, setTaskId] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [bundle, setBundle] = useState(null);
@@ -76,11 +81,28 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     const term = fileSearch.trim().toLowerCase();
     const rows = [...(catalog.dev_files || [])];
     if (!term) return rows;
-    return rows.filter((item) => {
-      const haystack = `${item.entity_name} ${item.schema_name} ${item.table_name}`.toLowerCase();
-      return haystack.includes(term);
-    });
+    return rows.filter((item) => String(item.table_name || "").toLowerCase().includes(term));
   }, [catalog.dev_files, fileSearch]);
+  const groupedDevFiles = useMemo(() => {
+    const tree = new Map();
+    for (const item of catalog.dev_files || []) {
+      if (!tree.has(item.entity_name)) tree.set(item.entity_name, new Map());
+      const schemas = tree.get(item.entity_name);
+      if (!schemas.has(item.schema_name)) schemas.set(item.schema_name, []);
+      schemas.get(item.schema_name).push(item);
+    }
+    return Array.from(tree.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([entityName, schemas]) => ({
+        entity_name: entityName,
+        schemas: Array.from(schemas.entries())
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([schemaName, items]) => ({
+            schema_name: schemaName,
+            items: [...items].sort((a, b) => String(a.table_name || "").localeCompare(String(b.table_name || ""))),
+          })),
+      }));
+  }, [catalog.dev_files]);
 
   const currentFingerprint = useMemo(() => (bundle ? bundleFingerprint(bundle) : ""), [bundle]);
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
@@ -103,12 +125,14 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         schema_name: target.schema_name,
         table_name: target.table_name,
       });
+      setSchemaMode(COMMON_SCHEMAS.includes(target.schema_name) ? target.schema_name : CUSTOM_SCHEMA_OPTION);
       setMoveTarget({
         entity_name: target.entity_name,
         schema_name: target.schema_name,
         table_name: target.table_name,
       });
-      setKeyAttributesText(Array.isArray(data?.key_attributes) ? data.key_attributes.join(", ") : "");
+      setMoveSchemaMode(COMMON_SCHEMAS.includes(target.schema_name) ? target.schema_name : CUSTOM_SCHEMA_OPTION);
+      setKeyAttributesText((prev) => (Array.isArray(data?.key_attributes) && data.key_attributes.length ? data.key_attributes.join(", ") : prev));
       setBundle(data || null);
       setValidatedFingerprint("");
       setMessageType("success");
@@ -126,7 +150,10 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setError("Нужно выбрать сущность, схему и имя таблицы");
       return;
     }
-    await openBundle(selection);
+    await openBundle({
+      ...selection,
+      key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
+    });
   };
 
   const handleValidate = async () => {
@@ -290,11 +317,13 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           schema_name: data.bundle.schema_name,
           table_name: data.bundle.table_name,
         });
+        setSchemaMode(COMMON_SCHEMAS.includes(data.bundle.schema_name) ? data.bundle.schema_name : CUSTOM_SCHEMA_OPTION);
         setMoveTarget({
           entity_name: data.bundle.entity_name,
           schema_name: data.bundle.schema_name,
           table_name: data.bundle.table_name,
         });
+        setMoveSchemaMode(COMMON_SCHEMAS.includes(data.bundle.schema_name) ? data.bundle.schema_name : CUSTOM_SCHEMA_OPTION);
         setKeyAttributesText(Array.isArray(data.bundle.key_attributes) ? data.bundle.key_attributes.join(", ") : "");
       }
       setValidation(null);
@@ -357,17 +386,31 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             </label>
             <label className="admin-field">
               <span>Схема</span>
-              <input
-                list="entity-dev-schemas"
-                value={selection.schema_name}
-                onChange={(e) => setSelection((prev) => ({ ...prev, schema_name: e.target.value }))}
-                placeholder="dm"
-              />
-              <datalist id="entity-dev-schemas">
-                {(selectedEntity?.schemas || []).map((item) => (
-                  <option key={item} value={item} />
+              <select
+                className="admin-select"
+                value={schemaMode}
+                onChange={(e) => {
+                  const nextMode = e.target.value;
+                  setSchemaMode(nextMode);
+                  if (nextMode !== CUSTOM_SCHEMA_OPTION) {
+                    setSelection((prev) => ({ ...prev, schema_name: nextMode }));
+                  }
+                }}
+              >
+                {COMMON_SCHEMAS.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
                 ))}
-              </datalist>
+                <option value={CUSTOM_SCHEMA_OPTION}>Другая схема</option>
+              </select>
+              {schemaMode === CUSTOM_SCHEMA_OPTION ? (
+                <input
+                  value={selection.schema_name}
+                  onChange={(e) => setSelection((prev) => ({ ...prev, schema_name: e.target.value }))}
+                  placeholder="custom_schema"
+                />
+              ) : null}
             </label>
             <label className="admin-field">
               <span>Таблица</span>
@@ -402,7 +445,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           </div>
         </div>
 
-        {bundle && (
+        {bundle?.exists && (
           <div className="dev-meta-generator">
             <div className="section-subtitle">Перемещение и удаление</div>
             <div className="dev-meta-generator-grid">
@@ -423,17 +466,31 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               </label>
               <label className="admin-field">
                 <span>Новая схема</span>
-                <input
-                  list="entity-dev-move-schemas"
-                  value={moveTarget.schema_name}
-                  onChange={(e) => setMoveTarget((prev) => ({ ...prev, schema_name: e.target.value }))}
-                  placeholder="dm"
-                />
-                <datalist id="entity-dev-move-schemas">
-                  {(selectedMoveEntity?.schemas || []).map((item) => (
-                    <option key={item} value={item} />
+                <select
+                  className="admin-select"
+                  value={moveSchemaMode}
+                  onChange={(e) => {
+                    const nextMode = e.target.value;
+                    setMoveSchemaMode(nextMode);
+                    if (nextMode !== CUSTOM_SCHEMA_OPTION) {
+                      setMoveTarget((prev) => ({ ...prev, schema_name: nextMode }));
+                    }
+                  }}
+                >
+                  {COMMON_SCHEMAS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
                   ))}
-                </datalist>
+                  <option value={CUSTOM_SCHEMA_OPTION}>Другая схема</option>
+                </select>
+                {moveSchemaMode === CUSTOM_SCHEMA_OPTION ? (
+                  <input
+                    value={moveTarget.schema_name}
+                    onChange={(e) => setMoveTarget((prev) => ({ ...prev, schema_name: e.target.value }))}
+                    placeholder="custom_schema"
+                  />
+                ) : null}
               </label>
               <label className="admin-field">
                 <span>Новая таблица</span>
@@ -467,22 +524,53 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                   className="dev-meta-file-search"
                   value={fileSearch}
                   onChange={(e) => setFileSearch(e.target.value)}
-                  placeholder="Поиск по entity/schema/table"
+                  placeholder="Поиск по имени объекта"
                 />
               </div>
             </div>
-            <div className="dev-meta-file-list">
-              {filteredDevFiles.map((file) => (
-                <button
-                  key={file.object_key}
-                  className={`dev-meta-file ${bundle?.object_key === file.object_key ? "active" : ""}`}
-                  onClick={() => openBundle(file)}
-                >
-                  <span className="mono dev-meta-file-name">{file.object_key}</span>
-                  <span className="muted">{formatRuDateTime(file.updated_at)}</span>
-                </button>
-              ))}
-            </div>
+            {fileSearch.trim() ? (
+              <div className="dev-meta-file-list">
+                {filteredDevFiles.map((file) => (
+                  <button
+                    key={file.object_key}
+                    className={`dev-meta-file ${bundle?.object_key === file.object_key ? "active" : ""}`}
+                    onClick={() => openBundle(file)}
+                  >
+                    <span className="mono dev-meta-file-short">{file.table_name}</span>
+                    <span className="dev-meta-file-path">{file.entity_name} / {file.schema_name}</span>
+                    <span className="muted">{formatRuDateTime(file.updated_at)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="dev-meta-tree">
+                {groupedDevFiles.map((entityNode) => (
+                  <details key={entityNode.entity_name} className="dev-meta-tree-entity">
+                    <summary className="dev-meta-tree-summary">{entityNode.entity_name}</summary>
+                    <div className="dev-meta-tree-schemas">
+                      {entityNode.schemas.map((schemaNode) => (
+                        <details key={`${entityNode.entity_name}-${schemaNode.schema_name}`} className="dev-meta-tree-schema">
+                          <summary className="dev-meta-tree-summary schema">{schemaNode.schema_name}</summary>
+                          <div className="dev-meta-file-list compact">
+                            {schemaNode.items.map((file) => (
+                              <button
+                                key={file.object_key}
+                                className={`dev-meta-file ${bundle?.object_key === file.object_key ? "active" : ""}`}
+                                onClick={() => openBundle(file)}
+                              >
+                                <span className="mono dev-meta-file-short">{file.table_name}</span>
+                                <span className="mono dev-meta-file-path">{file.object_key}</span>
+                                <span className="muted">{formatRuDateTime(file.updated_at)}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

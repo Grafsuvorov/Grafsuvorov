@@ -607,6 +607,7 @@ def init_entity_dev_meta_bundle(
     entity_name: str,
     schema_name: str,
     table_name: str,
+    key_attributes: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -646,13 +647,18 @@ def init_entity_dev_meta_bundle(
         schema_name=schema_name,
         table_name=table_name,
     )
+    normalized_keys = _normalize_key_attributes(key_attributes)
+    if normalized_keys:
+        yaml_payload["key_attributes"] = normalized_keys
+    else:
+        yaml_payload.pop("key_attributes", None)
     return {
         "entity_name": entity_name,
         "schema_name": schema_name,
         "table_name": table_name,
         "object_key": _build_object_key(entity_name, schema_name, table_name),
         "yaml_content": _dump_yaml(yaml_payload),
-        "key_attributes": [],
+        "key_attributes": normalized_keys or [],
         "recreate_sql": "",
         "insert_sql": "",
         "truncate_sql": "",

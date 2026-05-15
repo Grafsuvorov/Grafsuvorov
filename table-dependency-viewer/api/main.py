@@ -205,6 +205,7 @@ class EntityMetaInitPayload(BaseModel):
     entity_name: str
     schema_name: str
     table_name: str
+    key_attributes: Optional[List[str]] = None
 
 
 class EntityMetaLockPayload(BaseModel):
@@ -928,6 +929,7 @@ def init_admin_entity_meta(payload: EntityMetaInitPayload, request: Request):
         entity_name=payload.entity_name,
         schema_name=payload.schema_name,
         table_name=payload.table_name,
+        key_attributes=payload.key_attributes,
     )
 
 

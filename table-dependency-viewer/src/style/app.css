@@ -8078,6 +8078,12 @@ main.content {
   margin-top: 12px;
 }
 
+.dev-meta-file-list.compact {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  max-height: none;
+  overflow: visible;
+}
+
 .dev-meta-file {
   display: grid;
   gap: 6px;
@@ -8098,6 +8104,17 @@ main.content {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dev-meta-file-short {
+  font-size: 15px;
+  color: #f8fafc;
+}
+
+.dev-meta-file-path {
+  font-size: 12px;
+  color: rgba(191, 219, 254, 0.82);
+  word-break: break-word;
 }
 
 .dev-meta-file:hover:not(:disabled) {
@@ -8131,6 +8148,47 @@ main.content {
   color: #fecaca;
   font-size: 11px;
   font-weight: 600;
+}
+
+.dev-meta-tree {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.dev-meta-tree-entity,
+.dev-meta-tree-schema {
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.dev-meta-tree-schema {
+  border-radius: 14px;
+  background: rgba(30, 41, 59, 0.32);
+}
+
+.dev-meta-tree-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.dev-meta-tree-summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-meta-tree-summary.schema {
+  font-size: 13px;
+  color: #bfdbfe;
+}
+
+.dev-meta-tree-schemas {
+  padding: 0 10px 10px;
+  display: grid;
+  gap: 10px;
 }
 
 .dev-meta-editor-shell {

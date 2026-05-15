@@ -36,6 +36,7 @@ EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
 TABLE_ID_MAX_NORMAL = 100000
 DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
 SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+MAX_REPLICA_ENTITIES = 4
 
 
 def _normalize_name(value: str) -> str:
@@ -103,6 +104,24 @@ def _normalize_key_attributes(items: Optional[list[str]]) -> Optional[list[str]]
         return None
     normalized = [str(item).strip() for item in items if str(item).strip()]
     return normalized or []
+
+
+def _normalize_entity_names(items: Optional[list[str]], primary_entity_name: str) -> list[str]:
+    if not items:
+        return []
+    primary = _normalize_name(primary_entity_name)
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        value = str(item or "").strip()
+        if not value:
+            continue
+        norm = _normalize_name(value)
+        if not norm or norm == primary or norm in seen:
+            continue
+        seen.add(norm)
+        result.append(value)
+    return result
 
 
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
@@ -413,24 +432,29 @@ def _apply_bundle_identity(
     entity_name: str,
     schema_name: str,
     table_name: str,
+    path_entity_name: Optional[str] = None,
+    entity_id: Optional[int] = None,
 ) -> str:
     payload = _load_yaml_text(yaml_content)
     if not isinstance(payload, dict):
         payload = _build_default_yaml(entity_name, schema_name, table_name)
+    sql_owner_entity = path_entity_name or entity_name
     payload["entity_name"] = entity_name
+    if entity_id is not None:
+        payload["entity_id"] = entity_id
     payload["table_schema"] = _normalize_name(schema_name)
     payload["table_name"] = _normalize_name(table_name)
     payload["sql_query_recreate_init"] = (
         f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
+        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
     )
     payload["sql_query_insert_init"] = (
         f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
+        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
     )
     payload["sql_query_truncate"] = (
         f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
-        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+        f"{sql_owner_entity}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
     )
     return _dump_yaml(payload)
 
@@ -891,6 +915,7 @@ def save_entity_dev_meta_bundle(
     table_name: str,
     task_id: str,
     key_attributes: Optional[list[str]],
+    replica_entity_names: Optional[list[str]],
     yaml_content: str,
     recreate_sql: str,
     insert_sql: str,
@@ -902,6 +927,9 @@ def save_entity_dev_meta_bundle(
     task_id_norm = str(task_id or "").strip().upper()
     if not re.fullmatch(r"DWH-\d+", task_id_norm):
         raise ValueError("Номер задачи должен быть в формате DWH-12345")
+    replica_entities = _normalize_entity_names(replica_entity_names, entity_name)
+    if len(replica_entities) > MAX_REPLICA_ENTITIES:
+        raise ValueError(f"Можно указать не больше {MAX_REPLICA_ENTITIES} дополнительных сущностей")
     object_key = _build_object_key(entity_name, schema_name, table_name)
     _ensure_entity_lock(engine=engine, object_key=object_key, author=author, ttl_minutes=lock_ttl_minutes)
     validation = validate_entity_dev_meta_bundle(
@@ -951,6 +979,26 @@ def save_entity_dev_meta_bundle(
     if truncate_text.strip():
         warnings.extend(_ensure_meta_permissions(truncate_path, root))
 
+    replica_paths: list[str] = []
+    for replica_entity_name in replica_entities:
+        replica_entity_id = _lookup_entity_id(engine, replica_entity_name)
+        if replica_entity_id is None:
+            raise ValueError(f"Не удалось определить entity_id для сущности `{replica_entity_name}`")
+        replica_dir = _resolve_object_dir(root, replica_entity_name, schema_name, table_name)
+        replica_dir.mkdir(parents=True, exist_ok=True)
+        replica_yaml = _apply_bundle_identity(
+            yaml_content=normalized.get("yaml_content", yaml_content),
+            entity_name=replica_entity_name,
+            schema_name=schema_name,
+            table_name=table_name,
+            path_entity_name=entity_name,
+            entity_id=replica_entity_id,
+        )
+        replica_yaml_path = replica_dir / SQL_FILE_NAMES["yaml"]
+        replica_yaml_path.write_text(replica_yaml, encoding="utf-8")
+        warnings.extend(_ensure_meta_permissions(replica_yaml_path, root))
+        replica_paths.append(str(replica_dir))
+
     _audit_dev_meta(
         engine,
         ENTITY_LOCK_SCHEMA,
@@ -965,6 +1013,8 @@ def save_entity_dev_meta_bundle(
             "table_name": table_name,
             "task_id": task_id_norm,
             "branch_name": task_id_norm,
+            "replica_entity_names": replica_entities,
+            "replica_paths": replica_paths,
             "warnings": [*validation["warnings"], *warnings],
         },
     )
@@ -974,6 +1024,7 @@ def save_entity_dev_meta_bundle(
         "object_key": object_key,
         "task_id": task_id_norm,
         "branch_name": task_id_norm,
+        "replica_paths": replica_paths,
         "validation": {
             **validation,
             "warnings": [*validation["warnings"], *warnings],
@@ -1003,7 +1054,7 @@ def delete_entity_dev_meta_bundle(
     root = _resolve_root(base_dir, dev_root_value)
     object_dir = _resolve_object_dir(root, entity_name, schema_name, table_name)
     if not object_dir.exists():
-        raise ValueError("DEV bundle не найден, удалять нечего")
+        raise ValueError("DEV объект не найден, удалять нечего")
 
     shutil.rmtree(object_dir)
 

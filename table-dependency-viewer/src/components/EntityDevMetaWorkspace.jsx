@@ -5,7 +5,7 @@ import { formatRuDateTime } from "../utils/datetime.js";
 const COMMON_SCHEMAS = ["stg", "ods", "dict_dds", "dict_stg", "dq", "dm", "dm_calc", "dm_view", "dds"];
 const CUSTOM_SCHEMA_OPTION = "__custom__";
 
-function bundleFingerprint(bundle) {
+function objectFingerprint(bundle) {
   return JSON.stringify({
     yaml_content: bundle.yaml_content || "",
     recreate_sql: bundle.recreate_sql || "",
@@ -32,6 +32,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const [moveSchemaMode, setMoveSchemaMode] = useState("dm");
   const [taskId, setTaskId] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
+  const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,7 +97,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       }));
   }, [catalog.dev_files]);
 
-  const currentFingerprint = useMemo(() => (bundle ? bundleFingerprint(bundle) : ""), [bundle]);
+  const currentFingerprint = useMemo(() => (bundle ? objectFingerprint(bundle) : ""), [bundle]);
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
 
   const acquireLock = async (target) => {
@@ -175,15 +176,15 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       if (Array.isArray(data?.normalized?.key_attributes)) {
         setKeyAttributesText(data.normalized.key_attributes.join(", "));
       }
-      const nextFingerprint = bundleFingerprint({
+      const nextFingerprint = objectFingerprint({
         ...bundle,
         yaml_content: data?.normalized?.yaml_content || bundle.yaml_content,
       });
       setValidatedFingerprint(data?.valid ? nextFingerprint : "");
       setMessageType(data?.valid ? "success" : "warning");
-      setMessage(data?.valid ? "Проверка пройдена. Bundle готов к сохранению в DEV." : "Проверка завершилась с ошибками.");
+      setMessage(data?.valid ? "Проверка пройдена. Объект готов к сохранению в DEV." : "Проверка завершилась с ошибками.");
     } catch (err) {
-      setError(err.message || "Не удалось провалидировать bundle");
+      setError(err.message || "Не удалось провалидировать объект");
     } finally {
       setValidating(false);
     }
@@ -199,7 +200,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     }
     if (!isValidationFresh) {
       setMessageType("warning");
-      setMessage("Перед сохранением нужна успешная проверка текущей версии bundle.");
+      setMessage("Перед сохранением нужна успешная проверка текущей версии объекта.");
       setError(null);
       return;
     }
@@ -213,6 +214,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         table_name: selection.table_name,
         task_id: taskId,
         key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
+        replica_entity_names: replicaEntitiesText.split(",").map((item) => item.trim()).filter(Boolean),
         yaml_content: bundle.yaml_content,
         recreate_sql: bundle.recreate_sql,
         insert_sql: bundle.insert_sql,
@@ -228,15 +230,15 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
         setKeyAttributesText(data.validation.normalized.key_attributes.join(", "));
       }
       setValidation(data?.validation || null);
-      setValidatedFingerprint(bundleFingerprint({
+      setValidatedFingerprint(objectFingerprint({
         ...bundle,
         yaml_content: data?.validation?.normalized?.yaml_content || bundle.yaml_content,
       }));
       await refreshAll();
       setMessageType("success");
-      setMessage(`DEV bundle сохранен: ${data?.path || ""}`);
+      setMessage(`DEV объект сохранен: ${data?.path || ""}`);
     } catch (err) {
-      setError(err.message || "Не удалось сохранить bundle");
+      setError(err.message || "Не удалось сохранить объект");
     } finally {
       setSaving(false);
     }
@@ -271,7 +273,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setMessageType("success");
       setMessage("DEV объект удален.");
     } catch (err) {
-      setError(err.message || "Не удалось удалить bundle");
+      setError(err.message || "Не удалось удалить объект");
     } finally {
       setDeleting(false);
     }
@@ -329,7 +331,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setMessageType("success");
       setMessage(`Объект перемещен: ${data?.object_key || ""}`);
     } catch (err) {
-      setError(err.message || "Не удалось переместить bundle");
+      setError(err.message || "Не удалось переместить объект");
     } finally {
       setMoving(false);
     }
@@ -355,6 +357,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <label className="admin-field">
               <span>Сущность</span>
               <input
+                className="admin-select"
                 list="entity-meta-entities"
                 value={selection.entity_name}
                 onChange={(e) => setSelection((prev) => ({ ...prev, entity_name: e.target.value }))}
@@ -418,6 +421,21 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                 placeholder="delivery_number_sales, batch, dt_report"
               />
             </label>
+            <label className="admin-field dev-meta-generator-wide">
+              <span>Размножить в сущности</span>
+              <input
+                className="admin-select"
+                list="entity-meta-replicas"
+                value={replicaEntitiesText}
+                onChange={(e) => setReplicaEntitiesText(e.target.value)}
+                placeholder="BI_FI, BI_SB_WUC_COPY"
+              />
+              <datalist id="entity-meta-replicas">
+                {entityOptions.map((item) => (
+                  <option key={`replica-${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
+                ))}
+              </datalist>
+            </label>
           </div>
           <div className="dev-meta-generator-actions">
             <button className="btn btn-primary" onClick={handleOpenCurrentSelection} disabled={loading}>
@@ -434,6 +452,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               <label className="admin-field">
                 <span>Новая сущность</span>
                 <input
+                  className="admin-select"
                   list="entity-meta-move-entities"
                   value={moveTarget.entity_name}
                   onChange={(e) => setMoveTarget((prev) => ({ ...prev, entity_name: e.target.value }))}
@@ -559,7 +578,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           <div className="dev-meta-editor-shell">
             <div className="dev-meta-editor-head">
               <div className="dev-meta-editor-title">
-                <div className="section-subtitle">Bundle редактор</div>
+                <div className="section-subtitle">Редактор объекта</div>
                 <div className="muted dev-meta-editor-path">
                   {bundle?.object_key || "Сначала выберите объект"}
                 </div>
@@ -595,7 +614,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               <div className="dev-meta-validation">
                 <div className="section-subtitle">Результат проверки</div>
                 <div className={`dev-meta-validation-pill ${validation.valid ? "ok" : "bad"}`}>
-                  {validation.valid ? "Bundle валиден" : "Есть ошибки"}
+                  {validation.valid ? "Объект валиден" : "Есть ошибки"}
                 </div>
                 {validation.errors?.length ? (
                   <ul className="dev-meta-validation-list">

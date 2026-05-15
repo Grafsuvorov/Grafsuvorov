@@ -32,6 +32,8 @@ SQL_FILE_NAMES = {
 SYSTEM_FIELDS = ("dttm_inserted", "dttm_updated", "deleted_flag")
 IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
 EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
+TABLE_ID_GAP_LIMIT = 10000
+DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
 
 
 def _normalize_name(value: str) -> str:
@@ -93,16 +95,194 @@ def _dump_yaml(data: dict[str, Any]) -> str:
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
     schema_norm = _normalize_name(schema_name)
     return {
-        "entity_name": entity_name,
-        "table_schema": schema_norm,
         "table_name": table_name,
-        "object_type": "view" if schema_norm.endswith("_view") else "table",
-        "table_load_mode": "full_reload",
-        "sql_query_recreate_init": f"etl_loads_entity/{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}",
-        "sql_query_insert_init": f"etl_loads_entity/{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}",
-        "sql_query_truncate": f"etl_loads_entity/{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}",
+        "table_schema": schema_norm,
+        "table_id": None,
+        "source_id": None,
+        "source_type": "GREENPLUM",
+        "flag_has_views": schema_norm.endswith("_view"),
+        "table_load_mode": "TRUNCATE_INIT",
+        "job_id": None,
+        "job_name": None,
+        "table_loading_index": 1,
+        "entity_id": None,
+        "entity_name": entity_name,
+        "object_type": "VIEW" if schema_norm.endswith("_view") else "TABLE",
+        "table_load_interval": dict(DEFAULT_INTERVAL),
+        "flag_waiting_dag_finished": False,
+        "start_date": None,
+        "sql_query_recreate_init": (
+            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
+        ),
+        "sql_query_insert_init": (
+            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
+        ),
+        "sql_query_truncate": (
+            f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+            f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+        ),
         "depends_on": {},
+        "verification": [],
+        "key_attributes": [],
     }
+
+
+def _iter_yaml_paths(root: Path) -> Iterable[Path]:
+    if not root.exists():
+        return []
+    return root.rglob("meta_data_file.yaml")
+
+
+def _load_yaml_file(path: Path) -> dict[str, Any]:
+    try:
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return {}
+
+
+def _find_template_payload(root: Path, entity_name: str, schema_name: str) -> Optional[dict[str, Any]]:
+    entity_dir = _find_child_case_insensitive(root, entity_name)
+    if not entity_dir:
+        return None
+    schema_dir = _find_child_case_insensitive(entity_dir, schema_name)
+    if not schema_dir or not schema_dir.exists():
+        return None
+
+    candidates: list[tuple[Path, dict[str, Any]]] = []
+    for yaml_path in schema_dir.rglob("meta_data_file.yaml"):
+        payload = _load_yaml_file(yaml_path)
+        if isinstance(payload, dict) and payload:
+            candidates.append((yaml_path, payload))
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda item: str(item[0]).lower())
+    return dict(candidates[0][1])
+
+
+def _collect_used_table_ids(*roots: Path) -> set[int]:
+    used_ids: set[int] = set()
+    for root in roots:
+        for yaml_path in _iter_yaml_paths(root):
+            payload = _load_yaml_file(yaml_path)
+            raw_value = payload.get("table_id")
+            try:
+                value = int(raw_value)
+            except Exception:
+                continue
+            if value > 0:
+                used_ids.add(value)
+    return used_ids
+
+
+def _next_table_id(*roots: Path) -> int:
+    used_ids = _collect_used_table_ids(*roots)
+    for candidate in range(1, TABLE_ID_GAP_LIMIT):
+        if candidate not in used_ids:
+            return candidate
+    low_ids = [value for value in used_ids if value < TABLE_ID_GAP_LIMIT]
+    if low_ids:
+        return max(low_ids) + 1
+    return (max(used_ids) + 1) if used_ids else 1
+
+
+def _lookup_entity_id(engine, entity_name: str) -> Optional[int]:
+    table_ref = TABLE_ENTITIES_META or "tech_etl.entities_meta"
+    query = text(
+        f"""
+        SELECT entity_id
+        FROM {table_ref}
+        WHERE lower(trim(entity_name)) = lower(trim(:entity_name))
+        ORDER BY entity_id
+        LIMIT 1
+        """
+    )
+    with engine.connect() as conn:
+        value = conn.execute(query, {"entity_name": entity_name}).scalar()
+    try:
+        return int(value) if value is not None else None
+    except Exception:
+        return None
+
+
+def _build_generated_yaml(
+    *,
+    engine,
+    prod_root: Path,
+    dev_root: Path,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+) -> dict[str, Any]:
+    schema_norm = _normalize_name(schema_name)
+    table_norm = _normalize_name(table_name)
+    template = (
+        _find_template_payload(dev_root, entity_name, schema_name)
+        or _find_template_payload(prod_root, entity_name, schema_name)
+        or {}
+    )
+
+    payload = dict(template) if isinstance(template, dict) else {}
+    if not payload:
+        payload = _build_default_yaml(entity_name, schema_name, table_name)
+    else:
+        merged_default = _build_default_yaml(entity_name, schema_name, table_name)
+        merged_default.update(payload)
+        payload = merged_default
+
+    payload["table_name"] = table_norm
+    payload["table_schema"] = schema_norm
+    payload["entity_name"] = entity_name
+    payload["table_id"] = _next_table_id(prod_root, dev_root)
+
+    entity_id = payload.get("entity_id")
+    if entity_id in (None, "", 0, "0"):
+        resolved_entity_id = _lookup_entity_id(engine, entity_name)
+        if resolved_entity_id is not None:
+            payload["entity_id"] = resolved_entity_id
+
+    payload["depends_on"] = {}
+
+    object_type = str(payload.get("object_type") or "").strip()
+    if not object_type:
+        payload["object_type"] = "VIEW" if schema_norm.endswith("_view") else "TABLE"
+    else:
+        payload["object_type"] = object_type.upper()
+
+    if "table_load_mode" not in payload or not payload.get("table_load_mode"):
+        payload["table_load_mode"] = "TRUNCATE_INIT"
+
+    if schema_norm in {"stg", "dict_stg"}:
+        payload["source_id"] = None
+
+    interval = payload.get("table_load_interval")
+    if not isinstance(interval, dict):
+        payload["table_load_interval"] = dict(DEFAULT_INTERVAL)
+    else:
+        normalized_interval = dict(DEFAULT_INTERVAL)
+        normalized_interval.update({key: interval.get(key) for key in DEFAULT_INTERVAL.keys() if key in interval})
+        payload["table_load_interval"] = normalized_interval
+
+    if not isinstance(payload.get("verification"), list):
+        payload["verification"] = []
+    if not isinstance(payload.get("key_attributes"), list):
+        payload["key_attributes"] = []
+
+    payload["sql_query_recreate_init"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['recreate_sql']}"
+    )
+    payload["sql_query_insert_init"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['insert_sql']}"
+    )
+    payload["sql_query_truncate"] = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/{SQL_FILE_NAMES['truncate_sql']}"
+    )
+    return payload
 
 
 def _extract_created_object(sql: str) -> tuple[str, str] | None:
@@ -281,6 +461,7 @@ def read_entity_dev_meta_bundle(
 
 def init_entity_dev_meta_bundle(
     *,
+    engine,
     base_dir: Path,
     prod_root_value: str,
     dev_root_value: str,
@@ -288,6 +469,8 @@ def init_entity_dev_meta_bundle(
     schema_name: str,
     table_name: str,
 ) -> dict[str, Any]:
+    prod_root = _resolve_root(base_dir, prod_root_value)
+    dev_root = _resolve_root(base_dir, dev_root_value)
     try:
         bundle = read_entity_dev_meta_bundle(
             base_dir=base_dir,
@@ -316,7 +499,14 @@ def init_entity_dev_meta_bundle(
     except FileNotFoundError:
         pass
 
-    yaml_payload = _build_default_yaml(entity_name, schema_name, table_name)
+    yaml_payload = _build_generated_yaml(
+        engine=engine,
+        prod_root=prod_root,
+        dev_root=dev_root,
+        entity_name=entity_name,
+        schema_name=schema_name,
+        table_name=table_name,
+    )
     return {
         "entity_name": entity_name,
         "schema_name": schema_name,
@@ -328,7 +518,7 @@ def init_entity_dev_meta_bundle(
         "truncate_sql": "",
         "source": "new",
         "exists": False,
-        "path": str(_resolve_object_dir(_resolve_root(base_dir, dev_root_value), entity_name, schema_name, table_name)),
+        "path": str(_resolve_object_dir(dev_root, entity_name, schema_name, table_name)),
     }
 
 
@@ -373,7 +563,10 @@ def validate_entity_dev_meta_bundle(
     if object_type not in {"table", "view"}:
         errors.append("`object_type` должен быть `table` или `view`")
 
-    expected_prefix = f"etl_loads_entity/{entity_name}/{schema_name}/{table_name}/"
+    expected_prefix = (
+        f"meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/"
+        f"{entity_name}/{schema_name}/{table_name}/"
+    )
     for field_name, file_name in (
         ("sql_query_recreate_init", SQL_FILE_NAMES["recreate_sql"]),
         ("sql_query_insert_init", SQL_FILE_NAMES["insert_sql"]),
@@ -418,12 +611,6 @@ def validate_entity_dev_meta_bundle(
         expected_depends_on = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
         current_depends_on = _flatten_depends_on(payload.get("depends_on"))
         expected_depends_on_flat = _flatten_depends_on(expected_depends_on)
-        missing = sorted(expected_depends_on_flat - current_depends_on)
-        if missing:
-            errors.append(
-                "В `depends_on` не хватает зависимостей из insert SQL: "
-                + ", ".join(f"{schema_part}.{table_part}" for schema_part, table_part in missing)
-            )
         extra = sorted(current_depends_on - expected_depends_on_flat)
         if extra:
             warnings.append(

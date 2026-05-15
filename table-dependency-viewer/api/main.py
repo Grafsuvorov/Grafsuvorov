@@ -901,6 +901,7 @@ def get_admin_entity_meta_reference_entities(request: Request):
 def init_admin_entity_meta(payload: EntityMetaInitPayload, request: Request):
     _require_admin(request)
     return init_entity_dev_meta_bundle(
+        engine=engine,
         base_dir=BASE_DIR,
         prod_root_value=ENTITY_META_DIR,
         dev_root_value=DEV_ENTITY_META_DIR,

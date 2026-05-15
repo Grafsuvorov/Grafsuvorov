@@ -1060,6 +1060,37 @@ main.content {
   padding: 10px 12px;
 }
 
+.admin-field select {
+  color-scheme: dark;
+}
+
+.admin-field select option,
+.admin-field select optgroup {
+  background: #0f172a;
+  color: #f4f7ff;
+}
+
+.admin-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: rgba(15, 23, 42, 0.92);
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(226, 232, 240, 0.9) 50%),
+    linear-gradient(135deg, rgba(226, 232, 240, 0.9) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+.admin-select:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.7);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
 .admin-submit {
   align-self: end;
   height: 40px;

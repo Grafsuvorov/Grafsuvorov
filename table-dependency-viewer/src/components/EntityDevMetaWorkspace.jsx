@@ -230,6 +230,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <label className="admin-field">
               <span>Сущность</span>
               <select
+                className="admin-select"
                 value={selection.entity_name}
                 onChange={(e) => setSelection((prev) => ({ ...prev, entity_name: e.target.value }))}
               >

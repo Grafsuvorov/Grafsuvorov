@@ -1,39 +1,76 @@
-#!/usr/bin/bash
-set -euo pipefail
+api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/meta_info:/app/meta_info
+      - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+      - /root/table-dependency-viewer/config_files:/app/config_files
+      - /root/git_dir:/root/git_dir
+    ports:
+      - "5312:8000"
+    env_file:
+      - ./api/.env
+    environment:
+      - DATABASE_URL=
+      - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - CLICK_META_DIR=/app/config_files/meta
+      - DEV_CLICK_META_DIR=/app/config_files/meta_dev
+      - DEV_DATABASE_URL=
+      - DEV_META_DEPLOY_HOST=10.66.129.237
+      - DEV_META_DEPLOY_PORT=22
+      - DEV_META_DEPLOY_USER=root
+      - DEV_META_DEPLOY_PASSWORD=
+      - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+      - DEV_META_DEPLOY_SSH_KEY_PATH=
+      - DEV_META_DEPLOY_STRICT_HOST_KEY=false
+      - AIRFLOW_DEV_BASE_URL=
+      - AIRFLOW_DEV_DAG_ID=
+      - AIRFLOW_DEV_USERNAME=
+      - AIRFLOW_DEV_PASSWORD=
+      - DEV_META_LOCK_TTL_MIN=30
+      - ENTITY_META_GIT_REPO=/root/git_dir/etl
+      - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - GITLAB_API_URL=https://<ваш-gitlab>/api/v4
+      - GITLAB_PROJECT=<project_id_или_group/subgroup/repo>
+      - GITLAB_TOKEN=<token>
+      - AUTH_ENABLED=true
+      - AUTH_SECRET_KEY=change_me_please
+      - AUTH_ACCESS_TTL_MIN=7200
+      - AUTH_ALLOW_REGISTER=false
+      - AUTH_BOOTSTRAP_ADMIN_EMAIL=
+      - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
 
-unset http_proxy
-unset https_proxy
-unset HTTP_PROXY
-unset HTTPS_PROXY
-export GIT_SSL_NO_VERIFY=1
+  Что заменить:
 
-REPO_ROOT="/root/git_dir/etl"
-APP_ROOT="/app"
-BRANCH="main"
+  - GITLAB_API_URL
+  - GITLAB_PROJECT
+  - GITLAB_TOKEN
 
-echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  Если GitLab у вас, например, https://gitlab.company.ru, то:
 
-git -C "${REPO_ROOT}" fetch origin
-git -C "${REPO_ROOT}" checkout "${BRANCH}"
-git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
-git -C "${REPO_ROOT}" clean -fd
+  - GITLAB_API_URL=https://gitlab.company.ru/api/v4
 
-mkdir -p "${APP_ROOT}/meta_info"
-mkdir -p "${APP_ROOT}/config_files/meta/dm"
-mkdir -p "${APP_ROOT}/config_files/meta/dm_view"
+  GITLAB_PROJECT можно задать так:
 
-rm -rf "${APP_ROOT}/meta_info"/*
-rm -rf "${APP_ROOT}/config_files/meta/dm"/*
-rm -rf "${APP_ROOT}/config_files/meta/dm_view"/*
+  - числом, например 1234
+  - или путём:
 
-cp -r "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
-cp -r "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
-cp -r "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
+  - GITLAB_PROJECT=group/subgroup/etl
 
-find "${APP_ROOT}/meta_info" -type d -exec chmod 755 {} \;
-find "${APP_ROOT}/meta_info" -type f -exec chmod 644 {} \;
-find "${APP_ROOT}/config_files/meta" -type d -exec chmod 755 {} \;
-find "${APP_ROOT}/config_files/meta" -type f -exec chmod 644 {} \;
+  После этого:
 
-echo "[ci_cd] synced meta_info and config_files/meta from origin/${BRANCH}"
-echo "[ci_cd] done"
+  docker compose up -d --build
+
+  И потом в UI:
+
+  - правите объекты в dev
+  - вводите DWH-12345
+  - указываете существующую release-ветку
+  - нажимаете Создать MR
+
+  Если хотите, я ещё могу дать пример, какой GITLAB_TOKEN нужен по правам.
+

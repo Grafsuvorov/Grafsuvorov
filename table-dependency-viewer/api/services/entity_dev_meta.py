@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
+import subprocess
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
+from urllib import error as urlerror
+from urllib import parse as urlparse
+from urllib import request as urlrequest
 
 import yaml
 
@@ -17,6 +24,7 @@ from .dev_meta import (
     _resolve_root,
     acquire_dev_meta_lock,
     assert_dev_meta_lock_owner,
+    ensure_dev_meta_tables,
     get_dev_meta_status,
     release_dev_meta_lock,
 )
@@ -37,6 +45,11 @@ TABLE_ID_MAX_NORMAL = 100000
 DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
 SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_REPLICA_ENTITIES = 4
+
+
+class _IndentedYamlDumper(yaml.SafeDumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow=flow, indentless=False)
 
 
 def _normalize_name(value: str) -> str:
@@ -92,6 +105,7 @@ def _read_text_if_exists(path: Path) -> str:
 def _dump_yaml(data: dict[str, Any]) -> str:
     return yaml.dump(
         data,
+        Dumper=_IndentedYamlDumper,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,
@@ -122,6 +136,16 @@ def _normalize_entity_names(items: Optional[list[str]], primary_entity_name: str
         seen.add(norm)
         result.append(value)
     return result
+
+
+def _ensure_default_verification(payload: dict[str, Any], key_attributes: Optional[list[str]]) -> None:
+    verification = payload.get("verification")
+    if not isinstance(verification, list):
+        verification = []
+    if key_attributes and not verification:
+        payload["verification"] = ["duplicate_check"]
+        return
+    payload["verification"] = verification
 
 
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
@@ -515,6 +539,99 @@ def _dev_table_has_duplicates(
     return bool(exists), None
 
 
+def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
+    opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
+    return opener.open(req, timeout=timeout)
+
+
+def _gitlab_json_request(
+    *,
+    api_url: str,
+    project: str,
+    token: str,
+    path: str,
+    method: str = "GET",
+    payload: Optional[dict[str, Any]] = None,
+    query: Optional[dict[str, Any]] = None,
+    timeout: int = 30,
+) -> Any:
+    if not api_url:
+        raise ValueError("Не настроен GITLAB_API_URL")
+    project_ref = urlparse.quote(str(project or "").strip(), safe="")
+    base_url = f"{api_url.rstrip('/')}/projects/{project_ref}/{path.lstrip('/')}"
+    if query:
+        query_text = urlparse.urlencode(
+            {key: value for key, value in query.items() if value is not None},
+            doseq=True,
+        )
+        url = f"{base_url}?{query_text}" if query_text else base_url
+    else:
+        url = base_url
+    req = urlrequest.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "PRIVATE-TOKEN": token,
+        },
+        method=method,
+    )
+    try:
+        with _urlopen_without_proxy(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8")
+            return json.loads(body) if body else {}
+    except urlerror.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="ignore")
+        raise ValueError(f"GitLab вернул {exc.code}: {body}") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось вызвать GitLab API: {exc}") from exc
+
+
+def _parse_gitlab_project(value: str) -> Optional[str]:
+    text_value = str(value or "").strip()
+    if not text_value:
+        return None
+    if text_value.isdigit():
+        return text_value
+    if "://" in text_value:
+        parsed = urlparse.urlparse(text_value)
+        path_value = parsed.path.lstrip("/").removesuffix(".git")
+        return path_value or None
+    if ":" in text_value and "@" in text_value.split(":", 1)[0]:
+        _, path_value = text_value.split(":", 1)
+        path_value = path_value.strip().lstrip("/").removesuffix(".git")
+        return path_value or None
+    return text_value.strip("/").removesuffix(".git") or None
+
+
+def _git_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+        env.pop(key, None)
+    env["GIT_SSL_NO_VERIFY"] = "1"
+    return env
+
+
+def _run_git(repo_root: Path, args: list[str], *, cwd: Optional[Path] = None) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), *args] if cwd is None else ["git", *args],
+        cwd=str(cwd) if cwd else None,
+        capture_output=True,
+        text=True,
+        env=_git_env(),
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _object_dir_from_key(root: Path, object_key: str) -> Path:
+    parts = [part for part in str(object_key or "").split("/") if part]
+    if len(parts) != 3:
+        raise ValueError(f"Некорректный object_key: {object_key}")
+    return _resolve_object_dir(root, parts[0], parts[1], parts[2])
+
+
 def _ensure_entity_lock(*, engine, object_key: str, author: str, ttl_minutes: int) -> None:
     try:
         assert_dev_meta_lock_owner(
@@ -696,6 +813,7 @@ def init_entity_dev_meta_bundle(
         yaml_payload["key_attributes"] = normalized_keys
     else:
         yaml_payload.pop("key_attributes", None)
+    _ensure_default_verification(yaml_payload, normalized_keys)
     return {
         "entity_name": entity_name,
         "schema_name": schema_name,
@@ -747,6 +865,7 @@ def validate_entity_dev_meta_bundle(
             payload["key_attributes"] = normalized_keys
         else:
             payload.pop("key_attributes", None)
+    _ensure_default_verification(payload, normalized_keys)
 
     for field in REQUIRED_YAML_FIELDS:
         if not payload.get(field):
@@ -868,6 +987,7 @@ def validate_entity_dev_meta_bundle(
             normalized_payload["key_attributes"] = normalized_keys
         else:
             normalized_payload.pop("key_attributes", None)
+    _ensure_default_verification(normalized_payload, normalized_keys)
 
     dev_exists, dev_error = _dev_object_exists(dev_database_url, normalized_schema, normalized_table)
     if dev_error:
@@ -1225,6 +1345,221 @@ def move_entity_dev_meta_bundle(
             "path": str(target_dev_dir),
         },
     }
+
+
+def _list_task_entity_object_keys(*, engine, task_id: str) -> set[str]:
+    ensure_dev_meta_tables(engine)
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT file_name, action, details
+                FROM tech_etl.app_dev_meta_audit
+                WHERE schema_name = :schema_name
+                ORDER BY created_at
+                """
+            ),
+            {"schema_name": ENTITY_LOCK_SCHEMA},
+        ).mappings().all()
+    result: set[str] = set()
+    for row in rows:
+        try:
+            details = json.loads(row.get("details") or "{}")
+        except Exception:
+            details = {}
+        if str(details.get("task_id") or "").strip().upper() != task_id:
+            continue
+        file_name = str(row.get("file_name") or "").strip()
+        action = str(row.get("action") or "").strip().lower()
+        if file_name:
+            result.add(file_name)
+        if action == "move":
+            for extra_key in ("source_object_key", "target_object_key"):
+                extra_value = str(details.get(extra_key) or "").strip()
+                if extra_value:
+                    result.add(extra_value)
+        if action == "save":
+            entity_name = str(details.get("entity_name") or "").strip()
+            schema_name = str(details.get("schema_name") or "").strip()
+            table_name = str(details.get("table_name") or "").strip()
+            for replica_entity_name in details.get("replica_entity_names") or []:
+                if entity_name and schema_name and table_name and replica_entity_name:
+                    result.add(_build_object_key(str(replica_entity_name).strip(), schema_name, table_name))
+    return result
+
+
+def _sync_task_objects_to_worktree(
+    *,
+    dev_root: Path,
+    worktree_meta_root: Path,
+    object_keys: set[str],
+) -> dict[str, list[str]]:
+    updated_paths: list[str] = []
+    removed_paths: list[str] = []
+    for object_key in sorted(object_keys):
+        dev_object_dir = _object_dir_from_key(dev_root, object_key)
+        repo_object_dir = _object_dir_from_key(worktree_meta_root, object_key)
+        if dev_object_dir.exists():
+            repo_object_dir.parent.mkdir(parents=True, exist_ok=True)
+            if repo_object_dir.exists():
+                shutil.rmtree(repo_object_dir)
+            shutil.copytree(dev_object_dir, repo_object_dir)
+            updated_paths.append(str(repo_object_dir))
+        elif repo_object_dir.exists():
+            shutil.rmtree(repo_object_dir)
+            removed_paths.append(str(repo_object_dir))
+            parent = repo_object_dir.parent
+            while parent != worktree_meta_root and parent.exists():
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
+    return {"updated_paths": updated_paths, "removed_paths": removed_paths}
+
+
+def create_entity_meta_mr(
+    *,
+    engine,
+    base_dir: Path,
+    dev_root_value: str,
+    git_repo_value: str,
+    git_meta_root_value: str,
+    gitlab_token: str,
+    gitlab_project: str,
+    gitlab_api_url: str,
+    task_id: str,
+    release_branch: str,
+    author: str,
+) -> dict[str, Any]:
+    task_id_norm = str(task_id or "").strip().upper()
+    if not re.fullmatch(r"DWH-\d+", task_id_norm):
+        raise ValueError("Номер задачи должен быть в формате DWH-12345")
+    release_branch_norm = str(release_branch or "").strip()
+    if not release_branch_norm:
+        raise ValueError("Укажите release-ветку")
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    if not gitlab_token:
+        raise ValueError("Не настроен GITLAB_TOKEN")
+
+    dev_root = _resolve_root(base_dir, dev_root_value)
+    git_repo_root = Path(git_repo_value).resolve()
+    worktree_meta_root_rel = Path(git_meta_root_value)
+    project_ref = _parse_gitlab_project(gitlab_project) or _parse_gitlab_project(
+        _run_git(git_repo_root, ["remote", "get-url", "origin"])
+    )
+    if not project_ref:
+        raise ValueError("Не удалось определить GitLab project")
+
+    object_keys = _list_task_entity_object_keys(engine=engine, task_id=task_id_norm)
+    if not object_keys:
+        raise ValueError(f"Не найдено объектов для задачи {task_id_norm}")
+
+    feature_branch = f"feature/{task_id_norm}"
+    _run_git(git_repo_root, ["fetch", "origin"])
+    release_exists = _run_git(git_repo_root, ["ls-remote", "--heads", "origin", release_branch_norm])
+    if not release_exists:
+        raise ValueError(f"Release-ветка `{release_branch_norm}` не найдена в origin")
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix=f"entity-meta-{task_id_norm.lower()}-"))
+    try:
+        remote_feature_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", feature_branch]))
+        if remote_feature_exists:
+            _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{feature_branch}"])
+        else:
+            _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{release_branch_norm}"])
+
+        worktree_meta_root = worktree_dir / worktree_meta_root_rel
+        sync_result = _sync_task_objects_to_worktree(
+            dev_root=dev_root,
+            worktree_meta_root=worktree_meta_root,
+            object_keys=object_keys,
+        )
+
+        status_output = _run_git(git_repo_root, ["status", "--porcelain"], cwd=worktree_dir)
+        if status_output:
+            _run_git(git_repo_root, ["add", "."], cwd=worktree_dir)
+            commit_message = f"{task_id_norm}: update GP meta objects"
+            try:
+                _run_git(git_repo_root, ["commit", "-m", commit_message], cwd=worktree_dir)
+            except subprocess.CalledProcessError as exc:
+                if "nothing to commit" not in (exc.stdout or "") and "nothing to commit" not in (exc.stderr or ""):
+                    raise
+
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{feature_branch}"], cwd=worktree_dir)
+
+        title = f"{task_id_norm}: GP meta changes"
+        description_lines = [
+            f"Task: {task_id_norm}",
+            f"Author: {author}",
+            "",
+            "Objects:",
+            *[f"- {item}" for item in sorted(object_keys)],
+        ]
+        existing = _gitlab_json_request(
+            api_url=gitlab_api_url,
+            project=project_ref,
+            token=gitlab_token,
+            path="merge_requests",
+            method="GET",
+            query={
+                "state": "opened",
+                "source_branch": feature_branch,
+                "target_branch": release_branch_norm,
+            },
+        )
+        if existing:
+            mr_data = existing[0]
+        else:
+            mr_data = _gitlab_json_request(
+                api_url=gitlab_api_url,
+                project=project_ref,
+                token=gitlab_token,
+                path="merge_requests",
+                method="POST",
+                payload={
+                    "source_branch": feature_branch,
+                    "target_branch": release_branch_norm,
+                    "title": title,
+                    "description": "\n".join(description_lines),
+                    "remove_source_branch": False,
+                },
+            )
+
+        _audit_dev_meta(
+            engine,
+            ENTITY_LOCK_SCHEMA,
+            task_id_norm,
+            author,
+            "create_mr",
+            "",
+            {
+                "task_id": task_id_norm,
+                "feature_branch": feature_branch,
+                "release_branch": release_branch_norm,
+                "object_keys": sorted(object_keys),
+                "updated_paths": sync_result["updated_paths"],
+                "removed_paths": sync_result["removed_paths"],
+                "mr_url": mr_data.get("web_url"),
+            },
+        )
+        return {
+            "task_id": task_id_norm,
+            "feature_branch": feature_branch,
+            "release_branch": release_branch_norm,
+            "object_keys": sorted(object_keys),
+            "updated_paths": sync_result["updated_paths"],
+            "removed_paths": sync_result["removed_paths"],
+            "mr_url": mr_data.get("web_url"),
+            "mr_iid": mr_data.get("iid"),
+        }
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
 
 
 def lock_entity_dev_meta(*, engine, entity_name: str, schema_name: str, table_name: str, author: str, ttl_minutes: int) -> dict[str, Any]:

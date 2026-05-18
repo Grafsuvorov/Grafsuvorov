@@ -71,6 +71,11 @@ from .config import (
     DEV_META_DEPLOY_SSH_KEY_PATH,
     DEV_META_DEPLOY_STRICT_HOST_KEY,
     DEV_META_DEPLOY_USER,
+    ENTITY_META_GIT_META_ROOT,
+    ENTITY_META_GIT_REPO,
+    GITLAB_API_URL,
+    GITLAB_PROJECT,
+    GITLAB_TOKEN,
     AIRFLOW_DEV_BASE_URL,
     AIRFLOW_DEV_DAG_ID,
     AIRFLOW_DEV_USERNAME,
@@ -96,6 +101,7 @@ from .services.dev_meta import (
     validate_dev_meta_content,
 )
 from .services.entity_dev_meta import (
+    create_entity_meta_mr,
     delete_entity_dev_meta_bundle,
     get_entity_dev_meta_status,
     init_entity_dev_meta_bundle,
@@ -242,6 +248,11 @@ class EntityMetaMovePayload(BaseModel):
     target_schema_name: str
     target_table_name: str
     task_id: str
+
+
+class EntityMetaMrPayload(BaseModel):
+    task_id: str
+    release_branch: str
 
 
 class AssistantContextPayload(BaseModel):
@@ -1052,6 +1063,30 @@ def move_admin_entity_meta(payload: EntityMetaMovePayload, request: Request):
             task_id=payload.task_id,
             author=user.email,
             lock_ttl_minutes=DEV_META_LOCK_TTL_MIN,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.post("/api/admin/entity-meta/mr")
+def create_admin_entity_meta_mr(payload: EntityMetaMrPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = create_entity_meta_mr(
+            engine=engine,
+            base_dir=BASE_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            git_repo_value=ENTITY_META_GIT_REPO,
+            git_meta_root_value=ENTITY_META_GIT_META_ROOT,
+            gitlab_token=GITLAB_TOKEN,
+            gitlab_project=GITLAB_PROJECT,
+            gitlab_api_url=GITLAB_API_URL,
+            task_id=payload.task_id,
+            release_branch=payload.release_branch,
+            author=user.email,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

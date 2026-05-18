@@ -99,12 +99,14 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const [schemaMode, setSchemaMode] = useState("dm");
   const [moveSchemaMode, setMoveSchemaMode] = useState("dm");
   const [taskId, setTaskId] = useState("");
+  const [releaseBranch, setReleaseBranch] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
   const [replicaPicker, setReplicaPicker] = useState("");
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creatingPr, setCreatingPr] = useState(false);
   const [moving, setMoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -333,6 +335,36 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     }
   };
 
+  const handleCreateMr = async () => {
+    if (!taskIdValid) {
+      setMessageType("warning");
+      setMessage("Перед созданием MR укажите номер задачи в формате DWH-12345.");
+      setError(null);
+      return;
+    }
+    if (!String(releaseBranch || "").trim()) {
+      setMessageType("warning");
+      setMessage("Укажите release-ветку для MR.");
+      setError(null);
+      return;
+    }
+    setCreatingPr(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await entityMetaApi.createMr({
+        task_id: taskId,
+        release_branch: releaseBranch.trim(),
+      });
+      setMessageType("success");
+      setMessage(data?.mr_url ? `MR создан/обновлен: ${data.mr_url}` : "MR создан/обновлен.");
+    } catch (err) {
+      setError(err.message || "Не удалось создать MR");
+    } finally {
+      setCreatingPr(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!bundle) return;
     if (!taskIdValid) {
@@ -496,6 +528,14 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
                 placeholder="DWH-12345"
               />
             </label>
+            <label className="admin-field">
+              <span>Release ветка</span>
+              <input
+                value={releaseBranch}
+                onChange={(e) => setReleaseBranch(e.target.value)}
+                placeholder="release/2026-05-18"
+              />
+            </label>
             <label className="admin-field dev-meta-generator-wide">
               <span>Ключи</span>
               <input
@@ -527,6 +567,9 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           <div className="dev-meta-generator-actions">
             <button className="btn btn-primary" onClick={handleOpenCurrentSelection} disabled={loading}>
               {loading ? "Открываем..." : "Открыть / создать DEV-черновик"}
+            </button>
+            <button className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingPr || !taskIdValid || !String(releaseBranch || "").trim()}>
+              {creatingPr ? "Создаем MR..." : "Создать MR"}
             </button>
             <span className="muted">{branchPreview ? `Ветка: ${branchPreview}` : "Укажите задачу, сущность, схему и таблицу"}</span>
           </div>

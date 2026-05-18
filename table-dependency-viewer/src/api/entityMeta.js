@@ -11,4 +11,5 @@ export const entityMetaApi = {
   save: (body) => apiClient.post("/api/admin/entity-meta/save", body),
   delete: (body) => apiClient.post("/api/admin/entity-meta/delete", body),
   move: (body) => apiClient.post("/api/admin/entity-meta/move", body),
+  createMr: (body) => apiClient.post("/api/admin/entity-meta/mr", body),
 };

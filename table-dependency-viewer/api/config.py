@@ -45,6 +45,14 @@ DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
 DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
 DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
 DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
+ENTITY_META_GIT_REPO = os.getenv("ENTITY_META_GIT_REPO", "")
+ENTITY_META_GIT_META_ROOT = os.getenv(
+    "ENTITY_META_GIT_META_ROOT",
+    "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity",
+)
+GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", "")
+GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
+GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
 
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")

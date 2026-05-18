@@ -1,61 +1,39 @@
-table_name: map_material_sap_to_material_group_hyperion_test
-table_schema: dict_dds
-table_id: 6352
-source_id: 6
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 298
-job_name: DICT_LOADER_JOB
-table_loading_index: 1
-entity_id: 42
-entity_name: MANAGEMENT_REPORTING_1
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 03:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dict_dds/map_material_sap_to_material_group_hyperion_test/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dict_dds/map_material_sap_to_material_group_hyperion_test/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/MANAGEMENT_REPORTING_1/dict_dds/map_material_sap_to_material_group_hyperion_test/sql_query_truncate.sql
-depends_on:
-  dict_stg:
-  - v_dob_kd_dic_materials
-verification: []
-key_attributes:
-- material_code
+#!/usr/bin/bash
+set -euo pipefail
 
+unset http_proxy
+unset https_proxy
+unset HTTP_PROXY
+unset HTTPS_PROXY
+export GIT_SSL_NO_VERIFY=1
 
-depends_on:
-  dds:
-    - sales_bundle_and_delivery_relationship
-    - sales_location_stay_normative
-  dict_dds:
-    - foreign_warehouse_priority_definition
-    - location_sales
-    - map_hfm_manufacturer_to_sap_smelter
-  dm_calc:
-    - finish_goods_warehouse_stock_plant_by_date
-    - sales_bundle_transport_hub_turnover_sdt0004
-    - sales_delivery_actual_business_location_by_date
-    - sd_sales_stock_by_date
-    - sd_sales_svh_stock_by_date
-    - storage_sales_bundles_amount
-    - transport_hub_country
-  ods:
-    - hypdb_v_hfm_pcs013_1_014_1_al
-    - ztsd5018m_eu_b_ral
-    - ztsd5018m_uz_b_ral
-verification:
-  - duplicate_check
-  - business:
-      - dq_sd0001
-      - dq_sd0002
-      - dq_sd0003
-key_attributes:
-  - delivery_number_sales
-  - batch
-  - dt_report
+REPO_ROOT="/root/git_dir/etl"
+APP_ROOT="/app"
+BRANCH="main"
+
+echo "[ci_cd] start $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+git -C "${REPO_ROOT}" fetch origin
+git -C "${REPO_ROOT}" checkout "${BRANCH}"
+git -C "${REPO_ROOT}" reset --hard "origin/${BRANCH}"
+git -C "${REPO_ROOT}" clean -fd
+
+mkdir -p "${APP_ROOT}/meta_info"
+mkdir -p "${APP_ROOT}/config_files/meta/dm"
+mkdir -p "${APP_ROOT}/config_files/meta/dm_view"
+
+rm -rf "${APP_ROOT}/meta_info"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm"/*
+rm -rf "${APP_ROOT}/config_files/meta/dm_view"/*
+
+cp -r "${REPO_ROOT}/meta_info/." "${APP_ROOT}/meta_info/"
+cp -r "${REPO_ROOT}/config_files/meta/dm/." "${APP_ROOT}/config_files/meta/dm/"
+cp -r "${REPO_ROOT}/config_files/meta/dm_view/." "${APP_ROOT}/config_files/meta/dm_view/"
+
+find "${APP_ROOT}/meta_info" -type d -exec chmod 755 {} \;
+find "${APP_ROOT}/meta_info" -type f -exec chmod 644 {} \;
+find "${APP_ROOT}/config_files/meta" -type d -exec chmod 755 {} \;
+find "${APP_ROOT}/config_files/meta" -type f -exec chmod 644 {} \;
+
+echo "[ci_cd] synced meta_info and config_files/meta from origin/${BRANCH}"
+echo "[ci_cd] done"

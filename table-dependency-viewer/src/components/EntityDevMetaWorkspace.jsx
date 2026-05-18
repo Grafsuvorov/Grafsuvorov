@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { entityMetaApi } from "../api/entityMeta.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 
@@ -12,6 +12,74 @@ function objectFingerprint(bundle) {
     insert_sql: bundle.insert_sql || "",
     truncate_sql: bundle.truncate_sql || "",
   });
+}
+
+function EntityPicker({ options, value, onChange, placeholder = "Выберите сущность" }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState(value || "");
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    setQuery(value || "");
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    const term = String(query || "").trim().toLowerCase();
+    if (!term) return options;
+    return options.filter((item) => String(item || "").toLowerCase().includes(term));
+  }, [options, query]);
+
+  return (
+    <div className={`entity-picker ${open ? "open" : ""}`} ref={rootRef}>
+      <input
+        className="entity-picker-input"
+        value={query}
+        onChange={(e) => {
+          const next = e.target.value;
+          setQuery(next);
+          onChange(next);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+      />
+      <button type="button" className="entity-picker-toggle" onClick={() => setOpen((prev) => !prev)} aria-label="Открыть список сущностей">
+        ▾
+      </button>
+      {open ? (
+        <div className="entity-picker-menu">
+          {filteredOptions.length ? (
+            filteredOptions.map((item) => (
+              <button
+                type="button"
+                key={item}
+                className={`entity-picker-option ${item === value ? "active" : ""}`}
+                onClick={() => {
+                  setQuery(item);
+                  onChange(item);
+                  setOpen(false);
+                }}
+              >
+                {item}
+              </button>
+            ))
+          ) : (
+            <div className="entity-picker-empty">Ничего не найдено</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function EntityDevMetaWorkspace({ userProfile }) {
@@ -47,6 +115,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const [validation, setValidation] = useState(null);
   const [validatedFingerprint, setValidatedFingerprint] = useState("");
   const [lockInfo, setLockInfo] = useState(null);
+  const yamlEditorRef = useRef(null);
 
   const currentUser = userProfile?.email || userProfile?.username || "";
 
@@ -77,6 +146,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     if (!term) return rows;
     return rows.filter((item) => String(item.table_name || "").toLowerCase().includes(term));
   }, [catalog.dev_files, fileSearch]);
+  const entityNames = useMemo(() => entityOptions.map((item) => item.entity_name), [entityOptions]);
   const groupedDevFiles = useMemo(() => {
     const tree = new Map();
     for (const item of catalog.dev_files || []) {
@@ -146,6 +216,10 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setMessageType("success");
       setMessage(data?.exists ? `Объект открыт из ${data?.source || "dev"}.` : "Создан новый DEV-черновик.");
       await refreshAll();
+      window.setTimeout(() => {
+        yamlEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        yamlEditorRef.current?.focus();
+      }, 0);
     } catch (err) {
       setError(err.message || "Не удалось открыть объект");
     } finally {
@@ -371,18 +445,12 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
               <span>Сущность</span>
-              <input
-                className="admin-combo"
-                list="entity-meta-entities"
+              <EntityPicker
+                options={entityNames}
                 value={selection.entity_name}
-                onChange={(e) => setSelection((prev) => ({ ...prev, entity_name: e.target.value }))}
+                onChange={(next) => setSelection((prev) => ({ ...prev, entity_name: next }))}
                 placeholder="BI_SB_WUC"
               />
-              <datalist id="entity-meta-entities">
-                {entityOptions.map((item) => (
-                  <option key={`${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
-                ))}
-              </datalist>
             </label>
             <label className="admin-field">
               <span>Схема</span>
@@ -439,20 +507,12 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <label className="admin-field dev-meta-generator-wide">
               <span>Размножить в сущности</span>
               <div className="dev-meta-replica-picker">
-                <select
-                  className="admin-select"
+                <EntityPicker
+                  options={entityNames.filter((item) => item !== selection.entity_name)}
                   value={replicaPicker}
-                  onChange={(e) => setReplicaPicker(e.target.value)}
-                >
-                  <option value="">Выберите сущность</option>
-                  {entityOptions
-                    .filter((item) => item.entity_name !== selection.entity_name)
-                    .map((item) => (
-                      <option key={`replica-${item.entity_id}-${item.entity_name}`} value={item.entity_name}>
-                        {item.entity_name}
-                      </option>
-                    ))}
-                </select>
+                  onChange={setReplicaPicker}
+                  placeholder="Выберите сущность"
+                />
                 <button type="button" className="btn btn-secondary" onClick={appendReplicaEntity} disabled={!replicaPicker}>
                   Добавить
                 </button>
@@ -460,7 +520,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               <input
                 value={replicaEntitiesText}
                 onChange={(e) => setReplicaEntitiesText(e.target.value)}
-                placeholder="BI_FI, BI_SB_WUC_COPY"
+                placeholder="MANAGMENT_REPORTING_2, MANAGMENT_REPORTING_3"
               />
             </label>
           </div>
@@ -478,18 +538,12 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <div className="dev-meta-generator-grid">
               <label className="admin-field">
                 <span>Новая сущность</span>
-                <input
-                  className="admin-combo"
-                  list="entity-meta-move-entities"
+                <EntityPicker
+                  options={entityNames}
                   value={moveTarget.entity_name}
-                  onChange={(e) => setMoveTarget((prev) => ({ ...prev, entity_name: e.target.value }))}
+                  onChange={(next) => setMoveTarget((prev) => ({ ...prev, entity_name: next }))}
                   placeholder="BI_FI"
                 />
-                <datalist id="entity-meta-move-entities">
-                  {entityOptions.map((item) => (
-                    <option key={`move-${item.entity_id}-${item.entity_name}`} value={item.entity_name} />
-                  ))}
-                </datalist>
               </label>
               <label className="admin-field">
                 <span>Новая схема</span>
@@ -671,6 +725,7 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               <label className="admin-field entity-dev-editor-field">
                 <span>YAML</span>
                 <textarea
+                  ref={yamlEditorRef}
                   className="dev-meta-editor entity-dev-editor"
                   value={bundle?.yaml_content || ""}
                   onChange={(e) => setBundle((prev) => ({ ...prev, yaml_content: e.target.value }))}

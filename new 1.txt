@@ -1,19 +1,10 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/config.py
-[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/main.py
-56:    ENTITY_META_DIR,
-57:    DEV_ENTITY_META_DIR,
-911:        prod_root_value=ENTITY_META_DIR,
-912:        dev_root_value=DEV_ENTITY_META_DIR,
-922:        prod_root_value=ENTITY_META_DIR,
-923:        dev_root_value=DEV_ENTITY_META_DIR,
-939:        prod_root_value=ENTITY_META_DIR,
-940:        dev_root_value=DEV_ENTITY_META_DIR,
-982:        prod_root_value=ENTITY_META_DIR,
-983:        dev_root_value=DEV_ENTITY_META_DIR,
-1003:            prod_root_value=ENTITY_META_DIR,
-1004:            dev_root_value=DEV_ENTITY_META_DIR,
-1033:            dev_root_value=DEV_ENTITY_META_DIR,
-1055:            prod_root_value=ENTITY_META_DIR,
-1056:            dev_root_value=DEV_ENTITY_META_DIR,
-1081:            dev_root_value=DEV_ENTITY_META_DIR,
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
+ENTITY_META_DIR = os.getenv("ENTITY_META_DIR", "etl_loads_entity")
+  DEV_ENTITY_META_DIR = os.getenv("DEV_ENTITY_META_DIR", "etl_loads_entity_dev")
+  ENTITY_META_GIT_REPO = os.getenv("ENTITY_META_GIT_REPO", "")
+  ENTITY_META_GIT_META_ROOT = os.getenv(
+      "ENTITY_META_GIT_META_ROOT",
+      "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity",
+  )
+  GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", "")
+  GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
+  GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")

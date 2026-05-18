@@ -614,15 +614,31 @@ def _git_env() -> dict[str, str]:
 
 
 def _run_git(repo_root: Path, args: list[str], *, cwd: Optional[Path] = None) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo_root), *args] if cwd is None else ["git", *args],
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-        env=_git_env(),
-        check=True,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), *args] if cwd is None else ["git", *args],
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            env=_git_env(),
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        details = "\n".join(
+            part.strip()
+            for part in (exc.stdout or "", exc.stderr or "")
+            if str(part or "").strip()
+        ).strip()
+        joined_args = " ".join(args)
+        raise ValueError(f"Git команда завершилась с ошибкой: git {joined_args}\n{details}".strip()) from exc
     return result.stdout.strip()
+
+
+def _ensure_git_identity(*, repo_root: Path, cwd: Path, author: str) -> None:
+    email = str(author or "").strip() or "table-dependency-viewer@local"
+    name = email.split("@", 1)[0].replace(".", " ").replace("_", " ").strip().title() or "Table Dependency Viewer"
+    _run_git(repo_root, ["config", "user.email", email], cwd=cwd)
+    _run_git(repo_root, ["config", "user.name", name], cwd=cwd)
 
 
 def _object_dir_from_key(root: Path, object_key: str) -> Path:
@@ -1469,6 +1485,7 @@ def create_entity_meta_mr(
             _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{feature_branch}"])
         else:
             _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{release_branch_norm}"])
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
         worktree_meta_root = worktree_dir / worktree_meta_root_rel
         sync_result = _sync_task_objects_to_worktree(
@@ -1481,11 +1498,7 @@ def create_entity_meta_mr(
         if status_output:
             _run_git(git_repo_root, ["add", "."], cwd=worktree_dir)
             commit_message = f"{task_id_norm}: update GP meta objects"
-            try:
-                _run_git(git_repo_root, ["commit", "-m", commit_message], cwd=worktree_dir)
-            except subprocess.CalledProcessError as exc:
-                if "nothing to commit" not in (exc.stdout or "") and "nothing to commit" not in (exc.stderr or ""):
-                    raise
+            _run_git(git_repo_root, ["commit", "-m", commit_message], cwd=worktree_dir)
 
         _run_git(git_repo_root, ["push", "origin", f"HEAD:{feature_branch}"], cwd=worktree_dir)
 

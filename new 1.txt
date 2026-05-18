@@ -1,2 +1,19 @@
-grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/config.py
-  grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/main.py
+[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/config.py
+[root@rgm-s-dwhapp01 table-dependency-viewer]# grep -n "ENTITY_META_DIR" /root/table-dependency-viewer/api/main.py
+56:    ENTITY_META_DIR,
+57:    DEV_ENTITY_META_DIR,
+911:        prod_root_value=ENTITY_META_DIR,
+912:        dev_root_value=DEV_ENTITY_META_DIR,
+922:        prod_root_value=ENTITY_META_DIR,
+923:        dev_root_value=DEV_ENTITY_META_DIR,
+939:        prod_root_value=ENTITY_META_DIR,
+940:        dev_root_value=DEV_ENTITY_META_DIR,
+982:        prod_root_value=ENTITY_META_DIR,
+983:        dev_root_value=DEV_ENTITY_META_DIR,
+1003:            prod_root_value=ENTITY_META_DIR,
+1004:            dev_root_value=DEV_ENTITY_META_DIR,
+1033:            dev_root_value=DEV_ENTITY_META_DIR,
+1055:            prod_root_value=ENTITY_META_DIR,
+1056:            dev_root_value=DEV_ENTITY_META_DIR,
+1081:            dev_root_value=DEV_ENTITY_META_DIR,
+[root@rgm-s-dwhapp01 table-dependency-viewer]#

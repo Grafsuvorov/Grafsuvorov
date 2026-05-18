@@ -1,123 +1,78 @@
+И env:
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'find /app/meta_info_dev/databas           e/greenplum/schema_name/tech_etl/etl_loads_entity -name meta_data_file.yaml | head'
-find: ‘/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity’: No such file or directory
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'find /app/meta_info_dev/databas           e/greenplum/schema_name/tech_etl/etl_loads_entity -name meta_data_file.yaml | wc -l'
-find: ‘/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity’: No such file or directory
-0
+  - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+  - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
 
+  Ваш api должен выглядеть так:
 
-compos
-services:
-    frontend:
-      build: .
-      ports:
-        - "15312:80"
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    volumes:
+      - /root/table-dependency-viewer/scripts:/app/scripts:ro
+      - /root/table-dependency-viewer/meta_info:/app/meta_info
+      - /root/table-dependency-viewer/meta_info_dev:/app/meta_info_dev
+      - /root/table-dependency-viewer/config_files:/app/config_files
+      - /root/git_dir:/root/git_dir
+    ports:
+      - "5312:8000"
+    env_file:
+      - ./api/.env
+    environment:
+      - DATABASE_URL=
+      - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - ENTITY_META_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - DEV_ENTITY_META_DIR=/app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - CLICK_META_DIR=/app/config_files/meta
+      - DEV_CLICK_META_DIR=/app/config_files/meta_dev
+      - DEV_DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.171:5432/dwh
+      - DEV_META_DEPLOY_HOST=10.66.129.237
+      - DEV_META_DEPLOY_PORT=22
+      - DEV_META_DEPLOY_USER=root
+      - DEV_META_DEPLOY_PASSWORD=
+      - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
+      - DEV_META_DEPLOY_SSH_KEY_PATH=
+      - DEV_META_DEPLOY_STRICT_HOST_KEY=false
+      - AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
+      - AIRFLOW_DEV_DAG_ID=
+      - AIRFLOW_DEV_USERNAME=
+      - AIRFLOW_DEV_PASSWORD=
+      - DEV_META_LOCK_TTL_MIN=30
+      - AUTH_ENABLED=true
+      - AUTH_SECRET_KEY=change_me_please
+      - AUTH_ACCESS_TTL_MIN=7200
+      - AUTH_ALLOW_REGISTER=false
+      - AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
+      - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
+      - ENTITY_META_GIT_REPO=/root/git_dir/etl
+      - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
+      - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
+      - GITLAB_PROJECT=dwh/etl
+      - GITLAB_TOKEN=
 
-    api:
-      build:
-        context: .
-        dockerfile: api/Dockerfile
-      volumes:
-        - /root/table-dependency-viewer/scripts:/app/scripts:ro
-        - /root/table-dependency-viewer/meta_info:/app/meta_info
-        - /root/table-dependency-viewer/config_files:/app/config_files
-        - /root/git_dir:/root/git_dir
-      ports:
-        - "5312:8000"
-      env_file:
-        - ./api/.env
-      environment:
-        - DATABASE_URL=
-        - META_PARENT_DIR=/app/meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - CLICK_META_DIR=/app/config_files/meta
-        - DEV_CLICK_META_DIR=/app/config_files/meta_dev
-        - DEV_DATABASE_URL=postgresql+psycopg2://gpetl:gpetl@10.66.229.171:5432/dwh
-        - DEV_META_DEPLOY_HOST=10.66.129.237
-        - DEV_META_DEPLOY_PORT=22
-        - DEV_META_DEPLOY_USER=root
-        - DEV_META_DEPLOY_PASSWORD=
-        - DEV_META_DEPLOY_BASE_DIR=/home/airflow/config_files/meta
-        - DEV_META_DEPLOY_SSH_KEY_PATH=
-        - DEV_META_DEPLOY_STRICT_HOST_KEY=false
-        - AIRFLOW_DEV_BASE_URL=http://rgm-s-dwhair01.hq.root.ad:8080
-        - AIRFLOW_DEV_DAG_ID=
-        - AIRFLOW_DEV_USERNAME=
-        - AIRFLOW_DEV_PASSWORD=
-        - DEV_META_LOCK_TTL_MIN=30
-        - AUTH_ENABLED=true
-        - AUTH_SECRET_KEY=change_me_please
-        - AUTH_ACCESS_TTL_MIN=7200
-        - AUTH_ALLOW_REGISTER=false
-        - AUTH_BOOTSTRAP_ADMIN_EMAIL=Nikita.Suvorov@rusal.com
-        - AUTH_BOOTSTRAP_ADMIN_PASSWORD=admin
-        - ENTITY_META_GIT_REPO=/root/git_dir/etl
-        - ENTITY_META_GIT_META_ROOT=meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity
-        - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/dwh/etl/api/v4
-        - GITLAB_PROJECT=dwh/etl
-        - GITLAB_TOKEN=
+  Ещё одна ошибка у вас тут:
 
+  - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/dwh/etl/api/v4
 
-config
-from dotenv import load_dotenv
-import os
+  Так неверно. Должно быть:
 
-load_dotenv()
+  - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
 
-TABLE_LOADING_HISTORY   = os.getenv("TABLE_LOADING_HISTORY", "tech_etl.log_objects_loading_history")
-TABLE_ENTITIES_META     = os.getenv("TABLE_ENTITIES_META", "tech_etl.entities_meta")
-TABLE_TABLES_META       = os.getenv("TABLE_TABLES_META", "tech_etl.tables_meta")
-TABLE_TABLE_COMPARE     = os.getenv("TABLE_TABLE_COMPARE", "tech_monitoring.vw_table_compare")
-TABLE_YT_SLA            = os.getenv("TABLE_YT_SLA", "tech_etl.yt_sla")
-TABLE_TABLES_META_CLICK = os.getenv("TABLE_TABLES_META_CLICK", "tech_etl.tables_meta_clickhouse_upload")
-DATABASE_URL            = os.getenv("DATABASE_URL")
-DBT_LOGS_DATABASE_URL   = os.getenv("DBT_LOGS_DATABASE_URL", "")
-TABLE_YTREK_INCIDENTS   = os.getenv("TABLE_YTREK_INCIDENTS", "tech_etl.ytrek_incidents")
-TABLE_DATA_QUALITY      = os.getenv("TABLE_DATA_QUALITY", "dq.data_quality_results")
-TABLE_RELEASE_LOG       = os.getenv("TABLE_RELEASE_LOG", "tech_etl.release_log")
-TABLE_RELEASE_OBJECTS   = os.getenv("TABLE_RELEASE_OBJECTS", "tech_etl.release_objects")
-TABLE_YT_ISSUE_SNAPSHOT = os.getenv("TABLE_YT_ISSUE_SNAPSHOT", "tech_etl.yt_issue_snapshot")
-TABLE_YT_ISSUE_CUSTOM   = os.getenv("TABLE_YT_ISSUE_CUSTOM", "tech_etl.yt_issue_custom_field")
-TABLE_YT_ISSUE_TIMELINE = os.getenv("TABLE_YT_ISSUE_TIMELINE", "tech_etl.yt_issue_timeline")
-TABLE_YT_ISSUE_WORKLOG  = os.getenv("TABLE_YT_ISSUE_WORKLOG", "tech_etl.yt_issue_worklog")
-TABLE_YT_ISSUE_COMMENT  = os.getenv("TABLE_YT_ISSUE_COMMENT", "tech_etl.yt_issue_comment")
-TABLE_CLICK_LOAD_RUN    = os.getenv("TABLE_CLICK_LOAD_RUN", "tech_etl.click_fact_table_load_run")
-TABLE_CLICK_LOAD_STAGE  = os.getenv("TABLE_CLICK_LOAD_STAGE", "tech_etl.click_fact_table_load_stage")
-CLICK_META_DIR          = os.getenv("CLICK_META_DIR", "config_files/meta")
-DEV_CLICK_META_DIR      = os.getenv("DEV_CLICK_META_DIR", "config_files/meta_dev")
-DBT_MANIFEST_DIR        = os.getenv("DBT_MANIFEST_DIR", "config_files/dbt")
-TABLE_DBT_MODEL_CATALOG = os.getenv("TABLE_DBT_MODEL_CATALOG", "dc_dbt.model")
-TABLE_DBT_MODEL_LOG     = os.getenv("TABLE_DBT_MODEL_LOG", "tech_monitoring.log_dbt_model")
-TABLE_DBT_RUN_LOG       = os.getenv("TABLE_DBT_RUN_LOG", "tech_monitoring.log_dbt_run")
-ADMIN_CICD_SCRIPT       = os.getenv("ADMIN_CICD_SCRIPT", "scripts/ci_cd.sh")
-YTRACK_ISSUE_URL        = os.getenv("YTRACK_ISSUE_URL", "https://yt.rusal.ru/issue/{id}")
-DEV_DATABASE_URL        = os.getenv("DEV_DATABASE_URL", "")
-AIRFLOW_DEV_BASE_URL    = os.getenv("AIRFLOW_DEV_BASE_URL", "")
-AIRFLOW_DEV_DAG_ID      = os.getenv("AIRFLOW_DEV_DAG_ID", "")
-AIRFLOW_DEV_USERNAME    = os.getenv("AIRFLOW_DEV_USERNAME", "")
-AIRFLOW_DEV_PASSWORD    = os.getenv("AIRFLOW_DEV_PASSWORD", "")
-DEV_META_LOCK_TTL_MIN   = int(os.getenv("DEV_META_LOCK_TTL_MIN", "30"))
-DEV_META_DEPLOY_HOST    = os.getenv("DEV_META_DEPLOY_HOST", "")
-DEV_META_DEPLOY_PORT    = int(os.getenv("DEV_META_DEPLOY_PORT", "22"))
-DEV_META_DEPLOY_USER    = os.getenv("DEV_META_DEPLOY_USER", "")
-DEV_META_DEPLOY_PASSWORD = os.getenv("DEV_META_DEPLOY_PASSWORD", "")
-DEV_META_DEPLOY_BASE_DIR = os.getenv("DEV_META_DEPLOY_BASE_DIR", "")
-DEV_META_DEPLOY_SSH_KEY_PATH = os.getenv("DEV_META_DEPLOY_SSH_KEY_PATH", "")
-DEV_META_DEPLOY_STRICT_HOST_KEY = os.getenv("DEV_META_DEPLOY_STRICT_HOST_KEY", "false")
-ENTITY_META_DIR = os.getenv("ENTITY_META_DIR", "etl_loads_entity")
-DEV_ENTITY_META_DIR = os.getenv("DEV_ENTITY_META_DIR", "etl_loads_entity_dev")
-ENTITY_META_GIT_REPO = os.getenv("ENTITY_META_GIT_REPO", "")
-ENTITY_META_GIT_META_ROOT = os.getenv(
-    "ENTITY_META_GIT_META_ROOT",
-    "meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity",
-)
-GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", "")
-GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
-GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
+  Потому что /dwh/etl — это путь проекта, а не часть API base URL.
 
-AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
-AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")
-AUTH_ACCESS_TTL_MIN = int(os.getenv("AUTH_ACCESS_TTL_MIN", "480"))
-AUTH_ALLOW_REGISTER = os.getenv("AUTH_ALLOW_REGISTER", "false")
-AUTH_BOOTSTRAP_ADMIN_EMAIL = os.getenv("AUTH_BOOTSTRAP_ADMIN_EMAIL")
-AUTH_BOOTSTRAP_ADMIN_PASSWORD = os.getenv("AUTH_BOOTSTRAP_ADMIN_PASSWORD")
+  После правки:
+
+  mkdir -p /root/table-dependency-viewer/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity
+  docker compose up -d --build
+
+  Потом проверить:
+
+  docker compose exec api sh -lc 'echo $DEV_ENTITY_META_DIR'
+  docker compose exec api sh -lc 'ls -la /app/meta_info_dev'
+
+  И если хотите быстро проверить каталог:
+
+  docker compose exec api sh -lc 'find /app/meta_info_dev/database/greenplum/schema_name/tech_etl/etl_loads_entity -name meta_data_file.yaml | head'
+
+  То есть сейчас проблема не в фронте, а в том, что DEV-дерево вообще не примонтировано в контейнер.

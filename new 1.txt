@@ -1,2 +1,5 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'test -n "$GITLAB_TOKEN" && echo TOKEN_SET || echo TOKEN_EMPTY          '
-TOKEN_SET
+docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/user"'
+
+  2. Потом:
+
+  docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl"'

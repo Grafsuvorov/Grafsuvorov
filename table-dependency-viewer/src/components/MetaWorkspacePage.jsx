@@ -42,9 +42,14 @@ export default function MetaWorkspacePage({ userProfile }) {
 
   return (
     <div className="container cc-page">
-      <section className="cc-surface dev-meta-page">
-        <div className="section-title">Подготовка релиза</div>
-        <div className="section-subtitle">Общий раздел задачи: GP-объекты и ClickHouse мета с единым MR.</div>
+      <section className="cc-surface dev-meta-page meta-workspace-page">
+        <div className="meta-workspace-hero">
+          <div>
+            <div className="section-title">Подготовка релиза</div>
+            <div className="section-subtitle">Общий раздел задачи: GP-объекты и ClickHouse мета с единым MR.</div>
+          </div>
+          <div className="meta-workspace-badge">Admin only</div>
+        </div>
 
         {(message || error) && (
           <div className={`dev-meta-feedback ${error ? "error" : "success"}`}>
@@ -53,7 +58,7 @@ export default function MetaWorkspacePage({ userProfile }) {
           </div>
         )}
 
-        <div className="dev-meta-generator">
+        <div className="dev-meta-generator meta-workspace-context">
           <div className="section-subtitle">Общий контекст задачи</div>
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
@@ -82,21 +87,23 @@ export default function MetaWorkspacePage({ userProfile }) {
           </button>
         </div>
 
-        {mode === "gp" ? (
-          <EntityDevMetaWorkspace
-            userProfile={userProfile}
-            embedded
-            taskId={taskId}
-            onTaskIdChange={setTaskId}
-            releaseBranch={releaseBranch}
-            onReleaseBranchChange={setReleaseBranch}
-            hideCreateMr
-            hideHeader
-            hideTaskControls
-          />
-        ) : (
-          <DevMetaAdminPage userProfile={userProfile} embedded taskId={taskId} hideHeader />
-        )}
+        <div className="meta-workspace-pane">
+          {mode === "gp" ? (
+            <EntityDevMetaWorkspace
+              userProfile={userProfile}
+              embedded
+              taskId={taskId}
+              onTaskIdChange={setTaskId}
+              releaseBranch={releaseBranch}
+              onReleaseBranchChange={setReleaseBranch}
+              hideCreateMr
+              hideHeader
+              hideTaskControls
+            />
+          ) : (
+            <DevMetaAdminPage userProfile={userProfile} embedded taskId={taskId} hideHeader />
+          )}
+        </div>
       </section>
     </div>
   );

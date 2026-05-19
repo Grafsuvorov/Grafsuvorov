@@ -1,4 +1,17 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/user"'
-sh: 1: curl: not found
-[root@rgm-s-dwhapp01 table-dependency-viewer]#  docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl"'
-sh: 1: curl: not found
+curl -k --header "PRIVATE-TOKEN: <ВАШ_ТОКЕН>" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
+
+  И:
+
+  curl -k --header "PRIVATE-TOKEN: <ВАШ_ТОКЕН>" "https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl"
+
+  Если хотите проверить именно из контейнера, используйте Python:
+
+  docker compose exec api python -c 'import os,urllib.request,ssl; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user", headers={"PRIVATE-
+  TOKEN": os.environ["GITLAB_TOKEN"]}); print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
+
+  И проект:
+
+  docker compose exec api python -c 'import os,urllib.request,ssl; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl",
+  headers={"PRIVATE-TOKEN": os.environ["GITLAB_TOKEN"]}); print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
+
+  Как

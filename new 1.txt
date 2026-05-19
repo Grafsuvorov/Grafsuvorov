@@ -1,22 +1,2 @@
-Не удалось вызвать GitLab API: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1016)>
-
-le-dependency-viewer-api-1  | INFO:     Application startup complete.
-table-dependency-viewer-api-1  | INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35222 - "GET /api/tables?detailed=true HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35224 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35232 - "GET /api/admin/entity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35236 - "GET /api/admin/entity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35238 - "GET /api/admin/entity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35234 - "POST /auth/audit/event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35250 - "POST /api/admin/entity-meta/init HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35252 - "POST /api/admin/entity-meta/lock HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35258 - "GET /api/admin/entity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35254 - "GET /api/admin/entity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35256 - "GET /api/admin/entity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35308 - "POST /api/admin/entity-meta/mr HTTP/1.1" 400 Bad Request
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35382 - "POST /api/admin/entity-meta/validate HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35452 - "POST /api/admin/entity-meta/save HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35524 - "GET /api/admin/entity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35522 - "GET /api/admin/entity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35526 - "GET /api/admin/entity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:35546 - "POST /api/admin/entity-meta/mr HTTP/1.1" 400 Bad Request
+Операция не выполнена
+GitLab вернул 401: {"message":"401 Unauthorized"}

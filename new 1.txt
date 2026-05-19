@@ -1,40 +1,27 @@
-urllib.error.URLError: <urlopen error Tunnel connection failed: 407 Proxy Authentication Required>
-[root@rgm-s-dwhapp01 table-dependency-viewer]# curl -k --header "PRIVATE-TOKEN: glpat-5pLkVzxotagskBlujRUHfW86MQp1Ojt-5pLkVzxotagskBlujR" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
-curl: (56) Received HTTP code 407 from proxy after CONNECT
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import os,ssl,urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl._create_unverified_context())); req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user",headers={"PRIVATE-TOKEN": os.environ["GITLAB_TOKEN"]}); print(opener.open(req).read().decode())'
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-    response = meth(req, response)
-               ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-    response = self.parent.error(
-               ^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-    return self._call_chain(*args)
-           ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-    result = func(*args)
-             ^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
-    raise HTTPError(req.full_url, code, msg, hdrs, fp)
-urllib.error.HTTPError: HTTP Error 401: Unauthorized
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api python -c 'import os,ssl,urllib.request; opener=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ssl._create_unverified_context())); req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl",headers={"PRIVATE-TOKEN": os.environ["GITLAB_TOKEN"]}); print(opener.open(req).read().decode())'
-Traceback (most recent call last):
-  File "<string>", line 1, in <module>
-  File "/usr/local/lib/python3.11/urllib/request.py", line 525, in open
-    response = meth(req, response)
-               ^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 634, in http_response
-    response = self.parent.error(
-               ^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 563, in error
-    return self._call_chain(*args)
-           ^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 496, in _call_chain
-    result = func(*args)
-             ^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/urllib/request.py", line 643, in http_error_default
-    raise HTTPError(req.full_url, code, msg, hdrs, fp)
-urllib.error.HTTPError: HTTP Error 401: Unauthorized
-[root@rgm-s-dwhapp01 table-dependency-viewer]#
+python3 -c 'import ssl,urllib.request; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user", headers={"PRIVATE-TOKEN":"ВАШ_ТОКЕН"});
+  print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
+
+  Если токен рабочий:
+
+  - вернётся JSON с пользователем
+
+  Если нерабочий:
+
+  - будет 401 Unauthorized
+
+  Локально на Mac можно так же:
+
+  python3 -c 'import ssl,urllib.request; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user", headers={"PRIVATE-TOKEN":"ВАШ_ТОКЕН"});
+  print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
+
+  Или если есть curl, ещё проще:
+
+  curl -k --header "PRIVATE-TOKEN: ВАШ_ТОКЕН" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
+
+  Результат:
+
+  - пришёл JSON → токен рабочий
+  - 401 → токен нерабочий
+  - 403 → токен живой, но прав не хватает
+
+  Это самая короткая и надёжная проверка.

@@ -44,9 +44,9 @@ export default function MetaWorkspacePage({ userProfile }) {
     <div className="container cc-page">
       <section className="cc-surface dev-meta-page meta-workspace-page">
         <div className="meta-workspace-hero">
-          <div>
-            <div className="section-title">Подготовка релиза</div>
-            <div className="section-subtitle">Общий раздел задачи: GP-объекты и ClickHouse мета с единым MR.</div>
+          <div className="meta-workspace-hero-copy">
+            <div className="section-title">Meta Workspace</div>
+            <div className="section-subtitle">Подготовка релиза для Greenplum и ClickHouse в одном аккуратном рабочем контуре.</div>
           </div>
           <div className="meta-workspace-badge">Admin only</div>
         </div>
@@ -59,8 +59,13 @@ export default function MetaWorkspacePage({ userProfile }) {
         )}
 
         <div className="dev-meta-generator meta-workspace-context">
-          <div className="section-subtitle">Общий контекст задачи</div>
-          <div className="dev-meta-generator-grid">
+          <div className="meta-workspace-context-head">
+            <div>
+              <div className="section-subtitle">Общий раздел задачи</div>
+              <div className="muted">Один MR для всех изменений этой задачи.</div>
+            </div>
+          </div>
+          <div className="dev-meta-generator-grid meta-workspace-context-grid">
             <label className="admin-field">
               <span>Задача</span>
               <input value={taskId} onChange={(e) => setTaskId(e.target.value.toUpperCase())} placeholder="DWH-12345" />

@@ -180,9 +180,9 @@ export default function EntityDevMetaWorkspace({
   const [replicaPickerValues, setReplicaPickerValues] = useState([]);
   const [editorSections, setEditorSections] = useState({
     yaml: true,
-    recreate: false,
-    insert: false,
-    truncate: false,
+    recreate: true,
+    insert: true,
+    truncate: true,
   });
   const [fullscreenEditor, setFullscreenEditor] = useState(null);
   const [bundle, setBundle] = useState(null);
@@ -311,9 +311,9 @@ export default function EntityDevMetaWorkspace({
       setBundle(data || null);
       setEditorSections({
         yaml: true,
-        recreate: false,
-        insert: false,
-        truncate: false,
+        recreate: true,
+        insert: true,
+        truncate: true,
       });
       setValidatedFingerprint("");
       setMessageType("success");
@@ -877,12 +877,15 @@ export default function EntityDevMetaWorkspace({
             <div className="entity-dev-editors">
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("yaml")}>
-                  <span>YAML</span>
+                  <span className="entity-dev-editor-label">
+                    <span>YAML</span>
+                    <span className="entity-dev-editor-state">{editorSections.yaml ? "Открыт" : "Свернут"}</span>
+                  </span>
                   <span className="entity-dev-editor-toggle-actions">
-                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("yaml"); }}>
-                      Во весь экран
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("yaml"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
+                      ⤢
                     </span>
-                    <span>{editorSections.yaml ? "Свернуть" : "Раскрыть"}</span>
+                    <span className={`entity-dev-editor-chevron ${editorSections.yaml ? "open" : ""}`}>⌄</span>
                   </span>
                 </button>
                 {editorSections.yaml ? (
@@ -897,12 +900,15 @@ export default function EntityDevMetaWorkspace({
               </label>
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("recreate")}>
-                  <span>Recreate SQL</span>
+                  <span className="entity-dev-editor-label">
+                    <span>Recreate SQL</span>
+                    <span className="entity-dev-editor-state">{editorSections.recreate ? "Открыт" : "Свернут"}</span>
+                  </span>
                   <span className="entity-dev-editor-toggle-actions">
-                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("recreate"); }}>
-                      Во весь экран
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("recreate"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
+                      ⤢
                     </span>
-                    <span>{editorSections.recreate ? "Свернуть" : "Раскрыть"}</span>
+                    <span className={`entity-dev-editor-chevron ${editorSections.recreate ? "open" : ""}`}>⌄</span>
                   </span>
                 </button>
                 {editorSections.recreate ? (
@@ -916,12 +922,15 @@ export default function EntityDevMetaWorkspace({
               </label>
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("insert")}>
-                  <span>Insert SQL</span>
+                  <span className="entity-dev-editor-label">
+                    <span>Insert SQL</span>
+                    <span className="entity-dev-editor-state">{editorSections.insert ? "Открыт" : "Свернут"}</span>
+                  </span>
                   <span className="entity-dev-editor-toggle-actions">
-                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("insert"); }}>
-                      Во весь экран
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("insert"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
+                      ⤢
                     </span>
-                    <span>{editorSections.insert ? "Свернуть" : "Раскрыть"}</span>
+                    <span className={`entity-dev-editor-chevron ${editorSections.insert ? "open" : ""}`}>⌄</span>
                   </span>
                 </button>
                 {editorSections.insert ? (
@@ -935,12 +944,15 @@ export default function EntityDevMetaWorkspace({
               </label>
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("truncate")}>
-                  <span>Truncate SQL</span>
+                  <span className="entity-dev-editor-label">
+                    <span>Truncate SQL</span>
+                    <span className="entity-dev-editor-state">{editorSections.truncate ? "Открыт" : "Свернут"}</span>
+                  </span>
                   <span className="entity-dev-editor-toggle-actions">
-                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("truncate"); }}>
-                      Во весь экран
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("truncate"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
+                      ⤢
                     </span>
-                    <span>{editorSections.truncate ? "Свернуть" : "Раскрыть"}</span>
+                    <span className={`entity-dev-editor-chevron ${editorSections.truncate ? "open" : ""}`}>⌄</span>
                   </span>
                 </button>
                 {editorSections.truncate ? (

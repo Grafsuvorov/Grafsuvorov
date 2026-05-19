@@ -410,15 +410,38 @@ def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
     return targets
 
 
+def _extract_cte_names(sql: str) -> set[str]:
+    normalized = _normalize_sql(sql)
+    result: set[str] = set()
+    for match in re.finditer(r"\bwith\s+([a-z_][\w]*)\s+as\s*\(", normalized):
+        result.add(match.group(1))
+    for match in re.finditer(r",\s*([a-z_][\w]*)\s+as\s*\(", normalized):
+        result.add(match.group(1))
+    return result
+
+
+def _extract_temp_table_names(sql: str) -> set[str]:
+    normalized = _normalize_sql(sql)
+    result: set[str] = set()
+    for pattern in (
+        r"\bcreate\s+temporary\s+table\s+([a-z_][\w]*)\b",
+        r"\bcreate\s+temp\s+table\s+([a-z_][\w]*)\b",
+    ):
+        for match in re.finditer(pattern, normalized):
+            result.add(match.group(1))
+    return result
+
+
 def _extract_all_schema_refs(sql: str) -> set[str]:
     schemas: set[str] = set()
+    cte_names = _extract_cte_names(sql)
     pattern = re.compile(
         r"\b(?:from|join|insert\s+into|truncate\s+table|delete\s+from)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.",
         re.IGNORECASE,
     )
     for match in pattern.finditer(_strip_sql_comments(sql)):
         schema_name = _normalize_name(match.group(1))
-        if schema_name:
+        if schema_name and schema_name not in cte_names and len(schema_name) > 1:
             schemas.add(schema_name)
     return schemas
 
@@ -991,6 +1014,7 @@ def validate_entity_dev_meta_bundle(
     if object_type != "view" and not insert_sql.strip():
         errors.append("Insert SQL не должен быть пустым для table")
     elif insert_sql.strip():
+        temp_table_names = _extract_temp_table_names(insert_sql)
         insert_target = _extract_insert_target(insert_sql)
         expected_fqn = f"{normalized_schema}.{normalized_table}"
         if not insert_target:
@@ -1000,8 +1024,19 @@ def validate_entity_dev_meta_bundle(
 
         if re.search(r"\bselect\s+\*", _normalize_sql(insert_sql)):
             warnings.append("В insert SQL найден `SELECT *`")
-        if re.search(r"\bdrop\s+(table|view)\b", _normalize_sql(insert_sql)):
-            errors.append("В insert SQL запрещены `DROP TABLE/VIEW`")
+        drop_matches = list(re.finditer(r"\bdrop\s+(table|view)\s+(?:if\s+exists\s+)?([a-z0-9_\".]+)", _normalize_sql(insert_sql)))
+        risky_drop_targets: list[str] = []
+        for match in drop_matches:
+            drop_kind = match.group(1)
+            drop_target = match.group(2).replace('"', "").lower()
+            if drop_kind == "table" and "." not in drop_target and drop_target in temp_table_names:
+                continue
+            risky_drop_targets.append(f"{drop_kind} {drop_target}")
+        if risky_drop_targets:
+            warnings.append(
+                "В insert SQL найден `DROP TABLE/VIEW`; проверьте, что удаляются только временные объекты: "
+                + ", ".join(f"`{item}`" for item in risky_drop_targets)
+            )
         if re.search(r"\btruncate\s+table\b", _normalize_sql(insert_sql)):
             warnings.append("В insert SQL найден `TRUNCATE TABLE`; проверьте, что это действительно нужно")
 

@@ -241,6 +241,35 @@ def _collect_used_table_ids(*roots: Path) -> set[int]:
     return used_ids
 
 
+def _find_table_id_conflicts(*, current_object_key: str, table_id: Any, roots: Iterable[Path]) -> list[str]:
+    try:
+        target_id = int(table_id)
+    except Exception:
+        return []
+    if target_id <= 0:
+        return []
+
+    conflicts: list[str] = []
+    current_key_norm = str(current_object_key or "").strip().lower()
+    for root in roots:
+        for yaml_path in _iter_yaml_paths(root):
+            payload = _load_yaml_file(yaml_path)
+            try:
+                existing_id = int(payload.get("table_id"))
+            except Exception:
+                continue
+            if existing_id != target_id:
+                continue
+            rel = yaml_path.relative_to(root)
+            if len(rel.parts) < 4:
+                continue
+            object_key = _build_object_key(rel.parts[0], rel.parts[1], rel.parts[2])
+            if object_key.lower() == current_key_norm:
+                continue
+            conflicts.append(object_key)
+    return sorted(set(conflicts), key=str.lower)
+
+
 def _next_table_id(*roots: Path) -> int:
     used_ids = _collect_used_table_ids(*roots)
     normal_ids = [value for value in used_ids if 0 < value <= TABLE_ID_MAX_NORMAL]
@@ -871,6 +900,9 @@ def validate_entity_dev_meta_bundle(
     checks: list[str] = []
     normalized_schema = _normalize_name(schema_name)
     normalized_table = _normalize_name(table_name)
+    current_object_key = _build_object_key(entity_name, schema_name, table_name)
+    prod_root = _resolve_root(base_dir, prod_root_value)
+    dev_root = _resolve_root(base_dir, dev_root_value)
 
     try:
         payload = yaml.safe_load(yaml_content) or {}
@@ -898,6 +930,26 @@ def validate_entity_dev_meta_bundle(
         errors.append("`table_schema` в YAML не совпадает с выбранной схемой")
     if _normalize_name(payload.get("table_name")) != normalized_table:
         errors.append("`table_name` в YAML не совпадает с выбранной таблицей")
+
+    table_id_value = payload.get("table_id")
+    try:
+        table_id_int = int(table_id_value)
+        if table_id_int <= 0:
+            raise ValueError()
+    except Exception:
+        errors.append("`table_id` должен быть положительным числом")
+        table_id_int = None
+    if table_id_int is not None:
+        conflicts = _find_table_id_conflicts(
+            current_object_key=current_object_key,
+            table_id=table_id_int,
+            roots=(prod_root, dev_root),
+        )
+        if conflicts:
+            errors.append(
+                f"`table_id` {table_id_int} уже используется в других объектах: "
+                + ", ".join(f"`{item}`" for item in conflicts)
+            )
 
     object_type = _normalize_name(payload.get("object_type"))
     if object_type not in {"table", "view"}:
@@ -953,7 +1005,7 @@ def validate_entity_dev_meta_bundle(
         if re.search(r"\btruncate\s+table\b", _normalize_sql(insert_sql)):
             warnings.append("В insert SQL найден `TRUNCATE TABLE`; проверьте, что это действительно нужно")
 
-        known_schemas = _collect_known_schemas(_resolve_root(base_dir, prod_root_value)) | _collect_known_schemas(_resolve_root(base_dir, dev_root_value))
+        known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
         unknown_schemas = sorted(
             schema_name
             for schema_name in _extract_all_schema_refs(insert_sql)
@@ -987,7 +1039,7 @@ def validate_entity_dev_meta_bundle(
         if not re.search(rf"\b{re.escape(field_name)}\b", _normalize_sql(recreate_sql)):
             errors.append(f"В recreate SQL отсутствует системное поле `{field_name}`")
 
-    known_schemas = _collect_known_schemas(_resolve_root(base_dir, prod_root_value)) | _collect_known_schemas(_resolve_root(base_dir, dev_root_value))
+    known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
     if insert_sql.strip():
         expected_depends_on = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
         current_depends_on = _flatten_depends_on(payload.get("depends_on"))

@@ -666,6 +666,49 @@ def load_yaml(text: str, path: str, findings: list[Finding]) -> dict[str, Any]:
         return {}
 
 
+def collect_entity_table_ids(ref: str, cwd: Path) -> dict[int, list[str]]:
+    raw = run_git(["ls-tree", "-r", "--name-only", ref], cwd)
+    result: dict[int, list[str]] = {}
+    for path in (line.strip() for line in raw.splitlines() if line.strip()):
+        if not is_entity_meta_yaml(path):
+            continue
+        try:
+            text = git_show_text(ref, path, cwd)
+        except Exception:
+            continue
+        meta = load_yaml(text, path, [])
+        try:
+            table_id = int(meta.get("table_id"))
+        except Exception:
+            continue
+        if table_id <= 0:
+            continue
+        result.setdefault(table_id, []).append(path)
+    return result
+
+
+def add_duplicate_table_id_findings(
+    findings: list[Finding],
+    *,
+    head: str,
+    cwd: Path,
+    relevant_paths: Iterable[str],
+) -> None:
+    relevant_set = {str(path).strip() for path in relevant_paths if str(path).strip()}
+    if not relevant_set:
+        return
+    all_table_ids = collect_entity_table_ids(head, cwd)
+    for table_id, paths in sorted(all_table_ids.items()):
+        if len(paths) < 2:
+            continue
+        if not any(path in relevant_set for path in paths):
+            continue
+        message = f"`table_id` {table_id} дублируется в ветке: " + ", ".join(f"`{path}`" for path in sorted(paths))
+        for path in sorted(paths):
+            if path in relevant_set:
+                findings.append(Finding(BLOCKER, path, "duplicate-table-id", message))
+
+
 def parse_simple_yaml(text: str) -> dict[str, Any]:
     result: dict[str, Any] = {}
     current_key: str | None = None
@@ -1119,6 +1162,13 @@ def main() -> int:
             validate_sql(path, text, findings)
             if (is_click_view_sql(path) and not path.startswith("config_files/meta/dm_view/")) or "etl_loads_entity/" in path.lower() and "/dm_view/" in path.lower():
                 validate_view_on_view(path, text, view_index, findings)
+
+    add_duplicate_table_id_findings(
+        findings,
+        head=args.head,
+        cwd=cwd,
+        relevant_paths=[path for _, path in relevant if is_entity_meta_yaml(path)],
+    )
 
     if release_context:
         add_release_slot_comparison(findings, release_context.release_name, merged_tasks_list)

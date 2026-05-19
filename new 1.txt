@@ -1,5 +1,4 @@
-docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/user"'
-
-  2. Потом:
-
-  docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl"'
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/user"'
+sh: 1: curl: not found
+[root@rgm-s-dwhapp01 table-dependency-viewer]#  docker compose exec api sh -lc 'curl --insecure --header "PRIVATE-TOKEN: $GITLAB_TOKEN" "https://prod.gitlab.dwh.rusal.com/api/v4/projects/dwh%2Fetl"'
+sh: 1: curl: not found

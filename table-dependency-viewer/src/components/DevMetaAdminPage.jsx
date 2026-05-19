@@ -304,7 +304,7 @@ function DagLoadingMiniGame({ active }) {
   );
 }
 
-export default function DevMetaAdminPage({ userProfile, embedded = false, taskId: externalTaskId }) {
+export default function DevMetaAdminPage({ userProfile, embedded = false, taskId: externalTaskId, hideHeader = false }) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
@@ -312,6 +312,7 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
     order_by: "",
     dag_tags: "",
   });
+  const [newViewName, setNewViewName] = useState("");
   const [status, setStatus] = useState(null);
   const [files, setFiles] = useState({ dev_files: [], locks: [] });
   const [selectedFile, setSelectedFile] = useState(null);
@@ -349,6 +350,16 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
     refreshStatus().catch((err) => setError(err.message || "Не удалось загрузить статус"));
     refreshFiles().catch((err) => setError(err.message || "Не удалось загрузить файлы"));
   }, [canUseDevMeta]);
+
+  useEffect(() => {
+    if (!canUseDevMeta) return;
+    setSelectedFile(null);
+    setContent("");
+    setValidation(null);
+    setValidatedContent(null);
+    setLockInfo(null);
+    refreshFiles(schemaName).catch((err) => setError(err.message || "Не удалось загрузить файлы"));
+  }, [schemaName]);
 
   const formatDateTime = (value) => (value ? formatRuDateTime(value) : "—");
   const dagIsActive = ["queued", "running"].includes(String(dagStatus?.dag_run_state || "").toLowerCase());
@@ -592,6 +603,34 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
     }
   };
 
+  const handleCreateViewDraft = async () => {
+    const name = String(newViewName || "").trim();
+    if (!name) {
+      setError("Укажите имя view");
+      return;
+    }
+    const fileName = `${name}.sql`;
+    const draft = `create or replace view dm_view.${name} as\nselect\n  1 as stub_column;\n`;
+    try {
+      await devMetaApi.lock({ schema_name: "dm_view", file_name: fileName });
+      setSchemaName("dm_view");
+      setSelectedFile(fileName);
+      setContent(draft);
+      setValidation(null);
+      setValidatedContent(null);
+      setLockInfo({
+        schema_name: "dm_view",
+        file_name: fileName,
+        locked_by: currentUser,
+      });
+      setMessageType("success");
+      setError(null);
+      setMessage(`Черновик view создан: ${fileName}`);
+    } catch (err) {
+      setError(err.message || "Не удалось создать черновик view");
+    }
+  };
+
   const handleDownloadFile = () => {
     if (!selectedFile || !content) return;
     const blob = new Blob([content], { type: "text/yaml;charset=utf-8" });
@@ -618,10 +657,14 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
 
   const contentNode = (
       <section className={embedded ? "dev-meta-page" : "cc-surface dev-meta-page"}>
-        <div className="section-title">DEV Meta Generator</div>
-        <div className="section-subtitle">
-          Инструмент для генерации YAML-файла объекта для загрузки в ClickHouse и запуска DEV DAG.
-        </div>
+        {!hideHeader ? (
+          <>
+            <div className="section-title">DEV Meta Generator</div>
+            <div className="section-subtitle">
+              Инструмент для генерации YAML-файла объекта для загрузки в ClickHouse и запуска DEV DAG.
+            </div>
+          </>
+        ) : null}
 
         <div className="dev-meta-toolbar">
           <div className="muted">
@@ -629,6 +672,7 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
           </div>
         </div>
 
+        {!embedded ? (
         <div className="dev-meta-runbook">
           <div className="dev-meta-runbook-head">
             <div>
@@ -649,6 +693,16 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
             ))}
           </div>
         </div>
+        ) : null}
+
+        <div className="dev-meta-tabs">
+          <button type="button" className={`dev-meta-tab ${schemaName === "dm" ? "active" : ""}`} onClick={() => setSchemaName("dm")}>
+            Click table
+          </button>
+          <button type="button" className={`dev-meta-tab ${schemaName === "dm_view" ? "active" : ""}`} onClick={() => setSchemaName("dm_view")}>
+            Click view
+          </button>
+        </div>
 
         {(message || error) && (
           <div className={`dev-meta-feedback ${error ? "error" : messageType}`}>
@@ -666,7 +720,27 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
         )}
 
         <div className="dev-meta-generator">
-          <div className="section-subtitle">Новый YAML из параметров</div>
+          <div className="section-subtitle">{schemaName === "dm" ? "Новый YAML из параметров" : "Новый view SQL"}</div>
+          {schemaName === "dm_view" ? (
+            <>
+              <div className="dev-meta-generator-grid">
+                <label className="admin-field">
+                  <span>Имя view</span>
+                  <input
+                    value={newViewName}
+                    onChange={(e) => setNewViewName(e.target.value)}
+                    placeholder="account_debt_for_working_capital_final"
+                  />
+                </label>
+              </div>
+              <div className="dev-meta-generator-actions">
+                <button className="btn btn-primary" onClick={handleCreateViewDraft}>
+                  Создать черновик view
+                </button>
+              </div>
+            </>
+          ) : (
+          <>
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
               <span>GP схема</span>
@@ -707,6 +781,8 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
             </button>
             {generating ? <span className="muted">Читаем структуру объекта и собираем YAML…</span> : null}
           </div>
+          </>
+          )}
         </div>
 
         <div className="dev-meta-browser">

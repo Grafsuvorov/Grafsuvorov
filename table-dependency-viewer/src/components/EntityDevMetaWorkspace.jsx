@@ -155,6 +155,8 @@ export default function EntityDevMetaWorkspace({
   releaseBranch: externalReleaseBranch,
   onReleaseBranchChange,
   hideCreateMr = false,
+  hideHeader = false,
+  hideTaskControls = false,
 }) {
   const [status, setStatus] = useState(null);
   const [catalog, setCatalog] = useState({ entities: [], dev_files: [] });
@@ -182,6 +184,7 @@ export default function EntityDevMetaWorkspace({
     insert: false,
     truncate: false,
   });
+  const [fullscreenEditor, setFullscreenEditor] = useState(null);
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -558,10 +561,14 @@ export default function EntityDevMetaWorkspace({
 
   const content = (
       <section className={embedded ? "dev-meta-page" : "cc-surface dev-meta-page"}>
-        <div className="section-title">DEV Meta Workspace</div>
-        <div className="section-subtitle">
-          Редактор для `tech_etl/etl_loads_entity`: отдельная DEV-копия YAML и SQL перед релизом.
-        </div>
+        {!hideHeader ? (
+          <>
+            <div className="section-title">DEV Meta Workspace</div>
+            <div className="section-subtitle">
+              Редактор для `tech_etl/etl_loads_entity`: отдельная DEV-копия YAML и SQL перед релизом.
+            </div>
+          </>
+        ) : null}
 
         <div className="dev-meta-toolbar">
           <div className="muted">
@@ -617,22 +624,26 @@ export default function EntityDevMetaWorkspace({
                 placeholder="transport_bill"
               />
             </label>
-            <label className="admin-field">
-              <span>Задача</span>
-              <input
-                value={taskId}
-                onChange={(e) => setTaskId(e.target.value.toUpperCase())}
-                placeholder="DWH-12345"
-              />
-            </label>
-            <label className="admin-field">
-              <span>Release ветка</span>
-              <input
-                value={releaseBranch}
-                onChange={(e) => setReleaseBranch(e.target.value)}
-                placeholder="release/2026-05-18"
-              />
-            </label>
+            {!hideTaskControls ? (
+              <>
+                <label className="admin-field">
+                  <span>Задача</span>
+                  <input
+                    value={taskId}
+                    onChange={(e) => setTaskId(e.target.value.toUpperCase())}
+                    placeholder="DWH-12345"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>Release ветка</span>
+                  <input
+                    value={releaseBranch}
+                    onChange={(e) => setReleaseBranch(e.target.value)}
+                    placeholder="release/2026-05-18"
+                  />
+                </label>
+              </>
+            ) : null}
             <label className="admin-field dev-meta-generator-wide">
               <span>Ключи</span>
               <input
@@ -867,7 +878,12 @@ export default function EntityDevMetaWorkspace({
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("yaml")}>
                   <span>YAML</span>
-                  <span>{editorSections.yaml ? "Свернуть" : "Раскрыть"}</span>
+                  <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("yaml"); }}>
+                      Во весь экран
+                    </span>
+                    <span>{editorSections.yaml ? "Свернуть" : "Раскрыть"}</span>
+                  </span>
                 </button>
                 {editorSections.yaml ? (
                   <textarea
@@ -882,7 +898,12 @@ export default function EntityDevMetaWorkspace({
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("recreate")}>
                   <span>Recreate SQL</span>
-                  <span>{editorSections.recreate ? "Свернуть" : "Раскрыть"}</span>
+                  <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("recreate"); }}>
+                      Во весь экран
+                    </span>
+                    <span>{editorSections.recreate ? "Свернуть" : "Раскрыть"}</span>
+                  </span>
                 </button>
                 {editorSections.recreate ? (
                   <textarea
@@ -896,7 +917,12 @@ export default function EntityDevMetaWorkspace({
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("insert")}>
                   <span>Insert SQL</span>
-                  <span>{editorSections.insert ? "Свернуть" : "Раскрыть"}</span>
+                  <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("insert"); }}>
+                      Во весь экран
+                    </span>
+                    <span>{editorSections.insert ? "Свернуть" : "Раскрыть"}</span>
+                  </span>
                 </button>
                 {editorSections.insert ? (
                   <textarea
@@ -910,7 +936,12 @@ export default function EntityDevMetaWorkspace({
               <label className="admin-field entity-dev-editor-field">
                 <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("truncate")}>
                   <span>Truncate SQL</span>
-                  <span>{editorSections.truncate ? "Свернуть" : "Раскрыть"}</span>
+                  <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("truncate"); }}>
+                      Во весь экран
+                    </span>
+                    <span>{editorSections.truncate ? "Свернуть" : "Раскрыть"}</span>
+                  </span>
                 </button>
                 {editorSections.truncate ? (
                   <textarea
@@ -922,6 +953,44 @@ export default function EntityDevMetaWorkspace({
                 ) : null}
               </label>
             </div>
+            {fullscreenEditor ? (
+              <div className="entity-dev-modal">
+                <div className="entity-dev-modal-card">
+                  <div className="entity-dev-modal-head">
+                    <strong>
+                      {fullscreenEditor === "yaml" ? "YAML" : fullscreenEditor === "recreate" ? "Recreate SQL" : fullscreenEditor === "insert" ? "Insert SQL" : "Truncate SQL"}
+                    </strong>
+                    <button type="button" className="btn btn-secondary" onClick={() => setFullscreenEditor(null)}>
+                      Закрыть
+                    </button>
+                  </div>
+                  <textarea
+                    className="dev-meta-editor entity-dev-editor entity-dev-editor-modal"
+                    value={
+                      fullscreenEditor === "yaml"
+                        ? bundle?.yaml_content || ""
+                        : fullscreenEditor === "recreate"
+                          ? bundle?.recreate_sql || ""
+                          : fullscreenEditor === "insert"
+                            ? bundle?.insert_sql || ""
+                            : bundle?.truncate_sql || ""
+                    }
+                    onChange={(e) =>
+                      setBundle((prev) => ({
+                        ...prev,
+                        [fullscreenEditor === "yaml"
+                          ? "yaml_content"
+                          : fullscreenEditor === "recreate"
+                            ? "recreate_sql"
+                            : fullscreenEditor === "insert"
+                              ? "insert_sql"
+                              : "truncate_sql"]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>

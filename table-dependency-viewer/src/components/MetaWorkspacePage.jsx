@@ -43,8 +43,8 @@ export default function MetaWorkspacePage({ userProfile }) {
   return (
     <div className="container cc-page">
       <section className="cc-surface dev-meta-page">
-        <div className="section-title">Meta Workspace</div>
-        <div className="section-subtitle">Единая страница для Greenplum и ClickHouse меты с общим MR по задаче.</div>
+        <div className="section-title">Подготовка релиза</div>
+        <div className="section-subtitle">Общий раздел задачи: GP-объекты и ClickHouse мета с единым MR.</div>
 
         {(message || error) && (
           <div className={`dev-meta-feedback ${error ? "error" : "success"}`}>
@@ -73,11 +73,11 @@ export default function MetaWorkspacePage({ userProfile }) {
           </div>
         </div>
 
-        <div className="dev-meta-tabs">
-          <button type="button" className={`btn ${mode === "gp" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("gp")}>
+        <div className="dev-meta-tabs meta-workspace-tabs">
+          <button type="button" className={`dev-meta-tab ${mode === "gp" ? "active" : ""}`} onClick={() => setMode("gp")}>
             Greenplum
           </button>
-          <button type="button" className={`btn ${mode === "click" ? "btn-primary" : "btn-secondary"}`} onClick={() => setMode("click")}>
+          <button type="button" className={`dev-meta-tab ${mode === "click" ? "active" : ""}`} onClick={() => setMode("click")}>
             ClickHouse
           </button>
         </div>
@@ -91,9 +91,11 @@ export default function MetaWorkspacePage({ userProfile }) {
             releaseBranch={releaseBranch}
             onReleaseBranchChange={setReleaseBranch}
             hideCreateMr
+            hideHeader
+            hideTaskControls
           />
         ) : (
-          <DevMetaAdminPage userProfile={userProfile} embedded taskId={taskId} />
+          <DevMetaAdminPage userProfile={userProfile} embedded taskId={taskId} hideHeader />
         )}
       </section>
     </div>

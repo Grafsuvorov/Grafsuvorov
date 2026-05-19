@@ -53,6 +53,7 @@ ENTITY_META_GIT_META_ROOT = os.getenv(
 GITLAB_TOKEN = os.getenv("GITLAB_TOKEN", "")
 GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
 GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
+GITLAB_SSL_VERIFY = os.getenv("GITLAB_SSL_VERIFY", "true")
 
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")

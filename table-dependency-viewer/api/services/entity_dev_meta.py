@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import tempfile
 from datetime import datetime
@@ -539,8 +540,11 @@ def _dev_table_has_duplicates(
     return bool(exists), None
 
 
-def _urlopen_without_proxy(req: urlrequest.Request, timeout: int):
-    opener = urlrequest.build_opener(urlrequest.ProxyHandler({}))
+def _urlopen_without_proxy(req: urlrequest.Request, timeout: int, *, ssl_verify: bool = True):
+    handlers: list[Any] = [urlrequest.ProxyHandler({})]
+    if not ssl_verify:
+        handlers.append(urlrequest.HTTPSHandler(context=ssl._create_unverified_context()))
+    opener = urlrequest.build_opener(*handlers)
     return opener.open(req, timeout=timeout)
 
 
@@ -549,6 +553,7 @@ def _gitlab_json_request(
     api_url: str,
     project: str,
     token: str,
+    ssl_verify: bool,
     path: str,
     method: str = "GET",
     payload: Optional[dict[str, Any]] = None,
@@ -578,7 +583,7 @@ def _gitlab_json_request(
         method=method,
     )
     try:
-        with _urlopen_without_proxy(req, timeout=timeout) as resp:
+        with _urlopen_without_proxy(req, timeout=timeout, ssl_verify=ssl_verify) as resp:
             body = resp.read().decode("utf-8")
             return json.loads(body) if body else {}
     except urlerror.HTTPError as exc:
@@ -1444,6 +1449,7 @@ def create_entity_meta_mr(
     gitlab_token: str,
     gitlab_project: str,
     gitlab_api_url: str,
+    gitlab_ssl_verify: str,
     task_id: str,
     release_branch: str,
     author: str,
@@ -1462,6 +1468,7 @@ def create_entity_meta_mr(
     dev_root = _resolve_root(base_dir, dev_root_value)
     git_repo_root = Path(git_repo_value).resolve()
     worktree_meta_root_rel = Path(git_meta_root_value)
+    ssl_verify = str(gitlab_ssl_verify or "true").strip().lower() not in {"0", "false", "no", "off"}
     project_ref = _parse_gitlab_project(gitlab_project) or _parse_gitlab_project(
         _run_git(git_repo_root, ["remote", "get-url", "origin"])
     )
@@ -1514,6 +1521,7 @@ def create_entity_meta_mr(
             api_url=gitlab_api_url,
             project=project_ref,
             token=gitlab_token,
+            ssl_verify=ssl_verify,
             path="merge_requests",
             method="GET",
             query={
@@ -1529,6 +1537,7 @@ def create_entity_meta_mr(
                 api_url=gitlab_api_url,
                 project=project_ref,
                 token=gitlab_token,
+                ssl_verify=ssl_verify,
                 path="merge_requests",
                 method="POST",
                 payload={

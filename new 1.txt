@@ -1,2 +1,23 @@
-https://prod.gitlab.dwh.rusal.com/api/v4/version
-{"version":"18.9.1","revision":"95bf6656b5a","kas":{"enabled":false,"externalUrl":null,"externalK8sProxyUrl":null,"version":null},"enterprise":false}
+1. Через PRIVATE-TOKEN:
+
+  curl -k --header "PRIVATE-TOKEN: ВАШ_ТОКЕН" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
+
+  2. Через Bearer:
+
+  curl -k --header "Authorization: Bearer ВАШ_ТОКЕН" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
+
+  Результат:
+
+  - если один из них вернёт JSON пользователя, значит токен рабочий, просто нужен правильный заголовок
+  - если оба дают 401, токен невалидный
+
+  Для вашего приложения сейчас используется:
+
+  - PRIVATE-TOKEN
+
+  Так что если вдруг у вас работает только Bearer, я могу быстро переделать код.
+
+  Итого на сейчас:
+
+  - URL верный
+  - проблема в токене или формате его передачи

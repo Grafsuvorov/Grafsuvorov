@@ -1,14 +1,42 @@
-OST http://rgm-s-dwhapp01.hq.root.ad:15312/api/admin/entity-meta/validate 504 (Gateway Time-out)
-window.fetch @ index-BFYuVrcH.js:140
-rd @ index-BFYuVrcH.js:60
-post @ index-BFYuVrcH.js:60
-validate @ index-BFYuVrcH.js:140
-ct @ index-BFYuVrcH.js:140
-G1 @ index-BFYuVrcH.js:48
-(anonymous) @ index-BFYuVrcH.js:48
-nu @ index-BFYuVrcH.js:48
-gy @ index-BFYuVrcH.js:48
-ky @ index-BFYuVrcH.js:49
-lI @ index-BFYuVrcH.js:49
+server {
+    listen 80;
+    server_name _;
 
-{"id":116,"username":"project_18_bot_d9f1c1ade847ba019267e4f2c5fbbbc7","public_email":null,"name":"test","state":"active","locked":false,"avatar_url":"https://secure.gravatar.com/avatar/0ae0dc0f161a4bb9a961cfa5b9ad222139b2b2683113f7d119880576652db116?s=80\u0026d=identicon","web_url":"https://prod.gitlab.dwh.rusal.com/project_18_bot_d9f1c1ade847ba019267e4f2c5fbbbc7","created_at":"2026-05-19T11:25:52.453+03:00","bio":"","location":"","linkedin":"","twitter":"","discord":"","website_url":"","github":"","job_title":"","pronouns":null,"organization":"","bot":true,"work_information":null,"local_time":null,"last_sign_in_at":null,"confirmed_at":"2026-05-19T11:25:52.436+03:00","last_activity_on":"2026-05-19","email":"project_18_bot_d9f1c1ade847ba019267e4f2c5fbbbc7@noreply.prod.gitlab.dwh.rusal.com","theme_id":3,"color_scheme_id":1,"projects_limit":100000,"current_sign_in_at":null,"identities":[],"can_create_group":true,"can_create_project":true,"two_factor_enabled":false,"external":false,"private_profile":false,"commit_email":"project_18_bot_d9f1c1ade847ba019267e4f2c5fbbbc7@noreply.prod.gitlab.dwh.rusal.com","preferred_language":"en"}
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location /api/ {
+      proxy_pass http://api:8000/api/;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_connect_timeout 300s;
+      proxy_send_timeout 300s;
+      proxy_read_timeout 300s;
+      send_timeout 300s;
+    }
+
+    location /auth/ {
+      proxy_pass http://api:8000/auth/;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_connect_timeout 300s;
+      proxy_send_timeout 300s;
+      proxy_read_timeout 300s;
+      send_timeout 300s;
+    }
+
+    location / {
+      try_files $uri /index.html;
+    }
+
+    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2)$ {
+      expires 7d;
+      add_header Cache-Control "public";
+    }
+  }

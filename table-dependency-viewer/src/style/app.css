@@ -8144,12 +8144,11 @@ main.content {
 }
 
 .meta-workspace-tabs {
-  margin: 18px 0 12px;
-  padding: 6px;
-  border-radius: 16px;
-  background: rgba(8, 15, 28, 0.54);
-  border: 1px solid rgba(148, 163, 184, 0.1);
-  display: inline-flex;
+  margin: 18px 0 14px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  display: flex;
 }
 
 .meta-workspace-page {
@@ -8208,11 +8207,6 @@ main.content {
 .meta-workspace-pane > .dev-meta-page {
   background: transparent;
   padding: 0;
-}
-
-.meta-workspace-page .dev-meta-toolbar {
-  margin-top: 0;
-  margin-bottom: 14px;
 }
 
 .meta-workspace-page .dev-meta-generator,
@@ -8286,6 +8280,23 @@ main.content {
 .meta-workspace-page .dev-meta-browser,
 .meta-workspace-page .dev-meta-layout {
   margin-top: 16px;
+}
+
+.meta-workspace-page .dev-meta-tabs {
+  align-items: center;
+}
+
+.meta-workspace-page .dev-meta-page .dev-meta-tabs:not(.meta-workspace-tabs) {
+  margin-top: 12px;
+  margin-bottom: 14px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.meta-workspace-page .dev-meta-page .dev-meta-tabs:not(.meta-workspace-tabs) .dev-meta-tab {
+  min-width: 118px;
+  justify-content: center;
 }
 
 .meta-workspace-pane .dev-meta-generator:first-child,
@@ -8543,7 +8554,8 @@ main.content {
 }
 
 .dev-meta-lock-bar {
-  margin-top: 16px;
+  margin-top: 18px;
+  margin-bottom: 18px;
   display: flex;
   gap: 10px;
   align-items: center;
@@ -8967,14 +8979,6 @@ main.content {
   margin-top: 0;
 }
 
-.meta-workspace-page .dev-meta-page .dev-meta-tabs:not(.meta-workspace-tabs) {
-  margin-top: 12px;
-}
-
-.meta-workspace-page .dev-meta-page .dev-meta-tabs:not(.meta-workspace-tabs) .dev-meta-tab {
-  min-width: 118px;
-  justify-content: center;
-}
 
 .dev-meta-validation {
   margin-top: 16px;

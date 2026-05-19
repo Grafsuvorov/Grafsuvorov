@@ -466,7 +466,7 @@ export default function App() {
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
             ) : isAdmin ? (
-              <EntityDevMetaWorkspace userProfile={userProfile} />
+              <Navigate to="/admin/meta-workspace" replace />
             ) : (
               <Navigate to="/" replace />
             )

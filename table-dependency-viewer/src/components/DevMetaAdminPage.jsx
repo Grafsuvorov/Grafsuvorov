@@ -666,11 +666,13 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
           </>
         ) : null}
 
-        <div className="dev-meta-toolbar">
-          <div className="muted">
-            Lock TTL: {status?.lock_ttl_minutes ?? 30} минут. Сейчас блокировок: {status?.locks_count ?? 0}
+        {!embedded ? (
+          <div className="dev-meta-toolbar">
+            <div className="muted">
+              Lock TTL: {status?.lock_ttl_minutes ?? 30} минут. Сейчас блокировок: {status?.locks_count ?? 0}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {!embedded ? (
         <div className="dev-meta-runbook">

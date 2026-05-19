@@ -570,11 +570,13 @@ export default function EntityDevMetaWorkspace({
           </>
         ) : null}
 
-        <div className="dev-meta-toolbar">
-          <div className="muted">
-            DEV root: {status?.dev_root || "—"} · Lock TTL: {status?.lock_ttl_minutes ?? 30} мин.
+        {!embedded ? (
+          <div className="dev-meta-toolbar">
+            <div className="muted">
+              DEV root: {status?.dev_root || "—"} · Lock TTL: {status?.lock_ttl_minutes ?? 30} мин.
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="dev-meta-generator">
           <div className="section-subtitle">Открыть объект или создать DEV-черновик</div>

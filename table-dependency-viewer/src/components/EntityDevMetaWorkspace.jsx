@@ -82,6 +82,71 @@ function EntityPicker({ options, value, onChange, placeholder = "Выберит�
   );
 }
 
+function MultiEntityPicker({ options, values, onChange, placeholder = "Выберите сущности" }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredOptions = useMemo(() => {
+    const term = String(query || "").trim().toLowerCase();
+    if (!term) return options;
+    return options.filter((item) => String(item || "").toLowerCase().includes(term));
+  }, [options, query]);
+
+  const selectedLabel = values.length ? values.join(", ") : "";
+
+  const toggleValue = (item) => {
+    if (values.includes(item)) {
+      onChange(values.filter((value) => value !== item));
+      return;
+    }
+    onChange([...values, item]);
+  };
+
+  return (
+    <div className={`entity-picker multi ${open ? "open" : ""}`} ref={rootRef}>
+      <input
+        className="entity-picker-input"
+        value={open ? query : selectedLabel}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder}
+        readOnly={!open}
+      />
+      <button type="button" className="entity-picker-toggle" onClick={() => setOpen((prev) => !prev)} aria-label="Открыть список сущностей">
+        ▾
+      </button>
+      {open ? (
+        <div className="entity-picker-menu">
+          {filteredOptions.length ? (
+            filteredOptions.map((item) => (
+              <label key={item} className={`entity-picker-check ${values.includes(item) ? "active" : ""}`}>
+                <input type="checkbox" checked={values.includes(item)} onChange={() => toggleValue(item)} />
+                <span>{item}</span>
+              </label>
+            ))
+          ) : (
+            <div className="entity-picker-empty">Ничего не найдено</div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function EntityDevMetaWorkspace({ userProfile }) {
   const [status, setStatus] = useState(null);
   const [catalog, setCatalog] = useState({ entities: [], dev_files: [] });
@@ -102,7 +167,13 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const [releaseBranch, setReleaseBranch] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
-  const [replicaPicker, setReplicaPicker] = useState("");
+  const [replicaPickerValues, setReplicaPickerValues] = useState([]);
+  const [editorSections, setEditorSections] = useState({
+    yaml: true,
+    recreate: false,
+    insert: false,
+    truncate: false,
+  });
   const [bundle, setBundle] = useState(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -174,17 +245,26 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
 
   const appendReplicaEntity = () => {
-    const nextValue = String(replicaPicker || "").trim();
-    if (!nextValue) return;
+    const nextValues = replicaPickerValues
+      .map((item) => String(item || "").trim())
+      .filter(Boolean);
+    if (!nextValues.length) return;
     const current = replicaEntitiesText
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    if (current.includes(nextValue) || nextValue === selection.entity_name) {
-      return;
+    const next = [...current];
+    for (const value of nextValues) {
+      if (!next.includes(value) && value !== selection.entity_name) {
+        next.push(value);
+      }
     }
-    setReplicaEntitiesText([...current, nextValue].join(", "));
-    setReplicaPicker("");
+    setReplicaEntitiesText(next.join(", "));
+    setReplicaPickerValues([]);
+  };
+
+  const toggleEditorSection = (section) => {
+    setEditorSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const acquireLock = async (target) => {
@@ -214,6 +294,12 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
       setMoveSchemaMode(COMMON_SCHEMAS.includes(target.schema_name) ? target.schema_name : CUSTOM_SCHEMA_OPTION);
       setKeyAttributesText((prev) => (Array.isArray(data?.key_attributes) && data.key_attributes.length ? data.key_attributes.join(", ") : prev));
       setBundle(data || null);
+      setEditorSections({
+        yaml: true,
+        recreate: false,
+        insert: false,
+        truncate: false,
+      });
       setValidatedFingerprint("");
       setMessageType("success");
       setMessage(data?.exists ? `Объект открыт из ${data?.source || "dev"}.` : "Создан новый DEV-черновик.");
@@ -545,16 +631,16 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
               />
             </label>
             <label className="admin-field dev-meta-generator-wide">
-              <span>Размножить в сущности</span>
+                <span>Размножить в сущности</span>
               <div className="dev-meta-replica-picker">
-                <EntityPicker
+                <MultiEntityPicker
                   options={entityNames.filter((item) => item !== selection.entity_name)}
-                  value={replicaPicker}
-                  onChange={setReplicaPicker}
-                  placeholder="Выберите сущность"
+                  values={replicaPickerValues}
+                  onChange={setReplicaPickerValues}
+                  placeholder="Выберите сущности"
                 />
-                <button type="button" className="btn btn-secondary" onClick={appendReplicaEntity} disabled={!replicaPicker}>
-                  Добавить
+                <button type="button" className="btn btn-secondary" onClick={appendReplicaEntity} disabled={!replicaPickerValues.length}>
+                  Добавить выбранные
                 </button>
               </div>
               <input
@@ -766,41 +852,61 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
 
             <div className="entity-dev-editors">
               <label className="admin-field entity-dev-editor-field">
-                <span>YAML</span>
-                <textarea
-                  ref={yamlEditorRef}
-                  className="dev-meta-editor entity-dev-editor"
-                  value={bundle?.yaml_content || ""}
-                  onChange={(e) => setBundle((prev) => ({ ...prev, yaml_content: e.target.value }))}
-                  placeholder="meta_data_file.yaml"
-                />
+                <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("yaml")}>
+                  <span>YAML</span>
+                  <span>{editorSections.yaml ? "Свернуть" : "Раскрыть"}</span>
+                </button>
+                {editorSections.yaml ? (
+                  <textarea
+                    ref={yamlEditorRef}
+                    className="dev-meta-editor entity-dev-editor"
+                    value={bundle?.yaml_content || ""}
+                    onChange={(e) => setBundle((prev) => ({ ...prev, yaml_content: e.target.value }))}
+                    placeholder="meta_data_file.yaml"
+                  />
+                ) : null}
               </label>
               <label className="admin-field entity-dev-editor-field">
-                <span>Recreate SQL</span>
-                <textarea
-                  className="dev-meta-editor entity-dev-editor"
-                  value={bundle?.recreate_sql || ""}
-                  onChange={(e) => setBundle((prev) => ({ ...prev, recreate_sql: e.target.value }))}
-                  placeholder="sql_query_recreate_init.sql"
-                />
+                <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("recreate")}>
+                  <span>Recreate SQL</span>
+                  <span>{editorSections.recreate ? "Свернуть" : "Раскрыть"}</span>
+                </button>
+                {editorSections.recreate ? (
+                  <textarea
+                    className="dev-meta-editor entity-dev-editor"
+                    value={bundle?.recreate_sql || ""}
+                    onChange={(e) => setBundle((prev) => ({ ...prev, recreate_sql: e.target.value }))}
+                    placeholder="sql_query_recreate_init.sql"
+                  />
+                ) : null}
               </label>
               <label className="admin-field entity-dev-editor-field">
-                <span>Insert SQL</span>
-                <textarea
-                  className="dev-meta-editor entity-dev-editor"
-                  value={bundle?.insert_sql || ""}
-                  onChange={(e) => setBundle((prev) => ({ ...prev, insert_sql: e.target.value }))}
-                  placeholder="sql_query_insert_init.sql"
-                />
+                <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("insert")}>
+                  <span>Insert SQL</span>
+                  <span>{editorSections.insert ? "Свернуть" : "Раскрыть"}</span>
+                </button>
+                {editorSections.insert ? (
+                  <textarea
+                    className="dev-meta-editor entity-dev-editor"
+                    value={bundle?.insert_sql || ""}
+                    onChange={(e) => setBundle((prev) => ({ ...prev, insert_sql: e.target.value }))}
+                    placeholder="sql_query_insert_init.sql"
+                  />
+                ) : null}
               </label>
               <label className="admin-field entity-dev-editor-field">
-                <span>Truncate SQL</span>
-                <textarea
-                  className="dev-meta-editor entity-dev-editor"
-                  value={bundle?.truncate_sql || ""}
-                  onChange={(e) => setBundle((prev) => ({ ...prev, truncate_sql: e.target.value }))}
-                  placeholder="sql_query_truncate.sql"
-                />
+                <button type="button" className="entity-dev-editor-toggle" onClick={() => toggleEditorSection("truncate")}>
+                  <span>Truncate SQL</span>
+                  <span>{editorSections.truncate ? "Свернуть" : "Раскрыть"}</span>
+                </button>
+                {editorSections.truncate ? (
+                  <textarea
+                    className="dev-meta-editor entity-dev-editor"
+                    value={bundle?.truncate_sql || ""}
+                    onChange={(e) => setBundle((prev) => ({ ...prev, truncate_sql: e.target.value }))}
+                    placeholder="sql_query_truncate.sql"
+                  />
+                ) : null}
               </label>
             </div>
           </div>

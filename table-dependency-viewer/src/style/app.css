@@ -1187,6 +1187,25 @@ main.content {
   color: #94a3b8;
 }
 
+.entity-picker-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.entity-picker-check:hover,
+.entity-picker-check.active {
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.entity-picker-check input {
+  accent-color: #60a5fa;
+}
+
 .admin-select:focus {
   outline: none;
   border-color: rgba(96, 165, 250, 0.7);
@@ -8661,6 +8680,26 @@ main.content {
 
 .entity-dev-editor-field {
   gap: 8px;
+}
+
+.entity-dev-editor-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.58);
+  color: #e2e8f0;
+  padding: 12px 14px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+}
+
+.entity-dev-editor-toggle:hover {
+  background: rgba(30, 41, 59, 0.7);
 }
 
 .entity-dev-editor {

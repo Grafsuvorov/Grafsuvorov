@@ -147,7 +147,15 @@ function MultiEntityPicker({ options, values, onChange, placeholder = "Выбе�
   );
 }
 
-export default function EntityDevMetaWorkspace({ userProfile }) {
+export default function EntityDevMetaWorkspace({
+  userProfile,
+  embedded = false,
+  taskId: externalTaskId,
+  onTaskIdChange,
+  releaseBranch: externalReleaseBranch,
+  onReleaseBranchChange,
+  hideCreateMr = false,
+}) {
   const [status, setStatus] = useState(null);
   const [catalog, setCatalog] = useState({ entities: [], dev_files: [] });
   const [entityOptions, setEntityOptions] = useState([]);
@@ -163,8 +171,8 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   });
   const [schemaMode, setSchemaMode] = useState("dm");
   const [moveSchemaMode, setMoveSchemaMode] = useState("dm");
-  const [taskId, setTaskId] = useState("");
-  const [releaseBranch, setReleaseBranch] = useState("");
+  const [taskIdState, setTaskIdState] = useState("");
+  const [releaseBranchState, setReleaseBranchState] = useState("");
   const [keyAttributesText, setKeyAttributesText] = useState("");
   const [replicaEntitiesText, setReplicaEntitiesText] = useState("");
   const [replicaPickerValues, setReplicaPickerValues] = useState([]);
@@ -191,6 +199,10 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
   const yamlEditorRef = useRef(null);
 
   const currentUser = userProfile?.email || userProfile?.username || "";
+  const taskId = externalTaskId ?? taskIdState;
+  const setTaskId = onTaskIdChange ?? setTaskIdState;
+  const releaseBranch = externalReleaseBranch ?? releaseBranchState;
+  const setReleaseBranch = onReleaseBranchChange ?? setReleaseBranchState;
 
   const refreshAll = async () => {
     const [statusData, catalogData, entityData] = await Promise.all([
@@ -544,9 +556,8 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
     }
   };
 
-  return (
-    <div className="container cc-page">
-      <section className="cc-surface dev-meta-page">
+  const content = (
+      <section className={embedded ? "dev-meta-page" : "cc-surface dev-meta-page"}>
         <div className="section-title">DEV Meta Workspace</div>
         <div className="section-subtitle">
           Редактор для `tech_etl/etl_loads_entity`: отдельная DEV-копия YAML и SQL перед релизом.
@@ -654,9 +665,11 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
             <button className="btn btn-primary" onClick={handleOpenCurrentSelection} disabled={loading}>
               {loading ? "Открываем..." : "Открыть / создать DEV-черновик"}
             </button>
-            <button className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingPr || !taskIdValid || !String(releaseBranch || "").trim()}>
-              {creatingPr ? "Создаем MR..." : "Создать MR"}
-            </button>
+            {!hideCreateMr ? (
+              <button className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingPr || !taskIdValid || !String(releaseBranch || "").trim()}>
+                {creatingPr ? "Создаем MR..." : "Создать MR"}
+              </button>
+            ) : null}
             <span className="muted">{branchPreview ? `Ветка: ${branchPreview}` : "Укажите задачу, сущность, схему и таблицу"}</span>
           </div>
         </div>
@@ -912,6 +925,6 @@ export default function EntityDevMetaWorkspace({ userProfile }) {
           </div>
         </div>
       </section>
-    </div>
   );
+  return embedded ? content : <div className="container cc-page">{content}</div>;
 }

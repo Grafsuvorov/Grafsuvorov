@@ -73,6 +73,7 @@ from .config import (
     DEV_META_DEPLOY_USER,
     ENTITY_META_GIT_META_ROOT,
     ENTITY_META_GIT_REPO,
+    CLICK_META_GIT_ROOT,
     GITLAB_API_URL,
     GITLAB_PROJECT,
     GITLAB_SSL_VERIFY,
@@ -114,6 +115,7 @@ from .services.entity_dev_meta import (
     unlock_entity_dev_meta,
     validate_entity_dev_meta_bundle,
 )
+from .services.meta_workspace import create_meta_workspace_mr
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
     get_dbt_graph_snapshot,
@@ -178,6 +180,7 @@ class DevMetaSavePayload(BaseModel):
     schema_name: str
     file_name: str
     content: str
+    task_id: Optional[str] = None
 
 
 class DevMetaDagPayload(BaseModel):
@@ -197,6 +200,7 @@ class DevMetaDeployPayload(BaseModel):
     schema_name: str
     file_name: str
     content: str
+    task_id: Optional[str] = None
 
 
 class DevMetaGeneratePayload(BaseModel):
@@ -252,6 +256,11 @@ class EntityMetaMovePayload(BaseModel):
 
 
 class EntityMetaMrPayload(BaseModel):
+    task_id: str
+    release_branch: str
+
+
+class MetaWorkspaceMrPayload(BaseModel):
     task_id: str
     release_branch: str
 
@@ -822,6 +831,34 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
             content=payload.content,
             author=user.email,
             dev_database_url=DEV_DATABASE_URL,
+            task_id=payload.task_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
+@router.post("/api/admin/meta-workspace/mr")
+def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = create_meta_workspace_mr(
+            engine=engine,
+            base_dir=BASE_DIR,
+            entity_dev_root_value=DEV_ENTITY_META_DIR,
+            click_dev_root_value=DEV_CLICK_META_DIR,
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            gitlab_token=GITLAB_TOKEN,
+            gitlab_project=GITLAB_PROJECT,
+            gitlab_api_url=GITLAB_API_URL,
+            gitlab_ssl_verify=GITLAB_SSL_VERIFY,
+            task_id=payload.task_id,
+            release_branch=payload.release_branch,
+            author=user.email,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -895,6 +932,7 @@ def deploy_admin_dev_meta(payload: DevMetaDeployPayload, request: Request):
             remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
             ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
             strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,
+            task_id=payload.task_id,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

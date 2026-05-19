@@ -7,6 +7,7 @@ import "./style/app.css";
 import Sidebar from "./components/Sidebar.jsx";
 import HomePage from "./components/HomePage.jsx";
 import IncidentsPage from "./components/IncidentsPage.jsx";
+import ErrorDashboard from "./components/ErrorDashboard.jsx";
 import TableSearch from "./components/TableSearch.jsx";
 import SlowestTables from "./components/SlowestTables.jsx";
 import SlaPage from "./components/SlaPage.jsx";
@@ -27,6 +28,7 @@ import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
 import EntityDevMetaWorkspace from "./components/EntityDevMetaWorkspace.jsx";
+import MetaWorkspacePage from "./components/MetaWorkspacePage.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
@@ -177,6 +179,10 @@ export default function App() {
       }
       if (target === "/admin/dev-meta") {
         navigate("/admin/dev-meta");
+        return;
+      }
+      if (target === "/admin/meta-workspace") {
+        navigate("/admin/meta-workspace");
         return;
       }
       if (target === "/admin/entity-meta") {
@@ -443,6 +449,18 @@ export default function App() {
           }
         />
         <Route
+          path="/admin/meta-workspace"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <MetaWorkspacePage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
           path="/admin/entity-meta"
           element={
             AUTH_ENABLED && !authToken ? (
@@ -493,6 +511,16 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : (
               <IncidentsPage onSelectTable={openView} />
+            )
+          }
+        />
+        <Route
+          path="/failures"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : (
+              <ErrorDashboard onSelectTable={(table) => openView({ view: "table_info", table })} />
             )
           }
         />

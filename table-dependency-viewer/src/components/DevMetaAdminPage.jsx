@@ -304,7 +304,7 @@ function DagLoadingMiniGame({ active }) {
   );
 }
 
-export default function DevMetaAdminPage({ userProfile }) {
+export default function DevMetaAdminPage({ userProfile, embedded = false, taskId: externalTaskId }) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
@@ -332,6 +332,7 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   const canUseDevMeta = Boolean(userProfile);
   const currentUser = userProfile?.email || userProfile?.username || "";
+  const taskId = String(externalTaskId || "").trim().toUpperCase();
 
   const refreshStatus = async () => {
     const data = await devMetaApi.status();
@@ -439,6 +440,12 @@ export default function DevMetaAdminPage({ userProfile }) {
 
   const handleSaveAndDeploy = async () => {
     if (!selectedFile) return;
+    if (externalTaskId !== undefined && !taskId) {
+      setMessageType("warning");
+      setError(null);
+      setMessage("Перед отправкой в DEV укажите номер задачи в формате DWH-12345.");
+      return;
+    }
     if (!isValidationFresh) {
       setMessageType("warning");
       setError(null);
@@ -454,6 +461,7 @@ export default function DevMetaAdminPage({ userProfile }) {
         schema_name: schemaName,
         file_name: selectedFile,
         content,
+        task_id: taskId,
       });
       setValidation(data?.validation || null);
       setValidatedContent(data?.validation?.valid ? content : null);
@@ -608,9 +616,8 @@ export default function DevMetaAdminPage({ userProfile }) {
     );
   }
 
-  return (
-    <div className="container cc-page">
-      <section className="cc-surface dev-meta-page">
+  const contentNode = (
+      <section className={embedded ? "dev-meta-page" : "cc-surface dev-meta-page"}>
         <div className="section-title">DEV Meta Generator</div>
         <div className="section-subtitle">
           Инструмент для генерации YAML-файла объекта для загрузки в ClickHouse и запуска DEV DAG.
@@ -852,6 +859,6 @@ export default function DevMetaAdminPage({ userProfile }) {
           </div>
         </div>
       </section>
-    </div>
   );
+  return embedded ? contentNode : <div className="container cc-page">{contentNode}</div>;
 }

@@ -96,6 +96,15 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
+                  className={isActive("/admin/meta-workspace") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/meta-workspace")}
+                >
+                  Meta Workspace
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  type="button"
                   className={isActive("/admin/entity-meta") ? "active" : ""}
                   onClick={() => onChangeView("/admin/entity-meta")}
                 >

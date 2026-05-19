@@ -1,27 +1,40 @@
-python3 -c 'import ssl,urllib.request; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user", headers={"PRIVATE-TOKEN":"ВАШ_ТОКЕН"});
-  print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
+curl -k "https://prod.gitlab.dwh.rusal.com/api/v4/version"
 
-  Если токен рабочий:
+  Если адрес правильный, вернётся JSON примерно такого вида:
 
-  - вернётся JSON с пользователем
+  {"version":"...","revision":"..."}
 
-  Если нерабочий:
+  Если это работает, значит:
 
-  - будет 401 Unauthorized
+  - GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4 правильный
+  - проблема не в адресе, а в токене
 
-  Локально на Mac можно так же:
-
-  python3 -c 'import ssl,urllib.request; req=urllib.request.Request("https://prod.gitlab.dwh.rusal.com/api/v4/user", headers={"PRIVATE-TOKEN":"ВАШ_ТОКЕН"});
-  print(urllib.request.urlopen(req, context=ssl._create_unverified_context()).read().decode())'
-
-  Или если есть curl, ещё проще:
+  Потом проверка с токеном:
 
   curl -k --header "PRIVATE-TOKEN: ВАШ_ТОКЕН" "https://prod.gitlab.dwh.rusal.com/api/v4/user"
 
-  Результат:
+  Как трактовать:
 
-  - пришёл JSON → токен рабочий
-  - 401 → токен нерабочий
-  - 403 → токен живой, но прав не хватает
+  - /api/v4/version работает, а /api/v4/user даёт 401
+      - адрес правильный
+      - токен неверный/не для этого GitLab/не тот тип токена
+  - /api/v4/version не работает
+      - тогда адрес действительно неверный
 
-  Это самая короткая и надёжная проверка.
+  Для вашего репозитория URL:
+
+  https://prod.gitlab.dwh.rusal.com/dwh/etl
+
+  обычно настройки такие:
+
+  GITLAB_API_URL=https://prod.gitlab.dwh.rusal.com/api/v4
+  GITLAB_PROJECT=dwh/etl
+
+  То есть /dwh/etl/api/v4 было бы неверно, а /api/v4 — верно.
+
+  Сделайте одну проверку:
+
+  curl -k "https://prod.gitlab.dwh.rusal.com/api/v4/version"
+
+  Если пришлёте ответ, я сразу скажу, точно ли URL правильный.
+

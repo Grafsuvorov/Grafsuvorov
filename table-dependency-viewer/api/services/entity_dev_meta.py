@@ -147,6 +147,10 @@ def _ensure_default_verification(payload: dict[str, Any], key_attributes: Option
     if key_attributes and not verification:
         payload["verification"] = ["duplicate_check"]
         return
+    if not key_attributes:
+        if not verification or verification == ["duplicate_check"]:
+            payload.pop("verification", None)
+            return
     if verification:
         payload["verification"] = verification
         return

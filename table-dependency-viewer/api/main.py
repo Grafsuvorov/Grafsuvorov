@@ -4431,7 +4431,7 @@ def get_entities_timeline(days: int = Query(7, ge=3, le=30)):
                     ) AS rn
                 FROM {TABLE_LOADING_HISTORY} l
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
             ),
             base AS (

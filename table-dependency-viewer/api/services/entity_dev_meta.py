@@ -143,10 +143,14 @@ def _ensure_default_verification(payload: dict[str, Any], key_attributes: Option
     verification = payload.get("verification")
     if not isinstance(verification, list):
         verification = []
+    verification = [item for item in verification if str(item or "").strip()]
     if key_attributes and not verification:
         payload["verification"] = ["duplicate_check"]
         return
-    payload["verification"] = verification
+    if verification:
+        payload["verification"] = verification
+        return
+    payload.pop("verification", None)
 
 
 def _build_default_yaml(entity_name: str, schema_name: str, table_name: str) -> dict[str, Any]:
@@ -241,7 +245,13 @@ def _collect_used_table_ids(*roots: Path) -> set[int]:
     return used_ids
 
 
-def _find_table_id_conflicts(*, current_object_key: str, table_id: Any, roots: Iterable[Path]) -> list[str]:
+def _find_table_id_conflicts(
+    *,
+    current_object_key: str,
+    table_id: Any,
+    roots: Iterable[Path],
+    ignored_object_keys: Optional[Iterable[str]] = None,
+) -> list[str]:
     try:
         target_id = int(table_id)
     except Exception:
@@ -251,6 +261,12 @@ def _find_table_id_conflicts(*, current_object_key: str, table_id: Any, roots: I
 
     conflicts: list[str] = []
     current_key_norm = str(current_object_key or "").strip().lower()
+    ignored = {
+        str(item or "").strip().lower()
+        for item in (ignored_object_keys or [])
+        if str(item or "").strip()
+    }
+    ignored.add(current_key_norm)
     for root in roots:
         for yaml_path in _iter_yaml_paths(root):
             payload = _load_yaml_file(yaml_path)
@@ -264,7 +280,7 @@ def _find_table_id_conflicts(*, current_object_key: str, table_id: Any, roots: I
             if len(rel.parts) < 4:
                 continue
             object_key = _build_object_key(rel.parts[0], rel.parts[1], rel.parts[2])
-            if object_key.lower() == current_key_norm:
+            if object_key.lower() in ignored:
                 continue
             conflicts.append(object_key)
     return sorted(set(conflicts), key=str.lower)
@@ -912,6 +928,7 @@ def validate_entity_dev_meta_bundle(
     schema_name: str,
     table_name: str,
     key_attributes: Optional[list[str]],
+    source_object_key: Optional[str],
     yaml_content: str,
     recreate_sql: str,
     insert_sql: str,
@@ -967,6 +984,7 @@ def validate_entity_dev_meta_bundle(
             current_object_key=current_object_key,
             table_id=table_id_int,
             roots=(prod_root, dev_root),
+            ignored_object_keys=[source_object_key] if source_object_key else None,
         )
         if conflicts:
             errors.append(
@@ -1143,6 +1161,7 @@ def save_entity_dev_meta_bundle(
     table_name: str,
     task_id: str,
     key_attributes: Optional[list[str]],
+    source_object_key: Optional[str],
     replica_entity_names: Optional[list[str]],
     yaml_content: str,
     recreate_sql: str,
@@ -1168,6 +1187,7 @@ def save_entity_dev_meta_bundle(
         schema_name=schema_name,
         table_name=table_name,
         key_attributes=key_attributes,
+        source_object_key=source_object_key,
         yaml_content=yaml_content,
         recreate_sql=recreate_sql,
         insert_sql=insert_sql,

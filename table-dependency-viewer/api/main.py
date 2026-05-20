@@ -231,6 +231,7 @@ class EntityMetaSavePayload(BaseModel):
     table_name: str
     task_id: str
     key_attributes: Optional[List[str]] = None
+    source_object_key: Optional[str] = None
     replica_entity_names: Optional[List[str]] = None
     yaml_content: str
     recreate_sql: str
@@ -1024,6 +1025,7 @@ def validate_admin_entity_meta(payload: EntityMetaSavePayload, request: Request)
         schema_name=payload.schema_name,
         table_name=payload.table_name,
         key_attributes=payload.key_attributes,
+        source_object_key=payload.source_object_key,
         yaml_content=payload.yaml_content,
         recreate_sql=payload.recreate_sql,
         insert_sql=payload.insert_sql,
@@ -1046,6 +1048,7 @@ def save_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
             table_name=payload.table_name,
             task_id=payload.task_id,
             key_attributes=payload.key_attributes,
+            source_object_key=payload.source_object_key,
             replica_entity_names=payload.replica_entity_names,
             yaml_content=payload.yaml_content,
             recreate_sql=payload.recreate_sql,

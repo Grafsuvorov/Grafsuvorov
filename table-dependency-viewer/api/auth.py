@@ -1192,7 +1192,7 @@ def users_analytics(request: Request, days: int = 30):
                     FROM tech_etl.app_user_event
                     WHERE ts >= (NOW() - (:days || ' days')::interval)
                     GROUP BY COALESCE(user_email, 'unknown')
-                    ORDER BY events_count DESC, last_activity_at DESC
+                    ORDER BY last_activity_at DESC NULLS LAST, events_count DESC
                     LIMIT 50
                     """
                 ),

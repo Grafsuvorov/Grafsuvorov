@@ -29,6 +29,7 @@ import ReleasesPage from "./components/ReleasesPage.jsx";
 import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
 import EntityDevMetaWorkspace from "./components/EntityDevMetaWorkspace.jsx";
 import MetaWorkspacePage from "./components/MetaWorkspacePage.jsx";
+import DevCopyDagPage from "./components/DevCopyDagPage.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
@@ -183,6 +184,10 @@ export default function App() {
       }
       if (target === "/admin/meta-workspace") {
         navigate("/admin/meta-workspace");
+        return;
+      }
+      if (target === "/admin/dev-copy") {
+        navigate("/admin/dev-copy");
         return;
       }
       if (target === "/admin/entity-meta") {
@@ -455,6 +460,18 @@ export default function App() {
               <Navigate to="/login" replace />
             ) : isAdmin ? (
               <MetaWorkspacePage userProfile={userProfile} />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin/dev-copy"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <DevCopyDagPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
             )

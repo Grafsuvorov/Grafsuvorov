@@ -1126,6 +1126,73 @@ def trigger_airflow_dev_dag(
     }
 
 
+def trigger_airflow_parametrized_dag(
+    *,
+    airflow_base_url: str,
+    dag_id: str,
+    username: str,
+    password: str,
+    conf: dict[str, Any],
+) -> dict[str, Any]:
+    if not airflow_base_url:
+        raise ValueError("Airflow DEV не настроен")
+    resolved_dag_id = str(dag_id or "").strip()
+    if not resolved_dag_id:
+        raise ValueError("Не настроен dag_id для запуска")
+
+    dag_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}"
+    dag_info = _airflow_json_request(
+        url=dag_url,
+        username=username,
+        password=password,
+        timeout=20,
+    )
+    was_paused = bool(dag_info.get("is_paused"))
+    auto_unpaused = False
+    if was_paused:
+        _airflow_json_request(
+            url=dag_url,
+            username=username,
+            password=password,
+            method="PATCH",
+            payload={"is_paused": False},
+            timeout=20,
+        )
+        auto_unpaused = True
+
+    run_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{resolved_dag_id}/dagRuns"
+    try:
+        data = _airflow_json_request(
+            url=run_url,
+            username=username,
+            password=password,
+            method="POST",
+            payload={"conf": conf or {}},
+            timeout=30,
+        )
+    except Exception:
+        if auto_unpaused:
+            try:
+                _airflow_json_request(
+                    url=dag_url,
+                    username=username,
+                    password=password,
+                    method="PATCH",
+                    payload={"is_paused": True},
+                    timeout=20,
+                )
+            except Exception:
+                pass
+        raise
+
+    return {
+        "dag_id": resolved_dag_id,
+        "response": data,
+        "auto_unpaused": auto_unpaused,
+        "was_paused": was_paused,
+    }
+
+
 def get_airflow_dev_dag_status(
     *,
     airflow_base_url: str,

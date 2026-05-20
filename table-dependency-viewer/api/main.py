@@ -80,6 +80,7 @@ from .config import (
     GITLAB_TOKEN,
     AIRFLOW_DEV_BASE_URL,
     AIRFLOW_DEV_DAG_ID,
+    AIRFLOW_DEV_COPY_DAG_ID,
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
@@ -100,6 +101,7 @@ from .services.dev_meta import (
     release_dev_meta_lock,
     save_dev_meta_file,
     trigger_airflow_dev_dag,
+    trigger_airflow_parametrized_dag,
     validate_dev_meta_content,
 )
 from .services.entity_dev_meta import (
@@ -192,6 +194,18 @@ class DevMetaDagStatusPayload(BaseModel):
     schema_name: str
     file_name: str
     dag_id: Optional[str] = None
+    dag_run_id: str
+    auto_unpaused: bool = False
+
+
+class DevCopyDagPayload(BaseModel):
+    prod_schema_name: str
+    prod_table_name: str
+    dev_schema_name: str
+    dev_table_name: str
+
+
+class DevCopyDagStatusPayload(BaseModel):
     dag_run_id: str
     auto_unpaused: bool = False
 
@@ -905,6 +919,63 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
             dag_id=dag_id,
+            dag_run_id=payload.dag_run_id,
+            auto_unpaused=payload.auto_unpaused,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
+@router.get("/api/admin/dev-copy/status")
+def get_admin_dev_copy_status(request: Request):
+    _require_admin(request)
+    return {
+        "airflow": {
+            "base_url": AIRFLOW_DEV_BASE_URL,
+            "dag_id": AIRFLOW_DEV_COPY_DAG_ID,
+            "configured": bool(AIRFLOW_DEV_BASE_URL and AIRFLOW_DEV_COPY_DAG_ID),
+        }
+    }
+
+
+@router.post("/api/admin/dev-copy/run-dag")
+def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        values = {
+            "prod_schema_name": str(payload.prod_schema_name or "").strip(),
+            "prod_table_name": str(payload.prod_table_name or "").strip(),
+            "dev_schema_name": str(payload.dev_schema_name or "").strip(),
+            "dev_table_name": str(payload.dev_table_name or "").strip(),
+        }
+        missing = [key for key, value in values.items() if not value]
+        if missing:
+            raise ValueError("Нужно заполнить все параметры запуска DAG")
+        data = trigger_airflow_parametrized_dag(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            dag_id=AIRFLOW_DEV_COPY_DAG_ID,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            conf={
+                **values,
+                "author": user.email,
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-copy/dag-status")
+def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Request):
+    _require_admin(request)
+    try:
+        data = get_airflow_dev_dag_status(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            dag_id=AIRFLOW_DEV_COPY_DAG_ID,
             dag_run_id=payload.dag_run_id,
             auto_unpaused=payload.auto_unpaused,
         )

@@ -105,6 +105,15 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
+                  className={isActive("/admin/dev-copy") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/dev-copy")}
+                >
+                  DEV Copy
+                </button>
+              )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  type="button"
                   className={isActive("/admin/engineering") ? "active" : ""}
                   onClick={() => {
                     console.log("[Sidebar] open /admin/engineering");

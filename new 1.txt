@@ -1,97 +1,37 @@
+ df -h
+  docker system df
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache frontend api
-[+] Building 28.4s (25/32)
- => [table-dependency-viewer_api internal] load build definition from Dockerfile                                                                 0.0s
- => => transferring dockerfile: 1.74kB                                                                                                           0.0s
- => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                                            0.0s
- => => transferring dockerfile: 659B                                                                                                             0.0s
- => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                                                 1.6s
- => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                                               1.6s
- => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                                                  1.6s
- => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                                      1.6s
- => [table-dependency-viewer_frontend internal] load .dockerignore                                                                               0.0s
- => => transferring context: 162B                                                                                                                0.0s
- => [table-dependency-viewer_api internal] load .dockerignore                                                                                    0.0s
- => => transferring context: 162B                                                                                                                0.0s
- => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0f  0.0s
- => CACHED [table-dependency-viewer_frontend stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:2f07d83bf561b506400dc183b1b2003803e39efbd2  0.0s
- => [table-dependency-viewer_frontend internal] load build context                                                                               0.9s
- => => transferring context: 6.22MB                                                                                                              0.9s
- => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                                                             0.0s
- => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad2  0.0s
- => [table-dependency-viewer_api internal] load build context                                                                                    0.0s
- => => transferring context: 2.02kB                                                                                                              0.0s
- => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f01  0.0s
- => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                                                              0.0s
- => ERROR [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*               26.7s
- => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-proxy http  3.0s
- => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                                           1.0s
- => [table-dependency-viewer_frontend stage-1 2/3] COPY nginx.conf /etc/nginx/conf.d/default.conf                                                0.9s
- => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-prox  9.5s
- => [table-dependency-viewer_frontend build 5/6] COPY . .                                                                                        3.6s
- => [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                                               5.6s
- => [table-dependency-viewer_frontend stage-1 3/3] COPY --from=build /app/dist /usr/share/nginx/html                                             0.9s
- => [table-dependency-viewer_frontend] exporting to image                                                                                        0.1s
- => => exporting layers                                                                                                                          0.0s
- => => writing image sha256:b0b5e5be7cbf3ca07a7d6902546e02ff97e8af1490d34bcb3ec6733c5ec10af8                                                     0.0s
- => => naming to docker.io/library/table-dependency-viewer_frontend                                                                              0.0s
-------
- > [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*:
-#28 0.504 Hit:1 http://deb.debian.org/debian trixie InRelease
-#28 0.656 Get:2 http://deb.debian.org/debian trixie-updates InRelease [47.3 kB]
-#28 0.718 Hit:3 http://deb.debian.org/debian-security trixie-security InRelease
-#28 0.780 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9671 kB]
-#28 5.076 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 5.294 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
-#28 5.294 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 5.798 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [165 kB]
-#28 5.798 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 7.131 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [165 kB]
-#28 7.131 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 7.295 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
-#28 7.295 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 10.20 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9671 kB]
-#28 10.20 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 10.38 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
-#28 10.38 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 10.66 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [165 kB]
-#28 10.66 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 15.03 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [165 kB]
-#28 15.03 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 15.17 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
-#28 15.17 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 18.98 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9671 kB]
-#28 18.98 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 19.47 Get:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages [165 kB]
-#28 19.47 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 19.71 Get:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages [5412 B]
-#28 19.71 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 24.01 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9671 kB]
-#28 24.01 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 24.21 Ign:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 24.34 Ign:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 25.32 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [9671 kB]
-#28 25.32 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 25.49 Err:6 http://deb.debian.org/debian-security trixie-security/main amd64 Packages
-#28 25.49   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#28 25.49   404  Not Found [IP: 10.66.228.23 1010]
-#28 25.63 Err:5 http://deb.debian.org/debian trixie-updates/main amd64 Packages
-#28 25.63   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#28 25.63   404  Not Found [IP: 10.66.228.23 1010]
-#28 25.74 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [13.3 MB]
-#28 25.74 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 25.91 Get:4 http://deb.debian.org/debian trixie/main amd64 Packages [13.3 MB]
-#28 25.91 Err:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 25.91   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#28 26.11 Ign:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 26.25 Err:4 http://deb.debian.org/debian trixie/main amd64 Packages
-#28 26.25   Error writing to file - write (28: No space left on device) [IP: 10.66.228.23 1010]
-#28 26.25   404  Not Found [IP: 10.66.228.23 1010]
-#28 26.25 Fetched 47.3 kB in 26s (1818 B/s)
-#28 26.25 Reading package lists...
-#28 26.26 E: Failed to fetch http://deb.debian.org/debian/dists/trixie/main/binary-amd64/Packages  404  Not Found [IP: 10.66.228.23 1010]
-#28 26.26 E: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/main/binary-amd64/Packages  404  Not Found [IP: 10.66.228.23 1010]
-#28 26.26 E: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/main/binary-amd64/Packages  404  Not Found [IP: 10.66.228.23 1010]
-#28 26.26 E: Some index files failed to download. They have been ignored, or old ones used instead.
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*" did not complete successfully: exit code: 100
+  Что обычно помогает:
+
+  docker builder prune -af
+  docker image prune -af
+  docker container prune -f
+  docker volume prune -f
+
+  Если нужно почистить всё агрессивно:
+
+  docker system prune -af --volumes
+
+  Но это удалит:
+
+  - неиспользуемые образы
+  - stopped containers
+  - build cache
+  - dangling volumes
+
+  Если на сервере крутятся другие проекты, сначала лучше посмотреть:
+
+  docker system df -v
+
+  По api/Dockerfile у вас всё нормально:
+
+  - там обычный apt-get update && apt-get install ...
+  - он падает не из-за команды, а потому что Docker некуда писать
+
+  После очистки:
+
+  docker compose build --no-cache api frontend
+  docker compose up -d
+
+  Если хотите, могу сразу дать вам безопасную последовательность команд очистки именно для прод-сервера, чтобы не снести лишнее.
+

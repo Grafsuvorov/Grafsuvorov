@@ -348,6 +348,10 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
+  const canUseMetaWorkspace = useMemo(
+    () => userProfile?.role === "admin" || userProfile?.role === "engineer",
+    [userProfile]
+  );
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
   const assistantContext = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -458,7 +462,7 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseMetaWorkspace ? (
               <MetaWorkspacePage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
@@ -470,7 +474,7 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseDevMeta ? (
               <DevCopyDagPage userProfile={userProfile} />
             ) : (
               <Navigate to="/" replace />
@@ -482,7 +486,7 @@ export default function App() {
           element={
             AUTH_ENABLED && !authToken ? (
               <Navigate to="/login" replace />
-            ) : isAdmin ? (
+            ) : canUseMetaWorkspace ? (
               <Navigate to="/admin/meta-workspace" replace />
             ) : (
               <Navigate to="/" replace />

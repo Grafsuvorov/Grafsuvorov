@@ -17,7 +17,7 @@ export default function DevCopyDagPage({ userProfile }) {
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
 
-  const canUsePage = userProfile?.role === "admin";
+  const canUsePage = Boolean(userProfile);
   const dagRunState = String(dagStatus?.dag_run_state || "").toLowerCase();
   const dagIsActive = ["queued", "running"].includes(dagRunState);
 
@@ -90,7 +90,7 @@ export default function DevCopyDagPage({ userProfile }) {
       <div className="container cc-page">
         <div className="cc-surface">
           <div className="section-title">Доступ запрещён</div>
-          <div className="muted">Требуется роль администратора.</div>
+          <div className="muted">Требуется авторизация.</div>
         </div>
       </div>
     );

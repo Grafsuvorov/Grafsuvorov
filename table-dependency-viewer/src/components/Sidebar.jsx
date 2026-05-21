@@ -93,7 +93,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   DEV Meta
                 </button>
               )}
-              {authEnabled && userProfile?.role === "admin" && (
+              {authEnabled && (userProfile?.role === "admin" || userProfile?.role === "engineer") && (
                 <button
                   type="button"
                   className={isActive("/admin/meta-workspace") ? "active" : ""}
@@ -102,7 +102,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   Meta Workspace
                 </button>
               )}
-              {authEnabled && userProfile?.role === "admin" && (
+              {authEnabled && userProfile && (
                 <button
                   type="button"
                   className={isActive("/admin/dev-copy") ? "active" : ""}

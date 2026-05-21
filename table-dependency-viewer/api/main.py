@@ -857,7 +857,7 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/meta-workspace/mr")
 def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Request):
-    user = _require_admin(request)
+    user = _require_dev_meta_role(request)
     try:
         result = create_meta_workspace_mr(
             engine=engine,
@@ -929,7 +929,7 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
 
 @router.get("/api/admin/dev-copy/status")
 def get_admin_dev_copy_status(request: Request):
-    _require_admin(request)
+    _require_authenticated(request)
     return {
         "airflow": {
             "base_url": AIRFLOW_DEV_BASE_URL,
@@ -941,7 +941,7 @@ def get_admin_dev_copy_status(request: Request):
 
 @router.post("/api/admin/dev-copy/run-dag")
 def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
-    user = _require_admin(request)
+    user = _require_authenticated(request)
     try:
         values = {
             "source_table_schema": str(payload.source_table_schema or "").strip(),
@@ -969,7 +969,7 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
 
 @router.post("/api/admin/dev-copy/dag-status")
 def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Request):
-    _require_admin(request)
+    _require_authenticated(request)
     try:
         data = get_airflow_dev_dag_status(
             airflow_base_url=AIRFLOW_DEV_BASE_URL,

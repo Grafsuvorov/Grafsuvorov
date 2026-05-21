@@ -48,7 +48,7 @@ export default function MetaWorkspacePage({ userProfile }) {
             <div className="section-title">Meta Workspace</div>
             <div className="section-subtitle">Подготовка релиза для Greenplum и ClickHouse в одном аккуратном рабочем контуре.</div>
           </div>
-          <div className="meta-workspace-badge">Admin only</div>
+          <div className="meta-workspace-badge">Admin / Engineer</div>
         </div>
 
         {(message || error) && (

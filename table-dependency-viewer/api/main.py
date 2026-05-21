@@ -3234,7 +3234,7 @@ def _assistant_answer_slowest(question: str, context: AssistantContextPayload | 
             LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
             LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
             WHERE l.object_type = 'table'
-              AND l.loading_state = 'SUCCESS'
+              AND l.loading_state IN ('SUCCESS', 'LOADED')
               AND l.loading_start_dttm IS NOT NULL
               AND l.loading_finish_dttm IS NOT NULL
               AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -4297,7 +4297,7 @@ def resolve_dependencies(schema: str, table: str) -> List[DependencyItem]:
                     text(f"""
                         SELECT round((avg(extract(epoch from (loading_finish_dttm-loading_start_dttm))/60))::numeric,2)
                         FROM {TABLE_LOADING_HISTORY}
-                        WHERE object_id=:id AND loading_state='SUCCESS'
+                        WHERE object_id=:id AND loading_state IN ('SUCCESS', 'LOADED')
                     """),
                     {"id": r["table_id"]}
                 ).scalar()
@@ -4441,7 +4441,7 @@ def get_failed_tables():
             FROM {TABLE_LOADING_HISTORY} AS l2
             WHERE l2.object_name = l1.object_name
               AND l2.object_type = l1.object_type
-              AND l2.loading_state = 'SUCCESS'
+              AND l2.loading_state IN ('SUCCESS', 'LOADED')
         ) AS last_success_time
     FROM {TABLE_LOADING_HISTORY} l1
     inner join {TABLE_TABLES_META} tm on l1.object_id = tm.table_id
@@ -4608,7 +4608,7 @@ def get_metrics():
                     f"""
                 SELECT ROUND(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                 FROM {TABLE_LOADING_HISTORY}
-                WHERE loading_state = 'SUCCESS' and object_type='table'
+                WHERE loading_state IN ('SUCCESS', 'LOADED') and object_type='table'
                   AND loading_start_dttm >= now() - interval '24 hours'
             """
                 )
@@ -5190,7 +5190,7 @@ def get_table_card_info_by_path(schema: str, table: str, source: str = Query("cu
                             f"""
                         SELECT round(cast(AVG(EXTRACT(EPOCH FROM (loading_finish_dttm - loading_start_dttm)) / 60) as numeric), 1)
                         FROM {TABLE_LOADING_HISTORY}
-                        WHERE loading_state = 'SUCCESS'
+                        WHERE loading_state IN ('SUCCESS', 'LOADED')
                           AND object_type='table'
                           AND object_id = :object_id
                     """
@@ -5825,7 +5825,7 @@ def get_dependency_violations():
                     FROM {TABLE_LOADING_HISTORY} l
                     LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                     WHERE l.object_type = 'table'
-                      AND l.loading_state = 'SUCCESS'
+                      AND l.loading_state IN ('SUCCESS', 'LOADED')
                       AND l.loading_finish_dttm IS NOT NULL
                       AND t.table_schema = :schema
                       AND t.table_name = ANY(:tables)
@@ -6013,7 +6013,7 @@ def get_slowest_tables(
                 LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                 LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -6132,7 +6132,7 @@ def get_load_profile(days: int = Query(30, ge=1, le=120)):
                 SUM(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0) AS total_duration_minutes
             FROM {TABLE_LOADING_HISTORY} l
             WHERE l.object_type = 'table'
-              AND l.loading_state = 'SUCCESS'
+              AND l.loading_state IN ('SUCCESS', 'LOADED')
               AND l.loading_start_dttm IS NOT NULL
               AND l.loading_finish_dttm IS NOT NULL
               AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -6205,7 +6205,7 @@ def get_night_summary(
                 LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                 LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND l.loading_start_dttm >= :start_ts
@@ -6318,7 +6318,7 @@ def get_night_summary(
                             percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0) AS p95_duration
                         FROM {TABLE_LOADING_HISTORY} l
                         WHERE l.object_type = 'table'
-                          AND l.loading_state = 'SUCCESS'
+                          AND l.loading_state IN ('SUCCESS', 'LOADED')
                           AND l.loading_start_dttm IS NOT NULL
                           AND l.loading_finish_dttm IS NOT NULL
                           AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -6337,7 +6337,7 @@ def get_night_summary(
                         LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                         LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                         WHERE l.object_type = 'table'
-                          AND l.loading_state = 'SUCCESS'
+                          AND l.loading_state IN ('SUCCESS', 'LOADED')
                           AND l.loading_start_dttm IS NOT NULL
                           AND l.loading_finish_dttm IS NOT NULL
                           AND l.loading_start_dttm >= :start_ts
@@ -6541,7 +6541,7 @@ def get_night_heavy_tables(
                 LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                 LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -6575,7 +6575,7 @@ def get_night_heavy_tables(
                     EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS duration_minutes
                 FROM {TABLE_LOADING_HISTORY} l
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND l.loading_finish_dttm >= now() - (:days || ' days')::interval
@@ -6729,7 +6729,7 @@ def get_entity_loads(
                 LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                 LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND e.entity_id = :entity_id
@@ -7082,7 +7082,7 @@ def get_gantt_data(schema: str, table: str, depth: int = Query(3, ge=1, le=4)):
                 SELECT object_id, loading_start_dttm, loading_finish_dttm,
                        row_number() OVER (PARTITION BY object_id ORDER BY loading_start_dttm DESC) rn
                 FROM {TABLE_LOADING_HISTORY}
-                WHERE loading_state = 'SUCCESS' AND object_type = 'table'
+                WHERE loading_state IN ('SUCCESS', 'LOADED') AND object_type = 'table'
                   AND object_id IN :id_list
             )
             SELECT object_id, loading_start_dttm, loading_finish_dttm
@@ -8030,7 +8030,7 @@ def get_load_compare(
                 LEFT JOIN {TABLE_TABLES_META} t ON t.table_id = l.object_id
                 LEFT JOIN {TABLE_ENTITIES_META} e ON e.entity_id = t.entity_id
                 WHERE l.object_type = 'table'
-                  AND l.loading_state = 'SUCCESS'
+                  AND l.loading_state IN ('SUCCESS', 'LOADED')
                   AND l.loading_start_dttm IS NOT NULL
                   AND l.loading_finish_dttm IS NOT NULL
                   AND (

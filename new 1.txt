@@ -1,37 +1,254 @@
- df -h
-  docker system df
+2. Цель задачи
+Необходимо автоматизировать выполнение ручных релизных сценариев для объектов, которые сейчас пропускаются релизным DAG из-за truncate = delete.
+Цель — добавить в репозиторий и релизный DAG механизм, который позволит инженеру прикладывать формализованную инструкцию к объекту, а релизный процесс сможет автоматически:
+1. обнаружить наличие инструкции;2. выполнить backup по умолчанию;3. выполнить предрелизные SQL-шаги;4. выполнить основной recreate/insert/delete-сценарий;5. выполнить пострелизные SQL-шаги;6. сохранить лог выполнения;7. очистить временные backup-объекты через заданное количество релизов.
 
-  Что обычно помогает:
+3. Целевой процесс
+3.1. Изменение существующего процесса
+Если у объекта в YAML указано:
+truncate_mode: delete
+или в текущем формате:
+truncate: delete
+то релизный DAG больше не должен просто пропускать объект.
+Вместо этого он должен проверить, есть ли у объекта инструкция ручного сценария.
+Например:
+manual_release.yaml
+или:
+release_plan.yaml
+Если инструкция есть, DAG выполняет сценарий автоматически.
+Если инструкции нет, DAG ведет себя как раньше:
+объект пропускается;в лог пишется предупреждение;статус объекта = MANUAL_REQUIRED.
 
-  docker builder prune -af
-  docker image prune -af
-  docker container prune -f
-  docker volume prune -f
+4. Новая структура файлов
+Для каждого объекта можно добавить дополнительный файл инструкции:
+sb_wuc/  dm/    some_table/      table.yaml      sql_query_insert_init.sql      sql_query_recreate_init.sql      sql_query_truncate.sql      manual_release.yaml      manual_sql/        01_pre_backup_check.sql        02_delete_old_data.sql        03_load_history.sql        04_post_check.sql
+Или более универсально:
+sb_wuc/  dm/    some_table/      table.yaml      sql_query_insert_init.sql      sql_query_recreate_init.sql      sql_query_truncate.sql      release_plan.yaml      release_scripts/        pre/          01_check.sql          02_prepare.sql        post/          01_history_load.sql          02_validate.sql
+Я бы выбрал название:
+release_plan.yaml
+Потому что это не совсем “manual”, если мы хотим автоматизировать выполнение.
 
-  Если нужно почистить всё агрессивно:
+5. Пример release_plan.yaml
+release_plan_version: 1enabled: truemode: custom_delete_flowbackup:  enabled: true  type: table_copy  backup_schema: backup  backup_name_template: "{schema}_{table}_{release_id}_{timestamp}"  retention_releases: 1pre_steps:  - name: "Проверка наличия данных"    type: sql_file    file: "release_scripts/pre/01_check.sql"    required: true    stop_on_error: true  - name: "Удаление старых данных"    type: sql_file    file: "release_scripts/pre/02_delete_old_data.sql"    required: true    stop_on_error: truemain_steps:  run_recreate: true  run_insert: truepost_steps:  - name: "Загрузка истории"    type: sql_file    file: "release_scripts/post/01_history_load.sql"    required: true    stop_on_error: true  - name: "Проверка результата"    type: sql_file    file: "release_scripts/post/02_validate.sql"    required: true    stop_on_error: truecleanup:  enabled: true  cleanup_backup_after_releases: 1
 
-  docker system prune -af --volumes
+6. Более простой вариант инструкции
+Для первого этапа можно сделать проще:
+enabled: truebackup_required: truebackup_retention_releases: 1steps:  - order: 1    name: "Удалить старую таблицу"    file: "manual_sql/01_drop_old_table.sql"    stop_on_error: true  - order: 2    name: "Создать новую таблицу"    file: "sql_query_recreate_init.sql"    stop_on_error: true  - order: 3    name: "Загрузить данные"    file: "sql_query_insert_init.sql"    stop_on_error: true  - order: 4    name: "Прогрузить историю"    file: "manual_sql/04_load_history.sql"    stop_on_error: true  - order: 5    name: "Проверить количество строк"    file: "manual_sql/05_check_result.sql"    stop_on_error: true
+Но я бы всё-таки разделил на:
+backuppre_stepsmain_stepspost_stepscleanup
+Так будет понятнее и безопаснее.
 
-  Но это удалит:
+7. Поведение backup по умолчанию
+Для объектов с release_plan.yaml backup должен быть включен по умолчанию.
+Если явно не указано иное:
+backup:  enabled: true
+DAG перед выполнением сценария делает backup целевой таблицы.
+Например, для таблицы:
+dm.some_table
+создается backup:
+backup.dm_some_table_DWH_2134_20260521_153000
+Или, если удобнее хранить в той же схеме:
+dm.some_table_bkp_DWH_2134_20260521
+Но я бы рекомендовал отдельную схему:
+backup
+Пример SQL:
+create table backup.dm_some_table_DWH_2134_20260521_153000 asselect *from dm.some_tabledistributed randomly;
+Если важно сохранить distribution key, тогда backup-логика должна уметь получать DDL исходной таблицы и создавать backup с тем же распределением. Но для первого этапа можно начать с простого create table as.
 
-  - неиспользуемые образы
-  - stopped containers
-  - build cache
-  - dangling volumes
+8. Очистка backup-таблиц
+Нужно добавить автоматическую очистку backup-объектов.
+Требование:
+Backup-файлы/таблицы нужно удалять через один релиз.
+То есть если backup создан в релизе R100, он может быть удален после успешного завершения релиза R101 или при старте R102.
+Для этого нужна таблица учета backup.
+Например:
+create table release_backup_registry (    backup_id bigserial,    release_id text,    task_key text,    entity_code text,    table_schema text,    table_name text,    backup_schema text,    backup_table_name text,    created_dttm timestamp default now(),    cleanup_after_release_id text,    cleanup_status text default 'ACTIVE',    cleaned_dttm timestamp,    created_by text);
+При создании backup DAG пишет запись:
+release_id = REL_2026_05_21task_key = DWH-2134table_schema = dmtable_name = some_tablebackup_table_name = dm_some_table_DWH_2134_20260521_153000cleanup_status = ACTIVE
+На каждом релизе отдельный шаг DAG проверяет старые backup:
+если backup создан раньше, чем N релизов назад,и его статус ACTIVE,то удалить таблицу и проставить cleanup_status = DELETED.
 
-  Если на сервере крутятся другие проекты, сначала лучше посмотреть:
+9. Изменения в table.yaml
+Можно добавить в основной YAML признак, что объект имеет кастомный релизный сценарий:
+table_schema: dmtable_name: some_tabletable_load_mode: truncate_inserttruncate_mode: deleterelease_plan:  enabled: true  file: release_plan.yaml
+Или вообще не добавлять новое поле, а определять автоматически:
+если truncate = delete и рядом есть release_plan.yaml,то запускать кастомный сценарий.
+Я бы сделал явно:
+release_plan:  enabled: true  file: release_plan.yaml
+Так будет проще читать и валидировать.
 
-  docker system df -v
+10. Логика релизного DAG
+10.1. Текущая логика
+Если recreate изменился:    recreate + insertЕсли insert изменился:    truncate + insertЕсли truncate = delete:    skip
+10.2. Новая логика
+Если truncate = delete:    Если есть release_plan.enabled = true:        выполнить custom release flow    Иначе:        skip + MANUAL_REQUIREDИначе:    выполнить стандартную релизную логику
 
-  По api/Dockerfile у вас всё нормально:
+11. Custom release flow
+Для объекта с release_plan.yaml DAG выполняет:
+1. validate_release_plan2. create_backup3. run_pre_steps4. run_main_steps5. run_post_steps6. run_checks7. update_status8. register_backup_for_cleanup
 
-  - там обычный apt-get update && apt-get install ...
-  - он падает не из-за команды, а потому что Docker некуда писать
+11.1. Validate release plan
+Проверить:
+- файл release_plan.yaml существует;- YAML корректно парсится;- все SQL-файлы из инструкции существуют;- порядок шагов корректный;- нет дублей order;- для каждого required=true файла есть содержимое;- запрещенные команды отсутствуют или требуют подтверждения;- объект из инструкции совпадает с объектом из table.yaml.
 
-  После очистки:
+11.2. Backup
+Перед любыми изменениями:
+- проверить, что целевая таблица существует;- создать backup;- записать backup в release_backup_registry;- если backup не создан — остановить выполнение объекта.
+Backup должен быть обязательным по умолчанию.
+Отключение backup допустимо только явно:
+backup:  enabled: false  reason: "Таблица временная, backup не требуется"
+Но я бы на первом этапе вообще не разрешал отключать backup для prod.
 
-  docker compose build --no-cache api frontend
-  docker compose up -d
+11.3. Pre-steps
+Выполнить SQL-файлы из блока:
+pre_steps
+Примеры:
+- удалить данные за период;- подготовить staging-таблицу;- проверить наличие нужной истории;- проверить отсутствие дублей;- переименовать старую таблицу.
 
-  Если хотите, могу сразу дать вам безопасную последовательность команд очистки именно для прод-сервера, чтобы не снести лишнее.
+11.4. Main-steps
+Выполнить основные действия:
+main_steps:  run_recreate: true  run_insert: true
+Если run_recreate = true, DAG запускает:
+sql_query_recreate_init.sql
+Если run_insert = true, DAG запускает:
+sql_query_insert_init.sql
+Также можно добавить поддержку:
+main_steps:  run_truncate: false  run_delete: true  delete_file: sql_query_truncate.sql
 
+11.5. Post-steps
+Выполнить SQL-файлы из блока:
+post_steps
+Примеры:
+- прогрузить историю;- собрать статистику;- выполнить analyze;- проверить количество строк;- проверить контрольные суммы;- сравнить с backup;- обновить tables_meta.
+
+12. Статусы выполнения
+Нужно хранить статусы по каждому объекту и шагу.
+Например:
+create table release_custom_step_log (    log_id bigserial,    release_id text,    task_key text,    entity_code text,    table_schema text,    table_name text,    step_order int,    step_name text,    step_type text,    sql_file text,    status text,    started_dttm timestamp,    finished_dttm timestamp,    error_message text,    rows_affected bigint);
+Статусы:
+PENDINGRUNNINGSUCCESSFAILEDSKIPPED
+На фронте можно показывать:
+DWH-2134 / dm.some_tableBackup                    SUCCESSPre-step 01 check          SUCCESSPre-step 02 delete         SUCCESSRecreate                   SUCCESSInsert                     SUCCESSPost-step 01 history       SUCCESSPost-step 02 validation    FAILED
+
+13. Валидация SQL-файлов
+Перед релизом желательно добавить проверку:
+1. Синтаксис SQL.2. Наличие опасных команд.3. Наличие явного указания схемы.4. Запрет на изменение чужих схем.5. Запрет на drop без backup.6. Проверка, что target table соответствует YAML.
+Например, если объект:
+table_schema: dmtable_name: some_table
+то в recreate не должно быть:
+drop table dm.other_table;
+Иначе DAG должен остановить сценарий.
+
+14. Что считать опасными командами
+Для автоматического режима надо отдельно контролировать:
+drop schemadrop databasetruncate чужих таблицdelete без whereupdate без wherealter systemgrant/revokecreate extension
+Для некоторых команд можно разрешить выполнение только если в release_plan.yaml явно указано:
+allow_dangerous_operations: trueapproved_by: "teamlead"reason: "Миграция структуры таблицы"
+Но я бы на первом этапе сделал проще: опасные команды запрещены.
+
+15. Изменения во фронте инструмента
+В карточке таблицы можно добавить блок:
+Релизный сценарий
+Там отображать:
+- стандартный сценарий;- custom delete flow;- наличие release_plan.yaml;- список шагов;- статус проверки;- статус последнего выполнения;- backup-таблица;- ссылка на лог.
+Для объекта с truncate = delete без инструкции подсвечивать:
+Требуется release_plan.yaml. Объект будет пропущен релизным DAG.
+Для объекта с инструкцией:
+Custom release flow готов к выполнению.
+
+16. Как инженер должен описывать сценарий
+Инженер при разработке задачи должен приложить:
+1. standard files:   - table.yaml   - sql_query_insert_init.sql   - sql_query_recreate_init.sql   - sql_query_truncate.sql2. release_plan.yaml3. дополнительные SQL-файлы:   - release_scripts/pre/*.sql   - release_scripts/post/*.sql
+В MR должно быть видно:
+- почему нужен custom flow;- какие шаги будут выполнены;- какой backup создается;- когда backup будет очищен.
+
+17. Требования к MR
+В MR автоматически или вручную должно быть описание:
+### Объект`dm.some_table`### Тип релизного сценария`custom_delete_flow`### ПричинаОбъект использует `truncate = delete`, требуется предварительная подготовка данных.### BackupBackup создается автоматически:`backup.dm_some_table_<release_id>_<timestamp>`Retention:`1 релиз`### Шаги1. Проверка данных2. Удаление старых данных3. Recreate таблицы4. Insert новых данных5. Загрузка истории6. Проверка результата
+
+18. Критерии приемки
+Функциональные
+
+
+Для объекта с truncate = delete и без release_plan.yaml процесс работает как раньше:
+
+
+объект пропускается;в лог пишется MANUAL_REQUIRED.
+
+
+Для объекта с truncate = delete и release_plan.yaml DAG выполняет custom-сценарий.
+
+
+Перед выполнением сценария автоматически создается backup.
+
+
+Backup регистрируется в служебной таблице.
+
+
+Все шаги из release_plan.yaml выполняются строго по порядку.
+
+
+При ошибке на шаге с stop_on_error = true выполнение объекта останавливается.
+
+
+Статус каждого шага пишется в лог.
+
+
+После успешного завершения релиза backup остается доступен минимум до следующего релиза.
+
+
+Через заданное количество релизов backup автоматически удаляется.
+
+
+При удалении backup обновляется статус в release_backup_registry.
+
+
+
+Технические
+
+
+DAG должен уметь читать release_plan.yaml.
+
+
+DAG должен валидировать наличие всех SQL-файлов.
+
+
+DAG должен логировать результат каждого SQL-шагa.
+
+
+DAG должен не выполнять SQL, если не удалось создать backup.
+
+
+DAG должен запрещать выполнение сценария при некорректной инструкции.
+
+
+Должна быть возможность повторного запуска объекта после исправления ошибки.
+
+
+Повторный запуск не должен создавать конфликтующие backup-таблицы.
+
+
+
+19. Возможные названия задачи
+Можно назвать задачу так:
+Автоматизация кастомных релизных сценариев для объектов с truncate = delete
+Или:
+Реализация release_plan для автоматического выполнения ручных шагов при релизе объектов
+Или более корпоративно:
+Доработка релизного процесса: поддержка автоматизированных инструкций для объектов с нестандартной загрузкой
+Я бы выбрал:
+Автоматизация release_plan для объектов с нестандартным сценарием загрузки
+
+20. Краткое описание для YouTrack
+Необходимо доработать релизный процесс для объектов, которые сейчас пропускаются DAG при наличии truncate = delete.Требуется добавить поддержку файла release_plan.yaml рядом с YAML/SQL-файлами объекта. В этом файле инженер должен описывать предрелизные, основные и пострелизные SQL-шаги, которые необходимо выполнить для объекта.DAG должен автоматически определять наличие release_plan.yaml, валидировать его, создавать backup целевой таблицы по умолчанию, выполнять шаги в заданном порядке, логировать результат каждого шага и регистрировать backup для последующей автоматической очистки через заданное количество релизов.Если у объекта truncate = delete, но release_plan.yaml отсутствует, объект должен пропускаться как раньше со статусом MANUAL_REQUIRED.
+
+21. Рекомендуемый минимальный MVP
+Чтобы не делать всё сразу, я бы начал так:
+MVP 1
+1. Добавить release_plan.yaml.2. Поддержать только последовательный список SQL-файлов.3. Перед выполнением всегда делать backup.4. Логировать каждый шаг.5. При ошибке останавливать объект.6. Backup удалять вручную или отдельным DAG.
+MVP 2
+1. Добавить pre/main/post блоки.2. Добавить registry backup.3. Добавить автоматическую очистку через релиз.4. Добавить отображение статуса во фронте.
+MVP 3
+1. Добавить проверки опасных команд.2. Добавить dry-run/validate.3. Добавить автоматическую генерацию release_plan из UI.4. Добавить создание MR из инструмента.
+
+Главная идея: не пытаться зашить все ручные кейсы в код DAG. Лучше дать инженеру формальный файл release_plan.yaml, а DAG сделать универсальным исполнителем такого плана с обязательным backup, логированием и очисткой.

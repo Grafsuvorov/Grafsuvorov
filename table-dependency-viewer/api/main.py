@@ -80,7 +80,6 @@ from .config import (
     GITLAB_TOKEN,
     AIRFLOW_DEV_BASE_URL,
     AIRFLOW_DEV_DAG_ID,
-    AIRFLOW_DEV_COPY_DAG_ID,
     AIRFLOW_DEV_USERNAME,
     AIRFLOW_DEV_PASSWORD,
     DEV_META_LOCK_TTL_MIN,
@@ -152,6 +151,7 @@ from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 print("BOOT FILE:", __file__)
+DEV_COPY_DAG_ID = "load_from_prod_to_dev"
 
 init_auth()
 app.middleware("http")(auth_middleware)
@@ -199,10 +199,10 @@ class DevMetaDagStatusPayload(BaseModel):
 
 
 class DevCopyDagPayload(BaseModel):
-    prod_schema_name: str
-    prod_table_name: str
-    dev_schema_name: str
-    dev_table_name: str
+    source_table_schema: str
+    source_table_name: str
+    target_table_schema: str
+    target_table_name: str
 
 
 class DevCopyDagStatusPayload(BaseModel):
@@ -933,8 +933,8 @@ def get_admin_dev_copy_status(request: Request):
     return {
         "airflow": {
             "base_url": AIRFLOW_DEV_BASE_URL,
-            "dag_id": AIRFLOW_DEV_COPY_DAG_ID,
-            "configured": bool(AIRFLOW_DEV_BASE_URL and AIRFLOW_DEV_COPY_DAG_ID),
+            "dag_id": DEV_COPY_DAG_ID,
+            "configured": bool(AIRFLOW_DEV_BASE_URL),
         }
     }
 
@@ -944,17 +944,17 @@ def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
     user = _require_admin(request)
     try:
         values = {
-            "prod_schema_name": str(payload.prod_schema_name or "").strip(),
-            "prod_table_name": str(payload.prod_table_name or "").strip(),
-            "dev_schema_name": str(payload.dev_schema_name or "").strip(),
-            "dev_table_name": str(payload.dev_table_name or "").strip(),
+            "source_table_schema": str(payload.source_table_schema or "").strip(),
+            "source_table_name": str(payload.source_table_name or "").strip(),
+            "target_table_schema": str(payload.target_table_schema or "").strip(),
+            "target_table_name": str(payload.target_table_name or "").strip(),
         }
         missing = [key for key, value in values.items() if not value]
         if missing:
             raise ValueError("Нужно заполнить все параметры запуска DAG")
         data = trigger_airflow_parametrized_dag(
             airflow_base_url=AIRFLOW_DEV_BASE_URL,
-            dag_id=AIRFLOW_DEV_COPY_DAG_ID,
+            dag_id=DEV_COPY_DAG_ID,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
             conf={
@@ -975,7 +975,7 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
             airflow_base_url=AIRFLOW_DEV_BASE_URL,
             username=AIRFLOW_DEV_USERNAME,
             password=AIRFLOW_DEV_PASSWORD,
-            dag_id=AIRFLOW_DEV_COPY_DAG_ID,
+            dag_id=DEV_COPY_DAG_ID,
             dag_run_id=payload.dag_run_id,
             auto_unpaused=payload.auto_unpaused,
         )

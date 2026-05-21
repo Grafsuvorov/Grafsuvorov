@@ -6,10 +6,10 @@ import DagLoadingMiniGame from "./DagLoadingMiniGame.jsx";
 export default function DevCopyDagPage({ userProfile }) {
   const [status, setStatus] = useState(null);
   const [form, setForm] = useState({
-    prod_schema_name: "dm",
-    prod_table_name: "",
-    dev_schema_name: "dm",
-    dev_table_name: "",
+    source_table_schema: "dm",
+    source_table_name: "",
+    target_table_schema: "dm",
+    target_table_name: "",
   });
   const [running, setRunning] = useState(false);
   const [dagStatus, setDagStatus] = useState(null);
@@ -58,7 +58,7 @@ export default function DevCopyDagPage({ userProfile }) {
   }, [dagStatus?.dag_run_id, dagStatus?.dag_run_state, dagStatus?.auto_unpaused]);
 
   const handleRun = async () => {
-    if (!form.prod_schema_name || !form.prod_table_name || !form.dev_schema_name || !form.dev_table_name) {
+    if (!form.source_table_schema || !form.source_table_name || !form.target_table_schema || !form.target_table_name) {
       setError("Нужно заполнить схему и таблицу для PROD и DEV");
       return;
     }
@@ -101,41 +101,41 @@ export default function DevCopyDagPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Copy DAG</div>
         <div className="section-subtitle">
-          Запуск фиксированного DAG для копирования данных из PROD в DEV по параметрам схемы и таблицы.
+          Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Копировать можно в любую схему и с любым названием целевой таблицы.
         </div>
 
         <div className="dev-meta-generator">
           <div className="section-subtitle">Параметры запуска</div>
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
-              <span>PROD схема</span>
+              <span>source_table_schema</span>
               <input
-                value={form.prod_schema_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, prod_schema_name: e.target.value }))}
+                value={form.source_table_schema}
+                onChange={(e) => setForm((prev) => ({ ...prev, source_table_schema: e.target.value }))}
                 placeholder="dm"
               />
             </label>
             <label className="admin-field">
-              <span>PROD таблица</span>
+              <span>source_table_name</span>
               <input
-                value={form.prod_table_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, prod_table_name: e.target.value }))}
+                value={form.source_table_name}
+                onChange={(e) => setForm((prev) => ({ ...prev, source_table_name: e.target.value }))}
                 placeholder="account_debt"
               />
             </label>
             <label className="admin-field">
-              <span>DEV схема</span>
+              <span>target_table_schema</span>
               <input
-                value={form.dev_schema_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, dev_schema_name: e.target.value }))}
+                value={form.target_table_schema}
+                onChange={(e) => setForm((prev) => ({ ...prev, target_table_schema: e.target.value }))}
                 placeholder="dm"
               />
             </label>
             <label className="admin-field">
-              <span>DEV таблица</span>
+              <span>target_table_name</span>
               <input
-                value={form.dev_table_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, dev_table_name: e.target.value }))}
+                value={form.target_table_name}
+                onChange={(e) => setForm((prev) => ({ ...prev, target_table_name: e.target.value }))}
                 placeholder="account_debt_dev"
               />
             </label>

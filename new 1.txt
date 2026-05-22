@@ -1,35 +1,18 @@
-#!/usr/bin/env python3
-  import base64
-  import json
-  import sys
-  import urllib.request
-
-  BASE_URL = "http://rgm-s-dwhapp01.hq.root.ad:15312"
-  USERNAME = "your_login"
-  PASSWORD = "your_password"
-
-  def main():
-      if len(sys.argv) != 2 or "." not in sys.argv[1]:
-          print("Usage: python get_keys.py <schema.table>")
-          sys.exit(1)
-
-      schema, table = sys.argv[1].split(".", 1)
-      url = f"{BASE_URL}/api/card/{schema}/{table}"
-
-      credentials = f"{USERNAME}:{PASSWORD}".encode("utf-8")
-      auth_header = base64.b64encode(credentials).decode("utf-8")
-
-      req = urllib.request.Request(url)
-      req.add_header("Authorization", f"Basic {auth_header}")
-
-      with urllib.request.urlopen(req) as resp:
-          data = json.load(resp)
-
-      print(json.dumps({
-          "schema": schema,
-          "table": table,
-          "key_attributes": data.get("key_attributes", []),
-      }, ensure_ascii=False, indent=2))
-
-  if __name__ == "__main__":
-      main()
+Traceback (most recent call last):
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\key_atr.py", line 35, in <module>
+    main()
+  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\key_atr.py", line 25, in main
+    with urllib.request.urlopen(req) as resp:
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 214, in urlopen
+    return opener.open(url, data, timeout)
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 523, in open
+    response = meth(req, response)
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 632, in http_response
+    response = self.parent.error(
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 561, in error
+    return self._call_chain(*args)
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 494, in _call_chain
+    result = func(*args)
+  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 641, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 401: Unauthorized

@@ -4,9 +4,7 @@ import { useNavigate } from "react-router-dom";
 export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
   const navigate = useNavigate();
   const isActive = (path) => currentPath === path;
-  const customCursorTargetUser =
-    "" ||
-    ""; // укажите username или email пользователя
+  const customCursorTargetUser = "Nikita.Suvorov@rusal.com"; // username или email пользователя
   const useCustomHoverLabel = Boolean(
     customCursorTargetUser &&
     (

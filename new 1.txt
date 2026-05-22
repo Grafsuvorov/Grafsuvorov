@@ -1,309 +1,39 @@
-drop table if exists  pg_temp.service_le;
-create temp table  pg_temp.service_le	with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3)  as (
-with cte as (
-select distinct
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code,
-	ltrim(perp.service_code, '0') as service_code
---	nullif(array_to_string(array_agg(distinct ltrim(perp.service_code, '0') order by ltrim(perp.service_code, '0')), ', '), '') as service_list_text
-from
-	dm_calc.payment_requests tap
-	--dm.payment_request_approvement_history tap
-left join dds.transportation_service_and_accounting_relation perz 	on
-	tap.unit_balance_code = perz.unit_balance_code
-	and tap.invoice_document_code = perz.accounting_document_code
-	and tap.fiscal_year_of_relevant_invoice = perz.accounting_document_fiscal_year::numeric(4)
-	and perz.sales_document_type_code = '2'
-left join dds.transportation_service_and_accounting_relation_history perf	 on
-	tap.unit_balance_code = perf.unit_balance_code
-	and tap.invoice_document_code = perf.accounting_document_code
-	and tap.fiscal_year_of_relevant_invoice = perf.accounting_document_fiscal_year::numeric(4)
-	and perf.sales_document_type_code = '2'
-join dds.transportation_service_invoice_position perp 	on
-	perp.plant_code = coalesce(perz.plant_code, perf.plant_code)
-	and perp.transportation_service_invoice_code = coalesce(perz.transportation_service_invoice_code, perf.transportation_service_invoice_code)
-	and perp.transportation_service_invoice_position_code = coalesce(perz.transportation_service_invoice_position_code, perf.transportation_service_invoice_position_code))
-select 
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code,
-	nullif(array_to_string(array_agg(service_code order by service_code), ', '), '') as service_list_text
-	from cte as tap
-group by
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code
-)
-distributed by (unit_balance_code, fiscal_year,	accounting_document_code);
-
-
-
-drop table if exists pg_temp.service_mm;
-create temp table pg_temp.service_mm with (appendonly = true,orientation = column,compresstype = zstd,compresslevel = 3) as (
-with purch as(
-	select
-		service_package_code,
-		purchase_contract_code as purchase_document_code,
-		position_line_item_code
-	from
-		dds.purchase_contract_position
-	union all
-	select
-		service_package_code,
-		purchase_order_code as purchase_document_code,
-		position_line_item_code
-	from
-		dds.purchase_order_position),
-cte as(
-select distinct 
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code,
-	ltrim(esll_sub.service_code, '0') as service_list_text
-from
-	dm_calc.payment_requests tap
-join dds.advance_payment_requirements_by_purchase_orders mm	on
-	tap.unit_balance_code = mm.unit_balance_code
-	and tap.accounting_document_code = mm.accounting_document_code
-	and tap.fiscal_year = mm.fiscal_year::numeric(4)
-	and mm.purchase_document_code is not null
-join purch as purch on
-	mm.purchase_document_code = purch.purchase_document_code
-	and mm.purchase_document_position_line_item_code = purch.position_line_item_code
-left join dds.service_package_position esll on
-	esll.service_package_code = purch.service_package_code
-	and esll.reference_document_service_package_position_code = '0000000000'
-	and esll.is_deleted_code is false
-left join dds.service_package_position esll_sub on
-	esll.service_package_sub_code = esll_sub.service_package_code
-	and esll.is_multiple_service_assigned_code is true )
- 	select
- 	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code,
-	nullif(array_to_string(array_agg(service_list_text order by service_list_text), ', '), '') as service_list_text
-from cte as tap
-group by
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code
-)
-distributed by (unit_balance_code,fiscal_year,accounting_document_code);
- 	
-
- insert
-	into dm.payment_request_approvement_history(
-	unit_balance_code,
-	fiscal_year,
-	accounting_document_code,
-	accounting_document_position_code,
-	accounting_document_type,
-	dt_posting,
-	dt_accounting_document,
-	unit_balance_name,
-	plant_code,
-	plant_name,
-	general_ledger_account_code,
-	general_ledger_account_full_name,
-	reverse_document_code,
-	reference_document_number,
-	clearing_document_code,
-	document_currency_code,	
-	document_currency_amount,
-	local_currency_code,
-	local_currency_amount,
-	second_local_currency_code,
-	second_local_currency_amount,
-	payment_request_usd_vat_included_amount,
-	accounting_document_position_text,
-	counterparty_code,
-	counterparty_full_name,
-	counterparty_tin_code,
-	dttm_accounting_document_created,
-	accounting_document_created_by,
-	accounting_document_created_by_full_name,
-	accounting_document_created_by_name,
-	payment_request_change_code,
-	payment_request_updated_by,
-	payment_request_updated_by_full_name,
-	payment_request_updated_by_name,
-	dt_updated,
-	payment_request_status_after_update_code,
-	payment_request_status_after_update_name,
-	payment_request_status_before_update_code,
-	payment_request_status_before_update_name ,
-	dt_previously_updated,
-	approvement_duration_in_days,
-	approvement_duration,
-	dt_payment_posted,
-	dt_payment_created,
-	invoice_document_code,
-	fiscal_year_of_relevant_invoice,
-	counterparty_search_name,
-	subdivision_name,
-	department_name,
-	service_list_text,
-	payment_request_in_sap_system_url
-)
-with status_name as(
-	select
-		unit_balance_code,
-		payment_unblock_status_code,
-		unblock_status_set_by_name
-	from
-		(
-		select
-			unit_balance_code,
-			payment_unblock_status_code,
-			unblock_status_set_by_name,
-			funds_center_code,
-			min(funds_center_code) over (partition by unit_balance_code,
-			payment_unblock_status_code) as min_funds_center_code
-		from
-			dict_dds.payment_unblock_status_texts
-		where
-			language_code = 'R') as s
-	where
-		coalesce(funds_center_code, 'null') = coalesce(min_funds_center_code, 'null')
-),
-mm_tap as (
-select 
-	unit_balance_code, 
-	accounting_document_code,
-	fiscal_year,
-	accounting_document_position_line_item_code,
-	purchase_document_position_reference_line_item_code,
-	funds_center_code,
-	row_number() over (partition by unit_balance_code, accounting_document_code,fiscal_year order by accounting_document_position_line_item_code,
-	purchase_document_position_reference_line_item_code) as rn 
-from 
-	dds.advance_payment_requirements_by_purchase_orders)		
-select 
-	tap.unit_balance_code,
-	tap.fiscal_year,
-	tap.accounting_document_code,
-	tap.accounting_document_position_code,
-	tap.accounting_document_type,
-	tap.dt_posting,
-	tap.dt_accounting_document,
-	be.unit_balance_name,
-	tap.plant_code,
-	pl.plant_full_name,
-	tap.general_ledger_account_code,
-	acc.general_ledger_account_full_name_rus as general_ledger_account_full_name,
-	tap.reverse_document_code,
-	tap.reference_document_number,
-	tap.clearing_document_code,
-	tap.document_currency_code,	
-	tap.document_currency_amount,
-	tap.local_currency_code,
-	tap.local_currency_amount,
-	tap.second_local_currency_code,
-	tap.second_local_currency_amount,
-	round(case when 
-			tap.document_currency_code = 'USD' then tap.document_currency_amount
-	     	else 
-	     	tap.document_currency_amount * coalesce(r.currency_to_multiplier, 1) * case when coalesce(r.currency_rate, 1) > 0 
-	     	then coalesce(r.currency_rate, 1) else 1 end / (case when coalesce(r.currency_rate, 1) < 0 then abs(coalesce(r.currency_rate, 1)) 
-	     	else 1 end * coalesce(r.currency_from_multiplier, 1))
-	     end, 2) as payment_request_usd_vat_included_amount,
-	tap.accounting_document_position_text,
-	tap.counterparty_code,
-	cnt.counterparty_full_name,
-	cnt.counterparty_tin_code,
-	tap.dttm_accounting_document_created,
-	tap.accounting_document_created_by,
-	pmd1.person_full_name as accounting_document_created_by_full_name,
-	pmd1.person_name as accounting_document_created_by_name,
-	ph.payment_request_update_internal_code as payment_request_change_code,
-	ph.payment_request_updated_by,
-	pmd2.person_full_name as payment_request_updated_by_full_name,
-	pmd2.person_name as payment_request_updated_by_name,
-	ph.dt_updated,
-	ph.payment_request_status_after_update_code,
-	sn1.unblock_status_set_by_name as payment_request_status_after_update_name,
-	ph.payment_request_status_before_update_code,
-	sn2.unblock_status_set_by_name as payment_request_status_before_update_name,
-	coalesce(ph.dt_previously_updated, tap.dttm_accounting_document_created) as dt_previously_updated,
-	case
-		when extract(hour
-	from
-		ph.dt_updated - coalesce(ph.dt_previously_updated, tap.dttm_accounting_document_created)) >= 12 
-	then extract(day
-	from
-		ph.dt_updated - coalesce(ph.dt_previously_updated, tap.dttm_accounting_document_created)) + 1
-		else extract(day
-	from
-		ph.dt_updated - coalesce(ph.dt_previously_updated, tap.dttm_accounting_document_created))
-	end as approvement_duration_in_days,
-	cast(ph.dt_updated - coalesce(ph.dt_previously_updated, tap.dttm_accounting_document_created) as varchar) as approvement_duration,
-	tap.dt_payment_posted,
-	tap.dt_payment_created,
-	tap.invoice_document_code,
-	tap.fiscal_year_of_relevant_invoice,
-	cnt.counterparty_search_name,
-	fc.subdivision_name,
-	fc.department_name,
-	coalesce(le.service_list_text, mm.service_list_text) as service_list_text,
-	replace(replace(replace(range_low_value, 'XXXX',tap.unit_balance_code), 'YYYYYYYYYY', tap.accounting_document_code),'ZZZZ', tap.fiscal_year::varchar) as payment_request_in_sap_system_url
-from
-	dm_calc.payment_requests tap
-left join pg_temp.service_le le on
-	le.unit_balance_code = tap.unit_balance_code
-	and le.fiscal_year = tap.fiscal_year
-	and le.accounting_document_code = tap.accounting_document_code
-left join pg_temp.service_mm mm on
-	mm.unit_balance_code = tap.unit_balance_code
-	and mm.fiscal_year = tap.fiscal_year
-	and mm.accounting_document_code = tap.accounting_document_code
-left join dds.payment_request_approval_history ph on
-	tap.unit_balance_code = ph.unit_balance_code
-	and tap.accounting_document_code = ph.accounting_document_code
-	and tap.fiscal_year = ph.fiscal_year
-	and tap.accounting_document_position_code = ph.accounting_document_position_code
-left join dict_dds.unit_balance be on
-	be.unit_balance_code = tap.unit_balance_code
-left join dict_dds.general_ledger_account_chart acc on
-	acc.account_chart_code = be.account_chart_code
-	and acc.general_ledger_account_code = tap.general_ledger_account_code
-left join dict_dds.plant_and_subsidiary pl on
-	pl.plant_code = tap.plant_code
-left join dict_dds.counterparty cnt on
-	cnt.counterparty_code = tap.counterparty_code
-left join dict_dds.person_main_data as pmd1 on
-	pmd1.login_username = tap.accounting_document_created_by
-left join dict_dds.person_main_data as pmd2 on
-	pmd2.login_username = ph.payment_request_updated_by
-left join status_name sn1 on
-	ph.unit_balance_code = sn1.unit_balance_code
-	and ph.payment_request_status_after_update_code = sn1.payment_unblock_status_code
-left join status_name sn2 on
-	ph.unit_balance_code = sn2.unit_balance_code
-	and ph.payment_request_status_before_update_code = sn2.payment_unblock_status_code
-left join dds.earmarked_funds_documents efd on 
-	tap.earmarked_document_code = efd.earmarked_document_code
-	and tap.earmarked_document_position_line_item_code = efd.earmarked_document_position_line_item_code
-left join  mm_tap 	on
-	tap.unit_balance_code = mm_tap.unit_balance_code 
-	and tap.accounting_document_code = mm_tap.accounting_document_code 
-	and tap.fiscal_year  = mm_tap.fiscal_year::numeric(4,0) 
-	and mm_tap.rn = 1
-left join dict_dds.funds_center_and_department_link fc on 
-	coalesce(efd.funds_center_code, mm_tap.funds_center_code) = fc.funds_center_code
-
-left join dict_dds.currency_rates r on 
-	r.currency_from_code = tap.document_currency_code
-	and r.dt_currency_rate = date(tap.dttm_accounting_document_created)
-	and r.deleted_flag = false
-	and r.currency_rate_type_code = 'M'
-	and r.currency_to_code = 'USD'
-left join dict_dds.settings_and_parameters_sap saps on
-	abap_program_code = '/RUSAL/FI_KHD'
-	and parameter_code = 'URL_TAP'
-where
-	1 = 1
-	and tap.deleted_flag = false
-	and (tap.invoice_document_code is not  null
-	or ph.payment_request_update_internal_code is not null)
-;
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=300
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1524, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1445, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1308, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 877, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 441, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 609, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 415, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 92, in <module>
+table-dependency-viewer-api-1  |     from .services.dev_meta import (
+table-dependency-viewer-api-1  | ImportError: cannot import name 'stop_airflow_dag_run' from 'api.services.dev_meta' (/app/api/services/dev_meta.py)

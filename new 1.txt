@@ -1,18 +1,86 @@
-Traceback (most recent call last):
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\key_atr.py", line 35, in <module>
-    main()
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\key_atr.py", line 25, in main
-    with urllib.request.urlopen(req) as resp:
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 214, in urlopen
-    return opener.open(url, data, timeout)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 523, in open
-    response = meth(req, response)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 632, in http_response
-    response = self.parent.error(
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 561, in error
-    return self._call_chain(*args)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 494, in _call_chain
-    result = func(*args)
-  File "C:\Users\SuvorovND\AppData\Local\Programs\Python\Python39\lib\urllib\request.py", line 641, in http_error_default
-    raise HTTPError(req.full_url, code, msg, hdrs, fp)
-urllib.error.HTTPError: HTTP Error 401: Unauthorized
+#!/usr/bin/env python3
+  import json
+  import sys
+  import urllib.request
+  import urllib.error
+
+  BASE_URL = "http://rgm-s-dwhapp01.hq.root.ad:15312"
+  EMAIL = "your_email@company.ru"
+  PASSWORD = "your_password"
+
+
+  def post_json(url: str, payload: dict, headers: dict | None = None) -> dict:
+      data = json.dumps(payload).encode("utf-8")
+      req = urllib.request.Request(
+          url,
+          data=data,
+          method="POST",
+          headers={
+              "Content-Type": "application/json",
+              **(headers or {}),
+          },
+      )
+      with urllib.request.urlopen(req) as resp:
+          return json.load(resp)
+
+
+  def get_json(url: str, headers: dict | None = None) -> dict:
+      req = urllib.request.Request(
+          url,
+          method="GET",
+          headers=headers or {},
+      )
+      with urllib.request.urlopen(req) as resp:
+          return json.load(resp)
+
+
+  def login() -> str:
+      resp = post_json(
+          f"{BASE_URL}/auth/login",
+          {
+              "email": EMAIL,
+              "password": PASSWORD,
+          },
+      )
+      token = resp.get("access_token")
+      if not token:
+          raise RuntimeError("Не удалось получить access_token")
+      return token
+
+
+  def get_key_attributes(schema: str, table: str, token: str) -> dict:
+      data = get_json(
+          f"{BASE_URL}/api/card/{schema}/{table}",
+          headers={
+              "Authorization": f"Bearer {token}",
+          },
+      )
+      return {
+          "schema": schema,
+          "table": table,
+          "key_attributes": data.get("key_attributes", []),
+      }
+
+
+  def main():
+      if len(sys.argv) != 2 or "." not in sys.argv[1]:
+          print("Usage: python key_atr.py <schema.table>")
+          sys.exit(1)
+
+      schema, table = sys.argv[1].split(".", 1)
+
+      try:
+          token = login()
+          result = get_key_attributes(schema, table, token)
+          print(json.dumps(result, ensure_ascii=False, indent=2))
+      except urllib.error.HTTPError as exc:
+          body = exc.read().decode("utf-8", errors="ignore")
+          print(f"HTTP {exc.code}: {body}")
+          sys.exit(1)
+      except Exception as exc:
+          print(f"Ошибка: {exc}")
+          sys.exit(1)
+
+
+  if __name__ == "__main__":
+      main()

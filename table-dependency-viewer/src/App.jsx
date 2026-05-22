@@ -30,7 +30,9 @@ import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
 import EntityDevMetaWorkspace from "./components/EntityDevMetaWorkspace.jsx";
 import MetaWorkspacePage from "./components/MetaWorkspacePage.jsx";
 import DevCopyDagPage from "./components/DevCopyDagPage.jsx";
+import GlobalHoverLabel from "./components/GlobalHoverLabel.jsx";
 import { sendAuditEvent } from "./utils/audit.js";
+import { shouldUseCustomHoverLabel } from "./utils/customHoverUser.js";
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -350,6 +352,7 @@ export default function App() {
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
   const canUseMetaWorkspace = useMemo(() => userProfile?.role === "admin", [userProfile]);
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
+  const useCustomHoverLabel = useMemo(() => shouldUseCustomHoverLabel(userProfile), [userProfile]);
   const assistantContext = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const source = params.get("source") || "current";
@@ -381,6 +384,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <GlobalHoverLabel enabled={useCustomHoverLabel} />
       <Sidebar
         currentPath={location.pathname}
         onChangeView={openView}

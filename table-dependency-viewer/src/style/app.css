@@ -1806,26 +1806,38 @@ main.content {
   color: var(--accent);
 }
 
-.custom-cursor-target {
-  position: relative;
+.global-hover-label {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.48);
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.32), transparent 56%),
+    linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.98));
+  box-shadow:
+    0 16px 32px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(251, 191, 36, 0.08) inset;
+  color: #fef3c7;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transform: translate3d(-9999px, -9999px, 0);
+  transition: opacity 120ms ease;
 }
 
-.custom-cursor-target:hover::after {
-  content: ""; /* сюда впишите свой текст */
-  position: absolute;
-  top: -30px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  color: #f8fafc;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 20;
+.global-hover-label.is-visible {
+  opacity: 1;
+}
+
+body.custom-hover-label-active,
+body.custom-hover-label-active * {
+  cursor: none !important;
 }
 
 /* Shared elements */

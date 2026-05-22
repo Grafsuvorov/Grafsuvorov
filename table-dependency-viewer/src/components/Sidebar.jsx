@@ -4,16 +4,6 @@ import { useNavigate } from "react-router-dom";
 export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
   const navigate = useNavigate();
   const isActive = (path) => currentPath === path;
-  const customCursorTargetUser = "Nikita.Suvorov@rusal.com"; // username или email пользователя
-  const useCustomHoverLabel = Boolean(
-    customCursorTargetUser &&
-    (
-      String(userProfile?.username || "").trim() === customCursorTargetUser ||
-      String(userProfile?.email || "").trim() === customCursorTargetUser
-    )
-  );
-  const buttonClassName = (path) =>
-    `${isActive(path) ? "active" : ""} ${useCustomHoverLabel ? "custom-cursor-target" : ""}`.trim();
   const roleLabel = userProfile?.role === "admin"
     ? "Админ"
     : userProfile?.role === "engineer"
@@ -32,7 +22,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
             <div className="nav-primary">
               <button
                 type="button"
-                className={buttonClassName("/")}
+                className={isActive("/") ? "active" : ""}
                 onClick={() => onChangeView(null)}
               >
                 Обзор
@@ -40,7 +30,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
 
               <button
                 type="button"
-                className={buttonClassName("/tables")}
+                className={isActive("/tables") ? "active" : ""}
                 onClick={() => onChangeView("table_search")}
               >
                 Каталог
@@ -50,28 +40,28 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
             <div className="nav-secondary">
               <button
                 type="button"
-                className={buttonClassName("/slow-tables")}
+                className={isActive("/slow-tables") ? "active" : ""}
                 onClick={() => onChangeView("__slowest_tables__")}
               >
                 Производительность
               </button>
               <button
                 type="button"
-                className={buttonClassName("/night-ops")}
+                className={isActive("/night-ops") ? "active" : ""}
                 onClick={() => onChangeView("night_ops")}
               >
                 Мониторинг
               </button>
               <button
                 type="button"
-                className={buttonClassName("/entities")}
+                className={isActive("/entities") ? "active" : ""}
                 onClick={() => onChangeView("__entity_schedule__")}
               >
                 Сущности
               </button>
               <button
                 type="button"
-                className={buttonClassName("/releases")}
+                className={isActive("/releases") ? "active" : ""}
                 onClick={() => onChangeView("releases")}
               >
                 Релизы
@@ -79,7 +69,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile && (
                 <button
                   type="button"
-                  className={buttonClassName("/account")}
+                  className={isActive("/account") ? "active" : ""}
                   onClick={() => onChangeView("/account")}
                 >
                   Профиль
@@ -88,7 +78,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
-                  className={buttonClassName("/admin/users")}
+                  className={isActive("/admin/users") ? "active" : ""}
                   onClick={() => onChangeView("/admin/users")}
                 >
                   Админка
@@ -97,7 +87,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile && (
                 <button
                   type="button"
-                  className={buttonClassName("/admin/dev-meta")}
+                  className={isActive("/admin/dev-meta") ? "active" : ""}
                   onClick={() => onChangeView("/admin/dev-meta")}
                 >
                   DEV Meta
@@ -106,7 +96,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
-                  className={buttonClassName("/admin/meta-workspace")}
+                  className={isActive("/admin/meta-workspace") ? "active" : ""}
                   onClick={() => onChangeView("/admin/meta-workspace")}
                 >
                   Meta Workspace
@@ -115,7 +105,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile && (
                 <button
                   type="button"
-                  className={buttonClassName("/admin/dev-copy")}
+                  className={isActive("/admin/dev-copy") ? "active" : ""}
                   onClick={() => onChangeView("/admin/dev-copy")}
                 >
                   DEV Copy
@@ -124,7 +114,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               {authEnabled && userProfile?.role === "admin" && (
                 <button
                   type="button"
-                  className={buttonClassName("/admin/engineering")}
+                  className={isActive("/admin/engineering") ? "active" : ""}
                   onClick={() => {
                     console.log("[Sidebar] open /admin/engineering");
                     navigate("/admin/engineering");
@@ -135,7 +125,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               )}
               <button
                 type="button"
-                className={buttonClassName("/onboarding")}
+                className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >
                 Гид
@@ -153,7 +143,7 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               </div>
               <div className="auth-role">{roleLabel}</div>
             </div>
-            <button type="button" className={`auth-logout ${useCustomHoverLabel ? "custom-cursor-target" : ""}`.trim()} onClick={onLogout}>
+            <button type="button" className="auth-logout" onClick={onLogout}>
               Выйти
             </button>
           </div>

@@ -1503,12 +1503,13 @@ def _list_task_entity_object_keys(*, engine, task_id: str) -> set[str]:
             continue
         file_name = str(row.get("file_name") or "").strip()
         action = str(row.get("action") or "").strip().lower()
-        if file_name:
+        is_object_key = file_name.count("/") == 2
+        if file_name and is_object_key:
             result.add(file_name)
         if action == "move":
             for extra_key in ("source_object_key", "target_object_key"):
                 extra_value = str(details.get(extra_key) or "").strip()
-                if extra_value:
+                if extra_value and extra_value.count("/") == 2:
                     result.add(extra_value)
         if action == "save":
             entity_name = str(details.get("entity_name") or "").strip()

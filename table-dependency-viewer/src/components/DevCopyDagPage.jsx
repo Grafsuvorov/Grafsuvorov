@@ -20,6 +20,8 @@ export default function DevCopyDagPage({ userProfile }) {
   const canUsePage = Boolean(userProfile);
   const dagRunState = String(dagStatus?.dag_run_state || "").toLowerCase();
   const dagIsActive = ["queued", "running"].includes(dagRunState);
+  const copyWindow = status?.window || null;
+  const canRunNow = Boolean(copyWindow?.allowed);
 
   useEffect(() => {
     if (!canUsePage) return;
@@ -101,7 +103,7 @@ export default function DevCopyDagPage({ userProfile }) {
       <section className="cc-surface dev-meta-page">
         <div className="section-title">DEV Copy DAG</div>
         <div className="section-subtitle">
-          Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Копировать можно в любую схему и с любым названием целевой таблицы.
+          Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Копировать можно в любую схему и с любым названием целевой таблицы. Пользоваться страницей можно только с 08:00 до 21:00 по Москве.
         </div>
 
         <div className="dev-meta-generator">
@@ -141,12 +143,16 @@ export default function DevCopyDagPage({ userProfile }) {
             </label>
           </div>
           <div className="dev-meta-generator-actions">
-            <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured}>
+            <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured || !canRunNow}>
               {running ? "Запускаем DAG..." : "Запустить DEV copy DAG"}
             </button>
             <span className="muted">
               DAG: {status?.airflow?.dag_id || "не настроен"}
             </span>
+          </div>
+          <div className="muted">
+            Окно запуска: {copyWindow?.allowed_from || "08:00"} - {copyWindow?.allowed_to || "21:00"} (МСК)
+            {copyWindow ? `, сейчас ${copyWindow.allowed ? "запуск разрешен" : "запуск недоступен"}` : ""}
           </div>
         </div>
 
@@ -180,6 +186,9 @@ export default function DevCopyDagPage({ userProfile }) {
               <div className="dev-meta-dag-failed">
                 Ошибки: {dagStatus.failed_tasks.map((task) => `${task.task_id} (${task.state})`).join(", ")}
               </div>
+            ) : null}
+            {dagStatus.window_message ? (
+              <div className="dev-meta-dag-failed">{dagStatus.window_message}</div>
             ) : null}
             <DagLoadingMiniGame active={dagIsActive} />
           </div>

@@ -1252,6 +1252,31 @@ def get_airflow_dev_dag_status(
     }
 
 
+def stop_airflow_dag_run(
+    *,
+    airflow_base_url: str,
+    username: str,
+    password: str,
+    dag_id: str,
+    dag_run_id: str,
+    state: str = "failed",
+) -> dict[str, Any]:
+    if not airflow_base_url:
+        raise ValueError("Airflow DEV не настроен")
+    if not dag_id or not dag_run_id:
+        raise ValueError("Нужно указать dag_id и dag_run_id")
+
+    run_url = f"{airflow_base_url.rstrip('/')}/api/v1/dags/{dag_id}/dagRuns/{dag_run_id}"
+    return _airflow_json_request(
+        url=run_url,
+        username=username,
+        password=password,
+        method="PATCH",
+        payload={"state": state},
+        timeout=30,
+    )
+
+
 def deploy_dev_meta_file(
     *,
     engine,

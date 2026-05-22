@@ -40,7 +40,7 @@ SQL_FILE_NAMES = {
     "truncate_sql": "sql_query_truncate.sql",
 }
 SYSTEM_FIELDS = ("dttm_inserted", "dttm_updated", "deleted_flag")
-IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
+IGNORE_SCHEMAS = {"information_schema", "pg_catalog", "pg_temp"}
 EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
 TABLE_ID_MAX_NORMAL = 100000
 DEFAULT_INTERVAL = {"days": 1, "hours": 0, "minutes": 0, "seconds": 0}
@@ -446,22 +446,45 @@ def _extract_temp_table_names(sql: str) -> set[str]:
     for pattern in (
         r"\bcreate\s+temporary\s+table\s+([a-z_][\w]*)\b",
         r"\bcreate\s+temp\s+table\s+([a-z_][\w]*)\b",
+        r"\bcreate\s+temporary\s+table\s+pg_temp\.([a-z_][\w]*)\b",
+        r"\bcreate\s+temp\s+table\s+pg_temp\.([a-z_][\w]*)\b",
     ):
         for match in re.finditer(pattern, normalized):
             result.add(match.group(1))
     return result
 
 
+def _extract_relation_aliases(sql: str) -> set[str]:
+    normalized = _normalize_sql(sql)
+    aliases: set[str] = set()
+    pattern = re.compile(
+        r"\b(?:from|join)\s+(?:\"?[A-Za-z_][\w]*\"?)\s*\.\s*(?:\"[^\"]+\"|[A-Za-z_][\w]*)"
+        r"(?:\s+(?:as\s+)?)\s*([A-Za-z_][\w]*)\b",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(normalized):
+        alias = _normalize_name(match.group(1))
+        if alias:
+            aliases.add(alias)
+    return aliases
+
+
 def _extract_all_schema_refs(sql: str) -> set[str]:
     schemas: set[str] = set()
     cte_names = _extract_cte_names(sql)
+    relation_aliases = _extract_relation_aliases(sql)
     pattern = re.compile(
         r"\b(?:from|join|insert\s+into|truncate\s+table|delete\s+from)\s+(\"?[A-Za-z_][\w]*\"?)\s*\.",
         re.IGNORECASE,
     )
     for match in pattern.finditer(_strip_sql_comments(sql)):
         schema_name = _normalize_name(match.group(1))
-        if schema_name and schema_name not in cte_names and len(schema_name) > 1:
+        if (
+            schema_name
+            and schema_name not in cte_names
+            and schema_name not in relation_aliases
+            and len(schema_name) > 1
+        ):
             schemas.add(schema_name)
     return schemas
 

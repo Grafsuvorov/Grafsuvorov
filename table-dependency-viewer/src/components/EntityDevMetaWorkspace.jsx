@@ -154,6 +154,7 @@ export default function EntityDevMetaWorkspace({
   onTaskIdChange,
   releaseBranch: externalReleaseBranch,
   onReleaseBranchChange,
+  externalOpenRequest = null,
   hideCreateMr = false,
   hideHeader = false,
   hideTaskControls = false,
@@ -340,6 +341,16 @@ export default function EntityDevMetaWorkspace({
       key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
     });
   };
+
+  useEffect(() => {
+    if (!externalOpenRequest?.token) return;
+    openBundle({
+      entity_name: externalOpenRequest.entity_name,
+      schema_name: externalOpenRequest.schema_name,
+      table_name: externalOpenRequest.table_name,
+      key_attributes: Array.isArray(externalOpenRequest.key_attributes) ? externalOpenRequest.key_attributes : [],
+    });
+  }, [externalOpenRequest?.token]);
 
   const handleValidate = async () => {
     if (!bundle) return;

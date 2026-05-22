@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -19,6 +20,139 @@ from .entity_dev_meta import (
     _run_git,
     _sync_task_objects_to_worktree,
 )
+
+
+def _branch_exists(repo_root: Path, ref_name: str) -> bool:
+    try:
+        _run_git(repo_root, ["rev-parse", "--verify", ref_name])
+        return True
+    except Exception:
+        return False
+
+
+def _resolve_branch_ref(repo_root: Path, branch_name: str) -> str:
+    branch_norm = str(branch_name or "").strip()
+    if not branch_norm:
+        raise ValueError("Укажите имя ветки")
+    candidates = [branch_norm]
+    if not branch_norm.startswith("origin/"):
+        candidates.append(f"origin/{branch_norm}")
+    for candidate in candidates:
+        if _branch_exists(repo_root, candidate):
+            return candidate
+    raise ValueError(f"Ветка `{branch_norm}` не найдена")
+
+
+def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    git_repo_root = Path(git_repo_value).resolve()
+    _run_git(git_repo_root, ["fetch", "origin"])
+    output = _run_git(
+        git_repo_root,
+        ["for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin"],
+    )
+    branches = []
+    for line in output.splitlines():
+        item = str(line or "").strip()
+        if not item or item == "HEAD":
+            continue
+        branches.append(item)
+    return {"items": sorted(set(branches), key=str.lower)}
+
+
+def _parse_name_status(raw_output: str) -> list[tuple[str, str]]:
+    result: list[tuple[str, str]] = []
+    for line in str(raw_output or "").splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        result.append((parts[0].strip().upper(), parts[-1].strip()))
+    return result
+
+
+def _entity_root_parts(entity_git_root_value: str) -> tuple[str, ...]:
+    return tuple(part for part in Path(entity_git_root_value).as_posix().split("/") if part)
+
+
+def _click_root_parts(click_git_root_value: str) -> tuple[str, ...]:
+    return tuple(part for part in Path(click_git_root_value).as_posix().split("/") if part)
+
+
+def _build_branch_catalog(
+    *,
+    git_repo_root: Path,
+    entity_git_root_value: str,
+    click_git_root_value: str,
+    branch_name: str,
+    base_branch: str,
+) -> dict[str, Any]:
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    base_ref = _resolve_branch_ref(git_repo_root, base_branch)
+    diff_output = _run_git(
+        git_repo_root,
+        ["diff", "--name-status", f"{base_ref}...{branch_ref}"],
+    )
+    entity_root_parts = _entity_root_parts(entity_git_root_value)
+    click_root_parts = _click_root_parts(click_git_root_value)
+    gp_map: dict[str, dict[str, Any]] = {}
+    click_map: dict[str, dict[str, Any]] = {}
+    for status, raw_path in _parse_name_status(diff_output):
+        path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
+        if entity_root_parts and path_parts[: len(entity_root_parts)] == entity_root_parts:
+            rel = path_parts[len(entity_root_parts):]
+            if len(rel) >= 4:
+                entity_name, schema_name, table_name = rel[0], rel[1], rel[2]
+                object_key = f"{entity_name}/{schema_name}/{table_name}"
+                item = gp_map.setdefault(
+                    object_key,
+                    {
+                        "object_key": object_key,
+                        "entity_name": entity_name,
+                        "schema_name": schema_name,
+                        "table_name": table_name,
+                        "changed_files": [],
+                        "statuses": set(),
+                    },
+                )
+                item["changed_files"].append("/".join(rel[3:]))
+                item["statuses"].add(status[:1])
+            continue
+        if click_root_parts and path_parts[: len(click_root_parts)] == click_root_parts:
+            rel = path_parts[len(click_root_parts):]
+            if len(rel) >= 2:
+                schema_name, file_name = rel[0], rel[-1]
+                object_key = f"{schema_name}/{file_name}"
+                item = click_map.setdefault(
+                    object_key,
+                    {
+                        "object_key": object_key,
+                        "schema_name": schema_name,
+                        "file_name": file_name,
+                        "object_kind": "view" if schema_name == "dm_view" else "table",
+                        "statuses": set(),
+                    },
+                )
+                item["statuses"].add(status[:1])
+    gp_items = []
+    for item in gp_map.values():
+        status_marks = item.pop("statuses", set())
+        item["changed_files"] = sorted(set(item["changed_files"]))
+        item["change_type"] = "new" if "A" in status_marks else "deleted" if status_marks == {"D"} else "modified"
+        gp_items.append(item)
+    click_items = []
+    for item in click_map.values():
+        status_marks = item.pop("statuses", set())
+        item["change_type"] = "new" if "A" in status_marks else "deleted" if status_marks == {"D"} else "modified"
+        click_items.append(item)
+    return {
+        "branch_name": re.sub(r"^origin/", "", branch_ref),
+        "base_branch": re.sub(r"^origin/", "", base_ref),
+        "gp_objects": sorted(gp_items, key=lambda row: (row["entity_name"], row["schema_name"], row["table_name"])),
+        "click_objects": sorted(click_items, key=lambda row: (row["schema_name"], row["file_name"])),
+    }
 
 
 def _list_task_click_meta_files(*, engine, task_id: str) -> list[dict[str, str]]:

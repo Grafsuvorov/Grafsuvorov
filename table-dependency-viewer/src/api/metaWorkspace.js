@@ -1,5 +1,7 @@
 import { apiClient } from "./client.js";
 
 export const metaWorkspaceApi = {
+  branches: () => apiClient.get("/api/admin/meta-workspace/branches"),
+  branchCatalog: (params) => apiClient.get("/api/admin/meta-workspace/branch-catalog", { params }),
   createMr: (body) => apiClient.post("/api/admin/meta-workspace/mr", body),
 };

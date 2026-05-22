@@ -32,7 +32,13 @@ const DEV_META_RUNBOOK = [
   },
 ];
 
-export default function DevMetaAdminPage({ userProfile, embedded = false, taskId: externalTaskId, hideHeader = false }) {
+export default function DevMetaAdminPage({
+  userProfile,
+  embedded = false,
+  taskId: externalTaskId,
+  hideHeader = false,
+  externalOpenRequest = null,
+}) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
     schema_name_gp: "dm",
@@ -151,6 +157,37 @@ export default function DevMetaAdminPage({ userProfile, embedded = false, taskId
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!externalOpenRequest?.token) return;
+    const nextSchema = externalOpenRequest.schema_name || "dm";
+    const nextFile = externalOpenRequest.file_name;
+    if (!nextFile) return;
+    const openExternalFile = async () => {
+      setSchemaName(nextSchema);
+      setLoading(true);
+      setError(null);
+      setMessage(null);
+      setMessageType("info");
+      setValidation(null);
+      try {
+        const lock = await devMetaApi.lock({ schema_name: nextSchema, file_name: nextFile });
+        setLockInfo(lock || null);
+        const data = await devMetaApi.readFile({ schema_name: nextSchema, file_name: nextFile, source: "dev" });
+        setSelectedFile(nextFile);
+        setContent(data?.content || "");
+        setValidation(null);
+        setValidatedContent(null);
+        setMessage("Файл открыт и взят в работу.");
+        await refreshFiles(nextSchema);
+      } catch (err) {
+        setError(err.message || "Не удалось открыть файл");
+      } finally {
+        setLoading(false);
+      }
+    };
+    openExternalFile();
+  }, [externalOpenRequest?.token]);
 
   const handleValidate = async () => {
     if (!selectedFile) return;

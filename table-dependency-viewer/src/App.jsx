@@ -348,10 +348,7 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
-  const canUseMetaWorkspace = useMemo(
-    () => userProfile?.role === "admin" || userProfile?.role === "engineer",
-    [userProfile]
-  );
+  const canUseMetaWorkspace = useMemo(() => userProfile?.role === "admin", [userProfile]);
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
   const assistantContext = useMemo(() => {
     const params = new URLSearchParams(location.search);

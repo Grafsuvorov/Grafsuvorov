@@ -28,6 +28,7 @@ import hashlib
 import subprocess
 import tempfile
 from itertools import combinations
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, HTTPException
 
@@ -99,6 +100,7 @@ from .services.dev_meta import (
     read_dev_meta_file,
     release_dev_meta_lock,
     save_dev_meta_file,
+    stop_airflow_dag_run,
     trigger_airflow_dev_dag,
     trigger_airflow_parametrized_dag,
     validate_dev_meta_content,
@@ -116,7 +118,11 @@ from .services.entity_dev_meta import (
     unlock_entity_dev_meta,
     validate_entity_dev_meta_bundle,
 )
-from .services.meta_workspace import create_meta_workspace_mr
+from .services.meta_workspace import (
+    _build_branch_catalog,
+    create_meta_workspace_mr,
+    list_meta_workspace_branches,
+)
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
     get_dbt_graph_snapshot,
@@ -152,6 +158,9 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter()
 print("BOOT FILE:", __file__)
 DEV_COPY_DAG_ID = "load_from_prod_to_dev"
+DEV_COPY_TZ = ZoneInfo("Europe/Moscow")
+DEV_COPY_ALLOWED_HOUR_START = 8
+DEV_COPY_ALLOWED_HOUR_END = 21
 
 init_auth()
 app.middleware("http")(auth_middleware)
@@ -312,6 +321,32 @@ def _require_authenticated(request: Request):
     if not user or not getattr(user, "email", None):
         raise HTTPException(status_code=403, detail="Authentication required")
     return user
+
+
+def _get_dev_copy_window_status():
+    now = datetime.now(DEV_COPY_TZ)
+    current_hour = now.hour
+    allowed = DEV_COPY_ALLOWED_HOUR_START <= current_hour < DEV_COPY_ALLOWED_HOUR_END
+    return {
+        "timezone": "Europe/Moscow",
+        "now": now.isoformat(),
+        "allowed": allowed,
+        "allowed_from": f"{DEV_COPY_ALLOWED_HOUR_START:02d}:00",
+        "allowed_to": f"{DEV_COPY_ALLOWED_HOUR_END:02d}:00",
+    }
+
+
+def _assert_dev_copy_window():
+    window = _get_dev_copy_window_status()
+    if not window["allowed"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Запуск DEV copy DAG разрешен только с "
+                f"{window['allowed_from']} до {window['allowed_to']} по Москве."
+            ),
+        )
+    return window
 
 
 
@@ -857,7 +892,7 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/meta-workspace/mr")
 def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Request):
-    user = _require_dev_meta_role(request)
+    user = _require_admin(request)
     try:
         result = create_meta_workspace_mr(
             engine=engine,
@@ -880,6 +915,34 @@ def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", **result}
+
+
+@router.get("/api/admin/meta-workspace/branches")
+def get_admin_meta_workspace_branches(request: Request):
+    _require_admin(request)
+    try:
+        return list_meta_workspace_branches(git_repo_value=ENTITY_META_GIT_REPO)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/api/admin/meta-workspace/branch-catalog")
+def get_admin_meta_workspace_branch_catalog(
+    request: Request,
+    branch_name: str = Query(...),
+    base_branch: str = Query("main"),
+):
+    _require_admin(request)
+    try:
+        return _build_branch_catalog(
+            git_repo_root=Path(ENTITY_META_GIT_REPO).resolve(),
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            branch_name=branch_name,
+            base_branch=base_branch,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("/api/admin/dev-meta/run-dag")
@@ -930,18 +993,21 @@ def get_admin_dev_meta_dag_status(payload: DevMetaDagStatusPayload, request: Req
 @router.get("/api/admin/dev-copy/status")
 def get_admin_dev_copy_status(request: Request):
     _require_authenticated(request)
+    window = _get_dev_copy_window_status()
     return {
         "airflow": {
             "base_url": AIRFLOW_DEV_BASE_URL,
             "dag_id": DEV_COPY_DAG_ID,
             "configured": bool(AIRFLOW_DEV_BASE_URL),
-        }
+        },
+        "window": window,
     }
 
 
 @router.post("/api/admin/dev-copy/run-dag")
 def run_admin_dev_copy_dag(payload: DevCopyDagPayload, request: Request):
     user = _require_authenticated(request)
+    _assert_dev_copy_window()
     try:
         values = {
             "source_table_schema": str(payload.source_table_schema or "").strip(),
@@ -979,6 +1045,33 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
             dag_run_id=payload.dag_run_id,
             auto_unpaused=payload.auto_unpaused,
         )
+        window = _get_dev_copy_window_status()
+        if (
+            not window["allowed"]
+            and str(data.get("dag_run_state") or "").lower() in {"queued", "running"}
+        ):
+            stop_airflow_dag_run(
+                airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                username=AIRFLOW_DEV_USERNAME,
+                password=AIRFLOW_DEV_PASSWORD,
+                dag_id=DEV_COPY_DAG_ID,
+                dag_run_id=payload.dag_run_id,
+                state="failed",
+            )
+            data = get_airflow_dev_dag_status(
+                airflow_base_url=AIRFLOW_DEV_BASE_URL,
+                username=AIRFLOW_DEV_USERNAME,
+                password=AIRFLOW_DEV_PASSWORD,
+                dag_id=DEV_COPY_DAG_ID,
+                dag_run_id=payload.dag_run_id,
+                auto_unpaused=payload.auto_unpaused,
+            )
+            data["terminated_due_to_window"] = True
+            data["window_message"] = (
+                "DAG был остановлен, потому что вышел за разрешенное окно "
+                f"{window['allowed_from']} - {window['allowed_to']} по Москве."
+            )
+        data["window"] = window
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}

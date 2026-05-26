@@ -166,6 +166,7 @@ def _build_branch_catalog(
 
 def validate_meta_workspace_branch(
     *,
+    engine,
     base_dir: Path,
     git_repo_value: str,
     entity_git_root_value: str,

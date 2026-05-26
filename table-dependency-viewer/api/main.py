@@ -972,6 +972,7 @@ def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, 
     _require_admin(request)
     try:
         return validate_meta_workspace_branch(
+            engine=engine,
             base_dir=BASE_DIR,
             git_repo_value=ENTITY_META_GIT_REPO,
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,

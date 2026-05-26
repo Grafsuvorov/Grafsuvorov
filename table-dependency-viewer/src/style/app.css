@@ -8316,6 +8316,14 @@ body.custom-hover-label-active * {
   margin-bottom: 12px;
 }
 
+.meta-workspace-validation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
 .meta-workspace-validation-list {
   display: grid;
   gap: 10px;

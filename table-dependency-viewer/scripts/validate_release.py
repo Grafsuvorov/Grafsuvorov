@@ -615,14 +615,14 @@ def find_missing_system_fields_in_click_attributes(meta: dict[str, Any]) -> list
 
 
 def validate_recreate_sql_matches_yaml(path: str, sql: str, meta: dict[str, Any], findings: list[Finding]) -> None:
+    lowered_path = path.lower()
+    if any(marker in lowered_path for marker in ("/stg/", "/dict_stg/", "/landing/")):
+        return
     expected = expected_object_fqn(meta)
     if not expected:
         return
     created = extract_created_object(sql)
     if not created:
-        lowered = path.lower()
-        if any(marker in lowered for marker in ("/stg/", "/dict_stg/", "/landing/")):
-            return
         findings.append(
             Finding(
                 WARNING,
@@ -703,6 +703,11 @@ def add_duplicate_table_id_findings(
             continue
         if not any(path in relevant_set for path in paths):
             continue
+        object_parts = [Path(path).parts for path in paths]
+        if all(len(parts) >= 4 for parts in object_parts):
+            schema_table_pairs = {(parts[1], parts[2]) for parts in object_parts}
+            if len(schema_table_pairs) == 1:
+                continue
         message = f"`table_id` {table_id} дублируется в ветке: " + ", ".join(f"`{path}`" for path in sorted(paths))
         for path in sorted(paths):
             if path in relevant_set:
@@ -886,17 +891,18 @@ def validate_entity_meta(
                 findings.append(Finding(BLOCKER, path, "sql-read", f"Не удалось прочитать recreate SQL `{resolved_repo_path}`: {exc}"))
                 continue
             validate_recreate_sql_matches_yaml(path, recreate_sql, meta, findings)
-            missing_system_fields = find_missing_system_fields_in_sql(recreate_sql)
-            if missing_system_fields:
-                findings.append(
-                    Finding(
-                        BLOCKER,
-                        path,
-                        "system-fields",
-                        "В recreate SQL отсутствуют обязательные системные поля: "
-                        + ", ".join(f"`{field}`" for field in missing_system_fields),
+            if not any(marker in path.lower() for marker in ("/stg/", "/dict_stg/", "/landing/")):
+                missing_system_fields = find_missing_system_fields_in_sql(recreate_sql)
+                if missing_system_fields:
+                    findings.append(
+                        Finding(
+                            BLOCKER,
+                            path,
+                            "system-fields",
+                            "В recreate SQL отсутствуют обязательные системные поля: "
+                            + ", ".join(f"`{field}`" for field in missing_system_fields),
+                        )
                     )
-                )
 
         if field == "sql_query_insert_init" and resolved_repo_path:
             try:
@@ -906,6 +912,9 @@ def validate_entity_meta(
                 continue
             target_schema = normalize_object_fqn(str(meta.get("table_schema") or ""))
             target_table = normalize_object_fqn(str(meta.get("table_name") or ""))
+            is_stg_path = any(marker in path.lower() for marker in ("/stg/", "/dict_stg/", "/landing/"))
+            if is_stg_path:
+                continue
             refs = extract_schema_table_refs(insert_sql, known_schemas=known_schemas)
             if target_schema and target_table:
                 refs = {

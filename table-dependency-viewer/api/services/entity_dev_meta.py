@@ -362,6 +362,14 @@ def _find_table_id_conflicts(
     return sorted(set(conflicts), key=str.lower)
 
 
+def _is_move_like_table_id_conflict(current_object_key: str, conflict_object_key: str) -> bool:
+    current_parts = str(current_object_key or "").split("/")
+    conflict_parts = str(conflict_object_key or "").split("/")
+    if len(current_parts) != 3 or len(conflict_parts) != 3:
+        return False
+    return current_parts[1:] == conflict_parts[1:]
+
+
 def _next_table_id(*roots: Path) -> int:
     used_ids = _collect_used_table_ids(*roots)
     normal_ids = [value for value in used_ids if 0 < value <= TABLE_ID_MAX_NORMAL]
@@ -493,6 +501,7 @@ def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
     targets: list[tuple[str, str]] = []
     patterns = (
         (r"\btruncate\s+table\s+([a-z0-9_\".]+)", "truncate"),
+        (r"\btruncate\s+([a-z0-9_\".]+)", "truncate"),
         (r"\bdelete\s+from\s+([a-z0-9_\".]+)", "delete"),
     )
     for pattern, kind in patterns:
@@ -1039,6 +1048,7 @@ def validate_entity_dev_meta_bundle(
     checks: list[str] = []
     normalized_schema = _normalize_name(schema_name)
     normalized_table = _normalize_name(table_name)
+    is_stg_schema = normalized_schema in {"stg", "dict_stg"}
     current_object_key = _build_object_key(entity_name, schema_name, table_name)
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -1085,6 +1095,7 @@ def validate_entity_dev_meta_bundle(
             roots=(prod_root, dev_root),
             ignored_object_keys=[source_object_key] if source_object_key else None,
         )
+        conflicts = [item for item in conflicts if not _is_move_like_table_id_conflict(current_object_key, item)]
         if conflicts:
             errors.append(
                 f"`table_id` {table_id_int} уже используется в других объектах: "
@@ -1116,7 +1127,7 @@ def validate_entity_dev_meta_bundle(
 
     if not recreate_sql.strip():
         errors.append("Recreate SQL не должен быть пустым")
-    else:
+    elif not is_stg_schema:
         created = _extract_created_object(recreate_sql)
         expected_fqn = f"{normalized_schema}.{normalized_table}"
         if not created:
@@ -1134,10 +1145,11 @@ def validate_entity_dev_meta_bundle(
         temp_table_names = _extract_temp_table_names(insert_sql)
         insert_target = _extract_insert_target(insert_sql)
         expected_fqn = f"{normalized_schema}.{normalized_table}"
-        if not insert_target:
-            errors.append("В insert SQL не найден `INSERT INTO schema.table`")
-        elif insert_target != expected_fqn:
-            errors.append(f"Insert SQL пишет в `{insert_target}`, а ожидается `{expected_fqn}`")
+        if not is_stg_schema:
+            if not insert_target:
+                errors.append("В insert SQL не найден `INSERT INTO schema.table`")
+            elif insert_target != expected_fqn:
+                errors.append(f"Insert SQL пишет в `{insert_target}`, а ожидается `{expected_fqn}`")
 
         if re.search(r"\bselect\s+\*", _normalize_sql(insert_sql)):
             warnings.append("В insert SQL найден `SELECT *`")
@@ -1175,8 +1187,8 @@ def validate_entity_dev_meta_bundle(
         normalized_truncate = _normalize_sql(truncate_sql)
         mutation_targets = _extract_mutation_targets(truncate_sql)
         expected_fqn = f"{normalized_schema}.{normalized_table}"
-        if normalized_truncate == "select 1;" or normalized_truncate == "select 1":
-            warnings.append("Truncate SQL содержит только `SELECT 1`")
+        if normalized_truncate in {"select 1;", "select 1"}:
+            pass
         elif not mutation_targets:
             warnings.append("В truncate SQL не найдены `TRUNCATE TABLE` или `DELETE FROM`")
         else:
@@ -1187,9 +1199,10 @@ def validate_entity_dev_meta_bundle(
                     + ", ".join(f"`{target}`" for target in wrong_targets)
                 )
 
-    for field_name in SYSTEM_FIELDS:
-        if not re.search(rf"\b{re.escape(field_name)}\b", _normalize_sql(recreate_sql)):
-            errors.append(f"В recreate SQL отсутствует системное поле `{field_name}`")
+    if not is_stg_schema:
+        for field_name in SYSTEM_FIELDS:
+            if not re.search(rf"\b{re.escape(field_name)}\b", _normalize_sql(recreate_sql)):
+                errors.append(f"В recreate SQL отсутствует системное поле `{field_name}`")
 
     known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
     if insert_sql.strip():
@@ -1562,6 +1575,7 @@ def move_entity_dev_meta_bundle(
             "schema_name": target_schema_name,
             "table_name": target_table_name,
             "object_key": target_key,
+            "source_object_key": source_key,
             "yaml_content": normalized_yaml,
             "key_attributes": (moved_payload.get("key_attributes") if isinstance(moved_payload.get("key_attributes"), list) else []),
             "recreate_sql": bundle.get("recreate_sql", ""),

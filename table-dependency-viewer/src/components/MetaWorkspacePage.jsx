@@ -361,8 +361,13 @@ export default function MetaWorkspacePage({ userProfile }) {
             <div className="meta-workspace-validation">
               <div className="meta-workspace-validation-head">
                 <div className="section-subtitle">Результат проверки ветки</div>
-                <div className="muted">
-                  Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}
+                <div className="meta-workspace-validation-actions">
+                  <div className="muted">
+                    Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}
+                  </div>
+                  <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid || !String(releaseBranch || "").trim()}>
+                    {creatingMr ? "Создаем MR..." : "Создать MR"}
+                  </button>
                 </div>
               </div>
               <div className="meta-workspace-validation-list">

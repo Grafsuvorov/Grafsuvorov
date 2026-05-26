@@ -8300,6 +8300,66 @@ body.custom-hover-label-active * {
   word-break: break-word;
 }
 
+.meta-workspace-validation {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.meta-workspace-validation-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.meta-workspace-validation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.meta-workspace-validation-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(2, 6, 23, 0.48);
+}
+
+.meta-workspace-validation-card.ok {
+  border-color: rgba(34, 197, 94, 0.26);
+}
+
+.meta-workspace-validation-card.bad {
+  border-color: rgba(248, 113, 113, 0.26);
+}
+
+.meta-workspace-validation-title {
+  font-weight: 700;
+  color: #eff6ff;
+}
+
+.meta-workspace-validation-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.meta-workspace-validation-points {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.meta-workspace-validation-points.bad li {
+  color: #fecaca;
+}
+
+.meta-workspace-validation-points.warn li {
+  color: #fde68a;
+}
+
 .meta-workspace-pane > .dev-meta-page {
   background: transparent;
   padding: 0;
@@ -9135,6 +9195,28 @@ body.custom-hover-label-active * {
   line-height: 1;
 }
 
+.entity-dev-editor-run {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.entity-dev-editor-run:hover,
+.entity-dev-editor-expand:hover {
+  background: rgba(37, 99, 235, 0.22);
+  border-color: rgba(96, 165, 250, 0.34);
+  color: #eff6ff;
+}
+
 .entity-dev-editor-chevron {
   color: rgba(191, 219, 254, 0.82);
   transition: transform 0.18s ease;
@@ -9147,6 +9229,10 @@ body.custom-hover-label-active * {
 .entity-dev-editor {
   min-height: 200px;
   margin-top: 8px;
+}
+
+.entity-dev-run-hint {
+  margin-top: 10px;
 }
 
 .entity-dev-modal {

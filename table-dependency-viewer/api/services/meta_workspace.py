@@ -9,16 +9,18 @@ from typing import Any
 
 from sqlalchemy import text
 
-from .dev_meta import _audit_dev_meta, _resolve_root, ensure_dev_meta_tables
+from .dev_meta import _audit_dev_meta, _resolve_root, ensure_dev_meta_tables, validate_dev_meta_content
 from .entity_dev_meta import (
     ENTITY_LOCK_SCHEMA,
     _ensure_git_identity,
+    _load_yaml_text,
     _gitlab_json_request,
     _list_task_entity_object_keys,
     _object_dir_from_key,
     _parse_gitlab_project,
     _run_git,
     _sync_task_objects_to_worktree,
+    validate_entity_dev_meta_bundle,
 )
 
 
@@ -71,6 +73,13 @@ def _parse_name_status(raw_output: str) -> list[tuple[str, str]]:
             continue
         result.append((parts[0].strip().upper(), parts[-1].strip()))
     return result
+
+
+def _git_show_text(repo_root: Path, ref_name: str, rel_path: str) -> str:
+    try:
+        return _run_git(repo_root, ["show", f"{ref_name}:{rel_path}"])
+    except Exception:
+        return ""
 
 
 def _entity_root_parts(entity_git_root_value: str) -> tuple[str, ...]:
@@ -152,6 +161,107 @@ def _build_branch_catalog(
         "base_branch": re.sub(r"^origin/", "", base_ref),
         "gp_objects": sorted(gp_items, key=lambda row: (row["entity_name"], row["schema_name"], row["table_name"])),
         "click_objects": sorted(click_items, key=lambda row: (row["schema_name"], row["file_name"])),
+    }
+
+
+def validate_meta_workspace_branch(
+    *,
+    base_dir: Path,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    click_git_root_value: str,
+    prod_root_value: str,
+    dev_root_value: str,
+    branch_name: str,
+    base_branch: str,
+    dev_database_url: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    git_repo_root = Path(git_repo_value).resolve()
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    catalog = _build_branch_catalog(
+        git_repo_root=git_repo_root,
+        entity_git_root_value=entity_git_root_value,
+        click_git_root_value=click_git_root_value,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    gp_results: list[dict[str, Any]] = []
+    click_results: list[dict[str, Any]] = []
+
+    for item in catalog.get("gp_objects", []):
+        if item.get("change_type") == "deleted":
+            gp_results.append(
+                {
+                    **item,
+                    "valid": True,
+                    "skipped": True,
+                    "errors": [],
+                    "warnings": ["Объект удалён в ветке, проверка содержимого пропущена"],
+                    "checks": [],
+                }
+            )
+            continue
+        object_rel = Path(entity_git_root_value) / item["entity_name"] / item["schema_name"] / item["table_name"]
+        yaml_content = _git_show_text(git_repo_root, branch_ref, (object_rel / "meta_data_file.yaml").as_posix())
+        recreate_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_recreate_init.sql").as_posix())
+        insert_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_insert_init.sql").as_posix())
+        truncate_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix())
+        yaml_payload = _load_yaml_text(yaml_content)
+        validation = validate_entity_dev_meta_bundle(
+            base_dir=base_dir,
+            prod_root_value=prod_root_value,
+            dev_root_value=dev_root_value,
+            entity_name=item["entity_name"],
+            schema_name=item["schema_name"],
+            table_name=item["table_name"],
+            key_attributes=yaml_payload.get("key_attributes") if isinstance(yaml_payload.get("key_attributes"), list) else [],
+            source_object_key=None,
+            yaml_content=yaml_content,
+            recreate_sql=recreate_sql,
+            insert_sql=insert_sql,
+            truncate_sql=truncate_sql,
+            dev_database_url=dev_database_url,
+        )
+        gp_results.append({**item, **validation, "skipped": False})
+
+    for item in catalog.get("click_objects", []):
+        if item.get("change_type") == "deleted":
+            click_results.append(
+                {
+                    **item,
+                    "valid": True,
+                    "skipped": True,
+                    "errors": [],
+                    "warnings": ["Файл удалён в ветке, проверка содержимого пропущена"],
+                }
+            )
+            continue
+        content = _git_show_text(
+            git_repo_root,
+            branch_ref,
+            (Path(click_git_root_value) / item["schema_name"] / item["file_name"]).as_posix(),
+        )
+        validation = validate_dev_meta_content(
+            content=content,
+            schema_name=item["schema_name"],
+            dev_database_url=dev_database_url,
+        )
+        click_results.append({**item, **validation, "skipped": False})
+
+    all_results = [*gp_results, *click_results]
+    return {
+        **catalog,
+        "gp_results": gp_results,
+        "click_results": click_results,
+        "summary": {
+            "total": len(all_results),
+            "valid": sum(1 for item in all_results if item.get("valid")),
+            "invalid": sum(1 for item in all_results if not item.get("valid")),
+            "warnings": sum(len(item.get("warnings") or []) for item in all_results),
+        },
     }
 
 

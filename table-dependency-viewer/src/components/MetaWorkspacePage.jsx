@@ -53,6 +53,8 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [gpOpenRequest, setGpOpenRequest] = useState(null);
   const [clickOpenRequest, setClickOpenRequest] = useState(null);
   const [activeSelection, setActiveSelection] = useState(null);
+  const [branchValidation, setBranchValidation] = useState(null);
+  const [validatingBranch, setValidatingBranch] = useState(false);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
   const groupedGp = useMemo(() => groupGpObjects(branchCatalog.gp_objects), [branchCatalog.gp_objects]);
@@ -132,6 +134,28 @@ export default function MetaWorkspacePage({ userProfile }) {
       setError(err.message || "Не удалось создать MR");
     } finally {
       setCreatingMr(false);
+    }
+  };
+
+  const handleValidateAll = async () => {
+    if (!String(branchName || "").trim() || !String(baseBranch || "").trim()) {
+      setError("Укажите ветку и base-ветку");
+      return;
+    }
+    setValidatingBranch(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await metaWorkspaceApi.validateAll({
+        branch_name: branchName.trim(),
+        base_branch: baseBranch.trim(),
+      });
+      setBranchValidation(data || null);
+      setMessage("Проверка всех объектов ветки завершена.");
+    } catch (err) {
+      setError(err.message || "Не удалось проверить объекты ветки");
+    } finally {
+      setValidatingBranch(false);
     }
   };
 
@@ -246,6 +270,9 @@ export default function MetaWorkspacePage({ userProfile }) {
             <button type="button" className="btn btn-primary" onClick={() => loadBranchCatalog()} disabled={catalogLoading || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
               {catalogLoading ? "Обновляем diff..." : "Показать изменения ветки"}
             </button>
+            <button type="button" className="btn btn-secondary" onClick={handleValidateAll} disabled={validatingBranch || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
+              {validatingBranch ? "Проверяем всё..." : "Проверить все объекты ветки"}
+            </button>
             <span className="muted">GP: {branchSummary.gp} · Click: {branchSummary.click}</span>
           </div>
           <div className="meta-workspace-branch-picker">
@@ -330,6 +357,34 @@ export default function MetaWorkspacePage({ userProfile }) {
         </div>
 
         <div className="meta-workspace-pane">
+          {branchValidation?.summary ? (
+            <div className="meta-workspace-validation">
+              <div className="meta-workspace-validation-head">
+                <div className="section-subtitle">Результат проверки ветки</div>
+                <div className="muted">
+                  Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}
+                </div>
+              </div>
+              <div className="meta-workspace-validation-list">
+                {[...(branchValidation.gp_results || []), ...(branchValidation.click_results || [])].map((item) => (
+                  <div key={`${item.object_key}:${item.change_type}`} className={`meta-workspace-validation-card ${item.valid ? "ok" : "bad"}`}>
+                    <div className="meta-workspace-validation-title">{item.object_key}</div>
+                    <div className="meta-workspace-validation-meta">{item.valid ? "OK" : "Есть ошибки"} · {item.change_type}</div>
+                    {item.errors?.length ? (
+                      <ul className="meta-workspace-validation-points bad">
+                        {item.errors.map((point, idx) => <li key={`${item.object_key}-err-${idx}`}>{point}</li>)}
+                      </ul>
+                    ) : null}
+                    {item.warnings?.length ? (
+                      <ul className="meta-workspace-validation-points warn">
+                        {item.warnings.map((point, idx) => <li key={`${item.object_key}-warn-${idx}`}>{point}</li>)}
+                      </ul>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {activeSelection ? (
             <div className="meta-workspace-selection-bar">
               <button type="button" className="btn btn-ghost" onClick={handleBackToBranchList}>

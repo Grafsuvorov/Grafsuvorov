@@ -108,6 +108,7 @@ from .services.dev_meta import (
 from .services.entity_dev_meta import (
     create_entity_meta_mr,
     delete_entity_dev_meta_bundle,
+    execute_entity_dev_meta_sql,
     get_entity_dev_meta_status,
     init_entity_dev_meta_bundle,
     list_entity_reference_rows,
@@ -122,6 +123,7 @@ from .services.meta_workspace import (
     _build_branch_catalog,
     create_meta_workspace_mr,
     list_meta_workspace_branches,
+    validate_meta_workspace_branch,
 )
 from .services.dbt_manifest import (
     build_dbt_fallback_card,
@@ -284,9 +286,22 @@ class EntityMetaMrPayload(BaseModel):
     release_branch: str
 
 
+class EntityMetaRunSqlPayload(BaseModel):
+    entity_name: str
+    schema_name: str
+    table_name: str
+    sql_kind: str
+    sql_text: str
+
+
 class MetaWorkspaceMrPayload(BaseModel):
     task_id: str
     release_branch: str
+
+
+class MetaWorkspaceValidatePayload(BaseModel):
+    branch_name: str
+    base_branch: str
 
 
 class AssistantContextPayload(BaseModel):
@@ -945,6 +960,25 @@ def get_admin_meta_workspace_branch_catalog(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.post("/api/admin/meta-workspace/validate-all")
+def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, request: Request):
+    _require_admin(request)
+    try:
+        return validate_meta_workspace_branch(
+            base_dir=BASE_DIR,
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            prod_root_value=ENTITY_META_DIR,
+            dev_root_value=DEV_ENTITY_META_DIR,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+            dev_database_url=DEV_DATABASE_URL,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.post("/api/admin/dev-meta/run-dag")
 def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     user = _require_dev_meta_role(request)
@@ -1227,6 +1261,25 @@ def save_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", **result}
+
+
+@router.post("/api/admin/entity-meta/run-sql")
+def run_admin_entity_meta_sql(payload: EntityMetaRunSqlPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = execute_entity_dev_meta_sql(
+            engine=engine,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
+            sql_kind=payload.sql_kind,
+            sql_text=payload.sql_text,
+            dev_database_url=DEV_DATABASE_URL,
+            author=user.email,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return result
 
 
 @router.post("/api/admin/entity-meta/delete")

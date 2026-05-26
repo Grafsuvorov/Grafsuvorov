@@ -214,6 +214,78 @@ def _load_yaml_text(yaml_content: str) -> dict[str, Any]:
         return {}
 
 
+def execute_entity_dev_meta_sql(
+    *,
+    engine,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+    sql_kind: str,
+    sql_text: str,
+    dev_database_url: str,
+    author: str,
+) -> dict[str, Any]:
+    sql_kind_norm = str(sql_kind or "").strip().lower()
+    if sql_kind_norm not in {"recreate", "insert", "truncate"}:
+        raise ValueError("sql_kind должен быть одним из: recreate, insert, truncate")
+    sql_value = str(sql_text or "").strip()
+    if not sql_value:
+        raise ValueError("SQL текст пустой")
+    if not dev_database_url:
+        raise ValueError("Не настроен DEV_DATABASE_URL")
+
+    exec_engine = create_engine(dev_database_url)
+    connection = None
+    cursor = None
+    try:
+        connection = exec_engine.raw_connection()
+        cursor = connection.cursor()
+        cursor.execute(sql_value)
+        connection.commit()
+    except Exception as exc:
+        if connection is not None:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+        raise ValueError(f"Не удалось выполнить {sql_kind_norm} SQL в DEV: {exc}") from exc
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+        exec_engine.dispose()
+
+    object_key = _build_object_key(entity_name, schema_name, table_name)
+    _audit_dev_meta(
+        engine,
+        ENTITY_LOCK_SCHEMA,
+        object_key,
+        author,
+        f"run_{sql_kind_norm}",
+        sql_value,
+        {
+            "entity_name": entity_name,
+            "schema_name": schema_name,
+            "table_name": table_name,
+            "sql_kind": sql_kind_norm,
+        },
+    )
+    return {
+        "status": "ok",
+        "object_key": object_key,
+        "sql_kind": sql_kind_norm,
+        "executed_at": datetime.utcnow().isoformat(),
+        "message": f"{sql_kind_norm.upper()} SQL выполнен в DEV",
+    }
+
+
 def _find_template_payload(root: Path, entity_name: str, schema_name: str) -> Optional[dict[str, Any]]:
     entity_dir = _find_child_case_insensitive(root, entity_name)
     if not entity_dir:

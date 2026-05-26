@@ -193,6 +193,7 @@ export default function EntityDevMetaWorkspace({
   const [moving, setMoving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [validating, setValidating] = useState(false);
+  const [runningSqlKind, setRunningSqlKind] = useState("");
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
@@ -446,6 +447,39 @@ export default function EntityDevMetaWorkspace({
       setError(err.message || "Не удалось сохранить объект");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRunSql = async (sqlKind) => {
+    if (!bundle) return;
+    const sqlText = sqlKind === "recreate"
+      ? bundle.recreate_sql
+      : sqlKind === "insert"
+        ? bundle.insert_sql
+        : bundle.truncate_sql;
+    if (!String(sqlText || "").trim()) {
+      setMessageType("warning");
+      setMessage("SQL блок пустой, запускать нечего.");
+      setError(null);
+      return;
+    }
+    setRunningSqlKind(sqlKind);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await entityMetaApi.runSql({
+        entity_name: selection.entity_name,
+        schema_name: selection.schema_name,
+        table_name: selection.table_name,
+        sql_kind: sqlKind,
+        sql_text: sqlText,
+      });
+      setMessageType("success");
+      setMessage(data?.message || `${sqlKind.toUpperCase()} SQL выполнен в DEV.`);
+    } catch (err) {
+      setError(err.message || `Не удалось выполнить ${sqlKind} SQL`);
+    } finally {
+      setRunningSqlKind("");
     }
   };
 
@@ -920,6 +954,9 @@ export default function EntityDevMetaWorkspace({
                     <span className="entity-dev-editor-state">{editorSections.recreate ? "Открыт" : "Свернут"}</span>
                   </span>
                   <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-run" onClick={(e) => { e.stopPropagation(); handleRunSql("recreate"); }} title="Запустить в DEV" aria-label="Запустить в DEV">
+                      ▶
+                    </span>
                     <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("recreate"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
                       ⤢
                     </span>
@@ -942,6 +979,9 @@ export default function EntityDevMetaWorkspace({
                     <span className="entity-dev-editor-state">{editorSections.insert ? "Открыт" : "Свернут"}</span>
                   </span>
                   <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-run" onClick={(e) => { e.stopPropagation(); handleRunSql("insert"); }} title="Запустить в DEV" aria-label="Запустить в DEV">
+                      ▶
+                    </span>
                     <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("insert"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
                       ⤢
                     </span>
@@ -964,6 +1004,9 @@ export default function EntityDevMetaWorkspace({
                     <span className="entity-dev-editor-state">{editorSections.truncate ? "Открыт" : "Свернут"}</span>
                   </span>
                   <span className="entity-dev-editor-toggle-actions">
+                    <span className="entity-dev-editor-run" onClick={(e) => { e.stopPropagation(); handleRunSql("truncate"); }} title="Запустить в DEV" aria-label="Запустить в DEV">
+                      ▶
+                    </span>
                     <span className="entity-dev-editor-expand" onClick={(e) => { e.stopPropagation(); setFullscreenEditor("truncate"); }} title="Раскрыть полностью" aria-label="Раскрыть полностью">
                       ⤢
                     </span>
@@ -1018,6 +1061,7 @@ export default function EntityDevMetaWorkspace({
                 </div>
               </div>
             ) : null}
+            {runningSqlKind ? <div className="muted entity-dev-run-hint">Выполняем {runningSqlKind.toUpperCase()} SQL в DEV...</div> : null}
           </div>
         </div>
       </section>

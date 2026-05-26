@@ -550,8 +550,7 @@ def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
     normalized = _normalize_sql(sql)
     targets: list[tuple[str, str]] = []
     patterns = (
-        (r"\btruncate\s+table\s+([a-z0-9_\".]+)", "truncate"),
-        (r"\btruncate\s+([a-z0-9_\".]+)", "truncate"),
+        (r"\btruncate\s+(?:table\s+)?([a-z0-9_\".]+)", "truncate"),
         (r"\bdelete\s+from\s+([a-z0-9_\".]+)", "delete"),
     )
     for pattern, kind in patterns:

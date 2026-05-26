@@ -370,6 +370,56 @@ def _is_move_like_table_id_conflict(current_object_key: str, conflict_object_key
     return current_parts[1:] == conflict_parts[1:]
 
 
+def _format_branch_name(value: Any) -> Optional[str]:
+    branch_name = str(value or "").strip()
+    if not branch_name:
+        return None
+    if re.fullmatch(r"DWH-\d+", branch_name, flags=re.IGNORECASE):
+        return f"feature/{branch_name.upper()}"
+    return branch_name
+
+
+def _lookup_object_branch_contexts(engine, object_keys: Iterable[str]) -> dict[str, str]:
+    keys = {
+        str(item or "").strip()
+        for item in object_keys
+        if str(item or "").strip()
+    }
+    if not keys:
+        return {}
+    ensure_dev_meta_tables(engine)
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT file_name, details
+                FROM tech_etl.app_dev_meta_audit
+                WHERE schema_name = :schema_name
+                ORDER BY created_at DESC
+                """
+            ),
+            {"schema_name": ENTITY_LOCK_SCHEMA},
+        ).mappings().all()
+
+    result: dict[str, str] = {}
+    for row in rows:
+        object_key = str(row.get("file_name") or "").strip()
+        if object_key not in keys or object_key in result:
+            continue
+        try:
+            details = json.loads(row.get("details") or "{}")
+        except Exception:
+            details = {}
+        branch_name = (
+            _format_branch_name(details.get("feature_branch"))
+            or _format_branch_name(details.get("branch_name"))
+            or _format_branch_name(details.get("task_id"))
+        )
+        if branch_name:
+            result[object_key] = branch_name
+    return result
+
+
 def _next_table_id(*roots: Path) -> int:
     used_ids = _collect_used_table_ids(*roots)
     normal_ids = [value for value in used_ids if 0 < value <= TABLE_ID_MAX_NORMAL]
@@ -1029,6 +1079,7 @@ def init_entity_dev_meta_bundle(
 
 def validate_entity_dev_meta_bundle(
     *,
+    engine=None,
     base_dir: Path,
     prod_root_value: str,
     dev_root_value: str,
@@ -1097,9 +1148,14 @@ def validate_entity_dev_meta_bundle(
         )
         conflicts = [item for item in conflicts if not _is_move_like_table_id_conflict(current_object_key, item)]
         if conflicts:
+            branch_contexts = _lookup_object_branch_contexts(engine, conflicts) if engine is not None else {}
             errors.append(
                 f"`table_id` {table_id_int} уже используется в других объектах: "
-                + ", ".join(f"`{item}`" for item in conflicts)
+                + ", ".join(
+                    f"`{item}`"
+                    + (f" (ветка `{branch_contexts[item]}`)" if branch_contexts.get(item) else "")
+                    for item in conflicts
+                )
             )
 
     object_type = _normalize_name(payload.get("object_type"))
@@ -1292,6 +1348,7 @@ def save_entity_dev_meta_bundle(
     object_key = _build_object_key(entity_name, schema_name, table_name)
     _ensure_entity_lock(engine=engine, object_key=object_key, author=author, ttl_minutes=lock_ttl_minutes)
     validation = validate_entity_dev_meta_bundle(
+        engine=engine,
         base_dir=base_dir,
         prod_root_value=prod_root_value,
         dev_root_value=dev_root_value,

@@ -55,6 +55,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [activeSelection, setActiveSelection] = useState(null);
   const [branchValidation, setBranchValidation] = useState(null);
   const [validatingBranch, setValidatingBranch] = useState(false);
+  const [syncingBranch, setSyncingBranch] = useState(false);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
   const groupedGp = useMemo(() => groupGpObjects(branchCatalog.gp_objects), [branchCatalog.gp_objects]);
@@ -156,6 +157,34 @@ export default function MetaWorkspacePage({ userProfile }) {
       setError(err.message || "Не удалось проверить объекты ветки");
     } finally {
       setValidatingBranch(false);
+    }
+  };
+
+  const handleSyncBranch = async () => {
+    if (!taskIdValid) {
+      setError("Укажите номер задачи в формате DWH-12345");
+      return;
+    }
+    if (!String(branchName || "").trim() || !String(baseBranch || "").trim()) {
+      setError("Укажите ветку и base-ветку");
+      return;
+    }
+    setSyncingBranch(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await metaWorkspaceApi.syncBranch({
+        task_id: taskId.trim().toUpperCase(),
+        branch_name: branchName.trim(),
+        base_branch: baseBranch.trim(),
+      });
+      const committedText = data?.committed ? "Изменения закоммичены и отправлены в ветку." : "Новых изменений для коммита не было, ветка обновлена.";
+      setMessage(`${committedText} Ветка: ${data?.branch_name || branchName.trim()}`);
+      await loadBranchCatalog(branchName.trim());
+    } catch (err) {
+      setError(err.message || "Не удалось сохранить изменения в ветку");
+    } finally {
+      setSyncingBranch(false);
     }
   };
 
@@ -365,6 +394,14 @@ export default function MetaWorkspacePage({ userProfile }) {
                   <div className="muted">
                     Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}
                   </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSyncBranch}
+                    disabled={syncingBranch || !taskIdValid || !String(branchName || "").trim() || !String(baseBranch || "").trim()}
+                  >
+                    {syncingBranch ? "Сохраняем в ветку..." : "Сохранить в ветку"}
+                  </button>
                   <button type="button" className="btn btn-secondary" onClick={handleCreateMr} disabled={creatingMr || !taskIdValid || !String(releaseBranch || "").trim()}>
                     {creatingMr ? "Создаем MR..." : "Создать MR"}
                   </button>

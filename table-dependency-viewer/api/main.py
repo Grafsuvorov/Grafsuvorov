@@ -123,6 +123,7 @@ from .services.meta_workspace import (
     _build_branch_catalog,
     create_meta_workspace_mr,
     list_meta_workspace_branches,
+    sync_meta_workspace_branch,
     validate_meta_workspace_branch,
 )
 from .services.dbt_manifest import (
@@ -300,6 +301,12 @@ class MetaWorkspaceMrPayload(BaseModel):
 
 
 class MetaWorkspaceValidatePayload(BaseModel):
+    branch_name: str
+    base_branch: str
+
+
+class MetaWorkspaceSyncPayload(BaseModel):
+    task_id: str
     branch_name: str
     base_branch: str
 
@@ -979,6 +986,30 @@ def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, 
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@router.post("/api/admin/meta-workspace/sync-branch")
+def sync_admin_meta_workspace_branch(payload: MetaWorkspaceSyncPayload, request: Request):
+    user = _require_admin(request)
+    try:
+        result = sync_meta_workspace_branch(
+            engine=engine,
+            base_dir=BASE_DIR,
+            entity_dev_root_value=DEV_ENTITY_META_DIR,
+            click_dev_root_value=DEV_CLICK_META_DIR,
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            task_id=payload.task_id,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+            author=user.email,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", **result}
+
+
 @router.post("/api/admin/dev-meta/run-dag")
 def run_admin_dev_meta_dag(payload: DevMetaDagPayload, request: Request):
     user = _require_dev_meta_role(request)
@@ -1216,6 +1247,7 @@ def unlock_admin_entity_meta(payload: EntityMetaLockPayload, request: Request):
 def validate_admin_entity_meta(payload: EntityMetaSavePayload, request: Request):
     _require_admin(request)
     return validate_entity_dev_meta_bundle(
+        engine=engine,
         base_dir=BASE_DIR,
         prod_root_value=ENTITY_META_DIR,
         dev_root_value=DEV_ENTITY_META_DIR,

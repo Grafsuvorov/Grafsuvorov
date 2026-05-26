@@ -211,6 +211,7 @@ def validate_meta_workspace_branch(
         truncate_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix())
         yaml_payload = _load_yaml_text(yaml_content)
         validation = validate_entity_dev_meta_bundle(
+            engine=engine,
             base_dir=base_dir,
             prod_root_value=prod_root_value,
             dev_root_value=dev_root_value,
@@ -329,6 +330,115 @@ def _sync_click_task_files_to_worktree(
                     break
                 parent = parent.parent
     return {"updated_paths": updated_paths, "removed_paths": removed_paths}
+
+
+def _sync_meta_workspace_branch(
+    *,
+    engine,
+    base_dir: Path,
+    entity_dev_root_value: str,
+    click_dev_root_value: str,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    click_git_root_value: str,
+    task_id: str,
+    branch_name: str,
+    base_branch: str,
+    author: str,
+) -> dict[str, Any]:
+    task_id_norm = str(task_id or "").strip().upper()
+    if not task_id_norm or not task_id_norm.startswith("DWH-"):
+        raise ValueError("Номер задачи должен быть в формате DWH-12345")
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите ветку для сохранения")
+    base_branch_norm = str(base_branch or "").strip()
+    if not base_branch_norm:
+        raise ValueError("Укажите base-ветку")
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+
+    entity_dev_root = _resolve_root(base_dir, entity_dev_root_value)
+    click_dev_root = _resolve_root(base_dir, click_dev_root_value)
+    git_repo_root = Path(git_repo_value).resolve()
+    entity_git_root_rel = Path(entity_git_root_value)
+    click_git_root_rel = Path(click_git_root_value)
+
+    entity_object_keys = _list_task_entity_object_keys(engine=engine, task_id=task_id_norm)
+    click_files = _list_task_click_meta_files(engine=engine, task_id=task_id_norm)
+    if not entity_object_keys and not click_files:
+        raise ValueError(f"Не найдено изменений для задачи {task_id_norm}")
+
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
+    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
+        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-sync-{task_id_norm.lower()}-"))
+    try:
+        if remote_branch_exists:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
+        else:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+
+        entity_sync = {"updated_paths": [], "removed_paths": []}
+        if entity_object_keys:
+            entity_sync = _sync_task_objects_to_worktree(
+                dev_root=entity_dev_root,
+                worktree_meta_root=worktree_dir / entity_git_root_rel,
+                object_keys=entity_object_keys,
+            )
+
+        click_sync = {"updated_paths": [], "removed_paths": []}
+        if click_files:
+            click_sync = _sync_click_task_files_to_worktree(
+                dev_root=click_dev_root,
+                worktree_click_root=worktree_dir / click_git_root_rel,
+                files=click_files,
+            )
+
+        status_output = _run_git(git_repo_root, ["status", "--porcelain"], cwd=worktree_dir)
+        committed = False
+        if status_output:
+            _run_git(git_repo_root, ["add", "."], cwd=worktree_dir)
+            _run_git(git_repo_root, ["commit", "-m", f"{task_id_norm}: sync meta workspace changes"], cwd=worktree_dir)
+            committed = True
+
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
+
+        _audit_dev_meta(
+            engine,
+            ENTITY_LOCK_SCHEMA,
+            task_id_norm,
+            author,
+            "sync_meta_workspace_branch",
+            "",
+            {
+                "task_id": task_id_norm,
+                "feature_branch": branch_name_norm,
+                "base_branch": base_branch_norm,
+                "gp_object_keys": sorted(entity_object_keys),
+                "click_files": click_files,
+                "committed": committed,
+            },
+        )
+        return {
+            "task_id": task_id_norm,
+            "branch_name": branch_name_norm,
+            "base_branch": base_branch_norm,
+            "gp_object_keys": sorted(entity_object_keys),
+            "click_files": click_files,
+            "updated_paths": [*entity_sync["updated_paths"], *click_sync["updated_paths"]],
+            "removed_paths": [*entity_sync["removed_paths"], *click_sync["removed_paths"]],
+            "committed": committed,
+        }
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
 
 
 def create_meta_workspace_mr(
@@ -485,3 +595,32 @@ def create_meta_workspace_mr(
         except Exception:
             pass
         shutil.rmtree(worktree_dir, ignore_errors=True)
+
+
+def sync_meta_workspace_branch(
+    *,
+    engine,
+    base_dir: Path,
+    entity_dev_root_value: str,
+    click_dev_root_value: str,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    click_git_root_value: str,
+    task_id: str,
+    branch_name: str,
+    base_branch: str,
+    author: str,
+) -> dict[str, Any]:
+    return _sync_meta_workspace_branch(
+        engine=engine,
+        base_dir=base_dir,
+        entity_dev_root_value=entity_dev_root_value,
+        click_dev_root_value=click_dev_root_value,
+        git_repo_value=git_repo_value,
+        entity_git_root_value=entity_git_root_value,
+        click_git_root_value=click_git_root_value,
+        task_id=task_id,
+        branch_name=branch_name,
+        base_branch=base_branch,
+        author=author,
+    )

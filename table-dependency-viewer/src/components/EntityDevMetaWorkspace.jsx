@@ -194,6 +194,11 @@ export default function EntityDevMetaWorkspace({
   const [deleting, setDeleting] = useState(false);
   const [validating, setValidating] = useState(false);
   const [runningSqlKind, setRunningSqlKind] = useState("");
+  const [sqlRunStatus, setSqlRunStatus] = useState({
+    recreate: null,
+    insert: null,
+    truncate: null,
+  });
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
@@ -316,6 +321,11 @@ export default function EntityDevMetaWorkspace({
         recreate: true,
         insert: true,
         truncate: true,
+      });
+      setSqlRunStatus({
+        recreate: null,
+        insert: null,
+        truncate: null,
       });
       setValidatedFingerprint("");
       setMessageType("success");
@@ -464,6 +474,13 @@ export default function EntityDevMetaWorkspace({
       return;
     }
     setRunningSqlKind(sqlKind);
+    setSqlRunStatus((prev) => ({
+      ...prev,
+      [sqlKind]: {
+        state: "running",
+        text: `Выполняем ${sqlKind.toUpperCase()} SQL в DEV...`,
+      },
+    }));
     setError(null);
     setMessage(null);
     try {
@@ -476,8 +493,23 @@ export default function EntityDevMetaWorkspace({
       });
       setMessageType("success");
       setMessage(data?.message || `${sqlKind.toUpperCase()} SQL выполнен в DEV.`);
+      setSqlRunStatus((prev) => ({
+        ...prev,
+        [sqlKind]: {
+          state: "success",
+          text: data?.message || `${sqlKind.toUpperCase()} SQL выполнен успешно.`,
+        },
+      }));
     } catch (err) {
-      setError(err.message || `Не удалось выполнить ${sqlKind} SQL`);
+      const detail = err.message || `Не удалось выполнить ${sqlKind} SQL`;
+      setError(detail);
+      setSqlRunStatus((prev) => ({
+        ...prev,
+        [sqlKind]: {
+          state: "error",
+          text: detail,
+        },
+      }));
     } finally {
       setRunningSqlKind("");
     }
@@ -964,12 +996,19 @@ export default function EntityDevMetaWorkspace({
                   </span>
                 </button>
                 {editorSections.recreate ? (
-                  <textarea
-                    className="dev-meta-editor entity-dev-editor"
-                    value={bundle?.recreate_sql || ""}
-                    onChange={(e) => setBundle((prev) => ({ ...prev, recreate_sql: e.target.value }))}
-                    placeholder="sql_query_recreate_init.sql"
-                  />
+                  <>
+                    <textarea
+                      className="dev-meta-editor entity-dev-editor"
+                      value={bundle?.recreate_sql || ""}
+                      onChange={(e) => setBundle((prev) => ({ ...prev, recreate_sql: e.target.value }))}
+                      placeholder="sql_query_recreate_init.sql"
+                    />
+                    {sqlRunStatus.recreate ? (
+                      <div className={`entity-dev-sql-status ${sqlRunStatus.recreate.state}`}>
+                        {sqlRunStatus.recreate.text}
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
               </label>
               <label className="admin-field entity-dev-editor-field">
@@ -989,12 +1028,19 @@ export default function EntityDevMetaWorkspace({
                   </span>
                 </button>
                 {editorSections.insert ? (
-                  <textarea
-                    className="dev-meta-editor entity-dev-editor"
-                    value={bundle?.insert_sql || ""}
-                    onChange={(e) => setBundle((prev) => ({ ...prev, insert_sql: e.target.value }))}
-                    placeholder="sql_query_insert_init.sql"
-                  />
+                  <>
+                    <textarea
+                      className="dev-meta-editor entity-dev-editor"
+                      value={bundle?.insert_sql || ""}
+                      onChange={(e) => setBundle((prev) => ({ ...prev, insert_sql: e.target.value }))}
+                      placeholder="sql_query_insert_init.sql"
+                    />
+                    {sqlRunStatus.insert ? (
+                      <div className={`entity-dev-sql-status ${sqlRunStatus.insert.state}`}>
+                        {sqlRunStatus.insert.text}
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
               </label>
               <label className="admin-field entity-dev-editor-field">
@@ -1014,12 +1060,19 @@ export default function EntityDevMetaWorkspace({
                   </span>
                 </button>
                 {editorSections.truncate ? (
-                  <textarea
-                    className="dev-meta-editor entity-dev-editor"
-                    value={bundle?.truncate_sql || ""}
-                    onChange={(e) => setBundle((prev) => ({ ...prev, truncate_sql: e.target.value }))}
-                    placeholder="sql_query_truncate.sql"
-                  />
+                  <>
+                    <textarea
+                      className="dev-meta-editor entity-dev-editor"
+                      value={bundle?.truncate_sql || ""}
+                      onChange={(e) => setBundle((prev) => ({ ...prev, truncate_sql: e.target.value }))}
+                      placeholder="sql_query_truncate.sql"
+                    />
+                    {sqlRunStatus.truncate ? (
+                      <div className={`entity-dev-sql-status ${sqlRunStatus.truncate.state}`}>
+                        {sqlRunStatus.truncate.text}
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
               </label>
             </div>
@@ -1061,7 +1114,7 @@ export default function EntityDevMetaWorkspace({
                 </div>
               </div>
             ) : null}
-            {runningSqlKind ? <div className="muted entity-dev-run-hint">Выполняем {runningSqlKind.toUpperCase()} SQL в DEV...</div> : null}
+            {runningSqlKind ? <div className="muted entity-dev-run-hint">Запрос выполняется в DEV...</div> : null}
           </div>
         </div>
       </section>

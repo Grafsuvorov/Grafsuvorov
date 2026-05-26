@@ -1,202 +1,25 @@
- => ERROR [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                                         1.0s
-------
- > [table-dependency-viewer_frontend build 6/6] RUN npm run build:
-#23 0.306
-#23 0.306 > table-dependency-viewer@1.0.0 build
-#23 0.306 > vite build
-#23 0.306
-#23 0.546 vite v7.0.5 building for production...
-#23 0.611 transforming...
-#23 0.876 ✓ 20 modules transformed.
-#23 0.877 ✗ Build failed in 303ms
-#23 0.877 error during build:
-#23 0.877 [vite:esbuild] Transform failed with 1 error:
-#23 0.877 /app/src/components/Sidebar.jsx:7:34: ERROR: Expected ";" but found "Nikita"
-#23 0.877 file: /app/src/components/Sidebar.jsx:7:34
-#23 0.877
-#23 0.877 Expected ";" but found "Nikita"
-#23 0.877 5  |    const navigate = useNavigate();
-#23 0.877 6  |    const isActive = (path) => currentPath === path;
-#23 0.877 7  |    const customCursorTargetUser =""Nikita.Suvorov@rusal.com"";
-#23 0.877    |                                    ^
-#23 0.877 8  |    const useCustomHoverLabel = Boolean(
-#23 0.877 9  |      customCursorTargetUser &&
-#23 0.877
-#23 0.877     at failureErrorWithLog (/app/node_modules/esbuild/lib/main.js:1467:15)
-#23 0.877     at /app/node_modules/esbuild/lib/main.js:736:50
-#23 0.877     at responseCallbacks.<computed> (/app/node_modules/esbuild/lib/main.js:603:9)
-#23 0.877     at handleIncomingPacket (/app/node_modules/esbuild/lib/main.js:658:12)
-#23 0.877     at Socket.readFromStdout (/app/node_modules/esbuild/lib/main.js:581:7)
-#23 0.877     at Socket.emit (node:events:524:28)
-#23 0.877     at addChunk (node:internal/streams/readable:561:12)
-#23 0.877     at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
-#23 0.877     at Readable.push (node:internal/streams/readable:392:5)
-#23 0.877     at Pipe.onStreamRead (node:internal/stream_base_commons:191:23)
-------
-failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c npm run build" did not complete successfully: exit code: 1
-
-
-import "../style/app.css";
-import { useNavigate } from "react-router-dom";
-
-export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
-  const navigate = useNavigate();
-  const isActive = (path) => currentPath === path;
-  const customCursorTargetUser =""Nikita.Suvorov@rusal.com"";
-  const useCustomHoverLabel = Boolean(
-    customCursorTargetUser &&
-    (
-      String(userProfile?.username || "").trim() === customCursorTargetUser ||
-      String(userProfile?.email || "").trim() === customCursorTargetUser
-    )
-  );
-  const buttonClassName = (path) =>
-    `${isActive(path) ? "active" : ""} ${useCustomHoverLabel ? "custom-cursor-target" : ""}`.trim();
-  const roleLabel = userProfile?.role === "admin"
-    ? "Админ"
-    : userProfile?.role === "engineer"
-      ? "Инженер"
-      : userProfile?.role === "analyst"
-        ? "Аналитик"
-        : userProfile?.role;
-  return (
-    <header className="topnav">
-      <div className="topnav-inner">
-        {/* LEFT */}
-        <div className="topnav-left">
-          <div className="topnav-brand">DWH Контроль</div>
-
-          <nav className="topnav-nav">
-            <div className="nav-primary">
-              <button
-                type="button"
-                className={buttonClassName("/")}
-                onClick={() => onChangeView(null)}
-              >
-                Обзор
-              </button>
-
-              <button
-                type="button"
-                className={buttonClassName("/tables")}
-                onClick={() => onChangeView("table_search")}
-              >
-                Каталог
-              </button>
-            </div>
-
-            <div className="nav-secondary">
-              <button
-                type="button"
-                className={buttonClassName("/slow-tables")}
-                onClick={() => onChangeView("__slowest_tables__")}
-              >
-                Производительность
-              </button>
-              <button
-                type="button"
-                className={buttonClassName("/night-ops")}
-                onClick={() => onChangeView("night_ops")}
-              >
-                Мониторинг
-              </button>
-              <button
-                type="button"
-                className={buttonClassName("/entities")}
-                onClick={() => onChangeView("__entity_schedule__")}
-              >
-                Сущности
-              </button>
-              <button
-                type="button"
-                className={buttonClassName("/releases")}
-                onClick={() => onChangeView("releases")}
-              >
-                Релизы
-              </button>
-              {authEnabled && userProfile && (
-                <button
-                  type="button"
-                  className={buttonClassName("/account")}
-                  onClick={() => onChangeView("/account")}
-                >
-                  Профиль
-                </button>
-              )}
-              {authEnabled && userProfile?.role === "admin" && (
-                <button
-                  type="button"
-                  className={buttonClassName("/admin/users")}
-                  onClick={() => onChangeView("/admin/users")}
-                >
-                  Админка
-                </button>
-              )}
-              {authEnabled && userProfile && (
-                <button
-                  type="button"
-                  className={buttonClassName("/admin/dev-meta")}
-                  onClick={() => onChangeView("/admin/dev-meta")}
-                >
-                  DEV Meta
-                </button>
-              )}
-              {authEnabled && userProfile?.role === "admin" && (
-                <button
-                  type="button"
-                  className={buttonClassName("/admin/meta-workspace")}
-                  onClick={() => onChangeView("/admin/meta-workspace")}
-                >
-                  Meta Workspace
-                </button>
-              )}
-              {authEnabled && userProfile && (
-                <button
-                  type="button"
-                  className={buttonClassName("/admin/dev-copy")}
-                  onClick={() => onChangeView("/admin/dev-copy")}
-                >
-                  DEV Copy
-                </button>
-              )}
-              {authEnabled && userProfile?.role === "admin" && (
-                <button
-                  type="button"
-                  className={buttonClassName("/admin/engineering")}
-                  onClick={() => {
-                    console.log("[Sidebar] open /admin/engineering");
-                    navigate("/admin/engineering");
-                  }}
-                >
-                  Эффективность
-                </button>
-              )}
-              <button
-                type="button"
-                className={buttonClassName("/onboarding")}
-                onClick={() => onChangeView("onboarding")}
-              >
-                Гид
-              </button>
-            </div>
-          </nav>
-        </div>
-
-        {/* RIGHT */}
-        {authEnabled && userProfile && (
-          <div className="topnav-right">
-            <div className="auth-pill">
-              <div className="auth-user">
-                {userProfile?.username || userProfile?.email || "Пользователь"}
-              </div>
-              <div className="auth-role">{roleLabel}</div>
-            </div>
-            <button type="button" className={`auth-logout ${useCustomHoverLabel ? "custom-cursor-target" : ""}`.trim()} onClick={onLogout}>
-              Выйти
-            </button>
-          </div>
-        )}
-      </div>
-    </header>
-  );
-}
+PS C:\Users\KucherenkoVA2\Documents\etl\table-dependency-viewer\scripts> python .\build_depends_on.py --file C:\Users\KucherenkoVA2\Documents\etl\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\BI_INVESTMENT\dm\investment_budget_performance\sql_query_insert_init.sql --write
+[INFO] Known schemas (12): dds, dict_dds, dict_ods, dict_stg, dm, dm_calc, dm_view, landing, ods, raw_ext, rls, stg
+Traceback (most recent call last):
+  File "C:\Users\KucherenkoVA2\Documents\etl\table-dependency-viewer\scripts\build_depends_on.py", line 280, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\KucherenkoVA2\Documents\etl\table-dependency-viewer\scripts\build_depends_on.py", line 220, in main    data = load_yaml(meta_path)
+  File "C:\Users\KucherenkoVA2\Documents\etl\table-dependency-viewer\scripts\build_depends_on.py", line 117, in load_yaml    return yaml.safe_load(fh) or {}
+           ~~~~~~~~~~~~~~^^^^
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\__init__.py", line 125, in safe_load    return load(stream, SafeLoader)
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\__init__.py", line 81, in load    return loader.get_single_data()
+           ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\constructor.py", line 49, in get_single_data    node = self.get_single_node()
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\composer.py", line 36, in get_single_node    document = self.compose_document()
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\composer.py", line 58, in compose_document    self.get_event()
+    ~~~~~~~~~~~~~~^^
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\parser.py", line 118, in get_event    self.current_event = self.state()
+                         ~~~~~~~~~~^^
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\parser.py", line 193, in parse_document_end    token = self.peek_token()
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\scanner.py", line 129, in peek_token    self.fetch_more_tokens()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\KucherenkoVA2\AppData\Local\Programs\Python\Python313\Lib\site-packages\yaml\scanner.py", line 258, in fetch_more_tokens    raise ScannerError("while scanning for the next token", None,
+            "found character %r that cannot start any token" % ch,
+            self.get_mark())
+yaml.scanner.ScannerError: while scanning for the next tokenfound character '\t' that cannot start any token  in "C:\Users\KucherenkoVA2\Documents\etl\meta_info\database\greenplum\schema_name\tech_etl\etl_loads_entity\BI_INVESTMENT\dm\investment_budget_performance\sql_query_insert_init.sql", line 382, column 1

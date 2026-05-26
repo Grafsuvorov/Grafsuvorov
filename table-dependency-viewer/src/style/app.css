@@ -8269,6 +8269,37 @@ body.custom-hover-label-active * {
   margin-top: 12px;
 }
 
+.meta-workspace-selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.meta-workspace-selection-copy {
+  min-width: 0;
+}
+
+.meta-workspace-selection-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.86);
+}
+
+.meta-workspace-selection-title {
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5eefb;
+  word-break: break-word;
+}
+
 .meta-workspace-pane > .dev-meta-page {
   background: transparent;
   padding: 0;

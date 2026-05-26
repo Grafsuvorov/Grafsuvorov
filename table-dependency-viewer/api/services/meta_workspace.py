@@ -47,7 +47,7 @@ def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "origin"])
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
     output = _run_git(
         git_repo_root,
         ["for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin"],

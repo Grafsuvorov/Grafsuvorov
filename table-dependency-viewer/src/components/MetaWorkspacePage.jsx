@@ -52,6 +52,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [error, setError] = useState(null);
   const [gpOpenRequest, setGpOpenRequest] = useState(null);
   const [clickOpenRequest, setClickOpenRequest] = useState(null);
+  const [activeSelection, setActiveSelection] = useState(null);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
   const groupedGp = useMemo(() => groupGpObjects(branchCatalog.gp_objects), [branchCatalog.gp_objects]);
@@ -136,6 +137,10 @@ export default function MetaWorkspacePage({ userProfile }) {
 
   const openGpObject = (item) => {
     setMode("gp");
+    setActiveSelection({
+      domain: "gp",
+      title: `${item.entity_name} / ${item.schema_name} / ${item.table_name}`,
+    });
     setGpOpenRequest({
       token: `${item.object_key}:${Date.now()}`,
       entity_name: item.entity_name,
@@ -146,10 +151,26 @@ export default function MetaWorkspacePage({ userProfile }) {
 
   const openClickObject = (item) => {
     setMode("click");
+    setActiveSelection({
+      domain: "click",
+      title: `${item.schema_name} / ${item.file_name}`,
+    });
     setClickOpenRequest({
       token: `${item.object_key}:${Date.now()}`,
       schema_name: item.schema_name,
       file_name: item.file_name,
+    });
+  };
+
+  const handleBackToBranchList = () => {
+    setActiveSelection(null);
+    setGpOpenRequest(null);
+    setClickOpenRequest(null);
+    window.requestAnimationFrame(() => {
+      document.getElementById("meta-workspace-branch-browser")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     });
   };
 
@@ -244,7 +265,7 @@ export default function MetaWorkspacePage({ userProfile }) {
           </div>
         </div>
 
-        <div className="meta-workspace-branch-browser">
+        <div className="meta-workspace-branch-browser" id="meta-workspace-branch-browser">
           <div className="meta-workspace-branch-column">
             <div className="section-subtitle">Greenplum</div>
             <div className="meta-workspace-branch-tree">
@@ -309,6 +330,19 @@ export default function MetaWorkspacePage({ userProfile }) {
         </div>
 
         <div className="meta-workspace-pane">
+          {activeSelection ? (
+            <div className="meta-workspace-selection-bar">
+              <button type="button" className="btn btn-ghost" onClick={handleBackToBranchList}>
+                ← К списку веток
+              </button>
+              <div className="meta-workspace-selection-copy">
+                <div className="meta-workspace-selection-label">
+                  {activeSelection.domain === "gp" ? "Открыт GP объект" : "Открыт Click объект"}
+                </div>
+                <div className="meta-workspace-selection-title">{activeSelection.title}</div>
+              </div>
+            </div>
+          ) : null}
           {mode === "gp" ? (
             <EntityDevMetaWorkspace
               userProfile={userProfile}

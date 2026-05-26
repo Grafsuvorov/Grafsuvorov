@@ -1,202 +1,991 @@
-
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=20                                0
-table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 330, in run_endpoint_function
-table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.ca                                ll, **values)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/concurrency.py", line 32, in run_in_threadpool
-table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/to_thread.py", line 63, in run_sync
-table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_i                                n_worker_thread(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
-table-dependency-viewer-api-1  |     return await future
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 1002, in run
-table-dependency-viewer-api-1  |     result = context.run(func, *args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 974, in validat                                e_admin_meta_workspace_branch
-table-dependency-viewer-api-1  |     return validate_meta_workspace_branch(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", l                                ine 214, in validate_meta_workspace_branch
-table-dependency-viewer-api-1  |     engine=engine,
-table-dependency-viewer-api-1  |            ^^^^^^
-table-dependency-viewer-api-1  | NameError: name 'engine' is not defined
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44836 - "GET /api/admin/en                                tity-meta/status HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44842 - "GET /api/admin/en                                tity-meta/reference/entities HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44844 - "POST /auth/audit/                                event HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44838 - "GET /api/admin/en                                tity-meta/catalog HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44840 - "GET /api/admin/me                                ta-workspace/branches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44858 - "GET /api/admin/me                                ta-workspace/branch-catalog?branch_name=DWH-12847&base_branch=main HTTP/1.1" 200                                 OK
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44864 - "POST /api/admin/m                                eta-workspace/validate-all HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | ERROR:    Exception in ASGI application
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
-table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-re                                turns-value]
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /uvicorn/middleware/proxy_headers.py", line 63, in __call__
-table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/applications.py", line 1159, in __call__
-table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send                                )
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/applications.py", line 90, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive,                                 send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/errors.py", line 186, in __call__
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/errors.py", line 164, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 191, in __call__
-table-dependency-viewer-api-1  |     with recv_stream, send_stream, collapse_exc                                groups():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/contextlib.py                                ", line 158, in __exit__
-table-dependency-viewer-api-1  |     self.gen.throw(typ, value, traceback)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_utils.py", line 87, in collapse_excgroups
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 193, in __call__
-table-dependency-viewer-api-1  |     response = await self.dispatch_func(request                                , call_next)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_mi                                ddleware
-table-dependency-viewer-api-1  |     return await call_next(request)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 168, in call_next
-table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app                                _exc.__context__
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 144, in coro
-table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect                                , send_no_error)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/cors.py", line 96, in __call__
-table-dependency-viewer-api-1  |     await self.simple_response(scope, receive,                                 send, request_headers=headers)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/cors.py", line 154, in simple_response
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/exceptions.py", line 63, in __call__
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app                                , conn)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/middleware/asyncexitstack.py", line 18, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 660, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive,                                 send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 680, in app
-table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 276, in handle
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 134, in app
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, req                                uest)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 120, in app
-table-dependency-viewer-api-1  |     response = await f(request)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 674, in app
-table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 330, in run_endpoint_function
-table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.ca                                ll, **values)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/concurrency.py", line 32, in run_in_threadpool
-table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/to_thread.py", line 63, in run_sync
-table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_i                                n_worker_thread(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
-table-dependency-viewer-api-1  |     return await future
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 1002, in run
-table-dependency-viewer-api-1  |     result = context.run(func, *args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 974, in validat                                e_admin_meta_workspace_branch
-table-dependency-viewer-api-1  |     return validate_meta_workspace_branch(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", l                                ine 214, in validate_meta_workspace_branch
-table-dependency-viewer-api-1  |     engine=engine,
-table-dependency-viewer-api-1  |            ^^^^^^
-table-dependency-viewer-api-1  | NameError: name 'engine' is not defined
-table-dependency-viewer-api-1  | INFO:     172.22.0.3:44880 - "POST /api/admin/m                                eta-workspace/validate-all HTTP/1.1" 500 Internal Server Error
-table-dependency-viewer-api-1  | ERROR:    Exception in ASGI application
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /uvicorn/protocols/http/httptools_impl.py", line 421, in run_asgi
-table-dependency-viewer-api-1  |     result = await app(  # type: ignore[func-re                                turns-value]
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /uvicorn/middleware/proxy_headers.py", line 63, in __call__
-table-dependency-viewer-api-1  |     return await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/applications.py", line 1159, in __call__
-table-dependency-viewer-api-1  |     await super().__call__(scope, receive, send                                )
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/applications.py", line 90, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive,                                 send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/errors.py", line 186, in __call__
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/errors.py", line 164, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, _send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 191, in __call__
-table-dependency-viewer-api-1  |     with recv_stream, send_stream, collapse_exc                                groups():
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/contextlib.py                                ", line 158, in __exit__
-table-dependency-viewer-api-1  |     self.gen.throw(typ, value, traceback)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_utils.py", line 87, in collapse_excgroups
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 193, in __call__
-table-dependency-viewer-api-1  |     response = await self.dispatch_func(request                                , call_next)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/auth.py", line 817, in auth_mi                                ddleware
-table-dependency-viewer-api-1  |     return await call_next(request)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 168, in call_next
-table-dependency-viewer-api-1  |     raise app_exc from app_exc.__cause__ or app                                _exc.__context__
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/base.py", line 144, in coro
-table-dependency-viewer-api-1  |     await self.app(scope, receive_or_disconnect                                , send_no_error)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/cors.py", line 96, in __call__
-table-dependency-viewer-api-1  |     await self.simple_response(scope, receive,                                 send, request_headers=headers)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/cors.py", line 154, in simple_response
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/middleware/exceptions.py", line 63, in __call__
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(self.app                                , conn)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/middleware/asyncexitstack.py", line 18, in __call__
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 660, in __call__
-table-dependency-viewer-api-1  |     await self.middleware_stack(scope, receive,                                 send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 680, in app
-table-dependency-viewer-api-1  |     await route.handle(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/routing.py", line 276, in handle
-table-dependency-viewer-api-1  |     await self.app(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 134, in app
-table-dependency-viewer-api-1  |     await wrap_app_handling_exceptions(app, req                                uest)(scope, receive, send)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 53, in wrapped_app
-table-dependency-viewer-api-1  |     raise exc
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/_exception_handler.py", line 42, in wrapped_app
-table-dependency-viewer-api-1  |     await app(scope, receive, sender)
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 120, in app
-table-dependency-viewer-api-1  |     response = await f(request)
-table-dependency-viewer-api-1  |                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 674, in app
-table-dependency-viewer-api-1  |     raw_response = await run_endpoint_function(
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /fastapi/routing.py", line 330, in run_endpoint_function
-table-dependency-viewer-api-1  |     return await run_in_threadpool(dependant.ca                                ll, **values)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /starlette/concurrency.py", line 32, in run_in_threadpool
-table-dependency-viewer-api-1  |     return await anyio.to_thread.run_sync(func)
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/to_thread.py", line 63, in run_sync
-table-dependency-viewer-api-1  |     return await get_async_backend().run_sync_i                                n_worker_thread(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^                                ^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 2518, in run_sync_in_worker_thread
-table-dependency-viewer-api-1  |     return await future
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages                                /anyio/_backends/_asyncio.py", line 1002, in run
-table-dependency-viewer-api-1  |     result = context.run(func, *args)
-table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 974, in validat                                e_admin_meta_workspace_branch
-table-dependency-viewer-api-1  |     return validate_meta_workspace_branch(
-table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/services/meta_workspace.py", l                                ine 214, in validate_meta_workspace_branch
-table-dependency-viewer-api-1  |     engine=engine,
-table-dependency-viewer-api-1  |            ^^^^^^
-table-dependency-viewer-api-1  | NameError: name 'engine' is not defined
+drop table if exists base;
+create temporary table base on commit drop as (
+    select
+		-- общие признаки
+  		ddp.delivery_code as initial_delivery_code,																									-- Поставки завода производителя, код LE.000600
+ 		ddp.material_code,
+ 		mt.material_name,
+  		ddp.delivery_position_line_item_code as initial_delivery_item_code,																			-- Поставки завода производителя, позиция LE.000601
+ 		fd.sales_order_in_shipment as sales_order_code, 																							-- Заказ ЦК LE.000694
+		zle_1431_fraht.expense_code as expense_account_code, 								-- Статья затрат (код) LE.000740
+		zle_1431_fraht.service_code as service_account_code,
+		treate.expense_account_name as expense_account_name, 																						-- Статья затрат (наименование) LE.000741
+		concat_ws('-', zle_1431_fraht.expense_code, treate.expense_account_name) as expense_account_search_name, 									-- Статья затрат (связка) LE.000742
+		concat_ws('-', ddp.plant_producer_code, pas.plant_short_name) as plant_producer_search_name,												-- Завод (связка) LE.000604
+ 	 	sabu.sales_bundle_code as sales_bundle_code,																								-- ID химии LE.000739
+		zle_1431_fraht.usd_currency_code as expense_translated_currency_code,																		-- Валюта затраты USD LE.000744
+		concat_ws('-', zle_1431_fraht.expense_position_code, zle_1431_fraht.expense_name) as expense_group_search_name,								-- Группа затрат (связка) LE.000747
+		zle_1431_fraht.purchase_contract_code as transportation_service_contract_code,  -- Договор затраты LE.000748
+		zle_1431_fraht.transportation_scheme_code as transportation_scheme_code,
+		sabu.sales_bundle_gross_weight / 1000 as sales_bundle_gross_weight,		-- Вес брутто пакета LE.000759
+		sabu.sales_bundle_net_weight / 1000 as sales_bundle_net_weight,   -- Вес нетто пакета LE.000760
+		zle_1431_fraht.expense_per_ton_amount as expense_per_ton_usd_amount,																		-- Сумма в USD на тонну LE.000743
+		zle_1431_fraht.expense_per_ton_amount * sabu.sales_bundle_gross_weight / 1000 as total_expense_per_gross_weight_usd_amount, 				-- Сумма в USD на вес брутто пакета LE.000762
+		zle_1431_fraht.expense_per_ton_amount * sabu.sales_bundle_net_weight / 1000 as total_expense_per_net_weight_usd_amount,						-- Сумма в USD на вес нетто пакета LE.000761
+        sum(sabu.sales_bundle_gross_weight) over wind as sum_sales_bundle_gross_weight,
+		sum(sabu.sales_bundle_net_weight) over wind as sum_sales_bundle_net_weight,
+		sabu.sales_bundle_gross_weight as sales_bundle_gross_weight_nedelen,
+		sabu.sales_bundle_net_weight as sales_bundle_net_weight_nedelen
+ 
+	from dds.delivery_document_position as ddp
+ 		left join dict_dds.material_texts as mt
+			on mt.material_code = ddp.material_code
+	  		and mt.language_code = 'R'
+	  		and mt.deleted_flag = false
+		left join dict_dds.plant_and_subsidiary	as pas
+			on pas.plant_code = ddp.plant_producer_code
+			and pas.deleted_flag = false
+		left join ods.map_transportation_expenses_keys_ral as zle_1431_fraht on
+			zle_1431_fraht.delivery_code = ddp.delivery_code
+			and zle_1431_fraht.deleted_flag = false
+			and zle_1431_fraht.expense_type_code in ('1', '3')
+		left join dds.sales_batch_delivery as fd
+			on fd.delivery_number_of_plant_producer = ddp.delivery_code
+			and fd.delivery_item_number_of_plant_producer = ddp.delivery_position_line_item_code
+			and fd.batch_code = ddp.batch_code
+			and fd.is_not_valid_for_reporting = false
+			and fd.deleted_flag = false
+		left join dds.sales_bundle as sabu on
+			sabu.delivery_reference_code =  ddp.delivery_code || ddp.delivery_position_line_item_code
+			and sabu.deleted_flag = false
+		left join dict_dds.transportation_expense_account_texts as treate on
+			treate.expense_account_code = zle_1431_fraht.expense_code
+			and treate.language_code = 'R'
+			and treate.deleted_flag = false
+where ddp.deleted_flag = false
+window wind as (partition by ddp.delivery_code, ddp.delivery_position_line_item_code, fd.sales_order_in_shipment, zle_1431_fraht.expense_code, zle_1431_fraht.service_code)
+)
+distributed by (initial_delivery_code);
+ 
+drop table if exists punct_1;
+create temporary table punct_1 on commit drop as (
+select
+		-- общие признаки
+  		pre_1.initial_delivery_code,																									-- Поставки завода производителя, код LE.000600
+ 		pre_1.initial_delivery_item_code,																			-- Поставки завода производителя, позиция LE.000601
+ 		pre_1.sales_order_code, 																							-- Заказ ЦК LE.000694
+		pre_1.expense_account_code, 								-- Статья затрат (код) LE.000740
+		pre_1.expense_account_name, 																						-- Статья затрат (наименование) LE.000741
+		pre_1.expense_account_search_name, 									-- Статья затрат (связка) LE.000742
+		pre_1.plant_producer_search_name,												-- Завод (связка) LE.000604
+		pre_1.service_account_code,
+ 	 	concat_ws('-', ddh.transport_type_code, ttt.transport_transfer_type_name_rus) as transport_type_search_name,								-- Тип ПС (связка) LE.000610
+ 	 	ddh.vehicle_code as transport_vehicle_code,		  																							-- Номер вагона LE.000611
+ 	 	ddh.transport_bill_code,																													-- Номер транспортной накладной LE.000612
+ 	 	concat_ws('-', ddh.transport_bill_code, ddh.vehicle_code) as transport_bill_and_railcar_uni_code, 											-- Склейка Ж/д Накладная - №Вагона LE.000613
+ 	 	concat_ws('-', k3.etsng_code, et.etsng_name_rus) as etsng_search_name,																		-- Код ЕТСНГ (связка) LE.000633
+ 	 	concat_ws('-', pre_1.material_code, pre_1.material_name) as material_search_name,																-- Материал (связка) LE.000637
+ 	 	concat_ws('-', ms.shape_code, st.material_shape_full_name) as shape_search_name,															-- Форма груза (связка) LE.000641
+		 case
+			when mm.sector_code = '03'
+				then concat_ws('-', '01', us.sector_name)
+			else concat_ws('-', mm.sector_code,	us.sector_name)
+		end as sector_search_name,																													-- Сектор - группа материалов (связка) , замена k3 на s LE.000644
+		concat_ws('-', ms.grade_rusal_code, grt.grade_rusal_name) as grade_search_name,																-- Марка металла (связка) LE.000647
+		concat_ws('-', k3.transport_subtype_code, tvtyt.transport_subtype_name) as transport_subtype_search_name,													-- Вид ПС (связка) LE.000730
+		pre_1.sales_bundle_code,																								-- ID химии LE.000739
+		pre_1.expense_translated_currency_code,																		-- Валюта затраты USD LE.000744
+		pre_1.expense_group_search_name,								-- Группа затрат (связка) LE.000747
+		pre_1.transportation_service_contract_code,																-- Договор затраты LE.000748
+		concat_ws('-', pre_1.transportation_scheme_code, trsc.transportation_scheme_name) as transportation_scheme_search_name, 			-- Схема транспортировки (связка) LE.000752
+		concat_ws('-', trsc.transportation_scheme_type_code, trsstt.transportation_scheme_type_name) as transportation_scheme_type_search_name,		-- Тип схемы транспортировки (связка) LE.000755
+		concat_ws('-', trsc.transportation_scheme_subtype_code, trscst.transportation_scheme_subtype_name) as transportation_scheme_subtype_search_name, -- Подтип схемы транспортировки (связка) LE.000758
+		pre_1.sales_bundle_gross_weight,																		-- Вес брутто пакета LE.000759
+		pre_1.sales_bundle_net_weight, 																			-- Вес нетто пакета LE.000760
+		pre_1.expense_per_ton_usd_amount,																		-- Сумма в USD на тонну LE.000743
+		pre_1.total_expense_per_gross_weight_usd_amount,     				-- Сумма в USD на вес брутто пакета LE.000762
+		pre_1.total_expense_per_net_weight_usd_amount,						-- Сумма в USD на вес нетто пакета LE.000761
+		pre_1.sum_sales_bundle_gross_weight,
+		pre_1.sum_sales_bundle_net_weight,
+		pre_1.sales_bundle_gross_weight_nedelen,
+		pre_1.sales_bundle_net_weight_nedelen
+from base as pre_1
+		join dm_calc.is_relevant_transportation_aluminium_shipment_from_plant as ietasfp
+			on ietasfp.initial_delivery_code = pre_1.initial_delivery_code
+			and ietasfp.initial_delivery_item_code = pre_1.initial_delivery_item_code
+			and ietasfp.is_relevant_transportation_aluminium_shipment_from_plant is not null
+			and ietasfp.deleted_flag = false
+		join dds.delivery_document_header as ddh
+			on ddh.delivery_code = pre_1.initial_delivery_code
+			and ddh.deleted_flag = false
+		left join dict_dds.transport_transfer_type as ttt
+			on ttt.transport_transfer_type_code = ddh.transport_type_code
+			and ttt.deleted_flag = false
+		left join ods.map_delivery_document_attributes_keys_ral as k3
+			on k3.delivery_code = pre_1.initial_delivery_code
+			and k3.deleted_flag = false
+		left join dict_dds.etsng as et
+			on et.etsng_code = k3.etsng_code
+			and et.deleted_flag = false
+	    left join dict_dds.material_specification as ms
+			on ms.material_code = pre_1.material_code
+			and ms.deleted_flag = false
+		left join dict_dds.material_shape_texts as st
+			on st.shape_code = ms.shape_code
+			and st.language_code = 'R'
+			and st.deleted_flag = false
+		left join dict_dds.material as mm
+			on mm.material_code = pre_1.material_code
+			and mm.deleted_flag = false
+		left join dict_dds.sales_sector_texts as us
+			on us.sector_code = case
+									when mm.sector_code = '03'
+										then '01'
+									else mm.sector_code
+								end
+			and us.deleted_flag = false
+			and us.language_code = 'R'
+		left join dict_dds.grade_rusal_texts as grt
+			on grt.grade_rusal_code = ms.grade_rusal_code
+			and grt.language_code = 'R'
+			and grt.deleted_flag = false 
+		left join dict_dds.transportation_scheme as trsc on
+			trsc.transportation_scheme_code = pre_1.transportation_scheme_code
+			and trsc.deleted_flag = false
+		left join dict_dds.transport_subtype_texts as tvtyt
+			on tvtyt.transport_subtype_code = k3.transport_subtype_code
+			and tvtyt.language_code = 'R'
+			and tvtyt.deleted_flag = false
+		left join dict_dds.transportation_scheme_type_texts as trsstt on
+			trsstt.transportation_scheme_type_code = trsc.transportation_scheme_type_code
+			and trsstt.language_code = 'R'
+			and trsstt.deleted_flag = false
+		left join dict_dds.transportation_scheme_subtype_texts as trscst on
+			trscst.transportation_scheme_subtype_code = trsc.transportation_scheme_subtype_code
+			and trscst.language_code = 'R'
+			and trscst.deleted_flag = false
+)
+distributed by (sales_bundle_code); 
+ 
+drop table if exists punct_ck;
+	create temporary table punct_ck on commit drop
+	as (
+	select
+	    sales_bundle_code,
+	    sales_order_code,
+	    sales_bundle_gross_weight_nedelen,
+	    sales_bundle_net_weight_nedelen
+	from
+	    punct_1
+	group by
+	    sales_bundle_code,
+	    sales_order_code,
+	    sales_bundle_gross_weight_nedelen,
+	    sales_bundle_net_weight_nedelen)
+	distributed by (sales_bundle_code);
+	
+ 
+drop table if exists pre_2;
+	create temporary table pre_2 on commit drop as (
+	select
+	        -- общие признаки
+	        pre_2.initial_delivery_code,                                                                                                    -- Поставки завода производителя, код LE.000600
+	        pre_2.initial_delivery_item_code,                                                                            -- Поставки завода производителя, позиция LE.000601
+	        punct_ck.sales_order_code,                                                                                             -- Заказ ЦК LE.000694
+	        pre_2.expense_account_code,                                 -- Статья затрат (код) LE.000740
+	        pre_2.expense_account_name,                                                                                         -- Статья затрат (наименование) LE.000741
+	        pre_2.expense_account_search_name,                                     -- Статья затрат (связка) LE.000742
+	        pre_2.plant_producer_search_name,                -- Завод (связка) LE.000604
+	        pre_2.material_code,
+	        pre_2.service_account_code,
+	        concat_ws('-', pre_2.material_code, pre_2.material_name) as material_search_name,                                                                -- Материал (связка) LE.000637
+	        sbadr.sales_bundle_code,                                                                                                                    -- ID химии LE.000739
+	        pre_2.expense_translated_currency_code,                                                                        -- Валюта затраты USD LE.000744
+	        pre_2.expense_group_search_name,                                -- Группа затрат (связка) LE.000747
+	        pre_2.transportation_service_contract_code,                                                                -- Договор затраты LE.000748
+	        pre_2.transportation_scheme_code,
+	        punct_ck.sales_bundle_gross_weight_nedelen / 1000 as sales_bundle_gross_weight,                                                                        -- Вес брутто пакета LE.000759
+	        punct_ck.sales_bundle_net_weight_nedelen / 1000 as sales_bundle_net_weight,                                                                             -- Вес нетто пакета LE.000760
+	        pre_2.expense_per_ton_usd_amount,                                                                        -- Сумма в USD на тонну LE.000743
+	        pre_2.expense_per_ton_usd_amount * punct_ck.sales_bundle_gross_weight_nedelen / 1000 as total_expense_per_gross_weight_usd_amount,                 -- Сумма в USD на вес брутто пакета LE.000762
+	        pre_2.expense_per_ton_usd_amount * punct_ck.sales_bundle_net_weight_nedelen / 1000 as total_expense_per_net_weight_usd_amount,                        -- Сумма в USD на вес нетто пакета LE.000761
+	        sum(punct_ck.sales_bundle_gross_weight_nedelen) over wind as sum_sales_bundle_gross_weight,
+	        sum(punct_ck.sales_bundle_net_weight_nedelen) over wind as sum_sales_bundle_net_weight
+	from base as pre_2
+	        join dm_calc.is_metal_transshipped_in_container as imtic
+	            on imtic.initial_delivery_code = pre_2.initial_delivery_code
+	            and imtic.is_metal_transshipped_in_container_code is not null
+	            and imtic.deleted_flag = false
+	        left join dds.sales_bundle_and_delivery_relationship as sbadr on
+	            sbadr.delivery_code = pre_2.initial_delivery_code
+	            and sbadr.delivery_position_code = pre_2.initial_delivery_item_code
+	            and sbadr.deleted_flag = false
+	        join punct_ck
+	            on punct_ck.sales_bundle_code = sbadr.sales_bundle_code
+	       
+	window wind as (partition by pre_2.initial_delivery_code, pre_2.initial_delivery_item_code, punct_ck.sales_order_code, pre_2.expense_account_code, pre_2.service_account_code)
+	)
+	distributed by (sales_bundle_code); 
+	
+drop table if exists base;
+drop table if exists punct_ck;
+	
+drop table if exists punct_2;
+	create temporary table punct_2 on commit drop as (
+	select
+	        -- общие признаки
+	          pre_2.initial_delivery_code,                                                                                                    -- Поставки завода производителя, код LE.000600
+	         pre_2.initial_delivery_item_code,                                                                            -- Поставки завода производителя, позиция LE.000601
+	         pre_2.sales_order_code,                                                                                             -- Заказ ЦК LE.000694
+	        pre_2.expense_account_code,                                 -- Статья затрат (код) LE.000740
+	        pre_2.expense_account_name,                                                                                         -- Статья затрат (наименование) LE.000741
+	        pre_2.expense_account_search_name,                                     -- Статья затрат (связка) LE.000742
+	        pre_2.plant_producer_search_name,                                                -- Завод (связка) LE.000604
+	        pre_2.service_account_code,
+	          concat_ws('-', ddh.transport_type_code, ttt.transport_transfer_type_name_rus) as transport_type_search_name,                                -- Тип ПС (связка) LE.000610
+	          ddh.vehicle_code as transport_vehicle_code,                                                                                                      -- Номер вагона LE.000611
+	          ddh.transport_bill_code,                                                                                                            -- Номер транспортной накладной LE.000612
+	          concat_ws('-', ddh.transport_bill_code, ddh.vehicle_code) as transport_bill_and_railcar_uni_code,                                             -- Склейка Ж/д Накладная - №Вагона LE.000613
+	          concat_ws('-', k3.etsng_code, et.etsng_name_rus) as etsng_search_name,                                                                        -- Код ЕТСНГ (связка) LE.000633
+	          pre_2.material_search_name,                                                                -- Материал (связка) LE.000637
+	          concat_ws('-', ms.shape_code, st.material_shape_full_name) as shape_search_name,                                                            -- Форма груза (связка) LE.000641
+	         case
+	            when mm.sector_code = '03'
+	                then concat_ws('-', '01', us.sector_name)
+	            else concat_ws('-', mm.sector_code,    us.sector_name)
+	        end as sector_search_name,                                                                                                                    -- Сектор - группа материалов (связка) , замена k3 на s LE.000644
+	        concat_ws('-', ms.grade_rusal_code, grt.grade_rusal_name) as grade_search_name,                                                                -- Марка металла (связка) LE.000647
+	        concat_ws('-', k3.transport_subtype_code, tvtyt.transport_subtype_name) as transport_subtype_search_name,                                                    -- Вид ПС (связка) LE.000730
+	        pre_2.sales_bundle_code,                                                                                                                    -- ID химии LE.000739
+	        pre_2.expense_translated_currency_code,                                                                        -- Валюта затраты USD LE.000744
+	        pre_2.expense_group_search_name,                                -- Группа затрат (связка) LE.000747
+	        pre_2.transportation_service_contract_code,                                                                -- Договор затраты LE.000748
+	        concat_ws('-', pre_2.transportation_scheme_code, trsc.transportation_scheme_name) as transportation_scheme_search_name,             -- Схема транспортировки (связка) LE.000752
+	        concat_ws('-', trsc.transportation_scheme_type_code, trsstt.transportation_scheme_type_name) as transportation_scheme_type_search_name,        -- Тип схемы транспортировки (связка) LE.000755
+	        concat_ws('-', trsc.transportation_scheme_subtype_code, trscst.transportation_scheme_subtype_name) as transportation_scheme_subtype_search_name, -- Подтип схемы транспортировки (связка) LE.000758
+	        pre_2.sales_bundle_gross_weight,                                                                        -- Вес брутто пакета LE.000759
+	        pre_2.sales_bundle_net_weight,                                                                             -- Вес нетто пакета LE.000760
+	        pre_2.expense_per_ton_usd_amount,                                                                        -- Сумма в USD на тонну LE.000743
+	        pre_2.total_expense_per_gross_weight_usd_amount,                 -- Сумма в USD на вес брутто пакета LE.000762
+	        pre_2.total_expense_per_net_weight_usd_amount,                        -- Сумма в USD на вес нетто пакета LE.000761
+	        pre_2.sum_sales_bundle_gross_weight,
+	        pre_2.sum_sales_bundle_net_weight
+	from pre_2
+	        join dds.delivery_document_header as ddh
+	            on ddh.delivery_code = pre_2.initial_delivery_code
+	            and ddh.deleted_flag = false
+	        left join dict_dds.transport_transfer_type as ttt
+	            on ttt.transport_transfer_type_code = ddh.transport_type_code
+	            and ttt.deleted_flag = false
+	        left join ods.map_delivery_document_attributes_keys_ral as k3
+	            on k3.delivery_code = pre_2.initial_delivery_code
+	            and k3.deleted_flag = false
+	        left join dict_dds.etsng as et
+	            on et.etsng_code = k3.etsng_code
+	            and et.deleted_flag = false
+	        left join dict_dds.material_specification as ms
+	            on ms.material_code = pre_2.material_code
+	            and ms.deleted_flag = false
+	        left join dict_dds.material_shape_texts as st
+	            on st.shape_code = ms.shape_code
+	            and st.language_code = 'R'
+	            and st.deleted_flag = false
+	        left join dict_dds.material as mm
+	            on mm.material_code = pre_2.material_code
+	            and mm.deleted_flag = false
+	        left join dict_dds.sales_sector_texts as us
+	            on us.sector_code = case
+	                                    when mm.sector_code = '03'
+	                                        then '01'
+	                                    else mm.sector_code
+	                                end
+	            and us.deleted_flag = false
+	            and us.language_code = 'R'
+	        left join dict_dds.grade_rusal_texts as grt
+	            on grt.grade_rusal_code = ms.grade_rusal_code
+	            and grt.language_code = 'R'
+	            and grt.deleted_flag = false 
+	        left join dict_dds.transportation_scheme as trsc on
+	            trsc.transportation_scheme_code = pre_2.transportation_scheme_code
+	            and trsc.deleted_flag = false
+	        left join dict_dds.transport_subtype_texts as tvtyt
+	            on tvtyt.transport_subtype_code = k3.transport_subtype_code
+	            and tvtyt.language_code = 'R'
+	            and tvtyt.deleted_flag = false
+	        left join dict_dds.transportation_scheme_type_texts as trsstt on
+	            trsstt.transportation_scheme_type_code = trsc.transportation_scheme_type_code
+	            and trsstt.language_code = 'R'
+	            and trsstt.deleted_flag = false
+	        left join dict_dds.transportation_scheme_subtype_texts as trscst on
+	            trscst.transportation_scheme_subtype_code = trsc.transportation_scheme_subtype_code
+	            and trscst.language_code = 'R'
+	            and trscst.deleted_flag = false
+	)
+	distributed by (sales_bundle_code); 
+	
+drop table if exists pre_2;
+ 
+drop table if exists adrc;
+create temporary table adrc on commit drop as ( -- убираются дубли для поля склада
+select
+	address_code,
+	min(country_code) as country_code
+from
+	dict_dds.address
+group by
+	address_code
+	)
+distributed replicated;
+	
+drop table if exists bu_table;
+create temporary table bu_table on commit drop as (
+ 
+select
+sales_bundle_code, service_code,
+min(transportation_service_invoice_code) as transportation_service_invoice_code,
+min(transportation_service_invoice_position_code) as transportation_service_invoice_position_code,
+min(transportation_service_invoice_subposition_code) as transportation_service_invoice_subposition_code,
+min(plant_code) as plant_code,
+min(plant_name) as plant_name,
+min(plant_search_name) as plant_search_name,
+min(unit_balance_code) as unit_balance_code,
+min(unit_balance_name) as unit_balance_name,
+min(unit_balance_search_name) as unit_balance_search_name,
+sum(transportation_service_invoice_sec_lcl_curr_vat_ex_amount) as transportation_service_invoice_sec_lcl_curr_vat_ex_amount,
+min(second_local_currency_code) as second_local_currency_code,
+sum(transportation_service_invoice_sec_lcl_curr_vat_in_amount) as transportation_service_invoice_sec_lcl_curr_vat_in_amount,
+min(purchase_contract_code) as purchase_contract_code,
+min(sales_bundle_net_weight) as sales_bundle_net_weight,
+min(transport_bill_code) as transport_bill_code,
+min(vehicle_code) as vehicle_code,
+min(etsng_search_name) as etsng_search_name,
+min(material_search_name) as material_search_name,
+min(transportation_expenses_write_off_delivery_code) as transportation_expenses_write_off_delivery_code,
+min(creditor_search_name) as creditor_search_name,
+min(supplier_account_code) as supplier_account_code,
+min(sales_bundle_gross_weight) as sales_bundle_gross_weight
+from dm_calc.transportation_service_invoice_by_sales_bundle as base
+ 
+where base.sales_bundle_code in (select distinct sales_bundle_code from punct_1 union all select distinct sales_bundle_code from punct_2)
+and base.assignment_type_code <> 'Г'
+group by sales_bundle_code, service_code
+)
+distributed by (sales_bundle_code);
+ 
+ 
+ 
+drop table if exists p_1_for_bu;
+create temp table p_1_for_bu on commit drop as (
+select sales_bundle_code,
+min(sales_order_code) as sales_order_code,
+min(transport_type_search_name) as transport_type_search_name,
+min(sector_search_name) as sector_search_name,
+min(grade_search_name) as grade_search_name,
+min(expense_translated_currency_code) as expense_translated_currency_code,
+min(expense_group_search_name) as expense_group_search_name,
+min(transportation_scheme_search_name) as transportation_scheme_search_name,
+min(transportation_scheme_type_search_name) as transportation_scheme_type_search_name,
+min(transportation_scheme_subtype_search_name) as transportation_scheme_subtype_search_name,
+min(transportation_service_contract_code) as transportation_service_contract_code,
+min(expense_account_code) as expense_account_code,
+min(transport_subtype_search_name) as transport_subtype_search_name,
+min(material_search_name) as material_search_name,
+min(shape_search_name) as shape_search_name,
+min(sales_bundle_gross_weight) as sales_bundle_gross_weight,
+min(sales_bundle_net_weight) as sales_bundle_net_weight
+from punct_1
+where sales_bundle_code in (select sales_bundle_code from bu_table)
+group by sales_bundle_code
+) distributed by (sales_order_code);
+ 
+ 
+ 
+drop table if exists p_2_for_bu;
+create temp table p_2_for_bu on commit drop as (
+select sales_bundle_code,
+min(sales_order_code) as sales_order_code,
+min(transport_type_search_name) as transport_type_search_name,
+min(sector_search_name) as sector_search_name,
+min(grade_search_name) as grade_search_name,
+min(expense_translated_currency_code) as expense_translated_currency_code,
+min(expense_group_search_name) as expense_group_search_name,
+min(transportation_scheme_search_name) as transportation_scheme_search_name,
+min(transportation_scheme_type_search_name) as transportation_scheme_type_search_name,
+min(transportation_scheme_subtype_search_name) as transportation_scheme_subtype_search_name,
+min(transportation_service_contract_code) as transportation_service_contract_code,
+min(expense_account_code) as expense_account_code,
+min(transport_subtype_search_name) as transport_subtype_search_name,
+min(material_search_name) as material_search_name,
+min(shape_search_name) as shape_search_name,
+min(sales_bundle_gross_weight) as sales_bundle_gross_weight,
+min(sales_bundle_net_weight) as sales_bundle_net_weight
+from punct_2
+where sales_bundle_code in (select sales_bundle_code from bu_table)
+group by sales_bundle_code
+) distributed by (sales_order_code);
+ 
+ 
+drop table if exists hranenie;
+create temporary table hranenie on commit drop as (
+with tmp as (
+select base.sales_bundle_code, base.warehouse_code, base.dt_report, min(base.storage_cost_calculated_amount) as storage_cost_calculated_amount,
+min(base.delivery_for_storage_calculation_code) as delivery_for_storage_calculation_code,
+lpad(min(base.delivery_position_for_storage_calculation_code), 6, '0') as delivery_position_for_storage_calculation_code,
+min(zsrvpost.transportation_service_name) as service_name,
+min(base.receiving_plant_code) as receiving_plant_code,
+min(pas.plant_full_name) as receiving_plant_name,
+min(base.receiving_plant_code) || '-' || min(pas.plant_full_name) as receiving_plant_search_name,
+min(base.transport_bill_code) as transport_bill_code,
+min(base.uni) as uni,
+min(base.etsng_code) || '-' || min(ette.etsng_name) as etsng_search_name,
+min(base.material_code) || '-' || min(matet.material_name) as material_search_name,
+min(base.material_shape_code) || '-' || min(mf.material_shape_full_name) as material_shape_search_name,
+min(base.creditor_in_shipment_instruction_code) || '-' || min(addr_8.address_full_name) as creditor_in_shipment_instruction_search_name,
+min(base.purchase_contract_code) as purchase_contract_code,
+min(base.sales_bundle_gross_weight) as sales_bundle_gross_weight,
+min(railcar_code) as railcar_code,
+min(base.sales_bundle_net_weight) as sales_bundle_net_weight,
+min(base.warehouse_code) || '-' || min(trht_3.transport_hub_name) as warehouse_search_name,
+min(base.forwarder_code) || '-' || min(counter.counterparty_short_name) as forwarder_search_name,
+row_number() over(partition by base.sales_bundle_code, base.warehouse_code order by base.dt_report desc) as rn
+from dm_calc.storage_sales_bundles_amount as base
+	
+	left join dict_dds.plant_and_subsidiary as pas on
+		pas.plant_code = base.receiving_plant_code
+	left join dict_dds.material_texts as matet on
+		matet.material_code = base.material_code
+		and matet.language_code = 'R'
+	left join dict_dds.material_specification as dd_ms_s_n on
+		dd_ms_s_n.material_code = base.material_code
+	left join dict_dds.material_shape_texts as mf on
+		mf.shape_code = dd_ms_s_n.shape_code
+		and mf.language_code = 'R'
+	left join dict_dds.counterparty as counter on
+		counter.counterparty_code = base.forwarder_code
+ 
+	left join dict_dds.transportation_service_texts as zsrvpost on
+		zsrvpost.transportation_service_code = base.service_code
+		and zsrvpost.language_code = 'R'
+	left join dict_dds.etsng_texts as ette on
+		ette.etsng_code = base.etsng_code
+		and ette.language_code = 'R'
+	left join dict_dds.counterparty as counter_2 on
+		counter_2.counterparty_code = base.creditor_in_shipment_instruction_code
+ 
+	left join dict_dds.address as addr_8 on
+		addr_8.address_code = counter_2.address_code
+		and addr_8.international_display_format_code is null
+	
+--		and base.dt_report = '2025-12-05' --current_date
+	left join dict_dds.transport_hub as trhu on
+		trhu.transport_hub_code = base.warehouse_code
+	left join adrc as adrc on
+		adrc.address_code = trhu.address_code
+	left join dict_dds.country_texts as cotex on
+		cotex.country_code = adrc.country_code
+		and cotex.language_code = 'R'
+	left join dict_dds.transport_hub_texts as trht_3 on
+		trht_3.language_code = case when cotex.country_full_name = 'Россия' then 'R' else 'E' end
+		and trht_3.transport_hub_code = base.warehouse_code
+where base.sales_bundle_code in (select sales_bundle_code from punct_1 union all select sales_bundle_code from punct_2)
+	and base.warehouse_code is not null
+	and coalesce(storage_cost_calculated_amount, 0) > 0
+	
+	group by base.sales_bundle_code, base.warehouse_code, base.dt_report
+	)
+	
+select sales_bundle_code, warehouse_code, dt_report, storage_cost_calculated_amount, delivery_for_storage_calculation_code, delivery_position_for_storage_calculation_code,
+service_name, receiving_plant_code, receiving_plant_name, receiving_plant_search_name, transport_bill_code, uni, etsng_search_name, material_search_name,
+material_shape_search_name, creditor_in_shipment_instruction_search_name, purchase_contract_code, sales_bundle_gross_weight, railcar_code,
+sales_bundle_net_weight, warehouse_search_name, forwarder_search_name
+from tmp where rn = 1
+) distributed by (sales_bundle_code); 
+	
+drop table if exists adrc;
+ 
+drop table if exists pre_un;
+create temp table pre_un on commit drop as (
+ 
+with tmp as (
+		select
+		null as is_base_code,
+		hranenie.warehouse_code, hranenie.dt_report,
+		hranenie.delivery_for_storage_calculation_code as initial_delivery_code,
+	    hranenie.delivery_position_for_storage_calculation_code as initial_delivery_item_code,
+	    punct_1.sales_order_code,
+	    'STRGE' as expense_account_code,
+	    hranenie.service_name as expense_account_name,
+	    'STRGE' || '-' || hranenie.service_name as expense_account_search_name,
+	    hranenie.receiving_plant_search_name as plant_producer_search_name,
+	    punct_1.transport_type_search_name,
+	    hranenie.railcar_code as transport_vehicle_code,
+	    hranenie.transport_bill_code,
+	    hranenie.uni as transport_bill_and_railcar_uni_code,
+	    hranenie.etsng_search_name,
+	    hranenie.material_search_name,
+	    hranenie.material_shape_search_name as shape_search_name,
+	    punct_1.sector_search_name,
+	    punct_1.grade_search_name,
+	    punct_1.transport_subtype_search_name,
+	    punct_1.sales_bundle_code,
+		punct_1.service_account_code,
+	    punct_1.expense_translated_currency_code,
+	    punct_1.expense_group_search_name,
+	    hranenie.purchase_contract_code as transportation_service_contract_code,
+	    punct_1.transportation_scheme_search_name,
+	    punct_1.transportation_scheme_type_search_name,
+	    punct_1.transportation_scheme_subtype_search_name,
+	    hranenie.sales_bundle_gross_weight,
+	    hranenie.sales_bundle_net_weight,
+	    
+	    hranenie.storage_cost_calculated_amount / nullif(hranenie.sales_bundle_gross_weight, 0) as expense_per_ton_usd_amount,
+--	    punct_1.expense_per_ton_usd_amount,
+	    hranenie.storage_cost_calculated_amount as total_expense_per_gross_weight_usd_amount,
+	    hranenie.storage_cost_calculated_amount as total_expense_per_net_weight_usd_amount,
+	    null as sum_sales_bundle_gross_weight,
+	    null as sum_sales_bundle_net_weight,
+	    creditor_in_shipment_instruction_search_name,
+	    hranenie.warehouse_search_name,
+	    hranenie.forwarder_search_name
+	from punct_1
+	join hranenie on hranenie.sales_bundle_code = punct_1.sales_bundle_code
+	union all
+	select
+		null as is_base_code,
+		hranenie.warehouse_code, hranenie.dt_report,
+		hranenie.delivery_for_storage_calculation_code as initial_delivery_code,
+	    hranenie.delivery_position_for_storage_calculation_code as initial_delivery_item_code,
+	    punct_2.sales_order_code,
+	    'STRGE' as expense_account_code,
+	    hranenie.service_name as expense_account_name,
+	    'STRGE' || '-' || hranenie.service_name as expense_account_search_name,
+	    hranenie.receiving_plant_search_name as plant_producer_search_name,
+	    punct_2.transport_type_search_name,
+	    null as transport_vehicle_code,
+	    hranenie.transport_bill_code,
+	    hranenie.uni as transport_bill_and_railcar_uni_code,
+	    hranenie.etsng_search_name,
+	    hranenie.material_search_name,
+	    hranenie.material_shape_search_name as shape_search_name,
+	    punct_2.sector_search_name,
+	    punct_2.grade_search_name,
+	    punct_2.transport_subtype_search_name,
+	    punct_2.sales_bundle_code,
+	    punct_2.service_account_code,
+	    punct_2.expense_translated_currency_code,
+	    punct_2.expense_group_search_name,
+	    hranenie.purchase_contract_code as transportation_service_contract_code,
+	    punct_2.transportation_scheme_search_name,
+	    punct_2.transportation_scheme_type_search_name,
+	    punct_2.transportation_scheme_subtype_search_name,
+	    hranenie.sales_bundle_gross_weight,
+	    hranenie.sales_bundle_net_weight,
+	    hranenie.storage_cost_calculated_amount / nullif(hranenie.sales_bundle_gross_weight, 0) as expense_per_ton_usd_amount,
+--	    punct_2.expense_per_ton_usd_amount,
+	    hranenie.storage_cost_calculated_amount as total_expense_per_gross_weight_usd_amount,
+	    hranenie.storage_cost_calculated_amount as total_expense_per_net_weight_usd_amount,
+	    null as sum_sales_bundle_gross_weight,
+	    null as sum_sales_bundle_net_weight,
+	    creditor_in_shipment_instruction_search_name,
+	    hranenie.warehouse_search_name,
+	    hranenie.forwarder_search_name
+	from punct_2
+	join hranenie on hranenie.sales_bundle_code = punct_2.sales_bundle_code),
+	
+pre_un_hranen as (
+	
+select 
+is_base_code,
+initial_delivery_code,
+initial_delivery_item_code,
+sales_order_code,
+expense_account_code,
+expense_account_name,
+expense_account_search_name,
+plant_producer_search_name,
+transport_type_search_name,
+transport_vehicle_code,
+transport_bill_code,
+transport_bill_and_railcar_uni_code,
+etsng_search_name,
+material_search_name,
+shape_search_name,
+sector_search_name,
+grade_search_name,
+transport_subtype_search_name,
+sales_bundle_code,
+service_account_code,
+expense_translated_currency_code,
+expense_group_search_name,
+transportation_service_contract_code,
+transportation_scheme_search_name,
+transportation_scheme_type_search_name,
+transportation_scheme_subtype_search_name,
+sales_bundle_gross_weight,
+sales_bundle_net_weight,
+expense_per_ton_usd_amount,
+total_expense_per_gross_weight_usd_amount,
+total_expense_per_net_weight_usd_amount,
+warehouse_code, 
+dt_report,
+sum(sales_bundle_gross_weight) over wind as sum_sales_bundle_gross_weight,
+sum(sales_bundle_net_weight) over wind as sum_sales_bundle_net_weight,
+creditor_in_shipment_instruction_search_name,
+warehouse_search_name,
+forwarder_search_name
+from tmp
+	window wind as (partition by initial_delivery_code, initial_delivery_item_code, sales_order_code, expense_account_code, service_account_code))
+	
+	
+select
+null::text as is_base_code,
+min(initial_delivery_code)::text as initial_delivery_code,
+min(initial_delivery_item_code) as initial_delivery_item_code,
+min(sales_order_code) as sales_order_code,
+min(expense_account_code) as expense_account_code,
+min(expense_account_name) as expense_account_name,
+min(expense_account_search_name) as expense_account_search_name,
+min(plant_producer_search_name) as plant_producer_search_name,
+min(transport_type_search_name) as transport_type_search_name,
+min(transport_vehicle_code) as transport_vehicle_code,
+min(transport_bill_code) as transport_bill_code,
+min(transport_bill_and_railcar_uni_code) as transport_bill_and_railcar_uni_code,
+min(etsng_search_name) as etsng_search_name,
+min(material_search_name) as material_search_name,
+min(shape_search_name) as shape_search_name,
+min(sector_search_name) as sector_search_name,
+min(grade_search_name) as grade_search_name,
+min(transport_subtype_search_name) as transport_subtype_search_name,
+sales_bundle_code as sales_bundle_code,
+min(expense_translated_currency_code) as expense_translated_currency_code,
+min(expense_group_search_name) as expense_group_search_name,
+min(transportation_service_contract_code) as transportation_service_contract_code,
+min(transportation_scheme_search_name) as transportation_scheme_search_name,
+min(transportation_scheme_type_search_name) as transportation_scheme_type_search_name,
+min(transportation_scheme_subtype_search_name) as transportation_scheme_subtype_search_name,
+min(sales_bundle_gross_weight) as sales_bundle_gross_weight,
+min(sales_bundle_net_weight) as sales_bundle_net_weight,
+min(expense_per_ton_usd_amount)::numeric as expense_per_ton_usd_amount,
+min(total_expense_per_gross_weight_usd_amount)::numeric as total_expense_per_gross_weight_usd_amount,
+min(total_expense_per_net_weight_usd_amount)::numeric as total_expense_per_net_weight_usd_amount,
+min(sum_sales_bundle_gross_weight)::numeric as sum_sales_bundle_gross_weight,
+min(sum_sales_bundle_net_weight)::numeric as sum_sales_bundle_net_weight,
+min(creditor_in_shipment_instruction_search_name) as creditor_in_shipment_instruction_search_name,
+warehouse_code, 
+dt_report,
+warehouse_search_name,
+min(forwarder_search_name) as forwarder_search_name
+	from pre_un_hranen
+group by sales_bundle_code, warehouse_code, dt_report, warehouse_search_name
+	);
+ 
+insert into dm_calc.alverse_transportation_life_cycle (
+	    initial_delivery_code,
+--	    initial_delivery_item_code,
+	    sales_order_code,
+	    expense_account_code,
+	    expense_account_name,
+	    expense_account_search_name,
+	    plant_producer_search_name,
+	    transport_type_search_name,
+	    transport_vehicle_code,
+	    transport_bill_code,
+	    transport_bill_and_railcar_uni_code,
+	    etsng_search_name,
+	    material_search_name,
+	    shape_search_name,
+	    supplier_search_name, -- 
+	    sector_search_name,
+	    grade_search_name,
+	    transport_subtype_search_name,
+	    sales_bundle_code,
+	    expense_translated_currency_code,
+	    expense_group_search_name,
+	    transportation_service_contract_code,
+	    transportation_scheme_search_name,
+	    transportation_scheme_type_search_name,
+	    transportation_scheme_subtype_search_name,
+	    sales_bundle_gross_weight,
+	    sales_bundle_net_weight,
+	    expense_per_ton_usd_amount,
+	    total_expense_per_gross_weight_usd_amount,
+	    total_expense_per_net_weight_usd_amount,
+	    sum_sales_bundle_gross_weight,
+	    sum_sales_bundle_net_weight,
+	    external_contract_number, --
+	    warehouse_search_name --
+	)
+ 
+	select
+--		'X' as is_base_code,
+	    punct_1.initial_delivery_code,
+--	    punct_1.initial_delivery_item_code,
+	    punct_1.sales_order_code,
+	    punct_1.expense_account_code,
+	    punct_1.expense_account_name,
+	    punct_1.expense_account_search_name,
+	    punct_1.plant_producer_search_name,
+	    punct_1.transport_type_search_name,
+	    punct_1.transport_vehicle_code,
+	    punct_1.transport_bill_code,
+	    punct_1.transport_bill_and_railcar_uni_code,
+	    punct_1.etsng_search_name,
+	    punct_1.material_search_name,
+	    punct_1.shape_search_name,
+	    case
+	    when punct_1.expense_account_code in ('TARIF', 'TARNM') then '0000017489-' || coalesce(cntr3.counterparty_full_name, '')
+--	    when uni.is_base_code is null then coalesce(uni.creditor_in_shipment_instruction_search_name, uni.forwarder_search_name)
+	    else
+	    concat_ws('-', coalesce(ekko_1.supplier_code, ekko_2.supplier_code, ekko_3.supplier_code), coalesce(cntr3.counterparty_full_name, '')) end as supplier_search_name,  -- Поставщик и его наименование LE.000749
+	    punct_1.sector_search_name,
+	    punct_1.grade_search_name,
+	    punct_1.transport_subtype_search_name,
+	    punct_1.sales_bundle_code,
+	    punct_1.expense_translated_currency_code,
+	    punct_1.expense_group_search_name,
+	    punct_1.transportation_service_contract_code,
+	    punct_1.transportation_scheme_search_name,
+	    punct_1.transportation_scheme_type_search_name,
+	    punct_1.transportation_scheme_subtype_search_name,
+	    punct_1.sales_bundle_gross_weight,
+	    punct_1.sales_bundle_net_weight,
+	    punct_1.expense_per_ton_usd_amount,
+	    punct_1.total_expense_per_gross_weight_usd_amount,
+	    punct_1.total_expense_per_net_weight_usd_amount,
+	    punct_1.sum_sales_bundle_gross_weight,
+	    punct_1.sum_sales_bundle_net_weight,
+--	    null as creditor_in_shipment_instruction_search_name,
+--	    null as warehouse_code, 
+--		null as dt_report,
+	    coalesce(ekko_1.purchase_contract_external_part1_number, ekko_2.purchase_contract_external_part1_number, ekko_3.purchase_contract_external_part1_number) as external_contract_number,
+		null as warehouse_search_name
+--		null as forwarder_search_name
+	from
+	    punct_1
+	left join dds.purchase_order_header as ekko_1 on
+	    ekko_1.purchase_order_code = punct_1.transportation_service_contract_code
+	    and ekko_1.deleted_flag = false
+	left join dds.purchase_agreement_header as ekko_2 on
+	    ekko_2.purchase_agreement_code = punct_1.transportation_service_contract_code
+	    and ekko_2.deleted_flag = false
+	left join dds.purchase_contract_header as ekko_3 on
+	    ekko_3.purchase_contract_code = punct_1.transportation_service_contract_code
+	    and ekko_3.deleted_flag = false
+	left join dict_dds.counterparty as cntr3 on
+	    cntr3.counterparty_code = case when punct_1.expense_account_code in ('TARIF', 'TARNM') then '0000017489' else 
+	    	coalesce(ekko_1.supplier_code, ekko_2.supplier_code, ekko_3.supplier_code) end
+	    and cntr3.deleted_flag = false
+	union all
+	select
+--		'X' as is_base_code,
+	    punct_2.initial_delivery_code,
+--	    punct_2.initial_delivery_item_code,
+	    punct_2.sales_order_code,
+	    punct_2.expense_account_code,
+	    punct_2.expense_account_name,
+	    punct_2.expense_account_search_name,
+	    punct_2.plant_producer_search_name,
+	    punct_2.transport_type_search_name,
+	    punct_2.transport_vehicle_code,
+	    punct_2.transport_bill_code,
+	    punct_2.transport_bill_and_railcar_uni_code,
+	    punct_2.etsng_search_name,
+	    punct_2.material_search_name,
+	    punct_2.shape_search_name,
+	    case
+	    when punct_2.expense_account_code in ('TARIF', 'TARNM') then '0000017489-' || coalesce(cntr3.counterparty_full_name, '')
+--	    when uni.is_base_code is null then coalesce(uni.creditor_in_shipment_instruction_search_name, uni.forwarder_search_name)
+	    else
+	    concat_ws('-', coalesce(ekko_1.supplier_code, ekko_2.supplier_code, ekko_3.supplier_code), coalesce(cntr3.counterparty_full_name, '')) end as supplier_search_name,  -- Поставщик и его наименование LE.000749
+ 
+	    punct_2.sector_search_name,
+	    punct_2.grade_search_name,
+	    punct_2.transport_subtype_search_name,
+	    punct_2.sales_bundle_code,
+	    punct_2.expense_translated_currency_code,
+	    punct_2.expense_group_search_name,
+	    punct_2.transportation_service_contract_code,
+	    punct_2.transportation_scheme_search_name,
+	    punct_2.transportation_scheme_type_search_name,
+	    punct_2.transportation_scheme_subtype_search_name,
+	    punct_2.sales_bundle_gross_weight,
+	    punct_2.sales_bundle_net_weight,
+	    punct_2.expense_per_ton_usd_amount,
+	    punct_2.total_expense_per_gross_weight_usd_amount,
+	    punct_2.total_expense_per_net_weight_usd_amount,
+	    punct_2.sum_sales_bundle_gross_weight,
+	    punct_2.sum_sales_bundle_net_weight,
+	  	coalesce(ekko_1.purchase_contract_external_part1_number, ekko_2.purchase_contract_external_part1_number, ekko_3.purchase_contract_external_part1_number) as external_contract_number,
+ 
+--	    null as creditor_in_shipment_instruction_search_name,
+--	    null as warehouse_code, 
+--		null as dt_report,
+		null as warehouse_search_name
+--		null as forwarder_search_name
+	from
+	    punct_2
+	left join dds.purchase_order_header as ekko_1 on
+	    ekko_1.purchase_order_code = punct_2.transportation_service_contract_code
+	    and ekko_1.deleted_flag = false
+	left join dds.purchase_agreement_header as ekko_2 on
+	    ekko_2.purchase_agreement_code = punct_2.transportation_service_contract_code
+	    and ekko_2.deleted_flag = false
+	left join dds.purchase_contract_header as ekko_3 on
+	    ekko_3.purchase_contract_code = punct_2.transportation_service_contract_code
+	    and ekko_3.deleted_flag = false
+	left join dict_dds.counterparty as cntr3 on
+	    cntr3.counterparty_code = case when punct_2.expense_account_code in ('TARIF', 'TARNM') then '0000017489' else 
+	    	coalesce(ekko_1.supplier_code, ekko_2.supplier_code, ekko_3.supplier_code) end
+	    and cntr3.deleted_flag = false
+	union all
+	select
+	--null::text as is_base_code,
+	pre_un.initial_delivery_code,
+--	pre_un.initial_delivery_item_code,
+	pre_un.sales_order_code,
+	pre_un.expense_account_code,
+	pre_un.expense_account_name,
+	pre_un.expense_account_search_name,
+	pre_un.plant_producer_search_name,
+	pre_un.transport_type_search_name,
+	pre_un.transport_vehicle_code,
+	pre_un.transport_bill_code,
+	pre_un.transport_bill_and_railcar_uni_code,
+	pre_un.etsng_search_name,
+	pre_un.material_search_name,
+	pre_un.shape_search_name,
+	case
+	when pre_un.expense_account_code in ('TARIF', 'TARNM') then '0000017489-' || coalesce(cntr3.counterparty_full_name, '')
+	else coalesce(pre_un.creditor_in_shipment_instruction_search_name, pre_un.forwarder_search_name) end as supplier_search_name,
+	pre_un.sector_search_name,
+	pre_un.grade_search_name,
+	pre_un.transport_subtype_search_name,
+	pre_un.sales_bundle_code,
+	pre_un.expense_translated_currency_code,
+	pre_un.expense_group_search_name,
+	pre_un.transportation_service_contract_code,
+	pre_un.transportation_scheme_search_name,
+	pre_un.transportation_scheme_type_search_name,
+	pre_un.transportation_scheme_subtype_search_name,
+	pre_un.sales_bundle_gross_weight,
+	pre_un.sales_bundle_net_weight,
+	pre_un.expense_per_ton_usd_amount,
+	pre_un.total_expense_per_gross_weight_usd_amount,
+	pre_un.total_expense_per_net_weight_usd_amount,
+	pre_un.sum_sales_bundle_gross_weight,
+	pre_un.sum_sales_bundle_net_weight,
+	coalesce(ekko_1.purchase_contract_external_part1_number, ekko_2.purchase_contract_external_part1_number, ekko_3.purchase_contract_external_part1_number) as external_contract_number,
+	
+	--pre_un.creditor_in_shipment_instruction_search_name,
+	--pre_un.warehouse_code, 
+	--pre_un.dt_report,
+	pre_un.warehouse_search_name
+	--pre_un.forwarder_search_name
+	from pre_un 
+	left join dds.purchase_order_header as ekko_1 on
+	    ekko_1.purchase_order_code = pre_un.transportation_service_contract_code
+	    and ekko_1.deleted_flag = false
+	left join dds.purchase_agreement_header as ekko_2 on
+	    ekko_2.purchase_agreement_code = pre_un.transportation_service_contract_code
+	    and ekko_2.deleted_flag = false
+	left join dds.purchase_contract_header as ekko_3 on
+	    ekko_3.purchase_contract_code = pre_un.transportation_service_contract_code
+	    and ekko_3.deleted_flag = false
+	left join dict_dds.counterparty as cntr3 on
+	    cntr3.counterparty_code = case when pre_un.expense_account_code in ('TARIF', 'TARNM') then '0000017489' else 
+	    	coalesce(ekko_1.supplier_code, ekko_2.supplier_code, ekko_3.supplier_code) end
+	    and cntr3.deleted_flag = false
+ 
+ 
+union all
+	select
+	--null::text as is_base_code,
+	bu_table.transportation_expenses_write_off_delivery_code as initial_delivery_code,
+--	null::text as initial_delivery_item_code,
+	p_1_for_bu.sales_order_code,
+	'DOPUS' as expense_account_code,
+	trst.transportation_service_name as expense_account_name,
+	'DOPUS' || '-' || trst.transportation_service_name as expense_account_search_name,
+	bu_table.plant_code || '-' || bu_table.plant_name as plant_producer_search_name,
+	p_1_for_bu.transport_type_search_name,
+	bu_table.vehicle_code as transport_vehicle_code,
+	bu_table.transport_bill_code,
+	null::text as transport_bill_and_railcar_uni_code,
+	bu_table.etsng_search_name,
+	coalesce(p_1_for_bu.material_search_name, bu_table.material_search_name) as material_search_name,
+	p_1_for_bu.shape_search_name as shape_search_name,
+	bu_table.creditor_search_name as supplier_search_name,
+	p_1_for_bu.sector_search_name,
+	p_1_for_bu.grade_search_name,
+	p_1_for_bu.transport_subtype_search_name,
+	p_1_for_bu.sales_bundle_code,
+	--p_1_for_bu.service_account_code,
+	p_1_for_bu.expense_translated_currency_code,
+	p_1_for_bu.expense_group_search_name,
+	bu_table.purchase_contract_code as transportation_service_contract_code,
+	p_1_for_bu.transportation_scheme_search_name,
+	p_1_for_bu.transportation_scheme_type_search_name,
+	p_1_for_bu.transportation_scheme_subtype_search_name,
+	p_1_for_bu.sales_bundle_gross_weight as sales_bundle_gross_weight,
+	p_1_for_bu.sales_bundle_net_weight,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount / nullif(bu_table.sales_bundle_net_weight, 0) as expense_per_ton_usd_amount,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount as total_expense_per_gross_weight_usd_amount,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount as total_expense_per_net_weight_usd_amount,
+	
+	sum(p_1_for_bu.sales_bundle_gross_weight) over wind as sum_sales_bundle_gross_weight,
+	sum(p_1_for_bu.sales_bundle_net_weight) over wind as sum_sales_bundle_net_weight,
+	bu_table.supplier_account_code as external_contract_number,
+	--
+	--null::text as creditor_in_shipment_instruction_search_name,
+	--null::text as warehouse_code, 
+	--null as dt_report,
+	null::text as warehouse_search_name
+	--null::text as forwarder_search_name
+		from p_1_for_bu
+		join bu_table on bu_table.sales_bundle_code = p_1_for_bu.sales_bundle_code
+		left join dict_dds.transportation_service_texts as trst on
+			trst.language_code = 'R'
+			and trst.transportation_service_code = bu_table.service_code
+	window wind as (partition by bu_table.transportation_expenses_write_off_delivery_code, p_1_for_bu.sales_order_code)
+			
+	union all
+	select
+--	   null::text as is_base_code,
+	bu_table.transportation_expenses_write_off_delivery_code as initial_delivery_code,
+--	null::text as initial_delivery_item_code,
+	p_2_for_bu.sales_order_code,
+	'DOPUS' as expense_account_code,
+	trst.transportation_service_name as expense_account_name,
+	'DOPUS' || '-' || trst.transportation_service_name as expense_account_search_name,
+	bu_table.plant_code || '-' || bu_table.plant_name as plant_producer_search_name,
+	p_2_for_bu.transport_type_search_name,
+	bu_table.vehicle_code as transport_vehicle_code,
+	bu_table.transport_bill_code,
+	null::text as transport_bill_and_railcar_uni_code,
+	bu_table.etsng_search_name,
+	coalesce(p_2_for_bu.material_search_name, bu_table.material_search_name) as material_search_name,
+	p_2_for_bu.shape_search_name as shape_search_name,
+	bu_table.creditor_search_name as supplier_search_name,
+	p_2_for_bu.sector_search_name,
+	p_2_for_bu.grade_search_name,
+	p_2_for_bu.transport_subtype_search_name,
+	p_2_for_bu.sales_bundle_code,
+	--p_2_for_bu.service_account_code,
+	p_2_for_bu.expense_translated_currency_code,
+	p_2_for_bu.expense_group_search_name,
+	bu_table.purchase_contract_code as transportation_service_contract_code,
+	p_2_for_bu.transportation_scheme_search_name,
+	p_2_for_bu.transportation_scheme_type_search_name,
+	p_2_for_bu.transportation_scheme_subtype_search_name,
+	p_2_for_bu.sales_bundle_gross_weight as sales_bundle_gross_weight,
+	p_2_for_bu.sales_bundle_net_weight,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount / nullif(bu_table.sales_bundle_net_weight, 0) as expense_per_ton_usd_amount,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount as total_expense_per_gross_weight_usd_amount,
+	bu_table.transportation_service_invoice_sec_lcl_curr_vat_in_amount as total_expense_per_net_weight_usd_amount,
+	
+	sum(p_2_for_bu.sales_bundle_gross_weight) over wind as sum_sales_bundle_gross_weight,
+	sum(p_2_for_bu.sales_bundle_net_weight) over wind as sum_sales_bundle_net_weight,
+	bu_table.supplier_account_code as external_contract_number,
+	--
+	--null::text as creditor_in_shipment_instruction_search_name,
+	--null::text as warehouse_code, 
+	--null as dt_report,
+	null::text as warehouse_search_name
+	--null::text as forwarder_search_name
+	from p_2_for_bu
+	join bu_table on bu_table.sales_bundle_code = p_2_for_bu.sales_bundle_code
+	left join dict_dds.transportation_service_texts as trst on
+			trst.language_code = 'R'
+			and trst.transportation_service_code = bu_table.service_code
+	window wind as (partition by bu_table.transportation_expenses_write_off_delivery_code, p_2_for_bu.sales_order_code);
+ 

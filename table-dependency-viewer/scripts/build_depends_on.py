@@ -173,6 +173,16 @@ def _detect_root_from_meta_path(meta_path: Path) -> Optional[Path]:
     return None
 
 
+def _coerce_to_meta_yaml(path: Path) -> Path:
+    if path.name == "meta_data_file.yaml":
+        return path
+    if path.suffix.lower() == ".sql":
+        candidate = path.parent / "meta_data_file.yaml"
+        if candidate.exists():
+            return candidate
+    return path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build depends_on from sql_query_insert_init.sql")
     parser.add_argument("--root", default="", help="Root directory with meta_data_file.yaml")
@@ -189,12 +199,12 @@ def main() -> int:
     if args.file:
         file_arg = Path(args.file)
         if file_arg.is_absolute():
-            meta_paths = [file_arg.resolve()]
+            meta_paths = [_coerce_to_meta_yaml(file_arg.resolve())]
         else:
             if file_arg.parts and file_arg.parts[0] == "etl_loads_entity":
-                meta_paths = [(repo_root / file_arg).resolve()]
+                meta_paths = [_coerce_to_meta_yaml((repo_root / file_arg).resolve())]
             else:
-                meta_paths = [(root / file_arg).resolve()]
+                meta_paths = [_coerce_to_meta_yaml((root / file_arg).resolve())]
 
         if args.root:
             root = _detect_root(repo_root, args.root)

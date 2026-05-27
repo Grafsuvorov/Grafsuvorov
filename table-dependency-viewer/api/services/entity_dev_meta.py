@@ -48,13 +48,15 @@ SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_REPLICA_ENTITIES = 4
 
 
-class _IndentedYamlDumper(yaml.SafeDumper):
-    def increase_indent(self, flow=False, indentless=False):
-        return super().increase_indent(flow=flow, indentless=False)
-
-
 def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
+
+
+def _normalize_sql_identifier(raw: str) -> str:
+    value = str(raw or "").strip()
+    if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+        return value[1:-1]
+    return value.strip('"').lower()
 
 
 def _is_safe_identifier(value: str) -> bool:
@@ -106,7 +108,7 @@ def _read_text_if_exists(path: Path) -> str:
 def _dump_yaml(data: dict[str, Any]) -> str:
     return yaml.dump(
         data,
-        Dumper=_IndentedYamlDumper,
+        Dumper=yaml.SafeDumper,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,
@@ -626,11 +628,13 @@ def _extract_schema_table_refs(sql: str, known_schemas: set[str]) -> set[tuple[s
         re.IGNORECASE,
     )
     for match in pattern.finditer(_strip_sql_comments(sql)):
-        schema_name = _normalize_name(match.group(1))
-        table_name = _normalize_name(match.group(2))
-        if not schema_name or not table_name or schema_name in IGNORE_SCHEMAS:
+        schema_name = _normalize_sql_identifier(match.group(1))
+        table_name = _normalize_sql_identifier(match.group(2))
+        schema_key = _normalize_name(schema_name)
+        table_key = _normalize_name(table_name)
+        if not schema_name or not table_name or schema_key in IGNORE_SCHEMAS:
             continue
-        if known_schemas and schema_name not in known_schemas:
+        if known_schemas and schema_key not in known_schemas:
             continue
         refs.add((schema_name, table_name))
     return refs
@@ -670,10 +674,13 @@ def _build_depends_on(sql: str, target_schema: str, target_table: str, known_sch
     refs = _extract_schema_table_refs(sql, known_schemas)
     grouped: dict[str, set[str]] = {}
     for schema_name, table_name in refs:
-        if schema_name == target_schema and table_name == target_table:
+        if _normalize_name(schema_name) == target_schema and _normalize_name(table_name) == target_table:
             continue
         grouped.setdefault(schema_name, set()).add(table_name)
-    return {schema_name: sorted(table_names) for schema_name, table_names in sorted(grouped.items())}
+    return {
+        schema_name: sorted(table_names, key=lambda item: str(item).lower())
+        for schema_name, table_names in sorted(grouped.items(), key=lambda item: str(item[0]).lower())
+    }
 
 
 def _apply_bundle_identity(

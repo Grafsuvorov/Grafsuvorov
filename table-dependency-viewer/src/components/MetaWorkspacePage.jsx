@@ -45,6 +45,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [branchName, setBranchName] = useState("");
   const [baseBranch, setBaseBranch] = useState("main");
   const [branchOptions, setBranchOptions] = useState([]);
+  const [branchNameEdited, setBranchNameEdited] = useState(false);
   const [branchCatalog, setBranchCatalog] = useState({ gp_objects: [], click_objects: [] });
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [creatingMr, setCreatingMr] = useState(false);
@@ -56,8 +57,14 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [branchValidation, setBranchValidation] = useState(null);
   const [validatingBranch, setValidatingBranch] = useState(false);
   const [syncingBranch, setSyncingBranch] = useState(false);
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const branchScopedActive = Boolean(branchCatalog.branch_name);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
+  const suggestedBranchName = useMemo(
+    () => (taskIdValid ? `feature/${String(taskId || "").trim().toUpperCase()}` : ""),
+    [taskId, taskIdValid]
+  );
   const groupedGp = useMemo(() => groupGpObjects(branchCatalog.gp_objects), [branchCatalog.gp_objects]);
   const groupedClick = useMemo(() => groupClickObjects(branchCatalog.click_objects), [branchCatalog.click_objects]);
   const branchSummary = useMemo(
@@ -72,12 +79,38 @@ export default function MetaWorkspacePage({ userProfile }) {
     if (!term) return branchOptions;
     return branchOptions.filter((item) => String(item || "").toLowerCase().includes(term));
   }, [branchOptions, branchName]);
+  const allowedGpObjectKeys = useMemo(
+    () => new Set((branchCatalog.gp_objects || []).map((item) => item.object_key).filter(Boolean)),
+    [branchCatalog.gp_objects]
+  );
+  const allowedClickFiles = useMemo(
+    () => new Set((branchCatalog.click_objects || []).map((item) => `${item.schema_name}/${item.file_name}`).filter(Boolean)),
+    [branchCatalog.click_objects]
+  );
+  const hasGpObjects = branchSummary.gp > 0;
+  const hasClickObjects = branchSummary.click > 0;
+  const showGpTab = !branchScopedActive || hasGpObjects;
+  const showClickTab = !branchScopedActive || hasClickObjects;
 
   useEffect(() => {
     metaWorkspaceApi.branches()
       .then((data) => setBranchOptions(data?.items || []))
       .catch((err) => setError(err.message || "Не удалось загрузить список веток"));
   }, []);
+
+  useEffect(() => {
+    if (!suggestedBranchName || branchNameEdited) return;
+    setBranchName(suggestedBranchName);
+  }, [suggestedBranchName, branchNameEdited]);
+
+  useEffect(() => {
+    if (!branchScopedActive) return;
+    if (mode === "gp" && !showGpTab && showClickTab) {
+      setMode("click");
+    } else if (mode === "click" && !showClickTab && showGpTab) {
+      setMode("gp");
+    }
+  }, [branchScopedActive, mode, showClickTab, showGpTab]);
 
   const loadBranchCatalog = async (selectedBranch) => {
     const branchValue = String(selectedBranch || branchName || "").trim();
@@ -107,6 +140,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   };
 
   const handleSelectBranch = async (nextBranch) => {
+    setBranchNameEdited(true);
     setBranchName(nextBranch);
     await loadBranchCatalog(nextBranch);
   };
@@ -135,6 +169,37 @@ export default function MetaWorkspacePage({ userProfile }) {
       setError(err.message || "Не удалось создать MR");
     } finally {
       setCreatingMr(false);
+    }
+  };
+
+  const handleCreateBranch = async () => {
+    const nextBranch = String(branchName || "").trim();
+    if (!nextBranch) {
+      setError("Укажите имя новой ветки");
+      return;
+    }
+    setCreatingBranch(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await metaWorkspaceApi.createBranch({
+        branch_name: nextBranch,
+        base_branch: "main",
+      });
+      setBaseBranch("main");
+      const refreshed = await metaWorkspaceApi.branches();
+      setBranchOptions(refreshed?.items || []);
+      setMessage(
+        data?.already_exists
+          ? `Ветка уже существует: ${data.branch_name}`
+          : `Ветка создана от ${data.base_branch}: ${data.branch_name}`
+      );
+      await loadBranchCatalog(nextBranch);
+      jumpToGenerator("gp");
+    } catch (err) {
+      setError(err.message || "Не удалось создать ветку");
+    } finally {
+      setCreatingBranch(false);
     }
   };
 
@@ -227,6 +292,18 @@ export default function MetaWorkspacePage({ userProfile }) {
     });
   };
 
+  const jumpToGenerator = (nextMode) => {
+    setMode(nextMode);
+    setActiveSelection(null);
+    const targetId = nextMode === "gp" ? "meta-workspace-gp-generator" : "meta-workspace-click-generator";
+    window.requestAnimationFrame(() => {
+      document.getElementById(targetId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  };
+
   return (
     <div className="container cc-page">
       <section className="cc-surface dev-meta-page meta-workspace-page">
@@ -283,7 +360,10 @@ export default function MetaWorkspacePage({ userProfile }) {
               <input
                 list="meta-workspace-branches"
                 value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
+                onChange={(e) => {
+                  setBranchNameEdited(true);
+                  setBranchName(e.target.value);
+                }}
                 placeholder="feature/DWH-12345"
               />
               <datalist id="meta-workspace-branches">
@@ -296,6 +376,9 @@ export default function MetaWorkspacePage({ userProfile }) {
             </label>
           </div>
           <div className="dev-meta-generator-actions">
+            <button type="button" className="btn btn-secondary" onClick={handleCreateBranch} disabled={creatingBranch || !String(branchName || "").trim()}>
+              {creatingBranch ? "Создаем ветку..." : "Создать ветку от main"}
+            </button>
             <button type="button" className="btn btn-primary" onClick={() => loadBranchCatalog()} disabled={catalogLoading || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
               {catalogLoading ? "Обновляем diff..." : "Показать изменения ветки"}
             </button>
@@ -322,6 +405,7 @@ export default function MetaWorkspacePage({ userProfile }) {
         </div>
 
         <div className="meta-workspace-branch-browser" id="meta-workspace-branch-browser">
+          {showGpTab ? (
           <div className="meta-workspace-branch-column">
             <div className="section-subtitle">Greenplum</div>
             <div className="meta-workspace-branch-tree">
@@ -350,7 +434,9 @@ export default function MetaWorkspacePage({ userProfile }) {
               )) : <div className="muted">Измененных GP-объектов пока нет.</div>}
             </div>
           </div>
+          ) : null}
 
+          {showClickTab ? (
           <div className="meta-workspace-branch-column">
             <div className="section-subtitle">ClickHouse</div>
             <div className="meta-workspace-branch-tree">
@@ -374,18 +460,37 @@ export default function MetaWorkspacePage({ userProfile }) {
               )) : <div className="muted">Измененных Click-файлов пока нет.</div>}
             </div>
           </div>
+          ) : null}
         </div>
 
         <div className="dev-meta-tabs meta-workspace-tabs">
+          {showGpTab ? (
           <button type="button" className={`dev-meta-tab ${mode === "gp" ? "active" : ""}`} onClick={() => setMode("gp")}>
             Greenplum
           </button>
+          ) : null}
+          {showClickTab ? (
           <button type="button" className={`dev-meta-tab ${mode === "click" ? "active" : ""}`} onClick={() => setMode("click")}>
             ClickHouse
           </button>
+          ) : null}
         </div>
 
         <div className="meta-workspace-pane">
+          {branchScopedActive ? (
+            <div className="meta-workspace-selection-bar">
+              <button type="button" className="btn btn-secondary" onClick={() => jumpToGenerator("gp")}>
+                Новый GP объект
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => jumpToGenerator("click")}>
+                Новый Click файл
+              </button>
+              <div className="meta-workspace-selection-copy">
+                <div className="meta-workspace-selection-label">Рабочая ветка</div>
+                <div className="meta-workspace-selection-title">{branchCatalog.branch_name}</div>
+              </div>
+            </div>
+          ) : null}
           {branchValidation?.summary ? (
             <div className="meta-workspace-validation">
               <div className="meta-workspace-validation-head">
@@ -449,6 +554,9 @@ export default function MetaWorkspacePage({ userProfile }) {
               releaseBranch={releaseBranch}
               onReleaseBranchChange={setReleaseBranch}
               externalOpenRequest={gpOpenRequest}
+              allowedObjectKeys={allowedGpObjectKeys}
+              branchScopedActive={branchScopedActive}
+              generatorAnchorId="meta-workspace-gp-generator"
               hideCreateMr
               hideHeader
               hideTaskControls
@@ -460,6 +568,9 @@ export default function MetaWorkspacePage({ userProfile }) {
               taskId={taskId}
               hideHeader
               externalOpenRequest={clickOpenRequest}
+              allowedFiles={allowedClickFiles}
+              branchScopedActive={branchScopedActive}
+              generatorAnchorId="meta-workspace-click-generator"
             />
           )}
         </div>

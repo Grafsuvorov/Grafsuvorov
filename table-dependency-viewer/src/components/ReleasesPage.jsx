@@ -42,6 +42,8 @@ export default function ReleasesPage() {
   const [selectedDashboard, setSelectedDashboard] = useState(null);
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [selectedAssignee, setSelectedAssignee] = useState(null);
+  const [showAllCreators, setShowAllCreators] = useState(false);
+  const [showAllAssignees, setShowAllAssignees] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -111,6 +113,16 @@ export default function ReleasesPage() {
     const running = items.filter((i) => String(i.status || "").toLowerCase().includes("run")).length;
     return { total, failed, running };
   }, [items]);
+  const visibleReleases = useMemo(() => items.slice(0, 5), [items]);
+  const workloadChartWidth = useMemo(() => Math.max(900, ytWorkload.length * 56), [ytWorkload.length]);
+  const visibleCreators = useMemo(
+    () => (showAllCreators ? (ytStats?.by_creator || []) : (ytStats?.by_creator || []).slice(0, 10)),
+    [showAllCreators, ytStats]
+  );
+  const visibleAssignees = useMemo(
+    () => (showAllAssignees ? (ytStats?.by_assignee || []) : (ytStats?.by_assignee || []).slice(0, 10)),
+    [showAllAssignees, ytStats]
+  );
 
   const formatDateTime = (value) => {
     if (!value) return "—";
@@ -122,6 +134,14 @@ export default function ReleasesPage() {
     const [year, month, day] = String(value).split("-");
     if (!year || !month || !day) return value;
     return `${day}.${month}`;
+  };
+  const releaseStatusClass = (status) => {
+    const value = String(status || "").toLowerCase();
+    if (!value) return "status-unknown";
+    if (value.includes("success") || value.includes("loaded")) return "status-success";
+    if (value.includes("fail") || value.includes("error")) return "status-failed";
+    if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
+    return "status-unknown";
   };
 
   const workloadSummary = useMemo(() => {
@@ -222,7 +242,7 @@ export default function ReleasesPage() {
               <span>Задачи</span>
               <span></span>
             </div>
-            {items.map((row) => (
+            {visibleReleases.map((row) => (
               <div key={row.release_id} className="release-list-row">
                 <span className="mono">{row.release_id}</span>
                 <span className={`status-pill ${row.failed_count ? "status-failed" : "status-success"}`}>
@@ -253,6 +273,9 @@ export default function ReleasesPage() {
               </div>
             ))}
           </div>
+        )}
+        {!loading && !error && items.length > 5 && (
+          <div className="muted release-limit-note">Показаны 5 последних релизов из {items.length}.</div>
         )}
       </section>
 
@@ -301,7 +324,8 @@ export default function ReleasesPage() {
               </div>
             )}
             {!ytWorkloadLoading && !ytWorkloadError && ytWorkload.length > 0 && (
-              <div className="yt-workload-chart">
+              <div className="yt-workload-chart-scroll">
+                <div className="yt-workload-chart" style={{ minWidth: `${workloadChartWidth}px` }}>
                 <ResponsiveContainer width="100%" height={340}>
                   <ComposedChart data={ytWorkload} margin={{ top: 16, right: 18, left: -8, bottom: 8 }}>
                     <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
@@ -336,6 +360,7 @@ export default function ReleasesPage() {
                     <Bar dataKey="release_ready_count" name="Ожидание релиза" fill="#a78bfa" radius={[4, 4, 0, 0]} />
                   </ComposedChart>
                 </ResponsiveContainer>
+                </div>
               </div>
             )}
           </div>
@@ -457,7 +482,7 @@ export default function ReleasesPage() {
                   <span>Часы</span>
                   <span></span>
                 </div>
-                {(ytStats.by_creator || []).map((row, idx) => (
+                {visibleCreators.map((row, idx) => (
                   <div key={`creator-${idx}`} className="yt-analytics-row">
                     <span>{row.creator || "—"}</span>
                     <span>{row.tasks_count || 0}</span>
@@ -473,6 +498,11 @@ export default function ReleasesPage() {
                   </div>
                 ))}
               </div>
+              {(ytStats?.by_creator || []).length > 10 ? (
+                <button className="btn btn-secondary yt-analytics-more" onClick={() => setShowAllCreators((prev) => !prev)}>
+                  {showAllCreators ? "Скрыть сотрудников" : `Показать ещё (${(ytStats?.by_creator || []).length - 10})`}
+                </button>
+              ) : null}
               {selectedCreator && (
                 <div className="yt-analytics-tasks">
                   <div className="yt-analytics-task-head">
@@ -510,7 +540,7 @@ export default function ReleasesPage() {
                   <span>Часы</span>
                   <span></span>
                 </div>
-                {(ytStats.by_assignee || []).map((row, idx) => (
+                {visibleAssignees.map((row, idx) => (
                   <div key={`assignee-${idx}`} className="yt-analytics-row">
                     <span>{row.assignee || "—"}</span>
                     <span>{row.tasks_count || 0}</span>
@@ -526,6 +556,11 @@ export default function ReleasesPage() {
                   </div>
                 ))}
               </div>
+              {(ytStats?.by_assignee || []).length > 10 ? (
+                <button className="btn btn-secondary yt-analytics-more" onClick={() => setShowAllAssignees((prev) => !prev)}>
+                  {showAllAssignees ? "Скрыть сотрудников" : `Показать ещё (${(ytStats?.by_assignee || []).length - 10})`}
+                </button>
+              ) : null}
               {selectedAssignee && (
                 <div className="yt-analytics-tasks">
                   <div className="yt-analytics-task-head">
@@ -586,7 +621,7 @@ export default function ReleasesPage() {
                     {obj.schema_name}.{obj.table_name}
                   </button>
                   <span>{obj.target_system || "—"}</span>
-                  <span className={`status-pill ${obj.final_status?.toLowerCase().includes("success") ? "status-success" : "status-unknown"}`}>
+                  <span className={`status-pill ${releaseStatusClass(obj.final_status)}`}>
                     {obj.final_status || "—"}
                   </span>
                   <span className="muted" title={obj.change_type || ""}>

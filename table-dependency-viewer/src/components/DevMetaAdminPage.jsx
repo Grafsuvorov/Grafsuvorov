@@ -38,6 +38,9 @@ export default function DevMetaAdminPage({
   taskId: externalTaskId,
   hideHeader = false,
   externalOpenRequest = null,
+  allowedFiles = null,
+  branchScopedActive = false,
+  generatorAnchorId = "",
 }) {
   const [schemaName, setSchemaName] = useState("dm");
   const [generator, setGenerator] = useState({
@@ -125,7 +128,10 @@ export default function DevMetaAdminPage({
 
   const filteredFiles = useMemo(() => {
     const term = fileSearch.trim().toLowerCase();
-    const rows = [...(files.dev_files || [])].sort((left, right) => {
+    const allowedEntries = allowedFiles instanceof Set ? allowedFiles : null;
+    const rows = [...(files.dev_files || [])]
+      .filter((file) => !allowedEntries || allowedEntries.has(`${schemaName}/${file.file_name}`))
+      .sort((left, right) => {
       const leftTs = new Date(left.updated_at || 0).getTime();
       const rightTs = new Date(right.updated_at || 0).getTime();
       return rightTs - leftTs;
@@ -134,7 +140,7 @@ export default function DevMetaAdminPage({
       return rows;
     }
     return rows.filter((file) => file.file_name.toLowerCase().includes(term));
-  }, [files.dev_files, fileSearch]);
+  }, [files.dev_files, fileSearch, allowedFiles, schemaName]);
 
   const openFile = async (fileName) => {
     setLoading(true);
@@ -486,7 +492,7 @@ export default function DevMetaAdminPage({
           </div>
         )}
 
-        <div className="dev-meta-generator">
+        <div className="dev-meta-generator" id={generatorAnchorId || undefined}>
           <div className="section-subtitle">{schemaName === "dm" ? "Новый YAML из параметров" : "Новый view SQL"}</div>
           {schemaName === "dm_view" ? (
             <>
@@ -557,7 +563,11 @@ export default function DevMetaAdminPage({
             <div className="dev-meta-file-head">
               <div>
                 <div className="section-subtitle">DEV файлы</div>
-                <div className="muted">Открытие файла сразу берет его в работу для текущего пользователя.</div>
+                <div className="muted">
+                  {allowedFiles instanceof Set
+                    ? "Показаны только файлы из выбранной ветки."
+                    : "Открытие файла сразу берет его в работу для текущего пользователя."}
+                </div>
               </div>
               <div className="dev-meta-file-tools">
                 <input
@@ -570,7 +580,9 @@ export default function DevMetaAdminPage({
               </div>
             </div>
             <div className="dev-meta-file-list">
-              {filteredFiles.map((file) => (() => {
+              {!branchScopedActive ? (
+                <div className="muted dev-meta-scoped-empty">Сначала выбери ветку выше. После этого здесь появятся только файлы этой ветки.</div>
+              ) : filteredFiles.length ? filteredFiles.map((file) => (() => {
                 const fileLock = (files.locks || []).find(
                   (item) => item.schema_name === schemaName && item.file_name === file.file_name
                 );
@@ -592,7 +604,7 @@ export default function DevMetaAdminPage({
                     {blocked ? <span className="dev-meta-file-badge">Занят</span> : null}
                   </button>
                 );
-              })())}
+              })()) : <div className="muted">Для выбранной ветки файлов пока нет.</div>}
             </div>
           </div>
         </div>

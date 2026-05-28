@@ -63,6 +63,45 @@ def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     return {"items": sorted(set(branches), key=str.lower)}
 
 
+def create_meta_workspace_branch(*, git_repo_value: str, branch_name: str, base_branch: str) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    git_repo_root = Path(git_repo_value).resolve()
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите имя новой ветки")
+    base_branch_norm = str(base_branch or "").strip() or "main"
+
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    if bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm])):
+        return {
+            "branch_name": branch_name_norm,
+            "base_branch": base_branch_norm,
+            "created": False,
+            "already_exists": True,
+        }
+    if not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
+        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-branch-{branch_name_norm.replace('/', '-')}-"))
+    try:
+        _run_git(git_repo_root, ["worktree", "add", "-b", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+        _run_git(git_repo_root, ["push", "-u", "origin", branch_name_norm], cwd=worktree_dir)
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
+
+    return {
+        "branch_name": branch_name_norm,
+        "base_branch": base_branch_norm,
+        "created": True,
+        "already_exists": False,
+    }
+
+
 def _parse_name_status(raw_output: str) -> list[tuple[str, str]]:
     result: list[tuple[str, str]] = []
     for line in str(raw_output or "").splitlines():

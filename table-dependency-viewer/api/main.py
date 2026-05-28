@@ -120,6 +120,7 @@ from .services.entity_dev_meta import (
     validate_entity_dev_meta_bundle,
 )
 from .services.meta_workspace import (
+    create_meta_workspace_branch,
     _build_branch_catalog,
     create_meta_workspace_mr,
     list_meta_workspace_branches,
@@ -303,6 +304,11 @@ class MetaWorkspaceMrPayload(BaseModel):
 class MetaWorkspaceValidatePayload(BaseModel):
     branch_name: str
     base_branch: str
+
+
+class MetaWorkspaceCreateBranchPayload(BaseModel):
+    branch_name: str
+    base_branch: str = "main"
 
 
 class MetaWorkspaceSyncPayload(BaseModel):
@@ -944,6 +950,19 @@ def get_admin_meta_workspace_branches(request: Request):
     _require_admin(request)
     try:
         return list_meta_workspace_branches(git_repo_value=ENTITY_META_GIT_REPO)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/meta-workspace/branches")
+def create_admin_meta_workspace_branch(payload: MetaWorkspaceCreateBranchPayload, request: Request):
+    _require_admin(request)
+    try:
+        return create_meta_workspace_branch(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

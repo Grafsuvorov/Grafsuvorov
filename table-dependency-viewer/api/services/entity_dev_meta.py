@@ -48,6 +48,11 @@ SAFE_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 MAX_REPLICA_ENTITIES = 4
 
 
+class _IndentedSafeDumper(yaml.SafeDumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow, False)
+
+
 def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
 
@@ -108,11 +113,12 @@ def _read_text_if_exists(path: Path) -> str:
 def _dump_yaml(data: dict[str, Any]) -> str:
     return yaml.dump(
         data,
-        Dumper=yaml.SafeDumper,
+        Dumper=_IndentedSafeDumper,
         default_flow_style=False,
         sort_keys=False,
         allow_unicode=True,
         width=float("inf"),
+        indent=2,
     )
 
 

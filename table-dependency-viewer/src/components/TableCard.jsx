@@ -668,8 +668,10 @@ export default function TableCard({
     });
   }, [attributeTypeMap, dbtVisibleColumns]);
   const clickStatusLabel = (status) => {
-    switch (status) {
+    const value = String(status || "").toUpperCase();
+    switch (value) {
       case "SUCCESS":
+      case "LOADED":
         return "Успешно";
       case "FAILED":
         return "Ошибка";
@@ -684,7 +686,7 @@ export default function TableCard({
   const releaseStatusClass = (status) => {
     const value = String(status || "").toLowerCase();
     if (!value) return "status-unknown";
-    if (value.includes("success")) return "status-success";
+    if (value.includes("success") || value.includes("loaded")) return "status-success";
     if (value.includes("fail") || value.includes("error")) return "status-failed";
     if (value.includes("run") || value.includes("queue") || value.includes("retry")) return "status-running";
     return "status-unknown";
@@ -1875,7 +1877,7 @@ export default function TableCard({
                               className="history-error-toggle compact"
                               onClick={() => toggleGpError(`gp-${idx}`)}
                             >
-                              {expandedGpErrors[`gp-${idx}`] ? "Скрыть" : "Ошибка"}
+                              {expandedGpErrors[`gp-${idx}`] ? "Скрыть статус" : "Статус"}
                             </button>
                           ) : "—"}
                         </span>
@@ -1922,7 +1924,7 @@ export default function TableCard({
                               className="history-error-toggle compact"
                               onClick={() => toggleClickError(`click-${idx}`)}
                             >
-                              {expandedClickErrors[`click-${idx}`] ? "Скрыть" : "Ошибка"}
+                              {expandedClickErrors[`click-${idx}`] ? "Скрыть статус" : "Статус"}
                             </button>
                           ) : null}
                         </span>

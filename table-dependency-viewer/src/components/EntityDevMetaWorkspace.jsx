@@ -155,6 +155,9 @@ export default function EntityDevMetaWorkspace({
   releaseBranch: externalReleaseBranch,
   onReleaseBranchChange,
   externalOpenRequest = null,
+  allowedObjectKeys = null,
+  branchScopedActive = false,
+  generatorAnchorId = "",
   hideCreateMr = false,
   hideHeader = false,
   hideTaskControls = false,
@@ -237,14 +240,17 @@ export default function EntityDevMetaWorkspace({
 
   const filteredDevFiles = useMemo(() => {
     const term = fileSearch.trim().toLowerCase();
-    const rows = [...(catalog.dev_files || [])];
+    const allowedKeys = allowedObjectKeys instanceof Set ? allowedObjectKeys : null;
+    const rows = [...(catalog.dev_files || [])].filter((item) => !allowedKeys || allowedKeys.has(item.object_key));
     if (!term) return rows;
     return rows.filter((item) => String(item.table_name || "").toLowerCase().includes(term));
-  }, [catalog.dev_files, fileSearch]);
+  }, [catalog.dev_files, fileSearch, allowedObjectKeys]);
   const entityNames = useMemo(() => entityOptions.map((item) => item.entity_name), [entityOptions]);
   const groupedDevFiles = useMemo(() => {
+    const allowedKeys = allowedObjectKeys instanceof Set ? allowedObjectKeys : null;
     const tree = new Map();
     for (const item of catalog.dev_files || []) {
+      if (allowedKeys && !allowedKeys.has(item.object_key)) continue;
       if (!tree.has(item.entity_name)) tree.set(item.entity_name, new Map());
       const schemas = tree.get(item.entity_name);
       if (!schemas.has(item.schema_name)) schemas.set(item.schema_name, []);
@@ -261,7 +267,7 @@ export default function EntityDevMetaWorkspace({
             items: [...items].sort((a, b) => String(a.table_name || "").localeCompare(String(b.table_name || ""))),
           })),
       }));
-  }, [catalog.dev_files]);
+  }, [catalog.dev_files, allowedObjectKeys]);
 
   const currentFingerprint = useMemo(() => (bundle ? objectFingerprint(bundle) : ""), [bundle]);
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
@@ -657,7 +663,7 @@ export default function EntityDevMetaWorkspace({
           </div>
         ) : null}
 
-        <div className="dev-meta-generator">
+        <div className="dev-meta-generator" id={generatorAnchorId || undefined}>
           <div className="section-subtitle">Открыть объект или создать DEV-черновик</div>
           <div className="dev-meta-generator-grid">
             <label className="admin-field">
@@ -832,7 +838,11 @@ export default function EntityDevMetaWorkspace({
             <div className="dev-meta-file-head">
               <div>
                 <div className="section-subtitle">DEV объекты</div>
-                <div className="muted">Сохраняются в отдельном дереве `etl_loads_entity_dev`.</div>
+                <div className="muted">
+                  {allowedObjectKeys instanceof Set
+                    ? "Показаны только объекты из выбранной ветки."
+                    : "Сохраняются в отдельном дереве `etl_loads_entity_dev`."}
+                </div>
               </div>
               <div className="dev-meta-file-tools">
                 <input
@@ -843,9 +853,11 @@ export default function EntityDevMetaWorkspace({
                 />
               </div>
             </div>
-            {fileSearch.trim() ? (
+            {!branchScopedActive ? (
+              <div className="muted dev-meta-scoped-empty">Сначала выбери ветку выше. После этого здесь появятся только объекты этой ветки.</div>
+            ) : fileSearch.trim() ? (
               <div className="dev-meta-file-list">
-                {filteredDevFiles.map((file) => (
+                {filteredDevFiles.length ? filteredDevFiles.map((file) => (
                   <button
                     key={file.object_key}
                     className={`dev-meta-file ${bundle?.object_key === file.object_key ? "active" : ""}`}
@@ -855,11 +867,11 @@ export default function EntityDevMetaWorkspace({
                     <span className="dev-meta-file-path">{file.entity_name} / {file.schema_name}</span>
                     <span className="muted">{formatRuDateTime(file.updated_at)}</span>
                   </button>
-                ))}
+                )) : <div className="muted">Для выбранной ветки объектов пока нет.</div>}
               </div>
             ) : (
               <div className="dev-meta-tree">
-                {groupedDevFiles.map((entityNode) => (
+                {groupedDevFiles.length ? groupedDevFiles.map((entityNode) => (
                   <details key={entityNode.entity_name} className="dev-meta-tree-entity">
                     <summary className="dev-meta-tree-summary">{entityNode.entity_name}</summary>
                     <div className="dev-meta-tree-schemas">
@@ -883,7 +895,7 @@ export default function EntityDevMetaWorkspace({
                       ))}
                     </div>
                   </details>
-                ))}
+                )) : <div className="muted">Для выбранной ветки объектов пока нет.</div>}
               </div>
             )}
           </div>

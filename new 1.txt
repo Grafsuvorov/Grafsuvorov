@@ -1,22 +1,72 @@
-select * from dq.data_quality_results dqr
-where dt_of_verification::date='2026-05-27' and verification_type='row_count'
+with src as (
+    select
+        table_schema,
+        table_name,
+        dt_of_verification::date as check_dt,
+        metric_result::bigint as row_cnt,
+        dt_of_verification,
+        row_number() over (
+            partition by table_schema, table_name, dt_of_verification::date
+            order by dt_of_verification desc
+        ) as rn
+    from dq.data_quality_results
+    where verification_type = 'row_count'
+      and dt_of_verification::date in (date '2026-05-27', date '2026-05-26')
+      and metric_result ~ '^[0-9]+$'
+),
 
--- DROP TABLE dq.data_quality_results;
+today as (
+    select
+        table_schema,
+        table_name,
+        row_cnt as row_cnt_today,
+        dt_of_verification as dt_today
+    from src
+    where check_dt = date '2026-05-27'
+      and rn = 1
+),
 
-CREATE TABLE dq.data_quality_results (
-	verification_type varchar(15) NULL,
-	table_schema varchar(10) NULL,
-	table_name varchar(100) NULL,
-	metric_result text NULL,
-	dt_of_verification timestamp NULL,
-	sql_script text NULL,
-	error_code varchar(25) NULL,
-	table_keys text NULL
+yesterday as (
+    select
+        table_schema,
+        table_name,
+        row_cnt as row_cnt_yesterday,
+        dt_of_verification as dt_yesterday
+    from src
+    where check_dt = date '2026-05-26'
+      and rn = 1
 )
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-DISTRIBUTED BY (table_name);
+
+select
+    coalesce(t.table_schema, y.table_schema) as table_schema,
+    coalesce(t.table_name, y.table_name) as table_name,
+
+    y.row_cnt_yesterday,
+    t.row_cnt_today,
+
+    t.row_cnt_today - y.row_cnt_yesterday as diff_rows,
+    abs(t.row_cnt_today - y.row_cnt_yesterday) as abs_diff_rows,
+
+    case
+        when y.row_cnt_yesterday is null then 'NEW_TODAY'
+        when t.row_cnt_today is null then 'MISSING_TODAY'
+        when y.row_cnt_yesterday = 0 and t.row_cnt_today > 0 then 'FROM_ZERO'
+        when y.row_cnt_yesterday = 0 and t.row_cnt_today = 0 then 'NO_CHANGE_ZERO'
+        else round(
+            ((t.row_cnt_today - y.row_cnt_yesterday)::numeric / nullif(y.row_cnt_yesterday, 0)) * 100,
+            2
+        )::text
+    end as diff_percent,
+
+    y.dt_yesterday,
+    t.dt_today
+
+from today t
+full join yesterday y
+    on y.table_schema = t.table_schema
+   and y.table_name = t.table_name
+
+order by
+    abs(coalesce(t.row_cnt_today, 0) - coalesce(y.row_cnt_yesterday, 0)) desc
+
+limit 30;

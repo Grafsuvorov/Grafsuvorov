@@ -1,15 +1,193 @@
-select
-    general_ledger_account_code,
-    unit_balance_code,
-    accounting_document_code,
-    fiscal_year,
-    count(*) as cnt
-from dm_calc.accounting_document_tax_classification
-group by
-    general_ledger_account_code,
-    unit_balance_code,
-    accounting_document_code,
-    fiscal_year
-having count(*) > 1
-order by cnt desc
-limit 100;
+   explain
+   select count(*)
+from  invoice_purchase_document                                                                                                                                     as base
+left join   dm_calc.accounting_document_header_for_purchase_documents                                                                                                as bkpf
+    on
+        bkpf.unit_balance_code = base.unit_balance_code
+        and bkpf.fiscal_year = base.fiscal_year
+        and bkpf.dt_posting = base.dt_posting
+        and bkpf.accounting_document_type = base.purchase_document_type_code
+        and bkpf.reference_object_key = concat(base.invoice_code, base.fiscal_year)
+left join dm_calc.accounting_document_header_for_purchase_documents                                                                                                as bkpf_2
+    on
+        bkpf_2.unit_balance_code = base.unit_balance_code
+        and bkpf_2.accounting_document_code = bkpf.accounting_document_code
+        and bkpf_2.fiscal_year = base.fiscal_year
+left join dds.accounting_documents                                                                                                                                 as bseg
+    on
+        bseg.unit_balance_code = base.unit_balance_code
+        and bseg.accounting_document_code = bkpf.accounting_document_code
+        and bseg.fiscal_year::text = bkpf.fiscal_year
+        and bseg.account_type = 'K'
+        and bseg.is_active = true
+left join dict_dds.general_ledger_account_standard                                                                                                                 as glas
+    on
+        glas.valuation_class_code = base.valuation_class_code
+        and glas.account_modification_code is null
+        and glas.valuation_group_code = '5101'
+        and glas.transaction_key_code = 'WRX'
+        and glas.account_chart_code = '1000'
+left join dds.purchase_document_position_invoice_assignment                                                                                                        as rbco
+    on
+        rbco.accounting_document_code = base.invoice_code
+        and rbco.fiscal_year = base.fiscal_year
+        and rbco.accounting_document_position_code = base.invoice_position_line_item_code
+left join dict_dds.counterparty                                                                                                                                    as counter
+    on counter.counterparty_code = base.payee_alternative_code
+left join dict_dds.counterparty                                                                                                                                    as counter_2
+    on counter_2.counterparty_code = base.creditor_agent_code
+left join dds.purchase_agreement_header                                                                                                                            as ekko_1_1 -- EKKO-EBELN ключ = MM.000279
+    on ekko_1_1.purchase_agreement_code = base.purchase_document_code
+left join dds.purchase_contract_header                                                                                                                             as ekko_1_2
+    on ekko_1_2.purchase_contract_code = base.purchase_document_code
+left join dds.purchase_order_header                                                                                                                                as ekko_1_3
+    on ekko_1_3.purchase_order_code = base.purchase_document_code
+left join dict_dds.counterparty                                                                                                                                    as counter_3
+    on counter_3.counterparty_code = coalesce(ekko_1_1.supplier_code, ekko_1_2.supplier_code, ekko_1_3.supplier_code)
+left join dds.purchase_agreement_header                                                                                                                            as ekko_2_1 -- EKKO-EBELN ключ = MM.000290
+    on ekko_2_1.purchase_agreement_code = coalesce(ekko_1_1.number_of_principal_purchase_agreement, ekko_1_3.number_of_principal_purchase_order)
+left join dds.purchase_contract_header                                                                                                                             as ekko_2_2 on ekko_2_2.purchase_contract_code = coalesce(ekko_1_1.number_of_principal_purchase_agreement, ekko_1_3.number_of_principal_purchase_order)
+left join dds.purchase_order_header                                                                                                                                as ekko_2_3 on ekko_2_3.purchase_order_code = coalesce(ekko_1_1.number_of_principal_purchase_agreement, ekko_1_3.number_of_principal_purchase_order)
+left join dds.purchase_agreement_position                                                                                                                          as ekpo_1 on ekpo_1.purchase_agreement_code = base.purchase_document_code and ekpo_1.position_line_item_code = base.purchase_document_position_line_item_code
+left join dds.purchase_contract_position                                                                                                                           as ekpo_2 on ekpo_2.purchase_contract_code = base.purchase_document_code and ekpo_2.position_line_item_code = base.purchase_document_position_line_item_code
+left join dds.purchase_order_position                                                                                                                              as ekpo_3 on ekpo_3.purchase_order_code = base.purchase_document_code and ekpo_3.position_line_item_code = base.purchase_document_position_line_item_code
+left join dict_dds.material_texts                                                                                                                                  as mtprod_1 on mtprod_1.material_code = ekpo_1.material_main_code and mtprod_1.language_code = 'R'
+left join dict_dds.material_texts                                                                                                                                  as mtprod_2 on mtprod_2.material_code = ekpo_2.material_main_code and mtprod_2.language_code = 'R'
+left join dict_dds.material_texts                                                                                                                                  as mtprod_3 on mtprod_3.material_code = ekpo_3.material_main_code and mtprod_3.language_code = 'R'
+left join dds.purchase_document_history                                                                                                                            as ekbe
+    on
+        ekbe.purchase_document_code = base.purchase_document_code and ekbe.purchase_document_position_code = base.purchase_document_position_line_item_code
+        and ekbe.material_document_code = base.invoice_code and ekbe.fiscal_year = base.fiscal_year and ekbe.material_document_position_code = substring(base.invoice_position_line_item_code, 3, 4)
+        and ekbe.assignment_code = base.assignment_code
+left join dict_dds.unit_balance                                                                                                                                    as unb on unb.unit_balance_code = base.unit_balance_code
+left join dict_dds.country                                                                                                                                         as country on country.country_code = unb.country_code
+
+
+Aggregate  (cost=0.00..64782554.03 rows=1 width=8)
+  ->  Gather Motion 8:1  (slice14; segments: 8)  (cost=0.00..64782554.03 rows=1 width=8)
+        ->  Aggregate  (cost=0.00..64782554.03 rows=1 width=8)
+              ->  Hash Left Join  (cost=0.00..64782554.03 rows=71259494754 width=1)
+                    Hash Cond: ((unit_balance.country_code)::text = (country.country_code)::text)
+                    ->  Hash Left Join  (cost=0.00..58275169.08 rows=35629747377 width=3)
+                          Hash Cond: ((invoice_purchase_document.unit_balance_code)::text = (unit_balance.unit_balance_code)::text)
+                          ->  Hash Left Join  (cost=0.00..54750154.21 rows=17814873689 width=5)
+                                Hash Cond: (((invoice_purchase_document.purchase_document_code)::text = (purchase_document_history.purchase_document_code)::text) AND ((invoice_purchase_document.purchase_document_position_line_item_code)::text = (purchase_document_history.purchase_document_position_code)::text) AND ((invoice_purchase_document.invoice_code)::text = (purchase_document_history.material_document_code)::text) AND ((invoice_purchase_document.fiscal_year)::text = (purchase_document_history.fiscal_year)::text) AND ("substring"((invoice_purchase_document.invoice_position_line_item_code)::text, 3, 4) = (purchase_document_history.material_document_position_code)::text) AND ((invoice_purchase_document.assignment_code)::text = (purchase_document_history.assignment_code)::text))
+                                ->  Hash Left Join  (cost=0.00..9741902.47 rows=17814873689 width=48)
+                                      Hash Cond: ((purchase_order_position.material_main_code)::text = (material_texts_2.material_code)::text)
+                                      ->  Hash Left Join  (cost=0.00..5058056.44 rows=7987127283 width=62)
+                                            Hash Cond: ((purchase_contract_position.material_main_code)::text = (material_texts_1.material_code)::text)
+                                            ->  Hash Left Join  (cost=0.00..2531171.47 rows=3580951701 width=78)
+                                                  Hash Cond: ((purchase_agreement_position.material_main_code)::text = (material_texts.material_code)::text)
+                                                  ->  Hash Left Join  (cost=0.00..1179468.64 rows=1605485255 width=96)
+                                                        Hash Cond: (((invoice_purchase_document.purchase_document_code)::text = (purchase_order_position.purchase_order_code)::text) AND ((invoice_purchase_document.purchase_document_position_line_item_code)::text = (purchase_order_position.position_line_item_code)::text))
+                                                        ->  Hash Left Join  (cost=0.00..508451.85 rows=324554454 width=82)
+                                                              Hash Cond: (((invoice_purchase_document.purchase_document_code)::text = (purchase_contract_position.purchase_contract_code)::text) AND ((invoice_purchase_document.purchase_document_position_line_item_code)::text = (purchase_contract_position.position_line_item_code)::text))
+                                                              ->  Hash Left Join  (cost=0.00..355158.14 rows=152748413 width=66)
+                                                                    Hash Cond: (((invoice_purchase_document.purchase_document_code)::text = (purchase_agreement_position.purchase_agreement_code)::text) AND ((invoice_purchase_document.purchase_document_position_line_item_code)::text = (purchase_agreement_position.position_line_item_code)::text))
+                                                                    ->  Redistribute Motion 8:8  (slice9; segments: 8)  (cost=0.00..278669.41 rows=106554262 width=48)
+                                                                          Hash Key: invoice_purchase_document.purchase_document_position_line_item_code
+                                                                          ->  Hash Left Join  (cost=0.00..262660.70 rows=106554262 width=48)
+                                                                                Hash Cond: ((COALESCE(purchase_agreement_header.number_of_principal_purchase_agreement, purchase_order_header.number_of_principal_purchase_order))::text = (purchase_order_header_1.purchase_order_code)::text)
+                                                                                ->  Hash Left Join  (cost=0.00..220946.40 rows=76110188 width=70)
+                                                                                      Hash Cond: ((COALESCE(purchase_agreement_header.number_of_principal_purchase_agreement, purchase_order_header.number_of_principal_purchase_order))::text = (purchase_contract_header_1.purchase_contract_code)::text)
+                                                                                      ->  Hash Left Join  (cost=0.00..185346.46 rows=54364420 width=70)
+                                                                                            Hash Cond: ((COALESCE(purchase_agreement_header.number_of_principal_purchase_agreement, purchase_order_header.number_of_principal_purchase_order))::text = (purchase_agreement_header_1.purchase_agreement_code)::text)
+                                                                                            ->  Redistribute Motion 8:8  (slice8; segments: 8)  (cost=0.00..159766.57 rows=38831729 width=70)
+                                                                                                  Hash Key: COALESCE(purchase_agreement_header.number_of_principal_purchase_agreement, purchase_order_header.number_of_principal_purchase_order)
+                                                                                                  ->  Hash Left Join  (cost=0.00..151258.54 rows=38831729 width=70)
+                                                                                                        Hash Cond: ((COALESCE(purchase_agreement_header.supplier_code, purchase_contract_header.supplier_code, purchase_order_header.supplier_code))::text = (counterparty_2.counterparty_code)::text)
+                                                                                                        ->  Hash Left Join  (cost=0.00..129576.74 rows=27736949 width=103)
+                                                                                                              Hash Cond: ((invoice_purchase_document.purchase_document_code)::text = (purchase_order_header.purchase_order_code)::text)
+                                                                                                              ->  Hash Left Join  (cost=0.00..115561.45 rows=13868475 width=81)
+                                                                                                                    Hash Cond: ((invoice_purchase_document.purchase_document_code)::text = (purchase_contract_header.purchase_contract_code)::text)
+                                                                                                                    ->  Hash Left Join  (cost=0.00..109658.30 rows=6934238 width=70)
+                                                                                                                          Hash Cond: ((invoice_purchase_document.purchase_document_code)::text = (purchase_agreement_header.purchase_agreement_code)::text)
+                                                                                                                          ->  Redistribute Motion 8:8  (slice7; segments: 8)  (cost=0.00..106738.92 rows=3467119 width=48)
+                                                                                                                                Hash Key: invoice_purchase_document.purchase_document_code
+                                                                                                                                ->  Hash Left Join  (cost=0.00..106218.02 rows=3467119 width=48)
+                                                                                                                                      Hash Cond: ((invoice_purchase_document.creditor_agent_code)::text = (counterparty_1.counterparty_code)::text)
+                                                                                                                                      ->  Hash Left Join  (cost=0.00..104529.17 rows=1733560 width=59)
+                                                                                                                                            Hash Cond: ((invoice_purchase_document.payee_alternative_code)::text = (counterparty.counterparty_code)::text)
+                                                                                                                                            ->  Hash Left Join  (cost=0.00..103240.80 rows=866780 width=70)
+                                                                                                                                                  Hash Cond: (((invoice_purchase_document.invoice_code)::text = (purchase_document_position_invoice_assignment.accounting_document_code)::text) AND ((invoice_purchase_document.fiscal_year)::text = (purchase_document_position_invoice_assignment.fiscal_year)::text) AND ((invoice_purchase_document.invoice_position_line_item_code)::text = (purchase_document_position_invoice_assignment.accounting_document_position_code)::text))
+                                                                                                                                                  ->  Redistribute Motion 8:8  (slice5; segments: 8)  (cost=0.00..100586.00 rows=866780 width=70)
+                                                                                                                                                        Hash Key: invoice_purchase_document.invoice_code, invoice_purchase_document.fiscal_year, invoice_purchase_document.invoice_position_line_item_code
+                                                                                                                                                        ->  Hash Left Join  (cost=0.00..100396.09 rows=866780 width=70)
+                                                                                                                                                              Hash Cond: ((invoice_purchase_document.valuation_class_code)::text = (general_ledger_account_standard.valuation_class_code)::text)
+                                                                                                                                                              ->  Hash Left Join  (cost=0.00..99585.83 rows=750450 width=75)
+                                                                                                                                                                    Hash Cond: (((invoice_purchase_document.unit_balance_code)::text = (accounting_documents.unit_balance_code)::text) AND ((accounting_document_header_for_purchase_documents_1.accounting_document_code)::text = (accounting_documents.accounting_document_code)::text) AND ((accounting_document_header_for_purchase_documents_1.fiscal_year)::text = (accounting_documents.fiscal_year)::text))
+                                                                                                                                                                    ->  Hash Right Join  (cost=0.00..26088.31 rows=544183 width=91)
+                                                                                                                                                                          Hash Cond: (((accounting_document_header_for_purchase_documents.unit_balance_code)::text = (invoice_purchase_document.unit_balance_code)::text) AND ((accounting_document_header_for_purchase_documents.accounting_document_code)::text = (accounting_document_header_for_purchase_documents_1.accounting_document_code)::text) AND ((accounting_document_header_for_purchase_documents.fiscal_year)::text = (invoice_purchase_document.fiscal_year)::text))
+                                                                                                                                                                          ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..2394.80 rows=11388330 width=21)
+                                                                                                                                                                                Hash Key: accounting_document_header_for_purchase_documents.unit_balance_code
+                                                                                                                                                                                ->  Seq Scan on accounting_document_header_for_purchase_documents  (cost=0.00..1201.42 rows=11388330 width=21)
+                                                                                                                                                                          ->  Hash  (cost=16149.29..16149.29 rows=544183 width=91)
+                                                                                                                                                                                ->  Hash Right Join  (cost=0.00..16149.29 rows=544183 width=91)
+                                                                                                                                                                                      Hash Cond: (((accounting_document_header_for_purchase_documents_1.unit_balance_code)::text = (invoice_purchase_document.unit_balance_code)::text) AND ((accounting_document_header_for_purchase_documents_1.fiscal_year)::text = (invoice_purchase_document.fiscal_year)::text) AND (accounting_document_header_for_purchase_documents_1.dt_posting = invoice_purchase_document.dt_posting) AND ((accounting_document_header_for_purchase_documents_1.accounting_document_type)::text = (invoice_purchase_document.purchase_document_type_code)::text) AND ((accounting_document_header_for_purchase_documents_1.reference_object_key)::text = concat(invoice_purchase_document.invoice_code, invoice_purchase_document.fiscal_year)))
+                                                                                                                                                                                      ->  Redistribute Motion 8:8  (slice2; segments: 8)  (cost=0.00..3758.67 rows=11388330 width=45)
+                                                                                                                                                                                            Hash Key: accounting_document_header_for_purchase_documents_1.unit_balance_code
+                                                                                                                                                                                            ->  Seq Scan on accounting_document_header_for_purchase_documents accounting_document_header_for_purchase_documents_1  (cost=0.00..1201.42 rows=11388330 width=45)
+                                                                                                                                                                                      ->  Hash  (cost=723.71..723.71 rows=544183 width=82)
+                                                                                                                                                                                            ->  Redistribute Motion 8:8  (slice3; segments: 8)  (cost=0.00..723.71 rows=544183 width=82)
+                                                                                                                                                                                                  Hash Key: invoice_purchase_document.unit_balance_code
+                                                                                                                                                                                                  ->  Seq Scan on invoice_purchase_document  (cost=0.00..501.04 rows=544183 width=82)
+                                                                                                                                                                    ->  Hash  (cost=64145.71..64145.71 rows=9294362 width=21)
+                                                                                                                                                                          ->  Redistribute Motion 8:8  (slice4; segments: 8)  (cost=0.00..64145.71 rows=9294362 width=21)
+                                                                                                                                                                                Hash Key: accounting_documents.unit_balance_code
+                                                                                                                                                                                ->  Seq Scan on accounting_documents  (cost=0.00..63534.79 rows=9294362 width=21)
+                                                                                                                                                                                      Filter: ((account_type = 'K'::bpchar) AND is_active)
+                                                                                                                                                              ->  Hash  (cost=433.11..433.11 rows=377 width=5)
+                                                                                                                                                                    ->  Seq Scan on general_ledger_account_standard  (cost=0.00..433.11 rows=377 width=5)
+                                                                                                                                                                          Filter: ((account_modification_code IS NULL) AND ((valuation_group_code)::text = '5101'::text) AND ((transaction_key_code)::text = 'WRX'::text) AND ((account_chart_code)::text = '1000'::text))
+                                                                                                                                                  ->  Hash  (cost=718.31..718.31 rows=1502536 width=23)
+                                                                                                                                                        ->  Redistribute Motion 8:8  (slice6; segments: 8)  (cost=0.00..718.31 rows=1502536 width=23)
+                                                                                                                                                              Hash Key: purchase_document_position_invoice_assignment.accounting_document_code, purchase_document_position_invoice_assignment.fiscal_year, purchase_document_position_invoice_assignment.accounting_document_position_code
+                                                                                                                                                              ->  Seq Scan on purchase_document_position_invoice_assignment  (cost=0.00..545.87 rows=1502536 width=23)
+                                                                                                                                            ->  Hash  (cost=579.88..579.88 rows=440134 width=11)
+                                                                                                                                                  ->  Seq Scan on counterparty  (cost=0.00..579.88 rows=440134 width=11)
+                                                                                                                                      ->  Hash  (cost=579.88..579.88 rows=440134 width=11)
+                                                                                                                                            ->  Seq Scan on counterparty counterparty_1  (cost=0.00..579.88 rows=440134 width=11)
+                                                                                                                          ->  Hash  (cost=451.98..451.98 rows=70917 width=33)
+                                                                                                                                ->  Seq Scan on purchase_agreement_header  (cost=0.00..451.98 rows=70917 width=33)
+                                                                                                                    ->  Hash  (cost=447.18..447.18 rows=36676 width=22)
+                                                                                                                          ->  Seq Scan on purchase_contract_header  (cost=0.00..447.18 rows=36676 width=22)
+                                                                                                              ->  Hash  (cost=559.60..559.60 rows=397654 width=33)
+                                                                                                                    ->  Seq Scan on purchase_order_header  (cost=0.00..559.60 rows=397654 width=33)
+                                                                                                        ->  Hash  (cost=579.88..579.88 rows=440134 width=11)
+                                                                                                              ->  Seq Scan on counterparty counterparty_2  (cost=0.00..579.88 rows=440134 width=11)
+                                                                                            ->  Hash  (cost=451.98..451.98 rows=70917 width=11)
+                                                                                                  ->  Seq Scan on purchase_agreement_header purchase_agreement_header_1  (cost=0.00..451.98 rows=70917 width=11)
+                                                                                      ->  Hash  (cost=447.18..447.18 rows=36676 width=11)
+                                                                                            ->  Seq Scan on purchase_contract_header purchase_contract_header_1  (cost=0.00..447.18 rows=36676 width=11)
+                                                                                ->  Hash  (cost=559.60..559.60 rows=397654 width=11)
+                                                                                      ->  Seq Scan on purchase_order_header purchase_order_header_1  (cost=0.00..559.60 rows=397654 width=11)
+                                                                    ->  Hash  (cost=615.69..615.69 rows=437505 width=35)
+                                                                          ->  Redistribute Motion 8:8  (slice10; segments: 8)  (cost=0.00..615.69 rows=437505 width=35)
+                                                                                Hash Key: purchase_agreement_position.position_line_item_code
+                                                                                ->  Seq Scan on purchase_agreement_position  (cost=0.00..539.28 rows=437505 width=35)
+                                                              ->  Hash  (cost=592.28..592.28 rows=336513 width=33)
+                                                                    ->  Redistribute Motion 8:8  (slice11; segments: 8)  (cost=0.00..592.28 rows=336513 width=33)
+                                                                          Hash Key: purchase_contract_position.position_line_item_code
+                                                                          ->  Seq Scan on purchase_contract_position  (cost=0.00..536.87 rows=336513 width=33)
+                                                        ->  Hash  (cost=1107.04..1107.04 rows=1597854 width=31)
+                                                              ->  Redistribute Motion 8:8  (slice12; segments: 8)  (cost=0.00..1107.04 rows=1597854 width=31)
+                                                                    Hash Key: purchase_order_position.position_line_item_code
+                                                                    ->  Seq Scan on purchase_order_position  (cost=0.00..859.86 rows=1597854 width=31)
+                                                  ->  Hash  (cost=628.43..628.43 rows=1136755 width=18)
+                                                        ->  Seq Scan on material_texts  (cost=0.00..628.43 rows=1136755 width=18)
+                                                              Filter: ((language_code)::text = 'R'::text)
+                                            ->  Hash  (cost=628.43..628.43 rows=1136755 width=18)
+                                                  ->  Seq Scan on material_texts material_texts_1  (cost=0.00..628.43 rows=1136755 width=18)
+                                                        Filter: ((language_code)::text = 'R'::text)
+                                      ->  Hash  (cost=628.43..628.43 rows=1136755 width=18)
+                                            ->  Seq Scan on material_texts material_texts_2  (cost=0.00..628.43 rows=1136755 width=18)
+                                                  Filter: ((language_code)::text = 'R'::text)
+                                ->  Hash  (cost=2848.94..2848.94 rows=8066804 width=41)
+                                      ->  Redistribute Motion 8:8  (slice13; segments: 8)  (cost=0.00..2848.94 rows=8066804 width=41)
+                                            Hash Key: purchase_document_history.purchase_document_position_code
+                                            ->  Seq Scan on purchase_document_history  (cost=0.00..1198.56 rows=8066804 width=41)
+                          ->  Hash  (cost=431.04..431.04 rows=494 width=8)
+                                ->  Seq Scan on unit_balance  (cost=0.00..431.04 rows=494 width=8)
+                    ->  Hash  (cost=431.03..431.03 rows=251 width=3)
+                          ->  Seq Scan on country  (cost=0.00..431.03 rows=251 width=3)
+Optimizer: Pivotal Optimizer (GPORCA)

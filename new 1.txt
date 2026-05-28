@@ -1,72 +1,278 @@
-with src as (
+Почему раньше работало, а сейчас нет
+
+Скорее всего одно из этого:
+
+1. Вырос объем dm_calc.sd_sales_main_scm.
+2. Вырос объем dds.sales_bundle_and_delivery_relationship.
+3. Появились дубли/размножение по delivery_code.
+4. Появился перекос по sales_bundle_code или delivery_code.
+5. Устарела статистика.
+6. Изменился план запроса.
+7. На сегменте стало меньше доступного лимита workfile.
+8. Поменялись данные так, что row_number стал сортировать намного больше строк.
+
+Самое важное: ошибка на seg1 говорит, что проблема может быть не только в общем объеме, но и в перекосе данных. Один сегмент получил слишком много строк.
+
+Что прям плохо в текущем блоке lake
+1. Ты создаешь lake по всей истории
+
+Сейчас lake собирается без ограничения по периоду и без ограничения по нужным sales_bundle_code.
+
+from dm_calc.sd_sales_main_scm ssms
+join dds.sales_bundle_and_delivery_relationship sd4798
+    on ssms.delivery_number_sales = sd4798.delivery_code
+
+А потом ниже, в base, ты все равно используешь только те sales_bundle_code, которые есть в:
+
+dm_calc.sales_bundle_transport_hub_turnover_sdt0004
+
+и попадают в период:
+
+t4.dt_transportation_stage_start_p <= v_key_max
+and coalesce(t4.dt_transportation_stage_start_r, current_date) >= v_key_min
+
+То есть lake можно сильно уменьшить заранее.
+
+2. Join может быть many-to-many
+
+Если в sd_sales_main_scm по одной продажной поставке несколько строк, и в sales_bundle_and_delivery_relationship по этой же поставке тоже несколько строк, получится размножение.
+
+Например:
+
+ssms по delivery_number_sales = 5 строк
+sd4798 по delivery_code = 20 строк
+
+после join = 100 строк
+
+Потом все это сортируется для row_number().
+
+3. Нет фильтра по удаленным строкам в sd4798
+
+В других местах скрипта ты часто пишешь:
+
+is_deleted_code is null
+
+А здесь нет:
+
+join dds.sales_bundle_and_delivery_relationship as sd4798
+    on ssms.delivery_number_sales = sd4798.delivery_code
+
+Если в sd4798 есть исторические/удаленные строки, они тоже участвуют в join и увеличивают объем.
+
+Если бизнес-логика позволяет, надо добавить:
+
+and sd4798.is_deleted_code is null
+Быстрый правильный фикс
+
+Нужно перед lake создать маленький список нужных sales_bundle_code из t4, и только по ним строить lake.
+
+Добавь перед созданием pg_temp.lake
+drop table if exists pg_temp.t4_scope;
+
+create temporary table pg_temp.t4_scope
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+) as
+select distinct
+    t4.sales_bundle_code
+from dm_calc.sales_bundle_transport_hub_turnover_sdt0004 t4
+where t4.dt_transportation_stage_start_p <= v_key_max
+  and coalesce(t4.dt_transportation_stage_start_r, current_date) >= v_key_min
+  and t4.dt_transportation_stage_start_p <> coalesce(t4.dt_transportation_stage_start_r, '22991231'::date)
+  and t4.transport_route_destination_hub_code like 'G%'
+  and t4.sales_bundle_code is not null
+distributed by (sales_bundle_code);
+
+analyze pg_temp.t4_scope;
+Переписанный блок lake
+
+Вместо текущего lake попробуй так:
+
+drop table if exists pg_temp.lake;
+
+create temporary table pg_temp.lake
+with (
+    appendonly = true,
+    orientation = column,
+    compresstype = zstd,
+    compresslevel = 3
+) as
+select
+    x.delivery_number_sales,
+    x.SD_000003,
+    x.SD_000110,
+    x.SD_000001,
+    x.SD_000143,
+    x.SD_000010,
+    x.SD_000013,
+    x.SD_000014,
+    x.SD_000151,
+    x.SD_000054,
+    x.SD_000649,
+    x.SD_000044,
+    x.SD_000028,
+    x.SD_000040,
+    x.SD_000041,
+    x.SD_000042,
+    x.SD_000482,
+    x.SD_000004,
+    x.SD_000067,
+    x.SD_000047,
+    x.SD_000048,
+    x.SD_000049,
+    x.SD_000024,
+    x.sales_bundle_code
+from (
     select
-        table_schema,
-        table_name,
-        dt_of_verification::date as check_dt,
-        metric_result::bigint as row_cnt,
-        dt_of_verification,
+        ssms.delivery_number_sales,
+
+        ssms.delivery_number_of_producer_plant as SD_000003,
+        ssms.delivery_item_of_plant as SD_000110,
+        ssms.delivery_number_initial as SD_000001,
+        ssms.material_code as SD_000143,
+        ssms.dt_shipment as SD_000010,
+        ssms.railcar as SD_000013,
+        ssms.transport_bill as SD_000014,
+        ssms.uni as SD_000151,
+        ssms.port_of_discharge_in_foreign_port_code as SD_000054,
+        ssms.port_of_loading_code as SD_000649,
+        ssms.port_of_discharge_code as SD_000044,
+        ssms.transport_railcar_type_code as SD_000028,
+        ssms.bill_of_lading_group_code as SD_000040,
+        ssms.bill_of_lading_number as SD_000041,
+        ssms.dt_bill_of_lading as SD_000042,
+        ssms.dt_final_release as SD_000482,
+        ssms.batch as SD_000004,
+        ssms.delivery_basis as SD_000067,
+        ssms.bill_of_lading_group_code_in_foreign_port as SD_000047,
+        ssms.bill_of_lading_in_foreign_port as SD_000048,
+        ssms.dt_bill_of_lading_in_foreign_port as SD_000049,
+        ssms.dt_warehouse as SD_000024,
+
+        sd4798.sales_bundle_code,
+
         row_number() over (
-            partition by table_schema, table_name, dt_of_verification::date
-            order by dt_of_verification desc
+            partition by sd4798.sales_bundle_code
+            order by 
+                sd4798.source_system_position_code desc,
+                ssms.delivery_number_initial desc
         ) as rn
-    from dq.data_quality_results
-    where verification_type = 'row_count'
-      and dt_of_verification::date in (date '2026-05-27', date '2026-05-26')
-      and metric_result ~ '^[0-9]+$'
-),
 
-today as (
-    select
-        table_schema,
-        table_name,
-        row_cnt as row_cnt_today,
-        dt_of_verification as dt_today
-    from src
-    where check_dt = date '2026-05-27'
-      and rn = 1
-),
+    from pg_temp.t4_scope scope
 
-yesterday as (
-    select
-        table_schema,
-        table_name,
-        row_cnt as row_cnt_yesterday,
-        dt_of_verification as dt_yesterday
-    from src
-    where check_dt = date '2026-05-26'
-      and rn = 1
-)
+    join dds.sales_bundle_and_delivery_relationship sd4798
+        on sd4798.sales_bundle_code = scope.sales_bundle_code
+       and sd4798.is_deleted_code is null
+
+    join dm_calc.sd_sales_main_scm ssms
+        on ssms.delivery_number_sales = sd4798.delivery_code
+) x
+where x.rn = 1
+distributed by (sales_bundle_code);
+
+analyze pg_temp.lake;
+Почему это лучше
+
+Было:
+
+вся dm_calc.sd_sales_main_scm
+× вся dds.sales_bundle_and_delivery_relationship
+→ row_number по огромному набору
+
+Стало:
+
+сначала берем только нужные sales_bundle_code из t4 за расчетный период
+→ по ним берем sd4798
+→ по ним берем ssms
+→ row_number по сильно меньшему набору
+
+Это должно заметно снизить workfile.
+
+Если нельзя добавлять is_deleted_code is null
+
+Если бизнес говорит, что в lake должны участвовать и удаленные строки, убери это условие:
+
+and sd4798.is_deleted_code is null
+
+Но я бы сначала проверил, сколько оно отрезает:
 
 select
-    coalesce(t.table_schema, y.table_schema) as table_schema,
-    coalesce(t.table_name, y.table_name) as table_name,
+    count(*) as total_rows,
+    count(*) filter (where is_deleted_code is null) as active_rows,
+    count(*) filter (where is_deleted_code is not null) as deleted_rows
+from dds.sales_bundle_and_delivery_relationship;
 
-    y.row_cnt_yesterday,
-    t.row_cnt_today,
+Если удаленных много, это как раз могло раздуть join.
 
-    t.row_cnt_today - y.row_cnt_yesterday as diff_rows,
-    abs(t.row_cnt_today - y.row_cnt_yesterday) as abs_diff_rows,
+Что проверить перед запуском
+1. Сколько строк дает старый join
+select
+    count(*) as join_rows,
+    count(distinct sd4798.sales_bundle_code) as sales_bundle_cnt
+from dm_calc.sd_sales_main_scm ssms
+join dds.sales_bundle_and_delivery_relationship sd4798
+    on ssms.delivery_number_sales = sd4798.delivery_code;
+2. Сколько строк дает новый ограниченный join
+select
+    count(*) as join_rows,
+    count(distinct sd4798.sales_bundle_code) as sales_bundle_cnt
+from pg_temp.t4_scope scope
+join dds.sales_bundle_and_delivery_relationship sd4798
+    on sd4798.sales_bundle_code = scope.sales_bundle_code
+   and sd4798.is_deleted_code is null
+join dm_calc.sd_sales_main_scm ssms
+    on ssms.delivery_number_sales = sd4798.delivery_code;
 
-    case
-        when y.row_cnt_yesterday is null then 'NEW_TODAY'
-        when t.row_cnt_today is null then 'MISSING_TODAY'
-        when y.row_cnt_yesterday = 0 and t.row_cnt_today > 0 then 'FROM_ZERO'
-        when y.row_cnt_yesterday = 0 and t.row_cnt_today = 0 then 'NO_CHANGE_ZERO'
-        else round(
-            ((t.row_cnt_today - y.row_cnt_yesterday)::numeric / nullif(y.row_cnt_yesterday, 0)) * 100,
-            2
-        )::text
-    end as diff_percent,
+Если разница в разы — проблема найдена.
 
-    y.dt_yesterday,
-    t.dt_today
+Проверка перекоса
 
-from today t
-full join yesterday y
-    on y.table_schema = t.table_schema
-   and y.table_name = t.table_name
+Посмотри, нет ли sales_bundle_code, который дает очень много строк:
 
-order by
-    abs(coalesce(t.row_cnt_today, 0) - coalesce(y.row_cnt_yesterday, 0)) desc
+select
+    sd4798.sales_bundle_code,
+    count(*) as cnt
+from pg_temp.t4_scope scope
+join dds.sales_bundle_and_delivery_relationship sd4798
+    on sd4798.sales_bundle_code = scope.sales_bundle_code
+join dm_calc.sd_sales_main_scm ssms
+    on ssms.delivery_number_sales = sd4798.delivery_code
+group by sd4798.sales_bundle_code
+order by cnt desc
+limit 50;
 
-limit 30;
+Если сверху есть значения с десятками/сотнями тысяч строк — именно они могут валить row_number().
+
+Еще важная проверка: не поменяется ли результат
+
+После переписывания сравни старый и новый lake, если старый хотя бы на тестовом периоде создается.
+
+select count(*) from pg_temp.lake;
+select count(distinct sales_bundle_code) from pg_temp.lake;
+
+И проверить дубли:
+
+select
+    sales_bundle_code,
+    count(*) as cnt
+from pg_temp.lake
+group by sales_bundle_code
+having count(*) > 1;
+
+Должно быть 0, потому что rn = 1.
+
+Очень вероятная причина именно сейчас
+
+По твоему логу:
+
+workfile per segment size limit exceeded
+
+и контексту lake я бы сказал, что причина почти точно в этом:
+
+join ssms + sd4798 стал слишком большим,
+а row_number() вынужден сортировать огромный набор по sales_bundle_code.
+
+Раньше данных было меньше или статистика давала другой план. Сейчас Greenplum начал много spill-ить во временные файлы.

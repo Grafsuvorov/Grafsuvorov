@@ -60,7 +60,6 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
   const [treeLoading, setTreeLoading] = useState(false);
-  const [showChangedOnly, setShowChangedOnly] = useState(false);
   const [branchFile, setBranchFile] = useState(null);
   const [branchFileContent, setBranchFileContent] = useState("");
   const [branchFileLoading, setBranchFileLoading] = useState(false);
@@ -98,33 +97,6 @@ export default function MetaWorkspacePage({ userProfile }) {
   const hasClickObjects = branchSummary.click > 0;
   const showGpTab = !branchScopedActive || hasGpObjects;
   const showClickTab = !branchScopedActive || hasClickObjects;
-  const filteredBranchTree = useMemo(() => {
-    if (!showChangedOnly) return branchTree;
-    const gp_entities = (branchTree.gp_entities || [])
-      .map((entity) => ({
-        ...entity,
-        schemas: (entity.schemas || [])
-          .map((schema) => ({
-            ...schema,
-            tables: (schema.tables || [])
-              .map((table) => ({
-                ...table,
-                files: (table.files || []).filter((file) => file.changed),
-              }))
-              .filter((table) => (table.files || []).length),
-          }))
-          .filter((schema) => (schema.tables || []).length),
-      }))
-      .filter((entity) => (entity.schemas || []).length);
-    const click_schemas = (branchTree.click_schemas || [])
-      .map((schema) => ({
-        ...schema,
-        files: (schema.files || []).filter((file) => file.changed),
-      }))
-      .filter((schema) => (schema.files || []).length);
-    return { gp_entities, click_schemas };
-  }, [branchTree, showChangedOnly]);
-
   useEffect(() => {
     metaWorkspaceApi.branches()
       .then((data) => setBranchOptions(data?.items || []))
@@ -436,8 +408,7 @@ export default function MetaWorkspacePage({ userProfile }) {
         <div className="dev-meta-generator meta-workspace-context">
           <div className="meta-workspace-context-head">
             <div>
-              <div className="section-subtitle">Каталог изменений ветки</div>
-              <div className="muted">Подсветка объектов строится прямо из git diff выбранной ветки относительно base.</div>
+              <div className="section-subtitle">Измененные объекты в выбранной ветке</div>
             </div>
           </div>
           <div className="dev-meta-generator-grid meta-workspace-context-grid">
@@ -552,26 +523,22 @@ export default function MetaWorkspacePage({ userProfile }) {
         <div className="dev-meta-generator meta-workspace-context">
           <div className="meta-workspace-context-head">
             <div>
-              <div className="section-subtitle">Реальная структура ветки</div>
-              <div className="muted">Здесь показываются сущности, схемы и файлы прямо из выбранной git-ветки, а не из DEV-каталога на сервере.</div>
+              <div className="section-subtitle">Структура ветки</div>
+              <div className="muted">Выбранная ветка: {branchCatalog.branch_name || branchName || "—"}</div>
             </div>
           </div>
           <div className="dev-meta-generator-actions">
-            <label className="meta-workspace-inline-toggle">
-              <input type="checkbox" checked={showChangedOnly} onChange={(e) => setShowChangedOnly(e.target.checked)} />
-              <span>Показывать только изменённые файлы</span>
-            </label>
             <span className="muted">{treeLoading ? "Читаем дерево ветки..." : "Можно открыть и сохранить любой файл прямо в ветку."}</span>
           </div>
           <div className="meta-workspace-real-tree">
             <div className="meta-workspace-branch-column">
-              <div className="section-subtitle">Greenplum branch tree</div>
-              {(filteredBranchTree.gp_entities || []).length ? (
-                (filteredBranchTree.gp_entities || []).map((entity) => (
-                  <details key={entity.entity_name} className="meta-workspace-tree-node" open>
+              <div className="section-subtitle">Greenplum</div>
+              {(branchTree.gp_entities || []).length ? (
+                (branchTree.gp_entities || []).map((entity) => (
+                  <details key={entity.entity_name} className="meta-workspace-tree-node">
                     <summary className="meta-workspace-tree-summary entity">{entity.entity_name}</summary>
                     {(entity.schemas || []).map((schema) => (
-                      <details key={`${entity.entity_name}/${schema.schema_name}`} className="meta-workspace-tree-node" open>
+                      <details key={`${entity.entity_name}/${schema.schema_name}`} className="meta-workspace-tree-node">
                         <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
                         {(schema.tables || []).map((table) => (
                           <details key={`${entity.entity_name}/${schema.schema_name}/${table.table_name}`} className="meta-workspace-tree-node">
@@ -600,10 +567,10 @@ export default function MetaWorkspacePage({ userProfile }) {
             </div>
 
             <div className="meta-workspace-branch-column">
-              <div className="section-subtitle">ClickHouse branch tree</div>
-              {(filteredBranchTree.click_schemas || []).length ? (
-                (filteredBranchTree.click_schemas || []).map((schema) => (
-                  <details key={schema.schema_name} className="meta-workspace-tree-node" open>
+              <div className="section-subtitle">ClickHouse</div>
+              {(branchTree.click_schemas || []).length ? (
+                (branchTree.click_schemas || []).map((schema) => (
+                  <details key={schema.schema_name} className="meta-workspace-tree-node">
                     <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
                     <div className="meta-workspace-tree-files">
                       {(schema.files || []).map((file) => (

@@ -115,7 +115,8 @@ export default function MetaWorkspacePage({ userProfile }) {
     }
   }, [branchScopedActive, mode, showClickTab, showGpTab]);
 
-  const loadBranchCatalog = async (selectedBranch) => {
+  const loadBranchCatalog = async (selectedBranch, options = {}) => {
+    const silent = Boolean(options?.silent);
     const branchValue = String(selectedBranch || branchName || "").trim();
     if (!branchValue) {
       setError("Укажите ветку для просмотра изменений");
@@ -142,13 +143,22 @@ export default function MetaWorkspacePage({ userProfile }) {
       ]);
       setBranchCatalog(data || { gp_objects: [], click_objects: [] });
       setBranchTree(treeData || { gp_entities: [], click_schemas: [] });
-      setMessage("Каталог изменений ветки обновлен.");
+      if (!silent) {
+        setMessage("Каталог изменений ветки обновлен.");
+      }
     } catch (err) {
       setError(err.message || "Не удалось построить каталог ветки");
     } finally {
       setCatalogLoading(false);
       setTreeLoading(false);
     }
+  };
+
+  const triggerBranchLoadIfReady = async (selectedBranch, selectedBaseBranch) => {
+    const branchValue = String(selectedBranch || branchName || "").trim();
+    const baseValue = String(selectedBaseBranch || baseBranch || "").trim();
+    if (!branchValue || !baseValue) return;
+    await loadBranchCatalog(branchValue);
   };
 
   const handleSelectBranch = async (nextBranch) => {
@@ -336,6 +346,10 @@ export default function MetaWorkspacePage({ userProfile }) {
     }
   };
 
+  const handleBranchBundleSaved = async () => {
+    await loadBranchCatalog(branchName.trim(), { silent: true });
+  };
+
   const jumpToGenerator = (nextMode) => {
     setMode(nextMode);
     setActiveSelection(null);
@@ -405,7 +419,18 @@ export default function MetaWorkspacePage({ userProfile }) {
                 value={branchName}
                 onChange={(e) => {
                   setBranchNameEdited(true);
-                  setBranchName(e.target.value);
+                  const nextValue = e.target.value;
+                  setBranchName(nextValue);
+                  if (branchOptions.some((item) => String(item || "").toLowerCase() === String(nextValue || "").trim().toLowerCase())) {
+                    triggerBranchLoadIfReady(nextValue, baseBranch);
+                  }
+                }}
+                onBlur={() => triggerBranchLoadIfReady(branchName, baseBranch)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    triggerBranchLoadIfReady(branchName, baseBranch);
+                  }
                 }}
                 placeholder="feature/DWH-12345"
               />
@@ -415,15 +440,23 @@ export default function MetaWorkspacePage({ userProfile }) {
             </label>
             <label className="admin-field">
               <span>Base ветка</span>
-              <input value={baseBranch} onChange={(e) => setBaseBranch(e.target.value)} placeholder="main" />
+              <input
+                value={baseBranch}
+                onChange={(e) => setBaseBranch(e.target.value)}
+                onBlur={() => triggerBranchLoadIfReady(branchName, baseBranch)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    triggerBranchLoadIfReady(branchName, baseBranch);
+                  }
+                }}
+                placeholder="main"
+              />
             </label>
           </div>
           <div className="dev-meta-generator-actions">
             <button type="button" className="btn btn-secondary" onClick={handleCreateBranch} disabled={creatingBranch || !String(branchName || "").trim()}>
               {creatingBranch ? "Создаем ветку..." : "Создать ветку от main"}
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => loadBranchCatalog()} disabled={catalogLoading || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
-              {catalogLoading ? "Обновляем diff..." : "Показать изменения ветки"}
             </button>
             <button type="button" className="btn btn-secondary" onClick={handleValidateAll} disabled={validatingBranch || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
               {validatingBranch ? "Проверяем всё..." : "Проверить все объекты ветки"}
@@ -672,6 +705,8 @@ export default function MetaWorkspacePage({ userProfile }) {
               onReleaseBranchChange={setReleaseBranch}
               externalOpenRequest={gpOpenRequest}
               externalBranchBundle={gpBranchBundle}
+              branchSaveContext={branchScopedActive ? { branch_name: branchCatalog.branch_name || branchName.trim(), base_branch: baseBranch.trim() } : null}
+              onBranchSaved={handleBranchBundleSaved}
               allowedObjectKeys={allowedGpObjectKeys}
               branchScopedActive={branchScopedActive}
               generatorAnchorId="meta-workspace-gp-generator"

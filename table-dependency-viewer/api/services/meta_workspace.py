@@ -437,6 +437,96 @@ def save_meta_workspace_branch_file(
         shutil.rmtree(worktree_dir, ignore_errors=True)
 
 
+def save_meta_workspace_branch_gp_bundle(
+    *,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    branch_name: str,
+    base_branch: str,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+    yaml_content: str,
+    recreate_sql: str,
+    insert_sql: str,
+    truncate_sql: str,
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите ветку")
+    base_branch_norm = str(base_branch or "").strip() or "main"
+    entity_name_norm = str(entity_name or "").strip()
+    schema_name_norm = str(schema_name or "").strip()
+    table_name_norm = str(table_name or "").strip()
+    if not entity_name_norm or not schema_name_norm or not table_name_norm:
+        raise ValueError("Укажите сущность, схему и таблицу")
+
+    git_repo_root = Path(git_repo_value).resolve()
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
+    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
+        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-gp-{branch_name_norm.replace('/', '-')}-"))
+    try:
+        if remote_branch_exists:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
+        else:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+
+        object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_name_norm
+        object_dir = (worktree_dir / object_rel).resolve()
+        if not str(object_dir).startswith(str(worktree_dir.resolve())):
+            raise ValueError("Некорректный путь объекта")
+        object_dir.mkdir(parents=True, exist_ok=True)
+
+        files_to_write = {
+            "meta_data_file.yaml": str(yaml_content or ""),
+            "sql_query_recreate_init.sql": str(recreate_sql or ""),
+            "sql_query_insert_init.sql": str(insert_sql or ""),
+            "sql_query_truncate.sql": str(truncate_sql or ""),
+        }
+        rel_paths: list[str] = []
+        for file_name, content in files_to_write.items():
+            target_path = object_dir / file_name
+            target_path.write_text(content, encoding="utf-8")
+            rel_paths.append((object_rel / file_name).as_posix())
+
+        status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
+        committed = False
+        if status_output:
+            _run_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
+            task_id_norm = str(task_id or "").strip().upper()
+            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+            _run_git(
+                git_repo_root,
+                ["commit", "-m", f"{commit_prefix}: update {entity_name_norm}/{schema_name_norm}/{table_name_norm}"],
+                cwd=worktree_dir,
+            )
+            committed = True
+
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
+        return {
+            "branch_name": branch_name_norm,
+            "base_branch": base_branch_norm,
+            "object_key": f"{entity_name_norm}/{schema_name_norm}/{table_name_norm}",
+            "path": object_rel.as_posix(),
+            "changed_files": rel_paths,
+            "committed": committed,
+        }
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
+
+
 def validate_meta_workspace_branch(
     *,
     engine,

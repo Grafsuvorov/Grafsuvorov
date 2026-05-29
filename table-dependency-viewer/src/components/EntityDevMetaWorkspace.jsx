@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { entityMetaApi } from "../api/entityMeta.js";
+import { metaWorkspaceApi } from "../api/metaWorkspace.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 
 const COMMON_SCHEMAS = ["stg", "ods", "dict_dds", "dict_stg", "dq", "dm", "dm_calc", "dm_view", "dds"];
@@ -156,6 +157,8 @@ export default function EntityDevMetaWorkspace({
   onReleaseBranchChange,
   externalOpenRequest = null,
   externalBranchBundle = null,
+  branchSaveContext = null,
+  onBranchSaved = null,
   allowedObjectKeys = null,
   branchScopedActive = false,
   generatorAnchorId = "",
@@ -272,6 +275,11 @@ export default function EntityDevMetaWorkspace({
 
   const currentFingerprint = useMemo(() => (bundle ? objectFingerprint(bundle) : ""), [bundle]);
   const isValidationFresh = Boolean(validation?.valid && validatedFingerprint && validatedFingerprint === currentFingerprint);
+  const branchSaveActive = Boolean(
+    branchSaveContext?.branch_name
+    && branchSaveContext?.base_branch
+    && bundle?.source === "branch"
+  );
 
   const appendReplicaEntity = () => {
     const nextValues = replicaPickerValues
@@ -437,7 +445,13 @@ export default function EntityDevMetaWorkspace({
       });
       setValidatedFingerprint(data?.valid ? nextFingerprint : "");
       setMessageType(data?.valid ? "success" : "warning");
-      setMessage(data?.valid ? "Проверка пройдена. Объект готов к сохранению в DEV." : "Проверка завершилась с ошибками.");
+      setMessage(
+        data?.valid
+          ? branchSaveActive
+            ? "Проверка пройдена. Объект готов к сохранению в текущую ветку."
+            : "Проверка пройдена. Объект готов к сохранению в DEV."
+          : "Проверка завершилась с ошибками."
+      );
     } catch (err) {
       setError(err.message || "Не удалось провалидировать объект");
     } finally {
@@ -463,38 +477,63 @@ export default function EntityDevMetaWorkspace({
     setError(null);
     setMessage(null);
     try {
-      const data = await entityMetaApi.save({
-        entity_name: selection.entity_name,
-        schema_name: selection.schema_name,
-        table_name: selection.table_name,
-        task_id: taskId,
-        key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
-        source_object_key: bundle.source_object_key || null,
-        replica_entity_names: replicaEntitiesText.split(",").map((item) => item.trim()).filter(Boolean),
-        yaml_content: bundle.yaml_content,
-        recreate_sql: bundle.recreate_sql,
-        insert_sql: bundle.insert_sql,
-        truncate_sql: bundle.truncate_sql,
-      });
-      if (data?.validation?.normalized?.yaml_content) {
-        setBundle((prev) => ({
-          ...prev,
-          yaml_content: data.validation.normalized.yaml_content,
+      if (branchSaveActive) {
+        const data = await metaWorkspaceApi.saveBranchGpBundle({
+          branch_name: branchSaveContext.branch_name,
+          base_branch: branchSaveContext.base_branch,
+          task_id: taskId,
+          entity_name: selection.entity_name,
+          schema_name: selection.schema_name,
+          table_name: selection.table_name,
+          yaml_content: bundle.yaml_content,
+          recreate_sql: bundle.recreate_sql,
+          insert_sql: bundle.insert_sql,
+          truncate_sql: bundle.truncate_sql,
+        });
+        setValidatedFingerprint(currentFingerprint);
+        setMessageType("success");
+        setMessage(
+          data?.committed
+            ? `Изменения сохранены в ветку ${data?.branch_name || branchSaveContext.branch_name}.`
+            : `Новых изменений для коммита в ветку ${data?.branch_name || branchSaveContext.branch_name} не было.`
+        );
+        if (typeof onBranchSaved === "function") {
+          await onBranchSaved(data);
+        }
+      } else {
+        const data = await entityMetaApi.save({
+          entity_name: selection.entity_name,
+          schema_name: selection.schema_name,
+          table_name: selection.table_name,
+          task_id: taskId,
+          key_attributes: keyAttributesText.split(",").map((item) => item.trim()).filter(Boolean),
+          source_object_key: bundle.source_object_key || null,
+          replica_entity_names: replicaEntitiesText.split(",").map((item) => item.trim()).filter(Boolean),
+          yaml_content: bundle.yaml_content,
+          recreate_sql: bundle.recreate_sql,
+          insert_sql: bundle.insert_sql,
+          truncate_sql: bundle.truncate_sql,
+        });
+        if (data?.validation?.normalized?.yaml_content) {
+          setBundle((prev) => ({
+            ...prev,
+            yaml_content: data.validation.normalized.yaml_content,
+          }));
+        }
+        if (Array.isArray(data?.validation?.normalized?.key_attributes)) {
+          setKeyAttributesText(data.validation.normalized.key_attributes.join(", "));
+        }
+        setValidation(data?.validation || null);
+        setValidatedFingerprint(objectFingerprint({
+          ...bundle,
+          yaml_content: data?.validation?.normalized?.yaml_content || bundle.yaml_content,
         }));
+        await refreshAll();
+        setMessageType("success");
+        setMessage(`DEV объект сохранен: ${data?.path || ""}`);
       }
-      if (Array.isArray(data?.validation?.normalized?.key_attributes)) {
-        setKeyAttributesText(data.validation.normalized.key_attributes.join(", "));
-      }
-      setValidation(data?.validation || null);
-      setValidatedFingerprint(objectFingerprint({
-        ...bundle,
-        yaml_content: data?.validation?.normalized?.yaml_content || bundle.yaml_content,
-      }));
-      await refreshAll();
-      setMessageType("success");
-      setMessage(`DEV объект сохранен: ${data?.path || ""}`);
     } catch (err) {
-      setError(err.message || "Не удалось сохранить объект");
+      setError(err.message || (branchSaveActive ? "Не удалось сохранить объект в ветку" : "Не удалось сохранить объект"));
     } finally {
       setSaving(false);
     }
@@ -949,7 +988,7 @@ export default function EntityDevMetaWorkspace({
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={!bundle || saving || !isValidationFresh || !taskIdValid}>
-                  {saving ? "Сохраняем..." : "Сохранить в DEV"}
+                  {saving ? "Сохраняем..." : branchSaveActive ? "Сохранить в ветку" : "Сохранить в DEV"}
                 </button>
               </div>
             </div>

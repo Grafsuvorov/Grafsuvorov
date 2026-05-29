@@ -127,6 +127,7 @@ from .services.meta_workspace import (
     list_meta_workspace_branches,
     read_meta_workspace_branch_gp_bundle,
     read_meta_workspace_branch_file,
+    save_meta_workspace_branch_gp_bundle,
     save_meta_workspace_branch_file,
     sync_meta_workspace_branch,
     validate_meta_workspace_branch,
@@ -339,6 +340,19 @@ class MetaWorkspaceBranchGpBundlePayload(BaseModel):
     entity_name: str
     schema_name: str
     table_name: str
+
+
+class MetaWorkspaceBranchGpBundleSavePayload(BaseModel):
+    branch_name: str
+    base_branch: str
+    task_id: Optional[str] = None
+    entity_name: str
+    schema_name: str
+    table_name: str
+    yaml_content: str
+    recreate_sql: str
+    insert_sql: str
+    truncate_sql: str
 
 
 class AssistantContextPayload(BaseModel):
@@ -1053,6 +1067,29 @@ def get_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBund
             entity_name=payload.entity_name,
             schema_name=payload.schema_name,
             table_name=payload.table_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/meta-workspace/branch-gp-bundle/save")
+def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBundleSavePayload, request: Request):
+    user = _require_admin(request)
+    try:
+        return save_meta_workspace_branch_gp_bundle(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
+            yaml_content=payload.yaml_content,
+            recreate_sql=payload.recreate_sql,
+            insert_sql=payload.insert_sql,
+            truncate_sql=payload.truncate_sql,
+            task_id=payload.task_id or "",
+            author=user.email,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

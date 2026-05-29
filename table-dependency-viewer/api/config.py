@@ -55,6 +55,7 @@ GITLAB_PROJECT = os.getenv("GITLAB_PROJECT", "")
 GITLAB_API_URL = os.getenv("GITLAB_API_URL", "")
 GITLAB_SSL_VERIFY = os.getenv("GITLAB_SSL_VERIFY", "true")
 CLICK_META_GIT_ROOT = os.getenv("CLICK_META_GIT_ROOT", "config_files/meta")
+META_WORKSPACE_ROOT = os.getenv("META_WORKSPACE_ROOT", "/tmp/meta-workspaces")
 
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "false")
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY", "change_me")

@@ -75,6 +75,7 @@ from .config import (
     ENTITY_META_GIT_META_ROOT,
     ENTITY_META_GIT_REPO,
     CLICK_META_GIT_ROOT,
+    META_WORKSPACE_ROOT,
     GITLAB_API_URL,
     GITLAB_PROJECT,
     GITLAB_SSL_VERIFY,
@@ -1014,12 +1015,14 @@ def get_admin_meta_workspace_branch_catalog(
     branch_name: str = Query(...),
     base_branch: str = Query("main"),
 ):
-    _require_admin(request)
+    user = _require_admin(request)
     try:
         return _build_branch_catalog(
             git_repo_root=Path(ENTITY_META_GIT_REPO).resolve(),
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,
             click_git_root_value=CLICK_META_GIT_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=branch_name,
             base_branch=base_branch,
         )
@@ -1033,12 +1036,14 @@ def get_admin_meta_workspace_branch_tree(
     branch_name: str = Query(...),
     base_branch: str = Query("main"),
 ):
-    _require_admin(request)
+    user = _require_admin(request)
     try:
         return build_meta_workspace_branch_tree(
             git_repo_value=ENTITY_META_GIT_REPO,
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,
             click_git_root_value=CLICK_META_GIT_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=branch_name,
             base_branch=base_branch,
         )
@@ -1048,11 +1053,14 @@ def get_admin_meta_workspace_branch_tree(
 
 @router.post("/api/admin/meta-workspace/branch-file")
 def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload, request: Request):
-    _require_admin(request)
+    user = _require_admin(request)
     try:
         return read_meta_workspace_branch_file(
             git_repo_value=ENTITY_META_GIT_REPO,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=payload.branch_name,
+            base_branch="main",
             file_path=payload.file_path,
         )
     except ValueError as exc:
@@ -1061,12 +1069,15 @@ def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload
 
 @router.post("/api/admin/meta-workspace/branch-gp-bundle")
 def get_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBundlePayload, request: Request):
-    _require_admin(request)
+    user = _require_admin(request)
     try:
         return read_meta_workspace_branch_gp_bundle(
             git_repo_value=ENTITY_META_GIT_REPO,
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=payload.branch_name,
+            base_branch="main",
             entity_name=payload.entity_name,
             schema_name=payload.schema_name,
             table_name=payload.table_name,
@@ -1082,6 +1093,8 @@ def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBun
         return save_meta_workspace_branch_gp_bundle(
             git_repo_value=ENTITY_META_GIT_REPO,
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=payload.branch_name,
             base_branch=payload.base_branch,
             entity_name=payload.entity_name,
@@ -1107,6 +1120,8 @@ def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePa
     try:
         return save_meta_workspace_branch_file(
             git_repo_value=ENTITY_META_GIT_REPO,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             branch_name=payload.branch_name,
             base_branch=payload.base_branch,
             file_path=payload.file_path,
@@ -1123,7 +1138,7 @@ def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePa
 
 @router.post("/api/admin/meta-workspace/validate-all")
 def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, request: Request):
-    _require_admin(request)
+    user = _require_admin(request)
     try:
         return validate_meta_workspace_branch(
             engine=engine,
@@ -1131,6 +1146,8 @@ def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, 
             git_repo_value=ENTITY_META_GIT_REPO,
             entity_git_root_value=ENTITY_META_GIT_META_ROOT,
             click_git_root_value=CLICK_META_GIT_ROOT,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            workspace_owner=user.email,
             prod_root_value=ENTITY_META_DIR,
             dev_root_value=DEV_ENTITY_META_DIR,
             branch_name=payload.branch_name,

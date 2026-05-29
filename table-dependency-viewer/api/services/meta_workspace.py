@@ -28,6 +28,63 @@ class BranchRevisionConflictError(PermissionError):
     pass
 
 
+def _workspace_slug(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip().lower()).strip("-")
+    return slug or "default"
+
+
+def _workspace_branch_slug(branch_name: str) -> str:
+    return _workspace_slug(str(branch_name or "").replace("/", "__"))
+
+
+def _workspace_path(workspace_root_value: str, workspace_owner: str, branch_name: str) -> Path:
+    return Path(workspace_root_value).resolve() / _workspace_slug(workspace_owner) / _workspace_branch_slug(branch_name)
+
+
+def _ensure_branch_workspace(
+    *,
+    git_repo_root: Path,
+    workspace_root_value: str,
+    workspace_owner: str,
+    branch_name: str,
+    base_branch: str,
+    author: str | None = None,
+) -> tuple[str, Path]:
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите имя ветки")
+    base_branch_norm = str(base_branch or "").strip() or "main"
+    workspace_root = Path(workspace_root_value or "/tmp/meta-workspaces").resolve()
+    worktree_dir = _workspace_path(str(workspace_root), workspace_owner, branch_name_norm)
+
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
+    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
+        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+
+    worktree_parent = worktree_dir.parent
+    worktree_parent.mkdir(parents=True, exist_ok=True)
+    if not (worktree_dir / ".git").exists():
+        if worktree_dir.exists() and any(worktree_dir.iterdir()):
+            raise ValueError(f"Workspace `{worktree_dir}` уже существует и не похож на git worktree")
+        if remote_branch_exists:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
+        else:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+
+    if author:
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+
+    local_changes = bool(_run_git(git_repo_root, ["status", "--porcelain"], cwd=worktree_dir).strip())
+    if remote_branch_exists and not local_changes:
+        try:
+            _run_git(git_repo_root, ["fetch", "--prune", "origin"], cwd=worktree_dir)
+            _run_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
+        except Exception:
+            pass
+    return branch_name_norm, worktree_dir
+
+
 def _branch_exists(repo_root: Path, ref_name: str) -> bool:
     try:
         _run_git(repo_root, ["rev-parse", "--verify", ref_name])
@@ -228,14 +285,23 @@ def _build_branch_catalog(
     git_repo_root: Path,
     entity_git_root_value: str,
     click_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
     base_branch: str,
 ) -> dict[str, Any]:
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
     base_ref = _resolve_branch_ref(git_repo_root, base_branch)
     diff_output = _run_git(
         git_repo_root,
-        ["diff", "--name-status", f"{base_ref}...{branch_ref}"],
+        ["diff", "--name-status", f"{base_ref}...HEAD"],
+        cwd=worktree_dir,
     )
     entity_root_parts = _entity_root_parts(entity_git_root_value)
     click_root_parts = _click_root_parts(click_git_root_value)
@@ -294,6 +360,7 @@ def _build_branch_catalog(
         "base_branch": re.sub(r"^origin/", "", base_ref),
         "gp_objects": sorted(gp_items, key=lambda row: (row["entity_name"], row["schema_name"], row["table_name"])),
         "click_objects": sorted(click_items, key=lambda row: (row["schema_name"], row["file_name"])),
+        "workspace_path": str(worktree_dir),
     }
 
 
@@ -302,46 +369,60 @@ def build_meta_workspace_branch_tree(
     git_repo_value: str,
     entity_git_root_value: str,
     click_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
     base_branch: str,
 ) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
     catalog = _build_branch_catalog(
         git_repo_root=git_repo_root,
         entity_git_root_value=entity_git_root_value,
         click_git_root_value=click_git_root_value,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
         branch_name=branch_name,
         base_branch=base_branch,
     )
     changed_paths = {
         item
         for _status, item in _parse_name_status(
-            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
+            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...HEAD"], cwd=worktree_dir)
         )
     }
 
     gp_tree_map: dict[str, dict[str, dict[str, list[dict[str, Any]]]]] = {}
-    for raw_path in _git_list_tree_files(git_repo_root, branch_ref, entity_git_root_value):
-        path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
-        root_parts = _entity_root_parts(entity_git_root_value)
-        if path_parts[: len(root_parts)] != root_parts:
-            continue
-        rel = path_parts[len(root_parts):]
-        if len(rel) < 4:
-            continue
-        entity_name, schema_name, table_name = rel[0], rel[1], rel[2]
-        file_name = "/".join(rel[3:])
-        gp_tree_map.setdefault(entity_name, {}).setdefault(schema_name, {}).setdefault(table_name, []).append(
-            {
-                "file_name": file_name,
-                "file_path": raw_path,
-                "changed": raw_path in changed_paths,
-            }
-        )
+    gp_root = (worktree_dir / entity_git_root_value).resolve()
+    if gp_root.exists():
+        for file_path in gp_root.rglob("*"):
+            if not file_path.is_file():
+                continue
+            raw_path = file_path.relative_to(worktree_dir).as_posix()
+            path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
+            root_parts = _entity_root_parts(entity_git_root_value)
+            if path_parts[: len(root_parts)] != root_parts:
+                continue
+            rel = path_parts[len(root_parts):]
+            if len(rel) < 4:
+                continue
+            entity_name, schema_name, table_name = rel[0], rel[1], rel[2]
+            file_name = "/".join(rel[3:])
+            gp_tree_map.setdefault(entity_name, {}).setdefault(schema_name, {}).setdefault(table_name, []).append(
+                {
+                    "file_name": file_name,
+                    "file_path": raw_path,
+                    "changed": raw_path in changed_paths,
+                }
+            )
 
     gp_entities = []
     for entity_name, schema_map in sorted(gp_tree_map.items(), key=lambda item: item[0].lower()):
@@ -361,23 +442,28 @@ def build_meta_workspace_branch_tree(
         gp_entities.append({"entity_name": entity_name, "schemas": schemas})
 
     click_tree_map: dict[str, list[dict[str, Any]]] = {}
-    for raw_path in _git_list_tree_files(git_repo_root, branch_ref, click_git_root_value):
-        path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
-        root_parts = _click_root_parts(click_git_root_value)
-        if path_parts[: len(root_parts)] != root_parts:
-            continue
-        rel = path_parts[len(root_parts):]
-        if len(rel) < 2:
-            continue
-        schema_name = rel[0]
-        file_name = "/".join(rel[1:])
-        click_tree_map.setdefault(schema_name, []).append(
-            {
-                "file_name": file_name,
-                "file_path": raw_path,
-                "changed": raw_path in changed_paths,
-            }
-        )
+    click_root = (worktree_dir / click_git_root_value).resolve()
+    if click_root.exists():
+        for file_path in click_root.rglob("*"):
+            if not file_path.is_file():
+                continue
+            raw_path = file_path.relative_to(worktree_dir).as_posix()
+            path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
+            root_parts = _click_root_parts(click_git_root_value)
+            if path_parts[: len(root_parts)] != root_parts:
+                continue
+            rel = path_parts[len(root_parts):]
+            if len(rel) < 2:
+                continue
+            schema_name = rel[0]
+            file_name = "/".join(rel[1:])
+            click_tree_map.setdefault(schema_name, []).append(
+                {
+                    "file_name": file_name,
+                    "file_path": raw_path,
+                    "changed": raw_path in changed_paths,
+                }
+            )
 
     click_schemas = [
         {
@@ -392,13 +478,17 @@ def build_meta_workspace_branch_tree(
         "base_branch": catalog["base_branch"],
         "gp_entities": gp_entities,
         "click_schemas": click_schemas,
+        "workspace_path": str(worktree_dir),
     }
 
 
 def read_meta_workspace_branch_file(
     *,
     git_repo_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
+    base_branch: str,
     file_path: str,
 ) -> dict[str, Any]:
     if not git_repo_value:
@@ -407,15 +497,25 @@ def read_meta_workspace_branch_file(
     if not path_norm:
         raise ValueError("Не указан путь к файлу")
     git_repo_root = Path(git_repo_value).resolve()
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
-    if not _git_path_exists(git_repo_root, branch_ref, path_norm):
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
+    target_path = (worktree_dir / path_norm).resolve()
+    if not str(target_path).startswith(str(worktree_dir.resolve())):
+        raise ValueError("Некорректный путь файла")
+    if not target_path.exists():
         raise ValueError(f"Файл `{path_norm}` не найден в ветке `{branch_name}`")
-    content = _git_show_text(git_repo_root, branch_ref, path_norm)
+    content = target_path.read_text(encoding="utf-8")
     return {
         "branch_name": re.sub(r"^origin/", "", branch_ref),
         "file_path": path_norm,
         "content": content,
-        "revision": _build_branch_file_revision(git_repo_root, branch_ref, path_norm),
+        "revision": _build_branch_file_revision(git_repo_root, "HEAD", path_norm, cwd=worktree_dir),
+        "workspace_path": str(worktree_dir),
     }
 
 
@@ -423,7 +523,10 @@ def read_meta_workspace_branch_gp_bundle(
     *,
     git_repo_value: str,
     entity_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
+    base_branch: str,
     entity_name: str,
     schema_name: str,
     table_name: str,
@@ -431,12 +534,21 @@ def read_meta_workspace_branch_gp_bundle(
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     git_repo_root = Path(git_repo_value).resolve()
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
     object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_name
-    yaml_path = (object_rel / "meta_data_file.yaml").as_posix()
-    if not _git_path_exists(git_repo_root, branch_ref, yaml_path):
+    object_dir = (worktree_dir / object_rel).resolve()
+    if not str(object_dir).startswith(str(worktree_dir.resolve())):
+        raise ValueError("Некорректный путь объекта")
+    yaml_path = object_dir / "meta_data_file.yaml"
+    if not yaml_path.exists():
         raise ValueError(f"Объект `{entity_name}/{schema_name}/{table_name}` не найден в ветке `{branch_name}`")
-    yaml_content = _git_show_text(git_repo_root, branch_ref, yaml_path)
+    yaml_content = yaml_path.read_text(encoding="utf-8")
     payload = _load_yaml_text(yaml_content)
     return {
         "branch_name": re.sub(r"^origin/", "", branch_ref),
@@ -446,19 +558,22 @@ def read_meta_workspace_branch_gp_bundle(
         "object_key": f"{entity_name}/{schema_name}/{table_name}",
         "yaml_content": yaml_content,
         "key_attributes": payload.get("key_attributes") if isinstance(payload.get("key_attributes"), list) else [],
-        "recreate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_recreate_init.sql").as_posix()),
-        "insert_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_insert_init.sql").as_posix()),
-        "truncate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix()),
-        "revision": _build_branch_gp_revision(git_repo_root, branch_ref, object_rel),
+        "recreate_sql": (object_dir / "sql_query_recreate_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_recreate_init.sql").exists() else "",
+        "insert_sql": (object_dir / "sql_query_insert_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_insert_init.sql").exists() else "",
+        "truncate_sql": (object_dir / "sql_query_truncate.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_truncate.sql").exists() else "",
+        "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
         "source": "branch",
         "exists": True,
         "path": object_rel.as_posix(),
+        "workspace_path": str(worktree_dir),
     }
 
 
 def save_meta_workspace_branch_file(
     *,
     git_repo_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
     base_branch: str,
     file_path: str,
@@ -478,56 +593,48 @@ def save_meta_workspace_branch_file(
         raise ValueError("Не указан путь к файлу")
 
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
-    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
-    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
-        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
-    if remote_branch_exists:
-        _assert_branch_file_revision_matches(git_repo_root, f"origin/{branch_name_norm}", file_path_norm, expected_revision)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name_norm,
+        base_branch=base_branch_norm,
+        author=author,
+    )
+    _assert_branch_file_revision_matches(git_repo_root, "HEAD", file_path_norm, expected_revision)
 
-    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-file-{branch_name_norm.replace('/', '-')}-"))
-    try:
-        if remote_branch_exists:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
-        else:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
-        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+    target_path = (worktree_dir / file_path_norm).resolve()
+    if not str(target_path).startswith(str(worktree_dir.resolve())):
+        raise ValueError("Некорректный путь файла")
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(str(content or ""), encoding="utf-8")
 
-        target_path = (worktree_dir / file_path_norm).resolve()
-        if not str(target_path).startswith(str(worktree_dir.resolve())):
-            raise ValueError("Некорректный путь файла")
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        target_path.write_text(str(content or ""), encoding="utf-8")
+    status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", file_path_norm], cwd=worktree_dir)
+    committed = False
+    if status_output:
+        _run_git(git_repo_root, ["add", "--", file_path_norm], cwd=worktree_dir)
+        task_id_norm = str(task_id or "").strip().upper()
+        commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+        _run_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
+        committed = True
 
-        status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", file_path_norm], cwd=worktree_dir)
-        committed = False
-        if status_output:
-            _run_git(git_repo_root, ["add", "--", file_path_norm], cwd=worktree_dir)
-            task_id_norm = str(task_id or "").strip().upper()
-            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
-            _run_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
-            committed = True
-
-        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
-        return {
-            "branch_name": branch_name_norm,
-            "base_branch": base_branch_norm,
-            "file_path": file_path_norm,
-            "committed": committed,
-            "revision": _build_branch_file_revision(git_repo_root, "HEAD", file_path_norm, cwd=worktree_dir),
-        }
-    finally:
-        try:
-            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
-        except Exception:
-            pass
-        shutil.rmtree(worktree_dir, ignore_errors=True)
+    _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+    return {
+        "branch_name": branch_name_norm,
+        "base_branch": base_branch_norm,
+        "file_path": file_path_norm,
+        "committed": committed,
+        "revision": _build_branch_file_revision(git_repo_root, "HEAD", file_path_norm, cwd=worktree_dir),
+        "workspace_path": str(worktree_dir),
+    }
 
 
 def save_meta_workspace_branch_gp_bundle(
     *,
     git_repo_value: str,
     entity_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     branch_name: str,
     base_branch: str,
     entity_name: str,
@@ -554,68 +661,58 @@ def save_meta_workspace_branch_gp_bundle(
         raise ValueError("Укажите сущность, схему и таблицу")
 
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
-    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
-    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
-        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
     object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_name_norm
-    if remote_branch_exists:
-        _assert_branch_gp_revision_matches(git_repo_root, f"origin/{branch_name_norm}", object_rel, expected_revision)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name_norm,
+        base_branch=base_branch_norm,
+        author=author,
+    )
+    _assert_branch_gp_revision_matches(git_repo_root, "HEAD", object_rel, expected_revision)
 
-    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-gp-{branch_name_norm.replace('/', '-')}-"))
-    try:
-        if remote_branch_exists:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
-        else:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
-        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+    object_dir = (worktree_dir / object_rel).resolve()
+    if not str(object_dir).startswith(str(worktree_dir.resolve())):
+        raise ValueError("Некорректный путь объекта")
+    object_dir.mkdir(parents=True, exist_ok=True)
 
-        object_dir = (worktree_dir / object_rel).resolve()
-        if not str(object_dir).startswith(str(worktree_dir.resolve())):
-            raise ValueError("Некорректный путь объекта")
-        object_dir.mkdir(parents=True, exist_ok=True)
+    files_to_write = {
+        "meta_data_file.yaml": str(yaml_content or ""),
+        "sql_query_recreate_init.sql": str(recreate_sql or ""),
+        "sql_query_insert_init.sql": str(insert_sql or ""),
+        "sql_query_truncate.sql": str(truncate_sql or ""),
+    }
+    rel_paths: list[str] = []
+    for file_name, content in files_to_write.items():
+        target_path = object_dir / file_name
+        target_path.write_text(content, encoding="utf-8")
+        rel_paths.append((object_rel / file_name).as_posix())
 
-        files_to_write = {
-            "meta_data_file.yaml": str(yaml_content or ""),
-            "sql_query_recreate_init.sql": str(recreate_sql or ""),
-            "sql_query_insert_init.sql": str(insert_sql or ""),
-            "sql_query_truncate.sql": str(truncate_sql or ""),
-        }
-        rel_paths: list[str] = []
-        for file_name, content in files_to_write.items():
-            target_path = object_dir / file_name
-            target_path.write_text(content, encoding="utf-8")
-            rel_paths.append((object_rel / file_name).as_posix())
+    status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
+    committed = False
+    if status_output:
+        _run_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
+        task_id_norm = str(task_id or "").strip().upper()
+        commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+        _run_git(
+            git_repo_root,
+            ["commit", "-m", f"{commit_prefix}: update {entity_name_norm}/{schema_name_norm}/{table_name_norm}"],
+            cwd=worktree_dir,
+        )
+        committed = True
 
-        status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
-        committed = False
-        if status_output:
-            _run_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
-            task_id_norm = str(task_id or "").strip().upper()
-            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
-            _run_git(
-                git_repo_root,
-                ["commit", "-m", f"{commit_prefix}: update {entity_name_norm}/{schema_name_norm}/{table_name_norm}"],
-                cwd=worktree_dir,
-            )
-            committed = True
-
-        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
-        return {
-            "branch_name": branch_name_norm,
-            "base_branch": base_branch_norm,
-            "object_key": f"{entity_name_norm}/{schema_name_norm}/{table_name_norm}",
-            "path": object_rel.as_posix(),
-            "changed_files": rel_paths,
-            "committed": committed,
-            "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
-        }
-    finally:
-        try:
-            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
-        except Exception:
-            pass
-        shutil.rmtree(worktree_dir, ignore_errors=True)
+    _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+    return {
+        "branch_name": branch_name_norm,
+        "base_branch": base_branch_norm,
+        "object_key": f"{entity_name_norm}/{schema_name_norm}/{table_name_norm}",
+        "path": object_rel.as_posix(),
+        "changed_files": rel_paths,
+        "committed": committed,
+        "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
+        "workspace_path": str(worktree_dir),
+    }
 
 
 def validate_meta_workspace_branch(
@@ -625,6 +722,8 @@ def validate_meta_workspace_branch(
     git_repo_value: str,
     entity_git_root_value: str,
     click_git_root_value: str,
+    workspace_root_value: str,
+    workspace_owner: str,
     prod_root_value: str,
     dev_root_value: str,
     branch_name: str,
@@ -639,10 +738,18 @@ def validate_meta_workspace_branch(
         git_repo_root=git_repo_root,
         entity_git_root_value=entity_git_root_value,
         click_git_root_value=click_git_root_value,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
         branch_name=branch_name,
         base_branch=base_branch,
     )
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    branch_ref, worktree_dir = _ensure_branch_workspace(
+        git_repo_root=git_repo_root,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=workspace_owner,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
     gp_results: list[dict[str, Any]] = []
     click_results: list[dict[str, Any]] = []
 
@@ -660,10 +767,11 @@ def validate_meta_workspace_branch(
             )
             continue
         object_rel = Path(entity_git_root_value) / item["entity_name"] / item["schema_name"] / item["table_name"]
-        yaml_content = _git_show_text(git_repo_root, branch_ref, (object_rel / "meta_data_file.yaml").as_posix())
-        recreate_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_recreate_init.sql").as_posix())
-        insert_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_insert_init.sql").as_posix())
-        truncate_sql = _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix())
+        object_dir = worktree_dir / object_rel
+        yaml_content = (object_dir / "meta_data_file.yaml").read_text(encoding="utf-8") if (object_dir / "meta_data_file.yaml").exists() else ""
+        recreate_sql = (object_dir / "sql_query_recreate_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_recreate_init.sql").exists() else ""
+        insert_sql = (object_dir / "sql_query_insert_init.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_insert_init.sql").exists() else ""
+        truncate_sql = (object_dir / "sql_query_truncate.sql").read_text(encoding="utf-8") if (object_dir / "sql_query_truncate.sql").exists() else ""
         yaml_payload = _load_yaml_text(yaml_content)
         validation = validate_entity_dev_meta_bundle(
             engine=engine,
@@ -695,11 +803,8 @@ def validate_meta_workspace_branch(
                 }
             )
             continue
-        content = _git_show_text(
-            git_repo_root,
-            branch_ref,
-            (Path(click_git_root_value) / item["schema_name"] / item["file_name"]).as_posix(),
-        )
+        click_path = worktree_dir / click_git_root_value / item["schema_name"] / item["file_name"]
+        content = click_path.read_text(encoding="utf-8") if click_path.exists() else ""
         validation = validate_dev_meta_content(
             content=content,
             schema_name=item["schema_name"],

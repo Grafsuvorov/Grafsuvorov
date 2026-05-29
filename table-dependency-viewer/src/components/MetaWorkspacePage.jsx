@@ -62,6 +62,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [treeLoading, setTreeLoading] = useState(false);
   const [branchFileLoading, setBranchFileLoading] = useState(false);
   const [gpBranchBundle, setGpBranchBundle] = useState(null);
+  const [clickBranchFile, setClickBranchFile] = useState(null);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
@@ -294,6 +295,10 @@ export default function MetaWorkspacePage({ userProfile }) {
   };
 
   const openClickObject = (item) => {
+    if (branchScopedActive) {
+      handleOpenBranchClickFile(item.schema_name, item.file_name);
+      return;
+    }
     setMode("click");
     setActiveSelection({
       domain: "click",
@@ -310,6 +315,8 @@ export default function MetaWorkspacePage({ userProfile }) {
     setActiveSelection(null);
     setGpOpenRequest(null);
     setClickOpenRequest(null);
+    setGpBranchBundle(null);
+    setClickBranchFile(null);
     window.requestAnimationFrame(() => {
       document.getElementById("meta-workspace-branch-browser")?.scrollIntoView({
         behavior: "smooth",
@@ -341,6 +348,37 @@ export default function MetaWorkspacePage({ userProfile }) {
       });
     } catch (err) {
       setError(err.message || "Не удалось открыть объект ветки");
+    } finally {
+      setBranchFileLoading(false);
+    }
+  };
+
+  const handleOpenBranchClickFile = async (schemaName, fileName) => {
+    if (!String(branchName || "").trim() || !schemaName || !fileName) return;
+    setBranchFileLoading(true);
+    setError(null);
+    try {
+      const data = await metaWorkspaceApi.branchFile({
+        branch_name: branchName.trim(),
+        file_path: `${schemaName}/${fileName}`,
+      });
+      setClickBranchFile({
+        token: `${schemaName}/${fileName}:${Date.now()}`,
+        branch_name: data.branch_name,
+        file: {
+          schema_name: schemaName,
+          file_name: fileName,
+          content: data.content,
+          revision: data.revision,
+        },
+      });
+      setMode("click");
+      setActiveSelection({
+        domain: "click",
+        title: `${schemaName} / ${fileName}`,
+      });
+    } catch (err) {
+      setError(err.message || "Не удалось открыть файл ветки");
     } finally {
       setBranchFileLoading(false);
     }
@@ -596,12 +634,14 @@ export default function MetaWorkspacePage({ userProfile }) {
                     <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
                     <div className="meta-workspace-tree-files">
                       {(schema.files || []).map((file) => (
-                        <div
+                        <button
+                          type="button"
                           key={file.file_path}
-                          className={`meta-workspace-file-button passive ${file.changed ? "changed" : ""}`}
+                          className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
+                          onClick={() => handleOpenBranchClickFile(schema.schema_name, file.file_name)}
                         >
                           {file.file_name}
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </details>
@@ -721,7 +761,11 @@ export default function MetaWorkspacePage({ userProfile }) {
               taskId={taskId}
               hideHeader
               externalOpenRequest={clickOpenRequest}
+              externalBranchFile={clickBranchFile}
+              branchSaveContext={branchScopedActive ? { branch_name: branchCatalog.branch_name || branchName.trim(), base_branch: baseBranch.trim() } : null}
+              onBranchSaved={handleBranchBundleSaved}
               allowedFiles={allowedClickFiles}
+              allowedBranchFiles={branchCatalog.click_objects || []}
               branchScopedActive={branchScopedActive}
               generatorAnchorId="meta-workspace-click-generator"
             />

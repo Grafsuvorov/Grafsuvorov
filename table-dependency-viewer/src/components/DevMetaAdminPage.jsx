@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { devMetaApi } from "../api/devMeta.js";
+import { metaWorkspaceApi } from "../api/metaWorkspace.js";
 import { formatRuDateTime } from "../utils/datetime.js";
 import DagLoadingMiniGame from "./DagLoadingMiniGame.jsx";
 
@@ -38,7 +39,11 @@ export default function DevMetaAdminPage({
   taskId: externalTaskId,
   hideHeader = false,
   externalOpenRequest = null,
+  externalBranchFile = null,
+  branchSaveContext = null,
+  onBranchSaved = null,
   allowedFiles = null,
+  allowedBranchFiles = null,
   branchScopedActive = false,
   generatorAnchorId = "",
 }) {
@@ -67,6 +72,7 @@ export default function DevMetaAdminPage({
   const [runningDag, setRunningDag] = useState(false);
   const [dagStatus, setDagStatus] = useState(null);
   const [generating, setGenerating] = useState(false);
+  const [selectedRevision, setSelectedRevision] = useState(null);
 
   const canUseDevMeta = Boolean(userProfile);
   const currentUser = userProfile?.email || userProfile?.username || "";
@@ -107,6 +113,11 @@ export default function DevMetaAdminPage({
     validatedContent !== null &&
     validatedContent === content
   );
+  const branchSaveActive = Boolean(
+    branchSaveContext?.branch_name &&
+    branchSaveContext?.base_branch &&
+    selectedFile
+  );
 
   const lockRow = useMemo(() => {
     if (!selectedFile) return null;
@@ -127,6 +138,16 @@ export default function DevMetaAdminPage({
   };
 
   const filteredFiles = useMemo(() => {
+    if (branchSaveActive && Array.isArray(allowedBranchFiles)) {
+      const term = fileSearch.trim().toLowerCase();
+      const rows = [...allowedBranchFiles]
+        .filter((file) => file.schema_name === schemaName)
+        .sort((left, right) => String(left.file_name || "").localeCompare(String(right.file_name || "")));
+      if (!term) {
+        return rows;
+      }
+      return rows.filter((file) => String(file.file_name || "").toLowerCase().includes(term));
+    }
     const term = fileSearch.trim().toLowerCase();
     const allowedEntries = allowedFiles instanceof Set ? allowedFiles : null;
     const rows = [...(files.dev_files || [])]
@@ -149,10 +170,25 @@ export default function DevMetaAdminPage({
     setMessageType("info");
     setValidation(null);
     try {
+      if (branchSaveActive) {
+        const data = await metaWorkspaceApi.branchFile({
+          branch_name: branchSaveContext.branch_name,
+          file_path: `${schemaName}/${fileName}`,
+        });
+        setSelectedFile(fileName);
+        setContent(data?.content || "");
+        setSelectedRevision(data?.revision || null);
+        setValidation(null);
+        setValidatedContent(null);
+        setLockInfo(null);
+        setMessage(`Файл открыт из ветки ${data?.branch_name || branchSaveContext.branch_name}.`);
+        return;
+      }
       await acquireLock(fileName);
       const data = await devMetaApi.readFile({ schema_name: schemaName, file_name: fileName, source: "dev" });
       setSelectedFile(fileName);
       setContent(data?.content || "");
+      setSelectedRevision(null);
       setValidation(null);
       setValidatedContent(null);
       setMessage("Файл открыт и взят в работу.");
@@ -182,6 +218,7 @@ export default function DevMetaAdminPage({
         const data = await devMetaApi.readFile({ schema_name: nextSchema, file_name: nextFile, source: "dev" });
         setSelectedFile(nextFile);
         setContent(data?.content || "");
+        setSelectedRevision(null);
         setValidation(null);
         setValidatedContent(null);
         setMessage("Файл открыт и взят в работу.");
@@ -194,6 +231,21 @@ export default function DevMetaAdminPage({
     };
     openExternalFile();
   }, [externalOpenRequest?.token]);
+
+  useEffect(() => {
+    if (!externalBranchFile?.token || !externalBranchFile?.file) return;
+    const data = externalBranchFile.file;
+    setSchemaName(data.schema_name);
+    setSelectedFile(data.file_name);
+    setContent(data.content || "");
+    setSelectedRevision(data.revision || null);
+    setValidation(null);
+    setValidatedContent(null);
+    setLockInfo(null);
+    setMessageType("success");
+    setError(null);
+    setMessage(`Файл открыт из ветки ${externalBranchFile.branch_name || ""}.`);
+  }, [externalBranchFile?.token]);
 
   const handleValidate = async () => {
     if (!selectedFile) return;
@@ -210,7 +262,9 @@ export default function DevMetaAdminPage({
       setMessageType(data?.valid ? "success" : "warning");
       setMessage(
         data?.valid
-          ? "Проверка пройдена: файл корректен и готов к сохранению."
+          ? branchSaveActive
+            ? "Проверка пройдена: файл корректен и готов к сохранению в ветку."
+            : "Проверка пройдена: файл корректен и готов к сохранению."
           : "Проверка завершилась с ошибками. Исправь их перед сохранением."
       );
     } catch (err) {
@@ -222,7 +276,7 @@ export default function DevMetaAdminPage({
 
   const handleSaveAndDeploy = async () => {
     if (!selectedFile) return;
-    if (externalTaskId !== undefined && !taskId) {
+    if (!branchSaveActive && externalTaskId !== undefined && !taskId) {
       setMessageType("warning");
       setError(null);
       setMessage("Перед отправкой в DEV укажите номер задачи в формате DWH-12345.");
@@ -239,19 +293,41 @@ export default function DevMetaAdminPage({
     setMessage(null);
     setMessageType("info");
     try {
-      const data = await devMetaApi.deploy({
-        schema_name: schemaName,
-        file_name: selectedFile,
-        content,
-        task_id: taskId,
-      });
-      setValidation(data?.validation || null);
-      setValidatedContent(data?.validation?.valid ? content : null);
-      await refreshFiles();
-      setMessageType("success");
-      setMessage(`Файл сохранен локально и отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
+      if (branchSaveActive) {
+        const data = await metaWorkspaceApi.saveBranchFile({
+          branch_name: branchSaveContext.branch_name,
+          base_branch: branchSaveContext.base_branch,
+          file_path: `${schemaName}/${selectedFile}`,
+          content,
+          task_id: taskId,
+          expected_revision: selectedRevision || null,
+        });
+        setSelectedRevision(data?.revision || null);
+        setValidatedContent(content);
+        setMessageType("success");
+        setMessage(
+          data?.committed
+            ? `Файл сохранен в ветку ${data?.branch_name || branchSaveContext.branch_name}.`
+            : `Новых изменений для коммита в ветку ${data?.branch_name || branchSaveContext.branch_name} не было.`
+        );
+        if (typeof onBranchSaved === "function") {
+          await onBranchSaved(data);
+        }
+      } else {
+        const data = await devMetaApi.deploy({
+          schema_name: schemaName,
+          file_name: selectedFile,
+          content,
+          task_id: taskId,
+        });
+        setValidation(data?.validation || null);
+        setValidatedContent(data?.validation?.valid ? content : null);
+        await refreshFiles();
+        setMessageType("success");
+        setMessage(`Файл сохранен локально и отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
+      }
     } catch (err) {
-      setError(err.message || "Не удалось сохранить и отправить файл на DEV сервер");
+      setError(err.message || (branchSaveActive ? "Не удалось сохранить файл в ветку" : "Не удалось сохранить и отправить файл на DEV сервер"));
     } finally {
       setDeploying(false);
     }
@@ -562,9 +638,11 @@ export default function DevMetaAdminPage({
           <div className="dev-meta-file-block">
             <div className="dev-meta-file-head">
               <div>
-                <div className="section-subtitle">DEV файлы</div>
+                <div className="section-subtitle">{branchSaveActive ? "Файлы ветки" : "DEV файлы"}</div>
                 <div className="muted">
-                  {allowedFiles instanceof Set
+                  {branchSaveActive
+                    ? "Показаны файлы выбранной ветки."
+                    : allowedFiles instanceof Set
                     ? "Показаны только файлы из выбранной ветки."
                     : "Открытие файла сразу берет его в работу для текущего пользователя."}
                 </div>
@@ -592,16 +670,16 @@ export default function DevMetaAdminPage({
                     key={`dev-${file.file_name}`}
                     className={`dev-meta-file ${selectedFile === file.file_name ? "active" : ""} ${blocked ? "blocked" : ""}`}
                     onClick={() => openFile(file.file_name)}
-                    disabled={blocked}
+                    disabled={branchSaveActive ? false : blocked}
                   >
                     <span className="mono dev-meta-file-name" title={file.file_name}>{file.file_name}</span>
-                    <span className="muted">{formatDateTime(file.updated_at)}</span>
+                    {"updated_at" in file ? <span className="muted">{formatDateTime(file.updated_at)}</span> : null}
                     {file.last_action_by ? (
                       <span className="dev-meta-file-meta">
                         {file.last_action_by} · {formatDateTime(file.last_action_at)}
                       </span>
                     ) : null}
-                    {blocked ? <span className="dev-meta-file-badge">Занят</span> : null}
+                    {blocked && !branchSaveActive ? <span className="dev-meta-file-badge">Занят</span> : null}
                   </button>
                 );
               })()) : <div className="muted">Для выбранной ветки файлов пока нет.</div>}
@@ -625,14 +703,18 @@ export default function DevMetaAdminPage({
                 <button
                   className="btn btn-primary"
                   onClick={handleSaveAndDeploy}
-                  disabled={!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured || !isValidationFresh}
+                  disabled={
+                    branchSaveActive
+                      ? (!selectedFile || deploying || !isValidationFresh)
+                      : (!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured || !isValidationFresh)
+                  }
                 >
-                  {deploying ? "Сохраняем и отправляем..." : "Сохранить и отправить на DEV"}
+                  {deploying ? "Сохраняем..." : branchSaveActive ? "Сохранить в ветку" : "Сохранить и отправить на DEV"}
                 </button>
                 <button
                   className="btn btn-secondary"
                   onClick={handleRunDag}
-                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured}
+                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured || branchSaveActive}
                 >
                   {runningDag ? "Запускаем DAG..." : "Запустить DEV DAG"}
                 </button>

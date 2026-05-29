@@ -121,6 +121,19 @@ def _git_show_text(repo_root: Path, ref_name: str, rel_path: str) -> str:
         return ""
 
 
+def _git_list_tree_files(repo_root: Path, ref_name: str, rel_root: str) -> list[str]:
+    args = ["ls-tree", "-r", "--name-only", ref_name]
+    rel_root_norm = str(rel_root or "").strip().strip("/")
+    if rel_root_norm:
+        args.extend(["--", rel_root_norm])
+    output = _run_git(repo_root, args)
+    return [line.strip() for line in output.splitlines() if line.strip()]
+
+
+def _git_path_exists(repo_root: Path, ref_name: str, rel_path: str) -> bool:
+    return str(rel_path or "").strip() in set(_git_list_tree_files(repo_root, ref_name, rel_path))
+
+
 def _entity_root_parts(entity_git_root_value: str) -> tuple[str, ...]:
     return tuple(part for part in Path(entity_git_root_value).as_posix().split("/") if part)
 
@@ -201,6 +214,191 @@ def _build_branch_catalog(
         "gp_objects": sorted(gp_items, key=lambda row: (row["entity_name"], row["schema_name"], row["table_name"])),
         "click_objects": sorted(click_items, key=lambda row: (row["schema_name"], row["file_name"])),
     }
+
+
+def build_meta_workspace_branch_tree(
+    *,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    click_git_root_value: str,
+    branch_name: str,
+    base_branch: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    git_repo_root = Path(git_repo_value).resolve()
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    catalog = _build_branch_catalog(
+        git_repo_root=git_repo_root,
+        entity_git_root_value=entity_git_root_value,
+        click_git_root_value=click_git_root_value,
+        branch_name=branch_name,
+        base_branch=base_branch,
+    )
+    changed_paths = {
+        item
+        for _status, item in _parse_name_status(
+            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
+        )
+    }
+
+    gp_tree_map: dict[str, dict[str, dict[str, list[dict[str, Any]]]]] = {}
+    for raw_path in _git_list_tree_files(git_repo_root, branch_ref, entity_git_root_value):
+        path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
+        root_parts = _entity_root_parts(entity_git_root_value)
+        if path_parts[: len(root_parts)] != root_parts:
+            continue
+        rel = path_parts[len(root_parts):]
+        if len(rel) < 4:
+            continue
+        entity_name, schema_name, table_name = rel[0], rel[1], rel[2]
+        file_name = "/".join(rel[3:])
+        gp_tree_map.setdefault(entity_name, {}).setdefault(schema_name, {}).setdefault(table_name, []).append(
+            {
+                "file_name": file_name,
+                "file_path": raw_path,
+                "changed": raw_path in changed_paths,
+            }
+        )
+
+    gp_entities = []
+    for entity_name, schema_map in sorted(gp_tree_map.items(), key=lambda item: item[0].lower()):
+        schemas = []
+        for schema_name, table_map in sorted(schema_map.items(), key=lambda item: item[0].lower()):
+            tables = []
+            for table_name, files in sorted(table_map.items(), key=lambda item: item[0].lower()):
+                files_sorted = sorted(files, key=lambda item: item["file_name"].lower())
+                tables.append(
+                    {
+                        "table_name": table_name,
+                        "changed": any(item["changed"] for item in files_sorted),
+                        "files": files_sorted,
+                    }
+                )
+            schemas.append({"schema_name": schema_name, "tables": tables})
+        gp_entities.append({"entity_name": entity_name, "schemas": schemas})
+
+    click_tree_map: dict[str, list[dict[str, Any]]] = {}
+    for raw_path in _git_list_tree_files(git_repo_root, branch_ref, click_git_root_value):
+        path_parts = tuple(part for part in Path(raw_path).as_posix().split("/") if part)
+        root_parts = _click_root_parts(click_git_root_value)
+        if path_parts[: len(root_parts)] != root_parts:
+            continue
+        rel = path_parts[len(root_parts):]
+        if len(rel) < 2:
+            continue
+        schema_name = rel[0]
+        file_name = "/".join(rel[1:])
+        click_tree_map.setdefault(schema_name, []).append(
+            {
+                "file_name": file_name,
+                "file_path": raw_path,
+                "changed": raw_path in changed_paths,
+            }
+        )
+
+    click_schemas = [
+        {
+            "schema_name": schema_name,
+            "files": sorted(files, key=lambda item: item["file_name"].lower()),
+        }
+        for schema_name, files in sorted(click_tree_map.items(), key=lambda item: item[0].lower())
+    ]
+
+    return {
+        "branch_name": re.sub(r"^origin/", "", branch_ref),
+        "base_branch": catalog["base_branch"],
+        "gp_entities": gp_entities,
+        "click_schemas": click_schemas,
+    }
+
+
+def read_meta_workspace_branch_file(
+    *,
+    git_repo_value: str,
+    branch_name: str,
+    file_path: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    path_norm = str(file_path or "").strip().strip("/")
+    if not path_norm:
+        raise ValueError("Не указан путь к файлу")
+    git_repo_root = Path(git_repo_value).resolve()
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    if not _git_path_exists(git_repo_root, branch_ref, path_norm):
+        raise ValueError(f"Файл `{path_norm}` не найден в ветке `{branch_name}`")
+    content = _git_show_text(git_repo_root, branch_ref, path_norm)
+    return {
+        "branch_name": re.sub(r"^origin/", "", branch_ref),
+        "file_path": path_norm,
+        "content": content,
+    }
+
+
+def save_meta_workspace_branch_file(
+    *,
+    git_repo_value: str,
+    branch_name: str,
+    base_branch: str,
+    file_path: str,
+    content: str,
+    task_id: str,
+    author: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    branch_name_norm = str(branch_name or "").strip()
+    if not branch_name_norm:
+        raise ValueError("Укажите ветку")
+    base_branch_norm = str(base_branch or "").strip() or "main"
+    file_path_norm = str(file_path or "").strip().strip("/")
+    if not file_path_norm:
+        raise ValueError("Не указан путь к файлу")
+
+    git_repo_root = Path(git_repo_value).resolve()
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
+    if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
+        raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+
+    worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-file-{branch_name_norm.replace('/', '-')}-"))
+    try:
+        if remote_branch_exists:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
+        else:
+            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+
+        target_path = (worktree_dir / file_path_norm).resolve()
+        if not str(target_path).startswith(str(worktree_dir.resolve())):
+            raise ValueError("Некорректный путь файла")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(str(content or ""), encoding="utf-8")
+
+        status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", file_path_norm], cwd=worktree_dir)
+        committed = False
+        if status_output:
+            _run_git(git_repo_root, ["add", "--", file_path_norm], cwd=worktree_dir)
+            task_id_norm = str(task_id or "").strip().upper()
+            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+            _run_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
+            committed = True
+
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_name_norm}"], cwd=worktree_dir)
+        return {
+            "branch_name": branch_name_norm,
+            "base_branch": base_branch_norm,
+            "file_path": file_path_norm,
+            "committed": committed,
+        }
+    finally:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(worktree_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(worktree_dir, ignore_errors=True)
 
 
 def validate_meta_workspace_branch(

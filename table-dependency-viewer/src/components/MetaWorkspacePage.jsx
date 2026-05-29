@@ -58,6 +58,13 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [validatingBranch, setValidatingBranch] = useState(false);
   const [syncingBranch, setSyncingBranch] = useState(false);
   const [creatingBranch, setCreatingBranch] = useState(false);
+  const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [showChangedOnly, setShowChangedOnly] = useState(false);
+  const [branchFile, setBranchFile] = useState(null);
+  const [branchFileContent, setBranchFileContent] = useState("");
+  const [branchFileLoading, setBranchFileLoading] = useState(false);
+  const [branchFileSaving, setBranchFileSaving] = useState(false);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
@@ -91,6 +98,32 @@ export default function MetaWorkspacePage({ userProfile }) {
   const hasClickObjects = branchSummary.click > 0;
   const showGpTab = !branchScopedActive || hasGpObjects;
   const showClickTab = !branchScopedActive || hasClickObjects;
+  const filteredBranchTree = useMemo(() => {
+    if (!showChangedOnly) return branchTree;
+    const gp_entities = (branchTree.gp_entities || [])
+      .map((entity) => ({
+        ...entity,
+        schemas: (entity.schemas || [])
+          .map((schema) => ({
+            ...schema,
+            tables: (schema.tables || [])
+              .map((table) => ({
+                ...table,
+                files: (table.files || []).filter((file) => file.changed),
+              }))
+              .filter((table) => (table.files || []).length),
+          }))
+          .filter((schema) => (schema.tables || []).length),
+      }))
+      .filter((entity) => (entity.schemas || []).length);
+    const click_schemas = (branchTree.click_schemas || [])
+      .map((schema) => ({
+        ...schema,
+        files: (schema.files || []).filter((file) => file.changed),
+      }))
+      .filter((schema) => (schema.files || []).length);
+    return { gp_entities, click_schemas };
+  }, [branchTree, showChangedOnly]);
 
   useEffect(() => {
     metaWorkspaceApi.branches()
@@ -123,19 +156,28 @@ export default function MetaWorkspacePage({ userProfile }) {
       return;
     }
     setCatalogLoading(true);
+    setTreeLoading(true);
     setError(null);
     setMessage(null);
     try {
-      const data = await metaWorkspaceApi.branchCatalog({
-        branch_name: branchValue,
-        base_branch: baseBranch.trim(),
-      });
+      const [data, treeData] = await Promise.all([
+        metaWorkspaceApi.branchCatalog({
+          branch_name: branchValue,
+          base_branch: baseBranch.trim(),
+        }),
+        metaWorkspaceApi.branchTree({
+          branch_name: branchValue,
+          base_branch: baseBranch.trim(),
+        }),
+      ]);
       setBranchCatalog(data || { gp_objects: [], click_objects: [] });
+      setBranchTree(treeData || { gp_entities: [], click_schemas: [] });
       setMessage("Каталог изменений ветки обновлен.");
     } catch (err) {
       setError(err.message || "Не удалось построить каталог ветки");
     } finally {
       setCatalogLoading(false);
+      setTreeLoading(false);
     }
   };
 
@@ -290,6 +332,50 @@ export default function MetaWorkspacePage({ userProfile }) {
         block: "start",
       });
     });
+  };
+
+  const handleOpenBranchFile = async (filePath, label, domain = "branch") => {
+    if (!String(branchName || "").trim() || !String(filePath || "").trim()) return;
+    setBranchFileLoading(true);
+    setError(null);
+    try {
+      const data = await metaWorkspaceApi.branchFile({
+        branch_name: branchName.trim(),
+        file_path: filePath,
+      });
+      setBranchFile({
+        domain,
+        file_path: data.file_path,
+        title: label || data.file_path,
+      });
+      setBranchFileContent(data.content || "");
+    } catch (err) {
+      setError(err.message || "Не удалось открыть файл ветки");
+    } finally {
+      setBranchFileLoading(false);
+    }
+  };
+
+  const handleSaveBranchFile = async () => {
+    if (!branchFile?.file_path) return;
+    setBranchFileSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await metaWorkspaceApi.saveBranchFile({
+        branch_name: branchName.trim(),
+        base_branch: baseBranch.trim(),
+        file_path: branchFile.file_path,
+        content: branchFileContent,
+        task_id: taskIdValid ? taskId.trim().toUpperCase() : "",
+      });
+      setMessage(data?.committed ? "Файл сохранён и отправлен в ветку." : "Изменений для коммита не было.");
+      await loadBranchCatalog(branchName.trim());
+    } catch (err) {
+      setError(err.message || "Не удалось сохранить файл в ветку");
+    } finally {
+      setBranchFileSaving(false);
+    }
   };
 
   const jumpToGenerator = (nextMode) => {
@@ -462,6 +548,114 @@ export default function MetaWorkspacePage({ userProfile }) {
           </div>
           ) : null}
         </div>
+
+        <div className="dev-meta-generator meta-workspace-context">
+          <div className="meta-workspace-context-head">
+            <div>
+              <div className="section-subtitle">Реальная структура ветки</div>
+              <div className="muted">Здесь показываются сущности, схемы и файлы прямо из выбранной git-ветки, а не из DEV-каталога на сервере.</div>
+            </div>
+          </div>
+          <div className="dev-meta-generator-actions">
+            <label className="meta-workspace-inline-toggle">
+              <input type="checkbox" checked={showChangedOnly} onChange={(e) => setShowChangedOnly(e.target.checked)} />
+              <span>Показывать только изменённые файлы</span>
+            </label>
+            <span className="muted">{treeLoading ? "Читаем дерево ветки..." : "Можно открыть и сохранить любой файл прямо в ветку."}</span>
+          </div>
+          <div className="meta-workspace-real-tree">
+            <div className="meta-workspace-branch-column">
+              <div className="section-subtitle">Greenplum branch tree</div>
+              {(filteredBranchTree.gp_entities || []).length ? (
+                (filteredBranchTree.gp_entities || []).map((entity) => (
+                  <details key={entity.entity_name} className="meta-workspace-tree-node" open>
+                    <summary className="meta-workspace-tree-summary entity">{entity.entity_name}</summary>
+                    {(entity.schemas || []).map((schema) => (
+                      <details key={`${entity.entity_name}/${schema.schema_name}`} className="meta-workspace-tree-node" open>
+                        <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
+                        {(schema.tables || []).map((table) => (
+                          <details key={`${entity.entity_name}/${schema.schema_name}/${table.table_name}`} className="meta-workspace-tree-node">
+                            <summary className={`meta-workspace-tree-summary table ${table.changed ? "changed" : ""}`}>{table.table_name}</summary>
+                            <div className="meta-workspace-tree-files">
+                              {(table.files || []).map((file) => (
+                                <button
+                                  type="button"
+                                  key={file.file_path}
+                                  className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
+                                  onClick={() => handleOpenBranchFile(file.file_path, `${entity.entity_name} / ${schema.schema_name} / ${table.table_name} / ${file.file_name}`, "gp-branch")}
+                                >
+                                  {file.file_name}
+                                </button>
+                              ))}
+                            </div>
+                          </details>
+                        ))}
+                      </details>
+                    ))}
+                  </details>
+                ))
+              ) : (
+                <div className="muted">Файлы GP в ветке не найдены.</div>
+              )}
+            </div>
+
+            <div className="meta-workspace-branch-column">
+              <div className="section-subtitle">ClickHouse branch tree</div>
+              {(filteredBranchTree.click_schemas || []).length ? (
+                (filteredBranchTree.click_schemas || []).map((schema) => (
+                  <details key={schema.schema_name} className="meta-workspace-tree-node" open>
+                    <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
+                    <div className="meta-workspace-tree-files">
+                      {(schema.files || []).map((file) => (
+                        <button
+                          type="button"
+                          key={file.file_path}
+                          className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
+                          onClick={() => handleOpenBranchFile(file.file_path, `${schema.schema_name} / ${file.file_name}`, "click-branch")}
+                        >
+                          {file.file_name}
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                ))
+              ) : (
+                <div className="muted">Файлы Click в ветке не найдены.</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {branchFile || branchFileLoading ? (
+          <div className="dev-meta-generator meta-workspace-context">
+            <div className="meta-workspace-context-head">
+              <div>
+                <div className="section-subtitle">Файл ветки</div>
+                <div className="muted">{branchFile?.file_path || "Загружаем файл..."}</div>
+              </div>
+            </div>
+            <div className="meta-workspace-file-editor">
+              <textarea
+                value={branchFileContent}
+                onChange={(e) => setBranchFileContent(e.target.value)}
+                spellCheck={false}
+                disabled={branchFileLoading}
+                placeholder={branchFileLoading ? "Загружаем содержимое файла..." : "Выберите файл из дерева ветки"}
+              />
+            </div>
+            <div className="dev-meta-generator-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveBranchFile}
+                disabled={branchFileSaving || branchFileLoading || !branchFile?.file_path || !String(branchName || "").trim()}
+              >
+                {branchFileSaving ? "Сохраняем в ветку..." : "Сохранить файл в ветку"}
+              </button>
+              <span className="muted">Сохранение коммитит файл прямо в выбранную ветку и делает push.</span>
+            </div>
+          </div>
+        ) : null}
 
         <div className="dev-meta-tabs meta-workspace-tabs">
           {showGpTab ? (

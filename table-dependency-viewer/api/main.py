@@ -122,8 +122,11 @@ from .services.entity_dev_meta import (
 from .services.meta_workspace import (
     create_meta_workspace_branch,
     _build_branch_catalog,
+    build_meta_workspace_branch_tree,
     create_meta_workspace_mr,
     list_meta_workspace_branches,
+    read_meta_workspace_branch_file,
+    save_meta_workspace_branch_file,
     sync_meta_workspace_branch,
     validate_meta_workspace_branch,
 )
@@ -315,6 +318,19 @@ class MetaWorkspaceSyncPayload(BaseModel):
     task_id: str
     branch_name: str
     base_branch: str
+
+
+class MetaWorkspaceBranchFilePayload(BaseModel):
+    branch_name: str
+    file_path: str
+
+
+class MetaWorkspaceBranchFileSavePayload(BaseModel):
+    branch_name: str
+    base_branch: str
+    file_path: str
+    content: str
+    task_id: Optional[str] = None
 
 
 class AssistantContextPayload(BaseModel):
@@ -981,6 +997,55 @@ def get_admin_meta_workspace_branch_catalog(
             click_git_root_value=CLICK_META_GIT_ROOT,
             branch_name=branch_name,
             base_branch=base_branch,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/api/admin/meta-workspace/branch-tree")
+def get_admin_meta_workspace_branch_tree(
+    request: Request,
+    branch_name: str = Query(...),
+    base_branch: str = Query("main"),
+):
+    _require_admin(request)
+    try:
+        return build_meta_workspace_branch_tree(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            click_git_root_value=CLICK_META_GIT_ROOT,
+            branch_name=branch_name,
+            base_branch=base_branch,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/meta-workspace/branch-file")
+def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload, request: Request):
+    _require_admin(request)
+    try:
+        return read_meta_workspace_branch_file(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            branch_name=payload.branch_name,
+            file_path=payload.file_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/meta-workspace/branch-file/save")
+def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePayload, request: Request):
+    user = _require_admin(request)
+    try:
+        return save_meta_workspace_branch_file(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            branch_name=payload.branch_name,
+            base_branch=payload.base_branch,
+            file_path=payload.file_path,
+            content=payload.content,
+            task_id=payload.task_id or "",
+            author=user.email,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -461,13 +461,13 @@ export default function EntityDevMetaWorkspace({
 
   const handleSave = async () => {
     if (!bundle) return;
-    if (!taskIdValid) {
+    if (!branchSaveActive && !taskIdValid) {
       setMessageType("warning");
       setMessage("Перед сохранением укажите номер задачи в формате DWH-12345.");
       setError(null);
       return;
     }
-    if (!isValidationFresh) {
+    if (!branchSaveActive && !isValidationFresh) {
       setMessageType("warning");
       setMessage("Перед сохранением нужна успешная проверка текущей версии объекта.");
       setError(null);
@@ -987,7 +987,11 @@ export default function EntityDevMetaWorkspace({
                 <button className="btn btn-secondary" onClick={handleValidate} disabled={!bundle || validating}>
                   {validating ? "Проверяем..." : "Проверить"}
                 </button>
-                <button className="btn btn-primary" onClick={handleSave} disabled={!bundle || saving || !isValidationFresh || !taskIdValid}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={branchSaveActive ? (!bundle || saving) : (!bundle || saving || !isValidationFresh || !taskIdValid)}
+                >
                   {saving ? "Сохраняем..." : branchSaveActive ? "Сохранить в ветку" : "Сохранить в DEV"}
                 </button>
               </div>

@@ -155,6 +155,7 @@ export default function EntityDevMetaWorkspace({
   releaseBranch: externalReleaseBranch,
   onReleaseBranchChange,
   externalOpenRequest = null,
+  externalBranchBundle = null,
   allowedObjectKeys = null,
   branchScopedActive = false,
   generatorAnchorId = "",
@@ -368,6 +369,39 @@ export default function EntityDevMetaWorkspace({
       key_attributes: Array.isArray(externalOpenRequest.key_attributes) ? externalOpenRequest.key_attributes : [],
     });
   }, [externalOpenRequest?.token]);
+
+  useEffect(() => {
+    if (!externalBranchBundle?.token || !externalBranchBundle?.bundle) return;
+    const data = externalBranchBundle.bundle;
+    setSelection({
+      entity_name: data.entity_name,
+      schema_name: data.schema_name,
+      table_name: data.table_name,
+    });
+    setSchemaMode(COMMON_SCHEMAS.includes(data.schema_name) ? data.schema_name : CUSTOM_SCHEMA_OPTION);
+    setMoveTarget({
+      entity_name: data.entity_name,
+      schema_name: data.schema_name,
+      table_name: data.table_name,
+    });
+    setMoveSchemaMode(COMMON_SCHEMAS.includes(data.schema_name) ? data.schema_name : CUSTOM_SCHEMA_OPTION);
+    setKeyAttributesText(Array.isArray(data?.key_attributes) ? data.key_attributes.join(", ") : "");
+    setBundle(data || null);
+    setValidation(null);
+    setValidatedFingerprint("");
+    setSqlRunStatus({
+      recreate: null,
+      insert: null,
+      truncate: null,
+    });
+    setMessageType("success");
+    setMessage(`Объект открыт из ветки ${externalBranchBundle.branch_name || ""}.`);
+    setError(null);
+    window.setTimeout(() => {
+      yamlEditorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      yamlEditorRef.current?.focus();
+    }, 0);
+  }, [externalBranchBundle?.token]);
 
   const handleValidate = async () => {
     if (!bundle) return;

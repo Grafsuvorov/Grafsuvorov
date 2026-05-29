@@ -60,10 +60,8 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
   const [treeLoading, setTreeLoading] = useState(false);
-  const [branchFile, setBranchFile] = useState(null);
-  const [branchFileContent, setBranchFileContent] = useState("");
   const [branchFileLoading, setBranchFileLoading] = useState(false);
-  const [branchFileSaving, setBranchFileSaving] = useState(false);
+  const [gpBranchBundle, setGpBranchBundle] = useState(null);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
@@ -306,47 +304,31 @@ export default function MetaWorkspacePage({ userProfile }) {
     });
   };
 
-  const handleOpenBranchFile = async (filePath, label, domain = "branch") => {
-    if (!String(branchName || "").trim() || !String(filePath || "").trim()) return;
+  const handleOpenBranchGpTable = async (entityName, schemaName, tableName) => {
+    if (!String(branchName || "").trim() || !entityName || !schemaName || !tableName) return;
     setBranchFileLoading(true);
     setError(null);
     try {
-      const data = await metaWorkspaceApi.branchFile({
+      const data = await metaWorkspaceApi.branchGpBundle({
         branch_name: branchName.trim(),
-        file_path: filePath,
+        entity_name: entityName,
+        schema_name: schemaName,
+        table_name: tableName,
       });
-      setBranchFile({
-        domain,
-        file_path: data.file_path,
-        title: label || data.file_path,
+      setGpBranchBundle({
+        token: `${data.object_key}:${Date.now()}`,
+        branch_name: data.branch_name,
+        bundle: data,
       });
-      setBranchFileContent(data.content || "");
+      setMode("gp");
+      setActiveSelection({
+        domain: "gp",
+        title: `${entityName} / ${schemaName} / ${tableName}`,
+      });
     } catch (err) {
-      setError(err.message || "Не удалось открыть файл ветки");
+      setError(err.message || "Не удалось открыть объект ветки");
     } finally {
       setBranchFileLoading(false);
-    }
-  };
-
-  const handleSaveBranchFile = async () => {
-    if (!branchFile?.file_path) return;
-    setBranchFileSaving(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const data = await metaWorkspaceApi.saveBranchFile({
-        branch_name: branchName.trim(),
-        base_branch: baseBranch.trim(),
-        file_path: branchFile.file_path,
-        content: branchFileContent,
-        task_id: taskIdValid ? taskId.trim().toUpperCase() : "",
-      });
-      setMessage(data?.committed ? "Файл сохранён и отправлен в ветку." : "Изменений для коммита не было.");
-      await loadBranchCatalog(branchName.trim());
-    } catch (err) {
-      setError(err.message || "Не удалось сохранить файл в ветку");
-    } finally {
-      setBranchFileSaving(false);
     }
   };
 
@@ -542,17 +524,20 @@ export default function MetaWorkspacePage({ userProfile }) {
                         <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
                         {(schema.tables || []).map((table) => (
                           <details key={`${entity.entity_name}/${schema.schema_name}/${table.table_name}`} className="meta-workspace-tree-node">
-                            <summary className={`meta-workspace-tree-summary table ${table.changed ? "changed" : ""}`}>{table.table_name}</summary>
+                            <summary
+                              className={`meta-workspace-tree-summary table ${table.changed ? "changed" : ""}`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleOpenBranchGpTable(entity.entity_name, schema.schema_name, table.table_name);
+                              }}
+                            >
+                              {table.table_name}
+                            </summary>
                             <div className="meta-workspace-tree-files">
                               {(table.files || []).map((file) => (
-                                <button
-                                  type="button"
-                                  key={file.file_path}
-                                  className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
-                                  onClick={() => handleOpenBranchFile(file.file_path, `${entity.entity_name} / ${schema.schema_name} / ${table.table_name} / ${file.file_name}`, "gp-branch")}
-                                >
+                                <div key={file.file_path} className={`meta-workspace-file-button passive ${file.changed ? "changed" : ""}`}>
                                   {file.file_name}
-                                </button>
+                                </div>
                               ))}
                             </div>
                           </details>
@@ -574,14 +559,12 @@ export default function MetaWorkspacePage({ userProfile }) {
                     <summary className="meta-workspace-tree-summary schema">{schema.schema_name}</summary>
                     <div className="meta-workspace-tree-files">
                       {(schema.files || []).map((file) => (
-                        <button
-                          type="button"
+                        <div
                           key={file.file_path}
-                          className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
-                          onClick={() => handleOpenBranchFile(file.file_path, `${schema.schema_name} / ${file.file_name}`, "click-branch")}
+                          className={`meta-workspace-file-button passive ${file.changed ? "changed" : ""}`}
                         >
                           {file.file_name}
-                        </button>
+                        </div>
                       ))}
                     </div>
                   </details>
@@ -592,37 +575,6 @@ export default function MetaWorkspacePage({ userProfile }) {
             </div>
           </div>
         </div>
-
-        {branchFile || branchFileLoading ? (
-          <div className="dev-meta-generator meta-workspace-context">
-            <div className="meta-workspace-context-head">
-              <div>
-                <div className="section-subtitle">Файл ветки</div>
-                <div className="muted">{branchFile?.file_path || "Загружаем файл..."}</div>
-              </div>
-            </div>
-            <div className="meta-workspace-file-editor">
-              <textarea
-                value={branchFileContent}
-                onChange={(e) => setBranchFileContent(e.target.value)}
-                spellCheck={false}
-                disabled={branchFileLoading}
-                placeholder={branchFileLoading ? "Загружаем содержимое файла..." : "Выберите файл из дерева ветки"}
-              />
-            </div>
-            <div className="dev-meta-generator-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSaveBranchFile}
-                disabled={branchFileSaving || branchFileLoading || !branchFile?.file_path || !String(branchName || "").trim()}
-              >
-                {branchFileSaving ? "Сохраняем в ветку..." : "Сохранить файл в ветку"}
-              </button>
-              <span className="muted">Сохранение коммитит файл прямо в выбранную ветку и делает push.</span>
-            </div>
-          </div>
-        ) : null}
 
         <div className="dev-meta-tabs meta-workspace-tabs">
           {showGpTab ? (
@@ -715,6 +667,7 @@ export default function MetaWorkspacePage({ userProfile }) {
               releaseBranch={releaseBranch}
               onReleaseBranchChange={setReleaseBranch}
               externalOpenRequest={gpOpenRequest}
+              externalBranchBundle={gpBranchBundle}
               allowedObjectKeys={allowedGpObjectKeys}
               branchScopedActive={branchScopedActive}
               generatorAnchorId="meta-workspace-gp-generator"

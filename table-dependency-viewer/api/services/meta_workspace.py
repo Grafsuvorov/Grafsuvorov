@@ -337,6 +337,42 @@ def read_meta_workspace_branch_file(
     }
 
 
+def read_meta_workspace_branch_gp_bundle(
+    *,
+    git_repo_value: str,
+    entity_git_root_value: str,
+    branch_name: str,
+    entity_name: str,
+    schema_name: str,
+    table_name: str,
+) -> dict[str, Any]:
+    if not git_repo_value:
+        raise ValueError("Не настроен ENTITY_META_GIT_REPO")
+    git_repo_root = Path(git_repo_value).resolve()
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
+    object_rel = Path(entity_git_root_value) / entity_name / schema_name / table_name
+    yaml_path = (object_rel / "meta_data_file.yaml").as_posix()
+    if not _git_path_exists(git_repo_root, branch_ref, yaml_path):
+        raise ValueError(f"Объект `{entity_name}/{schema_name}/{table_name}` не найден в ветке `{branch_name}`")
+    yaml_content = _git_show_text(git_repo_root, branch_ref, yaml_path)
+    payload = _load_yaml_text(yaml_content)
+    return {
+        "branch_name": re.sub(r"^origin/", "", branch_ref),
+        "entity_name": entity_name,
+        "schema_name": schema_name,
+        "table_name": table_name,
+        "object_key": f"{entity_name}/{schema_name}/{table_name}",
+        "yaml_content": yaml_content,
+        "key_attributes": payload.get("key_attributes") if isinstance(payload.get("key_attributes"), list) else [],
+        "recreate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_recreate_init.sql").as_posix()),
+        "insert_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_insert_init.sql").as_posix()),
+        "truncate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix()),
+        "source": "branch",
+        "exists": True,
+        "path": object_rel.as_posix(),
+    }
+
+
 def save_meta_workspace_branch_file(
     *,
     git_repo_value: str,

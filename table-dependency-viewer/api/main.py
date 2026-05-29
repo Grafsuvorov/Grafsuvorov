@@ -125,6 +125,7 @@ from .services.meta_workspace import (
     build_meta_workspace_branch_tree,
     create_meta_workspace_mr,
     list_meta_workspace_branches,
+    read_meta_workspace_branch_gp_bundle,
     read_meta_workspace_branch_file,
     save_meta_workspace_branch_file,
     sync_meta_workspace_branch,
@@ -331,6 +332,13 @@ class MetaWorkspaceBranchFileSavePayload(BaseModel):
     file_path: str
     content: str
     task_id: Optional[str] = None
+
+
+class MetaWorkspaceBranchGpBundlePayload(BaseModel):
+    branch_name: str
+    entity_name: str
+    schema_name: str
+    table_name: str
 
 
 class AssistantContextPayload(BaseModel):
@@ -1029,6 +1037,22 @@ def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload
             git_repo_value=ENTITY_META_GIT_REPO,
             branch_name=payload.branch_name,
             file_path=payload.file_path,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/api/admin/meta-workspace/branch-gp-bundle")
+def get_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBundlePayload, request: Request):
+    _require_admin(request)
+    try:
+        return read_meta_workspace_branch_gp_bundle(
+            git_repo_value=ENTITY_META_GIT_REPO,
+            entity_git_root_value=ENTITY_META_GIT_META_ROOT,
+            branch_name=payload.branch_name,
+            entity_name=payload.entity_name,
+            schema_name=payload.schema_name,
+            table_name=payload.table_name,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

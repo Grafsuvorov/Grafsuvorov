@@ -120,6 +120,7 @@ from .services.entity_dev_meta import (
     validate_entity_dev_meta_bundle,
 )
 from .services.meta_workspace import (
+    BranchRevisionConflictError,
     create_meta_workspace_branch,
     _build_branch_catalog,
     build_meta_workspace_branch_tree,
@@ -333,6 +334,7 @@ class MetaWorkspaceBranchFileSavePayload(BaseModel):
     file_path: str
     content: str
     task_id: Optional[str] = None
+    expected_revision: Optional[dict] = None
 
 
 class MetaWorkspaceBranchGpBundlePayload(BaseModel):
@@ -353,6 +355,7 @@ class MetaWorkspaceBranchGpBundleSavePayload(BaseModel):
     recreate_sql: str
     insert_sql: str
     truncate_sql: str
+    expected_revision: Optional[dict] = None
 
 
 class AssistantContextPayload(BaseModel):
@@ -1090,7 +1093,10 @@ def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBun
             truncate_sql=payload.truncate_sql,
             task_id=payload.task_id or "",
             author=user.email,
+            expected_revision=payload.expected_revision,
         )
+    except BranchRevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1107,7 +1113,10 @@ def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePa
             content=payload.content,
             task_id=payload.task_id or "",
             author=user.email,
+            expected_revision=payload.expected_revision,
         )
+    except BranchRevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

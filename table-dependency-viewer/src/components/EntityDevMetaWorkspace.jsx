@@ -489,7 +489,13 @@ export default function EntityDevMetaWorkspace({
           recreate_sql: bundle.recreate_sql,
           insert_sql: bundle.insert_sql,
           truncate_sql: bundle.truncate_sql,
+          expected_revision: bundle.revision || null,
         });
+        if (data?.revision) {
+          setBundle((prev) => (
+            prev ? { ...prev, revision: data.revision } : prev
+          ));
+        }
         setValidatedFingerprint(currentFingerprint);
         setMessageType("success");
         setMessage(

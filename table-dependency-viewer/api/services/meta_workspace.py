@@ -24,6 +24,10 @@ from .entity_dev_meta import (
 )
 
 
+class BranchRevisionConflictError(PermissionError):
+    pass
+
+
 def _branch_exists(repo_root: Path, ref_name: str) -> bool:
     try:
         _run_git(repo_root, ["rev-parse", "--verify", ref_name])
@@ -119,6 +123,83 @@ def _git_show_text(repo_root: Path, ref_name: str, rel_path: str) -> str:
         return _run_git(repo_root, ["show", f"{ref_name}:{rel_path}"])
     except Exception:
         return ""
+
+
+def _git_object_oid(repo_root: Path, ref_name: str, rel_path: str, *, cwd: Path | None = None) -> str:
+    rel_norm = str(rel_path or "").strip().strip("/")
+    if not rel_norm:
+        return ""
+    try:
+        return str(_run_git(repo_root, ["rev-parse", f"{ref_name}:{rel_norm}"], cwd=cwd)).strip()
+    except Exception:
+        return ""
+
+
+def _build_branch_file_revision(repo_root: Path, ref_name: str, rel_path: str, *, cwd: Path | None = None) -> dict[str, str]:
+    path_norm = str(rel_path or "").strip().strip("/")
+    return {
+        "type": "file",
+        "path": path_norm,
+        "oid": _git_object_oid(repo_root, ref_name, path_norm, cwd=cwd),
+    }
+
+
+def _build_branch_gp_revision(repo_root: Path, ref_name: str, object_rel: Path, *, cwd: Path | None = None) -> dict[str, Any]:
+    files = [
+        "meta_data_file.yaml",
+        "sql_query_recreate_init.sql",
+        "sql_query_insert_init.sql",
+        "sql_query_truncate.sql",
+    ]
+    mapping = {
+        file_name: _git_object_oid(repo_root, ref_name, (object_rel / file_name).as_posix(), cwd=cwd)
+        for file_name in files
+    }
+    return {
+        "type": "gp_bundle",
+        "path": object_rel.as_posix(),
+        "files": mapping,
+    }
+
+
+def _assert_branch_file_revision_matches(
+    repo_root: Path,
+    ref_name: str,
+    rel_path: str,
+    expected_revision: dict[str, Any] | None,
+) -> None:
+    if not expected_revision:
+        return
+    actual_revision = _build_branch_file_revision(repo_root, ref_name, rel_path)
+    if (
+        str(expected_revision.get("path") or "").strip().strip("/") != actual_revision["path"]
+        or str(expected_revision.get("oid") or "") != actual_revision["oid"]
+    ):
+        raise BranchRevisionConflictError(
+            f"Файл `{actual_revision['path']}` изменился в ветке после открытия. Обновите его и повторите сохранение."
+        )
+
+
+def _assert_branch_gp_revision_matches(
+    repo_root: Path,
+    ref_name: str,
+    object_rel: Path,
+    expected_revision: dict[str, Any] | None,
+) -> None:
+    if not expected_revision:
+        return
+    actual_revision = _build_branch_gp_revision(repo_root, ref_name, object_rel)
+    expected_path = str(expected_revision.get("path") or "").strip().strip("/")
+    actual_path = actual_revision["path"]
+    expected_files = expected_revision.get("files") or {}
+    actual_files = actual_revision["files"]
+    if expected_path != actual_path or {
+        str(key): str(value or "")
+        for key, value in expected_files.items()
+    } != actual_files:
+        raise BranchRevisionConflictError(
+            f"Объект `{actual_path}` изменился в ветке после открытия. Обновите его и повторите сохранение."
+        )
 
 
 def _git_list_tree_files(repo_root: Path, ref_name: str, rel_root: str) -> list[str]:
@@ -334,6 +415,7 @@ def read_meta_workspace_branch_file(
         "branch_name": re.sub(r"^origin/", "", branch_ref),
         "file_path": path_norm,
         "content": content,
+        "revision": _build_branch_file_revision(git_repo_root, branch_ref, path_norm),
     }
 
 
@@ -367,6 +449,7 @@ def read_meta_workspace_branch_gp_bundle(
         "recreate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_recreate_init.sql").as_posix()),
         "insert_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_insert_init.sql").as_posix()),
         "truncate_sql": _git_show_text(git_repo_root, branch_ref, (object_rel / "sql_query_truncate.sql").as_posix()),
+        "revision": _build_branch_gp_revision(git_repo_root, branch_ref, object_rel),
         "source": "branch",
         "exists": True,
         "path": object_rel.as_posix(),
@@ -382,6 +465,7 @@ def save_meta_workspace_branch_file(
     content: str,
     task_id: str,
     author: str,
+    expected_revision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
@@ -398,6 +482,8 @@ def save_meta_workspace_branch_file(
     remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
     if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
         raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+    if remote_branch_exists:
+        _assert_branch_file_revision_matches(git_repo_root, f"origin/{branch_name_norm}", file_path_norm, expected_revision)
 
     worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-file-{branch_name_norm.replace('/', '-')}-"))
     try:
@@ -428,6 +514,7 @@ def save_meta_workspace_branch_file(
             "base_branch": base_branch_norm,
             "file_path": file_path_norm,
             "committed": committed,
+            "revision": _build_branch_file_revision(git_repo_root, "HEAD", file_path_norm, cwd=worktree_dir),
         }
     finally:
         try:
@@ -452,6 +539,7 @@ def save_meta_workspace_branch_gp_bundle(
     truncate_sql: str,
     task_id: str,
     author: str,
+    expected_revision: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
@@ -470,6 +558,9 @@ def save_meta_workspace_branch_gp_bundle(
     remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
     if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
         raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
+    object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_name_norm
+    if remote_branch_exists:
+        _assert_branch_gp_revision_matches(git_repo_root, f"origin/{branch_name_norm}", object_rel, expected_revision)
 
     worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-gp-{branch_name_norm.replace('/', '-')}-"))
     try:
@@ -479,7 +570,6 @@ def save_meta_workspace_branch_gp_bundle(
             _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
         _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
-        object_rel = Path(entity_git_root_value) / entity_name_norm / schema_name_norm / table_name_norm
         object_dir = (worktree_dir / object_rel).resolve()
         if not str(object_dir).startswith(str(worktree_dir.resolve())):
             raise ValueError("Некорректный путь объекта")
@@ -518,6 +608,7 @@ def save_meta_workspace_branch_gp_bundle(
             "path": object_rel.as_posix(),
             "changed_files": rel_paths,
             "committed": committed,
+            "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
         }
     finally:
         try:

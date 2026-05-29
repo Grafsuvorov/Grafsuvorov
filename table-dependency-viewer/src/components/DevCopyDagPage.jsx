@@ -184,7 +184,21 @@ export default function DevCopyDagPage({ userProfile }) {
             </div>
             {dagStatus.failed_tasks?.length ? (
               <div className="dev-meta-dag-failed">
-                Ошибки: {dagStatus.failed_tasks.map((task) => `${task.task_id} (${task.state})`).join(", ")}
+                <div>Ошибки:</div>
+                <div className="dev-copy-failed-list">
+                  {dagStatus.failed_tasks.map((task) => (
+                    <div key={`${task.task_id}:${task.try_number || 0}`} className="dev-copy-failed-item">
+                      <div className="dev-copy-failed-head">
+                        <strong>{task.task_id}</strong> <span>({task.state})</span>
+                      </div>
+                      {task.error_excerpt ? (
+                        <pre className="dev-copy-failed-log">{task.error_excerpt}</pre>
+                      ) : (
+                        <div className="muted">Подробный текст ошибки Airflow не вернул.</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : null}
             {dagStatus.window_message ? (

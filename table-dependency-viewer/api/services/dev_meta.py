@@ -682,6 +682,49 @@ def _airflow_json_request(
         raise ValueError(f"Не удалось вызвать Airflow: {exc}") from exc
 
 
+def _airflow_text_request(
+    *,
+    url: str,
+    username: str,
+    password: str,
+    timeout: int = 30,
+) -> str:
+    req = urlrequest.Request(url, method="GET")
+    if username or password:
+        raw = f"{username}:{password}".encode("utf-8")
+        req.add_header("Authorization", f"Basic {base64.b64encode(raw).decode('utf-8')}")
+    try:
+        with _urlopen_without_proxy(req, timeout=timeout) as resp:
+            return resp.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _extract_airflow_error_excerpt(log_text: str) -> str | None:
+    lines = [line.rstrip() for line in str(log_text or "").splitlines() if str(line or "").strip()]
+    if not lines:
+        return None
+    priority_markers = (
+        "airflowexception",
+        "traceback",
+        "exception:",
+        "error:",
+        "failed",
+    )
+    selected: list[str] = []
+    for line in reversed(lines):
+        lower_line = line.lower()
+        if any(marker in lower_line for marker in priority_markers):
+            selected.append(line.strip())
+        if len(selected) >= 6:
+            break
+    if not selected:
+        selected = [line.strip() for line in lines[-6:]]
+    selected.reverse()
+    excerpt = "\n".join(item for item in selected if item)
+    return excerpt[:2000] if excerpt else None
+
+
 def get_dev_meta_files(
     *,
     engine,
@@ -1221,10 +1264,25 @@ def get_airflow_dev_dag_status(
         {
             "task_id": task.get("task_id"),
             "state": task.get("state"),
+            "try_number": task.get("try_number"),
         }
         for task in (task_data.get("task_instances") or [])
         if task.get("state") in {"failed", "upstream_failed"}
     ]
+
+    for task in failed_tasks:
+        task_id = str(task.get("task_id") or "").strip()
+        try_number = task.get("try_number") or 1
+        if not task_id:
+            continue
+        log_url = f"{task_url}/{task_id}/logs/{try_number}"
+        log_text = _airflow_text_request(
+            url=log_url,
+            username=username,
+            password=password,
+            timeout=20,
+        )
+        task["error_excerpt"] = _extract_airflow_error_excerpt(log_text)
 
     auto_paused_back = False
     if auto_unpaused and str(dag_run_state or "").lower() in {"success", "failed"} and not dag_info.get("is_paused"):

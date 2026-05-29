@@ -266,6 +266,10 @@ export default function MetaWorkspacePage({ userProfile }) {
   };
 
   const openGpObject = (item) => {
+    if (branchScopedActive) {
+      handleOpenBranchGpTable(item.entity_name, item.schema_name, item.table_name);
+      return;
+    }
     setMode("gp");
     setActiveSelection({
       domain: "gp",

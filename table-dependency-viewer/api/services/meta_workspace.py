@@ -41,6 +41,33 @@ def _workspace_path(workspace_root_value: str, workspace_owner: str, branch_name
     return Path(workspace_root_value).resolve() / _workspace_slug(workspace_owner) / _workspace_branch_slug(branch_name)
 
 
+def _list_git_worktrees(git_repo_root: Path) -> list[dict[str, str]]:
+    output = _run_git(git_repo_root, ["worktree", "list", "--porcelain"])
+    items: list[dict[str, str]] = []
+    current: dict[str, str] = {}
+    for raw_line in str(output or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            if current:
+                items.append(current)
+                current = {}
+            continue
+        if line.startswith("worktree "):
+            current["path"] = line.removeprefix("worktree ").strip()
+            continue
+        if line.startswith("branch "):
+            current["branch"] = line.removeprefix("branch ").strip()
+            continue
+        if line.startswith("HEAD "):
+            current["head"] = line.removeprefix("HEAD ").strip()
+            continue
+        current.setdefault("flags", "")
+        current["flags"] = f"{current['flags']} {line}".strip()
+    if current:
+        items.append(current)
+    return items
+
+
 def _ensure_branch_workspace(
     *,
     git_repo_root: Path,
@@ -64,7 +91,24 @@ def _ensure_branch_workspace(
 
     worktree_parent = worktree_dir.parent
     worktree_parent.mkdir(parents=True, exist_ok=True)
-    if not (worktree_dir / ".git").exists():
+    target_branch_ref = f"refs/heads/{branch_name_norm}"
+    existing_worktree = None
+    for item in _list_git_worktrees(git_repo_root):
+        item_path = str(item.get("path") or "").strip()
+        item_branch = str(item.get("branch") or "").strip()
+        if Path(item_path).resolve() == worktree_dir.resolve() or item_branch == target_branch_ref:
+            existing_worktree = item
+            break
+
+    if existing_worktree:
+        existing_path = Path(str(existing_worktree.get("path") or "")).resolve()
+        existing_branch = str(existing_worktree.get("branch") or "").strip()
+        if existing_branch and existing_branch != target_branch_ref:
+            raise ValueError(
+                f"Workspace `{existing_path}` уже привязан к другой ветке `{existing_branch.removeprefix('refs/heads/')}`"
+            )
+        worktree_dir = existing_path
+    elif not (worktree_dir / ".git").exists():
         if worktree_dir.exists() and any(worktree_dir.iterdir()):
             raise ValueError(f"Workspace `{worktree_dir}` уже существует и не похож на git worktree")
         if remote_branch_exists:

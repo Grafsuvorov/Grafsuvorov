@@ -1,2 +1,1 @@
-Операция не выполнена
-Git команда завершилась с ошибкой: git worktree add -B feature/DWH-13087 /tmp/meta-workspaces/nikita.suvorov-rusal.com/feature__dwh-13087 origin/feature/DWH-13087 fatal: 'feature/DWH-13087' is already used by worktree at '/tmp/meta-workspaces/nikita.suvorov-rusal.com/feature__dwh-13087'
+:15312/api/admin/meta-workspace/branch-catalog?branch_name=feature%2FDWH-13087&base_branch=main:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)

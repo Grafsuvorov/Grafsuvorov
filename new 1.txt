@@ -1,94 +1,60 @@
-SELECT source_system_name AS source_system_name,
-       discreteness_name AS discreteness_name,
-       TO_CHAR (MAX ("DT_LATEST_DATA_EXTRACTED_SOURCE_SYSTEM"), 'DD-MM-YYYY') AS "Последняя дата",
-               TO_CHAR(ROUND(SUM("ACTUAL"), 0), 'FM999 999 999') AS "Факт",
-               TO_CHAR(ROUND(SUM("ACTIVE_GOAL"), 0), 'FM999 999 999') AS "Цель",
-               sum("DIFFERENCE_TYPE") AS "isGood",
-               sum("DIFFERENCE_TYPE_MTD") AS "isGoodMTD",
-               sum("DIFFERENCE_TYPE_YTD") AS "isGoodYTD",
-               TO_CHAR(ROUND(SUM("ACTUAL_YTD"), 0), 'FM999 999 999') AS "Факт YTD",
-               TO_CHAR(ROUND(SUM("ACTUAL_MTD"), 0), 'FM999 999 999') AS "Факт MTD",
-               CASE
-                   WHEN ROUND(SUM("DIFFERENCE_PERCENTAGE_MTD"), 1) = ROUND(SUM("DIFFERENCE_PERCENTAGE_MTD"), 0)
-                        AND SUM("DIFFERENCE_PERCENTAGE_MTD") <> 0 THEN REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE_MTD"), 0), '999 999 9999'), '.', ',')
-                   WHEN SUM("DIFFERENCE_PERCENTAGE_MTD") = 0 THEN TO_CHAR(SUM("DIFFERENCE_PERCENTAGE_MTD"), '9')
-                   ELSE REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE_MTD"), 1), '999 999 990.9'), '.', ',')
-               END AS "Ф-Ц MTD, %",
-               CASE
-                   WHEN ROUND(SUM("DIFFERENCE_PERCENTAGE_YTD"), 1) = ROUND(SUM("DIFFERENCE_PERCENTAGE_YTD"), 0)
-                        AND SUM("DIFFERENCE_PERCENTAGE_YTD") <> 0 THEN REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE_YTD"), 0), '999 999 9999'), '.', ',')
-                   WHEN SUM("DIFFERENCE_PERCENTAGE_YTD") = 0 THEN TO_CHAR(SUM("DIFFERENCE_PERCENTAGE_YTD"), '9')
-                   ELSE REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE_YTD"), 1), '999 999 990.9'), '.', ',')
-               END AS "Ф-Ц YTD, %",
-               CASE
-                   WHEN ROUND(SUM("DIFFERENCE_PERCENTAGE"), 1) = ROUND(SUM("DIFFERENCE_PERCENTAGE"), 0)
-                        AND SUM("DIFFERENCE_PERCENTAGE") <> 0 THEN REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE"), 0), '999 999 9999'), '.', ',')
-                   WHEN SUM("DIFFERENCE_PERCENTAGE") = 0 THEN TO_CHAR(SUM("DIFFERENCE_PERCENTAGE"), '9')
-                   ELSE REPLACE(TO_CHAR(ROUND(SUM("DIFFERENCE_PERCENTAGE"), 1), '999 999 990.9'), '.', ',')
-               END AS "Ф-Ц, %",
-               CASE
-                   WHEN ROUND(SUM("EXECUTION_PERCENTAGE_MTD"), 1) = ROUND(SUM("EXECUTION_PERCENTAGE_MTD"), 0)
-                        AND SUM("EXECUTION_PERCENTAGE_MTD") <> 0 THEN REPLACE(TO_CHAR(ROUND(SUM("EXECUTION_PERCENTAGE_MTD"), 0), 'FM9999999990' -- FM удаляет пробелы, 0 гарантирует отображение нуля
- ), '.', ',')
-                   WHEN SUM("EXECUTION_PERCENTAGE_MTD") = 0 THEN TO_CHAR(SUM("EXECUTION_PERCENTAGE_MTD"), 'FM99990') -- FM + 0 для "-0"
+create or replace function tech_etl.backup_entity_tables(
+      p_entity_id integer,
+      p_table_schema text
+  )
+  returns table (
+      source_table text,
+      backup_table text,
+      status text
+  )
+  language plpgsql
+  as
+  $$
+  declare
+      r record;
+      v_backup_suffix text := to_char(current_date, 'YYYY_MM_DD');
+      v_backup_table_name text;
+  begin
+      for r in
+          select t.table_name
+          from tech_etl.tables_meta t
+          where t.entity_id = p_entity_id
+            and t.table_schema = p_table_schema
+          order by t.table_name
+      loop
+          v_backup_table_name := format('%s_backup_%s', r.table_name, v_backup_suffix);
 
-                   ELSE REPLACE(TO_CHAR(ROUND(SUM("EXECUTION_PERCENTAGE_MTD"), 1), 'FM999999990D0' -- FM + 0D0 для "-0,1"
- ), '.', ',')
-               END AS "Выполнение MTD, %",
-               CASE
-                   WHEN ROUND(SUM("EXECUTION_PERCENTAGE_YTD"), 1) = ROUND(SUM("EXECUTION_PERCENTAGE_YTD"), 0)
-                        AND SUM("EXECUTION_PERCENTAGE_YTD") <> 0 THEN REPLACE(TO_CHAR(ROUND(SUM("EXECUTION_PERCENTAGE_YTD"), 0), 'FM9999999990' -- FM удаляет пробелы, 0 гарантирует отображение нуля
- ), '.', ',')
-                   WHEN SUM("EXECUTION_PERCENTAGE_YTD") = 0 THEN TO_CHAR(SUM("EXECUTION_PERCENTAGE_YTD"), 'FM99990') -- FM + 0 для "-0"
+          execute format(
+              'drop table if exists %I.%I',
+              p_table_schema,
+              v_backup_table_name
+          );
 
-                   ELSE REPLACE(TO_CHAR(ROUND(SUM("EXECUTION_PERCENTAGE_YTD"), 1), 'FM999999990D0' -- FM + 0D0 для "-0,1"
- ), '.', ',')
-               END AS "Выполнение YTD, %",
-               CASE
-                   WHEN ROUND(SUM("EXECUTION_PERCENTAGE_TRUNC"), 1) = ROUND(SUM("EXECUTION_PERCENTAGE_TRUNC"), 0)
-                        AND SUM("EXECUTION_PERCENTAGE_TRUNC") <> 0 THEN ROUND(SUM("EXECUTION_PERCENTAGE_TRUNC"), 0)
-                   WHEN SUM("EXECUTION_PERCENTAGE_TRUNC") = 0 THEN SUM("EXECUTION_PERCENTAGE_TRUNC")
-                   ELSE ROUND(SUM("EXECUTION_PERCENTAGE_TRUNC"), 1)
-               END AS "Выполнение, %"
-FROM
-  (WITH kpi_actual_daily_report_ad_date AS
-     (SELECT *
-      FROM dm_view.kpi_indicators_actual_daily_report_ad),
-        cte1 AS
-     (SELECT "REPORT_DATE" AS "REPORT_DATE_CTE",
-             "ENTITY" AS "ENTITY_CTE",
-             'KPI_AL_PRD_TOVAL_WH_STOCK' AS "ACCOUNT_CTE",
-             "ACTUAL" AS "CARGO_ON_WHEELS"
-      FROM dm_view.kpi_indicators_actual_daily_report_ad
-      WHERE "ACCOUNT" = 'KPI_AL_PRD_TOVAL_WH_WHEELS_STOCK' ),
-        cte2 AS
-     (SELECT "REPORT_DATE" AS "REPORT_DATE_CTE",
-             "ENTITY" AS "ENTITY_CTE",
-             'KPI_AL_PRD_TOVAL_WH_STOCK' AS "ACCOUNT_CTE",
-             "ACTUAL" AS "WH_TOTAL_STOCK",
-             "DIFFERENCE" AS "WH_TOTAL_STOCK_DIFFERENCE",
-             "DIFFERENCE_PERCENTAGE" AS "WH_TOTAL_STOCK_DIFFERENCE_PERCENTAGE"
-      FROM dm_view.kpi_indicators_actual_daily_report_ad
-      WHERE "ACCOUNT" = 'KPI_AL_PRD_TOVAL_WH_TOTAL_STOCK' ) SELECT a.*,
-                                                                   cte1."CARGO_ON_WHEELS",
-                                                                   cte2."WH_TOTAL_STOCK",
-                                                                   cte2."WH_TOTAL_STOCK_DIFFERENCE",
-                                                                   cte2."WH_TOTAL_STOCK_DIFFERENCE_PERCENTAGE"
-   FROM kpi_actual_daily_report_ad_date a
-   LEFT JOIN cte1 ON cte1."REPORT_DATE_CTE"=a."REPORT_DATE"
-   and cte1."ENTITY_CTE"=a."ENTITY"
-   and cte1."ACCOUNT_CTE"=a."ACCOUNT"
-   LEFT JOIN cte2 ON cte2."REPORT_DATE_CTE"=a."REPORT_DATE"
-   and cte2."ENTITY_CTE"=a."ENTITY"
-   and cte2."ACCOUNT_CTE"=a."ACCOUNT") AS virtual_table
-WHERE "REPORT_DATE" IN ('2026-05-01')
-  AND "ENTITY" IN ('BU_AL_AD')
-  AND (("ACCOUNT" = 'TEP_FG_AL_PRD_ALM_ALLOY')
-       AND (true))
-GROUP BY source_system_name,
-         discreteness_name
-ORDER BY "Последняя дата" DESC
-LIMIT 10000;
+          execute format(
+              'create table %I.%I (like %I.%I including all)',
+              p_table_schema,
+              v_backup_table_name,
+              p_table_schema,
+              r.table_name
+          );
 
-SQL Error [47] [07000]: Code: 47. DB::Exception: Unknown expression identifier 'REPORT_DATE' in scope cte1 AS (SELECT REPORT_DATE AS REPORT_DATE_CTE, ENTITY AS ENTITY_CTE, 'KPI_AL_PRD_TOVAL_WH_STOCK' AS ACCOUNT_CTE, ACTUAL AS CARGO_ON_WHEELS FROM dm_view.kpi_indicators_actual_daily_report_ad WHERE ACCOUNT = 'KPI_AL_PRD_TOVAL_WH_WHEELS_STOCK'). Maybe you meant: ['report_date']. (UNKNOWN_IDENTIFIER) (version 24.3.3.102 (official build))
-, server ClickHouseNode(addr=http:rgm-t-dwhclk01.hq.root.ad/<unresolved>:8443, db=dwh)@-1961150745
+          execute format(
+              'insert into %I.%I select * from %I.%I',
+              p_table_schema,
+              v_backup_table_name,
+              p_table_schema,
+              r.table_name
+          );
+
+          source_table := format('%s.%s', p_table_schema, r.table_name);
+          backup_table := format('%s.%s', p_table_schema, v_backup_table_name);
+          status := 'created';
+          return next;
+      end loop;
+  end;
+  $$;
+
+  Запуск:
+
+  select *
+  from tech_etl.backup_entity_tables(35, 'dm');

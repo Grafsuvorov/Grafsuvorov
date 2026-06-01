@@ -85,6 +85,10 @@ def _ensure_branch_workspace(
     worktree_dir = _workspace_path(str(workspace_root), workspace_owner, branch_name_norm)
 
     _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    try:
+        _run_git(git_repo_root, ["worktree", "prune"])
+    except Exception:
+        pass
     remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))
     if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
         raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
@@ -107,8 +111,18 @@ def _ensure_branch_workspace(
             raise ValueError(
                 f"Workspace `{existing_path}` уже привязан к другой ветке `{existing_branch.removeprefix('refs/heads/')}`"
             )
-        worktree_dir = existing_path
-    elif not (worktree_dir / ".git").exists():
+        try:
+            _run_git(git_repo_root, ["rev-parse", "--is-inside-work-tree"], cwd=existing_path)
+            worktree_dir = existing_path
+        except Exception:
+            try:
+                _run_git(git_repo_root, ["worktree", "remove", "--force", str(existing_path)])
+            except Exception:
+                pass
+            if existing_path.exists():
+                shutil.rmtree(existing_path, ignore_errors=True)
+            existing_worktree = None
+    if not existing_worktree and not (worktree_dir / ".git").exists():
         if worktree_dir.exists() and any(worktree_dir.iterdir()):
             raise ValueError(f"Workspace `{worktree_dir}` уже существует и не похож на git worktree")
         if remote_branch_exists:
@@ -157,15 +171,20 @@ def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     _run_git(git_repo_root, ["fetch", "--prune", "origin"])
     output = _run_git(
         git_repo_root,
-        ["for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin"],
+        ["for-each-ref", "--sort=-committerdate", "--format=%(refname:strip=3)", "refs/remotes/origin"],
     )
-    branches = []
+    branches: list[str] = []
+    seen: set[str] = set()
     for line in output.splitlines():
         item = str(line or "").strip()
         if not item or item == "HEAD":
             continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
         branches.append(item)
-    return {"items": sorted(set(branches), key=str.lower)}
+    return {"items": branches}
 
 
 def create_meta_workspace_branch(*, git_repo_value: str, branch_name: str, base_branch: str) -> dict[str, Any]:

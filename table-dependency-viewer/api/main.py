@@ -1028,6 +1028,8 @@ def get_admin_meta_workspace_branch_catalog(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось построить каталог ветки: {exc}")
 
 
 @router.get("/api/admin/meta-workspace/branch-tree")
@@ -1049,6 +1051,8 @@ def get_admin_meta_workspace_branch_tree(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось прочитать структуру ветки: {exc}")
 
 
 @router.post("/api/admin/meta-workspace/branch-file")

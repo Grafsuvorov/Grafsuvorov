@@ -502,7 +502,7 @@ export default function MetaWorkspacePage({ userProfile }) {
             <span className="muted">GP: {branchSummary.gp} · Click: {branchSummary.click}</span>
           </div>
           <div className="meta-workspace-branch-picker">
-            {filteredBranchOptions.length ? filteredBranchOptions.slice(0, 40).map((item) => (
+            {filteredBranchOptions.length ? filteredBranchOptions.map((item) => (
               <button
                 key={item}
                 type="button"

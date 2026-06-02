@@ -1,4 +1,3 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> python .\backup.py --host 10.66.229.201 --port 5432 --dbname dwh --user gpetl --password gpetl --entity-id 35 --table-schema dm --backup-date 2026-06-02                 
-  File "C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts\backup.py", line 2
-    import argparse
-IndentationError: unexpected indent
+python .\scripts\backup.py --host 10.66.229.201 --port 5432 --dbname dwh --user gpetl --password gpetl --entity-id 35 --table-schema dm --backup-date 2026-06-02
+
+  Есл

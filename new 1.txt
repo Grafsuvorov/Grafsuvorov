@@ -1,3 +1,93 @@
-python .\scripts\backup.py --host 10.66.229.201 --port 5432 --dbname dwh --user gpetl --password gpetl --entity-id 35 --table-schema dm --backup-date 2026-06-02
+ select 'backup',*  from dm.sales_account_receivables_backup_2026_06_02
+ where document_code='SF'
+and unit_balance_code='1515'
+and customer_code='0000000650'
+and billing_document_code='1601449017'
+and billing_document_position_code='000001'
+and delivery_code='0110349586'
+and delivery_position_code='000010'
+and payment_document_code='1515/0000/1601469498'
+and dt_payment='2026-03-10'
+union all 
+ select 'dm',*  from dm.sales_account_receivables_backup_2026_06_02
+ where document_code='SF'
+and unit_balance_code='1515'
+and customer_code='0000000650'
+and billing_document_code='1601449017'
+and billing_document_position_code='000001'
+and delivery_code='0110349586'
+and delivery_position_code='000010'
+and payment_document_code='1515/0000/1601469498'
+and dt_payment='2026-03-10'
+ 
 
-  Есл
+backup	dm
+SF	SF
+1515	1515
+0000000650	0000000650
+1601449017	1601449017
+000001	000001
+0110349586	0110349586
+000010	000010
+1515/0000/1601469498	1515/0000/1601469498
+2026-03-10	2026-03-10
+1270.27	1270.27
+EUR	EUR
+MIRONOVNS	MIRONOVNS
+65.142	65.142
+TO	TO
+2025-12-29	2025-12-29
+APG-10605-25/F	APG-10605-25/F
+SAP_AUTO	SAP_AUTO
+2026-06-01	2026-06-01
+A	A
+1.16032	1.16032
+1473.92	1473.92
+1601450961	1601450961
+2025-12-01	2025-12-01
+ZTPZ	ZTPZ
+2025-12-24	2025-12-24
+	
+AAX0143BAR0017	AAX0143BAR0017
+FOUNDRY ALUMINIUM ALLOY	FOUNDRY ALUMINIUM ALLOY
+WR03	WR03
+2 banking d. against WRelease	2 banking d. against WRelease
+6100051179	6100051179
+Q	Q
+	
+3000771321	3000771321
+3000771316	3000771316
+ApG-CMS-SA0249/25	ApG-CMS-SA0249/25
+DPU	DPU
+GEBZE	GEBZE
+202510	202510
+3000495586	3000495586
+04	04
+Warehouse release	Warehouse release
+09	09
+Turkey	Turkey
+6000233196	6000233196
+ApG02117	ApG02117
+2025-10-06	2025-10-06
+0005000831	0005000831
+ALPG_ZIR_EUR	ALPG_ZIR_EUR
+2	2
+ALLOY	ALLOY
+12	12
+	
+	
+0000063563	0000063563
+САО "ВСК"	САО "ВСК"
+09	09
+Turkey	Turkey
+F	F
+	
+	
+	
+X	X
+CMS JANT VE MAKINA SAN A.S.	CMS JANT VE MAKINA SAN A.S.
+SD invoices	SD invoices
+2026-06-02 06:19:22.542	2026-06-02 06:19:22.542
+2026-06-02 06:19:22.542	2026-06-02 06:19:22.542
+airflow	airflow
+false	false

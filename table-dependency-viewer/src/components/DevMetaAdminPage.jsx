@@ -113,11 +113,11 @@ export default function DevMetaAdminPage({
     validatedContent !== null &&
     validatedContent === content
   );
-  const branchSaveActive = Boolean(
+  const branchMode = Boolean(
     branchSaveContext?.branch_name &&
-    branchSaveContext?.base_branch &&
-    selectedFile
+    branchSaveContext?.base_branch
   );
+  const scopedFileMode = embedded && (branchMode || allowedFiles instanceof Set);
 
   const lockRow = useMemo(() => {
     if (!selectedFile) return null;
@@ -138,7 +138,7 @@ export default function DevMetaAdminPage({
   };
 
   const filteredFiles = useMemo(() => {
-    if (branchSaveActive && Array.isArray(allowedBranchFiles)) {
+    if (branchMode && Array.isArray(allowedBranchFiles)) {
       const term = fileSearch.trim().toLowerCase();
       const rows = [...allowedBranchFiles]
         .filter((file) => file.schema_name === schemaName)
@@ -170,7 +170,7 @@ export default function DevMetaAdminPage({
     setMessageType("info");
     setValidation(null);
     try {
-      if (branchSaveActive) {
+      if (branchMode) {
         const data = await metaWorkspaceApi.branchFile({
           branch_name: branchSaveContext.branch_name,
           file_path: `${schemaName}/${fileName}`,
@@ -262,7 +262,7 @@ export default function DevMetaAdminPage({
       setMessageType(data?.valid ? "success" : "warning");
       setMessage(
         data?.valid
-          ? branchSaveActive
+          ? branchMode
             ? "Проверка пройдена: файл корректен и готов к сохранению в ветку."
             : "Проверка пройдена: файл корректен и готов к сохранению."
           : "Проверка завершилась с ошибками. Исправь их перед сохранением."
@@ -276,7 +276,7 @@ export default function DevMetaAdminPage({
 
   const handleSaveAndDeploy = async () => {
     if (!selectedFile) return;
-    if (!branchSaveActive && externalTaskId !== undefined && !taskId) {
+    if (!branchMode && externalTaskId !== undefined && !taskId) {
       setMessageType("warning");
       setError(null);
       setMessage("Перед отправкой в DEV укажите номер задачи в формате DWH-12345.");
@@ -293,7 +293,7 @@ export default function DevMetaAdminPage({
     setMessage(null);
     setMessageType("info");
     try {
-      if (branchSaveActive) {
+      if (branchMode) {
         const data = await metaWorkspaceApi.saveBranchFile({
           branch_name: branchSaveContext.branch_name,
           base_branch: branchSaveContext.base_branch,
@@ -327,7 +327,7 @@ export default function DevMetaAdminPage({
         setMessage(`Файл сохранен локально и отправлен на DEV сервер: ${data?.remote_path || "успешно"}`);
       }
     } catch (err) {
-      setError(err.message || (branchSaveActive ? "Не удалось сохранить файл в ветку" : "Не удалось сохранить и отправить файл на DEV сервер"));
+      setError(err.message || (branchMode ? "Не удалось сохранить файл в ветку" : "Не удалось сохранить и отправить файл на DEV сервер"));
     } finally {
       setDeploying(false);
     }
@@ -638,9 +638,9 @@ export default function DevMetaAdminPage({
           <div className="dev-meta-file-block">
             <div className="dev-meta-file-head">
               <div>
-                <div className="section-subtitle">{branchSaveActive ? "Файлы ветки" : "DEV файлы"}</div>
+                <div className="section-subtitle">{branchMode ? "Файлы ветки" : "DEV файлы"}</div>
                 <div className="muted">
-                  {branchSaveActive
+                  {branchMode
                     ? "Показаны файлы выбранной ветки."
                     : allowedFiles instanceof Set
                     ? "Показаны только файлы из выбранной ветки."
@@ -658,7 +658,7 @@ export default function DevMetaAdminPage({
               </div>
             </div>
             <div className="dev-meta-file-list">
-              {!branchScopedActive ? (
+              {scopedFileMode && !branchScopedActive ? (
                 <div className="muted dev-meta-scoped-empty">Сначала выбери ветку выше. После этого здесь появятся только файлы этой ветки.</div>
               ) : filteredFiles.length ? filteredFiles.map((file) => (() => {
                 const fileLock = (files.locks || []).find(
@@ -670,7 +670,7 @@ export default function DevMetaAdminPage({
                     key={`dev-${file.file_name}`}
                     className={`dev-meta-file ${selectedFile === file.file_name ? "active" : ""} ${blocked ? "blocked" : ""}`}
                     onClick={() => openFile(file.file_name)}
-                    disabled={branchSaveActive ? false : blocked}
+                    disabled={branchMode ? false : blocked}
                   >
                     <span className="mono dev-meta-file-name" title={file.file_name}>{file.file_name}</span>
                     {"updated_at" in file ? <span className="muted">{formatDateTime(file.updated_at)}</span> : null}
@@ -679,7 +679,7 @@ export default function DevMetaAdminPage({
                         {file.last_action_by} · {formatDateTime(file.last_action_at)}
                       </span>
                     ) : null}
-                    {blocked && !branchSaveActive ? <span className="dev-meta-file-badge">Занят</span> : null}
+                    {blocked && !branchMode ? <span className="dev-meta-file-badge">Занят</span> : null}
                   </button>
                 );
               })()) : <div className="muted">Для выбранной ветки файлов пока нет.</div>}
@@ -704,17 +704,17 @@ export default function DevMetaAdminPage({
                   className="btn btn-primary"
                   onClick={handleSaveAndDeploy}
                   disabled={
-                    branchSaveActive
+                    branchMode
                       ? (!selectedFile || deploying || !isValidationFresh)
                       : (!selectedFile || deploying || isLockedByAnother || !status?.deploy?.configured || !isValidationFresh)
                   }
                 >
-                  {deploying ? "Сохраняем..." : branchSaveActive ? "Сохранить в ветку" : "Сохранить и отправить на DEV"}
+                  {deploying ? "Сохраняем..." : branchMode ? "Сохранить в ветку" : "Сохранить и отправить на DEV"}
                 </button>
                 <button
                   className="btn btn-secondary"
                   onClick={handleRunDag}
-                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured || branchSaveActive}
+                  disabled={!selectedFile || runningDag || isLockedByAnother || !status?.airflow?.configured || branchMode}
                 >
                   {runningDag ? "Запускаем DAG..." : "Запустить DEV DAG"}
                 </button>

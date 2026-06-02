@@ -1,5 +1,36 @@
-create table if not exists tech_etl.entity_backup_check_results (
-      run_dttm timestamp not null,
+Ниже готовый Python-скрипт. Он:
+
+  - берёт список таблиц по entity_id и schema
+  - сверяет таблицу с backup-таблицей вида _backup_YYYY_MM_DD
+  - исключает системные поля:
+      - dttm_inserted
+      - dttm_updated
+      - job_name
+      - deleted_flag
+  - пишет прогресс в отдельную таблицу
+  - пишет результаты в отдельную таблицу
+  - делает commit после каждой таблицы
+
+  Сначала создайте таблицы:
+
+  create table if not exists tech_etl.entity_backup_check_progress (
+      run_id text not null,
+      entity_id integer not null,
+      table_schema text not null,
+      backup_date date not null,
+      status text not null,
+      total_tables integer not null default 0,
+      processed_tables integer not null default 0,
+      current_table text,
+      started_at timestamp not null default now(),
+      finished_at timestamp,
+      error_message text
+  )
+  distributed randomly;
+
+  create table if not exists tech_etl.entity_backup_check_results (
+      run_id text not null,
+      checked_at timestamp not null,
       backup_date date not null,
       entity_id integer not null,
       table_schema text not null,
@@ -8,62 +39,194 @@ create table if not exists tech_etl.entity_backup_check_results (
       status text not null,
       source_cnt bigint,
       backup_cnt bigint,
-      diff_cnt bigint
+      diff_cnt bigint,
+      error_message text
   )
   distributed randomly;
 
-  Обновлённая функция:
+  Скрипт:
 
-  create or replace function tech_etl.check_entity_backup_tables(
-      p_entity_id integer,
-      p_table_schema text,
-      p_backup_date date default current_date
-  )
-  returns table (
-      run_dttm timestamp,
-      source_table text,
-      backup_table text,
-      status text,
-      source_cnt bigint,
-      backup_cnt bigint,
-      diff_cnt bigint
-  )
-  language plpgsql
-  as
-  $$
-  declare
-      r record;
-      v_run_dttm timestamp := now();
-      v_backup_suffix text := to_char(p_backup_date, 'YYYY_MM_DD');
-      v_backup_table_name text;
-      v_cols text;
-      v_source_cnt bigint;
-      v_backup_cnt bigint;
-      v_diff_cnt bigint;
-      v_status text;
-  begin
-      for r in
-          select t.table_name
-          from tech_etl.tables_meta t
-          where t.entity_id = p_entity_id
-            and t.table_schema = p_table_schema
-          order by t.table_name
-      loop
-          v_backup_table_name := format('%s_backup_%s', r.table_name, v_backup_suffix);
+  #!/usr/bin/env python3
+  import argparse
+  import sys
+  import uuid
+  from datetime import date, datetime
 
-          if not exists (
+  import psycopg2
+
+
+  EXCLUDED_COLUMNS = {
+      "dttm_inserted",
+      "dttm_updated",
+      "job_name",
+      "deleted_flag",
+  }
+
+
+  def qident(name: str) -> str:
+      return '"' + name.replace('"', '""') + '"'
+
+
+  def fqtn(schema: str, table: str) -> str:
+      return f"{qident(schema)}.{qident(table)}"
+
+
+  def get_tables(conn, entity_id: int, table_schema: str):
+      with conn.cursor() as cur:
+          cur.execute(
+              """
+              select table_name
+              from tech_etl.tables_meta
+              where entity_id = %s
+                and table_schema = %s
+              order by table_name
+              """,
+              (entity_id, table_schema),
+          )
+          return [row[0] for row in cur.fetchall()]
+
+
+  def table_exists(conn, table_schema: str, table_name: str) -> bool:
+      with conn.cursor() as cur:
+          cur.execute(
+              """
               select 1
               from information_schema.tables
-              where table_schema = p_table_schema
-                and table_name = v_backup_table_name
-          ) then
-              v_status := 'backup_not_found';
-              v_source_cnt := null;
-              v_backup_cnt := null;
-              v_diff_cnt := null;
+              where table_schema = %s
+                and table_name = %s
+              limit 1
+              """,
+              (table_schema, table_name),
+          )
+          return cur.fetchone() is not None
 
+
+  def get_business_columns(conn, table_schema: str, table_name: str):
+      with conn.cursor() as cur:
+          cur.execute(
+              """
+              select column_name
+              from information_schema.columns
+              where table_schema = %s
+                and table_name = %s
+              order by ordinal_position
+              """,
+              (table_schema, table_name),
+          )
+          return [
+              row[0]
+              for row in cur.fetchall()
+              if row[0] not in EXCLUDED_COLUMNS
+          ]
+
+
+  def get_count(conn, table_schema: str, table_name: str) -> int:
+      sql = f"select count(*) from {fqtn(table_schema, table_name)}"
+      with conn.cursor() as cur:
+          cur.execute(sql)
+          return cur.fetchone()[0]
+
+
+  def get_diff_count(conn, table_schema: str, source_table: str, backup_table: str, columns):
+      cols = ", ".join(qident(col) for col in columns)
+      sql = f"""
+          select count(*)
+          from (
+              (select {cols} from {fqtn(table_schema, source_table)}
+               except all
+               select {cols} from {fqtn(table_schema, backup_table)})
+              union all
+              (select {cols} from {fqtn(table_schema, backup_table)}
+               except all
+               select {cols} from {fqtn(table_schema, source_table)})
+          ) q
+      """
+      with conn.cursor() as cur:
+          cur.execute(sql)
+          return cur.fetchone()[0]
+
+
+  def upsert_progress(
+      conn,
+      run_id: str,
+      entity_id: int,
+      table_schema: str,
+      backup_date: date,
+      status: str,
+      total_tables: int,
+      processed_tables: int,
+      current_table: str | None,
+      error_message: str | None = None,
+      finished: bool = False,
+  ):
+      with conn.cursor() as cur:
+          cur.execute(
+              "delete from tech_etl.entity_backup_check_progress where run_id = %s",
+              (run_id,),
+          )
+          cur.execute(
+              """
+              insert into tech_etl.entity_backup_check_progress (
+                  run_id,
+                  entity_id,
+                  table_schema,
+                  backup_date,
+                  status,
+                  total_tables,
+                  processed_tables,
+                  current_table,
+                  started_at,
+                  finished_at,
+                  error_message
+              )
+              values (
+                  %s, %s, %s, %s, %s, %s, %s, %s,
+                  coalesce(
+                      (select min(started_at)
+                       from tech_etl.entity_backup_check_progress
+                       where run_id = %s),
+                      now()
+                  ),
+                  %s,
+                  %s
+              )
+              """,
+              (
+                  run_id,
+                  entity_id,
+                  table_schema,
+                  backup_date,
+                  status,
+                  total_tables,
+                  processed_tables,
+                  current_table,
+                  run_id,
+                  datetime.now() if finished else None,
+                  error_message,
+              ),
+          )
+
+
+  def insert_result(
+      conn,
+      run_id: str,
+      backup_date: date,
+      entity_id: int,
+      table_schema: str,
+      source_table: str,
+      backup_table: str,
+      status: str,
+      source_cnt=None,
+      backup_cnt=None,
+      diff_cnt=None,
+      error_message=None,
+  ):
+      with conn.cursor() as cur:
+          cur.execute(
+              """
               insert into tech_etl.entity_backup_check_results (
-                  run_dttm,
+                  run_id,
+                  checked_at,
                   backup_date,
                   entity_id,
                   table_schema,
@@ -72,52 +235,13 @@ create table if not exists tech_etl.entity_backup_check_results (
                   status,
                   source_cnt,
                   backup_cnt,
-                  diff_cnt
+                  diff_cnt,
+                  error_message
               )
-              values (
-                  v_run_dttm,
-                  p_backup_date,
-                  p_entity_id,
-                  p_table_schema,
-                  format('%s.%s', p_table_schema, r.table_name),
-                  format('%s.%s', p_table_schema, v_backup_table_name),
-                  v_status,
-                  v_source_cnt,
-                  v_backup_cnt,
-                  v_diff_cnt
-              );
-
-              run_dttm := v_run_dttm;
-              source_table := format('%s.%s', p_table_schema, r.table_name);
-              backup_table := format('%s.%s', p_table_schema, v_backup_table_name);
-              status := v_status;
-              source_cnt := v_source_cnt;
-              backup_cnt := v_backup_cnt;
-              diff_cnt := v_diff_cnt;
-              return next;
-              continue;
-          end if;
-
-          select string_agg(format('%I', c.column_name), ', ' order by c.ordinal_position)
-          into v_cols
-          from information_schema.columns c
-          where c.table_schema = p_table_schema
-            and c.table_name = r.table_name
-            and c.column_name not in (
-                'dttm_inserted',
-                'dttm_updated',
-                'job_name',
-                'deleted_flag'
-            );
-
-          if v_cols is null then
-              v_status := 'no_business_columns';
-              v_source_cnt := null;
-              v_backup_cnt := null;
-              v_diff_cnt := null;
-
-              insert into tech_etl.entity_backup_check_results (
-                  run_dttm,
+              values (%s, now(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+              """,
+              (
+                  run_id,
                   backup_date,
                   entity_id,
                   table_schema,
@@ -126,116 +250,232 @@ create table if not exists tech_etl.entity_backup_check_results (
                   status,
                   source_cnt,
                   backup_cnt,
-                  diff_cnt
-              )
-              values (
-                  v_run_dttm,
-                  p_backup_date,
-                  p_entity_id,
-                  p_table_schema,
-                  format('%s.%s', p_table_schema, r.table_name),
-                  format('%s.%s', p_table_schema, v_backup_table_name),
-                  v_status,
-                  v_source_cnt,
-                  v_backup_cnt,
-                  v_diff_cnt
-              );
-
-              run_dttm := v_run_dttm;
-              source_table := format('%s.%s', p_table_schema, r.table_name);
-              backup_table := format('%s.%s', p_table_schema, v_backup_table_name);
-              status := v_status;
-              source_cnt := v_source_cnt;
-              backup_cnt := v_backup_cnt;
-              diff_cnt := v_diff_cnt;
-              return next;
-              continue;
-          end if;
-
-          execute format(
-              'select count(*) from %I.%I',
-              p_table_schema,
-              r.table_name
+                  diff_cnt,
+                  error_message,
+              ),
           )
-          into v_source_cnt;
 
-          execute format(
-              'select count(*) from %I.%I',
-              p_table_schema,
-              v_backup_table_name
-          )
-          into v_backup_cnt;
 
-          execute format(
-              $sql$
-              select count(*)
-              from (
-                  (select %s from %I.%I
-                   except all
-                   select %s from %I.%I)
-                  union all
-                  (select %s from %I.%I
-                   except all
-                   select %s from %I.%I)
-              ) q
-              $sql$,
-              v_cols, p_table_schema, r.table_name,
-              v_cols, p_table_schema, v_backup_table_name,
-              v_cols, p_table_schema, v_backup_table_name,
-              v_cols, p_table_schema, r.table_name
-          )
-          into v_diff_cnt;
+  def main():
+      parser = argparse.ArgumentParser()
+      parser.add_argument("--host", required=True)
+      parser.add_argument("--port", type=int, default=5432)
+      parser.add_argument("--dbname", required=True)
+      parser.add_argument("--user", required=True)
+      parser.add_argument("--password", required=True)
+      parser.add_argument("--entity-id", type=int, required=True)
+      parser.add_argument("--table-schema", required=True)
+      parser.add_argument("--backup-date", default=str(date.today()))
+      args = parser.parse_args()
 
-          if v_source_cnt = v_backup_cnt and v_diff_cnt = 0 then
-              v_status := 'ok';
-          else
-              v_status := 'mismatch';
-          end if;
+      backup_date = date.fromisoformat(args.backup_date)
+      backup_suffix = backup_date.strftime("%Y_%m_%d")
+      run_id = str(uuid.uuid4())
 
-          insert into tech_etl.entity_backup_check_results (
-              run_dttm,
+      conn = psycopg2.connect(
+          host=args.host,
+          port=args.port,
+          dbname=args.dbname,
+          user=args.user,
+          password=args.password,
+      )
+      conn.autocommit = False
+
+      try:
+          tables = get_tables(conn, args.entity_id, args.table_schema)
+          total = len(tables)
+
+          upsert_progress(
+              conn,
+              run_id,
+              args.entity_id,
+              args.table_schema,
               backup_date,
-              entity_id,
-              table_schema,
-              source_table,
-              backup_table,
-              status,
-              source_cnt,
-              backup_cnt,
-              diff_cnt
+              "running",
+              total,
+              0,
+              None,
           )
-          values (
-              v_run_dttm,
-              p_backup_date,
-              p_entity_id,
-              p_table_schema,
-              format('%s.%s', p_table_schema, r.table_name),
-              format('%s.%s', p_table_schema, v_backup_table_name),
-              v_status,
-              v_source_cnt,
-              v_backup_cnt,
-              v_diff_cnt
-          );
+          conn.commit()
 
-          run_dttm := v_run_dttm;
-          source_table := format('%s.%s', p_table_schema, r.table_name);
-          backup_table := format('%s.%s', p_table_schema, v_backup_table_name);
-          status := v_status;
-          source_cnt := v_source_cnt;
-          backup_cnt := v_backup_cnt;
-          diff_cnt := v_diff_cnt;
-          return next;
-      end loop;
-  end;
-  $$;
+          for idx, table_name in enumerate(tables, start=1):
+              backup_table = f"{table_name}_backup_{backup_suffix}"
+              source_name = f"{args.table_schema}.{table_name}"
+              backup_name = f"{args.table_schema}.{backup_table}"
 
-  Запуск:
+              print(f"[{idx}/{total}] checking {source_name}")
+              upsert_progress(
+                  conn,
+                  run_id,
+                  args.entity_id,
+                  args.table_schema,
+                  backup_date,
+                  "running",
+                  total,
+                  idx - 1,
+                  source_name,
+              )
+              conn.commit()
+
+              try:
+                  if not table_exists(conn, args.table_schema, backup_table):
+                      insert_result(
+                          conn,
+                          run_id,
+                          backup_date,
+                          args.entity_id,
+                          args.table_schema,
+                          source_name,
+                          backup_name,
+                          "backup_not_found",
+                      )
+                      conn.commit()
+                      continue
+
+                  columns = get_business_columns(conn, args.table_schema, table_name)
+                  if not columns:
+                      insert_result(
+                          conn,
+                          run_id,
+                          backup_date,
+                          args.entity_id,
+                          args.table_schema,
+                          source_name,
+                          backup_name,
+                          "no_business_columns",
+                      )
+                      conn.commit()
+                      continue
+
+                  source_cnt = get_count(conn, args.table_schema, table_name)
+                  backup_cnt = get_count(conn, args.table_schema, backup_table)
+                  diff_cnt = get_diff_count(
+                      conn,
+                      args.table_schema,
+                      table_name,
+                      backup_table,
+                      columns,
+                  )
+
+                  status = "ok" if source_cnt == backup_cnt and diff_cnt == 0 else "mismatch"
+
+                  insert_result(
+                      conn,
+                      run_id,
+                      backup_date,
+                      args.entity_id,
+                      args.table_schema,
+                      source_name,
+                      backup_name,
+                      status,
+                      source_cnt,
+                      backup_cnt,
+                      diff_cnt,
+                  )
+                  conn.commit()
+
+              except Exception as exc:
+                  conn.rollback()
+                  insert_result(
+                      conn,
+                      run_id,
+                      backup_date,
+                      args.entity_id,
+                      args.table_schema,
+                      source_name,
+                      backup_name,
+                      "error",
+                      error_message=str(exc)[:4000],
+                  )
+                  conn.commit()
+
+              upsert_progress(
+                  conn,
+                  run_id,
+                  args.entity_id,
+                  args.table_schema,
+                  backup_date,
+                  "running",
+                  total,
+                  idx,
+                  source_name,
+              )
+              conn.commit()
+
+          upsert_progress(
+              conn,
+              run_id,
+              args.entity_id,
+              args.table_schema,
+              backup_date,
+              "finished",
+              total,
+              total,
+              None,
+              finished=True,
+          )
+          conn.commit()
+
+          print(f"done, run_id={run_id}")
+          return 0
+
+      except Exception as exc:
+          conn.rollback()
+          try:
+              upsert_progress(
+                  conn,
+                  run_id,
+                  args.entity_id,
+                  args.table_schema,
+                  backup_date,
+                  "failed",
+                  0,
+                  0,
+                  None,
+                  error_message=str(exc)[:4000],
+                  finished=True,
+              )
+              conn.commit()
+          except Exception:
+              conn.rollback()
+          print(f"failed, run_id={run_id}, error={exc}", file=sys.stderr)
+          return 1
+
+      finally:
+          conn.close()
+
+
+  if __name__ == "__main__":
+      raise SystemExit(main())
+
+  Пример запуска:
+
+  python check_entity_backups.py \
+    --host gp-host \
+    --port 5432 \
+    --dbname your_db \
+    --user your_user \
+    --password your_password \
+    --entity-id 35 \
+    --table-schema dm \
+    --backup-date 2026-06-02
+
+  Смотреть прогресс:
 
   select *
-  from tech_etl.check_entity_backup_tables(35, 'dm');
+  from tech_etl.entity_backup_check_progress
+  order by started_at desc;
 
-  Посмотреть историю:
+  Смотреть результаты:
 
   select *
   from tech_etl.entity_backup_check_results
-  order by run_dttm desc, source_table;
+  where run_id = 'ваш_run_id'
+  order by checked_at, source_table;
+
+  Если хотите, могу ещё сразу упростить его под ваш Airflow:
+
+  - вынести подключение в переменные окружения
+  - добавить --stop-on-error
+  - добавить итоговый raise, если есть mismatch/error.
+

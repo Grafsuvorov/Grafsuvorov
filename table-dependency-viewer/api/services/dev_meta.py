@@ -872,6 +872,7 @@ def get_dev_meta_files(
     audit_map = _get_last_audit_map(engine, schema_name)
     prod_files = list_meta_files(prod_root, schema_name)
     dev_files = list_meta_files(dev_root, schema_name)
+    remote_error = None
     if deploy_host and deploy_user and deploy_base_dir:
         try:
             remote_files = list_remote_meta_files(
@@ -886,8 +887,8 @@ def get_dev_meta_files(
             )
             if remote_files:
                 dev_files = remote_files
-        except Exception:
-            pass
+        except Exception as exc:
+            remote_error = str(exc)
     for file_row in prod_files:
         file_row.update(audit_map.get(file_row["file_name"], {}))
     for file_row in dev_files:
@@ -896,6 +897,7 @@ def get_dev_meta_files(
         "schema_name": schema_name,
         "prod_files": prod_files,
         "dev_files": dev_files,
+        "remote_error": remote_error,
         "locks": [
             {"schema_name": key[0], "file_name": key[1], **value}
             for key, value in locks.items()

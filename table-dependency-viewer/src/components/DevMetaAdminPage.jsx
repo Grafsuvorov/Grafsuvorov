@@ -86,6 +86,11 @@ export default function DevMetaAdminPage({
   const refreshFiles = async (schema = schemaName) => {
     const data = await devMetaApi.files(schema);
     setFiles(data || { dev_files: [], locks: [] });
+    if (data?.remote_error) {
+      setMessageType("warning");
+      setError(null);
+      setMessage(`Не удалось прочитать DEV-файлы с удаленного сервера: ${data.remote_error}`);
+    }
   };
 
   useEffect(() => {

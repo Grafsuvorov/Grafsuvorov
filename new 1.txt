@@ -1,2 +1,1 @@
-Операция не выполнена
-Git команда завершилась с ошибкой: git clone /root/git_dir/etl /var/lib/table-dependency-viewer/meta-workspaces/test-rusal.com/repo fatal: could not create work tree dir '/var/lib/table-dependency-viewer/meta-workspaces/test-rusal.com/repo': File exists
+Git команда завершилась с ошибкой: git checkout -B feature/DWH-11695 origin/feature/DWH-11695 fatal: Unable to create '/var/lib/table-dependency-viewer/meta-workspaces/test-rusal.com/repo/.git/index.lock': File exists. Another git process seems to be running in this repository, e.g. an editor opened by 'git commit'. Please make sure all processes are terminated then try again. If it still fails, a git process may have crashed in this repository earlier: remove the file manually to continue.

@@ -1,3 +1,466 @@
-PS C:\Users\SuvorovND\GIT\table-dependency-viewer\scripts> git fetch origin                                                                                                                                                         
-remote: HTTP Basic: Access denied. If a password was provided for Git authentication, the password was incorrect or you're required to use a token instead of a password. If a token was provided, it was either incorrect, expired, or improperly scoped. See https://prod.gitlab.dwh.rusal.com/help/topics/git/troubleshooting_git.md#error-on-git-fetch-http-basic-access-denied
-fatal: Authentication failed for 'https://prod.gitlab.dwh.rusal.com/dwh/etl.git/'
+Цель
+сократить количество ошибок после релиза в PROD, возникающих из‑за случайного удаления, переименования, изменения типа или ограничения полей/таблиц.
+
+Ожидаемый результат
+отчёт с информацией о разнице структур, на основе которого можно будет принять решение об отмене отправки таблицы в релиз (при обнаружении недопустимых отклонений).
+
+желательно в интерфейсе dbeaver, для удобства анализа группами SA и DE.
+
+Сравниваемые объекты
+метаданные (information_schema.tables & columns) DEV и PROD GP. (сначала протестируем на GP, потом запросим и для Click)
+
+данные из PROD брать не онлайн, а копировать раз в день в 23:00 (можно в 19:00 + в последнем шаге каждого релиза) (если есть риск блокировок. если риска нет, лучше онлайн).
+
+данные из DEV нужны онлайн, чтобы тестировать только что изменённые объекты хранилища.
+
+Сравниваемые атрибуты
+
+таблицы,
+колонки,
+типы данных,
+ограничения колонок,
+атрибуты типов данных
+Время запуска
+вручную.
+
+самые частые сценарии:
+
+SA & DE перед релизом, при тестировании в DEV.
+
+SA & PO перед тестированием изменений в витрине.
+
+Фильтры
+
+слой (необязательный, одно значение).
+
+если значение не введено, то проверять только слои с бизнес-данными:
+dds
+dict_dds
+dict_ods
+dict_raw_ext
+dict_stg
+dm
+dm_calc
+dm_view
+landing
+ods
+raw_ext
+rls
+stg
+если значение введено, то не ограничивать его списком слоёв по умолчанию. пусть остаётся возможность сравнить и userdata, и всё остальное.
+таблица (необязательный, одно значение).
+
+если значение не введено, то проверять без ограничений.
+если значение введено, то проверять только его.
+сохранить в таблицу результат {true/false}.
+
+по умолчанию = true
+
+вариант false сделан для возможности запуска коллегами (например, продакт и его команда), которые тестируют доработку витрины в DEV, но у которых не должно быть полномочий на сохранение чего-либо в таблицы GP.
+
+к обсуждению: можно сделать дополнительную таблицу-лог запусков функции, куда записывать только "кто-когда-фильтры-количество записей"
+
+Классификация различий (справочник)
+отображать в отдельных полях отчёта, далее будем использовать для сортировки. нумерация сделана по убыванию критичности предупреждения.
+
+эталоном считаем данные из PROD.
+
+10. Данные из PROD актуальны на max(dttm_inserted)::date
+
+20. Удалена таблица в DEV
+
+30. Удалено поле в DEV
+
+40. Изменён тип данных в DEV
+
+50. Изменены атрибуты типа/default/nullable в DEV
+
+60. Добавлена таблица в DEV
+
+70. Добавлено поле в DEV
+
+90. Полное совпадение по выполненным проверкам
+
+Сохранение результатов
+
+Если при запуске фильтр "сохранить в таблицу результат" = true, то сохранять результат в общедоступную таблицу в GP DEV userdata.compare_gp_metadata_prod_vs_dev.
+
+Слой userdata под замену, но это обсудим в процессе реализции.
+
+Сохранять в таблице данные за 60 дней. Если она станет огромной, рассмотрим варианты меньшего времени хранения.
+
+Над этой таблицей планируется настроить несколько виртуальных представлений для быстрого анализа.
+
+create sequence if not exists userdata.compare_gp_metadata_run_seq start 1;
+
+create table userdata.say_compare_gp_metadata_prod_vs_dev (
+    -- метаданные объектов
+    table_catalog           text,                         -- каталог таблицы
+    table_schema            text,                         -- схема таблицы
+    table_name              text,                         -- имя таблицы
+    column_name             text,                         -- имя колонки (будет null для строк, сравнивающих только таблицы)
+    column_position         integer,                      -- позиция колонки в таблице (для сортировки внутри объекта)
+    
+    -- классификация различий
+    diff_code               integer,                      -- код отклонения из справочника (10, 20, 30, 40, 50, 60, 70)
+    diff_name               text,                         -- текстовое описание отклонения
+
+    -- флаги прохождения проверок
+    is_prod_snapshot_actual boolean,                      -- true, если снимок information_schema из prod свежий (не старше вчерашнего дня)
+    is_table_exist_prod     boolean,                      -- true, если таблица найдена в information_schema.tables prod
+    is_table_exist_dev      boolean,                      -- true, если таблица найдена в information_schema.tables dev
+    is_column_exist_prod    boolean,                      -- true, если колонка найдена в information_schema.columns prod
+    is_column_exist_dev     boolean,                      -- true, если колонка найдена в information_schema.columns dev
+    is_data_type_check      boolean,                      -- false, если типы отличаются
+    is_constraint_check     boolean,                      -- false, если ограничения отличаются
+
+    -- типы данных
+    data_type_prod          text,                         -- тип данных колонки в prod (для сравнения с dev)
+    data_type_dev           text,                         -- тип данных колонки в dev
+    
+    -- идентификаторы запуска
+    run_id                  bigint,                       -- уникальный номер запуска проверки. алгоритм: nextval('seq') = одно значение на все строки в рамках одного запуска
+    run_timestamp           timestamp default now(),      -- время запуска функции
+    run_user                text,                         -- логин пользователя, запустившего проверку
+    layer_filter            text,                         -- применённый фильтр по слою (или null)
+    table_filter            text,                         -- применённый фильтр по таблице (или null)
+    
+    -- обязательные поля для всех таблиц
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar(60) not null default 'airflow'::character varying,
+    deleted_flag bool not null default false
+)
+with (
+	appendonly = true,
+	orientation = column,
+	compresstype = zstd,
+	compresslevel = 3
+)
+distributed by (run_id)  
+--добавить бы ещё партицию по дате запуска проверки, чтобы потом было проще очищать историю   
+
+Алгоритм
+
+общее: записываем в таблицу только строки с различиями. либо одну строку "различия не обнаружены" в рамках одного запуска.
+
+если "флаг прохождения проверки" (все начинаются на is_%) заполнился по ходу алгоритма, то далее он должен заполниться этим же значением для последующих записей с тем же ключом (если не указано в алгоритме что значение поля надо заменить).
+
+поля run_id (автогенерируемое = одно значение на один запуск), run_timestamp, run_user, layer_filter, table_filter, is_prod_snapshot_actual должны быть заполнены всегда.
+
+при обращении к таблицам information_schema.%, фильтровать значение table_catalog в соответствии с данными DEV/PROD.
+
+Актуальность сверки:
+если будет копирование information_schema из прода раз в день, то при запуске инструмента проверять дату копирования:
+
+если она меньше, чем вчера, то записать:
+diff_code = 10
+diff_name = "Данные из PROD актуальны на" || max(inform_scheme_prod.dttm_inserted)::date
+is_prod_snapshot_actual = false
+остальные поля оставить пустыми для этой строки. следующие шаги алгоритма всё равно запустить.
+иначе заполнить поле is_prod_snapshot_actual = true
+получившееся значение is_prod_snapshot_actual заполнять во всех строках последующих шагов
+
+Сравнение по таблицам, без колонок:
+сделать full join таблиц DEV и PROD information_schema.tables по ключам:
+table_schema
+table_name
+
+предзаполнить соответствующие колонки для отчёта + по умолчанию поля для фильтрации:
+is_table_exist_prod = true
+is_table_exist_dev = true
+
+если в метаданных DEV отсутствует запись, то записать:
+diff_code = 20
+diff_name = "Удалена таблица в DEV"
+is_table_exist_prod = true
+is_table_exist_dev = false
+если в метаданных PROD отсутствует запись, то записать:
+diff_code = 60
+diff_name = "Добавлена таблица в DEV"
+is_table_exist_prod = false
+is_table_exist_dev = true
+иначе (если различий по таблицам нет), то на этом шаге информация не записывается в результат.
+Сравнение по именам колонок таблиц:
+сделать full join таблиц DEV и PROD information_schema.columns по ключам:
+table_schema
+table_name
+column_name
+
+исключить из выборки таблицы, которые на шаге сравнения таблиц были помечены как "удалена или добавлена в DEV" diff_code in (20, 60).
+
+заполнить соответствующие колонки для отчёта + поля для фильтрации:
+is_column_exist_prod = true
+is_column_exist_dev = true
+data_type_prod
+data_type_dev
+
+is_data_type_check = true
+
+is_constraint_check = true
+
+если в метаданных DEV отсутствует запись, то записать:
+diff_code = 30
+diff_name = "Удалено поле в DEV"
+is_column_exist_prod = true
+is_column_exist_dev = false
+
+если в метаданных PROD отсутствует запись, то записать:
+diff_code = 70
+diff_name = "Добавлено поле в DEV"
+is_column_exist_prod = false
+is_column_exist_dev = true
+
+если между prod и dev различаются поля data_type, то записать:
+diff_code = 40
+diff_name = "Изменён тип данных в DEV"
+
+is_data_type_check = false
+
+если сработал код 40, то код 50 для этой колонки не записывать.
+
+если между prod и dev различаются поля:
+column_default
+is_nullable
+character_maximum_length
+numeric_precision
+numeric_precision_radix
+numeric_scale
+то записать:
+diff_code = 50
+diff_name = "Изменены атрибуты типа/default/nullable в DEV"
+
+is_constraint_check = false
+
+иначе (если различий по колонкам таблиц нет), то на этом шаге информация не записывается в результат.
+
+Идеальный шаг алгоритма:
+
+Если различий по таблицам и колонкам (шаги 2 и 3) не найдено, необходимо оставить в таблице запись об этом.
+
+Записать:
+
+diff_code = 90
+diff_name = "Полное совпадение по выполненным проверкам"
+
+
+
+
+Настройка событий 
+User avatar
+Анастасия Семенова
+Прокомментировал(а) 14 дней назад
+@Blinov Dmitriy , по доработке советовалась в феврале с @Aleksandr Kornienko . прошу передать ему в работу
+
+User avatar
+Анастасия Семенова
+Прокомментировал(а) 14 дней назад
+после этой доработки планирую также из важного:
+
+сравнение метаданных Clickhouse DEV и PROD.
+сравнение метаданных GP и Click.
+не знаю в каких системах такое возможно настроить, это к обсуждению
+
+из не очень важного, но это легко настроить в отдельной таблице:
+
+Сравнение по комментариям к таблице
+Сравнение по комментариям к колонке
+Сравнение по ключам дистрибъюции для таблицы
+Blinov Dmitriy
+Обновлено 13 дней назад
+Исполнитель:Blinov Dmitriy → Andrey Reutskiy
+Andrey Reutskiy
+Обновлено 12 дней назад
+Исполнитель:Andrey Reutskiy → Lysogor Evgeniy
+Lysogor Evgeniy
+Обновлено 12 дней назад
+Состояние:Зарегистрирована → В работе
+Lysogor Evgeniy
+Обновлено 12 дней назад
+6ч00м
+22 мая 2026
+Разработка
+Разработка процесса переноса таблиц с прод на дев
+
+Фактические трудозатраты:? → 6ч
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) 8 дней назад
+По information_shema решили хранить историю за последние 60 дней, чтобы результаты сравнений за прошлые периоды могли ссылаться на метаданные того времени.
+
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) 5 дней назад (изменено)
+Реализовал базовый функционал (без фильтрации по схемам/таблицам, а всего сразу) сравнения в даге information_schema_sync на деве.
+
+Появились некоторые вопросы к хранению истории information_schema. У нас при запуске идет обновление истории метаданных на деве (и проде, если установлен флаг), нужно ли нам обновлять историю по всем объектам, или только по тем, по которым был запущен DAG?
+
+Lysogor Evgeniy
+Обновлено 5 дней назад
+3ч40м
+25 мая 2026
+Разработка
+Разработка процесса исторических загрузок из прода
+
+Фактические трудозатраты:6ч → 1д 1ч 40м
+Lysogor Evgeniy
+Обновлено 5 дней назад
+7ч00м
+26 мая 2026
+Разработка
+Разработка запросов для сравнения структуры метаданных дева и прода
+
+Фактические трудозатраты:1д 1ч 40м → 2д 40м
+Lysogor Evgeniy
+Обновлено 5 дней назад
+7ч00м
+28 мая 2026
+Разработка
+Встреча с Никитой и Андреем, реализация истории и логирования, создание Дага для этого процесса
+
+Фактические трудозатраты:2д 40м → 2д 7ч 40м
+Lysogor Evgeniy
+Обновлено 5 дней назад
+5ч00м
+29 мая 2026
+Разработка
+Доработка дага, параметризация, добавление шага удаления истории
+
+Фактические трудозатраты:2д 7ч 40м → 3д 4ч 40м
+Khaustova Mariya
+Обновлено 2 дня назад
+Дашборд КХД/Направление:Нет: дашборд → Внутренние сервисы КХД
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) 2 дня назад
+Немного изменил структурно таблицу для сбора метаданных, разделил ее на две, связанные между собой по run_id. Вынес все в tech_monitoring схему
+
+create table tech_monitoring.say_compare_gp_metadata_log
+(
+    -- идентификаторы запуска
+    run_id                  bigint,                       -- уникальный номер запуска проверки. алгоритм: nextval('seq') = одно значение на все строки в рамках одного запуска
+    run_timestamp           timestamp default now(),      -- время запуска функции
+    run_user                text,                         -- логин пользователя, запустившего проверку
+    layer_filter            text,                         -- применённый фильтр по слою (или null)
+    table_filter            text,                         -- применённый фильтр по таблице (или null)
+    prod_snapshot_last_dttm timestamp,                    -- время последнего обновления метаданных прода
+    is_prod_snapshot_actual boolean,					  -- флаг актуальности метаданных прода
+    state_code              integer,                      -- код проверки
+    state_name              text,                         -- статус проверки
+    
+    -- обязательные поля для всех таблиц
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar(60) not null default 'airflow'::character varying,
+    deleted_flag bool not null default false
+)
+with (
+	appendonly = true,
+	orientation = column,
+	compresstype = zstd,
+	compresslevel = 3
+)
+distributed by (run_id);
+
+create table tech_monitoring.say_compare_gp_metadata_prod_vs_dev (
+    -- метаданные объектов
+    table_catalog           text,                         -- каталог таблицы
+    table_schema            text,                         -- схема таблицы
+    table_name              text,                         -- имя таблицы
+    column_name             text,                         -- имя колонки (будет null для строк, сравнивающих только таблицы)
+    column_position         integer,                      -- позиция колонки в таблице (для сортировки внутри объекта)
+    
+    -- классификация различий
+    diff_code               integer,                      -- код отклонения из справочника (10, 20, 30, 40, 50, 60, 70)
+    diff_name               text,                         -- текстовое описание отклонения
+
+    -- флаги прохождения проверок
+    is_table_exist_prod     boolean,                      -- true, если таблица найдена в information_schema.tables prod
+    is_table_exist_dev      boolean,                      -- true, если таблица найдена в information_schema.tables dev
+    is_column_exist_prod    boolean,                      -- true, если колонка найдена в information_schema.columns prod
+    is_column_exist_dev     boolean,                      -- true, если колонка найдена в information_schema.columns dev
+    is_data_type_check      boolean,                      -- false, если типы отличаются
+    is_constraint_check     boolean,                      -- false, если ограничения отличаются
+
+    -- типы данных
+    data_type_prod          text,                         -- тип данных колонки в prod (для сравнения с dev)
+    data_type_dev           text,                         -- тип данных колонки в dev
+    
+    -- идентификаторы запуска
+    run_id                  bigint,                       -- уникальный номер запуска проверки. алгоритм: nextval('seq') = одно значение на все строки в рамках одного запуска
+    
+    -- обязательные поля для всех таблиц
+    dttm_inserted timestamp not null default now(),
+    dttm_updated timestamp not null default now(),
+    job_name varchar(60) not null default 'airflow'::character varying,
+    deleted_flag bool not null default false
+)
+with (
+	appendonly = true,
+	orientation = column,
+	compresstype = zstd,
+	compresslevel = 3
+)
+distributed by (run_id);
+
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) 1 день назад
+Настроил dag под названием information_schema_sync
+
+Он принимает в качестве параметров author, schema_name и table_name
+
+Автор идет в таблицу логов tech_monitoring.say_compare_gp_metadata_log как запускающий, так же в эту таблицу пишутся какие фильтры он применил.
+
+После чего идет выгрузка из прод information_schema с фильтрами, как указаны ('ALL' по умолчанию, выгружает все) в тест.
+
+В тесте у нас присутствуют 4 таблички, которые соответствуют выборке из information_schema.tables и information_schema.columns:
+
+tech_monitoring.tables_meta_dev
+tech_monitoring.tables_meta_prod
+tech_monitoring.columns_meta_dev
+tech_monitoring.columns_meta_prod
+
+В них хранится история по выгружаемым объектам (история не полная, во время запуска дага генерируется снепшот, причем не полный, а выборки данных). История хранится с помощью технических полей "dttm_valid_from", "dttm_valid_to", "is_active".
+
+Далее из этих таблиц с выборкой is_active = true формируется список расхождений между девом и продом, и этот список собирается в таблицу tech_monitoring.say_compare_gp_metadata_prod_vs_dev согласно описанию этой задачи.
+
+В текущей реализации снепшот прода всегда актуальный, поэтому эту проверку можно в теории скипнуть (4 столбца из таблицы tech_monitoring.say_compare_gp_metadata_log).
+
+    prod_snapshot_last_dttm timestamp,                    -- время последнего обновления метаданных прода
+    is_prod_snapshot_actual boolean,					  -- флаг актуальности метаданных прода
+    state_code              integer,                      -- код проверки
+    state_name              text,                         -- статус проверки
+
+Сам даг бегает по расписанию в 8 вечера с параметрами author = 'airflow', и выгрузкой всего.
+
+Можно тестировать его работу.
+
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) 1 день назад
+Из нюансов, который надо проработать отдельно, это информативность information_schema табиц как таковых. У нас формируется огромный список расхождений в день из-за того, что в infrormation_schema.tables много мусора считается отдельными таблицами (времянки, партиции), и из-за этого генерируется список из расхождений в ~5000 таблиц при загрузке всего. По факту их там несколько сотен, остальное это партиции/времянки.
+
+Так же есть вопросы к информативности information_schema.columns, где тип данных раскидан в три разных столбца, из-за чего несколько типов данных могут схлопываться в один, хотя ddl для них был разный.
+
+select column_name, 
+data_type,
+domain_catalog, domain_schema, domain_name,
+udt_catalog, udt_schema, udt_name
+from information_schema.columns;
+
+Предлагаю переписать запросы для формирования метаданных, обращаясь к pg_catalog напрямую.
+
+Andrey Reutskiy
+Обновлено 1 день назад
+Тип карточки:User Story → Task
+Lysogor Evgeniy
+Обновлено около 20 часов назад
+Состояние:В работе → Проверка / Тест
+User avatar
+Lysogor Evgeniy
+Прокомментировал(а) около 20 часов назад
+Подправил пару багов:
+
+При фильтрации схемы/таблицы у нас затиралась история в tables_meta и columns_meta. Связано это было с тем, что выгружался не полный слепок с прода/дева, а лишь его часть, и сравнивалась со всеми активными записями в истории. Обнаруживалось, что огого, у нас в выгрузке 1 таблица, а в истории тысячи, должно быть удалили, и помечал их все удаленными.
+Некорректно выставляющася дата последнего слепка в tech_monitoring.say_compare_gp_metadata_log. Связно с тем, что ts в airflow возвращает время с UTC таймзоной, а я вставлял просто в timestamp без таймзоны, из-за чего на 3 часа съезжал по времени загрузк

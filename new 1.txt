@@ -1,29 +1,15 @@
-то сделать:
-
-  mkdir -p /var/lib/table-dependency-viewer/meta-workspaces
-
-  Этого достаточно, если контейнеры у вас запускаются от root.
-
-  Потом:
-
-  git pull
-  docker compose up -d --build api
-
-  Что ещё важно:
-
-  - ничего из проекта переносить не нужно
-  - старые workspace вручную переносить не нужно
-  - новая логика сама начнёт использовать:
-      - /var/lib/table-dependency-viewer/meta-workspaces
-
-  Если хотите проверить после старта:
-
-  ls -la /var/lib/table-dependency-viewer/meta-workspaces
-  docker compose exec api sh -lc 'echo $META_WORKSPACE_ROOT && ls -la $META_WORKSPACE_ROOT'
-
-  То есть коротко:
-
-  - создать директорию надо
-  - переносить старые файлы не надо
-  - проект из /root/... трогать не надо.
-
+[root@rgm-s-dwhapp01 table-dependency-viewer]# cd ..
+[root@rgm-s-dwhapp01 ~]# mkdir -p /var/lib/table-dependency-viewer/meta-workspaces
+[root@rgm-s-dwhapp01 ~]# ls
+airflow                Dockerfile                  logs           package-lock.json  scripts                         telegraf.conf
+anaconda-ks.cfg        get_parq_schema.py          meta_info      parq.py            sqlite                          Templates
+app                    git_dir                     N3R7A2C7_v2    prod_t2s           sqlite-autoconf-3400100         tempor
+audit_parse            gitlab_certs                N3R7A2C7_v2.1  queries.py         ss_tools                        Text2SQL
+check_llm_certs.py     glossary.yml                nodejs         rag_advct.2.0.zip  table-dependency-viewer         venv
+config                 khd_etl_greenplum           node_modules   recipe.yml         table-dependency-viewer-backup  volumet2s
+copy_on_the_fly_s3.py  lec1_frag4_current_time.py  p312_cmp       repos              table-dependency-viewer.tar
+data                   llm_connectors              package.json   ru_ru.json         tasks
+[root@rgm-s-dwhapp01 ~]# cd ..
+[root@rgm-s-dwhapp01 /]# cd var/
+[root@rgm-s-dwhapp01 var]# ls
+adm  cache  crash  db  empty  games  gopher  kerberos  lib  local  lock  log  mail  nis  opt  preserve  run  spool  tmp  yp

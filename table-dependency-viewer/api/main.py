@@ -99,6 +99,7 @@ from .services.dev_meta import (
     get_dev_meta_files,
     get_dev_meta_status,
     read_dev_meta_file,
+    read_remote_dev_meta_file,
     release_dev_meta_lock,
     save_dev_meta_file,
     stop_airflow_dag_run,
@@ -851,6 +852,13 @@ def get_admin_dev_meta_files(request: Request, schema_name: str = Query("dm")):
         prod_root_value=CLICK_META_DIR,
         dev_root_value=DEV_CLICK_META_DIR,
         schema_name=schema_name,
+        deploy_host=DEV_META_DEPLOY_HOST,
+        deploy_port=DEV_META_DEPLOY_PORT,
+        deploy_user=DEV_META_DEPLOY_USER,
+        deploy_password=DEV_META_DEPLOY_PASSWORD,
+        deploy_base_dir=DEV_META_DEPLOY_BASE_DIR,
+        deploy_ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
+        deploy_strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,
     )
 
 
@@ -866,6 +874,21 @@ def get_admin_dev_meta_file(payload: DevMetaFilePayload, request: Request):
             file_name=payload.file_name,
         )
     except FileNotFoundError:
+        if payload.source != "prod":
+            try:
+                return read_remote_dev_meta_file(
+                    schema_name=payload.schema_name,
+                    file_name=payload.file_name,
+                    host=DEV_META_DEPLOY_HOST,
+                    port=DEV_META_DEPLOY_PORT,
+                    user=DEV_META_DEPLOY_USER,
+                    password=DEV_META_DEPLOY_PASSWORD,
+                    remote_base_dir=DEV_META_DEPLOY_BASE_DIR,
+                    ssh_key_path=DEV_META_DEPLOY_SSH_KEY_PATH,
+                    strict_host_key=DEV_META_DEPLOY_STRICT_HOST_KEY,
+                )
+            except Exception:
+                pass
         raise HTTPException(status_code=404, detail="Файл не найден")
 
 

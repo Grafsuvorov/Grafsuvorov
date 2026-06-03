@@ -545,6 +545,132 @@ def list_meta_files(root: Path, schema_name: str) -> list[dict[str, Any]]:
     return result
 
 
+def _run_ssh_capture(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    ssh_key_path: str,
+    strict_host_key: str,
+    remote_command: str,
+    timeout: int = 30,
+) -> str:
+    if not host or not user:
+        raise ValueError("Не настроено SSH-подключение к DEV серверу")
+    ssh_target = f"{user}@{host}"
+    ssh_cmd = _build_ssh_base_command(
+        port=port,
+        ssh_key_path=ssh_key_path,
+        password=password,
+        strict_host_key=strict_host_key,
+    )
+    try:
+        result = subprocess.run(
+            ssh_cmd + [ssh_target, remote_command],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(exc.stderr.strip() or exc.stdout.strip() or "Команда на DEV сервере завершилась с ошибкой") from exc
+    except Exception as exc:
+        raise ValueError(f"Не удалось выполнить команду на DEV сервере: {exc}") from exc
+    return result.stdout
+
+
+def list_remote_meta_files(
+    *,
+    schema_name: str,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    remote_base_dir: str,
+    ssh_key_path: str,
+    strict_host_key: str,
+) -> list[dict[str, Any]]:
+    if not remote_base_dir:
+        return []
+    remote_dir = f"{remote_base_dir.rstrip('/')}/{schema_name}"
+    quoted_dir = shlex.quote(remote_dir)
+    remote_command = (
+        f"if [ ! -d {quoted_dir} ]; then exit 0; fi; "
+        f"find {quoted_dir} -maxdepth 1 -type f "
+        "-printf '%f\t%TY-%Tm-%TdT%TH:%TM:%TS\t%s\n'"
+    )
+    output = _run_ssh_capture(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        ssh_key_path=ssh_key_path,
+        strict_host_key=strict_host_key,
+        remote_command=remote_command,
+        timeout=30,
+    )
+    result: list[dict[str, Any]] = []
+    for raw_line in str(output or "").splitlines():
+        parts = raw_line.split("\t")
+        if len(parts) < 3:
+            continue
+        file_name = str(parts[0] or "").strip()
+        updated_at = str(parts[1] or "").strip()
+        size_raw = str(parts[2] or "").strip()
+        if not file_name:
+            continue
+        try:
+            size_value = int(float(size_raw))
+        except Exception:
+            size_value = 0
+        result.append(
+            {
+                "file_name": file_name,
+                "updated_at": updated_at,
+                "size": size_value,
+                "source": "remote_dev",
+            }
+        )
+    return sorted(result, key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+
+
+def read_remote_dev_meta_file(
+    *,
+    schema_name: str,
+    file_name: str,
+    host: str,
+    port: int,
+    user: str,
+    password: str,
+    remote_base_dir: str,
+    ssh_key_path: str,
+    strict_host_key: str,
+) -> dict[str, Any]:
+    if not remote_base_dir:
+        raise FileNotFoundError(file_name)
+    remote_path = f"{remote_base_dir.rstrip('/')}/{schema_name}/{file_name}"
+    quoted_path = shlex.quote(remote_path)
+    remote_command = f"test -f {quoted_path} && cat {quoted_path}"
+    content = _run_ssh_capture(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        ssh_key_path=ssh_key_path,
+        strict_host_key=strict_host_key,
+        remote_command=remote_command,
+        timeout=30,
+    )
+    return {
+        "schema_name": schema_name,
+        "file_name": file_name,
+        "content": content,
+        "path": remote_path,
+        "source": "remote_dev",
+    }
+
+
 def _get_active_locks(engine) -> dict[tuple[str, str], dict[str, Any]]:
     ensure_dev_meta_tables(engine)
     with engine.begin() as conn:
@@ -732,6 +858,13 @@ def get_dev_meta_files(
     prod_root_value: str,
     dev_root_value: str,
     schema_name: str,
+    deploy_host: str = "",
+    deploy_port: int = 22,
+    deploy_user: str = "",
+    deploy_password: str = "",
+    deploy_base_dir: str = "",
+    deploy_ssh_key_path: str = "",
+    deploy_strict_host_key: str = "false",
 ) -> dict[str, Any]:
     prod_root = _resolve_root(base_dir, prod_root_value)
     dev_root = _resolve_root(base_dir, dev_root_value)
@@ -739,6 +872,22 @@ def get_dev_meta_files(
     audit_map = _get_last_audit_map(engine, schema_name)
     prod_files = list_meta_files(prod_root, schema_name)
     dev_files = list_meta_files(dev_root, schema_name)
+    if deploy_host and deploy_user and deploy_base_dir:
+        try:
+            remote_files = list_remote_meta_files(
+                schema_name=schema_name,
+                host=deploy_host,
+                port=deploy_port,
+                user=deploy_user,
+                password=deploy_password,
+                remote_base_dir=deploy_base_dir,
+                ssh_key_path=deploy_ssh_key_path,
+                strict_host_key=deploy_strict_host_key,
+            )
+            if remote_files:
+                dev_files = remote_files
+        except Exception:
+            pass
     for file_row in prod_files:
         file_row.update(audit_map.get(file_row["file_name"], {}))
     for file_row in dev_files:

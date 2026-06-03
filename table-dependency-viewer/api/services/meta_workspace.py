@@ -33,39 +33,46 @@ def _workspace_slug(value: str) -> str:
     return slug or "default"
 
 
-def _workspace_branch_slug(branch_name: str) -> str:
-    return _workspace_slug(str(branch_name or "").replace("/", "__"))
+def _workspace_path(workspace_root_value: str, workspace_owner: str) -> Path:
+    return Path(workspace_root_value).resolve() / _workspace_slug(workspace_owner) / "repo"
 
 
-def _workspace_path(workspace_root_value: str, workspace_owner: str, branch_name: str) -> Path:
-    return Path(workspace_root_value).resolve() / _workspace_slug(workspace_owner) / _workspace_branch_slug(branch_name)
+def _git_origin_url(git_repo_root: Path) -> str:
+    return _run_git(git_repo_root, ["remote", "get-url", "origin"])
 
 
-def _list_git_worktrees(git_repo_root: Path) -> list[dict[str, str]]:
-    output = _run_git(git_repo_root, ["worktree", "list", "--porcelain"])
-    items: list[dict[str, str]] = []
-    current: dict[str, str] = {}
-    for raw_line in str(output or "").splitlines():
-        line = raw_line.strip()
-        if not line:
-            if current:
-                items.append(current)
-                current = {}
+def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, keep_path: Path) -> None:
+    if not owner_root.exists():
+        return
+    keep_resolved = keep_path.resolve()
+    for child in owner_root.iterdir():
+        child_resolved = child.resolve()
+        if child_resolved == keep_resolved:
             continue
-        if line.startswith("worktree "):
-            current["path"] = line.removeprefix("worktree ").strip()
-            continue
-        if line.startswith("branch "):
-            current["branch"] = line.removeprefix("branch ").strip()
-            continue
-        if line.startswith("HEAD "):
-            current["head"] = line.removeprefix("HEAD ").strip()
-            continue
-        current.setdefault("flags", "")
-        current["flags"] = f"{current['flags']} {line}".strip()
-    if current:
-        items.append(current)
-    return items
+        if child.is_dir():
+            try:
+                _run_git(git_repo_root, ["worktree", "remove", "--force", str(child)])
+            except Exception:
+                pass
+            shutil.rmtree(child, ignore_errors=True)
+        else:
+            try:
+                child.unlink()
+            except Exception:
+                pass
+
+
+def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path) -> None:
+    if (workspace_dir / ".git").exists():
+        return
+    if workspace_dir.exists():
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+    workspace_dir.parent.mkdir(parents=True, exist_ok=True)
+    _run_git(git_repo_root, ["clone", str(git_repo_root), str(workspace_dir)])
+    try:
+        _run_git(git_repo_root, ["remote", "set-url", "origin", _git_origin_url(git_repo_root)], cwd=workspace_dir)
+    except Exception:
+        pass
 
 
 def _ensure_branch_workspace(
@@ -81,8 +88,8 @@ def _ensure_branch_workspace(
     if not branch_name_norm:
         raise ValueError("Укажите имя ветки")
     base_branch_norm = str(base_branch or "").strip() or "main"
-    workspace_root = Path(workspace_root_value or "/tmp/meta-workspaces").resolve()
-    worktree_dir = _workspace_path(str(workspace_root), workspace_owner, branch_name_norm)
+    workspace_root = Path(workspace_root_value or "/var/lib/table-dependency-viewer/meta-workspaces").resolve()
+    worktree_dir = _workspace_path(str(workspace_root), workspace_owner)
 
     _run_git(git_repo_root, ["fetch", "--prune", "origin"])
     try:
@@ -93,53 +100,26 @@ def _ensure_branch_workspace(
     if not remote_branch_exists and not bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", base_branch_norm])):
         raise ValueError(f"Base-ветка `{base_branch_norm}` не найдена в origin")
 
-    worktree_parent = worktree_dir.parent
-    worktree_parent.mkdir(parents=True, exist_ok=True)
-    target_branch_ref = f"refs/heads/{branch_name_norm}"
-    existing_worktree = None
-    for item in _list_git_worktrees(git_repo_root):
-        item_path = str(item.get("path") or "").strip()
-        item_branch = str(item.get("branch") or "").strip()
-        if Path(item_path).resolve() == worktree_dir.resolve() or item_branch == target_branch_ref:
-            existing_worktree = item
-            break
-
-    if existing_worktree:
-        existing_path = Path(str(existing_worktree.get("path") or "")).resolve()
-        existing_branch = str(existing_worktree.get("branch") or "").strip()
-        if existing_branch and existing_branch != target_branch_ref:
-            raise ValueError(
-                f"Workspace `{existing_path}` уже привязан к другой ветке `{existing_branch.removeprefix('refs/heads/')}`"
-            )
-        try:
-            _run_git(git_repo_root, ["rev-parse", "--is-inside-work-tree"], cwd=existing_path)
-            worktree_dir = existing_path
-        except Exception:
-            try:
-                _run_git(git_repo_root, ["worktree", "remove", "--force", str(existing_path)])
-            except Exception:
-                pass
-            if existing_path.exists():
-                shutil.rmtree(existing_path, ignore_errors=True)
-            existing_worktree = None
-    if not existing_worktree and not (worktree_dir / ".git").exists():
-        if worktree_dir.exists() and any(worktree_dir.iterdir()):
-            raise ValueError(f"Workspace `{worktree_dir}` уже существует и не похож на git worktree")
-        if remote_branch_exists:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{branch_name_norm}"])
-        else:
-            _run_git(git_repo_root, ["worktree", "add", "-B", branch_name_norm, str(worktree_dir), f"origin/{base_branch_norm}"])
+    owner_root = worktree_dir.parent
+    owner_root.mkdir(parents=True, exist_ok=True)
+    _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
+    _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
 
     if author:
         _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
-    local_changes = bool(_run_git(git_repo_root, ["status", "--porcelain"], cwd=worktree_dir).strip())
-    if remote_branch_exists and not local_changes:
-        try:
-            _run_git(git_repo_root, ["fetch", "--prune", "origin"], cwd=worktree_dir)
-            _run_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
-        except Exception:
-            pass
+    _run_git(git_repo_root, ["fetch", "--prune", "origin"], cwd=worktree_dir)
+    try:
+        _run_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["clean", "-fd"], cwd=worktree_dir)
+    except Exception:
+        pass
+
+    if remote_branch_exists:
+        _run_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
+    else:
+        _run_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
     return branch_name_norm, worktree_dir
 
 

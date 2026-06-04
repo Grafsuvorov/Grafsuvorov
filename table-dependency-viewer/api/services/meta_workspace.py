@@ -33,6 +33,10 @@ class BranchRevisionConflictError(PermissionError):
 _FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
 _INDEX_LOCK_ERROR_RE = re.compile(r"index\.lock")
 _INDEX_CORRUPT_ERROR_RE = re.compile(r"index file smaller than expected", re.IGNORECASE)
+_WORKSPACE_FS_ERROR_RE = re.compile(
+    r"(unable to unlink old|unable to create file|cannot create directory at).*(No such file or directory)?",
+    re.IGNORECASE,
+)
 
 
 def _workspace_slug(value: str) -> str:
@@ -181,6 +185,14 @@ def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path) -> None:
         pass
 
 
+def _recreate_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, author: str | None = None) -> None:
+    if workspace_dir.exists():
+        shutil.rmtree(workspace_dir, ignore_errors=True)
+    _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
+    if author:
+        _ensure_git_identity(repo_root=git_repo_root, cwd=workspace_dir, author=author)
+
+
 def _ensure_branch_workspace(
     *,
     git_repo_root: Path,
@@ -209,10 +221,7 @@ def _ensure_branch_workspace(
     owner_root = worktree_dir.parent
     owner_root.mkdir(parents=True, exist_ok=True)
 
-    def _prepare_workspace():
-        _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
-        _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
-
+    def _sync_workspace_checkout():
         if author:
             _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
@@ -229,6 +238,17 @@ def _ensure_branch_workspace(
         else:
             _run_workspace_git(git_repo_root, ["checkout", "-f", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
         _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
+
+    def _prepare_workspace():
+        _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
+        _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
+        try:
+            _sync_workspace_checkout()
+        except ValueError as exc:
+            if not _WORKSPACE_FS_ERROR_RE.search(str(exc)):
+                raise
+            _recreate_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir, author=author)
+            _sync_workspace_checkout()
 
     _with_workspace_lock(worktree_dir, _prepare_workspace)
     return branch_name_norm, worktree_dir

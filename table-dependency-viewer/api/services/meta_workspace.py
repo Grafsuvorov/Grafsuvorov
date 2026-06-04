@@ -33,6 +33,7 @@ class BranchRevisionConflictError(PermissionError):
 _FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
 _INDEX_LOCK_ERROR_RE = re.compile(r"index\.lock")
 _INDEX_CORRUPT_ERROR_RE = re.compile(r"index file smaller than expected", re.IGNORECASE)
+_INDEX_WRITE_ERROR_RE = re.compile(r"could not write new index file", re.IGNORECASE)
 _WORKSPACE_FS_ERROR_RE = re.compile(
     r"(unable to unlink old|unable to create file|cannot create directory at).*(No such file or directory)?",
     re.IGNORECASE,
@@ -107,6 +108,10 @@ def _run_workspace_git(git_repo_root: Path, args: list[str], *, cwd: Path) -> st
                 _clear_stale_index_lock(cwd)
                 recovered = True
             if _INDEX_CORRUPT_ERROR_RE.search(error_text):
+                _clear_corrupt_index(cwd)
+                recovered = True
+            if _INDEX_WRITE_ERROR_RE.search(error_text):
+                _clear_stale_index_lock(cwd)
                 _clear_corrupt_index(cwd)
                 recovered = True
             if not recovered:
@@ -245,7 +250,11 @@ def _ensure_branch_workspace(
         try:
             _sync_workspace_checkout()
         except ValueError as exc:
-            if not _WORKSPACE_FS_ERROR_RE.search(str(exc)):
+            error_text = str(exc)
+            if not (
+                _WORKSPACE_FS_ERROR_RE.search(error_text)
+                or _INDEX_WRITE_ERROR_RE.search(error_text)
+            ):
                 raise
             _recreate_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir, author=author)
             _sync_workspace_checkout()

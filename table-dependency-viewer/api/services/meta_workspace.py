@@ -231,8 +231,6 @@ def _ensure_branch_workspace(
 
         if author:
             _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
-
-        _fetch_prune_origin(git_repo_root, cwd=worktree_dir)
         try:
             _run_workspace_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
             _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)

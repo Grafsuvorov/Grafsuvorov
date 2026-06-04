@@ -127,6 +127,27 @@ def _run_workspace_git(git_repo_root: Path, args: list[str], *, cwd: Path) -> st
     return ""
 
 
+def _workspace_git_ok(git_repo_root: Path, workspace_dir: Path) -> bool:
+    if not (workspace_dir / ".git").exists():
+        return False
+    try:
+        _run_workspace_git(git_repo_root, ["rev-parse", "--is-inside-work-tree"], cwd=workspace_dir)
+        return True
+    except Exception:
+        return False
+
+
+def _workspace_matches_target(git_repo_root: Path, workspace_dir: Path, target_ref: str) -> bool:
+    if not _workspace_git_ok(git_repo_root, workspace_dir):
+        return False
+    try:
+        current_head = _run_workspace_git(git_repo_root, ["rev-parse", "HEAD"], cwd=workspace_dir).strip()
+        target_head = _run_git(git_repo_root, ["rev-parse", target_ref]).strip()
+        return bool(current_head) and current_head == target_head
+    except Exception:
+        return False
+
+
 def _fetch_prune_origin(git_repo_root: Path, *, cwd: Path | None = None) -> None:
     def _run_fetch():
         last_error = None
@@ -265,23 +286,21 @@ def _ensure_branch_workspace(
 
         if author:
             _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
-        try:
-            _run_workspace_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
+        if not _workspace_matches_target(git_repo_root, worktree_dir, target_ref):
+            _run_workspace_git(git_repo_root, ["reset", "--hard", target_ref], cwd=worktree_dir)
             _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
-        except Exception:
-            pass
-
-        _run_workspace_git(git_repo_root, ["reset", "--hard", target_ref], cwd=worktree_dir)
-        _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
 
     def _prepare_workspace():
         _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
-        _recreate_workspace_repo(
-            git_repo_root=git_repo_root,
-            workspace_dir=worktree_dir,
-            target_ref=target_ref,
-            author=author,
-        )
+        if not _workspace_matches_target(git_repo_root, worktree_dir, target_ref):
+            _recreate_workspace_repo(
+                git_repo_root=git_repo_root,
+                workspace_dir=worktree_dir,
+                target_ref=target_ref,
+                author=author,
+            )
+        elif author:
+            _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
         _sync_workspace_checkout()
 
     _with_workspace_lock(worktree_dir, _prepare_workspace)

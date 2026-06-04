@@ -1,5 +1,31 @@
-Операция не выполнена
-Git команда завершилась с ошибкой: git reset --hard origin/feature/DWH-11479 Updating files: 90% (11901/13192) Updating files: 91% (12005/13192) Updating files: 92% (12137/13192) Updating files: 93% (12269/13192) Updating files: 94% (12401/13192) Updating files: 95% (12533/13192) Updating files: 96% (12665/13192) Updating files: 97% (12797/13192) Updating files: 98% (12929/13192) Updating files: 99% (13061/13192) Updating files: 100% (13192/13192) Updating files: 100% (13192/13192), done. fatal: Could not write new index file.
+df -h /var/lib/table-dependency-viewer/meta-workspaces
+  df -i /var/lib/table-dependency-viewer/meta-workspaces
+  ls -ld /var/lib/table-dependency-viewer/meta-workspaces
+  touch /var/lib/table-dependency-viewer/meta-workspaces/test_write && rm -f /var/lib/table-dependency-viewer/meta-workspaces/test_write
 
+  И внутри контейнера:
 
-Git команда завершилась с ошибкой: git checkout -f -B feature/DWH-11402 origin/feature/DWH-11402 fatal: unable to write new index file
+  docker compose exec api sh -lc 'df -h /var/lib/table-dependency-viewer/meta-workspaces && df -i /var/lib/table-dependency-viewer/meta-workspaces && ls -ld /var/lib/
+  table-dependency-viewer/meta-workspaces'
+
+  Если хотите ещё точнее:
+
+  docker compose exec api sh -lc 'mkdir -p /var/lib/table-dependency-viewer/meta-workspaces/_probe && cd /var/lib/table-dependency-viewer/meta-workspaces/_probe && git
+  init && python - <<\"PY\"\nopen(\"bigfile\",\"wb\").write(b\"x\"*1024*1024)\nprint(\"ok\")\nPY'
+
+  Что я думаю сейчас:
+
+  - если на двух учётках одинаково валится на index file, почти наверняка проблема в диске/volume
+  - приложение уже несколько раз пытается пересоздавать workspace с нуля, и если даже это не помогает, значит среда записи нездорова
+
+  Самый вероятный фикс:
+
+  - либо очистить/починить /var/lib/...
+  - либо перенести workspace на другой диск/раздел, где точно есть место и inode
+
+  Если пришлёте вывод:
+
+  - df -h
+  - df -i
+  - ls -ld
+    по этому пути, я сразу скажу, это место, inode или права.

@@ -517,18 +517,11 @@ def _build_branch_catalog(
     branch_name: str,
     base_branch: str,
 ) -> dict[str, Any]:
-    branch_ref, worktree_dir = _ensure_branch_workspace(
-        git_repo_root=git_repo_root,
-        workspace_root_value=workspace_root_value,
-        workspace_owner=workspace_owner,
-        branch_name=branch_name,
-        base_branch=base_branch,
-    )
+    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
     base_ref = _resolve_branch_ref(git_repo_root, base_branch)
     diff_output = _run_git(
         git_repo_root,
-        ["diff", "--name-status", f"{base_ref}...HEAD"],
-        cwd=worktree_dir,
+        ["diff", "--name-status", f"{base_ref}...{branch_ref}"],
     )
     entity_root_parts = _entity_root_parts(entity_git_root_value)
     click_root_parts = _click_root_parts(click_git_root_value)

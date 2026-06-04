@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import fcntl
 import json
 import re
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,9 @@ class BranchRevisionConflictError(PermissionError):
     pass
 
 
+_FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
+
+
 def _workspace_slug(value: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", str(value or "").strip().lower()).strip("-")
     return slug or "default"
@@ -39,6 +44,45 @@ def _workspace_path(workspace_root_value: str, workspace_owner: str) -> Path:
 
 def _git_origin_url(git_repo_root: Path) -> str:
     return _run_git(git_repo_root, ["remote", "get-url", "origin"])
+
+
+def _with_repo_lock(git_repo_root: Path, callback):
+    lock_path = git_repo_root / ".meta-workspace-fetch.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            return callback()
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _fetch_prune_origin(git_repo_root: Path, *, cwd: Path | None = None) -> None:
+    def _run_fetch():
+        last_error = None
+        for attempt in range(2):
+            try:
+                _run_git(git_repo_root, ["fetch", "--prune", "origin"], cwd=cwd)
+                return
+            except ValueError as exc:
+                last_error = exc
+                match = _FETCH_REF_ERROR_RE.search(str(exc))
+                if not match or attempt > 0:
+                    raise
+                ref_name = str(match.group(1) or "").strip()
+                if ref_name:
+                    try:
+                        _run_git(git_repo_root, ["update-ref", "-d", ref_name], cwd=cwd)
+                    except Exception:
+                        pass
+                time.sleep(0.2)
+        if last_error:
+            raise last_error
+
+    if cwd is None:
+        _with_repo_lock(git_repo_root, _run_fetch)
+    else:
+        _run_fetch()
 
 
 def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, keep_path: Path) -> None:
@@ -97,7 +141,7 @@ def _ensure_branch_workspace(
     workspace_root = Path(workspace_root_value or "/var/lib/table-dependency-viewer/meta-workspaces").resolve()
     worktree_dir = _workspace_path(str(workspace_root), workspace_owner)
 
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    _fetch_prune_origin(git_repo_root)
     try:
         _run_git(git_repo_root, ["worktree", "prune"])
     except Exception:
@@ -114,7 +158,7 @@ def _ensure_branch_workspace(
     if author:
         _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"], cwd=worktree_dir)
+    _fetch_prune_origin(git_repo_root, cwd=worktree_dir)
     try:
         _run_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
         _run_git(git_repo_root, ["clean", "-fd"], cwd=worktree_dir)
@@ -154,7 +198,7 @@ def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    _fetch_prune_origin(git_repo_root)
     output = _run_git(
         git_repo_root,
         ["for-each-ref", "--sort=-committerdate", "--format=%(refname:strip=3)", "refs/remotes/origin"],
@@ -182,7 +226,7 @@ def create_meta_workspace_branch(*, git_repo_value: str, branch_name: str, base_
         raise ValueError("Укажите имя новой ветки")
     base_branch_norm = str(base_branch or "").strip() or "main"
 
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    _fetch_prune_origin(git_repo_root)
     if bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm])):
         return {
             "branch_name": branch_name_norm,
@@ -782,7 +826,7 @@ def validate_meta_workspace_branch(
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
     git_repo_root = Path(git_repo_value).resolve()
-    _run_git(git_repo_root, ["fetch", "--prune", "origin"])
+    _fetch_prune_origin(git_repo_root)
     catalog = _build_branch_catalog(
         git_repo_root=git_repo_root,
         entity_git_root_value=entity_git_root_value,

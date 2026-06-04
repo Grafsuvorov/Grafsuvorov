@@ -180,9 +180,16 @@ def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path) -> None:
         else:
             workspace_dir.unlink(missing_ok=True)
     workspace_dir.parent.mkdir(parents=True, exist_ok=True)
-    clone_target = workspace_dir.name
     origin_url = _git_origin_url(git_repo_root)
-    _run_git(git_repo_root, ["clone", origin_url, clone_target], cwd=workspace_dir.parent)
+    temp_workspace_dir = Path(tempfile.mkdtemp(prefix=f"{workspace_dir.name}-", dir=str(workspace_dir.parent)))
+    try:
+        _run_git(git_repo_root, ["clone", origin_url, str(temp_workspace_dir)], cwd=workspace_dir.parent)
+        if workspace_dir.exists():
+            shutil.rmtree(workspace_dir, ignore_errors=True)
+        temp_workspace_dir.replace(workspace_dir)
+    except Exception:
+        shutil.rmtree(temp_workspace_dir, ignore_errors=True)
+        raise
     if not (workspace_dir / ".git").exists():
         raise ValueError(f"Не удалось создать workspace `{workspace_dir}`")
     try:

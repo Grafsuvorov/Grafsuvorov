@@ -32,6 +32,7 @@ class BranchRevisionConflictError(PermissionError):
 
 _FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
 _INDEX_LOCK_ERROR_RE = re.compile(r"index\.lock")
+_INDEX_CORRUPT_ERROR_RE = re.compile(r"index file smaller than expected", re.IGNORECASE)
 
 
 def _workspace_slug(value: str) -> str:
@@ -78,6 +79,15 @@ def _clear_stale_index_lock(workspace_dir: Path) -> None:
             pass
 
 
+def _clear_corrupt_index(workspace_dir: Path) -> None:
+    index_path = workspace_dir / ".git" / "index"
+    if index_path.exists():
+        try:
+            index_path.unlink()
+        except Exception:
+            pass
+
+
 def _run_workspace_git(git_repo_root: Path, args: list[str], *, cwd: Path) -> str:
     last_error = None
     for attempt in range(2):
@@ -85,9 +95,18 @@ def _run_workspace_git(git_repo_root: Path, args: list[str], *, cwd: Path) -> st
             return _run_git(git_repo_root, args, cwd=cwd)
         except ValueError as exc:
             last_error = exc
-            if attempt > 0 or not _INDEX_LOCK_ERROR_RE.search(str(exc)):
+            error_text = str(exc)
+            if attempt > 0:
                 raise
-            _clear_stale_index_lock(cwd)
+            recovered = False
+            if _INDEX_LOCK_ERROR_RE.search(error_text):
+                _clear_stale_index_lock(cwd)
+                recovered = True
+            if _INDEX_CORRUPT_ERROR_RE.search(error_text):
+                _clear_corrupt_index(cwd)
+                recovered = True
+            if not recovered:
+                raise
             time.sleep(0.1)
     if last_error:
         raise last_error

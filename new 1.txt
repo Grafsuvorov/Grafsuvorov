@@ -1,1 +1,1 @@
-Git команда завершилась с ошибкой: git checkout -f -B feature/DWH-12951 origin/feature/DWH-12951 fatal: unable to read tree (2e0c75b710cb416cbf55b12aaf6c85ccf99b1aff)
+Git команда завершилась с ошибкой: git worktree add --force --detach /var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo origin/DWH-13208 Preparing worktree (detached HEAD 1911c68f7) fatal: '/var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo' already exists

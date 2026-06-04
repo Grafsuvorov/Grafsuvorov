@@ -200,15 +200,16 @@ def _ensure_branch_workspace(
         _fetch_prune_origin(git_repo_root, cwd=worktree_dir)
         try:
             _run_workspace_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
-            _run_workspace_git(git_repo_root, ["clean", "-fd"], cwd=worktree_dir)
+            _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
         except Exception:
             pass
 
         if remote_branch_exists:
-            _run_workspace_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
+            _run_workspace_git(git_repo_root, ["checkout", "-f", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
             _run_workspace_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
         else:
-            _run_workspace_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
+            _run_workspace_git(git_repo_root, ["checkout", "-f", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
+        _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
 
     _with_workspace_lock(worktree_dir, _prepare_workspace)
     return branch_name_norm, worktree_dir

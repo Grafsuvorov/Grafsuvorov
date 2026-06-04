@@ -38,6 +38,7 @@ _WORKSPACE_FS_ERROR_RE = re.compile(
     r"(unable to unlink old|unable to create file|cannot create directory at).*(No such file or directory)?",
     re.IGNORECASE,
 )
+_WORKTREE_EXISTS_ERROR_RE = re.compile(r"already exists", re.IGNORECASE)
 
 
 def _workspace_slug(value: str) -> str:
@@ -171,33 +172,43 @@ def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, k
                 pass
 
 
-def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, target_ref: str) -> None:
-    if workspace_dir.exists():
-        if workspace_dir.is_dir():
-            try:
-                _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
-            except Exception:
-                pass
-            shutil.rmtree(workspace_dir, ignore_errors=True)
-        else:
-            workspace_dir.unlink(missing_ok=True)
-    workspace_dir.parent.mkdir(parents=True, exist_ok=True)
+def _drop_workspace_dir(*, git_repo_root: Path, workspace_dir: Path) -> None:
+    try:
+        _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
+    except Exception:
+        pass
     try:
         _run_git(git_repo_root, ["worktree", "prune"])
     except Exception:
         pass
-    try:
-        _run_git(
-            git_repo_root,
-            ["worktree", "add", "--force", "--detach", str(workspace_dir), target_ref],
-        )
-    except Exception:
+    if workspace_dir.exists():
+        if workspace_dir.is_dir():
+            shutil.rmtree(workspace_dir, ignore_errors=True)
+        else:
+            workspace_dir.unlink(missing_ok=True)
+
+
+def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, target_ref: str) -> None:
+    _drop_workspace_dir(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
+    workspace_dir.parent.mkdir(parents=True, exist_ok=True)
+    last_error = None
+    for attempt in range(2):
         try:
-            _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
-        except Exception:
-            pass
-        shutil.rmtree(workspace_dir, ignore_errors=True)
-        raise
+            _run_git(
+                git_repo_root,
+                ["worktree", "add", "--force", "--detach", str(workspace_dir), target_ref],
+            )
+            break
+        except Exception as exc:
+            last_error = exc
+            if attempt > 0 or not _WORKTREE_EXISTS_ERROR_RE.search(str(exc)):
+                _drop_workspace_dir(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
+                raise
+            _drop_workspace_dir(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
+            time.sleep(0.1)
+    else:
+        if last_error:
+            raise last_error
     if not (workspace_dir / ".git").exists():
         raise ValueError(f"Не удалось создать workspace `{workspace_dir}`")
 
@@ -209,8 +220,7 @@ def _recreate_workspace_repo(
     target_ref: str,
     author: str | None = None,
 ) -> None:
-    if workspace_dir.exists():
-        shutil.rmtree(workspace_dir, ignore_errors=True)
+    _drop_workspace_dir(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
     _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=workspace_dir, target_ref=target_ref)
     if author:
         _ensure_git_identity(repo_root=git_repo_root, cwd=workspace_dir, author=author)

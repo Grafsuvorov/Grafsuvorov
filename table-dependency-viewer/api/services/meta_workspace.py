@@ -31,6 +31,7 @@ class BranchRevisionConflictError(PermissionError):
 
 
 _FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
+_INDEX_LOCK_ERROR_RE = re.compile(r"index\.lock")
 
 
 def _workspace_slug(value: str) -> str:
@@ -55,6 +56,42 @@ def _with_repo_lock(git_repo_root: Path, callback):
             return callback()
         finally:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _with_workspace_lock(workspace_dir: Path, callback):
+    lock_path = workspace_dir.parent / ".workspace.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            return callback()
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _clear_stale_index_lock(workspace_dir: Path) -> None:
+    index_lock = workspace_dir / ".git" / "index.lock"
+    if index_lock.exists():
+        try:
+            index_lock.unlink()
+        except Exception:
+            pass
+
+
+def _run_workspace_git(git_repo_root: Path, args: list[str], *, cwd: Path) -> str:
+    last_error = None
+    for attempt in range(2):
+        try:
+            return _run_git(git_repo_root, args, cwd=cwd)
+        except ValueError as exc:
+            last_error = exc
+            if attempt > 0 or not _INDEX_LOCK_ERROR_RE.search(str(exc)):
+                raise
+            _clear_stale_index_lock(cwd)
+            time.sleep(0.1)
+    if last_error:
+        raise last_error
+    return ""
 
 
 def _fetch_prune_origin(git_repo_root: Path, *, cwd: Path | None = None) -> None:
@@ -152,24 +189,28 @@ def _ensure_branch_workspace(
 
     owner_root = worktree_dir.parent
     owner_root.mkdir(parents=True, exist_ok=True)
-    _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
-    _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
 
-    if author:
-        _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
+    def _prepare_workspace():
+        _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
+        _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
 
-    _fetch_prune_origin(git_repo_root, cwd=worktree_dir)
-    try:
-        _run_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
-        _run_git(git_repo_root, ["clean", "-fd"], cwd=worktree_dir)
-    except Exception:
-        pass
+        if author:
+            _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
-    if remote_branch_exists:
-        _run_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
-        _run_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
-    else:
-        _run_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
+        _fetch_prune_origin(git_repo_root, cwd=worktree_dir)
+        try:
+            _run_workspace_git(git_repo_root, ["reset", "--hard"], cwd=worktree_dir)
+            _run_workspace_git(git_repo_root, ["clean", "-fd"], cwd=worktree_dir)
+        except Exception:
+            pass
+
+        if remote_branch_exists:
+            _run_workspace_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
+            _run_workspace_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
+        else:
+            _run_workspace_git(git_repo_root, ["checkout", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
+
+    _with_workspace_lock(worktree_dir, _prepare_workspace)
     return branch_name_norm, worktree_dir
 
 
@@ -694,24 +735,29 @@ def save_meta_workspace_branch_file(
         base_branch=base_branch_norm,
         author=author,
     )
-    _assert_branch_file_revision_matches(git_repo_root, "HEAD", file_path_norm, expected_revision)
-
-    target_path = (worktree_dir / file_path_norm).resolve()
-    if not str(target_path).startswith(str(worktree_dir.resolve())):
-        raise ValueError("Некорректный путь файла")
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_text(str(content or ""), encoding="utf-8")
-
-    status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", file_path_norm], cwd=worktree_dir)
     committed = False
-    if status_output:
-        _run_git(git_repo_root, ["add", "--", file_path_norm], cwd=worktree_dir)
-        task_id_norm = str(task_id or "").strip().upper()
-        commit_prefix = task_id_norm if task_id_norm else branch_name_norm
-        _run_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
-        committed = True
 
-    _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+    def _save_file():
+        nonlocal committed
+        _assert_branch_file_revision_matches(git_repo_root, "HEAD", file_path_norm, expected_revision)
+
+        target_path = (worktree_dir / file_path_norm).resolve()
+        if not str(target_path).startswith(str(worktree_dir.resolve())):
+            raise ValueError("Некорректный путь файла")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(str(content or ""), encoding="utf-8")
+
+        status_output = _run_workspace_git(git_repo_root, ["status", "--porcelain", "--", file_path_norm], cwd=worktree_dir)
+        if status_output:
+            _run_workspace_git(git_repo_root, ["add", "--", file_path_norm], cwd=worktree_dir)
+            task_id_norm = str(task_id or "").strip().upper()
+            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+            _run_workspace_git(git_repo_root, ["commit", "-m", f"{commit_prefix}: update {Path(file_path_norm).name}"], cwd=worktree_dir)
+            committed = True
+
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+
+    _with_workspace_lock(worktree_dir, _save_file)
     return {
         "branch_name": branch_name_norm,
         "base_branch": base_branch_norm,
@@ -763,39 +809,42 @@ def save_meta_workspace_branch_gp_bundle(
         base_branch=base_branch_norm,
         author=author,
     )
-    _assert_branch_gp_revision_matches(git_repo_root, "HEAD", object_rel, expected_revision)
-
-    object_dir = (worktree_dir / object_rel).resolve()
-    if not str(object_dir).startswith(str(worktree_dir.resolve())):
-        raise ValueError("Некорректный путь объекта")
-    object_dir.mkdir(parents=True, exist_ok=True)
-
-    files_to_write = {
-        "meta_data_file.yaml": str(yaml_content or ""),
-        "sql_query_recreate_init.sql": str(recreate_sql or ""),
-        "sql_query_insert_init.sql": str(insert_sql or ""),
-        "sql_query_truncate.sql": str(truncate_sql or ""),
-    }
-    rel_paths: list[str] = []
-    for file_name, content in files_to_write.items():
-        target_path = object_dir / file_name
-        target_path.write_text(content, encoding="utf-8")
-        rel_paths.append((object_rel / file_name).as_posix())
-
-    status_output = _run_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
     committed = False
-    if status_output:
-        _run_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
-        task_id_norm = str(task_id or "").strip().upper()
-        commit_prefix = task_id_norm if task_id_norm else branch_name_norm
-        _run_git(
-            git_repo_root,
-            ["commit", "-m", f"{commit_prefix}: update {entity_name_norm}/{schema_name_norm}/{table_name_norm}"],
-            cwd=worktree_dir,
-        )
-        committed = True
 
-    _run_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+    def _save_bundle():
+        nonlocal committed
+        _assert_branch_gp_revision_matches(git_repo_root, "HEAD", object_rel, expected_revision)
+
+        object_dir = (worktree_dir / object_rel).resolve()
+        if not str(object_dir).startswith(str(worktree_dir.resolve())):
+            raise ValueError("Некорректный путь объекта")
+        object_dir.mkdir(parents=True, exist_ok=True)
+
+        files_to_write = {
+            "meta_data_file.yaml": str(yaml_content or ""),
+            "sql_query_recreate_init.sql": str(recreate_sql or ""),
+            "sql_query_insert_init.sql": str(insert_sql or ""),
+            "sql_query_truncate.sql": str(truncate_sql or ""),
+        }
+        for file_name, content in files_to_write.items():
+            target_path = object_dir / file_name
+            target_path.write_text(content, encoding="utf-8")
+
+        status_output = _run_workspace_git(git_repo_root, ["status", "--porcelain", "--", object_rel.as_posix()], cwd=worktree_dir)
+        if status_output:
+            _run_workspace_git(git_repo_root, ["add", "--", object_rel.as_posix()], cwd=worktree_dir)
+            task_id_norm = str(task_id or "").strip().upper()
+            commit_prefix = task_id_norm if task_id_norm else branch_name_norm
+            _run_workspace_git(
+                git_repo_root,
+                ["commit", "-m", f"{commit_prefix}: update {entity_name_norm}/{schema_name_norm}/{table_name_norm}"],
+                cwd=worktree_dir,
+            )
+            committed = True
+
+        _run_workspace_git(git_repo_root, ["push", "origin", f"HEAD:{branch_ref}"], cwd=worktree_dir)
+
+    _with_workspace_lock(worktree_dir, _save_bundle)
     return {
         "branch_name": branch_name_norm,
         "base_branch": base_branch_norm,

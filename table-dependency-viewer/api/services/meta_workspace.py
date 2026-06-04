@@ -171,37 +171,47 @@ def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, k
                 pass
 
 
-def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path) -> None:
-    if (workspace_dir / ".git").exists():
-        return
+def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, target_ref: str) -> None:
     if workspace_dir.exists():
         if workspace_dir.is_dir():
+            try:
+                _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
+            except Exception:
+                pass
             shutil.rmtree(workspace_dir, ignore_errors=True)
         else:
             workspace_dir.unlink(missing_ok=True)
     workspace_dir.parent.mkdir(parents=True, exist_ok=True)
-    origin_url = _git_origin_url(git_repo_root)
-    temp_workspace_dir = Path(tempfile.mkdtemp(prefix=f"{workspace_dir.name}-", dir=str(workspace_dir.parent)))
     try:
-        _run_git(git_repo_root, ["clone", origin_url, str(temp_workspace_dir)], cwd=workspace_dir.parent)
-        if workspace_dir.exists():
-            shutil.rmtree(workspace_dir, ignore_errors=True)
-        temp_workspace_dir.replace(workspace_dir)
+        _run_git(git_repo_root, ["worktree", "prune"])
     except Exception:
-        shutil.rmtree(temp_workspace_dir, ignore_errors=True)
+        pass
+    try:
+        _run_git(
+            git_repo_root,
+            ["worktree", "add", "--force", "--detach", str(workspace_dir), target_ref],
+        )
+    except Exception:
+        try:
+            _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
+        except Exception:
+            pass
+        shutil.rmtree(workspace_dir, ignore_errors=True)
         raise
     if not (workspace_dir / ".git").exists():
         raise ValueError(f"Не удалось создать workspace `{workspace_dir}`")
-    try:
-        _run_git(git_repo_root, ["remote", "set-url", "origin", origin_url], cwd=workspace_dir)
-    except Exception:
-        pass
 
 
-def _recreate_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, author: str | None = None) -> None:
+def _recreate_workspace_repo(
+    *,
+    git_repo_root: Path,
+    workspace_dir: Path,
+    target_ref: str,
+    author: str | None = None,
+) -> None:
     if workspace_dir.exists():
         shutil.rmtree(workspace_dir, ignore_errors=True)
-    _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=workspace_dir)
+    _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=workspace_dir, target_ref=target_ref)
     if author:
         _ensure_git_identity(repo_root=git_repo_root, cwd=workspace_dir, author=author)
 
@@ -234,6 +244,8 @@ def _ensure_branch_workspace(
     owner_root = worktree_dir.parent
     owner_root.mkdir(parents=True, exist_ok=True)
 
+    target_ref = f"origin/{branch_name_norm}" if remote_branch_exists else f"origin/{base_branch_norm}"
+
     def _sync_workspace_checkout():
         _clear_stale_index_lock(worktree_dir)
 
@@ -245,16 +257,17 @@ def _ensure_branch_workspace(
         except Exception:
             pass
 
-        if remote_branch_exists:
-            _run_workspace_git(git_repo_root, ["checkout", "-f", "-B", branch_name_norm, f"origin/{branch_name_norm}"], cwd=worktree_dir)
-            _run_workspace_git(git_repo_root, ["reset", "--hard", f"origin/{branch_name_norm}"], cwd=worktree_dir)
-        else:
-            _run_workspace_git(git_repo_root, ["checkout", "-f", "-B", branch_name_norm, f"origin/{base_branch_norm}"], cwd=worktree_dir)
+        _run_workspace_git(git_repo_root, ["reset", "--hard", target_ref], cwd=worktree_dir)
         _run_workspace_git(git_repo_root, ["clean", "-fdx"], cwd=worktree_dir)
 
     def _prepare_workspace():
         _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
-        _recreate_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir, author=author)
+        _recreate_workspace_repo(
+            git_repo_root=git_repo_root,
+            workspace_dir=worktree_dir,
+            target_ref=target_ref,
+            author=author,
+        )
         _sync_workspace_checkout()
 
     _with_workspace_lock(worktree_dir, _prepare_workspace)

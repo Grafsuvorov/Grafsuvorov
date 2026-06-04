@@ -1,1 +1,2 @@
-Git команда завершилась с ошибкой: git fetch --prune origin fatal: not a git repository (or any parent up to mount point /var/lib/table-dependency-viewer) Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+Операция не выполнена
+Git команда завершилась с ошибкой: git clone /root/git_dir/etl repo Cloning into 'repo'... done. fatal: unable to read tree (c2a1fb1718604590e4b35f8c567792b600d12cb0) warning: Clone succeeded, but checkout failed. You can inspect what was checked out with 'git status' and retry with 'git restore --source=HEAD :/'

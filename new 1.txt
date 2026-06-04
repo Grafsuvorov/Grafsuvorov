@@ -1,43 +1,16 @@
+ls -ld /var/lib/table-dependency-viewer /var/lib/table-dependency-viewer/meta-workspaces
+  ls -la /var/lib/table-dependency-viewer/meta-workspaces
+  ls -Zd /var/lib/table-dependency-viewer/meta-workspaces
+  getenforce
 
-[root@rgm-s-dwhapp01 table-dependency-viewer]# df -h
-Filesystem                Size  Used Avail Use% Mounted on
-devtmpfs                   24G     0   24G   0% /dev
-tmpfs                      24G  8.0K   24G   1% /dev/shm
-tmpfs                      24G  2.4G   22G  11% /run
-tmpfs                      24G     0   24G   0% /sys/fs/cgroup
-/dev/mapper/centos-root    44G   36G  8.5G  81% /
-/dev/sda1                1014M  182M  833M  18% /boot
-/dev/mapper/vg01-lvmdata   99G   64G   30G  69% /u01
-tmpfs                     4.7G     0  4.7G   0% /run/user/0
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/c3ead836d07f4521b46bed8084218e0e4d539c61e37165c58b6876d8f7e0cafb/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/672e934ce32b65fc0a0c2765651cbcd20e52f5017e59ab49c9d2b2db8f6e6ebe/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/40d4a390c264fc235146dcb6f3169785679b4f0a53efeb43f36b2d410c5e460e/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/44b79ac40e2fbffc65473780749003d434e8d8aa6fdfc5dabf333e976582390f/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/90758f5102e82f6caee4d2d0016944f406e0661bc03decb9bfb158aacc1eacb7/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/92c8e78b4d3b3a316603e3e8badd5e9bd7243b6c09c8f7284d81d116a1c597e5/merged
-overlay                    99G   64G   30G  69% /u01/docker-volumes/overlay2/5c4d996937e94836a6b0072283d685bb533ee9b0f1360e0643eeaadbfc8be6b4/merged
-[root@rgm-s-dwhapp01 table-dependency-viewer]# df -i
-Filesystem                 Inodes   IUsed    IFree IUse% Mounted on
-devtmpfs                  6156472     432  6156040    1% /dev
-tmpfs                     6159460       3  6159457    1% /dev/shm
-tmpfs                     6159460    1699  6157761    1% /run
-tmpfs                     6159460      16  6159444    1% /sys/fs/cgroup
-/dev/mapper/centos-root  18258936  636654 17622282    4% /
-/dev/sda1                  524288     333   523955    1% /boot
-/dev/mapper/vg01-lvmdata  6553600 3120502  3433098   48% /u01
-tmpfs                     6159460       1  6159459    1% /run/user/0
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/c3ead836d07f4521b46bed8084218e0e4d539c61e37165c58b6876d8f7e0cafb/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/672e934ce32b65fc0a0c2765651cbcd20e52f5017e59ab49c9d2b2db8f6e6ebe/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/40d4a390c264fc235146dcb6f3169785679b4f0a53efeb43f36b2d410c5e460e/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/44b79ac40e2fbffc65473780749003d434e8d8aa6fdfc5dabf333e976582390f/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/90758f5102e82f6caee4d2d0016944f406e0661bc03decb9bfb158aacc1eacb7/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/92c8e78b4d3b3a316603e3e8badd5e9bd7243b6c09c8f7284d81d116a1c597e5/merged
-overlay                   6553600 3120502  3433098   48% /u01/docker-volumes/overlay2/5c4d996937e94836a6b0072283d685bb533ee9b0f1360e0643eeaadbfc8be6b4/merged
-[root@rgm-s-dwhapp01 table-dependency-viewer]# ls -ld
-drwxrwxrwx. 10 root root 4096 May 14 17:01 .
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'df -h /var/lib/table-dependency-viewer/meta-workspaces && df -i /var/lib/table-dependency-viewer/meta-workspaces && ls -ld /var/lib/table-dependency-viewer/meta-workspaces'
-Filesystem               Size  Used Avail Use% Mounted on
-/dev/mapper/centos-root   44G   36G  8.5G  81% /var/lib/table-dependency-viewer/meta-workspaces
-Filesystem                Inodes  IUsed    IFree IUse% Mounted on
-/dev/mapper/centos-root 18258976 636654 17622322    4% /var/lib/table-dependency-viewer/meta-workspaces
-drwxr-xr-x. 5 root root 93 Jun  3 13:51 /var/lib/table-dependency-viewer/meta-workspaces
+  И внутри контейнера сделать прямую пробу записи:
+
+  docker compose exec api sh -lc 'mkdir -p /var/lib/table-dependency-viewer/meta-workspaces/_probe && touch /var/lib/table-dependency-viewer/meta-workspaces/_probe/
+  test && rm -f /var/lib/table-dependency-viewer/meta-workspaces/_probe/test && echo ok'
+
+  И пробу git прямо там:
+
+  docker compose exec api sh -lc 'rm -rf /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo && git clone --no-checkout
+  https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo'
+
+  Что я думаю сейчас:

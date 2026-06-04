@@ -227,6 +227,8 @@ def _ensure_branch_workspace(
     owner_root.mkdir(parents=True, exist_ok=True)
 
     def _sync_workspace_checkout():
+        _clear_stale_index_lock(worktree_dir)
+
         if author:
             _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
@@ -253,6 +255,7 @@ def _ensure_branch_workspace(
             error_text = str(exc)
             if not (
                 _WORKSPACE_FS_ERROR_RE.search(error_text)
+                or _INDEX_LOCK_ERROR_RE.search(error_text)
                 or _INDEX_WRITE_ERROR_RE.search(error_text)
             ):
                 raise

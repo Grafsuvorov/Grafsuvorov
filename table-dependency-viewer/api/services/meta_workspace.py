@@ -248,19 +248,8 @@ def _ensure_branch_workspace(
 
     def _prepare_workspace():
         _cleanup_legacy_owner_workspaces(git_repo_root=git_repo_root, owner_root=owner_root, keep_path=worktree_dir)
-        _ensure_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir)
-        try:
-            _sync_workspace_checkout()
-        except ValueError as exc:
-            error_text = str(exc)
-            if not (
-                _WORKSPACE_FS_ERROR_RE.search(error_text)
-                or _INDEX_LOCK_ERROR_RE.search(error_text)
-                or _INDEX_WRITE_ERROR_RE.search(error_text)
-            ):
-                raise
-            _recreate_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir, author=author)
-            _sync_workspace_checkout()
+        _recreate_workspace_repo(git_repo_root=git_repo_root, workspace_dir=worktree_dir, author=author)
+        _sync_workspace_checkout()
 
     _with_workspace_lock(worktree_dir, _prepare_workspace)
     return branch_name_norm, worktree_dir

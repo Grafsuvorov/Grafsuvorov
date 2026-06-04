@@ -1,6 +1,4 @@
- docker compose exec api sh -lc 'rm -rf /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo && git clone --no-checkout
-  https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo'
 
-  Если эта команда:
-
-  - 
+[root@rgm-s-dwhapp01 table-dependency-viewer]#  docker compose exec api sh -lc 'rm -rf /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo && git clone --no-checkout https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git /var/lib/table-dependency-viewer/meta-workspaces/_probe_repo'
+Cloning into '/var/lib/table-dependency-viewer/meta-workspaces/_probe_repo'...
+fatal: unable to access 'https://prod.gitlab.dwh.rusal.com/dwh/etl.git/': CONNECT tunnel failed, response 407

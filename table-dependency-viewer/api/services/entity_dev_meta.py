@@ -850,16 +850,34 @@ def _parse_gitlab_project(value: str) -> Optional[str]:
 
 def _git_env() -> dict[str, str]:
     env = os.environ.copy()
-    for key in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+    for key in (
+        "http_proxy",
+        "https_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+        "no_proxy",
+        "NO_PROXY",
+    ):
         env.pop(key, None)
     env["GIT_SSL_NO_VERIFY"] = "1"
     return env
 
 
 def _run_git(repo_root: Path, args: list[str], *, cwd: Optional[Path] = None) -> str:
+    git_cmd = [
+        "git",
+        "-c",
+        "http.proxy=",
+        "-c",
+        "https.proxy=",
+        "-c",
+        "core.gitProxy=",
+    ]
     try:
         result = subprocess.run(
-            ["git", "-C", str(repo_root), *args] if cwd is None else ["git", *args],
+            [*git_cmd, "-C", str(repo_root), *args] if cwd is None else [*git_cmd, *args],
             cwd=str(cwd) if cwd else None,
             capture_output=True,
             text=True,

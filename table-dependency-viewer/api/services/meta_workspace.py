@@ -65,6 +65,10 @@ def _with_repo_lock(git_repo_root: Path, callback):
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def _run_repo_locked_git(git_repo_root: Path, args: list[str], *, cwd: Path | None = None) -> str:
+    return _with_repo_lock(git_repo_root, lambda: _run_git(git_repo_root, args, cwd=cwd))
+
+
 def _with_workspace_lock(workspace_dir: Path, callback):
     lock_path = workspace_dir.parent / ".workspace.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -161,7 +165,7 @@ def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, k
             continue
         if child.is_dir():
             try:
-                _run_git(git_repo_root, ["worktree", "remove", "--force", str(child)])
+                _run_repo_locked_git(git_repo_root, ["worktree", "remove", "--force", str(child)])
             except Exception:
                 pass
             shutil.rmtree(child, ignore_errors=True)
@@ -174,11 +178,11 @@ def _cleanup_legacy_owner_workspaces(*, git_repo_root: Path, owner_root: Path, k
 
 def _drop_workspace_dir(*, git_repo_root: Path, workspace_dir: Path) -> None:
     try:
-        _run_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
+        _run_repo_locked_git(git_repo_root, ["worktree", "remove", "--force", str(workspace_dir)])
     except Exception:
         pass
     try:
-        _run_git(git_repo_root, ["worktree", "prune"])
+        _run_repo_locked_git(git_repo_root, ["worktree", "prune"])
     except Exception:
         pass
     if workspace_dir.exists():
@@ -194,7 +198,7 @@ def _ensure_workspace_repo(*, git_repo_root: Path, workspace_dir: Path, target_r
     last_error = None
     for attempt in range(2):
         try:
-            _run_git(
+            _run_repo_locked_git(
                 git_repo_root,
                 ["worktree", "add", "--force", "--detach", str(workspace_dir), target_ref],
             )
@@ -244,7 +248,7 @@ def _ensure_branch_workspace(
 
     _fetch_prune_origin(git_repo_root)
     try:
-        _run_git(git_repo_root, ["worktree", "prune"])
+        _run_repo_locked_git(git_repo_root, ["worktree", "prune"])
     except Exception:
         pass
     remote_branch_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", branch_name_norm]))

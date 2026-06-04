@@ -1,2 +1,5 @@
 Операция не выполнена
-Git команда завершилась с ошибкой: git clone https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git repo Cloning into 'repo'... fatal: cannot copy '/usr/share/git-core/templates/info/exclude' to '/var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo/.git/info/exclude': File exists
+Git команда завершилась с ошибкой: git reset --hard origin/feature/DWH-11479 Updating files: 90% (11901/13192) Updating files: 91% (12005/13192) Updating files: 92% (12137/13192) Updating files: 93% (12269/13192) Updating files: 94% (12401/13192) Updating files: 95% (12533/13192) Updating files: 96% (12665/13192) Updating files: 97% (12797/13192) Updating files: 98% (12929/13192) Updating files: 99% (13061/13192) Updating files: 100% (13192/13192) Updating files: 100% (13192/13192), done. fatal: Could not write new index file.
+
+
+Git команда завершилась с ошибкой: git checkout -f -B feature/DWH-11402 origin/feature/DWH-11402 fatal: unable to write new index file

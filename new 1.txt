@@ -1,2 +1,2 @@
 Операция не выполнена
-Git команда завершилась с ошибкой: git clone https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git repo Cloning into 'repo'... BUG: refs/files-backend.c:3175: initial ref transaction called with existing refs
+Git команда завершилась с ошибкой: git clone https://etl:glpat-mwi6RAoFF2R1baFqStfpg286MQp1OjJ0CA.01.0y038nzce@prod.gitlab.dwh.rusal.com/dwh/etl.git repo Cloning into 'repo'... fatal: cannot copy '/usr/share/git-core/templates/info/exclude' to '/var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo/.git/info/exclude': File exists

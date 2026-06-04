@@ -1,1 +1,7 @@
-Git команда завершилась с ошибкой: git worktree add --force --detach /var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo origin/feature/DWH-11402 Preparing worktree (detached HEAD 56dc07b18) error: unable to create file .gitignore: No such file or directory error: unable to create file .gitlab-ci.yml: No such file or directory fatal: cannot create directory at '.gitlab': No such file or directory
+/var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com
+
+Операция не выполнена
+Не удалось построить каталог ветки: [Errno 2] No such file or directory: '/var/lib/table-dependency-viewer/meta-workspaces/nikita.suvorov-rusal.com/repo'
+
+Операция не выполнена
+Git команда завершилась с ошибкой: git reset --hard origin/feature/DWH-11107 fatal: not a git repository (or any parent up to mount point /var/lib/table-dependency-viewer) Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).

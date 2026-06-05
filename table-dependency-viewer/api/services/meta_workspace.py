@@ -580,7 +580,7 @@ def _build_branch_catalog(
         "base_branch": re.sub(r"^origin/", "", base_ref),
         "gp_objects": sorted(gp_items, key=lambda row: (row["entity_name"], row["schema_name"], row["table_name"])),
         "click_objects": sorted(click_items, key=lambda row: (row["schema_name"], row["file_name"])),
-        "workspace_path": str(worktree_dir),
+        "workspace_path": "",
     }
 
 
@@ -616,7 +616,7 @@ def build_meta_workspace_branch_tree(
     changed_paths = {
         item
         for _status, item in _parse_name_status(
-            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...HEAD"], cwd=worktree_dir)
+            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
         )
     }
 

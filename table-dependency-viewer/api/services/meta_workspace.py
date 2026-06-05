@@ -463,10 +463,12 @@ def _assert_branch_file_revision_matches(
     ref_name: str,
     rel_path: str,
     expected_revision: dict[str, Any] | None,
+    *,
+    cwd: Path | None = None,
 ) -> None:
     if not expected_revision:
         return
-    actual_revision = _build_branch_file_revision(repo_root, ref_name, rel_path)
+    actual_revision = _build_branch_file_revision(repo_root, ref_name, rel_path, cwd=cwd)
     if (
         str(expected_revision.get("path") or "").strip().strip("/") != actual_revision["path"]
         or str(expected_revision.get("oid") or "") != actual_revision["oid"]
@@ -481,10 +483,12 @@ def _assert_branch_gp_revision_matches(
     ref_name: str,
     object_rel: Path,
     expected_revision: dict[str, Any] | None,
+    *,
+    cwd: Path | None = None,
 ) -> None:
     if not expected_revision:
         return
-    actual_revision = _build_branch_gp_revision(repo_root, ref_name, object_rel)
+    actual_revision = _build_branch_gp_revision(repo_root, ref_name, object_rel, cwd=cwd)
     expected_path = str(expected_revision.get("path") or "").strip().strip("/")
     actual_path = actual_revision["path"]
     expected_files = expected_revision.get("files") or {}
@@ -844,7 +848,7 @@ def save_meta_workspace_branch_file(
 
     def _save_file():
         nonlocal committed
-        _assert_branch_file_revision_matches(git_repo_root, "HEAD", file_path_norm, expected_revision)
+        _assert_branch_file_revision_matches(git_repo_root, "HEAD", file_path_norm, expected_revision, cwd=worktree_dir)
 
         target_path = (worktree_dir / file_path_norm).resolve()
         if not str(target_path).startswith(str(worktree_dir.resolve())):
@@ -918,7 +922,7 @@ def save_meta_workspace_branch_gp_bundle(
 
     def _save_bundle():
         nonlocal committed
-        _assert_branch_gp_revision_matches(git_repo_root, "HEAD", object_rel, expected_revision)
+        _assert_branch_gp_revision_matches(git_repo_root, "HEAD", object_rel, expected_revision, cwd=worktree_dir)
 
         object_dir = (worktree_dir / object_rel).resolve()
         if not str(object_dir).startswith(str(worktree_dir.resolve())):

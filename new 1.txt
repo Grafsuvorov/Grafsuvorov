@@ -1,5 +1,2 @@
 Операция не выполнена
-Объект `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/account_debt` изменился в ветке после открытия. Обновите его и повторите сохранение.
-
-Операция не выполнена
-HTTP 500
+Объект `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/accounting_balance` изменился в ветке после открытия. Обновите его и повторите сохранение.

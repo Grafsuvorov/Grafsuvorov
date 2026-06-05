@@ -170,6 +170,7 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter()
 print("BOOT FILE:", __file__)
 DEV_COPY_DAG_ID = "load_from_prod_to_dev"
+DEV_COPY_SCHEMA_SYNC_DAG_ID = "information_schema_sync"
 DEV_COPY_TZ = ZoneInfo("Europe/Moscow")
 DEV_COPY_ALLOWED_HOUR_START = 8
 DEV_COPY_ALLOWED_HOUR_END = 21
@@ -229,6 +230,21 @@ class DevCopyDagPayload(BaseModel):
 class DevCopyDagStatusPayload(BaseModel):
     dag_run_id: str
     auto_unpaused: bool = False
+
+
+class DevCopySchemaSyncPayload(BaseModel):
+    check_table_schema: str
+    check_table_name: str
+
+
+class DevCopySchemaSyncDagStatusPayload(BaseModel):
+    dag_run_id: str
+    auto_unpaused: bool = False
+
+
+class DevCopySchemaSyncReportPayload(BaseModel):
+    check_table_schema: str
+    check_table_name: str
 
 
 class DevMetaDeployPayload(BaseModel):
@@ -417,6 +433,68 @@ def _assert_dev_copy_window():
                 f"{window['allowed_from']} до {window['allowed_to']} по Москве."
             ),
         )
+
+
+def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name: str):
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                select
+                    run_id,
+                    run_timestamp,
+                    run_user,
+                    layer_filter,
+                    table_filter,
+                    prod_snapshot_last_dttm,
+                    is_prod_snapshot_actual,
+                    state_code,
+                    state_name
+                from tech_monitoring.say_compare_gp_metadata_log
+                where coalesce(deleted_flag, false) = false
+                  and coalesce(run_user, '') = :run_user
+                  and coalesce(layer_filter, '') = :table_schema
+                  and coalesce(table_filter, '') = :table_name
+                order by coalesce(run_timestamp, dttm_inserted) desc, run_id desc
+                limit 1
+                """
+            ),
+            {
+                "run_user": str(run_user or "").strip(),
+                "table_schema": str(table_schema or "").strip(),
+                "table_name": str(table_name or "").strip(),
+            },
+        ).mappings().first()
+    return dict(row) if row else None
+
+
+def _get_schema_sync_report_rows(*, run_id: int):
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                select
+                    table_schema,
+                    table_name,
+                    column_name,
+                    column_position,
+                    diff_code,
+                    diff_name,
+                    data_type_prod,
+                    data_type_dev
+                from tech_monitoring.say_compare_gp_metadata_prod_vs_dev
+                where coalesce(deleted_flag, false) = false
+                  and run_id = :run_id
+                order by
+                    coalesce(table_schema, ''),
+                    coalesce(table_name, ''),
+                    column_position nulls last,
+                    coalesce(column_name, '')
+                """
+            ),
+            {"run_id": run_id},
+        ).mappings().all()
+    return [dict(row) for row in rows]
     return window
 
 
@@ -1268,6 +1346,11 @@ def get_admin_dev_copy_status(request: Request):
             "dag_id": DEV_COPY_DAG_ID,
             "configured": bool(AIRFLOW_DEV_BASE_URL),
         },
+        "schema_sync": {
+            "base_url": AIRFLOW_DEV_BASE_URL,
+            "dag_id": DEV_COPY_SCHEMA_SYNC_DAG_ID,
+            "configured": bool(AIRFLOW_DEV_BASE_URL),
+        },
         "window": window,
     }
 
@@ -1343,6 +1426,83 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-copy/schema-sync/run-dag")
+def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, request: Request):
+    user = _require_authenticated(request)
+    try:
+        values = {
+            "author": user.email,
+            "check_table_schema": str(payload.check_table_schema or "").strip(),
+            "check_table_name": str(payload.check_table_name or "").strip(),
+        }
+        missing = [key for key, value in values.items() if not value]
+        if missing:
+            raise ValueError("Нужно заполнить author, check_table_schema и check_table_name")
+        data = trigger_airflow_parametrized_dag(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            conf=values,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-copy/schema-sync/dag-status")
+def get_admin_dev_copy_schema_sync_dag_status(payload: DevCopySchemaSyncDagStatusPayload, request: Request):
+    _require_authenticated(request)
+    try:
+        data = get_airflow_dev_dag_status(
+            airflow_base_url=AIRFLOW_DEV_BASE_URL,
+            username=AIRFLOW_DEV_USERNAME,
+            password=AIRFLOW_DEV_PASSWORD,
+            dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,
+            dag_run_id=payload.dag_run_id,
+            auto_unpaused=payload.auto_unpaused,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "ok", "response": data}
+
+
+@router.post("/api/admin/dev-copy/schema-sync/report")
+def get_admin_dev_copy_schema_sync_report(payload: DevCopySchemaSyncReportPayload, request: Request):
+    user = _require_authenticated(request)
+    table_schema = str(payload.check_table_schema or "").strip()
+    table_name = str(payload.check_table_name or "").strip()
+    if not table_schema or not table_name:
+        raise HTTPException(status_code=400, detail="Нужно указать check_table_schema и check_table_name")
+    try:
+        run_info = _get_schema_sync_latest_run(
+            run_user=user.email,
+            table_schema=table_schema,
+            table_name=table_name,
+        )
+        if not run_info:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Не найден результат сверки для {table_schema}.{table_name} и пользователя {user.email}",
+            )
+        report_rows = _get_schema_sync_report_rows(run_id=run_info["run_id"])
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "status": "ok",
+        "run": run_info,
+        "summary": {
+            "diff_count": len(report_rows),
+            "schema_name": table_schema,
+            "table_name": table_name,
+        },
+        "items": report_rows,
+    }
 
 
 @router.post("/api/admin/dev-meta/deploy")

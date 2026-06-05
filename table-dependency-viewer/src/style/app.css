@@ -9101,6 +9101,63 @@ body.custom-hover-label-active * {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
+.dev-copy-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dev-copy-report-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(8, 15, 28, 0.72);
+}
+
+.dev-copy-report-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.dev-copy-report-table th,
+.dev-copy-report-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dev-copy-report-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(15, 23, 42, 0.95);
+  color: #bfdbfe;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.dev-copy-report-table td {
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.dev-copy-report-table tbody tr:hover {
+  background: rgba(30, 41, 59, 0.44);
+}
+
+.dev-copy-report-empty {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  background: rgba(20, 83, 45, 0.16);
+  color: #dcfce7;
+}
+
 .dev-meta-game {
   margin-top: 14px;
   padding: 14px;

@@ -11,8 +11,16 @@ export default function DevCopyDagPage({ userProfile }) {
     target_table_schema: "dm",
     target_table_name: "",
   });
+  const [schemaSyncForm, setSchemaSyncForm] = useState({
+    check_table_schema: "dm",
+    check_table_name: "",
+  });
   const [running, setRunning] = useState(false);
   const [dagStatus, setDagStatus] = useState(null);
+  const [schemaSyncRunning, setSchemaSyncRunning] = useState(false);
+  const [schemaSyncDagStatus, setSchemaSyncDagStatus] = useState(null);
+  const [schemaSyncReportLoading, setSchemaSyncReportLoading] = useState(false);
+  const [schemaSyncReport, setSchemaSyncReport] = useState(null);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
@@ -20,6 +28,8 @@ export default function DevCopyDagPage({ userProfile }) {
   const canUsePage = Boolean(userProfile);
   const dagRunState = String(dagStatus?.dag_run_state || "").toLowerCase();
   const dagIsActive = ["queued", "running"].includes(dagRunState);
+  const schemaSyncDagRunState = String(schemaSyncDagStatus?.dag_run_state || "").toLowerCase();
+  const schemaSyncDagIsActive = ["queued", "running"].includes(schemaSyncDagRunState);
   const copyWindow = status?.window || null;
   const canRunNow = Boolean(copyWindow?.allowed);
 
@@ -59,6 +69,65 @@ export default function DevCopyDagPage({ userProfile }) {
     };
   }, [dagStatus?.dag_run_id, dagStatus?.dag_run_state, dagStatus?.auto_unpaused]);
 
+  useEffect(() => {
+    if (!schemaSyncDagStatus?.dag_run_id) return undefined;
+    if (["success", "failed"].includes(String(schemaSyncDagStatus?.dag_run_state || "").toLowerCase())) {
+      return undefined;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const data = await devCopyApi.schemaSyncDagStatus({
+          dag_run_id: schemaSyncDagStatus.dag_run_id,
+          auto_unpaused: Boolean(schemaSyncDagStatus.auto_unpaused),
+        });
+        if (!cancelled) {
+          setSchemaSyncDagStatus(data?.response || null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Не удалось получить статус DAG сверки");
+        }
+      }
+    };
+    poll();
+    const timer = window.setInterval(poll, 7000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [schemaSyncDagStatus?.dag_run_id, schemaSyncDagStatus?.dag_run_state, schemaSyncDagStatus?.auto_unpaused]);
+
+  useEffect(() => {
+    if (schemaSyncDagRunState !== "success") return;
+    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) return;
+    let cancelled = false;
+    const loadReport = async () => {
+      setSchemaSyncReportLoading(true);
+      try {
+        const data = await devCopyApi.schemaSyncReport({
+          check_table_schema: schemaSyncForm.check_table_schema,
+          check_table_name: schemaSyncForm.check_table_name,
+        });
+        if (!cancelled) {
+          setSchemaSyncReport(data || null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Не удалось получить результат сверки");
+        }
+      } finally {
+        if (!cancelled) {
+          setSchemaSyncReportLoading(false);
+        }
+      }
+    };
+    loadReport();
+    return () => {
+      cancelled = true;
+    };
+  }, [schemaSyncDagRunState, schemaSyncForm.check_table_schema, schemaSyncForm.check_table_name]);
+
   const handleRun = async () => {
     if (!form.source_table_schema || !form.source_table_name || !form.target_table_schema || !form.target_table_name) {
       setError("Нужно заполнить схему и таблицу для PROD и DEV");
@@ -84,6 +153,55 @@ export default function DevCopyDagPage({ userProfile }) {
       setError(err.message || "Не удалось запустить DAG");
     } finally {
       setRunning(false);
+    }
+  };
+
+  const handleRunSchemaSync = async () => {
+    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) {
+      setError("Нужно заполнить check_table_schema и check_table_name");
+      return;
+    }
+    setSchemaSyncRunning(true);
+    setSchemaSyncReport(null);
+    setError(null);
+    setMessage(null);
+    try {
+      const data = await devCopyApi.runSchemaSyncDag(schemaSyncForm);
+      const dagRun = data?.response?.response || data?.response || {};
+      setSchemaSyncDagStatus({
+        dag_id: data?.response?.dag_id || status?.schema_sync?.dag_id || null,
+        dag_run_id: dagRun?.dag_run_id,
+        dag_run_state: dagRun?.state || "queued",
+        failed_tasks: [],
+        auto_unpaused: Boolean(data?.response?.auto_unpaused),
+        dag_is_paused: Boolean(data?.response?.was_paused),
+      });
+      setMessageType("success");
+      setMessage(`DAG сверки metadata запущен: ${data?.response?.dag_id || status?.schema_sync?.dag_id || "—"}`);
+    } catch (err) {
+      setError(err.message || "Не удалось запустить DAG сверки metadata");
+    } finally {
+      setSchemaSyncRunning(false);
+    }
+  };
+
+  const handleLoadSchemaSyncReport = async () => {
+    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) {
+      setError("Нужно заполнить check_table_schema и check_table_name");
+      return;
+    }
+    setSchemaSyncReportLoading(true);
+    setError(null);
+    try {
+      const data = await devCopyApi.schemaSyncReport({
+        check_table_schema: schemaSyncForm.check_table_schema,
+        check_table_name: schemaSyncForm.check_table_name,
+      });
+      setSchemaSyncReport(data || null);
+    } catch (err) {
+      setError(err.message || "Не удалось получить результат сверки");
+    } finally {
+      setSchemaSyncReportLoading(false);
     }
   };
 
@@ -156,6 +274,44 @@ export default function DevCopyDagPage({ userProfile }) {
           </div>
         </div>
 
+        <div className="dev-meta-generator">
+          <div className="section-subtitle">Сверка metadata PROD vs DEV</div>
+          <div className="muted">
+            Запуск DAG <span className="mono">{status?.schema_sync?.dag_id || "information_schema_sync"}</span> с параметрами автора, схемы и таблицы.
+          </div>
+          <div className="dev-meta-generator-grid">
+            <label className="admin-field">
+              <span>author</span>
+              <input value={userProfile?.email || ""} disabled />
+            </label>
+            <label className="admin-field">
+              <span>check_table_schema</span>
+              <input
+                value={schemaSyncForm.check_table_schema}
+                onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_schema: e.target.value }))}
+                placeholder="dm"
+              />
+            </label>
+            <label className="admin-field">
+              <span>check_table_name</span>
+              <input
+                value={schemaSyncForm.check_table_name}
+                onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_name: e.target.value }))}
+                placeholder="account_debt"
+              />
+            </label>
+          </div>
+          <div className="dev-meta-generator-actions">
+            <button className="btn btn-primary" onClick={handleRunSchemaSync} disabled={schemaSyncRunning || !status?.schema_sync?.configured}>
+              {schemaSyncRunning ? "Запускаем DAG сверки..." : "Запустить information_schema_sync"}
+            </button>
+            <button className="btn btn-secondary" onClick={handleLoadSchemaSyncReport} disabled={schemaSyncReportLoading || !schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name}>
+              {schemaSyncReportLoading ? "Обновляем результат..." : "Показать результат"}
+            </button>
+            <span className="muted">DAG: {status?.schema_sync?.dag_id || "не настроен"}</span>
+          </div>
+        </div>
+
         {(message || error) && (
           <div className={`dev-meta-feedback ${error ? "error" : messageType}`}>
             <div className="dev-meta-feedback-title">
@@ -205,6 +361,109 @@ export default function DevCopyDagPage({ userProfile }) {
               <div className="dev-meta-dag-failed">{dagStatus.window_message}</div>
             ) : null}
             <DagLoadingMiniGame active={dagIsActive} />
+          </div>
+        )}
+
+        {schemaSyncDagStatus && (
+          <div className="dev-meta-dag-status">
+            <div className="section-subtitle">Статус сверки metadata</div>
+            <div className="dev-meta-dag-grid">
+              <div className="dev-meta-dag-card">
+                <span className="label">Run</span>
+                <strong className="mono">{schemaSyncDagStatus.dag_run_id || "—"}</strong>
+              </div>
+              <div className={`dev-meta-dag-card dev-meta-dag-state dev-meta-dag-state-${schemaSyncDagRunState || "idle"}`}>
+                <span className="label">Статус запуска</span>
+                <strong>{schemaSyncDagStatus.dag_run_state || "—"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Дата запуска</span>
+                <strong>{schemaSyncDagStatus.logical_date ? formatRuDateTime(schemaSyncDagStatus.logical_date) : "—"}</strong>
+              </div>
+            </div>
+            {schemaSyncDagStatus.failed_tasks?.length ? (
+              <div className="dev-meta-dag-failed">
+                <div>Ошибки:</div>
+                <div className="dev-copy-failed-list">
+                  {schemaSyncDagStatus.failed_tasks.map((task) => (
+                    <div key={`${task.task_id}:${task.try_number || 0}`} className="dev-copy-failed-item">
+                      <div className="dev-copy-failed-head">
+                        <strong>{task.task_id}</strong> <span>({task.state})</span>
+                      </div>
+                      {task.error_excerpt ? (
+                        <pre className="dev-copy-failed-log">{task.error_excerpt}</pre>
+                      ) : (
+                        <div className="muted">Подробный текст ошибки Airflow не вернул.</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <DagLoadingMiniGame active={schemaSyncDagIsActive} />
+          </div>
+        )}
+
+        {schemaSyncReport && (
+          <div className="dev-meta-dag-status">
+            <div className="section-subtitle">Результат сверки schema metadata</div>
+            <div className="dev-copy-report-grid">
+              <div className="dev-meta-dag-card">
+                <span className="label">Схема и таблица</span>
+                <strong>{schemaSyncReport.summary?.schema_name || "—"}.{schemaSyncReport.summary?.table_name || "—"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Run ID</span>
+                <strong>{schemaSyncReport.run?.run_id || "—"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Статус</span>
+                <strong>{schemaSyncReport.run?.state_name || "—"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Снимок PROD</span>
+                <strong>{schemaSyncReport.run?.prod_snapshot_last_dttm ? formatRuDateTime(schemaSyncReport.run.prod_snapshot_last_dttm) : "—"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Актуальность snapshot</span>
+                <strong>{schemaSyncReport.run?.is_prod_snapshot_actual ? "Актуален" : "Неактуален"}</strong>
+              </div>
+              <div className="dev-meta-dag-card">
+                <span className="label">Количество отличий</span>
+                <strong>{schemaSyncReport.summary?.diff_count ?? 0}</strong>
+              </div>
+            </div>
+
+            {schemaSyncReport.items?.length ? (
+              <div className="dev-copy-report-table-wrap">
+                <table className="dev-copy-report-table">
+                  <thead>
+                    <tr>
+                      <th>Схема</th>
+                      <th>Таблица</th>
+                      <th>Поле</th>
+                      <th>Отличие</th>
+                      <th>Тип в PROD</th>
+                      <th>Тип в DEV</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {schemaSyncReport.items.map((row, idx) => (
+                      <tr key={`${row.table_schema}:${row.table_name}:${row.column_name || idx}:${row.diff_code || idx}`}>
+                        <td>{row.table_schema || "—"}</td>
+                        <td>{row.table_name || "—"}</td>
+                        <td className="mono">{row.column_name || "—"}</td>
+                        <td>{row.diff_name || "—"}</td>
+                        <td className="mono">{row.data_type_prod || "—"}</td>
+                        <td className="mono">{row.data_type_dev || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="dev-copy-report-empty">Отличий между PROD и DEV не найдено.</div>
+            )}
           </div>
         )}
       </section>

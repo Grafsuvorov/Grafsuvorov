@@ -1139,6 +1139,8 @@ def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBun
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось сохранить объект в ветку: {exc}")
 
 
 @router.post("/api/admin/meta-workspace/branch-file/save")
@@ -1161,6 +1163,8 @@ def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePa
         raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Не удалось сохранить файл в ветку: {exc}")
 
 
 @router.post("/api/admin/meta-workspace/validate-all")

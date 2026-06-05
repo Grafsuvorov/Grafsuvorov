@@ -1,2 +1,64 @@
-Операция не выполнена
-Не удалось сохранить объект в ветку: name 'rel_paths' is not defined
+information_schema_sync
+
+author *:
+check_table_schema *:
+check_table_name *:
+
+CREATE TABLE tech_monitoring.say_compare_gp_metadata_log (
+	run_id int8 NULL,
+	run_timestamp timestamp DEFAULT now() NULL,
+	run_user text NULL,
+	layer_filter text NULL,
+	table_filter text NULL,
+	prod_snapshot_last_dttm timestamp NULL,
+	is_prod_snapshot_actual bool NULL,
+	state_code int4 NULL,
+	state_name text NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (run_id);
+
+18	2026-06-05 14:12:47.000	airflow	dm	sb_wuc_test	2026-06-05 14:12:47.000	true	1	Данные актуальны на 2026-06-05T11:12:47+00:00	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
+
+CREATE TABLE tech_monitoring.say_compare_gp_metadata_prod_vs_dev (
+	table_catalog text NULL,
+	table_schema text NULL,
+	table_name text NULL,
+	column_name text NULL,
+	column_position int4 NULL,
+	diff_code int4 NULL,
+	diff_name text NULL,
+	is_table_exist_prod bool NULL,
+	is_table_exist_dev bool NULL,
+	is_column_exist_prod bool NULL,
+	is_column_exist_dev bool NULL,
+	is_data_type_check bool NULL,
+	is_constraint_check bool NULL,
+	data_type_prod text NULL,
+	data_type_dev text NULL,
+	run_id int8 NULL,
+	dttm_inserted timestamp DEFAULT now() NOT NULL,
+	dttm_updated timestamp DEFAULT now() NOT NULL,
+	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
+	deleted_flag bool DEFAULT false NOT NULL
+)
+WITH (
+	appendonly=true,
+	orientation=column,
+	compresstype=zstd,
+	compresslevel=3
+)
+DISTRIBUTED BY (run_id);
+
+dwh	dm	sb_wuc_test	material_rus_type	10	70	Добавлено поле в DEV	true	true	false	true	false	false		character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
+dwh	dm	sb_wuc_test	realization_status	2	40	Изменён тип данных в DEV	true	true	true	true	false	false	integer	character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
+dwh	dm	sb_wuc_test	plant_manufact	4	50	Изменены атрибуты типа/default/nullable в DEV	true	true	true	true	true	false	character varying	character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false

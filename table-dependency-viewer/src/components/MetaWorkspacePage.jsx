@@ -81,8 +81,10 @@ export default function MetaWorkspacePage({ userProfile }) {
   );
   const filteredBranchOptions = useMemo(() => {
     const term = String(branchName || "").trim().toLowerCase();
-    if (!term) return branchOptions;
-    return branchOptions.filter((item) => String(item || "").toLowerCase().includes(term));
+    if (!term) return [];
+    return branchOptions
+      .filter((item) => String(item || "").toLowerCase().includes(term))
+      .slice(0, 20);
   }, [branchOptions, branchName]);
   const allowedGpObjectKeys = useMemo(
     () => new Set((branchCatalog.gp_objects || []).map((item) => item.object_key).filter(Boolean)),
@@ -502,18 +504,22 @@ export default function MetaWorkspacePage({ userProfile }) {
             <span className="muted">GP: {branchSummary.gp} · Click: {branchSummary.click}</span>
           </div>
           <div className="meta-workspace-branch-picker">
-            {filteredBranchOptions.length ? filteredBranchOptions.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`meta-workspace-branch-pill ${item === branchCatalog.branch_name ? "active" : ""}`}
-                onClick={() => handleSelectBranch(item)}
-                disabled={catalogLoading}
-              >
-                {item}
-              </button>
-            )) : (
-              <div className="muted">Подходящих веток не найдено.</div>
+            {String(branchName || "").trim() ? (
+              filteredBranchOptions.length ? filteredBranchOptions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`meta-workspace-branch-pill ${item === branchCatalog.branch_name ? "active" : ""}`}
+                  onClick={() => handleSelectBranch(item)}
+                  disabled={catalogLoading}
+                >
+                  {item}
+                </button>
+              )) : (
+                <div className="muted">Подходящих веток не найдено.</div>
+              )
+            ) : (
+              <div className="muted">Начните вводить имя ветки, и появятся подходящие варианты.</div>
             )}
           </div>
         </div>

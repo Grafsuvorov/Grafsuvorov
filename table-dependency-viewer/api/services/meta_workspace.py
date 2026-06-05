@@ -959,7 +959,14 @@ def save_meta_workspace_branch_gp_bundle(
         "base_branch": base_branch_norm,
         "object_key": f"{entity_name_norm}/{schema_name_norm}/{table_name_norm}",
         "path": object_rel.as_posix(),
-        "changed_files": rel_paths,
+        "changed_files": sorted(
+            [
+                (object_rel / "meta_data_file.yaml").as_posix(),
+                (object_rel / "sql_query_recreate_init.sql").as_posix(),
+                (object_rel / "sql_query_insert_init.sql").as_posix(),
+                (object_rel / "sql_query_truncate.sql").as_posix(),
+            ]
+        ),
         "committed": committed,
         "revision": _build_branch_gp_revision(git_repo_root, "HEAD", object_rel, cwd=worktree_dir),
         "workspace_path": str(worktree_dir),

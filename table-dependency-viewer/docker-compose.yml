@@ -7,6 +7,8 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+    env_file:
+      - ./api/.env
     volumes:
       - ./api:/app/api
       - ./scripts:/app/scripts
@@ -24,9 +26,6 @@ services:
       - TABLE_DBT_MODEL_CATALOG=${TABLE_DBT_MODEL_CATALOG}
       - TABLE_DBT_MODEL_LOG=${TABLE_DBT_MODEL_LOG}
       - TABLE_DBT_RUN_LOG=${TABLE_DBT_RUN_LOG}
-      - DEV_COPY_SCHEMA_SYNC_DAG_ID=${DEV_COPY_SCHEMA_SYNC_DAG_ID}
-      - TABLE_SAY_COMPARE_GP_METADATA_LOG=${TABLE_SAY_COMPARE_GP_METADATA_LOG}
-      - TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=${TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV}
       - AIRFLOW_DEV_BASE_URL=${AIRFLOW_DEV_BASE_URL}
       - AIRFLOW_DEV_DAG_ID=${AIRFLOW_DEV_DAG_ID}
       - AIRFLOW_DEV_USERNAME=${AIRFLOW_DEV_USERNAME}

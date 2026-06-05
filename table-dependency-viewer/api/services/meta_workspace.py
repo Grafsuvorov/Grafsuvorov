@@ -328,6 +328,18 @@ def _resolve_branch_ref(repo_root: Path, branch_name: str) -> str:
     raise ValueError(f"Ветка `{branch_norm}` не найдена")
 
 
+def _resolve_origin_branch_ref(repo_root: Path, branch_name: str) -> str:
+    branch_norm = str(branch_name or "").strip()
+    if not branch_norm:
+        raise ValueError("Укажите имя ветки")
+    ref_name = branch_norm if branch_norm.startswith("origin/") else f"origin/{branch_norm}"
+    try:
+        _run_git(repo_root, ["rev-parse", "--verify", ref_name])
+        return ref_name
+    except Exception as exc:
+        raise ValueError(f"Ветка `{branch_norm}` не найдена в origin") from exc
+
+
 def list_meta_workspace_branches(*, git_repo_value: str) -> dict[str, Any]:
     if not git_repo_value:
         raise ValueError("Не настроен ENTITY_META_GIT_REPO")
@@ -517,8 +529,8 @@ def _build_branch_catalog(
     branch_name: str,
     base_branch: str,
 ) -> dict[str, Any]:
-    branch_ref = _resolve_branch_ref(git_repo_root, branch_name)
-    base_ref = _resolve_branch_ref(git_repo_root, base_branch)
+    branch_ref = _resolve_origin_branch_ref(git_repo_root, branch_name)
+    base_ref = _resolve_origin_branch_ref(git_repo_root, base_branch)
     diff_output = _run_git(
         git_repo_root,
         ["diff", "--name-status", f"{base_ref}...{branch_ref}"],
@@ -616,7 +628,7 @@ def build_meta_workspace_branch_tree(
     changed_paths = {
         item
         for _status, item in _parse_name_status(
-            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
+            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_origin_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
         )
     }
 

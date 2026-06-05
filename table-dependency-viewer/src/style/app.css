@@ -9158,6 +9158,32 @@ body.custom-hover-label-active * {
   color: #dcfce7;
 }
 
+.dev-copy-sections {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.dev-copy-section {
+  display: grid;
+  gap: 8px;
+}
+
+.dev-copy-section-mark {
+  padding-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(191, 219, 254, 0.74);
+}
+
+.dev-copy-card {
+  margin-top: 0;
+}
+
 .dev-meta-game {
   margin-top: 14px;
   padding: 14px;
@@ -9623,6 +9649,10 @@ body.custom-hover-label-active * {
 @media (max-width: 760px) {
   .dev-meta-runbook {
     padding: 14px;
+  }
+
+  .dev-copy-sections {
+    grid-template-columns: 1fr;
   }
 
   .dev-meta-editor-shell {

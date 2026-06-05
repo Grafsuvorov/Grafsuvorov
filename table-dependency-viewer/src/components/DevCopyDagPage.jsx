@@ -173,6 +173,7 @@ export default function DevCopyDagPage({ userProfile }) {
         dag_run_id: dagRun?.dag_run_id,
         dag_run_state: dagRun?.state || "queued",
         failed_tasks: [],
+        logical_date: dagRun?.logical_date || dagRun?.execution_date || null,
         auto_unpaused: Boolean(data?.response?.auto_unpaused),
         dag_is_paused: Boolean(data?.response?.was_paused),
       });
@@ -182,26 +183,6 @@ export default function DevCopyDagPage({ userProfile }) {
       setError(err.message || "Не удалось запустить DAG сверки metadata");
     } finally {
       setSchemaSyncRunning(false);
-    }
-  };
-
-  const handleLoadSchemaSyncReport = async () => {
-    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) {
-      setError("Нужно заполнить check_table_schema и check_table_name");
-      return;
-    }
-    setSchemaSyncReportLoading(true);
-    setError(null);
-    try {
-      const data = await devCopyApi.schemaSyncReport({
-        check_table_schema: schemaSyncForm.check_table_schema,
-        check_table_name: schemaSyncForm.check_table_name,
-      });
-      setSchemaSyncReport(data || null);
-    } catch (err) {
-      setError(err.message || "Не удалось получить результат сверки");
-    } finally {
-      setSchemaSyncReportLoading(false);
     }
   };
 
@@ -224,91 +205,100 @@ export default function DevCopyDagPage({ userProfile }) {
           Запуск DAG `load_from_prod_to_dev` для копирования данных из PROD в DEV. Копировать можно в любую схему и с любым названием целевой таблицы. Пользоваться страницей можно только с 08:00 до 21:00 по Москве.
         </div>
 
-        <div className="dev-meta-generator">
-          <div className="section-subtitle">Параметры запуска</div>
-          <div className="dev-meta-generator-grid">
-            <label className="admin-field">
-              <span>source_table_schema</span>
-              <input
-                value={form.source_table_schema}
-                onChange={(e) => setForm((prev) => ({ ...prev, source_table_schema: e.target.value }))}
-                placeholder="dm"
-              />
-            </label>
-            <label className="admin-field">
-              <span>source_table_name</span>
-              <input
-                value={form.source_table_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, source_table_name: e.target.value }))}
-                placeholder="account_debt"
-              />
-            </label>
-            <label className="admin-field">
-              <span>target_table_schema</span>
-              <input
-                value={form.target_table_schema}
-                onChange={(e) => setForm((prev) => ({ ...prev, target_table_schema: e.target.value }))}
-                placeholder="dm"
-              />
-            </label>
-            <label className="admin-field">
-              <span>target_table_name</span>
-              <input
-                value={form.target_table_name}
-                onChange={(e) => setForm((prev) => ({ ...prev, target_table_name: e.target.value }))}
-                placeholder="account_debt_dev"
-              />
-            </label>
+        <div className="dev-copy-sections">
+          <div className="dev-copy-section">
+            <div className="dev-copy-section-mark">Copy</div>
+            <div className="dev-meta-generator dev-copy-card">
+              <div className="section-subtitle">Параметры запуска</div>
+              <div className="dev-meta-generator-grid">
+                <label className="admin-field">
+                  <span>source_table_schema</span>
+                  <input
+                    value={form.source_table_schema}
+                    onChange={(e) => setForm((prev) => ({ ...prev, source_table_schema: e.target.value }))}
+                    placeholder="dm"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>source_table_name</span>
+                  <input
+                    value={form.source_table_name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, source_table_name: e.target.value }))}
+                    placeholder="account_debt"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>target_table_schema</span>
+                  <input
+                    value={form.target_table_schema}
+                    onChange={(e) => setForm((prev) => ({ ...prev, target_table_schema: e.target.value }))}
+                    placeholder="dm"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>target_table_name</span>
+                  <input
+                    value={form.target_table_name}
+                    onChange={(e) => setForm((prev) => ({ ...prev, target_table_name: e.target.value }))}
+                    placeholder="account_debt_dev"
+                  />
+                </label>
+              </div>
+              <div className="dev-meta-generator-actions">
+                <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured || !canRunNow}>
+                  {running ? "Запускаем DAG..." : "Запустить DEV copy DAG"}
+                </button>
+                <span className="muted">
+                  DAG: {status?.airflow?.dag_id || "не настроен"}
+                </span>
+              </div>
+              <div className="muted">
+                Окно запуска: {copyWindow?.allowed_from || "08:00"} - {copyWindow?.allowed_to || "21:00"} (МСК)
+                {copyWindow ? `, сейчас ${copyWindow.allowed ? "запуск разрешен" : "запуск недоступен"}` : ""}
+              </div>
+            </div>
           </div>
-          <div className="dev-meta-generator-actions">
-            <button className="btn btn-primary" onClick={handleRun} disabled={running || !status?.airflow?.configured || !canRunNow}>
-              {running ? "Запускаем DAG..." : "Запустить DEV copy DAG"}
-            </button>
-            <span className="muted">
-              DAG: {status?.airflow?.dag_id || "не настроен"}
-            </span>
-          </div>
-          <div className="muted">
-            Окно запуска: {copyWindow?.allowed_from || "08:00"} - {copyWindow?.allowed_to || "21:00"} (МСК)
-            {copyWindow ? `, сейчас ${copyWindow.allowed ? "запуск разрешен" : "запуск недоступен"}` : ""}
-          </div>
-        </div>
 
-        <div className="dev-meta-generator">
-          <div className="section-subtitle">Сверка metadata PROD vs DEV</div>
-          <div className="muted">
-            Запуск DAG <span className="mono">{status?.schema_sync?.dag_id || "information_schema_sync"}</span> с параметрами автора, схемы и таблицы.
-          </div>
-          <div className="dev-meta-generator-grid">
-            <label className="admin-field">
-              <span>author</span>
-              <input value={userProfile?.email || ""} disabled />
-            </label>
-            <label className="admin-field">
-              <span>check_table_schema</span>
-              <input
-                value={schemaSyncForm.check_table_schema}
-                onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_schema: e.target.value }))}
-                placeholder="dm"
-              />
-            </label>
-            <label className="admin-field">
-              <span>check_table_name</span>
-              <input
-                value={schemaSyncForm.check_table_name}
-                onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_name: e.target.value }))}
-                placeholder="account_debt"
-              />
-            </label>
-          </div>
-          <div className="dev-meta-generator-actions">
-            <button className="btn btn-primary" onClick={handleRunSchemaSync} disabled={schemaSyncRunning || !status?.schema_sync?.configured}>
-              {schemaSyncRunning ? "Запускаем DAG сверки..." : "Запустить information_schema_sync"}
-            </button>
-            <button className="btn btn-secondary" onClick={handleLoadSchemaSyncReport} disabled={schemaSyncReportLoading || !schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name}>
-              {schemaSyncReportLoading ? "Обновляем результат..." : "Показать результат"}
-            </button>
-            <span className="muted">DAG: {status?.schema_sync?.dag_id || "не настроен"}</span>
+          <div className="dev-copy-section">
+            <div className="dev-copy-section-mark">Check</div>
+            <div className="dev-meta-generator dev-copy-card">
+              <div className="section-subtitle">Сверка metadata PROD vs DEV</div>
+              <div className="muted">
+                Запуск DAG <span className="mono">{status?.schema_sync?.dag_id || "information_schema_sync"}</span> с параметрами автора, схемы и таблицы.
+              </div>
+              <div className="dev-meta-generator-grid">
+                <label className="admin-field">
+                  <span>author</span>
+                  <input value={userProfile?.email || ""} disabled />
+                </label>
+                <label className="admin-field">
+                  <span>check_table_schema</span>
+                  <input
+                    value={schemaSyncForm.check_table_schema}
+                    onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_schema: e.target.value }))}
+                    placeholder="dm"
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>check_table_name</span>
+                  <input
+                    value={schemaSyncForm.check_table_name}
+                    onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_name: e.target.value }))}
+                    placeholder="account_debt"
+                  />
+                </label>
+              </div>
+              <div className="dev-meta-generator-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleRunSchemaSync}
+                  disabled={schemaSyncRunning || !schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name}
+                >
+                  {schemaSyncRunning ? "Запускаем DAG сверки..." : "Запустить information_schema_sync"}
+                </button>
+                <span className="muted">DAG: {status?.schema_sync?.dag_id || "не настроен"}</span>
+              </div>
+            </div>
           </div>
         </div>
 

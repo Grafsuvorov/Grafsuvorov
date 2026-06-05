@@ -168,6 +168,7 @@ app.add_middleware(
 # Подключение
 engine = create_engine(DATABASE_URL)
 dbt_logs_engine = create_engine(DBT_LOGS_DATABASE_URL) if DBT_LOGS_DATABASE_URL else None
+dev_engine = create_engine(DEV_DATABASE_URL) if DEV_DATABASE_URL else engine
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
@@ -442,7 +443,7 @@ def _dev_copy_author(user) -> str:
 
 
 def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name: str):
-    with engine.begin() as conn:
+    with dev_engine.begin() as conn:
         row = conn.execute(
             text(
                 f"""
@@ -475,7 +476,7 @@ def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name:
 
 
 def _get_schema_sync_report_rows(*, run_id: int):
-    with engine.begin() as conn:
+    with dev_engine.begin() as conn:
         rows = conn.execute(
             text(
                 f"""

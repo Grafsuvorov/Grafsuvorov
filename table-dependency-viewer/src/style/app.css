@@ -8255,6 +8255,53 @@ body.custom-hover-label-active * {
   margin-top: 10px;
 }
 
+.meta-workspace-branch-field {
+  position: relative;
+}
+
+.meta-workspace-branch-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  background: rgba(7, 14, 28, 0.98);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(14px);
+}
+
+.meta-workspace-branch-option {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.56);
+  color: #dbeafe;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.meta-workspace-branch-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(96, 165, 250, 0.3);
+  background: rgba(23, 37, 64, 0.9);
+}
+
+.meta-workspace-branch-option.active {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(37, 99, 235, 0.18);
+  color: #eff6ff;
+}
+
 .meta-workspace-branch-picker {
   margin-top: 10px;
   display: flex;

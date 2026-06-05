@@ -452,10 +452,9 @@ export default function MetaWorkspacePage({ userProfile }) {
             </div>
           </div>
           <div className="dev-meta-generator-grid meta-workspace-context-grid">
-            <label className="admin-field">
+            <label className="admin-field meta-workspace-branch-field">
               <span>Ветка</span>
               <input
-                list="meta-workspace-branches"
                 value={branchName}
                 onChange={(e) => {
                   setBranchNameEdited(true);
@@ -474,9 +473,22 @@ export default function MetaWorkspacePage({ userProfile }) {
                 }}
                 placeholder="feature/DWH-12345"
               />
-              <datalist id="meta-workspace-branches">
-                {branchOptions.map((item) => <option key={item} value={item} />)}
-              </datalist>
+              {String(branchName || "").trim() && filteredBranchOptions.length > 0 && (
+                <div className="meta-workspace-branch-dropdown">
+                  {filteredBranchOptions.map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`meta-workspace-branch-option ${item === branchCatalog.branch_name ? "active" : ""}`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelectBranch(item)}
+                      disabled={catalogLoading}
+                    >
+                      {item}
+                    </button>
+                  ))}
+                </div>
+              )}
             </label>
             <label className="admin-field">
               <span>Base ветка</span>

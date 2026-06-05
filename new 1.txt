@@ -1,2 +1,5 @@
 Операция не выполнена
-Git команда завершилась с ошибкой: git diff --name-status origin/main...DWH-12744 fatal: ambiguous argument 'origin/main...DWH-12744': unknown revision or path not in the working tree. Use '--' to separate paths from revisions, like this: 'git <command> [<revision>...] -- [<file>...]'
+Объект `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_calc/account_debt` изменился в ветке после открытия. Обновите его и повторите сохранение.
+
+Операция не выполнена
+HTTP 500

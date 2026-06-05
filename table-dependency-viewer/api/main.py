@@ -61,6 +61,9 @@ from .config import (
     TABLE_DBT_MODEL_CATALOG,
     TABLE_DBT_MODEL_LOG,
     TABLE_DBT_RUN_LOG,
+    DEV_COPY_SCHEMA_SYNC_DAG_ID,
+    TABLE_SAY_COMPARE_GP_METADATA_LOG,
+    TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV,
     ADMIN_CICD_SCRIPT,
     YTRACK_ISSUE_URL,
     DATABASE_URL,
@@ -170,7 +173,6 @@ from fastapi import APIRouter, HTTPException
 router = APIRouter()
 print("BOOT FILE:", __file__)
 DEV_COPY_DAG_ID = "load_from_prod_to_dev"
-DEV_COPY_SCHEMA_SYNC_DAG_ID = "information_schema_sync"
 DEV_COPY_TZ = ZoneInfo("Europe/Moscow")
 DEV_COPY_ALLOWED_HOUR_START = 8
 DEV_COPY_ALLOWED_HOUR_END = 21
@@ -439,7 +441,7 @@ def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name:
     with engine.begin() as conn:
         row = conn.execute(
             text(
-                """
+                f"""
                 select
                     run_id,
                     run_timestamp,
@@ -450,7 +452,7 @@ def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name:
                     is_prod_snapshot_actual,
                     state_code,
                     state_name
-                from tech_monitoring.say_compare_gp_metadata_log
+                from {TABLE_SAY_COMPARE_GP_METADATA_LOG}
                 where coalesce(deleted_flag, false) = false
                   and coalesce(run_user, '') = :run_user
                   and coalesce(layer_filter, '') = :table_schema
@@ -472,7 +474,7 @@ def _get_schema_sync_report_rows(*, run_id: int):
     with engine.begin() as conn:
         rows = conn.execute(
             text(
-                """
+                f"""
                 select
                     table_schema,
                     table_name,
@@ -482,7 +484,7 @@ def _get_schema_sync_report_rows(*, run_id: int):
                     diff_name,
                     data_type_prod,
                     data_type_dev
-                from tech_monitoring.say_compare_gp_metadata_prod_vs_dev
+                from {TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV}
                 where coalesce(deleted_flag, false) = false
                   and run_id = :run_id
                 order by
@@ -495,7 +497,6 @@ def _get_schema_sync_report_rows(*, run_id: int):
             {"run_id": run_id},
         ).mappings().all()
     return [dict(row) for row in rows]
-    return window
 
 
 

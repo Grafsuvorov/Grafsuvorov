@@ -30,6 +30,15 @@ DBT_MANIFEST_DIR        = os.getenv("DBT_MANIFEST_DIR", "config_files/dbt")
 TABLE_DBT_MODEL_CATALOG = os.getenv("TABLE_DBT_MODEL_CATALOG", "dc_dbt.model")
 TABLE_DBT_MODEL_LOG     = os.getenv("TABLE_DBT_MODEL_LOG", "tech_monitoring.log_dbt_model")
 TABLE_DBT_RUN_LOG       = os.getenv("TABLE_DBT_RUN_LOG", "tech_monitoring.log_dbt_run")
+DEV_COPY_SCHEMA_SYNC_DAG_ID = os.getenv("DEV_COPY_SCHEMA_SYNC_DAG_ID", "information_schema_sync")
+TABLE_SAY_COMPARE_GP_METADATA_LOG = os.getenv(
+    "TABLE_SAY_COMPARE_GP_METADATA_LOG",
+    "tech_monitoring.say_compare_gp_metadata_log",
+)
+TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV = os.getenv(
+    "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV",
+    "tech_monitoring.say_compare_gp_metadata_prod_vs_dev",
+)
 ADMIN_CICD_SCRIPT       = os.getenv("ADMIN_CICD_SCRIPT", "scripts/ci_cd.sh")
 YTRACK_ISSUE_URL        = os.getenv("YTRACK_ISSUE_URL", "https://yt.rusal.ru/issue/{id}")
 DEV_DATABASE_URL        = os.getenv("DEV_DATABASE_URL", "")

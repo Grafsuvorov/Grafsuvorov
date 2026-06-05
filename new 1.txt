@@ -1,64 +1,59 @@
-information_schema_sync
 
-author *:
-check_table_schema *:
-check_table_name *:
-
-CREATE TABLE tech_monitoring.say_compare_gp_metadata_log (
-	run_id int8 NULL,
-	run_timestamp timestamp DEFAULT now() NULL,
-	run_user text NULL,
-	layer_filter text NULL,
-	table_filter text NULL,
-	prod_snapshot_last_dttm timestamp NULL,
-	is_prod_snapshot_actual bool NULL,
-	state_code int4 NULL,
-	state_name text NULL,
-	dttm_inserted timestamp DEFAULT now() NOT NULL,
-	dttm_updated timestamp DEFAULT now() NOT NULL,
-	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
-	deleted_flag bool DEFAULT false NOT NULL
-)
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-DISTRIBUTED BY (run_id);
-
-18	2026-06-05 14:12:47.000	airflow	dm	sb_wuc_test	2026-06-05 14:12:47.000	true	1	Данные актуальны на 2026-06-05T11:12:47+00:00	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
-
-CREATE TABLE tech_monitoring.say_compare_gp_metadata_prod_vs_dev (
-	table_catalog text NULL,
-	table_schema text NULL,
-	table_name text NULL,
-	column_name text NULL,
-	column_position int4 NULL,
-	diff_code int4 NULL,
-	diff_name text NULL,
-	is_table_exist_prod bool NULL,
-	is_table_exist_dev bool NULL,
-	is_column_exist_prod bool NULL,
-	is_column_exist_dev bool NULL,
-	is_data_type_check bool NULL,
-	is_constraint_check bool NULL,
-	data_type_prod text NULL,
-	data_type_dev text NULL,
-	run_id int8 NULL,
-	dttm_inserted timestamp DEFAULT now() NOT NULL,
-	dttm_updated timestamp DEFAULT now() NOT NULL,
-	job_name varchar(60) DEFAULT 'airflow'::character varying NOT NULL,
-	deleted_flag bool DEFAULT false NOT NULL
-)
-WITH (
-	appendonly=true,
-	orientation=column,
-	compresstype=zstd,
-	compresslevel=3
-)
-DISTRIBUTED BY (run_id);
-
-dwh	dm	sb_wuc_test	material_rus_type	10	70	Добавлено поле в DEV	true	true	false	true	false	false		character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
-dwh	dm	sb_wuc_test	realization_status	2	40	Изменён тип данных в DEV	true	true	true	true	false	false	integer	character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
-dwh	dm	sb_wuc_test	plant_manufact	4	50	Изменены атрибуты типа/default/nullable в DEV	true	true	true	true	true	false	character varying	character varying	18	2026-06-05 14:13:20.147	2026-06-05 14:13:20.147	airflow	false
+WARN[0000] The "DEV_COPY_SCHEMA_SYNC_DAG_ID" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_LOG" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV" variable is not set. Defaulting to a blank string.
+[+] Building 97.0s (33/33) FINISHED
+ => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                      0.0s
+ => => transferring dockerfile: 659B                                                                                       0.0s
+ => [table-dependency-viewer_api internal] load build definition from Dockerfile                                           0.0s
+ => => transferring dockerfile: 1.74kB                                                                                     0.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                           1.7s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                         1.7s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                            1.7s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                1.7s
+ => [table-dependency-viewer_frontend internal] load .dockerignore                                                         0.0s
+ => => transferring context: 162B                                                                                          0.0s
+ => [table-dependency-viewer_api internal] load .dockerignore                                                              0.0s
+ => => transferring context: 162B                                                                                          0.0s
+ => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0  0.0s
+ => CACHED [table-dependency-viewer_frontend stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:8b1e78743a03dbb2c951  0.0s
+ => [table-dependency-viewer_frontend internal] load build context                                                         1.0s
+ => => transferring context: 6.74MB                                                                                        0.9s
+ => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                                       0.0s
+ => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:a3ab0b966bc4e91546a033e220  0.0s
+ => => resolve docker.io/library/python:3.11-slim@sha256:a3ab0b966bc4e91546a033e22093cb840908979487a9fc0e6e38295747e49ac0  0.0s
+ => [table-dependency-viewer_api internal] load build context                                                              0.0s
+ => => transferring context: 406.38kB                                                                                      0.0s
+ => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f96  0.0s
+ => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                                        0.0s
+ => [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/list  57.8s
+ => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm confi  2.5s
+ => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                     0.8s
+ => [table-dependency-viewer_frontend stage-1 2/3] COPY nginx.conf /etc/nginx/conf.d/default.conf                          0.7s
+ => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm  7.2s
+ => [table-dependency-viewer_frontend build 5/6] COPY . .                                                                  3.6s
+ => [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                         5.6s
+ => [table-dependency-viewer_frontend stage-1 3/3] COPY --from=build /app/dist /usr/share/nginx/html                       0.7s
+ => [table-dependency-viewer_frontend] exporting to image                                                                  0.1s
+ => => exporting layers                                                                                                    0.1s
+ => => writing image sha256:9fd8df2724b0f0ebb547298a2950af620d724f64f33d310c9a4f5b254f16e468                               0.0s
+ => => naming to docker.io/library/table-dependency-viewer_frontend                                                        0.0s
+ => [table-dependency-viewer_api stage-1  4/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node                   0.8s
+ => [table-dependency-viewer_api stage-1  5/10] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm                     0.7s
+ => [table-dependency-viewer_api stage-1  6/10] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx                     0.7s
+ => [table-dependency-viewer_api stage-1  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules   1.0s
+ => [table-dependency-viewer_api stage-1  8/10] COPY api/ /app/api/                                                        0.4s
+ => [table-dependency-viewer_api stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pip install --in  25.6s
+ => [table-dependency-viewer_api stage-1 10/10] RUN apt-get update     && apt-get install -y --no-install-recommends open  7.5s
+ => [table-dependency-viewer_api] exporting to image                                                                       0.7s
+ => => exporting layers                                                                                                    0.7s
+ => => writing image sha256:af2a23b1a275dfab491f6e6cd975694ec3386f885a1c7c002194c5a5bd83e948                               0.0s
+ => => naming to docker.io/library/table-dependency-viewer_api                                                             0.0s
+[root@rgm-s-dwhapp01 table-dependency-viewer]#
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose up -d --force-recreate frontend api
+WARN[0000] The "DEV_COPY_SCHEMA_SYNC_DAG_ID" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_LOG" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV" variable is not set. Defaulting to a blank string.
+[+] Running 2/2
+ ⠿ Container table-dependency-viewer-frontend-1  Started                                                                   2.4s
+ ⠿ Container table-dependency-viewer-api-1       Started 

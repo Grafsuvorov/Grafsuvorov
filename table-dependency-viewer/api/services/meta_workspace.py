@@ -628,7 +628,14 @@ def build_meta_workspace_branch_tree(
     changed_paths = {
         item
         for _status, item in _parse_name_status(
-            _run_git(git_repo_root, ["diff", "--name-status", f"{_resolve_origin_branch_ref(git_repo_root, base_branch)}...{branch_ref}"])
+            _run_git(
+                git_repo_root,
+                [
+                    "diff",
+                    "--name-status",
+                    f"{_resolve_origin_branch_ref(git_repo_root, base_branch)}...{_resolve_origin_branch_ref(git_repo_root, branch_name)}",
+                ],
+            )
         )
     }
 

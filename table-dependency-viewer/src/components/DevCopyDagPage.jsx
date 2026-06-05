@@ -420,33 +420,6 @@ export default function DevCopyDagPage({ userProfile }) {
         {schemaSyncReport && (
           <div className="dev-meta-dag-status">
             <div className="section-subtitle">Результат сверки schema metadata</div>
-            <div className="dev-copy-report-grid">
-              <div className="dev-meta-dag-card">
-                <span className="label">Схема и таблица</span>
-                <strong>{schemaSyncReport.summary?.schema_name || "—"}.{schemaSyncReport.summary?.table_name || "—"}</strong>
-              </div>
-              <div className="dev-meta-dag-card">
-                <span className="label">Run ID</span>
-                <strong>{schemaSyncReport.run?.run_id || "—"}</strong>
-              </div>
-              <div className="dev-meta-dag-card">
-                <span className="label">Статус</span>
-                <strong>{schemaSyncReport.run?.state_name || "—"}</strong>
-              </div>
-              <div className="dev-meta-dag-card">
-                <span className="label">Снимок PROD</span>
-                <strong>{schemaSyncReport.run?.prod_snapshot_last_dttm ? formatRuDateTime(schemaSyncReport.run.prod_snapshot_last_dttm) : "—"}</strong>
-              </div>
-              <div className="dev-meta-dag-card">
-                <span className="label">Актуальность snapshot</span>
-                <strong>{schemaSyncReport.run?.is_prod_snapshot_actual ? "Актуален" : "Неактуален"}</strong>
-              </div>
-              <div className="dev-meta-dag-card">
-                <span className="label">Количество отличий</span>
-                <strong>{schemaSyncReport.summary?.diff_count ?? 0}</strong>
-              </div>
-            </div>
-
             {schemaSyncReport.items?.length ? (
               <div className="dev-copy-report-table-wrap">
                 <table className="dev-copy-report-table">

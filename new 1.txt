@@ -1,1 +1,28 @@
-docker compose exec api sh -lc 'env | grep -E "DEV_COPY_SCHEMA_SYNC_DAG_ID|TABLE_SAY_COMPARE_GP_METADATA"'
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'env | grep -E "DEV_COPY_SCHEMA_SYNC_DAG_ID|TABLE_SAY_COMPARE_GP_METADATA"'
+WARN[0000] The "DEV_COPY_SCHEMA_SYNC_DAG_ID" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_LOG" variable is not set. Defaulting to a blank string.
+WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV" variable is not set. Defaulting to a blank string.
+TABLE_SAY_COMPARE_GP_METADATA_LOG=
+TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=
+DEV_COPY_SCHEMA_SYNC_DAG_ID=
+
+
+env
+DEV_COPY_SCHEMA_SYNC_DAG_ID=information_schema_sync
+TABLE_SAY_COMPARE_GP_METADATA_LOG=tech_monitoring.say_compare_gp_metadata_log
+TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=tech_monitoring.say_compare_gp_metadata_prod_vs_dev
+
+config.py DEV_COPY_SCHEMA_SYNC_DAG_ID = os.getenv("DEV_COPY_SCHEMA_SYNC_DAG_ID", "information_schema_sync")
+TABLE_SAY_COMPARE_GP_METADATA_LOG = os.getenv(
+    "TABLE_SAY_COMPARE_GP_METADATA_LOG",
+    "tech_monitoring.say_compare_gp_metadata_log",
+)
+TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV = os.getenv(
+    "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV",
+    "tech_monitoring.say_compare_gp_metadata_prod_vs_dev",
+)
+
+compos
+        - DEV_COPY_SCHEMA_SYNC_DAG_ID=${DEV_COPY_SCHEMA_SYNC_DAG_ID}
+        - TABLE_SAY_COMPARE_GP_METADATA_LOG=${TABLE_SAY_COMPARE_GP_METADATA_LOG}
+        - TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=${TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV}

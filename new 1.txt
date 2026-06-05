@@ -1,1 +1,2 @@
-Не удалось построить каталог ветки: name 'worktree_dir' is not defined
+Операция не выполнена
+Git команда завершилась с ошибкой: git diff --name-status main...DWH-10489 fatal: ambiguous argument 'main...DWH-10489': unknown revision or path not in the working tree. Use '--' to separate paths from revisions, like this: 'git <command> [<revision>...] -- [<file>...]'

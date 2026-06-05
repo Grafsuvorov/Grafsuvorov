@@ -4,6 +4,7 @@ import { formatRuDateTime } from "../utils/datetime.js";
 import DagLoadingMiniGame from "./DagLoadingMiniGame.jsx";
 
 export default function DevCopyDagPage({ userProfile }) {
+  const schemaSyncAuthor = userProfile?.username || userProfile?.email || "";
   const [status, setStatus] = useState(null);
   const [form, setForm] = useState({
     source_table_schema: "dm",
@@ -269,7 +270,7 @@ export default function DevCopyDagPage({ userProfile }) {
               <div className="dev-meta-generator-grid">
                 <label className="admin-field">
                   <span>author</span>
-                  <input value={userProfile?.email || ""} disabled />
+                  <input value={schemaSyncAuthor} disabled />
                 </label>
                 <label className="admin-field">
                   <span>check_table_schema</span>

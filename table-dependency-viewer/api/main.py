@@ -437,6 +437,10 @@ def _assert_dev_copy_window():
         )
 
 
+def _dev_copy_author(user) -> str:
+    return str(getattr(user, "username", None) or getattr(user, "email", None) or "").strip()
+
+
 def _get_schema_sync_latest_run(*, run_user: str, table_schema: str, table_name: str):
     with engine.begin() as conn:
         row = conn.execute(
@@ -1434,7 +1438,7 @@ def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, reques
     user = _require_authenticated(request)
     try:
         values = {
-            "author": user.email,
+            "author": _dev_copy_author(user),
             "check_table_schema": str(payload.check_table_schema or "").strip(),
             "check_table_name": str(payload.check_table_name or "").strip(),
         }
@@ -1479,14 +1483,14 @@ def get_admin_dev_copy_schema_sync_report(payload: DevCopySchemaSyncReportPayloa
         raise HTTPException(status_code=400, detail="Нужно указать check_table_schema и check_table_name")
     try:
         run_info = _get_schema_sync_latest_run(
-            run_user=user.email,
+            run_user=_dev_copy_author(user),
             table_schema=table_schema,
             table_name=table_name,
         )
         if not run_info:
             raise HTTPException(
                 status_code=404,
-                detail=f"Не найден результат сверки для {table_schema}.{table_name} и пользователя {user.email}",
+                detail=f"Не найден результат сверки для {table_schema}.{table_name} и пользователя {_dev_copy_author(user)}",
             )
         report_rows = _get_schema_sync_report_rows(run_id=run_info["run_id"])
     except HTTPException:

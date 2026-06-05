@@ -1,28 +1,35 @@
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose exec api sh -lc 'env | grep -E "DEV_COPY_SCHEMA_SYNC_DAG_ID|TABLE_SAY_COMPARE_GP_METADATA"'
-WARN[0000] The "DEV_COPY_SCHEMA_SYNC_DAG_ID" variable is not set. Defaulting to a blank string.
-WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_LOG" variable is not set. Defaulting to a blank string.
-WARN[0000] The "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV" variable is not set. Defaulting to a blank string.
-TABLE_SAY_COMPARE_GP_METADATA_LOG=
-TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=
-DEV_COPY_SCHEMA_SYNC_DAG_ID=
-
-
-env
-DEV_COPY_SCHEMA_SYNC_DAG_ID=information_schema_sync
-TABLE_SAY_COMPARE_GP_METADATA_LOG=tech_monitoring.say_compare_gp_metadata_log
-TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=tech_monitoring.say_compare_gp_metadata_prod_vs_dev
-
-config.py DEV_COPY_SCHEMA_SYNC_DAG_ID = os.getenv("DEV_COPY_SCHEMA_SYNC_DAG_ID", "information_schema_sync")
-TABLE_SAY_COMPARE_GP_METADATA_LOG = os.getenv(
-    "TABLE_SAY_COMPARE_GP_METADATA_LOG",
-    "tech_monitoring.say_compare_gp_metadata_log",
-)
-TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV = os.getenv(
-    "TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV",
-    "tech_monitoring.say_compare_gp_metadata_prod_vs_dev",
-)
-
-compos
-        - DEV_COPY_SCHEMA_SYNC_DAG_ID=${DEV_COPY_SCHEMA_SYNC_DAG_ID}
-        - TABLE_SAY_COMPARE_GP_METADATA_LOG=${TABLE_SAY_COMPARE_GP_METADATA_LOG}
-        - TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV=${TABLE_SAY_COMPARE_GP_METADATA_PROD_VS_DEV}
+rgm-s-dwhair01
+*** Found local files:
+***   * /u01/airflow/logs/dag_id=information_schema_sync/run_id=manual__2026-06-05T13:28:46.056603+00:00/task_id=s3_upload/attempt=2.log
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=non-requeueable deps ti=<TaskInstance: information_schema_sync.s3_upload manual__2026-06-05T13:28:46.056603+00:00 [queued]>
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1159} INFO - Dependencies all met for dep_context=requeueable deps ti=<TaskInstance: information_schema_sync.s3_upload manual__2026-06-05T13:28:46.056603+00:00 [queued]>
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1361} INFO - Starting attempt 2 of 2
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1382} INFO - Executing <Task(DeleteBackupSSHOperator): s3_upload> on 2026-06-05 13:28:46.056603+00:00
+[2026-06-05, 16:30:10 MSK] {standard_task_runner.py:57} INFO - Started process 121863 to run task
+[2026-06-05, 16:30:10 MSK] {standard_task_runner.py:84} INFO - Running: ['***', 'tasks', 'run', 'information_schema_sync', 's3_upload', 'manual__2026-06-05T13:28:46.056603+00:00', '--job-id', '3793008', '--raw', '--subdir', 'DAGS_FOLDER/dynamic_generate.py', '--cfg-path', '/tmp/tmp8sqy1cw_']
+[2026-06-05, 16:30:10 MSK] {standard_task_runner.py:85} INFO - Job 3793008: Subtask s3_upload
+[2026-06-05, 16:30:10 MSK] {task_command.py:416} INFO - Running <TaskInstance: information_schema_sync.s3_upload manual__2026-06-05T13:28:46.056603+00:00 [running]> on host rgm-s-dwhair01
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1662} INFO - Exporting env vars: AIRFLOW_CTX_DAG_EMAIL='DE_DWH@ROOT.AD' AIRFLOW_CTX_DAG_OWNER='BlinovDmitriy' AIRFLOW_CTX_DAG_ID='information_schema_sync' AIRFLOW_CTX_TASK_ID='s3_upload' AIRFLOW_CTX_EXECUTION_DATE='2026-06-05T13:28:46.056603+00:00' AIRFLOW_CTX_TRY_NUMBER='2' AIRFLOW_CTX_DAG_RUN_ID='manual__2026-06-05T13:28:46.056603+00:00'
+[2026-06-05, 16:30:10 MSK] {DeleteBackupSSHOperator.py:47} INFO - Parameter minio_dir is not added
+[2026-06-05, 16:30:10 MSK] {connection.py:471} ERROR - Unable to retrieve connection from secrets backend (EnvironmentVariablesBackend). Checking subsequent secrets backend.
+Traceback (most recent call last):
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/connection.py", line 466, in get_connection_from_secrets
+    conn = secrets_backend.get_connection(conn_id=conn_id)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/secrets/base_secrets.py", line 96, in get_connection
+    value = self.get_conn_value(conn_id=conn_id)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/secrets/environment_variables.py", line 51, in get_conn_value
+    return os.environ.get(CONN_ENV_PREFIX + conn_id.upper())
+AttributeError: 'NoneType' object has no attribute 'upper'
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1937} ERROR - Task failed with exception
+Traceback (most recent call last):
+  File "/home/airflow/dags/plugins/custom_operators/DeleteBackupSSHOperator.py", line 53, in execute
+    hook = BaseHook.get_connection(self.minio_conn)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/hooks/base.py", line 72, in get_connection
+    conn = Connection.get_connection_from_secrets(conn_id)
+  File "/u01/arf-venv/lib/python3.8/site-packages/airflow/models/connection.py", line 477, in get_connection_from_secrets
+    raise AirflowNotFoundException(f"The conn_id `{conn_id}` isn't defined")
+airflow.exceptions.AirflowNotFoundException: The conn_id `None` isn't defined
+[2026-06-05, 16:30:10 MSK] {taskinstance.py:1400} INFO - Marking task as FAILED. dag_id=information_schema_sync, task_id=s3_upload, execution_date=20260605T132846, start_date=20260605T133010, end_date=20260605T133010
+[2026-06-05, 16:30:10 MSK] {standard_task_runner.py:104} ERROR - Failed to execute job 3793008 for task s3_upload (The conn_id `None` isn't defined; 121863)
+[2026-06-05, 16:30:11 MSK] {local_task_job_runner.py:228} INFO - Task exited with return code 1
+[2026-06-05, 16:30:11 MSK] {taskinstance.py:2778} INFO - 0 downstream tasks scheduled from follow-on schedule check

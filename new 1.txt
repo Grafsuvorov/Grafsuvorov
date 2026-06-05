@@ -1,2 +1,2 @@
 Операция не выполнена
-Объект `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dds/accounting_balance` изменился в ветке после открытия. Обновите его и повторите сохранение.
+Не удалось сохранить объект в ветку: name 'rel_paths' is not defined

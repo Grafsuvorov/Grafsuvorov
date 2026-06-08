@@ -1,61 +1,405 @@
-table_name: sb_wuc
-table_schema: dm
-table_id: 1334
-source_id: 15
-source_type: GREENPLUM
-flag_has_views: true
-table_load_mode: TRUNCATE_INIT
-job_id: 1
-job_name: DM_SB_WUC
-table_loading_index: 1
-entity_id: 35
-entity_name: BI_SB_WUC
-object_type: TABLE
-table_load_interval:
-    days: 1
-    hours: 0
-    minutes: 0
-    seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 00:30:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sb_wuc/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sb_wuc/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/dm/sb_wuc/sql_query_truncate.sql
-depends_on:
-    dds:
-        - sales_bundle_and_delivery_relationship
-    dict_dds:
-        - business_location
-        - business_location_texts
-        - business_location_working_capital_texts
-        - foreign_warehouse_priority_definition
-        - location_sales
-        - map_hfm_manufacturer_to_sap_smelter
-        - normative_at_location_and_sales_market_td
-        - normative_at_location_td
-        - normative_at_plant_td
-        - normative_at_sales_market_td
-        - normative_at_warehouse_td
-    dm_calc:
-        - finish_goods_warehouse_stock_plant_by_date
-        - sales_bundle_transport_hub_turnover_sdt0004
-        - sales_delivery_actual_business_location_by_date
-        - sales_statistics_days_in_location_by_year
-        - sd_sales_stock_by_date
-        - sd_sales_svh_stock_by_date
-        - storage_sales_bundles_amount
-        - transport_hub_country
-    ods:
-        - hypdb_v_hfm_pcs013_1_014_1_al
-        - ztsd5018m_eu_b_ral
-        - ztsd5018m_uz_b_ral
-verification:
-    - duplicate_check
-    -   business:
-            - dq_sd0001
-            - dq_sd0002
-            - dq_sd0003
-key_attributes:
-    - delivery_number_sales
-    - batch
-    - dt_report
+Чек-лист по стандартам оформления кода Greenplum для разработчиков:
+
+Удаление объектов
+
+Использована конструкция drop table if exists вместо drop table
+Если от таблицы зависимо представление, прописан drop table if exists ... cascade
+Создание объектов
+
+Использована конструкция create table if not exists вместо create table и использована конструкция create or replace view вместо create view
+В таблице прописаны технические поля (для stg/dict_stg в верхнем регистре)
+К таблице и каждому полю указан комментарий
+Явно задана storage-конфигурация таблицы с параметрами
+Явно прописано распределение по ключу
+Вставка данных
+
+В блоке insert перечислены все бизнес-поля в том же порядке, что и в DDL
+select-запросы
+
+Во всех местах запроса явно перечислены поля вместо звездочки (*)
+При использовании выражений и функций указаны алиасы для соответствующих полей
+При соединении двух и более таблиц использованы алиасы для всех таблиц и всех полей
+Если название поля-источника отличается названия целевого поля, для него использован алиас
+Псевдонимы (алиасы)
+
+Для таблиц в подзапросах использованы алиасы, отражающие суть таблицы или аббревиатуру её названия
+Для полей внешнего запроса использованы алиасы, совпадающие с названиями полей целевой таблицы
+При создании всех псевдонимов использовано ключевое слово as
+Сортировка и группировка
+
+Явно указаны названия полей при group by и order by вместо их порядковых номеров
+Логические условия
+
+Использованы скобки для группировки всех логических условий
+Использование конструкции insert-select-from-values
+
+Использовать конструкцию insert-select-from-values вместо insert-values при вставке множественных значений
+Функции
+
+Входные параметры функций имеют префикс p_
+Локальные переменные имеют префикс v_
+
+
+
+Удаление объектов 
+Обязательная проверка существования объекта в БД перед удалением 
+Неправильно: 
+drop table schema.table1;
+
+Правильно: 
+drop table if exists schema.table1;
+
+В случае, если от таблицы зависит представление (view), необходимо использовать каскадное удаление 
+Неправильно: 
+drop table if exists schema.table1;
+
+Правильно: 
+drop table if exists schema.table1 cascade;
+
+Создание объектов 
+Обязательная проверка отсутствия объекта в БД перед созданием 
+Неправильно: 
+create table schema.table1...
+
+Правильно: 
+create table if not exists schema.table1...
+
+
+Для представлений: 
+Неправильно: 
+create view schema.view1...
+
+Правильно: 
+create or replace view schema.view1...
+
+Обязательное указание технических полей (для stg/dict_stg поля в верхнем регистре) 
+Неправильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null
+  )
+  distributed by (column1);
+
+Правильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null,
+  dttm_inserted timestamp not null default now(),
+  dttm_updated timestamp not null default now(),
+  job_name varchar(60) not null default 'airflow'::character varying,
+  deleted_flag bool not null default false
+  )
+  distributed by (column1);
+
+Явное задание storage - конфигурации таблицы 
+Неправильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null,
+  dttm_inserted timestamp not null default now(),
+  dttm_updated timestamp not null default now(),
+  job_name varchar(60) not null default 'airflow'::character varying,
+  deleted_flag bool not null default false
+  )
+  distributed by (column1);
+
+Правильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null,
+  dttm_inserted timestamp not null default now(),
+  dttm_updated timestamp not null default now(),
+  job_name varchar(60) not null default 'airflow'::character varying,
+  deleted_flag bool not null default false
+  )
+with (
+  appendonly=true,
+  orientation=column,
+  compresstype=zstd,
+  compresslevel=1
+)
+distributed by (column1);
+
+Для каждой таблицы обязательно указание комментариев. Сначала указывается комментарий к самой таблице, потом к ее полям 
+Неправильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null,
+  dttm_inserted timestamp not null default now(),
+  dttm_updated timestamp not null default now(),
+  job_name varchar(60) not null default 'airflow'::character varying,
+  deleted_flag bool not null default false
+  )
+with (
+  appendonly=true,
+  orientation=column,
+  compresstype=zstd,
+  compresslevel=1
+)
+distributed by (column1);
+
+Правильно: 
+create table if not exists schema.table1 (
+  column1 int not null,
+  column2 text null,
+  column3 text null,
+  dttm_inserted timestamp not null default now(),
+  dttm_updated timestamp not null default now(),
+  job_name varchar(60) not null default 'airflow'::character varying,
+  deleted_flag bool not null default false
+  )
+with (
+  appendonly=true,
+  orientation=column,
+  compresstype=zstd,
+  compresslevel=1
+)
+distributed by (column1);
+
+comment on table schema.table1 is 'table_description';
+comment on column schema.table1.column1 is 'column1_description';
+comment on column schema.table1.column2 is 'column2_description';
+comment on column schema.table1.column3 is 'column3_description';
+
+Секция вставки данных "insert" 
+Обязательное перечисление всех бизнес-полей 
+Неправильно: 
+insert into schema.table1
+select
+  column1,
+  column2,
+  column3
+from
+  schema.table0;
+
+Правильно: 
+insert into schema.table1 (
+  column1,
+  column2,
+  column3
+)
+select
+  column1,
+  column2,
+  column3
+from
+  schema.table0;
+
+Также порядок бизнес-полей в скрипте вставки данных должен соответствовать порядку полей в DDL целевой таблицы.
+
+Секция select-запроса 
+В любом месте запроса использовать явное перечисление полей с указанием их имени, звездочка недопустима 
+Неправильно: 
+select *
+from schema.table1;
+
+Правильно: 
+select
+  column1,
+  column2
+from
+  schema.table1;
+
+При сортировке и группировании явно указываются названия полей, их порядковые номера недопустимы 
+Неправильно: 
+select 
+  column1,
+  count(*)
+from 
+  schema.table1
+group by 1
+order by 1;
+
+Правильно: 
+select 
+  t1.column1,
+  count(*) as row_cnt
+from 
+  schema.table1 as t1
+group by t1.column1
+order by t1.column1;
+
+Псевдонимы (алиасы) 
+• Псевдонимы таблиц в подзапросе должны отражать её суть, либо аббревиатура из составных частей названия таблицы
+Пример: ods.order_details as od
+
+• Псевдонимы полей для внешнего запроса должны совпадать с названием полей целевой таблицы
+
+Неправильно: 
+insert into dds.details (col1, col2, col3)
+with cte as (
+select
+  "COL1",
+  "COL2",
+  "COL3"
+from
+  ods.order_details t1
+  )
+select 
+  "COL1",
+  "COL2",
+  "COL3"
+from cte;
+
+Правильно: 
+insert into dds.details (col1, col2, col3)
+with cte as (
+select
+  "COL1" as col1,
+  "COL2" as col2,
+  "COL3" as col3
+from
+  ods.order_details as od
+  )
+select 
+  col1,
+  col2,
+  col3
+from cte;
+
+При создании псевдонимов явно указывается «as» 
+Неправильно: 
+select
+  t1.column1 col1 
+from
+  schema.table1 t1;
+
+Правильно: 
+select 
+  t1.column1 as col1
+from 
+  schema.table1 as t1;
+
+Алиас для поля обязательно указывается в следующих случаях: 
+• При использовании выражений;
+• В запросе присутствует соединение двух и более таблиц;
+• Название поля в целевой таблице отличается от поля таблицы-источника;
+
+Неправильно: 
+insert into dict_dds.cost_element (
+  cost_element_code,
+  functional_area_code,
+  account_chart_code,
+  cost_element_short_name_rus,
+  cost_element_short_name_eng,
+  cost_element_full_name_rus,
+  cost_element_full_name_eng,
+  dt_created,
+  created_by
+)
+select 
+  tech_etl.util_text_to_null_validation(cska."KSTAR"), -- Использование выражения
+  cska."FUNC_AREA", -- Название поля в целевой таблице отличается от поля таблицы - источника
+  tech_etl.util_text_to_null_validation(cska."KTOPL"),
+  csku."KTEXT", -- Два и более полей с одинаковым наименованием из разных таблиц
+  csku2."KTEXT",
+  tech_etl.util_text_to_null_validation(csku."LTEXT"),
+  tech_etl.util_text_to_null_validation(csku2."LTEXT"),
+  tech_etl.util_text_to_date_validation(cska."ERSDA"),
+  tech_etl.util_text_to_null_validation(cska."USNAM")
+from
+  dict_stg."CSKA" cska
+  left join dict_stg."CSKU" csku on 
+    cska."KSTAR" = csku."KSTAR" and cska."KTOPL" =csku."KTOPL" 
+    and cska."MANDT" =csku."MANDT" and csku."SPRAS" ='R'
+  left join dict_stg."CSKU" csku2 on 
+    cska."KSTAR" = csku2."KSTAR" and cska."KTOPL" =csku2."KTOPL" 
+    and cska."MANDT" =csku2."MANDT" and csku2."SPRAS" ='E'
+WHERE 
+  cska."MANDT"='400';
+
+Правильно: 
+insert into dict_dds.cost_element (
+  cost_element_code,
+  functional_area_code,
+  account_chart_code,
+  cost_element_short_name_rus,
+  cost_element_short_name_eng,
+  cost_element_full_name_rus,
+  cost_element_full_name_eng,
+  dt_created,
+  created_by
+)
+select 
+  tech_etl.util_text_to_null_validation(cska."KSTAR") as cost_element_code, -- Использование выражения
+  cska."FUNC_AREA" as functional_area_code, -- Название поля в целевой таблице отличается от поля таблицы - источника
+  tech_etl.util_text_to_null_validation(cska."KTOPL") as account_chart_code,
+  csku."KTEXT" as cost_element_short_name_rus, -- Два и более полей с одинаковым наименованием из разных таблиц
+  csku2."KTEXT" as cost_element_short_name_eng,
+  tech_etl.util_text_to_null_validation(csku."LTEXT") as cost_element_full_name_rus,
+  tech_etl.util_text_to_null_validation(csku2."LTEXT") as cost_element_full_name_eng,
+  tech_etl.util_text_to_date_validation(cska."ERSDA") as dt_created,
+  tech_etl.util_text_to_null_validation(cska."USNAM") as created_by
+from
+  dict_stg."CSKA" cska
+  left join dict_stg."CSKU" csku on 
+    cska."KSTAR" = csku."KSTAR" and cska."KTOPL" =csku."KTOPL" 
+    and cska."MANDT" = csku."MANDT" and csku."SPRAS" ='R'
+  left join dict_stg."CSKU" csku2 on 
+    cska."KSTAR" = csku2."KSTAR" and cska."KTOPL" = csku2."KTOPL" 
+    and cska."MANDT" = csku2."MANDT" and csku2."SPRAS" ='E'
+WHERE 
+  cska."MANDT"='400';
+
+Использование скобок для группировки логических условий 
+Неправильно: 
+select
+  t1.key1,
+  t1.column1,
+  t1.column2
+from
+  schema.table1 as t1
+where
+  key1 = 100 and t1.column2 = 'value' or column1 > 1000;
+
+Правильно: 
+select
+  t1.key1,
+  t1.column1,
+  t1.column2
+from
+  schema.table1 as t1
+where
+  (t1.key1 = 100 and t1.column2 = 'value') 
+  or (t1.column1 > 1000);
+
+Использование конструкции "insert-select-from-values" вместо "insert-values" 
+Неправильно: 
+insert into dict_stg.paydox_credit_limit_reason_texts ( 
+	paydox_credit_limit_reason_code,
+	paydox_credit_limit_reason_name
+) 
+values
+	('1','Отсрочка платежа по доходному договору'),
+	('2','Согласование превышения страхового лимита по доходному договору'),
+	('3','Аванс по расходному договору');
+
+Правильно: 
+insert into dict_stg.paydox_credit_limit_reason_texts (
+		paydox_credit_limit_reason_code,
+		paydox_credit_limit_reason_name
+	)
+select
+  paydox_credit_limit_reason_code,
+	paydox_credit_limit_reason_name
+from (
+		values ('1', 'Отсрочка платежа по доходному договору'),
+			('2','Согласование превышения страхового лимита по доходному договору'),
+			('3', 'Аванс по расходному договору')
+	) as paydox_credit_limit_reason_texts(
+		paydox_credit_limit_reason_code,
+		paydox_credit_limit_reason_name
+	);
+
+Функции 
+Параметры 
+• Входные параметры должны иметь префикс p_
+Пример: p_table_name
+
+• Локальные переменные должны иметь префикс v_
+Пример: v_table_name

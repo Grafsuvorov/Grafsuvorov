@@ -236,8 +236,9 @@ class DevCopyDagStatusPayload(BaseModel):
 
 
 class DevCopySchemaSyncPayload(BaseModel):
-    check_table_schema: str
-    check_table_name: str
+    run_mode: Optional[str] = "self"
+    check_table_schema: Optional[str] = ""
+    check_table_name: Optional[str] = ""
 
 
 class DevCopySchemaSyncDagStatusPayload(BaseModel):
@@ -1438,14 +1439,21 @@ def get_admin_dev_copy_dag_status(payload: DevCopyDagStatusPayload, request: Req
 def run_admin_dev_copy_schema_sync_dag(payload: DevCopySchemaSyncPayload, request: Request):
     user = _require_authenticated(request)
     try:
-        values = {
-            "author": _dev_copy_author(user),
-            "check_table_schema": str(payload.check_table_schema or "").strip(),
-            "check_table_name": str(payload.check_table_name or "").strip(),
-        }
-        missing = [key for key, value in values.items() if not value]
-        if missing:
-            raise ValueError("Нужно заполнить author, check_table_schema и check_table_name")
+        run_mode = str(payload.run_mode or "self").strip().lower()
+        if run_mode not in {"self", "all"}:
+            raise ValueError("Допустимые значения run_mode: self или all")
+
+        values = {}
+        if run_mode == "self":
+            values = {
+                "author": _dev_copy_author(user),
+                "check_table_schema": str(payload.check_table_schema or "").strip(),
+                "check_table_name": str(payload.check_table_name or "").strip(),
+            }
+            missing = [key for key, value in values.items() if not value]
+            if missing:
+                raise ValueError("Нужно заполнить author, check_table_schema и check_table_name")
+
         data = trigger_airflow_parametrized_dag(
             airflow_base_url=AIRFLOW_DEV_BASE_URL,
             dag_id=DEV_COPY_SCHEMA_SYNC_DAG_ID,

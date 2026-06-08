@@ -14,6 +14,7 @@ export default function DevCopyDagPage({ userProfile }) {
     target_table_name: "",
   });
   const [schemaSyncForm, setSchemaSyncForm] = useState({
+    run_mode: "self",
     check_table_schema: "dm",
     check_table_name: "",
   });
@@ -21,8 +22,6 @@ export default function DevCopyDagPage({ userProfile }) {
   const [dagStatus, setDagStatus] = useState(null);
   const [schemaSyncRunning, setSchemaSyncRunning] = useState(false);
   const [schemaSyncDagStatus, setSchemaSyncDagStatus] = useState(null);
-  const [schemaSyncReportLoading, setSchemaSyncReportLoading] = useState(false);
-  const [schemaSyncReport, setSchemaSyncReport] = useState(null);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState("info");
   const [error, setError] = useState(null);
@@ -32,6 +31,10 @@ export default function DevCopyDagPage({ userProfile }) {
   const dagIsActive = ["queued", "running"].includes(dagRunState);
   const schemaSyncDagRunState = String(schemaSyncDagStatus?.dag_run_state || "").toLowerCase();
   const schemaSyncDagIsActive = ["queued", "running"].includes(schemaSyncDagRunState);
+  const schemaSyncIsAllMode = schemaSyncForm.run_mode === "all";
+  const schemaSyncObjectLabel = schemaSyncIsAllMode
+    ? "ALL"
+    : [schemaSyncForm.check_table_schema, schemaSyncForm.check_table_name].filter(Boolean).join(".");
   const copyWindow = status?.window || null;
   const canRunNow = Boolean(copyWindow?.allowed);
 
@@ -102,33 +105,12 @@ export default function DevCopyDagPage({ userProfile }) {
 
   useEffect(() => {
     if (schemaSyncDagRunState !== "success") return;
-    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) return;
-    let cancelled = false;
-    const loadReport = async () => {
-      setSchemaSyncReportLoading(true);
-      try {
-        const data = await devCopyApi.schemaSyncReport({
-          check_table_schema: schemaSyncForm.check_table_schema,
-          check_table_name: schemaSyncForm.check_table_name,
-        });
-        if (!cancelled) {
-          setSchemaSyncReport(data || null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err.message || "Не удалось получить результат сверки");
-        }
-      } finally {
-        if (!cancelled) {
-          setSchemaSyncReportLoading(false);
-        }
-      }
-    };
-    loadReport();
-    return () => {
-      cancelled = true;
-    };
-  }, [schemaSyncDagRunState, schemaSyncForm.check_table_schema, schemaSyncForm.check_table_name]);
+    setError(null);
+    setMessageType("success");
+    setMessage(
+      `Сверка завершена для ${schemaSyncObjectLabel || "выбранных объектов"}. Иди смотри в БД.`
+    );
+  }, [schemaSyncDagRunState, schemaSyncObjectLabel]);
 
   const handleRun = async () => {
     if (!form.source_table_schema || !form.source_table_name || !form.target_table_schema || !form.target_table_name) {
@@ -159,12 +141,11 @@ export default function DevCopyDagPage({ userProfile }) {
   };
 
   const handleRunSchemaSync = async () => {
-    if (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name) {
+    if (!schemaSyncIsAllMode && (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name)) {
       setError("Нужно заполнить check_table_schema и check_table_name");
       return;
     }
     setSchemaSyncRunning(true);
-    setSchemaSyncReport(null);
     setError(null);
     setMessage(null);
     try {
@@ -286,35 +267,60 @@ export default function DevCopyDagPage({ userProfile }) {
               <div className="dev-meta-generator dev-copy-card">
                 <div className="section-subtitle">Сверка metadata PROD vs DEV</div>
                 <div className="muted">
-                  Запуск DAG <span className="mono">{status?.schema_sync?.dag_id || "information_schema_sync"}</span> с параметрами автора, схемы и таблицы.
+                  Запуск DAG <span className="mono">{status?.schema_sync?.dag_id || "information_schema_sync"}</span>.
+                </div>
+                <div className="dev-meta-tabs">
+                  <button
+                    type="button"
+                    className={`dev-meta-tab ${!schemaSyncIsAllMode ? "active" : ""}`}
+                    onClick={() => setSchemaSyncForm((prev) => ({ ...prev, run_mode: "self" }))}
+                  >
+                    Свой author
+                  </button>
+                  <button
+                    type="button"
+                    className={`dev-meta-tab ${schemaSyncIsAllMode ? "active" : ""}`}
+                    onClick={() => setSchemaSyncForm((prev) => ({ ...prev, run_mode: "all" }))}
+                  >
+                    ALL
+                  </button>
+                </div>
+                <div className="muted">
+                  {schemaSyncIsAllMode
+                    ? "В режиме ALL DAG запускается без параметров."
+                    : "В режиме author DAG запускается с author, check_table_schema и check_table_name."}
                 </div>
                 <div className="dev-meta-generator-grid">
-                  <label className="admin-field">
-                    <span>author</span>
-                    <input value={schemaSyncAuthor} disabled />
-                  </label>
-                  <label className="admin-field">
-                    <span>check_table_schema</span>
-                    <input
-                      value={schemaSyncForm.check_table_schema}
-                      onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_schema: e.target.value }))}
-                      placeholder="dm"
-                    />
-                  </label>
-                  <label className="admin-field">
-                    <span>check_table_name</span>
-                    <input
-                      value={schemaSyncForm.check_table_name}
-                      onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_name: e.target.value }))}
-                      placeholder="account_debt"
-                    />
-                  </label>
+                  {!schemaSyncIsAllMode ? (
+                    <>
+                      <label className="admin-field">
+                        <span>author</span>
+                        <input value={schemaSyncAuthor} disabled />
+                      </label>
+                      <label className="admin-field">
+                        <span>check_table_schema</span>
+                        <input
+                          value={schemaSyncForm.check_table_schema}
+                          onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_schema: e.target.value }))}
+                          placeholder="dm"
+                        />
+                      </label>
+                      <label className="admin-field">
+                        <span>check_table_name</span>
+                        <input
+                          value={schemaSyncForm.check_table_name}
+                          onChange={(e) => setSchemaSyncForm((prev) => ({ ...prev, check_table_name: e.target.value }))}
+                          placeholder="account_debt"
+                        />
+                      </label>
+                    </>
+                  ) : null}
                 </div>
                 <div className="dev-meta-generator-actions">
                   <button
                     className="btn btn-primary"
                     onClick={handleRunSchemaSync}
-                    disabled={schemaSyncRunning || !schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name}
+                    disabled={schemaSyncRunning || (!schemaSyncIsAllMode && (!schemaSyncForm.check_table_schema || !schemaSyncForm.check_table_name))}
                   >
                     {schemaSyncRunning ? "Запускаем DAG сверки..." : "Запустить information_schema_sync"}
                   </button>
@@ -417,39 +423,12 @@ export default function DevCopyDagPage({ userProfile }) {
           </div>
         )}
 
-        {schemaSyncReport && (
+        {schemaSyncDagRunState === "success" && (
           <div className="dev-meta-dag-status">
             <div className="section-subtitle">Результат сверки schema metadata</div>
-            {schemaSyncReport.items?.length ? (
-              <div className="dev-copy-report-table-wrap">
-                <table className="dev-copy-report-table">
-                  <thead>
-                    <tr>
-                      <th>Схема</th>
-                      <th>Таблица</th>
-                      <th>Поле</th>
-                      <th>Отличие</th>
-                      <th>Тип в PROD</th>
-                      <th>Тип в DEV</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schemaSyncReport.items.map((row, idx) => (
-                      <tr key={`${row.table_schema}:${row.table_name}:${row.column_name || idx}:${row.diff_code || idx}`}>
-                        <td>{row.table_schema || "—"}</td>
-                        <td>{row.table_name || "—"}</td>
-                        <td className="mono">{row.column_name || "—"}</td>
-                        <td>{row.diff_name || "—"}</td>
-                        <td className="mono">{row.data_type_prod || "—"}</td>
-                        <td className="mono">{row.data_type_dev || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="dev-copy-report-empty">Отличий между PROD и DEV не найдено.</div>
-            )}
+            <div className="dev-copy-report-empty">
+              Сверка завершена для <span className="mono">{schemaSyncObjectLabel || "ALL"}</span>. Иди смотри результат в БД.
+            </div>
           </div>
         )}
       </section>

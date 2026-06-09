@@ -1,48 +1,13 @@
-# airflow.dag (Оставить это, иначе парсинг файла планировщиком не произойдёт)
-import os
-from yaml import safe_load
-from generation_utility.dag_generator import generate_dag
-
-# CFG_FOLDER = Variable.get('CFG_FOLDER_PG')
-CFG_FOLDER = f'{os.environ.get("AIRFLOW_HOME")}/config_files/PG'
-default_args = {
-    'owner': 'BlinovD',
-    'start_date': '2023-12-01',
-    'depends_on_past': False,
-    'email_on_failure': True,
-    'email': ['Dmitriy.Blinov@rusal.com'],
-    'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': 5,
-    'catchup': False
-}
-
-general_config = []
-tasks = []
-dags = []
-
-for dags_dirs in os.scandir(CFG_FOLDER):
-    if dags_dirs.is_dir():
-        dag_config = {
-            'dags': [],
-            'tasks': []
-        }
-        
-        for config in os.scandir(dags_dirs):
-            if config.is_file() and "yaml" == config.name.split(".")[-1]:
-                with open(config, 'r') as stream:
-                    config_dict = safe_load(stream)
-
-                for dag in config_dict.get('dags', []):
-                    dag_config['dags'].append(dag)
-
-                for task in config_dict.get('tasks', []):
-                    dag_config['tasks'].append(task)
-        if dag_config != {'dags': [], 'tasks': []}:
-            general_config.append(dag_config)
-
-for dag_one in general_config:
-    for dag_config in dag_one['dags']:
-        dag = generate_dag(dag_config.get('default_args', default_args),
-                           dag_one,
-                           dag_config)
+  elif task_type == 'SSHOperator':
+        task_args['ssh_conn_id'] = task_config['ssh_conn_id']
+        task_args['command'] = task_config['command']
+        operator = SSHOperator(**task_args)
+    
+    elif task_type == 'DeleteBackupSSHOperator':
+        task_args['ssh_conn_id'] = task_config['ssh_conn_id']
+        task_args['cmd_timeout'] = task_config.get('cmd_timeout', None)
+        task_args['command'] = task_config['command']
+        task_args['minio_conn'] = task_config['minio_conn'].get(CLUSTER)
+        task_args['secure'] = CLUSTER == "DEV"
+        task_args['cnt_version'] = task_config.get('cnt_version', 1)
+        operator = DeleteBackupSSHOperator(**task_args)

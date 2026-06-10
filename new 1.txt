@@ -1,17 +1,11 @@
-select
-    a.attnum,
-    a.attname as column_name,
-    d.description as comment
-from pg_class c
-join pg_namespace n
-    on n.oid = c.relnamespace
-join pg_attribute a
-    on a.attrelid = c.oid
-left join pg_description d
-    on d.objoid = c.oid
-   and d.objsubid = a.attnum
-where n.nspname = 'dm'
-  and c.relname = 'my_view'
-  and a.attnum > 0
-  and not a.attisdropped
-order by a.attnum;
+select * from dds.accounting_documents
+where 
+	is_active = true
+	and (reference_procedure in( 'BKPF','BKPFF'))
+
+select * from dds.accounting_documents
+where 
+	p.is_active = true
+	and p.account_type in ('D', 'K')
+	and (p.accounting_document_status_code is null
+		or p.accounting_document_status_code = 'A');

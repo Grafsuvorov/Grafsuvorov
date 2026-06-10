@@ -1,13 +1,17 @@
-  elif task_type == 'SSHOperator':
-        task_args['ssh_conn_id'] = task_config['ssh_conn_id']
-        task_args['command'] = task_config['command']
-        operator = SSHOperator(**task_args)
-    
-    elif task_type == 'DeleteBackupSSHOperator':
-        task_args['ssh_conn_id'] = task_config['ssh_conn_id']
-        task_args['cmd_timeout'] = task_config.get('cmd_timeout', None)
-        task_args['command'] = task_config['command']
-        task_args['minio_conn'] = task_config['minio_conn'].get(CLUSTER)
-        task_args['secure'] = CLUSTER == "DEV"
-        task_args['cnt_version'] = task_config.get('cnt_version', 1)
-        operator = DeleteBackupSSHOperator(**task_args)
+select
+    a.attnum,
+    a.attname as column_name,
+    d.description as comment
+from pg_class c
+join pg_namespace n
+    on n.oid = c.relnamespace
+join pg_attribute a
+    on a.attrelid = c.oid
+left join pg_description d
+    on d.objoid = c.oid
+   and d.objsubid = a.attnum
+where n.nspname = 'dm'
+  and c.relname = 'my_view'
+  and a.attnum > 0
+  and not a.attisdropped
+order by a.attnum;

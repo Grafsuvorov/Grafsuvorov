@@ -1,11 +1,5 @@
-select * from dds.accounting_documents
-where 
-	is_active = true
-	and (reference_procedure in( 'BKPF','BKPFF'))
-
-select * from dds.accounting_documents
-where 
-	p.is_active = true
-	and p.account_type in ('D', 'K')
-	and (p.accounting_document_status_code is null
-		or p.accounting_document_status_code = 'A');
+    SELECT count(*)
+FROM dm.demand_planning_purchase_request_analysis            
+WHERE (
+    pg_typeof(dt_actual_release) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_actual_release::text) 

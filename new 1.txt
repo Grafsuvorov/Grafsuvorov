@@ -1,5 +1,186 @@
-    SELECT count(*)
+select
+	count (*)
+from 
+	dm.demand_planning_material_reservations	
+WHERE
+  -- Преобразуем в дату, а потом обратно в строку формата ГГГГ-ММ и сравниваем
+  dt_reservation_document_material_requirement_yyyymm != 
+      to_char(to_date(dt_reservation_document_material_requirement_yyyymm, 'YYYY-MM'), 'YYYY-MM');
+      
+     
+--dq_mm0216
+select
+	count (*)
+from 
+	dm.demand_planning_material_reservation_adjustments	
+WHERE
+  -- Преобразуем в дату, а потом обратно в строку формата ГГГГ-ММ и сравниваем
+  dt_adjustment_request_yyyymm != 
+      to_char(to_date(dt_adjustment_request_yyyymm , 'YYYY-MM'), 'YYYY-MM');
+      
+     
+ -dq_mm0217
+select
+	count (*)
+from 
+	dm.demand_planning_purchase_request_analysis	
+WHERE
+  -- Преобразуем в дату, а потом обратно в строку формата ГГГГ-ММ и сравниваем
+  dt_delivery_yyyymm != 
+      to_char(to_date(dt_delivery_yyyymm , 'YYYY-MM'), 'YYYY-MM');
+      
+   
+      -- Создание функции для проверки корректности даты
+/*CREATE OR REPLACE FUNCTION is_valid_date4(input_text text) --функция принимает 1 параметр типа text
+RETURNS boolean AS $$                                     --Указывает, что функция возвращает значение типа boolean (истина или ложь).
+                                                          --Используя доллар-квотирование для определения многострочного литерала.
+declare 
+    result_date date;                                     --Объявление переменной типа date, которая будет использоваться для хранения результата преобразования строки в дату.
+BEGIN
+    result_date := to_date(input_text, 'YYYY-MM-DD');
+    RETURN TRUE;
+exception    --исключение 
+    WHEN OTHERS then                                      --Если произошло исключение (например, строка не может быть преобразована в дату),
+        RETURN FALSE;                                     -- функция возвращает FALSE
+END;
+$$ LANGUAGE plpgsql;*/
+ 
+ SELECT count(*)
+FROM dm.demand_planning_material_reservations            
+WHERE (
+    pg_typeof(dt_reservation_document_material_requirement) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_reservation_document_material_requirement::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);
+
+
+--dq_mm0224
+-- Создание функции для проверки корректности даты
+/* CREATE OR REPLACE FUNCTION is_valid_date4(input_text text) --функция принимает 1 параметр типа text
+RETURNS boolean AS $$                                     --Указывает, что функция возвращает значение типа boolean (истина или ложь).
+                                                          --Используя доллар-квотирование для определения многострочного литерала.
+declare 
+    result_date date;                                     --Объявление переменной типа date, которая будет использоваться для хранения результата преобразования строки в дату.
+BEGIN
+    result_date := to_date(input_text, 'YYYY-MM-DD');
+    RETURN TRUE;
+exception    --исключение 
+    WHEN OTHERS then                                      --Если произошло исключение (например, строка не может быть преобразована в дату),
+        RETURN FALSE;                                     -- функция возвращает FALSE
+END;
+$$ LANGUAGE plpgsql;*/
+
+SELECT count(*)
+FROM dm.demand_planning_material_reservations            
+WHERE (
+    pg_typeof(dt_reservation_document_position_plan_approval) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_reservation_document_position_plan_approval::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);
+
+
+
+
+-dq_mm0225
+-- Создание функции для проверки корректности даты
+/*CREATE OR REPLACE FUNCTION is_valid_date4(input_text text) --функция принимает 1 параметр типа text
+RETURNS boolean AS $$                                     --Указывает, что функция возвращает значение типа boolean (истина или ложь).
+                                                          --Используя доллар-квотирование для определения многострочного литерала.
+declare 
+    result_date date;                                     --Объявление переменной типа date, которая будет использоваться для хранения результата преобразования строки в дату.
+BEGIN
+    result_date := to_date(input_text, 'YYYY-MM-DD');
+    RETURN TRUE;
+exception    --исключение 
+    WHEN OTHERS then                                      --Если произошло исключение (например, строка не может быть преобразована в дату),
+        RETURN FALSE;                                     -- функция возвращает FALSE
+END;
+$$ LANGUAGE plpgsql;*/
+
+SELECT count(*)
+FROM dm.demand_planning_material_reservations            
+WHERE (
+    pg_typeof(dt_reservation_document_position_actual_approval) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_reservation_document_position_actual_approval::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);
+
+
+
+--dq_mm0226
+-- Создание функции для проверки корректности даты
+/*CREATE OR REPLACE FUNCTION is_valid_date4(input_text text) --функция принимает 1 параметр типа text
+RETURNS boolean AS $$                                     --Указывает, что функция возвращает значение типа boolean (истина или ложь).
+                                                          --Используя доллар-квотирование для определения многострочного литерала.
+declare 
+    result_date date;                                     --Объявление переменной типа date, которая будет использоваться для хранения результата преобразования строки в дату.
+BEGIN
+    result_date := to_date(input_text, 'YYYY-MM-DD');
+    RETURN TRUE;
+exception    --исключение 
+    WHEN OTHERS then                                      --Если произошло исключение (например, строка не может быть преобразована в дату),
+        RETURN FALSE;                                     -- функция возвращает FALSE
+END;
+$$ LANGUAGE plpgsql;*/
+
+SELECT count(*)
+FROM dm.demand_planning_material_reservation_adjustments            
+WHERE (
+    pg_typeof(dt_adjustment_request) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_adjustment_request::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);
+
+
+
+SELECT count(*)
+FROM dm.demand_planning_purchase_request_analysis            
+WHERE (
+    pg_typeof(dt_delivery) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_delivery::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);
+
+
+
+--dq_mm0228
+SELECT count(*)
+FROM dm.demand_planning_purchase_request_analysis            
+WHERE (
+    pg_typeof(dt_plan_release) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
+    NOT is_valid_date(dt_plan_release::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);	
+
+
+
+--dq_mm0229
+SELECT count(*)
 FROM dm.demand_planning_purchase_request_analysis            
 WHERE (
     pg_typeof(dt_actual_release) = 'character varying'::regtype and     --Проверка, что тип данных столбца varchar
-    NOT is_valid_date(dt_actual_release::text) 
+    NOT is_valid_date(dt_actual_release::text)     --Использование функции is_valid_date, чтобы проверить, что строка не является корректной датой в формате YYYY-MM-DD. Здесь dt_discharge_in_foreign_port::text явно преобразует значение столбца в тип text, чтобы передать его в функцию.
+);	
+
+
+--dq_mm0280
+SELECT
+     count(*)
+FROM 
+    dm.demand_planning_material_reservation_adjustments
+WHERE 
+    adjustment_request_fiscal_year !~ '^\d{4}$';
+    
+   
+   
+--dq_mm0292
+SELECT 
+    count(*)
+FROM 
+    dm.demand_planning_material_reservation_financials
+WHERE 
+    fiscal_month_mmm !~ '^\d{3}$';
+    
+   
+   
+   --dq_mm0303
+SELECT 
+    count(*)
+FROM 
+    dm.demand_planning_material_reservation_financials
+WHERE 
+    fiscal_year !~ '^\d{4}$'; 

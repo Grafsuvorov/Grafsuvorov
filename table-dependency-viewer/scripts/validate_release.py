@@ -666,6 +666,102 @@ def load_yaml(text: str, path: str, findings: list[Finding]) -> dict[str, Any]:
         return {}
 
 
+def click_meta_object_label(meta: dict[str, Any], path: str) -> str:
+    schema_name = normalize_object_fqn(str(meta.get("schema_name_click") or ""))
+    object_name = normalize_object_fqn(str(meta.get("object_name") or ""))
+    if schema_name and object_name:
+        return f"{schema_name}.{object_name}"
+    return path
+
+
+def build_click_attribute_index(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    attributes = meta.get("attributes")
+    if not isinstance(attributes, list):
+        return result
+    for item in attributes:
+        if not isinstance(item, dict):
+            continue
+        key = normalize_object_fqn(str(item.get("column_name_click") or item.get("column_name_gp") or ""))
+        if key:
+            result[key] = item
+    return result
+
+
+def _normalized_attr_value(value: Any) -> str:
+    if value is None:
+        return "∅"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value).strip()
+
+
+def compare_click_meta_attributes(
+    path: str,
+    base_meta: dict[str, Any],
+    head_meta: dict[str, Any],
+    findings: list[Finding],
+) -> None:
+    base_index = build_click_attribute_index(base_meta)
+    head_index = build_click_attribute_index(head_meta)
+    if not base_index and not head_index:
+        return
+
+    object_label = click_meta_object_label(head_meta or base_meta, path)
+    added = sorted(head_index.keys() - base_index.keys())
+    removed = sorted(base_index.keys() - head_index.keys())
+    changed: list[str] = []
+
+    tracked_fields = (
+        "data_type_click",
+        "data_type_gp",
+        "is_nullable",
+        "default",
+        "column_name_gp",
+        "description",
+    )
+
+    for column_name in sorted(base_index.keys() & head_index.keys()):
+        before = base_index[column_name]
+        after = head_index[column_name]
+        diffs: list[str] = []
+        for field_name in tracked_fields:
+            old_value = _normalized_attr_value(before.get(field_name))
+            new_value = _normalized_attr_value(after.get(field_name))
+            if old_value != new_value:
+                diffs.append(f"{field_name}: `{old_value}` -> `{new_value}`")
+        if diffs:
+            changed.append(f"{column_name} ({'; '.join(diffs)})")
+
+    if added:
+        findings.append(
+            Finding(
+                INFO,
+                path,
+                "click-attributes-added",
+                f"`{object_label}`: добавлены атрибуты `{', '.join(added)}`.",
+            )
+        )
+    if removed:
+        findings.append(
+            Finding(
+                WARNING,
+                path,
+                "click-attributes-removed",
+                f"`{object_label}`: удалены атрибуты `{', '.join(removed)}`.",
+            )
+        )
+    if changed:
+        findings.append(
+            Finding(
+                WARNING,
+                path,
+                "click-attributes-changed",
+                f"`{object_label}`: изменены атрибуты: " + "; ".join(changed),
+            )
+        )
+
+
 def collect_entity_table_ids(ref: str, cwd: Path) -> dict[int, list[str]]:
     raw = run_git(["ls-tree", "-r", "--name-only", ref], cwd)
     result: dict[int, list[str]] = {}
@@ -1167,6 +1263,21 @@ def main() -> int:
                 validate_entity_meta(path, meta, args.head, cwd, findings, known_schemas)
             if is_click_meta_yaml(path):
                 validate_click_meta(path, meta, findings)
+                if git_file_exists(args.base, path, cwd):
+                    try:
+                        base_text = git_show_text(args.base, path, cwd)
+                    except Exception as exc:
+                        findings.append(
+                            Finding(
+                                WARNING,
+                                path,
+                                "click-meta-compare",
+                                f"Не удалось прочитать базовую версию Click YAML из `{args.base}`: {exc}",
+                            )
+                        )
+                    else:
+                        base_meta = load_yaml(base_text, f"{args.base}:{path}", [])
+                        compare_click_meta_attributes(path, base_meta, meta, findings)
         elif is_sql(path):
             validate_sql(path, text, findings)
             if (is_click_view_sql(path) and not path.startswith("config_files/meta/dm_view/")) or "etl_loads_entity/" in path.lower() and "/dm_view/" in path.lower():

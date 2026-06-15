@@ -397,6 +397,7 @@ def generate_dev_meta_yaml(
     view_definition = (object_meta or {}).get("view_definition")
     table_comment = (object_meta or {}).get("table_comment")
     entity_last_load = (object_meta or {}).get("entity_last_load")
+    base_column_descriptions: dict[str, str] = {}
     if object_type == "view" and not distribution_clause:
         view_base = _extract_view_base(view_definition)
         if view_base:
@@ -405,6 +406,29 @@ def generate_dev_meta_yaml(
                     distribution_query,
                     {"schema_name": view_base[0], "table_name": view_base[1]},
                 ).scalar()
+    if object_type == "view":
+        view_base = _extract_view_base(view_definition)
+        if view_base:
+            with generator_engine.connect() as conn:
+                base_rows = conn.execute(
+                    columns_query,
+                    {"schema_name": view_base[0], "table_name": view_base[1]},
+                ).mappings().all()
+                if not table_comment:
+                    base_object_meta = conn.execute(
+                        object_query,
+                        {
+                            "schema_name": view_base[0],
+                            "table_name": view_base[1],
+                            "qualified_name": f"{view_base[0]}.{view_base[1]}",
+                        },
+                    ).mappings().first()
+                    table_comment = (base_object_meta or {}).get("table_comment") or table_comment
+            base_column_descriptions = {
+                str(row["column_name"]): str(row["description"] or "").replace("\n", " ")
+                for row in base_rows
+                if str(row["description"] or "").strip()
+            }
     distributed = _parse_gp_distribution_clause(distribution_clause)
     distributed_columns = {
         item for item in (distributed or []) if item not in {"REPLICATED", "RANDOMLY"}
@@ -453,7 +477,11 @@ def generate_dev_meta_yaml(
             "data_type_click": _normalize_click_type(data_type_gp),
             "data_type_gp": data_type_gp,
             "is_nullable": "NULL" if bool(row["is_nullable"]) and column_name not in normalized_order_by else "NOT NULL",
-            "description": str(row["description"] or "Комментария нет").replace("\n", " "),
+            "description": str(
+                row["description"]
+                or base_column_descriptions.get(column_name)
+                or "Комментария нет"
+            ).replace("\n", " "),
         }
         if row["column_default"]:
             attr["default"] = str(row["column_default"])

@@ -1295,7 +1295,13 @@ def validate_entity_dev_meta_bundle(
         expected_depends_on = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
         current_depends_on = _flatten_depends_on(payload.get("depends_on"))
         expected_depends_on_flat = _flatten_depends_on(expected_depends_on)
+        missing = sorted(expected_depends_on_flat - current_depends_on)
         extra = sorted(current_depends_on - expected_depends_on_flat)
+        if missing:
+            errors.append(
+                "В `depends_on` не хватает зависимостей из insert SQL: "
+                + ", ".join(f"{schema_part}.{table_part}" for schema_part, table_part in missing)
+            )
         if extra:
             warnings.append(
                 "В `depends_on` есть лишние записи относительно insert SQL: "

@@ -327,6 +327,7 @@ class EntityMetaRunSqlPayload(BaseModel):
 class MetaWorkspaceMrPayload(BaseModel):
     task_id: str
     release_branch: str
+    branch_name: Optional[str] = None
 
 
 class MetaWorkspaceValidatePayload(BaseModel):
@@ -1086,6 +1087,7 @@ def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Req
             gitlab_ssl_verify=GITLAB_SSL_VERIFY,
             task_id=payload.task_id,
             release_branch=payload.release_branch,
+            branch_name=payload.branch_name,
             author=user.email,
         )
     except PermissionError as exc:

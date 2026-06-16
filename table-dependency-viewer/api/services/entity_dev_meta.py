@@ -543,15 +543,15 @@ def _extract_created_object(sql: str) -> tuple[str, str] | None:
     return match.group(1), match.group(2).replace('"', "").lower()
 
 
-def _extract_insert_target(sql: str) -> Optional[str]:
+def _extract_insert_targets(sql: str) -> list[str]:
     normalized = _normalize_sql(sql)
-    match = re.search(
+    targets: list[str] = []
+    for match in re.finditer(
         r"\binsert\s+into\s+([a-z0-9_\".]+)",
         normalized,
-    )
-    if not match:
-        return None
-    return match.group(1).replace('"', "").lower()
+    ):
+        targets.append(match.group(1).replace('"', "").lower())
+    return targets
 
 
 def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
@@ -1229,13 +1229,19 @@ def validate_entity_dev_meta_bundle(
         errors.append("Insert SQL не должен быть пустым для table")
     elif insert_sql.strip():
         temp_table_names = _extract_temp_table_names(insert_sql)
-        insert_target = _extract_insert_target(insert_sql)
+        insert_targets = _extract_insert_targets(insert_sql)
         expected_fqn = f"{normalized_schema}.{normalized_table}"
         if not is_stg_schema:
-            if not insert_target:
+            if not insert_targets:
                 errors.append("В insert SQL не найден `INSERT INTO schema.table`")
-            elif insert_target != expected_fqn:
-                errors.append(f"Insert SQL пишет в `{insert_target}`, а ожидается `{expected_fqn}`")
+            elif expected_fqn not in insert_targets:
+                meaningful_targets = [
+                    target
+                    for target in insert_targets
+                    if "." in target or target not in temp_table_names
+                ]
+                actual_target = (meaningful_targets or insert_targets)[-1]
+                errors.append(f"Insert SQL пишет в `{actual_target}`, а ожидается `{expected_fqn}`")
 
         if re.search(r"\bselect\s+\*", _normalize_sql(insert_sql)):
             warnings.append("В insert SQL найден `SELECT *`")

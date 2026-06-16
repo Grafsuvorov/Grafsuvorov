@@ -617,10 +617,16 @@ export default function EntityDevMetaWorkspace({
     setError(null);
     setMessage(null);
     try {
-      const data = await entityMetaApi.createMr({
-        task_id: taskId,
-        release_branch: releaseBranch.trim(),
-      });
+      const data = branchSaveActive
+        ? await metaWorkspaceApi.createMr({
+          task_id: taskId,
+          release_branch: releaseBranch.trim(),
+          branch_name: branchSaveContext.branch_name,
+        })
+        : await entityMetaApi.createMr({
+          task_id: taskId,
+          release_branch: releaseBranch.trim(),
+        });
       setMessageType("success");
       setMessage(data?.mr_url ? `MR создан/обновлен: ${data.mr_url}` : "MR создан/обновлен.");
     } catch (err) {

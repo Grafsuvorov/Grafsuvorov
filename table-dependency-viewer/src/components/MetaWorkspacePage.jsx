@@ -188,6 +188,7 @@ export default function MetaWorkspacePage({ userProfile }) {
       const data = await metaWorkspaceApi.createMr({
         task_id: taskId.trim().toUpperCase(),
         release_branch: releaseBranch.trim(),
+        branch_name: branchScopedActive ? String(branchName || "").trim() : undefined,
       });
       setMessage(data?.mr_url ? `MR создан/обновлен: ${data.mr_url}` : "MR создан/обновлен.");
     } catch (err) {

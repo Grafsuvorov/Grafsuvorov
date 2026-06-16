@@ -1274,6 +1274,7 @@ def create_meta_workspace_mr(
     gitlab_ssl_verify: str,
     task_id: str,
     release_branch: str,
+    branch_name: str | None = None,
     author: str,
 ) -> dict[str, Any]:
     task_id_norm = str(task_id or "").strip().upper()
@@ -1301,26 +1302,30 @@ def create_meta_workspace_mr(
 
     entity_object_keys = _list_task_entity_object_keys(engine=engine, task_id=task_id_norm)
     click_files = _list_task_click_meta_files(engine=engine, task_id=task_id_norm)
-    if not entity_object_keys and not click_files:
-        raise ValueError(f"Не найдено изменений для задачи {task_id_norm}")
-
-    feature_branch = f"feature/{task_id_norm}"
+    source_branch = str(branch_name or "").strip() or f"feature/{task_id_norm}"
     _run_git(git_repo_root, ["fetch", "origin"])
     release_exists = _run_git(git_repo_root, ["ls-remote", "--heads", "origin", release_branch_norm])
     if not release_exists:
         raise ValueError(f"Release-ветка `{release_branch_norm}` не найдена в origin")
 
+    if branch_name:
+        remote_source_exists = _run_git(git_repo_root, ["ls-remote", "--heads", "origin", source_branch])
+        if not remote_source_exists:
+            raise ValueError(f"Ветка `{source_branch}` не найдена в origin. Сначала сохраните изменения в ветку.")
+    elif not entity_object_keys and not click_files:
+        raise ValueError(f"Не найдено изменений для задачи {task_id_norm}")
+
     worktree_dir = Path(tempfile.mkdtemp(prefix=f"meta-workspace-{task_id_norm.lower()}-"))
     try:
-        remote_feature_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", feature_branch]))
+        remote_feature_exists = bool(_run_git(git_repo_root, ["ls-remote", "--heads", "origin", source_branch]))
         if remote_feature_exists:
-            _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{feature_branch}"])
+            _run_git(git_repo_root, ["worktree", "add", "-B", source_branch, str(worktree_dir), f"origin/{source_branch}"])
         else:
-            _run_git(git_repo_root, ["worktree", "add", "-B", feature_branch, str(worktree_dir), f"origin/{release_branch_norm}"])
+            _run_git(git_repo_root, ["worktree", "add", "-B", source_branch, str(worktree_dir), f"origin/{release_branch_norm}"])
         _ensure_git_identity(repo_root=git_repo_root, cwd=worktree_dir, author=author)
 
         entity_sync = {"updated_paths": [], "removed_paths": []}
-        if entity_object_keys:
+        if not branch_name and entity_object_keys:
             entity_sync = _sync_task_objects_to_worktree(
                 dev_root=entity_dev_root,
                 worktree_meta_root=worktree_dir / entity_git_root_rel,
@@ -1328,7 +1333,7 @@ def create_meta_workspace_mr(
             )
 
         click_sync = {"updated_paths": [], "removed_paths": []}
-        if click_files:
+        if not branch_name and click_files:
             click_sync = _sync_click_task_files_to_worktree(
                 dev_root=click_dev_root,
                 worktree_click_root=worktree_dir / click_git_root_rel,
@@ -1340,11 +1345,12 @@ def create_meta_workspace_mr(
             _run_git(git_repo_root, ["add", "."], cwd=worktree_dir)
             _run_git(git_repo_root, ["commit", "-m", f"{task_id_norm}: update meta workspace objects"], cwd=worktree_dir)
 
-        _run_git(git_repo_root, ["push", "origin", f"HEAD:{feature_branch}"], cwd=worktree_dir)
+        _run_git(git_repo_root, ["push", "origin", f"HEAD:{source_branch}"], cwd=worktree_dir)
 
         description_lines = [
             f"Task: {task_id_norm}",
             f"Author: {author}",
+            f"Source branch: {source_branch}",
             "",
             "GP objects:",
             *([f"- {item}" for item in sorted(entity_object_keys)] or ["- none"]),
@@ -1359,7 +1365,7 @@ def create_meta_workspace_mr(
             ssl_verify=ssl_verify,
             path="merge_requests",
             method="GET",
-            query={"state": "opened", "source_branch": feature_branch, "target_branch": release_branch_norm},
+            query={"state": "opened", "source_branch": source_branch, "target_branch": release_branch_norm},
         )
         if existing:
             mr_data = existing[0]
@@ -1372,7 +1378,7 @@ def create_meta_workspace_mr(
                 path="merge_requests",
                 method="POST",
                 payload={
-                    "source_branch": feature_branch,
+                    "source_branch": source_branch,
                     "target_branch": release_branch_norm,
                     "title": f"{task_id_norm}: Meta workspace changes",
                     "description": "\n".join(description_lines),
@@ -1389,16 +1395,17 @@ def create_meta_workspace_mr(
             "",
             {
                 "task_id": task_id_norm,
-                "feature_branch": feature_branch,
+                "feature_branch": source_branch,
                 "release_branch": release_branch_norm,
                 "gp_object_keys": sorted(entity_object_keys),
                 "click_files": click_files,
+                "source_branch": source_branch,
                 "mr_url": mr_data.get("web_url"),
             },
         )
         return {
             "task_id": task_id_norm,
-            "feature_branch": feature_branch,
+            "feature_branch": source_branch,
             "release_branch": release_branch_norm,
             "gp_object_keys": sorted(entity_object_keys),
             "click_files": click_files,

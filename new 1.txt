@@ -1,198 +1,52 @@
-do
-$$
-DECLARE
-	v_row_cnt int8;
-	v_calc_time interval ;
-	v_start_dttm timestamp(0) ;
-    v_key_min numeric(4, 0) ;
-    v_key_max numeric(4, 0) ;
-	v_dttm_src_loaded timestamp ;
-BEGIN
-	v_start_dttm   := clock_timestamp()  ;
-	raise notice '% START ', to_char(clock_timestamp(),'hh24:mi:ss');
-
- 	select coalesce(max(dttm_inserted_src), '1970-01-01') as dttm_inserted_src
-		into v_dttm_src_loaded
-	from dds.investment_expenses;
-	raise notice '% calc increment (v_dttm_src_loaded = %)', to_char(clock_timestamp(),'hh24:mi:ss'), v_dttm_src_loaded;
-
-
-
-	drop table if exists pg_temp.delta;
-	create temporary table pg_temp.delta   as (
-		select
-		    inv_exp_ods.unit_budget_code,
-		    inv_exp_ods.measure_type_code,
-		    inv_exp_ods.investment_budget_section_code,
-		    inv_exp_ods.investment_budget_subsection_code,
-		    inv_exp_ods.version_code,
-		    inv_exp_ods.fiscal_year,
-		    inv_exp_ods.division_code,
-		    inv_exp_ods.is_additional_finance_code,
-		    inv_exp_ods.unit_budget_partner_code,
-		    inv_exp_ods.investment_activity_code,
-		    inv_exp_ods.investment_area_code,
-		    inv_exp_ods.purchase_document_code,
-		    inv_exp_ods.investment_budget_adjustment_number,
-		    inv_exp_ods.investment_activity_status_code,
-		    inv_exp_ods.financing_status_code,
-		    inv_exp_ods.budget_group_code,
-		    inv_exp_ods.amount,
-		    inv_exp_ods.amount_currency_code,
-		    inv_exp_ods.dt_report,
-		    inv_exp_ods.dt_investment_expense_or_payment,
-		    inv_exp_ods.dt_created,
-		    inv_exp_ods.created_by,
-		    inv_exp_ods.counterparty_code,
-		    inv_exp_ods.unit_budget_payer_code,
-		    inv_exp_ods.responsible_division_code,
-		    inv_exp_ods.is_currency_translation_prohibited_code,
-			inv_exp_ods.job_name                   as job_name,
-			inv_exp_ods.deleted_flag               as deleted_flag,
-		    inv_exp_ods.dttm_inserted              as dttm_inserted_src
-		from
-		    ods.investment_expenses as inv_exp_ods
-		where inv_exp_ods.dttm_inserted > v_dttm_src_loaded
-
-	)
-	distributed by (investment_activity_code, dt_investment_expense_or_payment, amount_currency_code, dt_created);
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.delta', v_row_cnt;
-
-
-
-	drop table if exists pg_temp.delta_agg;
-	create temporary table pg_temp.delta_agg   as (
-		select
-		    fiscal_year
-		from
-		    pg_temp.delta
-		group by fiscal_year
-	)
-	distributed replicated;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% create temp table % (%)', to_char(clock_timestamp(),'hh24:mi:ss'), 'pg_temp.delta_agg', v_row_cnt;
-
-
-	select
-		min(fiscal_year) as fiscal_year_min,
-		max(fiscal_year) as fiscal_year_max
-		into v_key_min , v_key_max
-	from pg_temp.delta_agg;
-	raise notice '% pg_temp.delta_agg v_key_min =  % ; v_key_max = % ', to_char(clock_timestamp(),'hh24:mi:ss'), v_key_min, v_key_max;
-
-	delete
-	from dds.investment_expenses  as tgt
-	   using pg_temp.delta_agg  as src
-	where
-				src.fiscal_year  = tgt.fiscal_year  and
-				tgt.fiscal_year between v_key_min	and v_key_max
-	;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% Delete target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
-
-
-	insert into dds.investment_expenses (unit_budget_code, measure_type_code, investment_budget_section_code, investment_budget_subsection_code, version_code, fiscal_year, division_code, is_additional_finance_code, unit_budget_partner_code, investment_activity_code, investment_area_code, purchase_document_code, investment_budget_adjustment_number, investment_activity_status_code, financing_status_code, budget_group_code, amount, amount_currency_code, dt_report, dt_investment_expense_or_payment, dt_created, created_by, counterparty_code, unit_budget_payer_code, responsible_division_code, is_currency_translation_prohibited_code, dttm_inserted_src, dttm_inserted, dttm_updated, job_name, deleted_flag)
-	select unit_budget_code, measure_type_code, investment_budget_section_code, investment_budget_subsection_code, version_code, fiscal_year, division_code, is_additional_finance_code, unit_budget_partner_code, investment_activity_code, investment_area_code, purchase_document_code, investment_budget_adjustment_number, investment_activity_status_code, financing_status_code, budget_group_code, amount, amount_currency_code, dt_report, dt_investment_expense_or_payment, dt_created, created_by, counterparty_code, unit_budget_payer_code, responsible_division_code, is_currency_translation_prohibited_code
-		, dttm_inserted_src
-	    , now()                   as dttm_inserted
-	    , now()                   as dttm_updated
-	    , job_name
-	    , deleted_flag
-	from pg_temp.delta;
-
-	get diagnostics v_row_cnt = row_count;
-	raise notice '% Insert target (%)', to_char(clock_timestamp(),'hh24:mi:ss'), v_row_cnt;
-
-	if v_row_cnt > 0 then
-		analyze dds.investment_expenses(investment_activity_code, dt_investment_expense_or_payment, amount_currency_code, dt_created);
-		raise notice '% analyze target', to_char(clock_timestamp(),'hh24:mi:ss');
-	end if;
-
-	v_calc_time :=  clock_timestamp() - v_start_dttm ;
-	raise notice '% FINISH (v_start_dttm = % ;  v_calc_time = %.)', to_char(clock_timestamp(),'hh24:mi:ss'), v_start_dttm, v_calc_time;
-end;
-$$
-
-
-
-	v_start_dttm   := clock_timestamp()  ;
-
- 	select coalesce(max(dttm_inserted_src), '1970-01-01') as dttm_inserted_src
-		into v_dttm_src_loaded
-	from dds.investment_expenses;
-
-	drop table if exists pg_temp.delta;
-	create temporary table pg_temp.delta   as (
-		select
-		    inv_exp_ods.unit_budget_code,
-		    inv_exp_ods.measure_type_code,
-		    inv_exp_ods.investment_budget_section_code,
-		    inv_exp_ods.investment_budget_subsection_code,
-		    inv_exp_ods.version_code,
-		    inv_exp_ods.fiscal_year,
-		    inv_exp_ods.division_code,
-		    inv_exp_ods.is_additional_finance_code,
-		    inv_exp_ods.unit_budget_partner_code,
-		    inv_exp_ods.investment_activity_code,
-		    inv_exp_ods.investment_area_code,
-		    inv_exp_ods.purchase_document_code,
-		    inv_exp_ods.investment_budget_adjustment_number,
-		    inv_exp_ods.investment_activity_status_code,
-		    inv_exp_ods.financing_status_code,
-		    inv_exp_ods.budget_group_code,
-		    inv_exp_ods.amount,
-		    inv_exp_ods.amount_currency_code,
-		    inv_exp_ods.dt_report,
-		    inv_exp_ods.dt_investment_expense_or_payment,
-		    inv_exp_ods.dt_created,
-		    inv_exp_ods.created_by,
-		    inv_exp_ods.counterparty_code,
-		    inv_exp_ods.unit_budget_payer_code,
-		    inv_exp_ods.responsible_division_code,
-		    inv_exp_ods.is_currency_translation_prohibited_code,
-			inv_exp_ods.job_name                   as job_name,
-			inv_exp_ods.deleted_flag               as deleted_flag,
-		    inv_exp_ods.dttm_inserted              as dttm_inserted_src
-		from
-		    ods.investment_expenses as inv_exp_ods
-		where inv_exp_ods.dttm_inserted > v_dttm_src_loaded
-
-	)
-	distributed by (investment_activity_code, dt_investment_expense_or_payment, amount_currency_code, dt_created);
-
-	drop table if exists pg_temp.delta_agg;
-	create temporary table pg_temp.delta_agg   as (
-		select
-		    fiscal_year
-		from
-		    pg_temp.delta
-		group by fiscal_year
-	)
-	distributed replicated;
-
-	select
-		min(fiscal_year) as fiscal_year_min,
-		max(fiscal_year) as fiscal_year_max
-		into v_key_min , v_key_max
-	from pg_temp.delta_agg;
-
-	delete
-	from dds.investment_expenses  as tgt
-	   using pg_temp.delta_agg  as src
-	where
-				src.fiscal_year  = tgt.fiscal_year  and
-				tgt.fiscal_year between v_key_min	and v_key_max
-	;
-
-	insert into dds.investment_expenses (unit_budget_code, measure_type_code, investment_budget_section_code, investment_budget_subsection_code, version_code, fiscal_year, division_code, is_additional_finance_code, unit_budget_partner_code, investment_activity_code, investment_area_code, purchase_document_code, investment_budget_adjustment_number, investment_activity_status_code, financing_status_code, budget_group_code, amount, amount_currency_code, dt_report, dt_investment_expense_or_payment, dt_created, created_by, counterparty_code, unit_budget_payer_code, responsible_division_code, is_currency_translation_prohibited_code, dttm_inserted_src, dttm_inserted, dttm_updated, job_name, deleted_flag)
-	select unit_budget_code, measure_type_code, investment_budget_section_code, investment_budget_subsection_code, version_code, fiscal_year, division_code, is_additional_finance_code, unit_budget_partner_code, investment_activity_code, investment_area_code, purchase_document_code, investment_budget_adjustment_number, investment_activity_status_code, financing_status_code, budget_group_code, amount, amount_currency_code, dt_report, dt_investment_expense_or_payment, dt_created, created_by, counterparty_code, unit_budget_payer_code, responsible_division_code, is_currency_translation_prohibited_code
-		, dttm_inserted_src
-	    , now()                   as dttm_inserted
-	    , now()                   as dttm_updated
-	    , job_name
-	    , deleted_flag
-	from pg_temp.delta;
+table_name: toro_material_cost_analysis
+table_schema: dm
+table_id: 6553
+source_id: 15
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 63
+entity_name: TORO
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2025-11-21 23:00:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_truncate.sql
+depends_on:
+  dds:
+  - toro_order_header
+  - toro_material_consumption
+  - toro_equipment_unit_design_features
+  - toro_technical_place_design_features
+  dict_dds:
+  - sap_class_header
+  - sap_classification_keywords_texts
+  - uom_external_format_texts
+  - toro_equipment_unit
+  - toro_technical_place
+  - plant_and_subsidiary
+  - toro_technical_area_texts
+  - toro_technical_area
+  - toro_work_type_texts
+  - toro_work_type_group
+  - toro_work_type_group_texts
+  - toro_repair_team
+  - toro_repair_team_texts
+verification:
+  - duplicate_check
+key_attributes:
+  - material_document_code
+  - dt_material_document
+  - operation_code
+  - material_code
+  - toro_order_code
+deleted_flag: true

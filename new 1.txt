@@ -1,52 +1,11 @@
-table_name: toro_material_cost_analysis
-table_schema: dm
-table_id: 6553
-source_id: 15
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 63
-entity_name: TORO
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2025-11-21 23:00:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TORO/dm/toro_material_cost_analysis/sql_query_truncate.sql
-depends_on:
-  dds:
-  - toro_order_header
-  - toro_material_consumption
-  - toro_equipment_unit_design_features
-  - toro_technical_place_design_features
-  dict_dds:
-  - sap_class_header
-  - sap_classification_keywords_texts
-  - uom_external_format_texts
-  - toro_equipment_unit
-  - toro_technical_place
-  - plant_and_subsidiary
-  - toro_technical_area_texts
-  - toro_technical_area
-  - toro_work_type_texts
-  - toro_work_type_group
-  - toro_work_type_group_texts
-  - toro_repair_team
-  - toro_repair_team_texts
-verification:
-  - duplicate_check
-key_attributes:
-  - material_document_code
-  - dt_material_document
-  - operation_code
-  - material_code
-  - toro_order_code
-deleted_flag: true
+  
+  SELECT *
+FROM dm."toro_material_cost_analysis"
+WHERE CONCAT_WS('~', "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" )
+IN (
+    SELECT CONCAT_WS('~', "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" )
+    FROM dm."toro_material_cost_analysis"
+    WHERE deleted_flag IS FALSE
+    GROUP BY "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" 
+    HAVING COUNT(1)>1
+)

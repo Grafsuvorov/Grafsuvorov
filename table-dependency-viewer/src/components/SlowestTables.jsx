@@ -4,6 +4,7 @@ import { formatDateInputValue, formatLocalDateTime, parseLocalDateTime } from ".
 import { formatPercent } from "../utils/format.js";
 import { entitiesApi } from "../api/entities.js";
 import { performanceApi } from "../api/performance.js";
+import { sortSchemaNames } from "../utils/schemaOrder.js";
 const SLA_MINUTES = 10;
 const SLOW_P95_MINUTES = 10;
 const UNSTABLE_WARN = 0.3;
@@ -129,7 +130,7 @@ export default function SlowestTables({ onSelectTable }) {
             const schema = String(row.table_fqn || "").split(".")[0];
             if (schema) set.add(schema);
           });
-          setEntitySchemaOptions(["all", ...Array.from(set).sort((a, b) => a.localeCompare(b, "en"))]);
+          setEntitySchemaOptions(["all", ...sortSchemaNames(Array.from(set))]);
         }
       })
       .catch(() => setEntityLoads([]))
@@ -307,7 +308,7 @@ export default function SlowestTables({ onSelectTable }) {
       const [schemaName] = String(row.table_fqn || "").split(".");
       if (schemaName) schemas.add(schemaName);
     });
-    return Array.from(schemas).sort((a, b) => a.localeCompare(b, "ru"));
+    return sortSchemaNames(Array.from(schemas));
   }, [compareRows]);
 
   const filteredCompareRows = useMemo(() => {

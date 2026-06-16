@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
 import { parseLocalDateTime } from "../utils/datetime.js";
 import { entitiesApi } from "../api/entities.js";
+import { compareSchemaNames } from "../utils/schemaOrder.js";
 
 export default function EntityTablesPage() {
   const location = useLocation();
@@ -49,7 +50,7 @@ export default function EntityTablesPage() {
   // Schema list
   const allSchemas = useMemo(() => {
     const s = new Set(rows.map((r) => r.schema_name ?? r.table_schema).filter(Boolean));
-    return Array.from(s).sort((a,b) => a.localeCompare(b));
+    return Array.from(s).sort(compareSchemaNames);
   }, [rows]);
 
   // Typeahead suggestions
@@ -110,7 +111,7 @@ export default function EntityTablesPage() {
       map[r.schema].push(r);
     });
     return Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
+      .sort(([a], [b]) => compareSchemaNames(a, b))
       .map(([schema, list]) => ({
         schema,
         rows: list.sort((a, b) => (b.lastDate?.getTime() || 0) - (a.lastDate?.getTime() || 0)),

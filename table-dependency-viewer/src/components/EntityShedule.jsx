@@ -4,6 +4,7 @@ import "../style/app.css";
 import { formatLocalDateTime, parseLocalDateTime } from "../utils/datetime.js";
 import { entitiesApi } from "../api/entities.js";
 import { accountApi } from "../api/account.js";
+import { sortSchemaNames } from "../utils/schemaOrder.js";
 
 export default function EntityShedule() {
   const [entities, setEntities] = useState([]);
@@ -219,7 +220,7 @@ export default function EntityShedule() {
 
   const coverageSchemaOptions = useMemo(() => {
     if (!coverage?.count_by_schema) return ["all"];
-    const schemas = Object.keys(coverage.count_by_schema).sort();
+    const schemas = sortSchemaNames(Object.keys(coverage.count_by_schema));
     return ["all", ...schemas];
   }, [coverage]);
 

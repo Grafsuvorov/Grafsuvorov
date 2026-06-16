@@ -1,11 +1,42 @@
-  
-  SELECT *
-FROM dm."toro_material_cost_analysis"
-WHERE CONCAT_WS('~', "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" )
-IN (
-    SELECT CONCAT_WS('~', "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" )
-    FROM dm."toro_material_cost_analysis"
-    WHERE deleted_flag IS FALSE
-    GROUP BY "material_document_code",  "dt_material_document",  "operation_code",  "material_code",  "toro_order_code" 
-    HAVING COUNT(1)>1
-)
+
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose logs api --tail=200
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/usr/local/bin/uvicorn", line 8, in <module>
+table-dependency-viewer-api-1  |     sys.exit(main())
+table-dependency-viewer-api-1  |              ^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1524, in __call__
+table-dependency-viewer-api-1  |     return self.main(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1445, in main
+table-dependency-viewer-api-1  |     rv = self.invoke(ctx)
+table-dependency-viewer-api-1  |          ^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 1308, in invoke
+table-dependency-viewer-api-1  |     return ctx.invoke(self.callback, **ctx.params)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/click/core.py", line 877, in invoke
+table-dependency-viewer-api-1  |     return callback(*args, **kwargs)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 441, in main
+table-dependency-viewer-api-1  |     run(
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/main.py", line 609, in run
+table-dependency-viewer-api-1  |     config.load_app()
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/config.py", line 415, in load_app
+table-dependency-viewer-api-1  |     return import_from_string(self.app)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/site-packages/uvicorn/importer.py", line 19, in import_from_string
+table-dependency-viewer-api-1  |     module = importlib.import_module(module_str)
+table-dependency-viewer-api-1  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/usr/local/lib/python3.11/importlib/__init__.py", line 126, in import_module
+table-dependency-viewer-api-1  |     return _bootstrap._gcd_import(name[level:], package, level)
+table-dependency-viewer-api-1  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1204, in _gcd_import
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1176, in _find_and_load
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 1147, in _find_and_load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 690, in _load_unlocked
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap_external>", line 940, in exec_module
+table-dependency-viewer-api-1  |   File "<frozen importlib._bootstrap>", line 241, in _call_with_frames_removed
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 96, in <module>
+table-dependency-viewer-api-1  |     from .services.dev_meta import (
+table-dependency-viewer-api-1  |   File "/app/api/services/dev_meta.py", line 22, in <module>
+table-dependency-viewer-api-1  |     from .dev_meta import (
+table-dependency-viewer-api-1  | ImportError: cannot import name '_audit_dev_meta' from partially initialized module 'api.services.dev_meta' (most likely due to a circular import) (/app/api/services/dev_meta.py)

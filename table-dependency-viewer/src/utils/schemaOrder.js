@@ -5,9 +5,9 @@ const PIPELINE_SCHEMA_ORDER = [
   "dds",
   "ods",
   "stg",
-  "dict_dds",
   "dict_stg",
   "dict_ods",
+  "dict_dds",
 ];
 
 export function compareSchemaNames(left, right) {
@@ -26,4 +26,3 @@ export function compareSchemaNames(left, right) {
 export function sortSchemaNames(values) {
   return [...values].sort(compareSchemaNames);
 }
-

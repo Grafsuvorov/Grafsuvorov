@@ -36,6 +36,8 @@ SQL_PATH_FIELDS = {
 DEPENDENCY_IGNORE_SCHEMAS = {"information_schema", "pg_catalog"}
 DEPENDENCY_EXTRA_SCHEMAS = {"raw_ext", "dict_raw_ext", "dq"}
 REQUIRED_SYSTEM_FIELDS = ("dttm_inserted", "dttm_updated", "deleted_flag")
+CLICK_DIFF_IGNORED_FIELDS = {"description"}
+CLICK_DIFF_SYSTEM_FIELDS = {"dttm_inserted", "dttm_updated", "deleted_flag", "job_name"}
 
 BLOCKER = "BLOCKER"
 WARNING = "WARNING"
@@ -696,6 +698,29 @@ def _normalized_attr_value(value: Any) -> str:
     return str(value).strip()
 
 
+def _normalized_attr_compare_value(field_name: str, value: Any) -> str:
+    normalized = _normalized_attr_value(value)
+    if field_name in {"data_type_click", "data_type_gp"}:
+        return re.sub(r"\s+", "", normalized)
+    if field_name == "is_nullable":
+        return re.sub(r"\s+", " ", normalized).strip().upper()
+    if field_name == "default":
+        return re.sub(r"\s+", " ", normalized).strip()
+    if field_name == "column_name_gp":
+        return normalized.strip()
+    return normalized
+
+
+def _attr_field_label(field_name: str) -> str:
+    return {
+        "data_type_click": "тип ClickHouse",
+        "data_type_gp": "тип GP",
+        "is_nullable": "nullable",
+        "default": "default",
+        "column_name_gp": "колонка GP",
+    }.get(field_name, field_name)
+
+
 def compare_click_meta_attributes(
     path: str,
     base_meta: dict[str, Any],
@@ -708,8 +733,8 @@ def compare_click_meta_attributes(
         return
 
     object_label = click_meta_object_label(head_meta or base_meta, path)
-    added = sorted(head_index.keys() - base_index.keys())
-    removed = sorted(base_index.keys() - head_index.keys())
+    added = sorted(name for name in head_index.keys() - base_index.keys() if name not in CLICK_DIFF_SYSTEM_FIELDS)
+    removed = sorted(name for name in base_index.keys() - head_index.keys() if name not in CLICK_DIFF_SYSTEM_FIELDS)
     changed: list[str] = []
 
     tracked_fields = (
@@ -718,20 +743,23 @@ def compare_click_meta_attributes(
         "is_nullable",
         "default",
         "column_name_gp",
-        "description",
     )
 
     for column_name in sorted(base_index.keys() & head_index.keys()):
+        if column_name in CLICK_DIFF_SYSTEM_FIELDS:
+            continue
         before = base_index[column_name]
         after = head_index[column_name]
         diffs: list[str] = []
         for field_name in tracked_fields:
-            old_value = _normalized_attr_value(before.get(field_name))
-            new_value = _normalized_attr_value(after.get(field_name))
+            if field_name in CLICK_DIFF_IGNORED_FIELDS:
+                continue
+            old_value = _normalized_attr_compare_value(field_name, before.get(field_name))
+            new_value = _normalized_attr_compare_value(field_name, after.get(field_name))
             if old_value != new_value:
-                diffs.append(f"{field_name}: `{old_value}` -> `{new_value}`")
+                diffs.append(f"{_attr_field_label(field_name)}: `{old_value}` -> `{new_value}`")
         if diffs:
-            changed.append(f"{column_name} ({'; '.join(diffs)})")
+            changed.append(f"- `{column_name}`: " + "; ".join(diffs))
 
     if added:
         findings.append(
@@ -739,7 +767,7 @@ def compare_click_meta_attributes(
                 INFO,
                 path,
                 "click-attributes-added",
-                f"`{object_label}`: добавлены атрибуты `{', '.join(added)}`.",
+                f"`{object_label}`: добавлены поля\n" + "\n".join(f"- `{item}`" for item in added),
             )
         )
     if removed:
@@ -748,7 +776,7 @@ def compare_click_meta_attributes(
                 WARNING,
                 path,
                 "click-attributes-removed",
-                f"`{object_label}`: удалены атрибуты `{', '.join(removed)}`.",
+                f"`{object_label}`: удалены поля\n" + "\n".join(f"- `{item}`" for item in removed),
             )
         )
     if changed:
@@ -757,9 +785,20 @@ def compare_click_meta_attributes(
                 WARNING,
                 path,
                 "click-attributes-changed",
-                f"`{object_label}`: изменены атрибуты: " + "; ".join(changed),
+                f"`{object_label}`: изменены поля\n" + "\n".join(changed),
             )
         )
+
+
+def _append_finding(lines: list[str], item: Finding) -> None:
+    task_suffix = f" [tasks: {', '.join(f'`{task_id}`' for task_id in item.task_ids)}]" if item.task_ids else ""
+    message_lines = [part.rstrip() for part in str(item.message or "").splitlines() if part.strip()]
+    if not message_lines:
+        lines.append(f"- `{item.path}` [{item.rule}]{task_suffix}")
+        return
+    lines.append(f"- `{item.path}` [{item.rule}]{task_suffix}: {message_lines[0]}")
+    for extra_line in message_lines[1:]:
+        lines.append(f"  {extra_line}")
 
 
 def collect_entity_table_ids(ref: str, cwd: Path) -> dict[int, list[str]]:
@@ -1203,8 +1242,7 @@ def format_report(
         lines.append(f"## {severity} ({len(group)})")
         lines.append("")
         for item in group:
-            task_suffix = f" [tasks: {', '.join(f'`{task_id}`' for task_id in item.task_ids)}]" if item.task_ids else ""
-            lines.append(f"- `{item.path}` [{item.rule}]{task_suffix}: {item.message}")
+            _append_finding(lines, item)
         lines.append("")
     return "\n".join(lines)
 

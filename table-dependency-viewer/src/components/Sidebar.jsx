@@ -123,12 +123,28 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
                   Эффективность
                 </button>
               )}
+              {authEnabled && userProfile?.role === "admin" && (
+                <button
+                  type="button"
+                  className={isActive("/admin/feedback") ? "active" : ""}
+                  onClick={() => onChangeView("/admin/feedback")}
+                >
+                  Фидбек
+                </button>
+              )}
               <button
                 type="button"
                 className={isActive("/onboarding") ? "active" : ""}
                 onClick={() => onChangeView("onboarding")}
               >
                 Гид
+              </button>
+              <button
+                type="button"
+                className={isActive("/about-app") ? "active" : ""}
+                onClick={() => onChangeView("about_app")}
+              >
+                О приложении
               </button>
             </div>
           </nav>

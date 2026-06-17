@@ -2925,6 +2925,237 @@ body.custom-hover-label-active * {
   font-size: 13px;
 }
 
+.about-tabs {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.about-tab {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.36);
+  color: inherit;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.about-tab:hover {
+  border-color: rgba(96, 165, 250, 0.45);
+  transform: translateY(-1px);
+}
+
+.about-tab.active {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(96, 165, 250, 0.55);
+  color: #dbeafe;
+}
+
+.about-article {
+  display: grid;
+  gap: 14px;
+}
+
+.about-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.about-summary-card {
+  display: grid;
+  gap: 8px;
+}
+
+.about-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #dbeafe;
+}
+
+.about-summary-text {
+  color: rgba(226, 232, 240, 0.82);
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.about-article-block {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.about-article-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.about-article-text {
+  color: rgba(226, 232, 240, 0.88);
+  line-height: 1.65;
+  font-size: 14px;
+}
+
+.about-feedback-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.about-feedback-wide {
+  grid-column: 1 / -1;
+}
+
+.about-feedback-textarea {
+  min-height: 180px;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(2, 6, 23, 0.52);
+  color: inherit;
+  padding: 12px 14px;
+  font: inherit;
+}
+
+.about-feedback-textarea:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+.about-feedback-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.about-feedback-hint {
+  grid-column: 1 / -1;
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.feedback-admin-page {
+  display: grid;
+  gap: 18px;
+}
+
+.feedback-admin-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.feedback-admin-toolbar {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.feedback-admin-days {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.feedback-admin-topic {
+  min-width: 220px;
+}
+
+.feedback-admin-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.feedback-admin-kpi {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.46);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  display: grid;
+  gap: 6px;
+}
+
+.feedback-admin-kpi .label {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 12px;
+}
+
+.feedback-admin-kpi .value {
+  font-size: 28px;
+  font-weight: 800;
+  color: #f8fbff;
+}
+
+.feedback-admin-list {
+  display: grid;
+  gap: 14px;
+}
+
+.feedback-admin-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.46);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.feedback-admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.feedback-admin-topic-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.feedback-admin-date {
+  color: rgba(226, 232, 240, 0.68);
+  font-size: 12px;
+}
+
+.feedback-admin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 12px;
+}
+
+.feedback-admin-message {
+  color: rgba(244, 247, 255, 0.92);
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.feedback-admin-empty {
+  padding: 20px 0;
+  color: rgba(226, 232, 240, 0.72);
+}
+
 .logic-audit-filters {
   display: flex;
   flex-wrap: wrap;

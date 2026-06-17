@@ -38,7 +38,9 @@ const PAGE_LABELS = {
   "/logic-audit": "Аудит логики",
   "/account": "Профиль",
   "/admin/users": "Админка",
+  "/admin/feedback": "Обратная связь",
   "/onboarding": "Гид",
+  "/about-app": "О приложении",
 };
 
 export default function AdminUsersPage({ userProfile }) {
@@ -178,7 +180,19 @@ export default function AdminUsersPage({ userProfile }) {
       setLastDeployAt(data?.last_run_at || new Date().toLocaleString("ru-RU"));
       setDeployReady(false);
     } catch (err) {
-      setError(normalizeError(err));
+      setDeployError(normalizeError(err));
+      if (err?.detail && typeof err.detail === "object") {
+        setDeployOutput(err.detail);
+        setLastDeployAt(err.detail?.last_run_at || null);
+        return;
+      }
+      try {
+        const status = await adminApi.ciCdStatus();
+        setDeployOutput(status);
+        setLastDeployAt(status?.last_run_at || null);
+      } catch {
+        // ignore secondary status load errors
+      }
     } finally {
       setDeploying(false);
     }

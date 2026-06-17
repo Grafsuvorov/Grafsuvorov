@@ -19,11 +19,13 @@ import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
 import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 import NightOpsPage from "./components/NightOpsPage.jsx";
 import OnboardingPage from "./components/OnboardingPage.jsx";
+import AboutAppPage from "./components/AboutAppPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
 import DevMetaAdminPage from "./components/DevMetaAdminPage.jsx";
 import AdminEngineeringPage from "./components/AdminEngineeringPage.jsx";
+import AdminFeedbackPage from "./components/AdminFeedbackPage.jsx";
 import AccountPage from "./components/AccountPage.jsx";
 import ReleasesPage from "./components/ReleasesPage.jsx";
 import AdminAssistantPanel from "./components/AdminAssistantPanel.jsx";
@@ -176,6 +178,10 @@ export default function App() {
         navigate("/onboarding");
         return;
       }
+      if (target === "about_app") {
+        navigate("/about-app");
+        return;
+      }
       if (target === "/admin/users") {
         navigate("/admin/users");
         return;
@@ -198,6 +204,10 @@ export default function App() {
       }
       if (target === "/admin/engineering") {
         navigate("/admin/engineering");
+        return;
+      }
+      if (target === "/admin/feedback") {
+        navigate("/admin/feedback");
         return;
       }
       if (target === "/account") {
@@ -507,6 +517,18 @@ export default function App() {
           }
         />
         <Route
+          path="/admin/feedback"
+          element={
+            AUTH_ENABLED && !authToken ? (
+              <Navigate to="/login" replace />
+            ) : isAdmin ? (
+              <AdminFeedbackPage />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+        <Route
           path="/account"
           element={
             AUTH_ENABLED && !authToken ? (
@@ -604,6 +626,10 @@ export default function App() {
         <Route
           path="/onboarding"
           element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage />}
+        />
+        <Route
+          path="/about-app"
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <AboutAppPage userProfile={userProfile} />}
         />
         <Route
           path="/dependencies"

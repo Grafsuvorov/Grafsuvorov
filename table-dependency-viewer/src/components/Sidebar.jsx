@@ -139,13 +139,6 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
               >
                 Гид
               </button>
-              <button
-                type="button"
-                className={isActive("/about-app") ? "active" : ""}
-                onClick={() => onChangeView("about_app")}
-              >
-                О приложении
-              </button>
             </div>
           </nav>
         </div>

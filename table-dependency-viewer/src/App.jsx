@@ -19,7 +19,6 @@ import IncidentDetailsPage from "./components/IncidentDetailsPage.jsx";
 import ImpactGraphPage from "./components/ImpactGraphPage.jsx";
 import NightOpsPage from "./components/NightOpsPage.jsx";
 import OnboardingPage from "./components/OnboardingPage.jsx";
-import AboutAppPage from "./components/AboutAppPage.jsx";
 import LogicAuditPage from "./components/LogicAuditPage.jsx";
 import LoginPage from "./components/LoginPage.jsx";
 import AdminUsersPage from "./components/AdminUsersPage.jsx";
@@ -176,10 +175,6 @@ export default function App() {
       }
       if (target === "onboarding") {
         navigate("/onboarding");
-        return;
-      }
-      if (target === "about_app") {
-        navigate("/about-app");
         return;
       }
       if (target === "/admin/users") {
@@ -625,11 +620,11 @@ export default function App() {
           <Route path="/analytics" element={<Navigate to="/slow-tables" replace />} />
         <Route
           path="/onboarding"
-          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage />}
+          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <OnboardingPage userProfile={userProfile} />}
         />
         <Route
           path="/about-app"
-          element={AUTH_ENABLED && !authToken ? <Navigate to="/login" replace /> : <AboutAppPage userProfile={userProfile} />}
+          element={<Navigate to="/onboarding" replace />}
         />
         <Route
           path="/dependencies"

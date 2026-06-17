@@ -1,69 +1,50 @@
-- `config_files/meta/dm/dm_material_purchase_document_approvement_history_dob_dtil_meta.yaml` [click-attributes-changed] [tasks: `DWH-13676`]: `dm.material_purchase_document_approvement_history_dob_dtil`: изменены атрибуты: deleted_flag (description: `∅` -> `Комментария нет`); dttm_inserted (description: `∅` -> `Комментария нет`); dttm_updated (description: `∅` -> `Комментария нет`); job_name (description: `∅` -> `Комментария нет`)
-- `config_files/meta/dm/dm_view_investment_expenses_and_payments_meta.yaml` [click-attributes-changed] [tasks: `DWH-13695`]: `dm.investment_expenses_and_payments`: изменены атрибуты: alternative_counterparty_of_unit_budget_partn
-er_code (description: `Контрагент, SAP ERP код филиала | Контрагент, SAP ERP код филиала | ZPBE_P.zcompanya` -> `Контрагент, SAP ERP код филиала | Контрагент, SAP ERP код филиала | dict_dds.unit_budget.counterparty_alternative_c
-ode`); amount (description: `Сумма | Сумма | 0AMOUNT` -> `Сумма | Сумма | dds.investment_expenses.amount`); budget_group_code (description: `Код статьи бюджета, код | Код статьи бюджета, код | ZIM_ITEM` -> `Код статьи бюджета, к
-од | Код статьи бюджета, код | dds.investment_expenses.budget_group_code`); budget_group_name (description: `Код статьи бюджета, название | Код статьи бюджета, название  | ZIM_ITEM` -> `Код статьи бюджета, название | Код статьи 
-бюджета, название | dict_dds.budget_group_texts.budget_group_name`); cost_element_code (description: `Вид затрат, код | Вид затрат, код | ZCOSTELMT` -> `Вид затрат, код | Вид затрат, код | dict_dds.budget_group.cost_element_code
-`); cost_element_name (description: `Вид затрат, название | Вид затрат, название | ZCOSTELMT` -> `Вид затрат, название | Вид затрат, название | dict_dds.cost_element_texts.cost_element_full_name`); counterparty_code (description
-: `Юрлицо-партнер | Юрлицо-партнер | ZCOMPANYP` -> `Юрлицо-партнер | Юрлицо-партнер | dds.investment_expenses.counterparty_code`); counterparty_hfm_code (description: `Контрагент, код HFM | Контрагент, код HFM | ZPBE_P.zhfm` -> 
-`Контрагент, код HFM | Контрагент, код HFM | dict_dds.counterparty.counterparty_hfm_code`); counterparty_of_unit_budget_partner_code (description: `Контрагент, SAP ERP код | Контрагент, SAP ERP код | ZPBE_P.zcompany` -> `Контраг
-ент, SAP ERP код | Контрагент, SAP ERP код | dict_dds.unit_budget.counterparty_code`); counterparty_of_unit_budget_partner_hfm_code (description: `Контрагент, код HFM | Контрагент, код HFM | ZPBE_P.zhfm` -> `Контрагент, код HFM 
-| Контрагент, код HFM | dict_dds.counterparty.counterparty_hfm_code`); counterparty_of_unit_budget_partner_search_name (description: `Контрагент (код+имя для фильтрации)| Контрагент (код+имя для фильтрации) | dict_dds.counterpar
-ty.counterparty_search_name` -> `Контрагент (код+имя для фильтрации) | Контрагент (код+имя для фильтрации) | dict_dds.counterparty.counterparty_search_name`); counterparty_of_unit_budget_partner_truncated_code (description: `Кон
-трагент (код для фильтрации)| Контрагент (код для фильтрации) | dict_dds.counterparty.counterparty_truncated_code` -> `Контрагент (код для фильтрации) | Контрагент (код для фильтрации) | dict_dds.counterparty.counterparty_trunca
-ted_code`); counterparty_search_name (description: `Контрагент (код+имя для фильтрации)| Контрагент (код+имя для фильтрации) | dict_dds.counterparty.counterparty_search_name` -> `Контрагент (код+имя для фильтрации) | Контрагент 
-(код+имя для фильтрации) | dict_dds.counterparty.counterparty_search_name`); counterparty_truncated_code (description: `Контрагент (код для фильтрации)| Контрагент (код для фильтрации) | dict_dds.counterparty.counterparty_trunca
-ted_code` -> `Контрагент (код для фильтрации) | Контрагент (код для фильтрации) | dict_dds.counterparty.counterparty_truncated_code`); division_code (description: `Дивизион, код | Дивизион, код | ZDIVISION` -> `Дивизион, код | Д
-ивизион, код | dds.investment_expenses.division_code`); division_name (description: `Дивизион, текст | Дивизион, текст | ZDIVISION  (текст средней длины)` -> `Дивизион, текст | Дивизион, текст | dict_dds.division_texts.division_
-full_name`); dt_investment_expense_or_payment (description: `Календарный день | Календарный день | CALDAY` -> `Календарный день | Календарный день | dds.investment_expenses.dt_investment_expense_or_payment`); financing_status_co
-de (description: `Статус финансирования, код | Статус финансирования, код | ZIMRESERV` -> `Статус финансирования, код | Статус финансирования, код | dds.investment_expenses.financing_status_code`); financing_status_name (descrip
-tion: `Статус финансирования, название | Статус финансирования, название | ZIMRESERV (краткий текст)` -> `Статус финансирования, название | Статус финансирования, название | dict_dds.financing_status_texts.financing_status_name`
-); investment_activity_external_code (description: `ИМ, внешний код | ИМ, внешний код | ZIMACTCOD` -> `ИМ, внешний код | ИМ, внешний код | dict_dds.investment_activity_td.investment_activity_external_code`); investment_activity_
-internal_code (description: `ИМ, внутренний код | ИМ, внутренний код | ZINVACTVT` -> `ИМ, внутренний код | ИМ, внутренний код | dds.investment_expenses.investment_activity_code`); investment_activity_isuip_internal_code (descrip
-tion: `ИМ, ИСУИП код| ИМ, ИСУИП код | dict_stg."viewForDWHIMCards".ID` -> `ИМ, ИСУИП код | ИМ, ИСУИП код | dict_dds.investment_activity_isuip.investment_activity_isuip_code`); investment_activity_name (description: `ИМ, название
- | ИМ, название | ZINVACTVT.ZTXT1 + ZINVACTVT.ZTXT2 + ZINVACTVT.ZTXT3` -> `ИМ, название | ИМ, название | dict_dds.investment_activity_td.investment_activity_extented_name`); investment_activity_status_code (description: `Статус 
-ИМ, код | Статус ИМ, код | ZIMSTATUS` -> `Статус ИМ, код | Статус ИМ, код | dds.investment_expenses.investment_activity_status_code`); investment_activity_status_name (description: `Статус ИМ, название | Статус ИМ, название | ZI
-MSTATUS  (стандартный текст)` -> `Статус ИМ, название | Статус ИМ, название | dict_dds.investment_activity_status_texts.investment_activity_status_name`); investment_area_code (description: `Направление, код | Направление, код |
- ZIMINVDIR` -> `Направление, код | Направление, код | dds.investment_expenses.investment_area_code`); investment_area_name (description: `Направление, название | Направление, название | ZIMINVDIR.ZTXT1 + ZIMINVDIR.ZTXT2 + ZIMINV
-DIR.ZTXT3` -> `Направление, название | Направление, название | dict_dds.investment_activity_focus_area.investment_activity_focus_area_extented_name`); investment_budget_adjustment_number (description: `Номер корректировки | Номе
-р корректировки | ZIM_CORR` -> `Номер корректировки | Номер корректировки | dds.investment_expenses.investment_budget_adjustment_number`); investment_budget_section_code (description: `Раздел ИБ, код | Раздел ИБ, код | ZSECT_GR`
- -> `Раздел ИБ, код | Раздел ИБ, код | dds.investment_expenses.investment_budget_section_code`); investment_budget_section_name (description: `Раздел ИБ, текст | Раздел ИБ, текст | ZSECT_GR (стандартный текст)` -> `Раздел ИБ, те
-кст | Раздел ИБ, текст | dict_dds.investment_budget_section_texts.investment_budget_section_full_name`); investment_budget_subsection_code (description: `Подраздел ИБ, код | Подраздел ИБ, код | ZSECTION` -> `Подраздел ИБ, код | 
-Подраздел ИБ, код | dds.investment_expenses.investment_budget_subsection_code`); investment_budget_subsection_isuip_code (description: `ИМ, ИСУИП подраздел, код | ИМ, ИСУИП подраздел, код | StrategicSubsectionCode.StrategicSubse
-ctionCode` -> `ИМ, ИСУИП по��раздел, код | ИМ, ИСУИП подраздел, код | dict_dds.investment_activity_isuip.investment_budget_longterm_forecast_subsection_code`); investment_budget_subsection_isuip_name (description: `ИМ, ИСУИП под
-раздел, название| ИМ, ИСУИП подраздел, название | StrategicSectionsSectionsSectionsLink.StrategicSectionName` -> `ИМ, ИСУИП подраздел, название | ИМ, ИСУИП подраздел, название | dict_dds.investment_budget_longterm_forecast_subse
-ction_texts.investment_budget_longterm_forecast_subsection_name`); investment_budget_subsection_name (description: `Подраздел ИБ, текст | Подраздел ИБ, текст | ZSECTION  (стандартный текст)` -> `Подраздел ИБ, текст | Подраздел И
-Б, текст | dict_dds.investment_budget_subsection_texts.investment_budget_subsection_full_name`); is_additional_finance_code (description: `Дофинансирование, код | Дофинансирование, код | ZADDFUNDF` -> `Дофинансирование, код | До
-финансирование, код | dds.investment_expenses.is_additional_finance_code`); is_additional_finance_name (description: `Дофинансирование, текст | Дофинансирование, текст | ZADDFUNDF (стандартный текст)` -> `Дофинансирование, текст
- | Дофинансирование, текст | dict_dds.additional_finance_texts.is_additional_finance_name`); plant_code (description: `Завод | Завод | ZPBE.0PLANT` -> `Завод | Завод | dict_dds.unit_budget.plant_code`); purchase_document_code (d
-escription: `Номер документа | Номер документа | ZKN_DOCNO` -> `Номер документа | Номер документа | dds.investment_expenses.purchase_document_code`); unit_balance_name (description: `БЕ название| БЕ название | dict_dds.unit_bala
-nce.unit_balance_name` -> `БЕ название | БЕ название | dict_dds.unit_balance.unit_balance_name`); unit_balance_partner_code (description: `Контрагент, SAP ERP БЕ | Контрагент, SAP ERP БЕ | ZPBE_P.0COMPCODE` -> `Контрагент, SAP E
-RP БЕ | Контрагент, SAP ERP БЕ | dict_dds.unit_budget.unit_balance_code`); unit_balance_partner_name (description: `БЕ-партнера название| БЕ-партнера название | dict_dds.unit_balance.unit_balance_name` -> `БЕ-партнера название |
- БЕ-партнера название | dict_dds.unit_balance.unit_balance_name`); unit_budget_isuip_code (description: `ПБЕ, ИСУИП код| ПБЕ, ИСУИП код | dict_dds.unit_budget.unit_budget_isuip_code` -> `ПБЕ, ИСУИП код | ПБЕ, ИСУИП код | dict_dd
-s.unit_budget.unit_budget_isuip_code`); unit_budget_partner_code (description: `Контрагент, код BI | Контрагент, код BI | ZPBE_P` -> `Контрагент, код BI | Контрагент, код BI | dds.investment_expenses.unit_budget_partner_code`); 
-unit_budget_partner_hfm_code (description: `ПБЕ-партнер, код HFM | ПБЕ-партнер, код HFM | ZPBE_P.zhfm` -> `ПБЕ-партнер, код HFM | ПБЕ-партнер, код HFM | dict_dds.unit_budget.hfm_code`); unit_budget_partner_name (description: `Ко
-нтрагент, имя | Контрагент, имя | ZPBE_P (текст средней длины)` -> `Контрагент, имя | Контрагент, имя | dict_dds.unit_budget_texts_td.unit_budget_full_name`); unit_budget_payer_code (description: `ПБЕ-плательщик | ПБЕ-плательщик
- | ZPBE_PAY` -> `ПБЕ-плательщик | ПБЕ-плательщик | dds.investment_expenses.unit_budget_payer_code`); unit_budget_payer_name (description: `ПБЕ-плательщик, имя | ПБЕ-плательщик, имя  | ZPBE_P (текст средней длины)` -> `ПБЕ-плательщик, имя | ПБЕ-плательщик, имя | dict_dds.unit_budget_texts_td.unit_budget_full_name`)
-- `config_files/meta/dm/dm_view_investment_payments_actual_meta.yaml` [click-attributes-changed] [tasks: `DWH-13695`]: `dm.investment_payments_actual`: изменены атрибуты: accounting_document_code (is_nullable: `NOT NULL` -> `NUL
-L`); accounting_document_fiscal_year (data_type_click: `Decimal(4, 0)` -> `Decimal(4,0)`; is_nullable: `NOT NULL` -> `NULL`); accounting_document_position_code (data_type_click: `Decimal(3, 0)` -> `Decimal(3,0)`; is_nullable: `N
-OT NULL` -> `NULL`); accounting_document_unit_balance_code (is_nullable: `NOT NULL` -> `NULL`); capitalization_percent (data_type_click: `Decimal(5, 2)` -> `Decimal(5,2)`); deleted_flag (is_nullable: `NOT NULL` -> `NULL`); docum
-ent_currency_amount (data_type_click: `Decimal(20, 2)` -> `Decimal(20,2)`); document_exchange_to_usd_rate (data_type_click: `Decimal(20, 5)` -> `Decimal(20,5)`); document_usd_currency_amount (data_type_click: `Decimal(20, 2)` ->
- `Decimal(20,2)`); dt_posting (data_type_click: `Date` -> `Date32`; is_nullable: `NOT NULL` -> `NULL`); dt_posting_reverse_document (data_type_click: `Date` -> `Date32`); dttm_inserted (is_nullable: `NOT NULL` -> `NULL`); dttm_u
-pdated (is_nullable: `NOT NULL` -> `NULL`); exclude_vat_payment_document_currency_amount (data_type_click: `Decimal(20, 2)` -> `Decimal(20,2)`); exclude_vat_payment_usd_currency_amount (data_type_click: `Decimal(20, 2)` -> `Deci
-mal(20,2)`); job_name (is_nullable: `NOT NULL` -> `NULL`); payment_document_fiscal_year (data_type_click: `Decimal(4, 0)` -> `Decimal(4,0)`); reverse_document_fiscal_year (data_type_click: `Decimal(4, 0)` -> `Decimal(4,0)`); vat
-_payment_document_currency_amount (data_type_click: `Decimal(20, 2)` -> `Decimal(20,2)`); vat_payment_usd_currency_amount (data_type_click: `Decimal(20, 2)` -> `Decimal(20,2)`); vat_rate (data_type_click: `Decimal(4, 2)` -> `Decimal(4,2)`)
-- `config_files/meta/dm_view/consolidated_document_workflow_approval_performance.sql` [view-create-if-not-exists] [tasks: `DWH-13690`]: `DROP VIEW IF EXISTS` + `CREATE VIEW IF NOT EXISTS` выглядит избыточно: после drop лучше обычный `CREATE VIEW`, чтобы ошибка создания не скрылась.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_view/investment_expenses_actual/sql_query_recreate_init.sql` [view-drop] [tasks: `DWH-13695`]: Для view не найден явный `DROP VIEW IF EXISTS`.       
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_FI/dm_view/investment_payments_actual/sql_query_recreate_init.sql` [view-drop] [tasks: `DWH-13695`]: Для view не найден явный `DROP VIEW IF EXISTS`.       
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_INVESTMENT/dm_view/investment_expenses_and_payments/sql_query_recreate_init.sql` [view-drop] [tasks: `DWH-13695`]: Для view не найден явный `DROP VIEW IF EXISTS`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_dds/map_forecast_transportation_scenario_to_business_location/sql_query_recreate_init.sql` [table-comment] [tasks: `DWH-13728`]: Не найден `COMMENT ON TABLE`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/DICT_LOADER/dict_dds/map_forecast_transportation_scenario_to_business_location/sql_query_recreate_init.sql` [column-comments] [tasks: `DWH-13728`]: Не найдены `COMMENT ON COLUMN`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/RLS_LOADER/rls/rls_t/sql_query_insert_init.sql` [select-star] [tasks: `DWH-13790`]: `SELECT *` нежелателен: downstream может сломаться при изменении колонок. 
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/RLS_LOADER/rls/rls_t/sql_query_recreate_init.sql` [table-comment] [tasks: `DWH-13790`]: Не найден `COMMENT ON TABLE`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/RLS_LOADER/rls/rls_t/sql_query_recreate_init.sql` [column-comments] [tasks: `DWH-13790`]: Не найдены `COMMENT ON COLUMN`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/ods/draw_ral/sql_query_recreate_init.sql` [table-comment] [tasks: `DWH-13484`]: Не найден `COMMENT ON TABLE`.
-- `meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/TRANSPORTATION/ods/draw_ral/sql_query_recreate_init.sql` [column-comments] [tasks: `DWH-13484`]: Не найдены `COMMENT ON COLUMN`.
-- `template_dir/dags_verification_query/dm/sb_wuc/dq_sd0522.sql` [select-star] [tasks: `DWH-13714`]: `SELECT *` нежелателен: downstream может сломаться при изменении колонок.
-- `DWH-13577` [release-slot-missing]: В Release Slot `DWH-13577` (Релиз FI (2026-06-17)) есть задачи, которых нет в merged tasks: DWH-13698.
-- `DWH-13677` [release-slot-missing]: В Release Slot `DWH-13677` (Релиз LE (2026-06-17)) есть задачи, которых нет в merged tasks: DWH-13719.
-- `release/2026-06-17` [release-slot-extra]: В merged tasks есть задачи, которых нет ни в одном Release Slot за 2026-06-17: DWH-13788.
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build --no-cache frontend api
+[+] Building 19.1s (23/31)
+ => [table-dependency-viewer_api internal] load build definition from Dockerfile                                                       0.0s
+ => => transferring dockerfile: 1.74kB                                                                                                 0.0s
+ => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                                  0.0s
+ => => transferring dockerfile: 659B                                                                                                   0.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                                        2.0s
+ => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                            2.2s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                                       2.0s
+ => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                                     2.2s
+ => [table-dependency-viewer_frontend internal] load .dockerignore                                                                     0.0s
+ => => transferring context: 162B                                                                                                      0.0s
+ => [table-dependency-viewer_api internal] load .dockerignore                                                                          0.0s
+ => => transferring context: 162B                                                                                                      0.0s
+ => [table-dependency-viewer_frontend build 1/6] FROM docker.io/library/node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a  0.0s
+ => [table-dependency-viewer_frontend internal] load build context                                                                     2.1s
+ => => transferring context: 110.17MB                                                                                                  2.0s
+ => CACHED [table-dependency-viewer_frontend stage-1 1/3] FROM docker.io/library/nginx:alpine@sha256:8b1e78743a03dbb2c95171cc58639fef  0.0s
+ => CACHED [table-dependency-viewer_frontend build 2/6] WORKDIR /app                                                                   0.0s
+ => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:ae52c5bef62a6bdd42cd1e8dffef86b9cd284b  0.0s
+ => [table-dependency-viewer_api internal] load build context                                                                          0.0s
+ => => transferring context: 413.33kB                                                                                                  0.0s
+ => CACHED [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a  0.0s
+ => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                                                    0.0s
+ => CANCELED [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*  16.8s
+ => [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set https-  3.1s
+ => [table-dependency-viewer_frontend build 3/6] COPY package*.json ./                                                                 0.9s
+ => [table-dependency-viewer_frontend stage-1 2/3] COPY nginx.conf /etc/nginx/conf.d/default.conf                                      0.8s
+ => [table-dependency-viewer_frontend build 4/6] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config set   8.9s
+ => [table-dependency-viewer_frontend build 5/6] COPY . .                                                                              3.1s
+ => ERROR [table-dependency-viewer_frontend build 6/6] RUN npm run build                                                               1.5s
+------
+ > [table-dependency-viewer_frontend build 6/6] RUN npm run build:
+#10 0.345
+#10 0.345 > table-dependency-viewer@1.0.0 build
+#10 0.345 > vite build
+#10 0.345
+#10 0.593 vite v7.0.5 building for production...
+#10 0.661 transforming...
+#10 1.361 ✓ 75 modules transformed.
+#10 1.363 ✗ Build failed in 741ms
+#10 1.363 error during build:
+#10 1.363 Could not resolve "../api/feedback.js" from "src/components/AboutAppPage.jsx"
+#10 1.363 file: /app/src/components/AboutAppPage.jsx
+#10 1.363     at getRollupError (file:///app/node_modules/rollup/dist/es/shared/parseAst.js:401:41)
+#10 1.363     at error (file:///app/node_modules/rollup/dist/es/shared/parseAst.js:397:42)
+#10 1.363     at ModuleLoader.handleInvalidResolvedId (file:///app/node_modules/rollup/dist/es/shared/node-entry.js:21442:24)
+#10 1.363     at file:///app/node_modules/rollup/dist/es/shared/node-entry.js:21402:26
+------
+failed to solve: rpc error: code = Unknown desc = process "/bin/sh -c npm run build" did not complete successfully: exit code: 1

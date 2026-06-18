@@ -3053,6 +3053,11 @@ body.custom-hover-label-active * {
   line-height: 1.35;
 }
 
+.entity-history-duration-detail {
+  color: rgba(226, 232, 240, 0.62);
+  font-size: 11px;
+}
+
 .feedback-admin-page {
   display: grid;
   gap: 18px;

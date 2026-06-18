@@ -63,6 +63,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [branchFileLoading, setBranchFileLoading] = useState(false);
   const [gpBranchBundle, setGpBranchBundle] = useState(null);
   const [clickBranchFile, setClickBranchFile] = useState(null);
+  const [editorVisible, setEditorVisible] = useState(false);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
@@ -148,6 +149,12 @@ export default function MetaWorkspacePage({ userProfile }) {
       ]);
       setBranchCatalog(data || { gp_objects: [], click_objects: [] });
       setBranchTree(treeData || { gp_entities: [], click_schemas: [] });
+      setActiveSelection(null);
+      setGpOpenRequest(null);
+      setClickOpenRequest(null);
+      setGpBranchBundle(null);
+      setClickBranchFile(null);
+      setEditorVisible(false);
       if (!silent) {
         setMessage("Каталог изменений ветки обновлен.");
       }
@@ -322,6 +329,7 @@ export default function MetaWorkspacePage({ userProfile }) {
     setClickOpenRequest(null);
     setGpBranchBundle(null);
     setClickBranchFile(null);
+    setEditorVisible(false);
     window.requestAnimationFrame(() => {
       document.getElementById("meta-workspace-branch-browser")?.scrollIntoView({
         behavior: "smooth",
@@ -346,6 +354,7 @@ export default function MetaWorkspacePage({ userProfile }) {
         branch_name: data.branch_name,
         bundle: data,
       });
+      setEditorVisible(true);
       setMode("gp");
       setActiveSelection({
         domain: "gp",
@@ -377,6 +386,7 @@ export default function MetaWorkspacePage({ userProfile }) {
           revision: data.revision,
         },
       });
+      setEditorVisible(true);
       setMode("click");
       setActiveSelection({
         domain: "click",
@@ -396,6 +406,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const jumpToGenerator = (nextMode) => {
     setMode(nextMode);
     setActiveSelection(null);
+    setEditorVisible(true);
     const targetId = nextMode === "gp" ? "meta-workspace-gp-generator" : "meta-workspace-click-generator";
     window.requestAnimationFrame(() => {
       document.getElementById(targetId)?.scrollIntoView({
@@ -760,6 +771,9 @@ export default function MetaWorkspacePage({ userProfile }) {
               </div>
             </div>
           ) : null}
+          {branchScopedActive && !editorVisible ? (
+            <div className="muted">Выберите объект из дерева выше или нажмите кнопку создания нового объекта.</div>
+          ) : null}
           {activeSelection ? (
             <div className="meta-workspace-selection-bar">
               <button type="button" className="btn btn-ghost" onClick={handleBackToBranchList}>
@@ -773,7 +787,7 @@ export default function MetaWorkspacePage({ userProfile }) {
               </div>
             </div>
           ) : null}
-          {mode === "gp" ? (
+          {(!branchScopedActive || editorVisible) && (mode === "gp" ? (
             <EntityDevMetaWorkspace
               userProfile={userProfile}
               embedded
@@ -807,7 +821,7 @@ export default function MetaWorkspacePage({ userProfile }) {
               branchScopedActive={branchScopedActive}
               generatorAnchorId="meta-workspace-click-generator"
             />
-          )}
+          ))}
         </div>
       </section>
     </div>

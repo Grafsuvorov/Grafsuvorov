@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import "../style/app.css";
 import { formatLocalDateTime, parseLocalDateTime } from "../utils/datetime.js";
 import { entitiesApi } from "../api/entities.js";
@@ -7,6 +7,7 @@ import { accountApi } from "../api/account.js";
 import { sortSchemaNames } from "../utils/schemaOrder.js";
 
 export default function EntityShedule() {
+  const location = useLocation();
   const [entities, setEntities] = useState([]);
   const [error, setError] = useState(null);
   const [loadingEntities, setLoadingEntities] = useState(false);
@@ -98,7 +99,9 @@ export default function EntityShedule() {
 
   const openEntityTables = (row) => {
     const q = new URLSearchParams({ name: row.entity_name ?? '' }).toString();
-    navigate(`/entity/${row.entity_id}/tables?${q}`);
+    navigate(`/entity/${row.entity_id}/tables?${q}`, {
+      state: { from: `${location.pathname}${location.search}` },
+    });
   };
 
   const toggleFavoriteEntity = async (row) => {
@@ -229,7 +232,9 @@ export default function EntityShedule() {
     const schema = String(row.schema).trim();
     const table = String(row.table).trim().replaceAll("/", "").replaceAll("-", "");
     if (!schema || !table) return;
-    navigate(`/table/${schema}/${table}`);
+    navigate(`/table/${schema}/${table}`, {
+      state: { from: `${location.pathname}${location.search}` },
+    });
   };
 
   return (

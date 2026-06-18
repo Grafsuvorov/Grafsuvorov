@@ -188,8 +188,11 @@ export default function EntityTablesPage() {
           </div>
         </div>
         <div className="entity-toolbar">
-          <button className="btn btn-ghost" onClick={() => navigate("/entity_schedule")}>
-            Назад к сущностям →
+          <button
+            className="btn btn-ghost"
+            onClick={() => navigate(location.state?.from || "/entities")}
+          >
+            ← Назад
           </button>
         </div>
       </div>
@@ -300,7 +303,11 @@ export default function EntityTablesPage() {
                   </div>
                   <button
                     className="btn btn-ghost entity-table-action"
-                    onClick={() => navigate(`/table/${r.schema}/${r.table}`)}
+                    onClick={() =>
+                      navigate(`/table/${r.schema}/${r.table}`, {
+                        state: { from: `${location.pathname}${location.search}` },
+                      })
+                    }
                   >
                     Карточка
                   </button>

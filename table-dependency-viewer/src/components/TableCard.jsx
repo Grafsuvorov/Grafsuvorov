@@ -19,6 +19,25 @@ export default function TableCard({
   tableContext = null,
 }) {
   const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
+  const formatDurationMmSs = (value) => {
+    const minutes = Number(value);
+    if (!Number.isFinite(minutes)) return "—";
+    const totalSeconds = Math.max(0, Math.round(minutes * 60));
+    const mm = Math.floor(totalSeconds / 60);
+    const ss = totalSeconds % 60;
+    return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  };
+  const formatDurationDelta = (currentValue, previousValue) => {
+    const current = Number(currentValue);
+    const previous = Number(previousValue);
+    if (!Number.isFinite(current) || !Number.isFinite(previous)) return "—";
+    const deltaSeconds = Math.round((current - previous) * 60);
+    const sign = deltaSeconds > 0 ? "+" : deltaSeconds < 0 ? "-" : "±";
+    const absSeconds = Math.abs(deltaSeconds);
+    const mm = Math.floor(absSeconds / 60);
+    const ss = absSeconds % 60;
+    return `${sign}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  };
   const isCurrentSource = source === "current";
   const [meta, setMeta] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
@@ -96,6 +115,27 @@ export default function TableCard({
   const clickRunsRequestRef = useRef(0);
   const clickHistoryRequestRef = useRef(0);
   const dbtHistoryRequestRef = useRef(0);
+  const gpHistoryWithDelta = useMemo(
+    () =>
+      (historyRows || []).map((row, idx, arr) => ({
+        ...row,
+        previous_duration_minutes:
+          idx + 1 < arr.length ? arr[idx + 1]?.duration_minutes ?? null : null,
+      })),
+    [historyRows],
+  );
+  const clickHistoryWithDelta = useMemo(
+    () =>
+      (clickHistory || []).map((row, idx, arr) => ({
+        ...row,
+        current_duration_minutes: row.actual_duration_min ?? row.duration_min ?? null,
+        previous_duration_minutes:
+          idx + 1 < arr.length
+            ? arr[idx + 1]?.actual_duration_min ?? arr[idx + 1]?.duration_min ?? null
+            : null,
+      })),
+    [clickHistory],
+  );
 
   useEffect(() => {
     if (!schema || !tableName) {
@@ -1862,7 +1902,7 @@ export default function TableCard({
                     <span>Длит.</span>
                     <span>Комментарий</span>
                   </div>
-                  {historyRows.map((row, idx) => (
+                  {gpHistoryWithDelta.map((row, idx) => (
                     <div key={`${row.finish || "row"}-${idx}`} className="history-row-block">
                       <div className="history-table-row">
                         <span className={`history-state history-${String(row.state || "unknown").toLowerCase()}`}>
@@ -1870,7 +1910,12 @@ export default function TableCard({
                         </span>
                         <span>{row.start || "—"}</span>
                         <span>{row.finish || "—"}</span>
-                        <span>{row.duration_minutes ?? "—"} мин</span>
+                        <span className="history-duration-cell">
+                          <strong>{formatDurationMmSs(row.duration_minutes)}</strong>
+                          <span className="history-duration-detail">
+                            prev {formatDurationMmSs(row.previous_duration_minutes)} · Δ {formatDurationDelta(row.duration_minutes, row.previous_duration_minutes)}
+                          </span>
+                        </span>
                         <span className="history-message">
                           {row.message ? (
                             <button
@@ -1909,13 +1954,18 @@ export default function TableCard({
                     <span>Ожидание</span>
                     <span>Статус</span>
                   </div>
-                  {clickHistory.map((row, idx) => (
+                  {clickHistoryWithDelta.map((row, idx) => (
                     <div key={`${row.run_uuid}-${idx}`} className="history-row-block">
                       <div className={`history-table-row status-${String(row.status || "").toLowerCase()}`}>
                         <span>{row.stage_name}</span>
                         <span>{row.start_dttm || "—"}</span>
                         <span>{row.end_dttm || "—"}</span>
-                        <span>{formatMinutes(row.actual_duration_min ?? row.duration_min)}</span>
+                        <span className="history-duration-cell">
+                          <strong>{formatDurationMmSs(row.current_duration_minutes)}</strong>
+                          <span className="history-duration-detail">
+                            prev {formatDurationMmSs(row.previous_duration_minutes)} · Δ {formatDurationDelta(row.current_duration_minutes, row.previous_duration_minutes)}
+                          </span>
+                        </span>
                         <span>{formatMinutes(row.lag_duration_min ?? 0)}</span>
                         <span className="history-click-status">
                           {clickStatusLabel(row.status)}

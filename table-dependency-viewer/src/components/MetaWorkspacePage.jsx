@@ -82,8 +82,10 @@ export default function MetaWorkspacePage({ userProfile }) {
   const filteredBranchOptions = useMemo(() => {
     const term = String(branchName || "").trim().toLowerCase();
     if (!term) return [];
+    const selected = String(branchName || "").trim().toLowerCase();
     return branchOptions
       .filter((item) => String(item || "").toLowerCase().includes(term))
+      .filter((item) => String(item || "").trim().toLowerCase() !== selected)
       .slice(0, 20);
   }, [branchOptions, branchName]);
   const allowedGpObjectKeys = useMemo(
@@ -449,7 +451,8 @@ export default function MetaWorkspacePage({ userProfile }) {
         <div className="dev-meta-generator meta-workspace-context">
           <div className="meta-workspace-context-head">
             <div>
-              <div className="section-subtitle">Измененные объекты в выбранной ветке</div>
+              <div className="section-subtitle">Изменения в выбранной ветке</div>
+              <div className="muted">Здесь показываются только объекты, которые отличаются от base-ветки и попадут в проверку/релиз.</div>
             </div>
           </div>
           <div className="dev-meta-generator-grid meta-workspace-context-grid">
@@ -512,7 +515,7 @@ export default function MetaWorkspacePage({ userProfile }) {
               {creatingBranch ? "Создаем ветку..." : "Создать ветку от main"}
             </button>
             <button type="button" className="btn btn-secondary" onClick={handleValidateAll} disabled={validatingBranch || !String(branchName || "").trim() || !String(baseBranch || "").trim()}>
-              {validatingBranch ? "Проверяем всё..." : "Проверить все объекты ветки"}
+              {validatingBranch ? "Проверяем всю ветку..." : "Проверить всю ветку"}
             </button>
             <span className="muted">GP: {branchSummary.gp} · Click: {branchSummary.click}</span>
           </div>
@@ -529,7 +532,11 @@ export default function MetaWorkspacePage({ userProfile }) {
                   {item}
                 </button>
               )) : (
-                <div className="muted">Подходящих веток не найдено.</div>
+                <div className="muted">
+                  {branchOptions.some((item) => String(item || "").trim().toLowerCase() === String(branchName || "").trim().toLowerCase())
+                    ? `Выбрана ветка: ${branchName}`
+                    : "Подходящих веток не найдено."}
+                </div>
               )
             ) : (
               <div className="muted">Начните вводить имя ветки, и появятся подходящие варианты.</div>
@@ -599,12 +606,16 @@ export default function MetaWorkspacePage({ userProfile }) {
         <div className="dev-meta-generator meta-workspace-context">
           <div className="meta-workspace-context-head">
             <div>
-              <div className="section-subtitle">Структура ветки</div>
+              <div className="section-subtitle">Полная структура файлов выбранной ветки</div>
               <div className="muted">Выбранная ветка: {branchCatalog.branch_name || branchName || "—"}</div>
             </div>
           </div>
           <div className="dev-meta-generator-actions">
-            <span className="muted">{treeLoading ? "Читаем дерево ветки..." : "Можно открыть и сохранить любой файл прямо в ветку."}</span>
+            <span className="muted">
+              {treeLoading
+                ? "Читаем дерево ветки..."
+                : "Здесь показано всё дерево файлов ветки. Ниже в редакторах списки ограничены изменёнными объектами ветки, чтобы не редактировать лишнее."}
+            </span>
           </div>
           <div className="meta-workspace-real-tree">
             <div className="meta-workspace-branch-column">
@@ -686,6 +697,14 @@ export default function MetaWorkspacePage({ userProfile }) {
         </div>
 
         <div className="meta-workspace-pane">
+          {branchScopedActive ? (
+            <div className="dev-meta-feedback info inline">
+              <div className="dev-meta-feedback-title">Режим ветки</div>
+              <div className="dev-meta-feedback-text">
+                Полное дерево файлов показано выше. Ниже DEV Meta и Click редактор работают только по объектам, изменённым в выбранной ветке.
+              </div>
+            </div>
+          ) : null}
           {branchScopedActive ? (
             <div className="meta-workspace-selection-bar">
               <button type="button" className="btn btn-secondary" onClick={() => jumpToGenerator("gp")}>

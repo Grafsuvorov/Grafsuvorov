@@ -205,25 +205,6 @@ export default function EntityShedule() {
     }
     return `${Math.round(minutes)} мин`;
   };
-  const formatDurationMmSs = (value) => {
-    const minutes = Number(value);
-    if (!Number.isFinite(minutes)) return "—";
-    const totalSeconds = Math.max(0, Math.round(minutes * 60));
-    const mm = Math.floor(totalSeconds / 60);
-    const ss = totalSeconds % 60;
-    return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-  };
-  const formatDurationDelta = (currentValue, previousValue) => {
-    const current = Number(currentValue);
-    const previous = Number(previousValue);
-    if (!Number.isFinite(current) || !Number.isFinite(previous)) return "—";
-    const deltaSeconds = Math.round((current - previous) * 60);
-    const sign = deltaSeconds > 0 ? "+" : deltaSeconds < 0 ? "-" : "±";
-    const absSeconds = Math.abs(deltaSeconds);
-    const mm = Math.floor(absSeconds / 60);
-    const ss = absSeconds % 60;
-    return `${sign}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-  };
 
   const coverageFiltered = useMemo(() => {
     const normalize = (value) =>
@@ -523,8 +504,7 @@ export default function EntityShedule() {
                   </div>
                   {(entityTimelineMap[String(row.entity_id)] || []).length > 0 ? (
                     <div className="entity-history-chart">
-                      {(entityTimelineMap[String(row.entity_id)] || []).map((item, idx, arr) => {
-                        const previousItem = idx + 1 < arr.length ? arr[idx + 1] : null;
+                      {(entityTimelineMap[String(row.entity_id)] || []).map((item) => {
                         const ratio = timelineMax ? Number(item.duration_minutes || 0) / timelineMax : 0;
                         const width = `${Math.max(16, ratio * 100)}%`;
                         return (
@@ -534,13 +514,7 @@ export default function EntityShedule() {
                               <div className="entity-history-meta">
                                 <span>Старт: {formatDateTime(item.start_dttm)}</span>
                                 <span>Финиш: {formatDateTime(item.end_dttm)}</span>
-                                <span>
-                                  Шла: {formatDurationMmSs(item.duration_minutes)}
-                                  <span className="entity-history-duration-detail">
-                                    {" · "}prev {formatDurationMmSs(previousItem?.duration_minutes)}
-                                    {" · "}Δ {formatDurationDelta(item.duration_minutes, previousItem?.duration_minutes)}
-                                  </span>
-                                </span>
+                                <span>Шла: {formatDuration(item.duration_minutes)}</span>
                               </div>
                               <div className="entity-history-track">
                                 <div className="entity-history-bar" style={{ width }} />

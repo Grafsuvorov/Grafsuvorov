@@ -7767,11 +7767,41 @@ def get_entity_table_info(entity_id: int):
     """
     sql = f"""
         SELECT
+            table_id,
             table_schema,
             table_name,
             table_last_load,
-            entity_name
-        FROM {TABLE_TABLES_META}
+            entity_name,
+            (
+                SELECT l.loading_state
+                FROM {TABLE_LOADING_HISTORY} l
+                WHERE l.object_type = 'table'
+                  AND l.object_id = tm.table_id
+                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
+                LIMIT 1
+            ) AS last_loading_state,
+            (
+                SELECT ROUND(CAST(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS numeric), 2)
+                FROM {TABLE_LOADING_HISTORY} l
+                WHERE l.object_type = 'table'
+                  AND l.object_id = tm.table_id
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
+                LIMIT 1
+            ) AS current_duration_minutes,
+            (
+                SELECT ROUND(CAST(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS numeric), 2)
+                FROM {TABLE_LOADING_HISTORY} l
+                WHERE l.object_type = 'table'
+                  AND l.object_id = tm.table_id
+                  AND l.loading_start_dttm IS NOT NULL
+                  AND l.loading_finish_dttm IS NOT NULL
+                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
+                OFFSET 1
+                LIMIT 1
+            ) AS previous_duration_minutes
+        FROM {TABLE_TABLES_META} tm
         WHERE entity_id = :entity_id order by table_last_load
     """
     try:
@@ -7786,6 +7816,13 @@ def get_entity_table_info(entity_id: int):
                 )
                 row["table_name"] = row["table_name"]
                 row["entity_name"] = row["entity_name"]
+                row["last_loading_state"] = row.get("last_loading_state")
+                row["current_duration_minutes"] = (
+                    float(row["current_duration_minutes"]) if row.get("current_duration_minutes") is not None else None
+                )
+                row["previous_duration_minutes"] = (
+                    float(row["previous_duration_minutes"]) if row.get("previous_duration_minutes") is not None else None
+                )
                 cleaned.append(row)
 
             return JSONResponse(content=cleaned, media_type="application/json; charset=utf-8")

@@ -82,6 +82,25 @@ export default function EntityTablesPage() {
   const normalizedRows = useMemo(() => {
     const now = Date.now();
     const staleHours = 24;
+    const formatDurationMmSs = (value) => {
+      const minutes = Number(value);
+      if (!Number.isFinite(minutes)) return "—";
+      const totalSeconds = Math.max(0, Math.round(minutes * 60));
+      const mm = Math.floor(totalSeconds / 60);
+      const ss = totalSeconds % 60;
+      return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+    };
+    const formatDurationDelta = (currentValue, previousValue) => {
+      const current = Number(currentValue);
+      const previous = Number(previousValue);
+      if (!Number.isFinite(current) || !Number.isFinite(previous)) return "—";
+      const deltaSeconds = Math.round((current - previous) * 60);
+      const sign = deltaSeconds > 0 ? "+" : deltaSeconds < 0 ? "-" : "±";
+      const absSeconds = Math.abs(deltaSeconds);
+      const mm = Math.floor(absSeconds / 60);
+      const ss = absSeconds % 60;
+      return `${sign}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+    };
     return filtered.map((r) => {
       const schema = r.schema_name ?? r.table_schema ?? "—";
       const table = r.tables_name ?? r.table_name ?? "—";
@@ -99,6 +118,12 @@ export default function EntityTablesPage() {
         lastDate,
         ageHours,
         stale,
+        lastLoadingState: r.last_loading_state ?? null,
+        currentDurationMinutes: r.current_duration_minutes ?? null,
+        previousDurationMinutes: r.previous_duration_minutes ?? null,
+        currentDurationLabel: formatDurationMmSs(r.current_duration_minutes),
+        previousDurationLabel: formatDurationMmSs(r.previous_duration_minutes),
+        deltaDurationLabel: formatDurationDelta(r.current_duration_minutes, r.previous_duration_minutes),
       };
     });
   }, [filtered]);
@@ -292,6 +317,11 @@ export default function EntityTablesPage() {
                   <div className="entity-table-info">
                     <div className="entity-table-name mono">{r.fqn}</div>
                     <div className="muted">Загрузка: {r.lastRaw || "—"}</div>
+                    <div className="entity-table-duration">
+                      <span>Текущая: {r.currentDurationLabel}</span>
+                      <span>prev: {r.previousDurationLabel}</span>
+                      <span>Δ {r.deltaDurationLabel}</span>
+                    </div>
                   </div>
                   <div className="entity-table-meta">
                     {r.stale ? (
@@ -299,6 +329,7 @@ export default function EntityTablesPage() {
                     ) : (
                       <span className="ok-pill">OK</span>
                     )}
+                    <span className="muted">{r.lastLoadingState || "—"}</span>
                     <span className="muted">{r.ageHours !== null ? `${r.ageHours} ч` : "нет данных"}</span>
                   </div>
                   <button

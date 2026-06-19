@@ -1,69 +1,170 @@
-CREATE TABLE tech_etl.yt_issue_custom_field (
-	issue_id text NOT NULL,
-	field_name text NOT NULL,
-	field_value text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
+with latest_snapshot as (
+    select *
+    from (
+        select
+            s.*,
+            row_number() over (
+                partition by s.issue_id
+                order by s.dttm_loaded desc
+            ) as rn
+        from tech_etl.yt_issue_snapshot s
+    ) t
+    where rn = 1
+),
+
+latest_fields as (
+    select *
+    from (
+        select
+            f.*,
+            row_number() over (
+                partition by f.issue_id, f.field_name
+                order by f.dttm_loaded desc
+            ) as rn
+        from tech_etl.yt_issue_custom_field f
+    ) t
+    where rn = 1
+),
+
+release_slots as (
+    select
+        s.issue_id,
+        s.summary,
+        s.current_state,
+        s.assignee as snapshot_assignee,
+
+        max(case when f.field_name = 'Тип карточки' then f.field_value end) as issue_type,
+        max(case when f.field_name = 'Assignee' then f.field_value end) as assignee,
+        max(case when f.field_name = 'Направление' then f.field_value end) as direction,
+        max(case when f.field_name = 'Номер релиза КХД' then f.field_value end) as release_number,
+        max(case when f.field_name = 'Фактическая дата релиза' then f.field_value end) as release_date_txt,
+        max(case when f.field_name = 'State' then f.field_value end) as state
+    from latest_snapshot s
+    join latest_fields f
+        on s.issue_id = f.issue_id
+    group by
+        s.issue_id,
+        s.summary,
+        s.current_state,
+        s.assignee
+),
+
+final as (
+    select
+        issue_id,
+        summary,
+        coalesce(direction, 'Не указано') as direction,
+        coalesce(assignee, snapshot_assignee, 'Не назначен') as assignee,
+        release_number,
+        state,
+        nullif(release_date_txt, '')::timestamp as release_dttm
+    from release_slots
+    where issue_type = 'Release Slot'
+      and nullif(release_date_txt, '') is not null
 )
-DISTRIBUTED BY (issue_id);
 
-DWH-10315	Тип карточки	Release Slot	2026-04-26 20:00:06.000
-DWH-10315	Priority	Normal	2026-04-26 20:00:06.000
-DWH-10315	State	Завершена	2026-04-26 20:00:06.000
-DWH-10315	Assignee	Zernov Aleksandr	2026-04-26 20:00:06.000
-DWH-10315	Subsystem	DE (Data Engineer)	2026-04-26 20:00:06.000
-DWH-10315	Направление	Управление запасами	2026-04-26 20:00:06.000
-DWH-10315	Spent time		2026-04-26 20:00:06.000
-DWH-10315	Фактические трудозатраты	P1DT1H30M	2026-04-26 20:00:06.000
-DWH-10315	Дашборд КХД/Направление		2026-04-26 20:00:06.000
-DWH-10315	Фактическая дата релиза	2026-04-08 15:00	2026-04-26 20:00:06.000
-DWH-10315	Дежурный аналитик КХД		2026-04-26 20:00:06.000
-DWH-10315	Номер релиза КХД	MM-05-26	2026-04-26 20:00:06.000
-DWH-10315	Экономия за счет ИИ		2026-04-26 20:00:06.000
-DWH-10315	Оценка трудозатрат		2026-04-26 20:00:06.000
+select
+    issue_id,
+    summary,
+    direction,
+    assignee,
+    release_number,
+    state,
+    release_dttm
+from final
+where release_dttm::date >= date_trunc('week', current_date)::date
+  and release_dttm::date <  date_trunc('week', current_date)::date + interval '7 day'
+order by
+    release_dttm,
+    direction,
+    summary;
 
-CREATE TABLE tech_etl.yt_issue_snapshot (
-	issue_id text NOT NULL,
-	summary text NULL,
-	description text NULL,
-	project_name text NULL,
-	project_key text NULL,
-	created_by text NULL,
-	assignee text NULL,
-	created_at timestamp NULL,
-	updated_at timestamp NULL,
-	resolved_at timestamp NULL,
-	current_state text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
+
+
+with latest_snapshot as (
+    select *
+    from (
+        select
+            s.*,
+            row_number() over (
+                partition by s.issue_id
+                order by s.dttm_loaded desc
+            ) as rn
+        from tech_etl.yt_issue_snapshot s
+    ) t
+    where rn = 1
+),
+
+latest_fields as (
+    select *
+    from (
+        select
+            f.*,
+            row_number() over (
+                partition by f.issue_id, f.field_name
+                order by f.dttm_loaded desc
+            ) as rn
+        from tech_etl.yt_issue_custom_field f
+    ) t
+    where rn = 1
+),
+
+release_slots as (
+    select
+        s.issue_id,
+        s.summary,
+        s.current_state,
+        s.assignee as snapshot_assignee,
+
+        max(case when f.field_name = 'Тип карточки' then f.field_value end) as issue_type,
+        max(case when f.field_name = 'Assignee' then f.field_value end) as assignee,
+        max(case when f.field_name = 'Направление' then f.field_value end) as direction,
+        max(case when f.field_name = 'Номер релиза КХД' then f.field_value end) as release_number,
+        max(case when f.field_name = 'Фактическая дата релиза' then f.field_value end) as release_date_txt,
+        max(case when f.field_name = 'State' then f.field_value end) as state
+    from latest_snapshot s
+    join latest_fields f
+        on s.issue_id = f.issue_id
+    group by
+        s.issue_id,
+        s.summary,
+        s.current_state,
+        s.assignee
+),
+
+final as (
+    select
+        issue_id,
+        summary,
+        coalesce(direction, 'Не указано') as direction,
+        coalesce(assignee, snapshot_assignee, 'Не назначен') as assignee,
+        release_number,
+        coalesce(state, current_state) as state,
+        nullif(release_date_txt, '')::timestamp as release_dttm
+    from release_slots
+    where issue_type = 'Release Slot'
+      and nullif(release_date_txt, '') is not null
 )
-DISTRIBUTED BY (issue_id);
-DWH-10315	Релиз MM (2026-04-08)	Общая задача для Релиза MM (2026-04-08)
 
-# Подготовка релиза
+select
+    '🚀 Релизное расписание на неделю' || chr(10) ||
+    'Период: ' ||
+    to_char(date_trunc('week', current_date)::date, 'DD.MM.YYYY') ||
+    ' — ' ||
+    to_char((date_trunc('week', current_date)::date + interval '6 day')::date, 'DD.MM.YYYY') ||
+    chr(10) || chr(10) ||
 
- [x] Провести ревью всех MR
- [x] Принять MR в релизную ветку
-
-# Запуск релиза
-
- [x] Запустить релизный DAG https://rgm-s-khair01.hq.root.ad/dags/dagcreateentity/grid?search=dagcreateentity
- [x] Сформировать письмо со списком задач и объектов релиза и отправить на DWH Team
-
-# Работа с DAG
-
- [x] Проставить статус SUCCESS для waitingtask (чтобы DAG продолжился)
- [x] Убедиться что нет ошибок в части GP
-
-# Загрузка в ClickHouse
-
- [x] Дождаться остановки DAG на таске waitingforclickhousetask и написать в пульс по направления, что бы установили плашки в BI
- [x] Проставить SUCCESS для waitingclicktask
-
-# Завершение релиза
-
- [x] Дождаться полного завершения DAG
- [ ] Проверить письмо мониторинга (нет ли ошибок)
-
-# Проверить DAG в Airflow:
-
- [x] Нет пропущенных шагов
- [x] Нет ли ошибок	КХД		SuvorovND		2026-02-11 15:07:00.000	2026-04-15 09:26:00.000	2026-04-09 08:20:00.000	Завершена	2026-04-26 20:00:06.000
+    string_agg(
+        '📅 ' || to_char(release_dttm, 'DD.MM.YYYY HH24:MI') || chr(10) ||
+        '• ' || summary || chr(10) ||
+        'Направление: ' || direction || chr(10) ||
+        'Ответственный: ' || assignee || chr(10) ||
+        'Номер релиза: ' || coalesce(release_number, '-') || chr(10) ||
+        'Статус: ' || coalesce(state, '-') || chr(10) ||
+        'Карточка: ' || issue_id,
+        chr(10) || chr(10)
+        order by release_dttm, direction, summary
+    ) as pulse_message
+from final
+where release_dttm::date >= date_trunc('week', current_date)::date
+  and release_dttm::date <  date_trunc('week', current_date)::date + interval '7 day';

@@ -1,31 +1,39 @@
-with latest_snapshot as (
-    select *
-    from (
-        select
-            s.*,
-            row_number() over (
-                partition by s.issue_id
-                order by s.dttm_loaded desc
-            ) as rn
-        from tech_etl.yt_issue_snapshot s
-    ) t
-    where rn = 1
-),
+ТЗ: уведомления о релизных слотах из YouTrack в Pulse
 
-latest_fields as (
-    select *
-    from (
-        select
-            f.*,
-            row_number() over (
-                partition by f.issue_id, f.field_name
-                order by f.dttm_loaded desc
-            ) as rn
-        from tech_etl.yt_issue_custom_field f
-    ) t
-    where rn = 1
-),
+ 1. Цель
 
+Реализовать автоматическую отправку уведомлений в канал Pulse по релизным слотам из YouTrack.
+
+по понедельникам отправлять расписание релизов на текущую неделю;
+ежедневно проверять изменения дат релизов;
+при изменении даты релиза отправлять уведомление о переносе.
+
+
+
+Необходимо получать задачи с типом карточки:
+
+Release Slot и записывать информцию в таблицы ниже ( логика уже есть в релизном даге), проверять по полю фактическая дата релиза от текущего дня и на 7 дней вперед.
+Важно, данные не транкейтить, хранится история. Если значения уже есть, проверяем, поменялась ли фактическая дата релиза, если поменялась перезаписываем, иначе вставляем только новые.
+tech_etl.yt_issue_worklog
+tech_etl.yt_issue_timeline
+tech_etl.yt_issue_snapshot
+tech_etl.yt_issue_custom_field
+tech_etl.yt_issue_comment
+
+
+Основной критерий отправки уведомления о переносе:
+
+`release_date` изменилась относительно предыдущего сохраненного значения.
+
+3. DAG 1: недельное расписание релизов
+Название DAG:
+yt_release_schedule
+
+Расписание запуска:
+
+Каждый понедельник утром в 09:00.
+
+   with 
 release_slots as (
     select
         s.issue_id,
@@ -39,8 +47,8 @@ release_slots as (
         max(case when f.field_name = 'Номер релиза КХД' then f.field_value end) as release_number,
         max(case when f.field_name = 'Фактическая дата релиза' then f.field_value end) as release_date_txt,
         max(case when f.field_name = 'State' then f.field_value end) as state
-    from latest_snapshot s
-    join latest_fields f
+    from tech_etl.yt_issue_snapshot s
+    join tech_etl.yt_issue_custom_field f
         on s.issue_id = f.issue_id
     group by
         s.issue_id,
@@ -48,90 +56,6 @@ release_slots as (
         s.current_state,
         s.assignee
 ),
-
-final as (
-    select
-        issue_id,
-        summary,
-        coalesce(direction, 'Не указано') as direction,
-        coalesce(assignee, snapshot_assignee, 'Не назначен') as assignee,
-        release_number,
-        state,
-        nullif(release_date_txt, '')::timestamp as release_dttm
-    from release_slots
-    where issue_type = 'Release Slot'
-      and nullif(release_date_txt, '') is not null
-)
-
-select
-    issue_id,
-    summary,
-    direction,
-    assignee,
-    release_number,
-    state,
-    release_dttm
-from final
-where release_dttm::date >= date_trunc('week', current_date)::date
-  and release_dttm::date <  date_trunc('week', current_date)::date + interval '7 day'
-order by
-    release_dttm,
-    direction,
-    summary;
-
-
-
-with latest_snapshot as (
-    select *
-    from (
-        select
-            s.*,
-            row_number() over (
-                partition by s.issue_id
-                order by s.dttm_loaded desc
-            ) as rn
-        from tech_etl.yt_issue_snapshot s
-    ) t
-    where rn = 1
-),
-
-latest_fields as (
-    select *
-    from (
-        select
-            f.*,
-            row_number() over (
-                partition by f.issue_id, f.field_name
-                order by f.dttm_loaded desc
-            ) as rn
-        from tech_etl.yt_issue_custom_field f
-    ) t
-    where rn = 1
-),
-
-release_slots as (
-    select
-        s.issue_id,
-        s.summary,
-        s.current_state,
-        s.assignee as snapshot_assignee,
-
-        max(case when f.field_name = 'Тип карточки' then f.field_value end) as issue_type,
-        max(case when f.field_name = 'Assignee' then f.field_value end) as assignee,
-        max(case when f.field_name = 'Направление' then f.field_value end) as direction,
-        max(case when f.field_name = 'Номер релиза КХД' then f.field_value end) as release_number,
-        max(case when f.field_name = 'Фактическая дата релиза' then f.field_value end) as release_date_txt,
-        max(case when f.field_name = 'State' then f.field_value end) as state
-    from latest_snapshot s
-    join latest_fields f
-        on s.issue_id = f.issue_id
-    group by
-        s.issue_id,
-        s.summary,
-        s.current_state,
-        s.assignee
-),
-
 final as (
     select
         issue_id,
@@ -168,3 +92,18 @@ select
 from final
 where release_dttm::date >= date_trunc('week', current_date)::date
   and release_dttm::date <  date_trunc('week', current_date)::date + interval '7 day';
+
+Уведомление о переносе релиза
+
+Если дата релиза изменилась, отправлять сообщение:
+
+🔄 Перенос релиза
+
+Релиз: FI
+Карточка: YT-12345
+Ответственный: Иванов И.И.
+
+Было: 26.06.2026 18:00
+Стало: 28.06.2026 18:00
+
+Ссылка на карточку: <ссылка>

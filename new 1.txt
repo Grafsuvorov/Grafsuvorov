@@ -1,7 +1,4 @@
-
-------
-failed to solve: rpc error: code = Unknown desc = nginx:alpine: failed to resolve source metadata for docker.io/library/nginx:alpine: faile         d to copy: httpReadSeeker: failed open: unexpected status code https://registry-1.docker.io/v2/library/nginx/manifests/sha256:1a8724a52d432         501548a8d8681bb1554c2d09778f8b9ed0882fc3442549980b7: 429 Too Many Requests - Server message: toomanyrequests: You have reached your unauthe         nticated pull rate limit. https://www.docker.com/increase-rate-limit
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build  frontend api
+root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build  frontend api
 [+] Building 4.5s (19/20)
  => [table-dependency-viewer_api internal] load build definition from Dockerfile                                                      0.0s
  => => transferring dockerfile: 1.74kB                                                                                                0.0s
@@ -30,3 +27,7 @@ failed to solve: rpc error: code = Unknown desc = nginx:alpine: failed to resolv
  > [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine:
 ------
 failed to solve: rpc error: code = Unknown desc = nginx:alpine: failed to resolve source metadata for docker.io/library/nginx:alpine: faile         d to copy: httpReadSeeker: failed open: unexpected status code https://registry-1.docker.io/v2/library/nginx/manifests/sha256:35cd77497979a         be70dc8d26f5ae60811eea233a2eb5dc03c2ee30972caeb303e: 429 Too Many Requests - Server message: toomanyrequests: You have reached your unauthe         nticated pull rate limit. https://www.docker.com/increase-rate-limit
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker pull nginx:alpine
+Error response from daemon: toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker images | grep nginx
+[root@rgm-s-dwhapp01 table-dependency-viewer]# docker images | grep -E 'nginx|node|python'

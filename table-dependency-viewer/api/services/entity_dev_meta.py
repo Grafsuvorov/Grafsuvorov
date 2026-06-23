@@ -57,6 +57,20 @@ def _normalize_name(value: str) -> str:
     return str(value or "").strip().strip('"').lower()
 
 
+def _normalize_path_segment(value: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "", _normalize_name(value))
+
+
+def _is_equivalent_object_name(left: str, right: str) -> bool:
+    left_norm = _normalize_name(left)
+    right_norm = _normalize_name(right)
+    if left_norm == right_norm:
+        return True
+    left_path = _normalize_path_segment(left)
+    right_path = _normalize_path_segment(right)
+    return bool(left_path and right_path and left_path == right_path)
+
+
 def _normalize_sql_identifier(raw: str) -> str:
     value = str(raw or "").strip()
     if value.startswith('"') and value.endswith('"') and len(value) >= 2:
@@ -535,22 +549,24 @@ def _build_generated_yaml(
 def _extract_created_object(sql: str) -> tuple[str, str] | None:
     normalized = _normalize_sql(sql)
     match = re.search(
-        r"\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?(view|table)\s+(?:if\s+not\s+exists\s+)?([a-z0-9_\".]+)",
+        r"\bcreate\s+(?:or\s+replace\s+)?(?:materialized\s+)?(view|table)\s+"
+        r"(?:if\s+not\s+exists\s+)?"
+        r"((?:\"[^\"]+\"|[a-z0-9_]+)\s*\.\s*(?:\"[^\"]+\"|[a-z0-9_./]+))",
         normalized,
     )
     if not match:
         return None
-    return match.group(1), match.group(2).replace('"', "").lower()
+    return match.group(1), re.sub(r"\s+", "", match.group(2).replace('"', "").lower())
 
 
 def _extract_insert_targets(sql: str) -> list[str]:
     normalized = _normalize_sql(sql)
     targets: list[str] = []
     for match in re.finditer(
-        r"\binsert\s+into\s+([a-z0-9_\".]+)",
+        r"\binsert\s+into\s+((?:\"[^\"]+\"|[a-z0-9_]+)\s*\.\s*(?:\"[^\"]+\"|[a-z0-9_./]+))",
         normalized,
     ):
-        targets.append(match.group(1).replace('"', "").lower())
+        targets.append(re.sub(r"\s+", "", match.group(1).replace('"', "").lower()))
     return targets
 
 
@@ -558,12 +574,18 @@ def _extract_mutation_targets(sql: str) -> list[tuple[str, str]]:
     normalized = _normalize_sql(sql)
     targets: list[tuple[str, str]] = []
     patterns = (
-        (r"\btruncate\s+(?:table\s+)?([a-z0-9_\".]+)", "truncate"),
-        (r"\bdelete\s+from\s+([a-z0-9_\".]+)", "delete"),
+        (
+            r"\btruncate\s+(?:table\s+)?((?:\"[^\"]+\"|[a-z0-9_]+)\s*\.\s*(?:\"[^\"]+\"|[a-z0-9_./]+))",
+            "truncate",
+        ),
+        (
+            r"\bdelete\s+from\s+((?:\"[^\"]+\"|[a-z0-9_]+)\s*\.\s*(?:\"[^\"]+\"|[a-z0-9_./]+))",
+            "delete",
+        ),
     )
     for pattern, kind in patterns:
         for match in re.finditer(pattern, normalized):
-            target = match.group(1).replace('"', "").lower()
+            target = re.sub(r"\s+", "", match.group(1).replace('"', "").lower())
             targets.append((kind, target))
     return targets
 
@@ -1158,8 +1180,11 @@ def validate_entity_dev_meta_bundle(
         errors.append("`entity_name` в YAML не совпадает с выбранной сущностью")
     if _normalize_name(payload.get("table_schema")) != normalized_schema:
         errors.append("`table_schema` в YAML не совпадает с выбранной схемой")
-    if _normalize_name(payload.get("table_name")) != normalized_table:
+    payload_table_name = str(payload.get("table_name") or "").strip()
+    if not _is_equivalent_object_name(payload_table_name, table_name):
         errors.append("`table_name` в YAML не совпадает с выбранной таблицей")
+    effective_table_name = payload_table_name or table_name
+    effective_normalized_table = _normalize_name(effective_table_name)
 
     table_id_value = payload.get("table_id")
     try:
@@ -1215,7 +1240,7 @@ def validate_entity_dev_meta_bundle(
         errors.append("Recreate SQL не должен быть пустым")
     elif not is_stg_schema:
         created = _extract_created_object(recreate_sql)
-        expected_fqn = f"{normalized_schema}.{normalized_table}"
+        expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
         if not created:
             warnings.append("В recreate SQL не найден `CREATE TABLE` или `CREATE VIEW`")
         else:
@@ -1230,7 +1255,7 @@ def validate_entity_dev_meta_bundle(
     elif insert_sql.strip():
         temp_table_names = _extract_temp_table_names(insert_sql)
         insert_targets = _extract_insert_targets(insert_sql)
-        expected_fqn = f"{normalized_schema}.{normalized_table}"
+        expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
         if not is_stg_schema:
             if not insert_targets:
                 errors.append("В insert SQL не найден `INSERT INTO schema.table`")
@@ -1238,7 +1263,7 @@ def validate_entity_dev_meta_bundle(
                 meaningful_targets = [
                     target
                     for target in insert_targets
-                    if "." in target or target not in temp_table_names
+                    if not target.startswith("pg_temp.") and ("." in target or target not in temp_table_names)
                 ]
                 actual_target = (meaningful_targets or insert_targets)[-1]
                 errors.append(f"Insert SQL пишет в `{actual_target}`, а ожидается `{expected_fqn}`")
@@ -1250,6 +1275,8 @@ def validate_entity_dev_meta_bundle(
         for match in drop_matches:
             drop_kind = match.group(1)
             drop_target = match.group(2).replace('"', "").lower()
+            if drop_target.startswith("pg_temp."):
+                continue
             if drop_kind == "table" and "." not in drop_target and drop_target in temp_table_names:
                 continue
             risky_drop_targets.append(f"{drop_kind} {drop_target}")
@@ -1278,13 +1305,17 @@ def validate_entity_dev_meta_bundle(
     elif truncate_sql.strip():
         normalized_truncate = _normalize_sql(truncate_sql)
         mutation_targets = _extract_mutation_targets(truncate_sql)
-        expected_fqn = f"{normalized_schema}.{normalized_table}"
+        expected_fqn = f"{normalized_schema}.{effective_normalized_table}"
         if normalized_truncate in {"select 1;", "select 1"}:
             pass
         elif not mutation_targets:
             warnings.append("В truncate SQL не найдены `TRUNCATE TABLE` или `DELETE FROM`")
         else:
-            wrong_targets = [target for _kind, target in mutation_targets if target != expected_fqn]
+            wrong_targets = [
+                target
+                for _kind, target in mutation_targets
+                if not target.startswith("pg_temp.") and target != expected_fqn
+            ]
             if wrong_targets:
                 errors.append(
                     "Truncate SQL обращается не к целевой таблице: "
@@ -1298,7 +1329,7 @@ def validate_entity_dev_meta_bundle(
 
     known_schemas = _collect_known_schemas(prod_root) | _collect_known_schemas(dev_root)
     if insert_sql.strip():
-        expected_depends_on = _build_depends_on(insert_sql, normalized_schema, normalized_table, known_schemas)
+        expected_depends_on = _build_depends_on(insert_sql, normalized_schema, effective_normalized_table, known_schemas)
         current_depends_on = _flatten_depends_on(payload.get("depends_on"))
         expected_depends_on_flat = _flatten_depends_on(expected_depends_on)
         missing = sorted(expected_depends_on_flat - current_depends_on)
@@ -1325,17 +1356,17 @@ def validate_entity_dev_meta_bundle(
             normalized_payload.pop("key_attributes", None)
     _ensure_default_verification(normalized_payload, normalized_keys)
 
-    dev_exists, dev_error = _dev_object_exists(dev_database_url, normalized_schema, normalized_table)
+    dev_exists, dev_error = _dev_object_exists(dev_database_url, normalized_schema, effective_normalized_table)
     if dev_error:
         errors.append(dev_error)
     elif not dev_exists:
-        errors.append(f"Объект `{normalized_schema}.{normalized_table}` не найден в DEV Greenplum")
+        errors.append(f"Объект `{normalized_schema}.{effective_normalized_table}` не найден в DEV Greenplum")
     else:
-        checks.append(f"Объект `{normalized_schema}.{normalized_table}` найден в DEV Greenplum")
+        checks.append(f"Объект `{normalized_schema}.{effective_normalized_table}` найден в DEV Greenplum")
         duplicate_status, duplicate_error = _dev_table_has_duplicates(
             dev_database_url,
             normalized_schema,
-            normalized_table,
+            effective_normalized_table,
             normalized_keys or [],
         )
         if duplicate_error:

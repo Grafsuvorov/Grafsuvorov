@@ -115,6 +115,7 @@ export default function TableCard({
   const clickRunsRequestRef = useRef(0);
   const clickHistoryRequestRef = useRef(0);
   const dbtHistoryRequestRef = useRef(0);
+  const depsRequestRef = useRef(0);
   const gpHistoryWithDelta = useMemo(
     () =>
       (historyRows || []).map((row, idx, arr) => ({
@@ -157,6 +158,21 @@ export default function TableCard({
       .then(setMeta)
       .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoadingMeta(false));
+  }, [schema, tableName, source]);
+
+  useEffect(() => {
+    depsRequestRef.current += 1;
+    setShowGraph(false);
+    setShowList(false);
+    setGraphTooLarge(false);
+    setGraphTruncated(false);
+    setEdges([]);
+    setGraphNodes([]);
+    setGraphLayout({});
+    setCentralNode("");
+    setGraphStats({ nodes: 0, edges: 0 });
+    setDepsError(null);
+    setLoadingDeps(false);
   }, [schema, tableName, source]);
 
   useEffect(() => {
@@ -775,6 +791,7 @@ export default function TableCard({
 
   const loadDependencies = () => {
     if (!schema || !tableName) return;
+    const requestId = ++depsRequestRef.current;
     setLoadingDeps(true);
     setDepsError(null);
     setShowGraph(false);
@@ -784,15 +801,17 @@ export default function TableCard({
     setGraphNodes([]);
     setGraphLayout({});
 
-    const params = new URLSearchParams({ depth: "4" });
+    const params = new URLSearchParams();
     if (source && source !== "current") {
       params.set("source", source);
     }
-    fetch(`${API_BASE}/api/graph/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    fetch(`${API_BASE}/api/graph/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}${suffix}`)
       .then((res) =>
         res.ok ? res.json() : Promise.reject("Не удалось построить граф зависимостей"),
       )
       .then((data) => {
+        if (requestId !== depsRequestRef.current) return;
         const nodes = Array.isArray(data.nodes) ? data.nodes : [];
         const incomingEdges = Array.isArray(data.edges) ? data.edges : [];
         const resolvedCentral = data?.table?.id || `${schema}.${tableName}`;
@@ -802,19 +821,21 @@ export default function TableCard({
         setGraphNodes(nodes);
         setGraphLayout(data.layout || {});
         setCentralNode(resolvedCentral);
-        const isTooLarge = stats.nodes > 350 || stats.edges > 800;
-        setGraphTooLarge(isTooLarge);
         setGraphTruncated(Boolean(data.truncated));
-        setShowGraph(!isTooLarge);
+        setShowGraph(true);
         requestAnimationFrame(() => {
           graphSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
         });
       })
       .catch((err) => {
+        if (requestId !== depsRequestRef.current) return;
         console.error(err);
         setDepsError(typeof err === "string" ? err : "Не удалось загрузить граф");
       })
-      .finally(() => setLoadingDeps(false));
+      .finally(() => {
+        if (requestId !== depsRequestRef.current) return;
+        setLoadingDeps(false);
+      });
   };
 
 
@@ -2049,19 +2070,11 @@ export default function TableCard({
               </div>
             </div>
           )}
-          {!loadingDeps && !depsError && graphTooLarge && (
+          {!loadingDeps && !depsError && showGraph && graphStats.nodes > 350 && (
             <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Слишком большой граф</div>
+              <div className="dep-error-title">Большой граф</div>
               <div className="muted">
-                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. Может подвисать.
-              </div>
-              <div className="table-graph-actions" style={{ marginTop: 10 }}>
-                <button className="btn btn-secondary" onClick={() => setShowGraph(true)}>
-                  Отрисовать
-                </button>
-                <button className="btn" onClick={() => setShowList(true)}>
-                  Показать список
-                </button>
+                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. Граф отрисован сразу, но может подвисать.
               </div>
             </div>
           )}

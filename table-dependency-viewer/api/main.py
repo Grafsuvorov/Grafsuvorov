@@ -6159,8 +6159,10 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), 
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
     rev = {}
+    fwd = {}
     for e in table_edges:
         rev.setdefault(e["target"], []).append(e["source"])
+        fwd.setdefault(e["source"], []).append(e["target"])
 
     visited = {key}
     queue = deque([(key, 0)])
@@ -6172,6 +6174,17 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), 
         if d >= depth:
             continue
         for nxt in rev.get(node, []):
+            if nxt in visited:
+                continue
+            visited.add(nxt)
+            if len(visited) >= max_nodes:
+                truncated = True
+                queue.clear()
+                break
+            queue.append((nxt, d + 1))
+        if truncated:
+            break
+        for nxt in fwd.get(node, []):
             if nxt in visited:
                 continue
             visited.add(nxt)

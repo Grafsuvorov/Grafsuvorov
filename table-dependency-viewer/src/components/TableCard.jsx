@@ -181,7 +181,6 @@ export default function TableCard({
     setHistoryError(null);
     const requestId = ++historyRequestRef.current;
     const params = new URLSearchParams({ limit: "10" });
-    if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/table-history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю запусков")))
       .then((data) => {
@@ -197,7 +196,7 @@ export default function TableCard({
         if (requestId !== historyRequestRef.current) return;
         setHistoryLoading(false);
       });
-  }, [schema, tableName, meta?.table_id, isCurrentSource]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
     if (!schema || !tableName || isCurrentSource) {
@@ -302,7 +301,6 @@ export default function TableCard({
     setClickError(null);
     const requestId = ++clickRunsRequestRef.current;
     const params = new URLSearchParams({ limit: "6" });
-    if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/click/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить ClickHouse-логи")))
       .then((data) => {
@@ -319,7 +317,7 @@ export default function TableCard({
         if (requestId !== clickRunsRequestRef.current) return;
         setClickLoading(false);
       });
-  }, [schema, tableName, meta?.table_id, isCurrentSource]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
     if (!schema || !tableName || !isCurrentSource) {
@@ -355,7 +353,6 @@ export default function TableCard({
     setClickHistoryError(null);
     const requestId = ++clickHistoryRequestRef.current;
     const params = new URLSearchParams({ limit: "20" });
-    if (meta?.table_id) params.set("table_id", String(meta.table_id));
     fetch(`${API_BASE}/api/click/history/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : Promise.reject("Не удалось загрузить историю ClickHouse")))
       .then((data) => {
@@ -371,7 +368,7 @@ export default function TableCard({
         if (requestId !== clickHistoryRequestRef.current) return;
         setClickHistoryLoading(false);
       });
-  }, [schema, tableName, meta?.table_id, isCurrentSource]);
+  }, [schema, tableName, isCurrentSource]);
 
   useEffect(() => {
     if (!schema || !tableName || !isCurrentSource) {

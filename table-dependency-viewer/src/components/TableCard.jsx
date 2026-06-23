@@ -2059,25 +2059,6 @@ export default function TableCard({
           {depsError && (
             <div className="dep-error-title">{depsError}</div>
           )}
-          {!loadingDeps && !depsError && !showGraph && (
-            <div className="muted">Нажмите «Граф зависимостей», чтобы построить.</div>
-          )}
-          {!loadingDeps && !depsError && graphTruncated && (
-            <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Граф усечён</div>
-              <div className="muted">
-                Ограничение глубины. Для полного обзора используйте граф сущности.
-              </div>
-            </div>
-          )}
-          {!loadingDeps && !depsError && showGraph && graphStats.nodes > 350 && (
-            <div className="card dep-error" style={{ marginTop: 12 }}>
-              <div className="dep-error-title">Большой граф</div>
-              <div className="muted">
-                Узлов: {graphStats.nodes}, связей: {graphStats.edges}. Граф отрисован сразу, но может подвисать.
-              </div>
-            </div>
-          )}
 
           {showGraph && graphNodes.length > 0 && (
             <GraphViewer
@@ -2087,26 +2068,6 @@ export default function TableCard({
               nodes={graphNodes}
               layout={graphLayout}
             />
-          )}
-
-          {(showGraph || showList) && (
-            <div className="table-graph-actions">
-              <button className="btn" onClick={() => setShowList(!showList)}>
-                {showList ? "Скрыть список" : "Показать список"}
-              </button>
-              {showList && (
-                <div style={{ width: "100%" }}>
-                  {graphTruncated && (
-                    <div className="muted" style={{ marginTop: 10 }}>
-                      Глубина ограничена — список показывает текущий срез.
-                    </div>
-                  )}
-                  <pre className="table-code" style={{ marginTop: 12 }}>
-                    {tableList.length ? tableList.join("\n") : "—"}
-                  </pre>
-                </div>
-              )}
-            </div>
           )}
         </div>
       </div>

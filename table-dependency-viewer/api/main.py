@@ -6157,7 +6157,12 @@ def get_graph_entity(entity_name: str):
 
 
 @router.get("/api/graph/table/{schema}/{table:path}")
-def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), source: str = Query("current")):
+def get_graph_table(
+    schema: str,
+    table: str,
+    depth: Optional[int] = Query(None, ge=1, le=20),
+    source: str = Query("current"),
+):
     snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
@@ -6172,42 +6177,26 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), 
         rev.setdefault(e["target"], []).append(e["source"])
         fwd.setdefault(e["source"], []).append(e["target"])
 
-    visited = {key}
-    queue = deque([(key, 0)])
-    truncated = False
-    max_nodes = 800
+    def traverse(adjacency: dict[str, list[str]]) -> set[str]:
+        visited_local = {key}
+        queue = deque([(key, 0)])
+        while queue:
+            node, d = queue.popleft()
+            if depth is not None and d >= depth:
+                continue
+            for nxt in adjacency.get(node, []):
+                if nxt in visited_local:
+                    continue
+                visited_local.add(nxt)
+                queue.append((nxt, d + 1))
+        return visited_local
 
-    while queue:
-        node, d = queue.popleft()
-        if d >= depth:
-            continue
-        for nxt in rev.get(node, []):
-            if nxt in visited:
-                continue
-            visited.add(nxt)
-            if len(visited) >= max_nodes:
-                truncated = True
-                queue.clear()
-                break
-            queue.append((nxt, d + 1))
-        if truncated:
-            break
-        for nxt in fwd.get(node, []):
-            if nxt in visited:
-                continue
-            visited.add(nxt)
-            if len(visited) >= max_nodes:
-                truncated = True
-                queue.clear()
-                break
-            queue.append((nxt, d + 1))
-        if truncated:
-            break
+    ancestors = traverse(rev)
+    descendants = traverse(fwd)
+    visited = ancestors | descendants
+    truncated = False
 
     edges_filtered = [e for e in table_edges if e["source"] in visited and e["target"] in visited]
-    if len(edges_filtered) > 1500:
-        edges_filtered = edges_filtered[:1500]
-        truncated = True
 
     nodes_payload = _normalize_layer_widths([table_nodes[n] for n in visited if n in table_nodes])
     layout_payload = _grid_layout_subset(table_nodes, edges_filtered, visited)

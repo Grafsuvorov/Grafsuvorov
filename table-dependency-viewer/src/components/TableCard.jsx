@@ -784,7 +784,7 @@ export default function TableCard({
     setGraphNodes([]);
     setGraphLayout({});
 
-    const params = new URLSearchParams({ depth: "3" });
+    const params = new URLSearchParams({ depth: "4" });
     if (source && source !== "current") {
       params.set("source", source);
     }

@@ -5265,36 +5265,44 @@ def get_table_history(
 
     try:
         with engine.connect() as conn:
-            resolved_table_id = table_id
-            if not resolved_table_id:
-                resolved_table_id = conn.execute(
-                    text(
-                        f"""
-                        SELECT table_id
-                        FROM {TABLE_TABLES_META}
-                        WHERE lower(table_schema) = :schema
-                          AND (lower(table_name) = :table OR lower(table_name) = :table_clean)
-                        LIMIT 1
-                        """
-                    ),
-                    {"schema": schema_norm, "table": table_norm, "table_clean": table_clean},
-                ).scalar()
-
-            params = {"limit": limit}
-            if resolved_table_id:
-                where_clause = "object_id = :table_id"
-                params["table_id"] = resolved_table_id
-            else:
-                where_clause = """
-                    lower(object_name) = :table_fqn
+            params = {
+                "limit": limit,
+                "schema": schema_norm,
+                "table": table_norm,
+                "table_clean": table_clean,
+                "table_fqn": f"{schema_norm}.{table_norm}",
+                "table_fqn_clean": f"{schema_norm}.{table_clean}" if table_clean else None,
+                "table_name": table_norm,
+                "table_name_clean": table_clean,
+            }
+            if table_id:
+                where_clause = f"""
+                    object_id = :table_id
+                    OR object_id IN (
+                        SELECT tm.table_id
+                        FROM {TABLE_TABLES_META} tm
+                        WHERE lower(tm.table_schema) = :schema
+                          AND (lower(tm.table_name) = :table OR lower(tm.table_name) = :table_clean)
+                    )
+                    OR lower(object_name) = :table_fqn
                     OR lower(object_name) = :table_fqn_clean
                     OR lower(object_name) = :table_name
                     OR lower(object_name) = :table_name_clean
                 """
-                params["table_fqn"] = f"{schema_norm}.{table_norm}"
-                params["table_fqn_clean"] = f"{schema_norm}.{table_clean}" if table_clean else None
-                params["table_name"] = table_norm
-                params["table_name_clean"] = table_clean
+                params["table_id"] = table_id
+            else:
+                where_clause = f"""
+                    object_id IN (
+                        SELECT tm.table_id
+                        FROM {TABLE_TABLES_META} tm
+                        WHERE lower(tm.table_schema) = :schema
+                          AND (lower(tm.table_name) = :table OR lower(tm.table_name) = :table_clean)
+                    )
+                    OR lower(object_name) = :table_fqn
+                    OR lower(object_name) = :table_fqn_clean
+                    OR lower(object_name) = :table_name
+                    OR lower(object_name) = :table_name_clean
+                """
 
             rows = conn.execute(
                 text(
@@ -6167,7 +6175,7 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), 
     visited = {key}
     queue = deque([(key, 0)])
     truncated = False
-    max_nodes = 300
+    max_nodes = 800
 
     while queue:
         node, d = queue.popleft()
@@ -6197,8 +6205,8 @@ def get_graph_table(schema: str, table: str, depth: int = Query(3, ge=1, le=4), 
             break
 
     edges_filtered = [e for e in table_edges if e["source"] in visited and e["target"] in visited]
-    if len(edges_filtered) > 500:
-        edges_filtered = edges_filtered[:500]
+    if len(edges_filtered) > 1500:
+        edges_filtered = edges_filtered[:1500]
         truncated = True
 
     nodes_payload = _normalize_layer_widths([table_nodes[n] for n in visited if n in table_nodes])

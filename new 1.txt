@@ -1,33 +1,38 @@
-root@rgm-s-dwhapp01 table-dependency-viewer]# docker compose build  frontend api
-[+] Building 4.5s (19/20)
- => [table-dependency-viewer_api internal] load build definition from Dockerfile                                                      0.0s
- => => transferring dockerfile: 1.74kB                                                                                                0.0s
- => [table-dependency-viewer_frontend internal] load build definition from Dockerfile                                                 0.0s
- => => transferring dockerfile: 659B                                                                                                  0.0s
- => ERROR [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine                                4.3s
- => [table-dependency-viewer_frontend internal] load metadata for docker.io/library/node:20-alpine                                    0.8s
- => [table-dependency-viewer_api internal] load metadata for docker.io/library/python:3.11-slim                                       0.8s
- => [table-dependency-viewer_api internal] load metadata for docker.io/library/node:20-slim                                           0.8s
- => [table-dependency-viewer_api internal] load .dockerignore                                                                         0.0s
- => => transferring context: 162B                                                                                                     0.0s
- => [table-dependency-viewer_api stage-1  1/10] FROM docker.io/library/python:3.11-slim@sha256:ae52c5bef62a6bdd42cd1e8dffef86b9cd284  0.0s
- => [table-dependency-viewer_api node 1/2] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d  0.0s
- => [table-dependency-viewer_api internal] load build context                                                                         0.0s
- => => transferring context: 2.12kB                                                                                                   0.0s
- => CACHED [table-dependency-viewer_api stage-1  2/10] WORKDIR /app                                                                   0.0s
- => CACHED [table-dependency-viewer_api stage-1  3/10] RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*    0.0s
- => CACHED [table-dependency-viewer_api node 2/2] RUN npm config set proxy http://rgm-s-rtproxnlb01.hq.root.ad:1010 && npm config se  0.0s
- => CACHED [table-dependency-viewer_api stage-1  4/10] COPY --from=node /usr/local/bin/node /usr/local/bin/node                       0.0s
- => CACHED [table-dependency-viewer_api stage-1  5/10] COPY --from=node /usr/local/bin/npm /usr/local/bin/npm                         0.0s
- => CACHED [table-dependency-viewer_api stage-1  6/10] COPY --from=node /usr/local/bin/npx /usr/local/bin/npx                         0.0s
- => CACHED [table-dependency-viewer_api stage-1  7/10] COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules       0.0s
- => [table-dependency-viewer_api stage-1  8/10] COPY api/ /app/api/                                                                   0.1s
- => CANCELED [table-dependency-viewer_api stage-1  9/10] RUN HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy=   pip install --index  3.5s
-------
- > [table-dependency-viewer_frontend internal] load metadata for docker.io/library/nginx:alpine:
-------
-failed to solve: rpc error: code = Unknown desc = nginx:alpine: failed to resolve source metadata for docker.io/library/nginx:alpine: faile         d to copy: httpReadSeeker: failed open: unexpected status code https://registry-1.docker.io/v2/library/nginx/manifests/sha256:35cd77497979a         be70dc8d26f5ae60811eea233a2eb5dc03c2ee30972caeb303e: 429 Too Many Requests - Server message: toomanyrequests: You have reached your unauthe         nticated pull rate limit. https://www.docker.com/increase-rate-limit
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker pull nginx:alpine
-Error response from daemon: toomanyrequests: You have reached your unauthenticated pull rate limit. https://www.docker.com/increase-rate-limit
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker images | grep nginx
-[root@rgm-s-dwhapp01 table-dependency-viewer]# docker images | grep -E 'nginx|node|python'
+table_name: /rusal/closeinv_ral
+table_schema: ods
+table_id: 1785
+source_id: 6
+source_type: GREENPLUM
+flag_has_views: false
+table_load_mode: TRUNCATE_INIT
+job_id: 296
+job_name: STG_JOB
+table_loading_index: 1
+entity_id: 35
+entity_name: BI_SB_WUC
+object_type: TABLE
+table_load_interval:
+  days: 1
+  hours: 0
+  minutes: 0
+  seconds: 0
+flag_waiting_dag_finished: false
+start_date: '2024-12-22 00:30:00'
+sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_recreate_init.sql
+sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_insert_init.sql
+sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_truncate.sql
+depends_on:
+  stg:
+    - /RUSAL/CLOSEINV
+
+BI_SB_WUC/ods/rusalcloseinv_ral
+Есть ошибки · modified
+`table_name` в YAML не совпадает с выбранной таблицей
+Recreate SQL создает `ods.`, а ожидается `ods.rusalcloseinv_ral`
+Insert SQL пишет в `ods.`, а ожидается `ods.rusalcloseinv_ral`
+Truncate SQL обращается не к целевой таблице: `ods.`
+Объект `ods.rusalcloseinv_ral` не найден в DEV Greenplum
+
+
+
+В insert SQL найден `DROP TABLE/VIEW`; проверьте, что удаляются только временные объекты: `table pg_temp.zsd324k_bi_ral_zterm`, `table pg_temp.distinct_vbrp`, `table pg_temp.contract_type_ptc`, `table pg_temp.vbak1366`, `table pg_temp.vbak2`, `table pg_temp.vbsk`, `table pg_temp.vbak4`, `table pg_temp.vbkd_kdgrp`, `table pg_temp.vbap2`, `table pg_temp.vbsk4`, `table pg_temp.vbak5`, `table pg_temp.vbak6`, `table pg_temp.vbak7`, `table pg_temp.vbsk_vbss_1375`, `table pg_temp.lot_type_contract`, `table pg_temp.group_add`, `table pg_temp.material_check`, `table pg_temp.price_agr_pos_search_base`, `table pg_temp.price_agr_pos_search_mat`, `table pg_temp.price_agr_pos_search_mat_10`, `table pg_temp.price_agr_pos_search_mat_shape`, `table pg_temp.invoice324_khd_posnr`, `table pg_temp.invoice324_khd`, `table pg_temp.invoice324_khd_not_charg`, `table pg_temp.invoice324_khd_shipdata`, `table pg_temp.invoice324_double_fkart`, `table pg_temp.vbrk_vbrp_final`, `table pg_temp.smart_4_st_inv_pos`, `table pg_temp.china_contract`, `table pg_temp.dm_opps_invoice_1_step`, `table pg_temp.dm_opps_invoice_2_step`, `table pg_temp.price_agreement_code_search_mat_full`, `table pg_temp.price_agreement_code_search_mat_10`, `table pg_temp.price_agreement_code_search_mat_shape`, `table pg_temp.price_agreement_code_search_max`, `table pg_temp.to_warehouse`, `table pg_temp.invoice_agent`, `table pg_temp.statement_pre_base`, `table pg_temp.statement_base_pre_calc_step_1`, `table pg_temp.statement_base_pre_calc_step_2`, `table pg_temp.kdmat_1425_full`, `table pg_temp.kdmat_1425_mat_10`, `table pg_temp.kdmat_1425_mat`, `table pg_temp.material_swap`, `table pg_temp.kdmat_1425_mat_swap`, `table pg_temp.kdmat_1425_max`, `table pg_temp.quota_contr_pos_full`, `table pg_temp.quota_contr_pos_mat_10`, `table pg_temp.quota_contr_pos_mat`, `table pg_temp.quota_contr_pos_min`, `table pg_temp.statement_base_pre_calc_step_3`, `table pg_temp.statement_base_pre_calc_step_4`

@@ -1,38 +1,767 @@
-table_name: /rusal/closeinv_ral
-table_schema: ods
-table_id: 1785
-source_id: 6
-source_type: GREENPLUM
-flag_has_views: false
-table_load_mode: TRUNCATE_INIT
-job_id: 296
-job_name: STG_JOB
-table_loading_index: 1
-entity_id: 35
-entity_name: BI_SB_WUC
-object_type: TABLE
-table_load_interval:
-  days: 1
-  hours: 0
-  minutes: 0
-  seconds: 0
-flag_waiting_dag_finished: false
-start_date: '2024-12-22 00:30:00'
-sql_query_recreate_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_recreate_init.sql
-sql_query_insert_init: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_insert_init.sql
-sql_query_truncate: meta_info/database/greenplum/schema_name/tech_etl/etl_loads_entity/BI_SB_WUC/ods/rusalcloseinv_ral/sql_query_truncate.sql
-depends_on:
-  stg:
-    - /RUSAL/CLOSEINV
+explain 
+ -- CTE dates: сгенерированный календарь дат (dt_report) от 01.01.2026 до текущей даты
+with dates as (
+    select generate_series(
+        date '2026-01-01',
+        current_date,
+        '1 day'::interval
+    )::date as dt_report
+),
+ 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- CTE dates_with_timezone: формирование ключевых полей (rw_part, kpr_home) и дат
+-- (прибытие/убытие с завода, станции, окончание выгрузки) с корректировкой на time_zone завода 
+dates_with_timezone as (
+    select
+        rwcar_date_control.rw_part,
+        date(
+            (
+                (rwcar_date_control.dt_in_plant at time zone 'UTC')
+                at time zone past.time_zone_iana_code
+            ) - interval '3 hours'
+        ) as dt_in_plant,											-- Дата прибытия на завод
+        date(
+            (
+                (rwcar_date_control.dt_out_plant at time zone 'UTC')
+                at time zone past.time_zone_iana_code
+            ) - interval '3 hours'
+        ) as dt_out_plant,											-- Дата убытия с завода
+        date(
+            (
+                (rwcar_date_control.dt_in_gdc at time zone 'UTC')
+                at time zone past.time_zone_iana_code
+            ) - interval '3 hours'
+        ) as dt_in_gdc,											-- Дата прибытия на станцию
+        date(
+            (
+                (rwcar_date_control.dt_out_gdc at time zone 'UTC')
+                at time zone past.time_zone_iana_code
+            ) - interval '3 hours'
+        ) as dt_out_gdc,											-- Дата убытия со станции
+        date(
+            (
+                (rwcar_date_control.dt_end_unload at time zone 'UTC')
+                at time zone past.time_zone_iana_code
+            ) - interval '3 hours'
+        ) as dt_end_unload,										-- Дата окончания разгрузки
+        rwcar_date_control.kpr_home												-- Код завода	
+    from ods.asuzdc_rwcar_date_control as rwcar_date_control
+    left join dict_dds.plant_and_subsidiary_td as past
+        on past.asuzdc_plant_code = case
+            when rwcar_date_control.kpr_home = '15'
+                then '2'
+            else rwcar_date_control.kpr_home
+        end
+    where past.asuzdc_plant_code is not null
+),
+ 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Вычисление кода субагента
+plant_id as (
+    select
+        pas.asuzdc_plant_code,																																																		-- Идентификатор завода АСУЖДЦ
+        pas.plant_code,																																																			-- Код завода
+        pas.plant_short_name,																																																		-- Наименование завода
+        case
+            when pas.plant_code = '5201' then 1
+            when pas.plant_code = '5101' then 2
+            when pas.plant_code = '5401' then 3
+            when pas.plant_code = '5301' then 4
+            when pas.plant_code = '6100' then 5
+            when pas.plant_code = '5601' then 6
+            when pas.plant_code = '6300' then 7
+            when pas.plant_code = '6800' then 8
+            when pas.plant_code = '5701' then 9
+            else 100
+        end as subsequent_code										-- Субкод завода
+    from dict_dds.plant_and_subsidiary as pas
+    left join dict_dds.plant_and_subsidiary_texts as past
+        on
+            past.plant_code = pas.plant_code
+            and past.language_code = 'R'
+    where
+        asuzdc_plant_code is not null
+        and pas.deleted_flag = false
+        and past.deleted_flag = false
+),
+ 
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	
+-- Агрегация нормативов с начала месяца / года отчетной даты dt_report
+normative_period as (
+    select
+        d.dt_report,
+        aurp.consignee_mdm_code as id_mdm,																																														-- Код МДМ Грузополучателя
+        aurp.railcar_type_asuzdc_code as car_type,																																													-- Тип т/с
+        aurp.package_type_asuzdc_code as pack_id,																																												-- Тип тары (Код)
+        aurp.is_unloaded_outside_plant_code as pr_avto,																																							-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        past.asuzdc_plant_code as kpr_home,																																														-- Индикатор завода
+        -- MTD: накопление с начала месяца до (dt_report - 1)
+        sum(case
+            when
+                cal.dt_report >= date_trunc('month', d.dt_report)
+                and cal.dt_report <= d.dt_report
+                then aurp.unload_daily_normative_quantity
+            else 0
+        end) as railcar_at_plant_unload_normative_quantity_mtd,		-- Агрегация норматива по разгрузке вагонов за месяц
+        sum(case
+            when
+                cal.dt_report >= date_trunc('month', d.dt_report)
+                and cal.dt_report <= d.dt_report
+                then aurp.unload_daily_normative_weight
+            else 0
+        end) as railcar_at_plant_unload_normative_weight_mtd,			-- Агрегация норматива по разгрузке массы глинозема за месяц
+        -- YTD: накопление с начала года до (dt_report - 1)
+        sum(case
+            when
+                cal.dt_report >= date_trunc('year', d.dt_report)
+                and cal.dt_report <= d.dt_report
+                then aurp.unload_daily_normative_quantity
+            else 0
+        end) as railcar_at_plant_unload_normative_quantity_ytd,		-- Агрегация норматива по разгрузке вагонов за год
+        sum(case
+            when
+                cal.dt_report >= date_trunc('year', d.dt_report)
+                and cal.dt_report <= d.dt_report
+                then aurp.unload_daily_normative_weight
+            else 0
+        end) as railcar_at_plant_unload_normative_weight_ytd			-- Агрегация норматива по разгрузке массы глинозема за год
+    from dates as d
+    cross join dates as cal
+    left join dict_dds.raw_material_unload_at_plant_normative_td as aurp
+        on
+            cal.dt_report >= aurp.dt_valid_from
+            and (cal.dt_report <= aurp.dt_valid_to or aurp.dt_valid_to is null)
+            and aurp.cargo_group_asuzdc_code = '1'
+    left join dict_dds.plant_and_subsidiary_td as past on past.plant_code = aurp.plant_code
+    where cal.dt_report <= d.dt_report
+ 
+    group by
+        d.dt_report,
+        aurp.consignee_mdm_code,
+        aurp.railcar_type_asuzdc_code,
+        aurp.package_type_asuzdc_code,
+        aurp.is_unloaded_outside_plant_code,
+        past.asuzdc_plant_code
+),
+ 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- CTE sbor: подготовка данных для основной витрины —
+-- формирование ключевых полей + промежуточных расчётов метрик
+sbor as (
+    select
+        dt_report,																																																						-- Дата отчета
+        qt.id_mdm,																																																						-- Код МДМ Грузополучателя
+        qt.car_type,																																																					-- Тип т/с	
+        qt.pr_avto,																																																					-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        case
+            when qt.rw_sort in ('23', '24', '25', '94', '9 ') and ugm.cargo_group_asuzdc_code = '1' then '3'
+            when qt.cargo_places = 5 and ugm.cargo_group_asuzdc_code = '1' then '1'
+            when qt.cargo_places = 1 and ugm.cargo_group_asuzdc_code = '1' then '2'
+            when qt.cargo_places > 5 and ugm.cargo_group_asuzdc_code = '1' then '4'
+            when qt.cargo_places = 0 and (qt.rw_sort = '6 ' or qt.rw_sort = '68') and ugm.cargo_group_asuzdc_code = '1' then '2'
+            when ugm.cargo_group_asuzdc_code in ('2', '3', '4') then '0'
+            else '6'
+        end as pack_id,																																																				-- LE.500019 Тип тары (Код)
+        dt_in_plant,																																																					-- Дата прибытия на завод
+        dt_out_plant,																																																					-- Дата убытия с завода
+        dt_in_gdc,																																																						-- Дата прибытия на станцию
+        dt_out_gdc,																																																					-- Дата убытия со станции
+        dt_end_unload,																																																					-- Дата окончания разгрузки
+        cargo_weight,  											-- Вес по документу																																																					-- 
+        case
+            when
+                dt_in_plant is not null
+                and dt_in_plant <= dt_report - 1
+                and (dt_out_plant is null or dt_out_plant > dt_report - 1)
+                and (dt_end_unload is null or dt_end_unload > dt_report - 1)
+                then 1
+            else 0
+        end as in_plant_sbor,
+        case
+            when
+                dt_in_gdc <= dt_report - 1
+                and (dt_out_gdc is null or dt_out_gdc > dt_report - 1)
+                and (dt_end_unload is null or dt_end_unload > dt_report - 1)
+                --and (dt_in_plant is null or dt_in_plant > dt_report - 1)
+                then 1
+            else 0
+        end as in_gdc_sbor,
+        case
+            when
+                dt_in_plant > dt_report - 1
+                and dt_in_plant <= dt_report
+                then 1
+            else 0
+        end as in_plant_day_prihod,										-- LE.500028 Поступило  вагонов с глиноземом на завод факт
+        case
+            when
+                extract(month from dt_in_plant) = extract(month from dt_report)
+                and (dt_in_plant <= dt_report - 1)
+                then 1
+            else 0
+        end as in_plant_month_prihod,									-- LE.500044 Поступило вагонов с глиноземом на завод факт с начала месяца MTD
+        case
+            when
+                extract(year from dt_in_plant) = extract(year from dt_report)
+                and (dt_in_plant <= dt_report - 1)
+                then 1
+            else 0
+        end as in_plant_year_prihod,										-- LE.500028 Поступило  вагонов с глиноземом на завод факт
+        case
+            when dt_end_unload >= dt_report and dt_end_unload <= dt_report
+                then 1
+            else 0
+        end as dt_end_unload_razgruzca
+    from (
+        select
+            dt_report,
+            coalesce(docs.id_mdm_p, docs1.id_mdm_p) as id_mdm,													-- Код МДМ Грузополучателя
+            rwcar_parts.car_type,																																																		-- Тип т/с	 
+            case
+                when coalesce(docs.rw_st_p, docs1.rw_st_p) = '924906'
+                    then 1
+                else 0
+            end as pr_avto,													-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+            coalesce(docs_cars1.cargo_places, docs_cars2.cargo_places) as cargo_places,												-- Количество мест
+            coalesce(coalesce(docs_cars1.rw_kg, docs_cars2.rw_kg), docs_cars.rw_kg) as rw_kg,													-- Код груза по документу 
+            hrw_cars.railcar_type_asuzdc_code as rw_sort,													-- Род вагона
+            coalesce(docs_cars1.cargo_weight, docs_cars2.cargo_weight) as cargo_weight,  											-- Вес по документу
+            dwz.dt_in_plant,																																																			-- Дата прибытия на завод
+            dwz.dt_out_plant,																																																			-- Дата убытия с завода
+            dwz.dt_in_gdc,																																																				-- Дата прибытия на станцию
+            dwz.dt_out_gdc,																																																			-- Дата убытия со станции
+            dwz.dt_end_unload																																																			-- Дата окончания разгрузки
+        from dates
+        left join dates_with_timezone as dwz
+            on (
+                extract(year from dwz.dt_in_plant) = extract(year from dt_report)
+                or extract(year from dwz.dt_in_gdc) = extract(year from dt_report)
+                or extract(year from dwz.dt_end_unload) = extract(year from dt_report)
+            )
+            --and (dwz.kpr_home != '15' or (dwz.kpr_home = '15' and (dwz.dt_in_plant is null or dwz.dt_in_plant >= dt_report - 1)))
+            --and (dwz.kpr_home != '15' or (dwz.kpr_home = '15' and dwz.dt_in_plant is null))
+            -- and (dwz.kpr_home != '15' or (dwz.kpr_home = '15' and dwz.dt_in_plant is null))
+            --and (dwz.kpr_home not in ('2', '15') or ((dwz.kpr_home = '15' and (dwz.dt_in_plant is null or dwz.dt_in_plant >= dt_report - 1))) or ((dwz.kpr_home = '2' and dwz.dt_in_plant <= dt_report - 1)))
+            --and (dwz.kpr_home not in ('2', '15') or ((dwz.kpr_home = '15' and (dwz.dt_in_plant is null or dwz.dt_in_plant >= dt_report))) or ((dwz.kpr_home = '2' and dwz.dt_in_plant < dt_report)))
+            and (dwz.kpr_home != '15' or (dwz.kpr_home = '15' and dwz.dt_in_plant is null))
+        left join ods.asuzdc_rwcar_parts as rwcar_parts
+            on
+                dwz.rw_part = rwcar_parts.rw_part
+                and rwcar_parts.car_type in ('2', '3')
+        left join ods.asuzdc_docs_cars as docs_cars
+            on
+                docs_cars.rw_part = rwcar_parts.rw_part
+                and docs_cars.doc_type = '1'
+        left join ods.asuzdc_docs_cars as docs_cars1
+            on
+                docs_cars1.rw_part = rwcar_parts.rw_part
+                and docs_cars1.doc_type = '2'
+        left join ods.asuzdc_docs as docs
+            on docs.rn_doc::varchar = docs_cars1.rn_doc
+        left join ods.asuzdc_docs_cars as docs_cars2
+            on docs_cars2.rw_part = dwz.rw_part and docs_cars2.doc_type = '10'
+        left join ods.asuzdc_docs as docs1
+            on docs1.rn_doc::varchar = docs_cars2.rn_doc
+        left join dict_dds.railcar_certificate as hrw_cars
+            on hrw_cars.railcar_code = rwcar_parts.car_num
+    --		and hrw_cars.transport_type_code = rwcar_parts.car_type
+    ) as qt
+    left join dict_dds.etsng as ugm on qt.rw_kg = ugm.etsng_code
+    where
+        ugm.cargo_group_asuzdc_code = '1'
+        and qt.id_mdm is not null
+),
+ 
+--select * from sbor where dt_report = '2026-04-17' and id_mdm = 'BP00000004'--and pack_id = 3 --and id_mdm = 
+ 
+-- основная расчетная cte для высисления значений на день
+sbor_day as (
+    select
+        sbor.dt_report,
+        sbor.id_mdm,																																																					-- Код МДМ Грузополучателя
+        sbor.car_type,																																																					-- Тип т/с	
+        sbor.pr_avto,																																																					-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        sbor.pack_id,																																																					-- LE.500019 Тип тары (Код)
+        sum(in_plant_sbor) as railcar_at_plant_actual_quantity,							-- LE.500025 Наличие вагонов с глиноземом на заводе факт
+        sum(in_gdc_sbor) - sum(in_plant_sbor) as railcar_at_station_actual_quantity,						-- LE.500026 Наличие вагонов с глиноземом на станции факт
+        sum(case when in_plant_sbor = 1 then cargo_weight / 1000 else 0 end) as railcar_at_plant_actual_weight,							-- LE.500035 Наличие тонн глинозема на заводе
+        sum(case when in_gdc_sbor = 1 then cargo_weight / 1000 else 0 end)
+        -
+        sum(case when in_plant_sbor = 1 then cargo_weight / 1000 else 0 end) as railcar_at_station_actual_weight,							-- LE.500036 Наличие тонн глинозема на станции
+        sum(in_plant_day_prihod) as railcar_arrived_to_plant_actual_quantity,					-- LE.500028 Поступило  вагонов с глиноземом на завод факт
+        sum(case when in_plant_day_prihod = 1 then cargo_weight / 1000 else 0 end) as railcar_arrived_to_plant_actual_weight,					-- LE.500038 Поступило тонн глинозема в ПС на завод факт
+        sum(dt_end_unload_razgruzca) as railcar_at_plant_unloaded_actual_quantity,				-- LE.500031 Вагоны с глиноземом разгружено на заводе факт
+        sum(case when dt_end_unload_razgruzca = 1 then cargo_weight / 1000 else 0 end) as railcar_at_plant_unloaded_actual_weight					-- LE.500035 Наличие тонн глинозема на заводе
+    from sbor
+    group by
+        sbor.dt_report,																																																				-- Дата очтета
+        sbor.id_mdm,																																																					-- Код МДМ Грузополучателя
+        sbor.car_type,																																																					-- Тип т/с	
+        sbor.pr_avto,																																																					-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        pack_id																																																						-- LE.500019 Тип тары (Код)				
+),
+ 
+-- основная расчетная cte для высисления значений на месяц
+sbor_month as (
+    select
+        dates.dt_report,																																																			-- Дата отчета
+        sbor.id_mdm,																																																				-- Код МДМ Грузополучателя
+        sbor.car_type,																																																				-- LE.500022 Тип т/с	
+        sbor.pr_avto,																																																				-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        sbor.pack_id,																																																				-- LE.500019 Тип тары (Код)
+        sum(in_plant_day_prihod) as railcar_arrived_to_plant_actual_mtd_quantity,				-- LE.500044 Поступило вагонов с глиноземом на завод факт с начала месяца MTD	
+        sum(dt_end_unload_razgruzca) as railcar_at_plant_unloaded_actual_mtd_quantity, 			-- LE.500045 Вагоны с глиноземом под разгрузку на заводе факт  с начала месяца MTD		
+        sum(case when dt_end_unload_razgruzca = 1 then cargo_weight / 1000 else 0 end) as railcar_at_plant_unloaded_actual_mtd_weight,				-- LE.500053 Тонн глинозема в вагонах разгружено на заводе факт  с начала месяца MTD
+        sum(case when in_plant_day_prihod = 1 then cargo_weight / 1000 else 0 end) as railcar_arrived_to_plant_actual_mtd_weight				-- LE.500050 Поступило тонн глинозема в ПС на завод факт с начала месяца
+    from dates
+    left join sbor
+        on
+            dates.dt_report > sbor.dt_report - 1
+            and extract(month from sbor.dt_report) = extract(month from dates.dt_report)
+    group by
+        dates.dt_report,																																																				-- Дата отчета
+        sbor.id_mdm,																																																					-- Код МДМ Грузополучателя
+        sbor.car_type,																																																					-- LE.500022 Тип т/с	
+        sbor.pr_avto,																																																					-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        sbor.pack_id																																																					-- LE.500019 Тип тары (Код)		
+),
+ 
+-- основная расчетная cte для высисления значений на год
+sbor_year as (
+    select
+        dates.dt_report,																																																			-- Дата отчета
+        sbor.id_mdm,																																																				-- Код МДМ Грузополучателя
+        sbor.car_type,																																																				-- LE.500022 Тип т/с	
+        sbor.pr_avto,																																																				-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        sbor.pack_id,																																																				-- LE.500019 Тип тары (Код)
+        sum(in_plant_day_prihod) as railcar_arrived_to_plant_actual_ytd_quantity,				-- LE.500056 Поступило вагонов с глиноземом на завод факт с начала года YTD
+        sum(dt_end_unload_razgruzca) as railcar_at_plant_unloaded_actual_ytd_quantity, 			-- LE.500059 Вагоны с глиноземом разгружено на заводе факт  с начала года YTD	
+        sum(case when dt_end_unload_razgruzca = 1 then cargo_weight / 1000 else 0 end) as railcar_at_plant_unloaded_actual_ytd_weight,				-- LE.500065 Тонн глинозема в вагонах разгружено на заводе факт  с начала года YTD
+        sum(case when in_plant_day_prihod = 1 then cargo_weight / 1000 else 0 end) as railcar_arrived_to_plant_actual_ytd_weight				-- LE.500062 Поступило тонн глинозема в ПС на завод факт с начала года YTD
+    from dates
+    left join sbor
+        on
+            dates.dt_report > sbor.dt_report - 1
+            and extract(year from sbor.dt_report) = extract(year from dates.dt_report)
+    group by
+        dates.dt_report,																																																				-- Дата отчета
+        sbor.id_mdm,																																																					-- Код МДМ Грузополучателя
+        sbor.car_type,																																																					-- LE.500022 Тип т/с	
+        sbor.pr_avto,																																																					-- Признак разгрузки на станции примыкания и доставки на завод автотранспортом
+        sbor.pack_id																																																					-- LE.500019 Тип тары (Код)		
+)
+ 
+select
+    dt_report,																																																						-- LE.500001 Дата отчета
+    plant_code,																																																					-- LE.500002 Завод (код)
+    plant_name, 																																																					-- LE.500003 Завод (наименование)
+    plant_search_name,																																																				-- LE.500004 Завод (связка)
+    subsequent_code,																																																				-- LE.500017 Субкод завода для сортировки
+    --	, plant_short_name																																																				-- LE.500018 Короткое название завода
+    package_type_code,																																																				-- LE.500019 Тип тары (Код)
+    package_type_name,																																																				-- LE.500020 Тип тары (Наименование)
+    package_type_search,																																																			-- LE.500021 Тип тары (Связка)
+    transport_type_code,																																																			-- LE.500022 Тип ПС (Код)
+    transport_type_name,																																																			-- LE.500023 Тип ПС (Наименование)
+    transport_type_search,																																																			-- LE.500024 Тип ПС (Связка)
+ 
+    -- сборка день
+    sum(railcar_at_plant_actual_quantity),																																															-- LE.500025 Наличие вагонов с глиноземом на заводе факт
+    sum(railcar_at_station_actual_quantity),																																														-- LE.500026 Наличие вагонов с глиноземом на станции факт
+    sum(railcar_total_actual_quantity),																																															-- LE.500027 Наличие вагонов с глиноземом на всех участках факт
+    sum(railcar_arrived_to_plant_actual_quantity), 																																												-- LE.500028 Поступило вагонов с глиноземом на завод факт
+    sum(railcar_at_plant_ready_for_unload_actual_quantity), 																																										-- LE.500029 Вагоны с глиноземом под разгрузку на заводе факт
+    sum(railcar_at_plant_unload_normative_quantity),																																												-- LE.500030 Вагоны с глиноземом под разгрузку на заводе норматив	
+    sum(railcar_at_plant_unloaded_actual_quantity),																																												-- LE.500031 Вагоны с глиноземом разгружено на заводе факт
+    sum(railcar_at_plant_left_after_unload_actual_quantity),    																																									-- LE.500032 Разница вагонов между фактически разгруженнными и наличием под разгрузку на заводе
+    sum(railcar_at_plant_unload_normative_vs_actual_quantity),																																									-- LE.500033 Разница вагонов под разгрузку между нормативом и фактом на заводе																								
+    comment,																																																						-- LE.500034 Комментарий											
+    sum(railcar_at_plant_actual_weight),																																															-- LE.500035 Наличие тонн глинозема в ПС на заводе факт
+    sum(railcar_at_station_actual_weight),																																															-- LE.500036 Наличие тонн глинозема в ПС на станции факт
+    sum(railcar_total_actual_weight),																																																-- LE.500037 Наличие тонн глиноза в ПС на всех участках факт
+    sum(railcar_arrived_to_plant_actual_weight),																																													-- LE.500038 Поступило тонн глинозема в ПС на завод факт
+    sum(railcar_at_plant_ready_for_unload_actual_weight),																																											-- LE.500039 Тонн глинозема в ПС под разгрузку на заводе факт
+    sum(railcar_at_plant_unload_normative_weight),																																													-- LE.500040 Тонн глинозема в ПС под разгрузку на заводе норматив 
+    sum(railcar_at_plant_unloaded_actual_weight),																																													-- LE.500041 Тонн глинозема в вагонах разгружено на заводе факт
+    sum(railcar_at_plant_unload_normative_vs_actual_weight),																																										-- LE.500043 Разница тонн под разгрузку между нормативом и фактом на заводе
+    sum(railcar_at_plant_left_after_unload_actual_weight),																																											-- LE.500042 Разница тонн между фактически разгруженнными и наличием под разгрузку на заводе
+ 
+    -- сборка месяц
+    sum(railcar_arrived_to_plant_actual_mtd_quantity),																																												-- LE.500044 Поступило вагонов с глиноземом на завод факт с начала месяца MTD
+    sum(railcar_at_plant_unload_normative_mtd_quantity), 																																											-- LE.500046 Вагоны с глиноземом под разгрузку на заводе норматив  с начала месяца MTD
+    sum(railcar_at_plant_unloaded_actual_mtd_quantity),																																											-- LE.500047 Вагоны с глиноземом разгружено на заводе факт  с начала месяца MTD
+    sum(railcar_at_plant_unload_normative_vs_actual_mtd_quantity), 																																								-- LE.500049 Разница вагонов под разгрузку между нормативом и фактом на заводе  с начала месяца MTD
+    sum(railcar_arrived_to_plant_actual_mtd_weight),																																												-- LE.500050 Поступило тонн глинозема в ПС на завод факт  с начала месяца MTD
+    sum(railcar_at_plant_unload_normative_mtd_weight),																																												-- LE.500052 Тонн глинозема в ПС под разгрузку на заводе норматив  с начала месяца MTD
+    sum(railcar_at_plant_unloaded_actual_mtd_weight),																																												-- LE.500053 Тонн глинозема в вагонах разгружено на заводе факт  с начала месяца MTD
+    sum(railcar_at_plant_unload_normative_vs_actual_mtd_weight),																																									-- LE.500055 Разница тонн под разгрузку между нормативом и фактом на заводе  с начала месяца MTD
+ 
+    -- сборка год
+    sum(railcar_arrived_to_plant_actual_ytd_quantity),																																												-- LE.500056 Поступило вагонов с глиноземом на завод факт с начала года YTD
+    sum(railcar_at_plant_unload_normative_ytd_quantity), 																																											-- LE.500058 Вагоны с глиноземом под разгрузку на заводе норматив  с начала года YTD
+    sum(railcar_at_plant_unloaded_actual_ytd_quantity),																																											-- LE.500059 Вагоны с глиноземом разгружено на заводе факт  с начала года YTD
+    sum(railcar_at_plant_unload_normative_vs_actual_ytd_quantity),																																									-- LE.500061 Разница вагонов под разгрузку между нормативом и фактом на заводе с начала года YTD
+    sum(railcar_arrived_to_plant_actual_ytd_weight),																																												-- LE.500062 Поступило тонн глинозема в ПС на завод факт с начала года YTD
+    sum(railcar_at_plant_unload_normative_ytd_weight),																																												-- LE.500064 Тонн глинозема в ПС под разгрузку на заводе норматив  с начала года YTD
+    sum(railcar_at_plant_unloaded_actual_ytd_weight),																																												-- LE.500065 Тонн глинозема в вагонах разгружено на заводе факт  с начала года YTD
+    sum(railcar_at_plant_unload_normative_vs_actual_ytd_weight)																																									-- LE.500067 Разница тонн под разгрузку между нормативом и фактом на заводе с начала года YTD
+from (
+    select
+        dates.dt_report,												-- LE.500001 Дата отчета
+        hh.asuzdc_plant_code as plant_code,												-- LE.500002 Завод (код)
+        hh.plant_short_name as plant_name, 												-- LE.500003 Завод (наименование)
+        hh.asuzdc_plant_code || '-' || hh.plant_short_name as plant_search_name,										-- LE.500004 Завод (связка)
+        hh.subsequent_code,											-- LE.500017 Субкод завода для сортировки
+        --	, hh.plant_short_name																																				as plant_short_name											-- LE.500018 Короткое название завода
+        aurp.package_type_asuzdc_code as package_type_code,										-- LE.500019 Тип тары (Код)
+        hgh_list.package_type_name,										-- LE.500020 Тип тары (Наименование)
+        aurp.package_type_asuzdc_code || '-' || hgh_list.package_type_name as package_type_search,										-- LE.500021 Тип тары (Связка)
+        aurp.railcar_type_asuzdc_code as transport_type_code,										-- LE.500022 Тип ПС (Код)
+        case
+            when aurp.railcar_type_asuzdc_code = '2' then 'Вагон'
+            when aurp.railcar_type_asuzdc_code = '3' then 'Контейнер'
+        end as transport_type_name,										-- LE.500023 Тип ПС (Наименование)
+        aurp.railcar_type_asuzdc_code || '-' || case
+            when aurp.railcar_type_asuzdc_code = '2' then 'Вагон'
+            when aurp.railcar_type_asuzdc_code = '3' then 'Контейнер'
+        end as transport_type_search,									-- LE.500024 Тип ПС (Связка)
+ 
+        -- сборка день
+        sbor_day.railcar_at_plant_actual_quantity,							-- LE.500025 Наличие вагонов с глиноземом на заводе факт
+        sbor_day.railcar_at_station_actual_quantity,						-- LE.500026 Наличие вагонов с глиноземом на станции факт
+        coalesce(sbor_day.railcar_at_plant_actual_quantity, 0) + coalesce(sbor_day.railcar_at_station_actual_quantity, 0) as railcar_total_actual_quantity,							-- LE.500027 Наличие вагонов с глиноземом на всех участках факт
+        sbor_day.railcar_arrived_to_plant_actual_quantity, 				-- LE.500028 Поступило вагонов с глиноземом на завод факт
+        coalesce(sbor_day.railcar_at_plant_actual_quantity, 0) + coalesce(sbor_day.railcar_arrived_to_plant_actual_quantity, 0)
+        +
+        (case when sbor_day.pr_avto = 1 then coalesce(sbor_day.railcar_at_station_actual_quantity, 0) else 0 end) as railcar_at_plant_ready_for_unload_actual_quantity, 		-- LE.500029 Вагоны с глиноземом под разгрузку на заводе факт
+        coalesce(aurp.unload_daily_normative_quantity, 0) as railcar_at_plant_unload_normative_quantity,				-- LE.500030 Вагоны с глиноземом под разгрузку на заводе норматив
+        sbor_day.railcar_at_plant_unloaded_actual_quantity,				-- LE.500031 Вагоны с глиноземом разгружено на заводе факт
+ 
+        coalesce(sbor_day.railcar_at_plant_unloaded_actual_quantity, 0) - coalesce(aurp.unload_daily_normative_quantity, 0) as railcar_at_plant_unload_normative_vs_actual_quantity,		-- LE.500033 Разница вагонов под разгрузку между нормативом и фактом на заводе
+        coalesce(sbor_day.railcar_at_plant_unloaded_actual_quantity, 0)
+        -
+        (
+            coalesce(sbor_day.railcar_at_plant_actual_quantity, 0) + coalesce(sbor_day.railcar_arrived_to_plant_actual_quantity, 0)
+            + (case when sbor_day.pr_avto = 1 then coalesce(sbor_day.railcar_at_station_actual_quantity, 0) else 0 end)
+        ) as railcar_at_plant_left_after_unload_actual_quantity,		-- LE.500032 Разница вагонов между фактически разгруженнными и наличием под разгрузку на заводе
+ 
+        unload_reason.reason_text as comment,													-- LE.500034 Комментарий											
+        sbor_day.railcar_at_plant_actual_weight,							-- LE.500035 Наличие тонн глинозема в ПС на заводе факт
+        sbor_day.railcar_at_station_actual_weight,							-- LE.500036 Наличие тонн глинозема в ПС на станции факт
+        coalesce(sbor_day.railcar_at_plant_actual_weight, 0) + coalesce(sbor_day.railcar_at_station_actual_weight, 0) as railcar_total_actual_weight,								-- LE.500037 Наличие тонн глиноза в ПС на всех участках факт
+        sbor_day.railcar_arrived_to_plant_actual_weight,					-- LE.500038 Поступило тонн глинозема в ПС на завод факт
+        coalesce(sbor_day.railcar_at_plant_actual_weight, 0) + coalesce(sbor_day.railcar_arrived_to_plant_actual_weight, 0)
+        +
+        (case when sbor_day.pr_avto = 1 then coalesce(sbor_day.railcar_at_station_actual_weight, 0) else 0 end) as railcar_at_plant_ready_for_unload_actual_weight,			-- LE.500039 Тонн глинозема в ПС под разгрузку на заводе факт
+        aurp.unload_daily_normative_weight as railcar_at_plant_unload_normative_weight,					-- LE.500040 Тонн глинозема в ПС под разгрузку на заводе норматив 
+        sbor_day.railcar_at_plant_unloaded_actual_weight,					-- LE.500041 Тонн глинозема в вагонах разгружено на заводе факт
+ 
+        coalesce(sbor_day.railcar_at_plant_unloaded_actual_weight, 0) - coalesce(aurp.unload_daily_normative_weight, 0) as railcar_at_plant_unload_normative_vs_actual_weight,		-- LE.500043 Разница тонн под разгрузку между нормативом и фактом на заводе
+        coalesce(sbor_day.railcar_at_plant_unloaded_actual_weight, 0)
+        -
+        (
+            coalesce(sbor_day.railcar_at_plant_actual_weight, 0) + coalesce(sbor_day.railcar_arrived_to_plant_actual_weight, 0)
+            +
+            (case when sbor_day.pr_avto = 1 then coalesce(sbor_day.railcar_at_station_actual_weight, 0) else 0 end)
+        ) as railcar_at_plant_left_after_unload_actual_weight,			-- LE.500042 Разница тонн между фактически разгруженнными и наличием под разгрузку на заводе
+ 
+        -- сборка месяц
+        sbor_month.railcar_arrived_to_plant_actual_mtd_quantity,				-- LE.500044 Поступило вагонов с глиноземом на завод факт с начала месяца MTD
+        norm.railcar_at_plant_unload_normative_quantity_mtd as railcar_at_plant_unload_normative_mtd_quantity, 			-- LE.500046 Вагоны с глиноземом под разгрузку на заводе норматив  с начала месяца MTD
+        sbor_month.railcar_at_plant_unloaded_actual_mtd_quantity,			-- LE.500047 Вагоны с глиноземом разгружено на заводе факт  с начала месяца MTD
+        coalesce(sbor_month.railcar_at_plant_unloaded_actual_mtd_quantity, 0)
+        -
+        coalesce(norm.railcar_at_plant_unload_normative_quantity_mtd, 0) as railcar_at_plant_unload_normative_vs_actual_mtd_quantity, -- LE.500049 Разница вагонов под разгрузку между нормативом и фактом на заводе  с начала месяца MTD
+        sbor_month.railcar_arrived_to_plant_actual_mtd_weight,				-- LE.500050 Поступило тонн глинозема в ПС на завод факт  с начала месяца MTD
+        norm.railcar_at_plant_unload_normative_weight_mtd as railcar_at_plant_unload_normative_mtd_weight,				-- LE.500052 Тонн глинозема в ПС под разгрузку на заводе норматив  с начала месяца MTD
+        sbor_month.railcar_at_plant_unloaded_actual_mtd_weight,				-- LE.500053 Тонн глинозема в вагонах разгружено на заводе факт  с начала месяца MTD
+        coalesce(sbor_month.railcar_arrived_to_plant_actual_mtd_weight, 0)
+        -
+        coalesce(norm.railcar_at_plant_unload_normative_weight_mtd, 0) as railcar_at_plant_unload_normative_vs_actual_mtd_weight,	-- LE.500055 Разница тонн под разгрузку между нормативом и фактом на заводе  с начала месяца MTD
+ 
+        -- сборка год
+        sbor_year.railcar_arrived_to_plant_actual_ytd_quantity,				-- LE.500056 Поступило вагонов с глиноземом на завод факт с начала года YTD
+        norm.railcar_at_plant_unload_normative_quantity_ytd as railcar_at_plant_unload_normative_ytd_quantity, 			-- LE.500058 Вагоны с глиноземом под разгрузку на заводе норматив  с начала года YTD
+        sbor_year.railcar_at_plant_unloaded_actual_ytd_quantity,			-- LE.500059 Вагоны с глиноземом разгружено на заводе факт  с начала года YTD
+        coalesce(sbor_year.railcar_at_plant_unloaded_actual_ytd_quantity, 0)
+        -
+        coalesce(norm.railcar_at_plant_unload_normative_quantity_ytd, 0) as railcar_at_plant_unload_normative_vs_actual_ytd_quantity, -- LE.500061 Разница вагонов под разгрузку между нормативом и фактом на заводе с начала года YTD
+        sbor_year.railcar_arrived_to_plant_actual_ytd_weight,				-- LE.500062 Поступило тонн глинозема в ПС на завод факт с начала года YTD
+        norm.railcar_at_plant_unload_normative_weight_ytd as railcar_at_plant_unload_normative_ytd_weight,				-- LE.500064 Тонн глинозема в ПС под разгрузку на заводе норматив  с начала года YTD
+        sbor_year.railcar_at_plant_unloaded_actual_ytd_weight,				-- LE.500065 Тонн глинозема в вагонах разгружено на заводе факт  с начала года YTD
+        coalesce(sbor_year.railcar_arrived_to_plant_actual_ytd_weight, 0)
+        -
+        coalesce(norm.railcar_at_plant_unload_normative_weight_ytd, 0) as railcar_at_plant_unload_normative_vs_actual_ytd_weight	-- LE.500067 Разница тонн под разгрузку между нормативом и фактом на заводе с начала года YTD
+ 
+    from dates
+    left join dict_dds.raw_material_unload_at_plant_normative_td as aurp
+        on
+            aurp.dt_valid_from < dates.dt_report
+            and (aurp.dt_valid_to >= dates.dt_report or aurp.dt_valid_to is null)
+    left join plant_id as hh
+        on hh.plant_code = aurp.plant_code
+    left join sbor_day
+        on
+            sbor_day.id_mdm::varchar = aurp.consignee_mdm_code::varchar
+            and sbor_day.car_type::varchar = aurp.railcar_type_asuzdc_code::varchar
+            and sbor_day.pack_id::varchar = aurp.package_type_asuzdc_code::varchar
+            and sbor_day.pr_avto::int = aurp.is_unloaded_outside_plant_code::int
+            and sbor_day.dt_report = dates.dt_report
+    left join sbor_month
+        on
+            sbor_month.id_mdm::varchar = aurp.consignee_mdm_code::varchar
+            and sbor_month.car_type::varchar = aurp.railcar_type_asuzdc_code::varchar
+            and sbor_month.pack_id::varchar = aurp.package_type_asuzdc_code::varchar
+            and sbor_month.pr_avto::int = aurp.is_unloaded_outside_plant_code::int
+            and dates.dt_report = sbor_month.dt_report
+    left join sbor_year
+        on
+            sbor_year.id_mdm::varchar = aurp.consignee_mdm_code::varchar
+            and sbor_year.car_type::varchar = aurp.railcar_type_asuzdc_code::varchar
+            and sbor_year.pack_id::varchar = aurp.package_type_asuzdc_code::varchar
+            and sbor_year.pr_avto::int = aurp.is_unloaded_outside_plant_code::int
+            and dates.dt_report = sbor_year.dt_report
+    left join dict_dds.package_type_texts as hgh_list
+        --	on id_list = '100' 
+        on
+            aurp.package_type_sap_code::varchar = hgh_list.package_type_code
+            and hgh_list.language_code = 'R'
+    left join ods.asuzdc_unload_reasons as unload_reason
+        on
+            unload_reason.id_group = '1'
+            and unload_reason.id_mdm = aurp.consignee_mdm_code
+            and unload_reason.kp = '-1'
+            and unload_reason.dt = dates.dt_report
+    left join normative_period as norm
+        on
+            dates.dt_report = norm.dt_report
+            and norm.id_mdm::varchar = aurp.consignee_mdm_code::varchar
+            and norm.car_type::varchar = aurp.railcar_type_asuzdc_code::varchar
+            and norm.pack_id::varchar = aurp.package_type_asuzdc_code::varchar
+            and norm.pr_avto::int = aurp.is_unloaded_outside_plant_code::int
+    where
+        aurp.cargo_group_asuzdc_code = '1'
+        and plant_short_name is not null
+) as qt
+where
+    (railcar_at_plant_actual_quantity > 0 and railcar_at_plant_actual_quantity is not null)
+    or (railcar_at_station_actual_quantity > 0 and railcar_at_station_actual_quantity is not null)
+    or (railcar_arrived_to_plant_actual_quantity > 0 and railcar_arrived_to_plant_actual_quantity is not null)
+    or (railcar_at_plant_unload_normative_quantity > 0 and railcar_at_plant_unload_normative_quantity is not null)
+group by
+    dt_report,																																																						-- LE.500001 Дата отчета
+    plant_code,																																																					-- LE.500002 Завод (код)
+    plant_name, 																																																					-- LE.500003 Завод (наименование)
+    plant_search_name,																																																				-- LE.500004 Завод (связка)
+    subsequent_code,																																																				-- LE.500017 Субкод завода для сортировки
+    --	, plant_short_name																																																				-- LE.500018 Короткое название завода
+    package_type_code,																																																				-- LE.500019 Тип тары (Код)
+    package_type_name,																																																				-- LE.500020 Тип тары (Наименование)
+    package_type_search,																																																			-- LE.500021 Тип тары (Связка)
+    transport_type_code,																																																			-- LE.500022 Тип ПС (Код)
+    transport_type_name,																																																			-- LE.500023 Тип ПС (Наименование)
+    transport_type_search,																																																			-- LE.500024 Тип ПС (Связка)
+    comment;
 
-BI_SB_WUC/ods/rusalcloseinv_ral
-Есть ошибки · modified
-`table_name` в YAML не совпадает с выбранной таблицей
-Recreate SQL создает `ods.`, а ожидается `ods.rusalcloseinv_ral`
-Insert SQL пишет в `ods.`, а ожидается `ods.rusalcloseinv_ral`
-Truncate SQL обращается не к целевой таблице: `ods.`
-Объект `ods.rusalcloseinv_ral` не найден в DEV Greenplum
 
 
-
-В insert SQL найден `DROP TABLE/VIEW`; проверьте, что удаляются только временные объекты: `table pg_temp.zsd324k_bi_ral_zterm`, `table pg_temp.distinct_vbrp`, `table pg_temp.contract_type_ptc`, `table pg_temp.vbak1366`, `table pg_temp.vbak2`, `table pg_temp.vbsk`, `table pg_temp.vbak4`, `table pg_temp.vbkd_kdgrp`, `table pg_temp.vbap2`, `table pg_temp.vbsk4`, `table pg_temp.vbak5`, `table pg_temp.vbak6`, `table pg_temp.vbak7`, `table pg_temp.vbsk_vbss_1375`, `table pg_temp.lot_type_contract`, `table pg_temp.group_add`, `table pg_temp.material_check`, `table pg_temp.price_agr_pos_search_base`, `table pg_temp.price_agr_pos_search_mat`, `table pg_temp.price_agr_pos_search_mat_10`, `table pg_temp.price_agr_pos_search_mat_shape`, `table pg_temp.invoice324_khd_posnr`, `table pg_temp.invoice324_khd`, `table pg_temp.invoice324_khd_not_charg`, `table pg_temp.invoice324_khd_shipdata`, `table pg_temp.invoice324_double_fkart`, `table pg_temp.vbrk_vbrp_final`, `table pg_temp.smart_4_st_inv_pos`, `table pg_temp.china_contract`, `table pg_temp.dm_opps_invoice_1_step`, `table pg_temp.dm_opps_invoice_2_step`, `table pg_temp.price_agreement_code_search_mat_full`, `table pg_temp.price_agreement_code_search_mat_10`, `table pg_temp.price_agreement_code_search_mat_shape`, `table pg_temp.price_agreement_code_search_max`, `table pg_temp.to_warehouse`, `table pg_temp.invoice_agent`, `table pg_temp.statement_pre_base`, `table pg_temp.statement_base_pre_calc_step_1`, `table pg_temp.statement_base_pre_calc_step_2`, `table pg_temp.kdmat_1425_full`, `table pg_temp.kdmat_1425_mat_10`, `table pg_temp.kdmat_1425_mat`, `table pg_temp.material_swap`, `table pg_temp.kdmat_1425_mat_swap`, `table pg_temp.kdmat_1425_max`, `table pg_temp.quota_contr_pos_full`, `table pg_temp.quota_contr_pos_mat_10`, `table pg_temp.quota_contr_pos_mat`, `table pg_temp.quota_contr_pos_min`, `table pg_temp.statement_base_pre_calc_step_3`, `table pg_temp.statement_base_pre_calc_step_4`
+Gather Motion 8:1  (slice28; segments: 8)  (cost=0.00..3403201739778780672.00 rows=1086 width=453)
+  ->  Sequence  (cost=0.00..3403201739778780672.00 rows=136 width=453)
+        ->  Shared Scan (share slice:id 28:0)  (cost=0.00..0.00 rows=1 width=1)
+              ->  Materialize  (cost=0.00..0.00 rows=1 width=1)
+                    ->  Result  (cost=0.00..0.00 rows=1 width=4)
+                          One-Time Filter: (gp_execution_segment() = 3)
+                          ->  Result  (cost=0.00..0.00 rows=1 width=4)
+                                ->  Result  (cost=0.00..0.00 rows=1 width=1)
+        ->  Sequence  (cost=0.00..3403201739778780672.00 rows=136 width=453)
+              ->  Shared Scan (share slice:id 28:4)  (cost=0.00..991615879131765376.00 rows=375127399963770159104 width=1)
+                    ->  Materialize  (cost=0.00..991615879131765376.00 rows=375127399963770159104 width=1)
+                          ->  Result  (cost=0.00..991240751731801600.00 rows=375127399963770159104 width=84)
+                                ->  Hash Join  (cost=0.00..959730050134844928.00 rows=375127399963770159104 width=65)
+                                      Hash Cond: (((COALESCE(COALESCE(asuzdc_docs_cars_1.rw_kg, asuzdc_docs_cars_2.rw_kg), asuzdc_docs_cars.rw_kg)))::text = (etsng.etsng_code)::text)
+                                      ->  Result  (cost=0.00..792971290882350080.00 rows=375127399963770159104 width=71)
+                                            Filter: (NOT ((COALESCE(asuzdc_docs.id_mdm_p, asuzdc_docs_1.id_mdm_p)) IS NULL))
+                                            ->  Result  (cost=0.00..762117062235330048.00 rows=937818499909425430528 width=71)
+                                                  ->  Hash Left Join  (cost=0.00..695531948741760896.00 rows=937818499909425430528 width=96)
+                                                        Hash Cond: ((asuzdc_rwcar_parts.car_num)::text = (railcar_certificate.railcar_code)::text)
+                                                        ->  Hash Left Join  (cost=0.00..269800800341377248.00 rows=468909249954712715264 width=102)
+                                                              Hash Cond: ((asuzdc_docs_cars_2.rn_doc)::text = ((asuzdc_docs_1.rn_doc)::character varying)::text)
+                                                              ->  Redistribute Motion 8:8  (slice26; segments: 8)  (cost=0.00..102400163461725408.00 rows=150348327326802 width=93)
+                                                                    Hash Key: asuzdc_docs_cars_2.rn_doc
+                                                                    ->  Hash Left Join  (cost=0.00..102400119696830800.00 rows=150348327326802 width=93)
+                                                                          Hash Cond: ((asuzdc_rwcar_date_control.rw_part)::text = (asuzdc_docs_cars_2.rw_part)::text)
+                                                                          ->  Hash Left Join  (cost=0.00..102400039257314576.00 rows=141953904834809 width=79)
+                                                                                Hash Cond: ((asuzdc_docs_cars_1.rn_doc)::text = ((asuzdc_docs.rn_doc)::character varying)::text)
+                                                                                ->  Redistribute Motion 8:8  (slice23; segments: 8)  (cost=0.00..102400000007048144.00 rows=45515273 width=70)
+                                                                                      Hash Key: asuzdc_docs_cars_1.rn_doc
+                                                                                      ->  Hash Left Join  (cost=0.00..102400000007038176.00 rows=45515273 width=70)
+                                                                                            Hash Cond: ((asuzdc_rwcar_parts.rw_part)::text = (asuzdc_docs_cars_1.rw_part)::text)
+                                                                                            ->  Hash Left Join  (cost=0.00..102400000007019872.00 rows=19332116 width=56)
+                                                                                                  Hash Cond: ((asuzdc_rwcar_parts.rw_part)::text = (asuzdc_docs_cars.rw_part)::text)
+                                                                                                  ->  Hash Left Join  (cost=0.00..102400000007011616.00 rows=7982914 width=49)
+                                                                                                        Hash Cond: ((asuzdc_rwcar_date_control.rw_part)::text = (asuzdc_rwcar_parts.rw_part)::text)
+                                                                                                        ->  Redistribute Motion 8:8  (slice19; segments: 8)  (cost=0.00..102400000007008256.00 rows=3991457 width=31)
+                                                                                                              Hash Key: asuzdc_rwcar_date_control.rw_part
+                                                                                                              ->  Nested Loop Left Join  (cost=0.00..102400000007007872.00 rows=3991457 width=31)
+                                                                                                                    Join Filter: ((date_part('year'::text, ((date((timezone((plant_and_subsidiary_td_1.time_zone_iana_code)::text, timezone('UTC'::text, asuzdc_rwcar_date_control.dt_in_plant)) - '03:00:00'::interval))))::timestamp without time zone) = date_part('year'::text, (share0_ref2.dt_report)::timestamp without time zone)) OR (date_part('year'::text, ((date((timezone((plant_and_subsidiary_td_1.time_zone_iana_code)::text, timezone('UTC'::text, asuzdc_rwcar_date_control.dt_in_gdc)) - '03:00:00'::interval))))::timestamp without time zone) = date_part('year'::text, (share0_ref2.dt_report)::timestamp without time zone)) OR (date_part('year'::text, ((date((timezone((plant_and_subsidiary_td_1.time_zone_iana_code)::text, timezone('UTC'::text, asuzdc_rwcar_date_control.dt_end_unload)) - '03:00:00'::interval))))::timestamp without time zone) = date_part('year'::text, (share0_ref2.dt_report)::timestamp without time zone)))
+                                                                                                                    ->  Shared Scan (share slice:id 19:0)  (cost=0.00..431.00 rows=1 width=4)
+                                                                                                                    ->  Materialize  (cost=0.00..100000000004611.66 rows=40228854 width=27)
+                                                                                                                          ->  Broadcast Motion 8:8  (slice18; segments: 8)  (cost=0.00..100000000003525.48 rows=40228854 width=27)
+                                                                                                                                ->  Result  (cost=0.00..3525.48 rows=5028607 width=27)
+                                                                                                                                      Filter: ((((asuzdc_rwcar_date_control.kpr_home)::text <> '15'::text) OR (((asuzdc_rwcar_date_control.kpr_home)::text = '15'::text) AND ((date((timezone((plant_and_subsidiary_td_1.time_zone_iana_code)::text, timezone('UTC'::text, asuzdc_rwcar_date_control.dt_in_plant)) - '03:00:00'::interval))) IS NULL))) AND (((asuzdc_rwcar_date_control.kpr_home)::text <> '15'::text) OR ((asuzdc_rwcar_date_control.kpr_home)::text = '15'::text)))
+                                                                                                                                      ->  Result  (cost=0.00..3181.91 rows=5221490 width=29)
+                                                                                                                                            ->  Hash Join  (cost=0.00..2508.34 rows=5221490 width=63)
+                                                                                                                                                  Hash Cond: ((CASE WHEN ((asuzdc_rwcar_date_control.kpr_home)::text = '15'::text) THEN '2'::character varying ELSE asuzdc_rwcar_date_control.kpr_home END)::text = (plant_and_subsidiary_td_1.asuzdc_plant_code)::text)
+                                                                                                                                                  ->  Seq Scan on asuzdc_rwcar_date_control  (cost=0.00..754.88 rows=580174 width=49)
+                                                                                                                                                  ->  Hash  (cost=431.09..431.09 rows=9 width=16)
+                                                                                                                                                        ->  Seq Scan on plant_and_subsidiary_td plant_and_subsidiary_td_1  (cost=0.00..431.09 rows=9 width=16)
+                                                                                                                                                              Filter: (NOT (asuzdc_plant_code IS NULL))
+                                                                                                        ->  Hash  (cost=802.31..802.31 rows=830028 width=18)
+                                                                                                              ->  Redistribute Motion 8:8  (slice20; segments: 8)  (cost=0.00..802.31 rows=830028 width=18)
+                                                                                                                    Hash Key: asuzdc_rwcar_parts.rw_part
+                                                                                                                    ->  Seq Scan on asuzdc_rwcar_parts  (cost=0.00..755.54 rows=830028 width=18)
+                                                                                                                          Filter: ((car_type)::text = ANY ('{2,3}'::text[]))
+                                                                                                  ->  Hash  (cost=2502.56..2502.56 rows=824826 width=14)
+                                                                                                        ->  Redistribute Motion 8:8  (slice21; segments: 8)  (cost=0.00..2502.56 rows=824826 width=14)
+                                                                                                              Hash Key: asuzdc_docs_cars.rw_part
+                                                                                                              ->  Seq Scan on asuzdc_docs_cars  (cost=0.00..2466.41 rows=824826 width=14)
+                                                                                                                    Filter: ((doc_type)::text = '1'::text)
+                                                                                            ->  Hash  (cost=2554.58..2554.58 rows=785780 width=28)
+                                                                                                  ->  Redistribute Motion 8:8  (slice22; segments: 8)  (cost=0.00..2554.58 rows=785780 width=28)
+                                                                                                        Hash Key: asuzdc_docs_cars_1.rw_part
+                                                                                                        ->  Seq Scan on asuzdc_docs_cars asuzdc_docs_cars_1  (cost=0.00..2485.71 rows=785780 width=28)
+                                                                                                              Filter: ((doc_type)::text = '2'::text)
+                                                                                ->  Hash  (cost=1272.42..1272.42 rows=974631 width=23)
+                                                                                      ->  Redistribute Motion 8:8  (slice24; segments: 8)  (cost=0.00..1272.42 rows=974631 width=23)
+                                                                                            Hash Key: (asuzdc_docs.rn_doc)::character varying
+                                                                                            ->  Seq Scan on asuzdc_docs  (cost=0.00..1160.56 rows=974631 width=23)
+                                                                          ->  Hash  (cost=2501.85..2501.85 rows=274469 width=28)
+                                                                                ->  Broadcast Motion 8:8  (slice25; segments: 8)  (cost=0.00..2501.85 rows=274469 width=28)
+                                                                                      ->  Seq Scan on asuzdc_docs_cars asuzdc_docs_cars_2  (cost=0.00..2443.78 rows=34309 width=28)
+                                                                                            Filter: ((doc_type)::text = '10'::text)
+                                                              ->  Hash  (cost=1272.42..1272.42 rows=974631 width=23)
+                                                                    ->  Redistribute Motion 8:8  (slice27; segments: 8)  (cost=0.00..1272.42 rows=974631 width=23)
+                                                                          Hash Key: (asuzdc_docs_1.rn_doc)::character varying
+                                                                          ->  Seq Scan on asuzdc_docs asuzdc_docs_1  (cost=0.00..1160.56 rows=974631 width=23)
+                                                        ->  Hash  (cost=453.44..453.44 rows=657971 width=12)
+                                                              ->  Seq Scan on railcar_certificate  (cost=0.00..453.44 rows=657971 width=12)
+                                      ->  Hash  (cost=431.48..431.48 rows=3 width=9)
+                                            ->  Seq Scan on etsng  (cost=0.00..431.48 rows=3 width=9)
+                                                  Filter: ((cargo_group_asuzdc_code)::text = '1'::text)
+              ->  HashAggregate  (cost=0.00..2411585860647015424.00 rows=136 width=453)
+                    Group Key: share0_ref5.dt_report, plant_and_subsidiary.asuzdc_plant_code, plant_and_subsidiary.plant_short_name, ((((plant_and_subsidiary.asuzdc_plant_code)::text || '-'::text) || (plant_and_subsidiary.plant_short_name)::text)), (CASE WHEN ((plant_and_subsidiary.plant_code)::text = '5201'::text) THEN 1 WHEN ((plant_and_subsidiary.plant_code)::text = '5101'::text) THEN 2 WHEN ((plant_and_subsidiary.plant_code)::text = '5401'::text) THEN 3 WHEN ((plant_and_subsidiary.plant_code)::text = '5301'::text) THEN 4 WHEN ((plant_and_subsidiary.plant_code)::text = '6100'::text) THEN 5 WHEN ((plant_and_subsidiary.plant_code)::text = '5601'::text) THEN 6 WHEN ((plant_and_subsidiary.plant_code)::text = '6300'::text) THEN 7 WHEN ((plant_and_subsidiary.plant_code)::text = '6800'::text) THEN 8 WHEN ((plant_and_subsidiary.plant_code)::text = '5701'::text) THEN 9 ELSE 100 END), raw_material_unload_at_plant_normative_td.package_type_asuzdc_code, package_type_texts.package_type_name, ((((raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text || '-'::text) || (package_type_texts.package_type_name)::text)), raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code, (CASE WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '2'::text) THEN 'Вагон'::text WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '3'::text) THEN 'Контейнер'::text ELSE NULL::text END), ((((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text || '-'::text) || CASE WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '2'::text) THEN 'Вагон'::text WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '3'::text) THEN 'Контейнер'::text ELSE NULL::text END)), asuzdc_unload_reasons.reason_text
+                    ->  Redistribute Motion 8:8  (slice17; segments: 8)  (cost=0.00..2411585860647015424.00 rows=136 width=448)
+                          Hash Key: share0_ref5.dt_report, plant_and_subsidiary.asuzdc_plant_code, plant_and_subsidiary.plant_short_name, ((((plant_and_subsidiary.asuzdc_plant_code)::text || '-'::text) || (plant_and_subsidiary.plant_short_name)::text)), (CASE WHEN ((plant_and_subsidiary.plant_code)::text = '5201'::text) THEN 1 WHEN ((plant_and_subsidiary.plant_code)::text = '5101'::text) THEN 2 WHEN ((plant_and_subsidiary.plant_code)::text = '5401'::text) THEN 3 WHEN ((plant_and_subsidiary.plant_code)::text = '5301'::text) THEN 4 WHEN ((plant_and_subsidiary.plant_code)::text = '6100'::text) THEN 5 WHEN ((plant_and_subsidiary.plant_code)::text = '5601'::text) THEN 6 WHEN ((plant_and_subsidiary.plant_code)::text = '6300'::text) THEN 7 WHEN ((plant_and_subsidiary.plant_code)::text = '6800'::text) THEN 8 WHEN ((plant_and_subsidiary.plant_code)::text = '5701'::text) THEN 9 ELSE 100 END), raw_material_unload_at_plant_normative_td.package_type_asuzdc_code, package_type_texts.package_type_name, ((((raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text || '-'::text) || (package_type_texts.package_type_name)::text)), raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code, (CASE WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '2'::text) THEN 'Вагон'::text WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '3'::text) THEN 'Контейнер'::text ELSE NULL::text END), ((((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text || '-'::text) || CASE WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '2'::text) THEN 'Вагон'::text WHEN ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = '3'::text) THEN 'Контейнер'::text ELSE NULL::text END)), asuzdc_unload_reasons.reason_text
+                          ->  Result  (cost=0.00..2411585860647015424.00 rows=136 width=448)
+                                Filter: ((((pg_catalog.sum((sum(share4_ref2.in_plant_sbor)))) > 0) AND (NOT ((pg_catalog.sum((sum(share4_ref2.in_plant_sbor)))) IS NULL))) OR (((((pg_catalog.sum((sum(share4_ref2.in_gdc_sbor)))) - (pg_catalog.sum((sum(share4_ref2.in_plant_sbor)))))) > 0) AND (NOT ((((pg_catalog.sum((sum(share4_ref2.in_gdc_sbor)))) - (pg_catalog.sum((sum(share4_ref2.in_plant_sbor)))))) IS NULL))) OR (((pg_catalog.sum((sum(share4_ref2.in_plant_day_prihod)))) > 0) AND (NOT ((pg_catalog.sum((sum(share4_ref2.in_plant_day_prihod)))) IS NULL))) OR (((COALESCE(raw_material_unload_at_plant_normative_td.unload_daily_normative_quantity, '0'::numeric)) > '0'::numeric) AND (NOT ((COALESCE(raw_material_unload_at_plant_normative_td.unload_daily_normative_quantity, '0'::numeric)) IS NULL))))
+                                ->  Result  (cost=0.00..2411585860647015424.00 rows=148 width=448)
+                                      ->  Hash Left Join  (cost=0.00..2411585860647015424.00 rows=148 width=320)
+                                            Hash Cond: ((share0_ref5.dt_report = share0_ref4.dt_report) AND ((raw_material_unload_at_plant_normative_td.consignee_mdm_code)::text = (raw_material_unload_at_plant_normative_td_1.consignee_mdm_code)::text) AND ((raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text = (raw_material_unload_at_plant_normative_td_1.railcar_type_asuzdc_code)::text) AND ((raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text = (raw_material_unload_at_plant_normative_td_1.package_type_asuzdc_code)::text) AND (int4(raw_material_unload_at_plant_normative_td.is_unloaded_outside_plant_code) = int4(raw_material_unload_at_plant_normative_td_1.is_unloaded_outside_plant_code)))
+                                            ->  Hash Left Join  (cost=0.00..2411585859290323456.00 rows=148 width=300)
+                                                  Hash Cond: (((raw_material_unload_at_plant_normative_td.consignee_mdm_code)::text = (asuzdc_unload_reasons.id_mdm)::text) AND (share0_ref5.dt_report = asuzdc_unload_reasons.dt))
+                                                  ->  Hash Left Join  (cost=0.00..2411585859290322944.00 rows=146 width=203)
+                                                        Hash Cond: ((raw_material_unload_at_plant_normative_td.package_type_sap_code)::text = (package_type_texts.package_type_code)::text)
+                                                        ->  Hash Right Join  (cost=0.00..2411585859290322432.00 rows=146 width=193)
+                                                              Hash Cond: (((share4_ref4.id_mdm)::text = (raw_material_unload_at_plant_normative_td.consignee_mdm_code)::text) AND ((share4_ref4.car_type)::text = (raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text) AND (share4_ref4.pack_id = (raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text) AND (share4_ref4.pr_avto = int4(raw_material_unload_at_plant_normative_td.is_unloaded_outside_plant_code)) AND (share0_ref7.dt_report = share0_ref5.dt_report))
+                                                              ->  Redistribute Motion 8:8  (slice4; segments: 8)  (cost=0.00..1053942671084959616.00 rows=50056458 width=58)
+                                                                    Hash Key: share4_ref4.id_mdm
+                                                                    ->  Result  (cost=0.00..1053942671084950528.00 rows=50056458 width=58)
+                                                                          ->  HashAggregate  (cost=0.00..1053942671084950528.00 rows=50056458 width=58)
+                                                                                Group Key: share0_ref7.dt_report, share4_ref4.id_mdm, share4_ref4.car_type, share4_ref4.pr_avto, share4_ref4.pack_id
+                                                                                ->  Redistribute Motion 8:8  (slice3; segments: 8)  (cost=0.00..986455217807342336.00 rows=106702904878583513088 width=42)
+                                                                                      Hash Key: share0_ref7.dt_report, share4_ref4.id_mdm, share4_ref4.car_type, share4_ref4.pr_avto, share4_ref4.pack_id
+                                                                                      ->  Hash Right Join  (cost=0.00..899334430032076416.00 rows=106702904878583513088 width=42)
+                                                                                            Hash Cond: (date_part('year'::text, (share4_ref4.dt_report)::timestamp without time zone) = date_part('year'::text, (share0_ref7.dt_report)::timestamp without time zone))
+                                                                                            Join Filter: (share0_ref7.dt_report > (share4_ref4.dt_report - 1))
+                                                                                            ->  Redistribute Motion 8:8  (slice1; segments: 8)  (cost=0.00..175514607895049216.00 rows=375127399963770159104 width=42)
+                                                                                                  Hash Key: date_part('year'::text, (share4_ref4.dt_report)::timestamp without time zone)
+                                                                                                  ->  Result  (cost=0.00..37970395424333240.00 rows=375127399963770159104 width=42)
+                                                                                                        ->  Shared Scan (share slice:id 1:4)  (cost=0.00..37970395424333240.00 rows=375127399963770159104 width=42)
+                                                                                            ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+                                                                                                  ->  Redistribute Motion 8:8  (slice2; segments: 8)  (cost=0.00..431.00 rows=1 width=4)
+                                                                                                        Hash Key: date_part('year'::text, (share0_ref7.dt_report)::timestamp without time zone)
+                                                                                                        ->  Shared Scan (share slice:id 2:0)  (cost=0.00..431.00 rows=1 width=4)
+                                                              ->  Hash  (cost=1357643188205317632.00..1357643188205317632.00 rows=146 width=161)
+                                                                    ->  Hash Right Join  (cost=0.00..1357643188205317632.00 rows=146 width=161)
+                                                                          Hash Cond: (((share4_ref3.id_mdm)::text = (raw_material_unload_at_plant_normative_td.consignee_mdm_code)::text) AND ((share4_ref3.car_type)::text = (raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text) AND (share4_ref3.pack_id = (raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text) AND (share4_ref3.pr_avto = int4(raw_material_unload_at_plant_normative_td.is_unloaded_outside_plant_code)) AND (share0_ref6.dt_report = share0_ref5.dt_report))
+                                                                          ->  Redistribute Motion 8:8  (slice8; segments: 8)  (cost=0.00..1053942671084959616.00 rows=50056458 width=58)
+                                                                                Hash Key: share4_ref3.id_mdm
+                                                                                ->  Result  (cost=0.00..1053942671084950528.00 rows=50056458 width=58)
+                                                                                      ->  HashAggregate  (cost=0.00..1053942671084950528.00 rows=50056458 width=58)
+                                                                                            Group Key: share0_ref6.dt_report, share4_ref3.id_mdm, share4_ref3.car_type, share4_ref3.pr_avto, share4_ref3.pack_id
+                                                                                            ->  Redistribute Motion 8:8  (slice7; segments: 8)  (cost=0.00..986455217807342336.00 rows=106702904878583513088 width=42)
+                                                                                                  Hash Key: share0_ref6.dt_report, share4_ref3.id_mdm, share4_ref3.car_type, share4_ref3.pr_avto, share4_ref3.pack_id
+                                                                                                  ->  Hash Right Join  (cost=0.00..899334430032076416.00 rows=106702904878583513088 width=42)
+                                                                                                        Hash Cond: (date_part('month'::text, (share4_ref3.dt_report)::timestamp without time zone) = date_part('month'::text, (share0_ref6.dt_report)::timestamp without time zone))
+                                                                                                        Join Filter: (share0_ref6.dt_report > (share4_ref3.dt_report - 1))
+                                                                                                        ->  Redistribute Motion 8:8  (slice5; segments: 8)  (cost=0.00..175514607895049216.00 rows=375127399963770159104 width=42)
+                                                                                                              Hash Key: date_part('month'::text, (share4_ref3.dt_report)::timestamp without time zone)
+                                                                                                              ->  Result  (cost=0.00..37970395424333240.00 rows=375127399963770159104 width=42)
+                                                                                                                    ->  Shared Scan (share slice:id 5:4)  (cost=0.00..37970395424333240.00 rows=375127399963770159104 width=42)
+                                                                                                        ->  Hash  (cost=431.00..431.00 rows=1 width=4)
+                                                                                                              ->  Redistribute Motion 8:8  (slice6; segments: 8)  (cost=0.00..431.00 rows=1 width=4)
+                                                                                                                    Hash Key: date_part('month'::text, (share0_ref6.dt_report)::timestamp without time zone)
+                                                                                                                    ->  Shared Scan (share slice:id 6:0)  (cost=0.00..431.00 rows=1 width=4)
+                                                                          ->  Hash  (cost=303700517120312768.00..303700517120312768.00 rows=146 width=129)
+                                                                                ->  Hash Join  (cost=0.00..303700517120312768.00 rows=146 width=129)
+                                                                                      Hash Cond: ((raw_material_unload_at_plant_normative_td.plant_code)::text = (plant_and_subsidiary.plant_code)::text)
+                                                                                      ->  Hash Right Join  (cost=0.00..303700517120311936.00 rows=107 width=102)
+                                                                                            Hash Cond: (((share4_ref2.id_mdm)::text = (raw_material_unload_at_plant_normative_td.consignee_mdm_code)::text) AND ((share4_ref2.car_type)::text = (raw_material_unload_at_plant_normative_td.railcar_type_asuzdc_code)::text) AND (share4_ref2.pack_id = (raw_material_unload_at_plant_normative_td.package_type_asuzdc_code)::text) AND (share4_ref2.pr_avto = int4(raw_material_unload_at_plant_normative_td.is_unloaded_outside_plant_code)) AND (share4_ref2.dt_report = share0_ref5.dt_report))
+                                                                                            ->  Redistribute Motion 8:8  (slice10; segments: 8)  (cost=0.00..303700517118941632.00 rows=50056458 width=90)
+                                                                                                  Hash Key: share4_ref2.id_mdm
+                                                                                                  ->  Result  (cost=0.00..303700517118927552.00 rows=50056458 width=90)
+                                                                                                        ->  Result  (cost=0.00..303700517118927552.00 rows=50056458 width=90)
+                                                                                                              ->  HashAggregate  (cost=0.00..303700517118923072.00 rows=50056458 width=106)
+                                                                                                                    Group Key: share4_ref2.dt_report, share4_ref2.id_mdm, share4_ref2.car_type, share4_ref2.pr_avto, share4_ref2.pack_id
+                                                                                                                    ->  Redistribute Motion 8:8  (slice9; segments: 8)  (cost=0.00..303700517118887104.00 rows=50056458 width=106)
+                                                                                                                          Hash Key: share4_ref2.dt_report, share4_ref2.id_mdm, share4_ref2.car_type, share4_ref2.pr_avto, share4_ref2.pack_id
+                                                                                                                          ->  Result  (cost=0.00..303700517118870528.00 rows=50056458 width=106)
+                                                                                                                                ->  HashAggregate  (cost=0.00..303700517118870528.00 rows=50056458 width=106)
+                                                                                                                                      Group Key: share4_ref2.dt_report, share4_ref2.id_mdm, share4_ref2.car_type, share4_ref2.pr_avto, share4_ref2.pack_id
+                                                                                                                                      ->  Shared Scan (share slice:id 9:4)  (cost=0.00..45202851695634736.00 rows=375127399963770159104 width=50)
+                                                                                            ->  Hash  (cost=1324059.88..1324059.88 rows=7 width=34)
+                                                                                                  ->  Redistribute Motion 8:8  (slice11; segments: 8)  (cost=0.00..1324059.88 rows=7 width=34)
+                                                                                                        Hash Key: raw_material_unload_at_plant_normative_td.consignee_mdm_code
+                                                                                                        ->  Nested Loop  (cost=0.00..1324059.88 rows=7 width=34)
+                                                                                                              Join Filter: ((raw_material_unload_at_plant_normative_td.dt_valid_from < share0_ref5.dt_report) AND ((raw_material_unload_at_plant_normative_td.dt_valid_to >= share0_ref5.dt_report) OR (raw_material_unload_at_plant_normative_td.dt_valid_to IS NULL)))
+                                                                                                              ->  Shared Scan (share slice:id 11:0)  (cost=0.00..431.00 rows=1 width=4)
+                                                                                                              ->  Materialize  (cost=0.00..431.02 rows=93 width=38)
+                                                                                                                    ->  Seq Scan on raw_material_unload_at_plant_normative_td  (cost=0.00..431.02 rows=93 width=38)
+                                                                                                                          Filter: ((cargo_group_asuzdc_code)::text = '1'::text)
+                                                                                      ->  Hash  (cost=862.36..862.36 rows=10 width=37)
+                                                                                            ->  Result  (cost=0.00..862.36 rows=10 width=37)
+                                                                                                  Filter: (NOT (plant_and_subsidiary.plant_short_name IS NULL))
+                                                                                                  ->  Result  (cost=0.00..862.36 rows=10 width=37)
+                                                                                                        ->  Hash Join  (cost=0.00..862.36 rows=10 width=33)
+                                                                                                              Hash Cond: ((plant_and_subsidiary_texts.plant_code)::text = (plant_and_subsidiary.plant_code)::text)
+                                                                                                              ->  Seq Scan on plant_and_subsidiary_texts  (cost=0.00..431.14 rows=626 width=5)
+                                                                                                                    Filter: ((NOT deleted_flag) AND ((language_code)::text = 'R'::text))
+                                                                                                              ->  Hash  (cost=431.10..431.10 rows=10 width=33)
+                                                                                                                    ->  Seq Scan on plant_and_subsidiary  (cost=0.00..431.10 rows=10 width=33)
+                                                                                                                          Filter: ((NOT (asuzdc_plant_code IS NULL)) AND (NOT deleted_flag))
+                                                        ->  Hash  (cost=431.00..431.00 rows=10 width=14)
+                                                              ->  Seq Scan on package_type_texts  (cost=0.00..431.00 rows=10 width=14)
+                                                                    Filter: ((language_code)::text = 'R'::text)
+                                                  ->  Hash  (cost=437.03..437.03 rows=6458 width=112)
+                                                        ->  Broadcast Motion 8:8  (slice12; segments: 8)  (cost=0.00..437.03 rows=6458 width=112)
+                                                              ->  Seq Scan on asuzdc_unload_reasons  (cost=0.00..431.57 rows=808 width=112)
+                                                                    Filter: (((id_group)::text = '1'::text) AND ((kp)::text = '-1'::text))
+                                            ->  Hash  (cost=1356691989.60..1356691989.60 rows=62 width=52)
+                                                  ->  Broadcast Motion 8:8  (slice16; segments: 8)  (cost=0.00..1356691989.60 rows=62 width=52)
+                                                        ->  Result  (cost=0.00..1356691989.57 rows=8 width=52)
+                                                              ->  GroupAggregate  (cost=0.00..1356691989.57 rows=8 width=52)
+                                                                    Group Key: share0_ref4.dt_report, raw_material_unload_at_plant_normative_td_1.consignee_mdm_code, raw_material_unload_at_plant_normative_td_1.railcar_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.package_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.is_unloaded_outside_plant_code, plant_and_subsidiary_td.asuzdc_plant_code
+                                                                    ->  Sort  (cost=0.00..1356691989.57 rows=14 width=33)
+                                                                          Sort Key: share0_ref4.dt_report, raw_material_unload_at_plant_normative_td_1.consignee_mdm_code, raw_material_unload_at_plant_normative_td_1.railcar_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.package_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.is_unloaded_outside_plant_code, plant_and_subsidiary_td.asuzdc_plant_code
+                                                                          ->  Redistribute Motion 8:8  (slice15; segments: 8)  (cost=0.00..1356691989.56 rows=14 width=33)
+                                                                                Hash Key: share0_ref4.dt_report, raw_material_unload_at_plant_normative_td_1.consignee_mdm_code, raw_material_unload_at_plant_normative_td_1.railcar_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.package_type_asuzdc_code, raw_material_unload_at_plant_normative_td_1.is_unloaded_outside_plant_code, plant_and_subsidiary_td.asuzdc_plant_code
+                                                                                ->  Hash Right Join  (cost=0.00..1356691989.56 rows=14 width=33)
+                                                                                      Hash Cond: ((plant_and_subsidiary_td.plant_code)::text = (raw_material_unload_at_plant_normative_td_1.plant_code)::text)
+                                                                                      ->  Result  (cost=0.00..431.09 rows=79 width=7)
+                                                                                            ->  Seq Scan on plant_and_subsidiary_td  (cost=0.00..431.07 rows=628 width=7)
+                                                                                      ->  Hash  (cost=1356691558.45..1356691558.45 rows=7 width=36)
+                                                                                            ->  Redistribute Motion 8:8  (slice14; segments: 8)  (cost=0.00..1356691558.45 rows=7 width=36)
+                                                                                                  Hash Key: raw_material_unload_at_plant_normative_td_1.plant_code
+                                                                                                  ->  Nested Loop Left Join  (cost=0.00..1356691558.45 rows=7 width=36)
+                                                                                                        Join Filter: ((share0_ref3.dt_report >= raw_material_unload_at_plant_normative_td_1.dt_valid_from) AND ((share0_ref3.dt_report <= raw_material_unload_at_plant_normative_td_1.dt_valid_to) OR (raw_material_unload_at_plant_normative_td_1.dt_valid_to IS NULL)))
+                                                                                                        ->  Nested Loop  (cost=0.00..1324032.07 rows=1 width=8)

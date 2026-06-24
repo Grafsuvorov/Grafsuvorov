@@ -82,6 +82,11 @@ def _is_safe_identifier(value: str) -> bool:
     return bool(SAFE_IDENTIFIER_RE.fullmatch(str(value or "").strip()))
 
 
+def _quote_ident(value: str) -> str:
+    raw = str(value or "")
+    return '"' + raw.replace('"', '""') + '"'
+
+
 def _strip_sql_comments(sql: str) -> str:
     sql = re.sub(r"/\*.*?\*/", " ", sql, flags=re.DOTALL)
     sql = re.sub(r"(?m)--.*?$", " ", sql)
@@ -755,8 +760,8 @@ def _dev_object_exists(dev_database_url: str, schema_name: str, table_name: str)
                     """
                     SELECT 1
                     FROM information_schema.tables
-                    WHERE lower(table_schema) = lower(:schema_name)
-                      AND lower(table_name) = lower(:table_name)
+                    WHERE table_schema = :schema_name
+                      AND table_name = :table_name
                     LIMIT 1
                     """
                 ),
@@ -777,16 +782,13 @@ def _dev_table_has_duplicates(
         return None, None
     if not key_attributes:
         return None, None
-    identifiers = [schema_name, table_name, *key_attributes]
-    if not all(_is_safe_identifier(item) for item in identifiers):
-        return None, "Не удалось проверить дубли: schema/table/key_attributes содержат недопустимые символы"
 
     dev_engine = create_engine(dev_database_url)
-    group_by = ", ".join(f'"{column}"' for column in key_attributes)
+    group_by = ", ".join(_quote_ident(column) for column in key_attributes)
     duplicate_sql = text(
         f"""
         SELECT 1
-        FROM "{schema_name}"."{table_name}"
+        FROM {_quote_ident(schema_name)}.{_quote_ident(table_name)}
         GROUP BY {group_by}
         HAVING COUNT(*) > 1
         LIMIT 1
@@ -1356,7 +1358,8 @@ def validate_entity_dev_meta_bundle(
             normalized_payload.pop("key_attributes", None)
     _ensure_default_verification(normalized_payload, normalized_keys)
 
-    dev_exists, dev_error = _dev_object_exists(dev_database_url, normalized_schema, effective_normalized_table)
+    dev_check_table_name = str(payload.get("table_name") or effective_table_name or "").strip()
+    dev_exists, dev_error = _dev_object_exists(dev_database_url, str(payload.get("table_schema") or schema_name or "").strip(), dev_check_table_name)
     if dev_error:
         errors.append(dev_error)
     elif not dev_exists:
@@ -1365,8 +1368,8 @@ def validate_entity_dev_meta_bundle(
         checks.append(f"Объект `{normalized_schema}.{effective_normalized_table}` найден в DEV Greenplum")
         duplicate_status, duplicate_error = _dev_table_has_duplicates(
             dev_database_url,
-            normalized_schema,
-            effective_normalized_table,
+            str(payload.get("table_schema") or schema_name or "").strip(),
+            dev_check_table_name,
             normalized_keys or [],
         )
         if duplicate_error:

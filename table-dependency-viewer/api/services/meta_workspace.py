@@ -25,9 +25,113 @@ from .entity_dev_meta import (
     validate_entity_dev_meta_bundle,
 )
 
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover
+    yaml = None
+
 
 class BranchRevisionConflictError(PermissionError):
     pass
+
+
+CLICK_DIFF_SYSTEM_FIELDS = {"dttm_inserted", "dttm_updated", "deleted_flag", "job_name"}
+
+
+def _load_yaml_if_possible(text_content: str) -> dict[str, Any]:
+    if not yaml:
+        return {}
+    try:
+        data = yaml.safe_load(text_content) or {}
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _build_click_attribute_index(meta: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    attributes = meta.get("attributes")
+    if not isinstance(attributes, list):
+        return result
+    for item in attributes:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("column_name_click") or item.get("column_name_gp") or "").strip().lower()
+        if key:
+            result[key] = item
+    return result
+
+
+def _normalized_attr_value(value: Any) -> str:
+    if value is None:
+        return "∅"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value).strip()
+
+
+def _normalized_attr_compare_value(field_name: str, value: Any) -> str:
+    normalized = _normalized_attr_value(value)
+    if field_name in {"data_type_click", "data_type_gp"}:
+        return re.sub(r"\s+", "", normalized)
+    if field_name == "is_nullable":
+        return re.sub(r"\s+", " ", normalized).strip().upper()
+    if field_name == "default":
+        return re.sub(r"\s+", " ", normalized).strip()
+    if field_name == "column_name_gp":
+        return normalized.strip()
+    return normalized
+
+
+def _attr_field_label(field_name: str) -> str:
+    return {
+        "data_type_click": "тип ClickHouse",
+        "data_type_gp": "тип GP",
+        "is_nullable": "nullable",
+        "default": "default",
+        "column_name_gp": "колонка GP",
+    }.get(field_name, field_name)
+
+
+def _compare_click_meta_attributes(base_meta: dict[str, Any], head_meta: dict[str, Any]) -> list[str]:
+    base_index = _build_click_attribute_index(base_meta)
+    head_index = _build_click_attribute_index(head_meta)
+    if not base_index and not head_index:
+        return []
+
+    tracked_fields = ("data_type_click", "data_type_gp", "is_nullable", "default", "column_name_gp")
+    messages: list[str] = []
+
+    added = sorted(name for name in head_index.keys() - base_index.keys() if name not in CLICK_DIFF_SYSTEM_FIELDS)
+    removed = sorted(name for name in base_index.keys() - head_index.keys() if name not in CLICK_DIFF_SYSTEM_FIELDS)
+    changed: list[str] = []
+
+    for column_name in sorted(base_index.keys() & head_index.keys()):
+        if column_name in CLICK_DIFF_SYSTEM_FIELDS:
+            continue
+        before = base_index[column_name]
+        after = head_index[column_name]
+        diffs: list[str] = []
+        for field_name in tracked_fields:
+            old_value = _normalized_attr_compare_value(field_name, before.get(field_name))
+            new_value = _normalized_attr_compare_value(field_name, after.get(field_name))
+            if old_value != new_value:
+                diffs.append(f"{_attr_field_label(field_name)}: `{old_value}` -> `{new_value}`")
+        if diffs:
+            changed.append(f"`{column_name}`: " + "; ".join(diffs))
+
+    if added:
+        preview = ", ".join(f"`{name}`" for name in added[:8])
+        messages.append(f"Добавлены поля: {preview}" + (" …" if len(added) > 8 else ""))
+    if removed:
+        preview = ", ".join(f"`{name}`" for name in removed[:8])
+        messages.append(f"Удалены поля: {preview}" + (" …" if len(removed) > 8 else ""))
+    if changed:
+        messages.append("Изменены поля:")
+        messages.extend(changed[:12])
+        if len(changed) > 12:
+            messages.append(f"… и ещё {len(changed) - 12}")
+    return messages
 
 
 _FETCH_REF_ERROR_RE = re.compile(r"cannot lock ref '([^']+)'")
@@ -1058,6 +1162,7 @@ def validate_meta_workspace_branch(
                     "skipped": True,
                     "errors": [],
                     "warnings": ["Файл удалён в ветке, проверка содержимого пропущена"],
+                    "infos": [],
                 }
             )
             continue
@@ -1068,7 +1173,23 @@ def validate_meta_workspace_branch(
             schema_name=item["schema_name"],
             dev_database_url=dev_database_url,
         )
-        click_results.append({**item, **validation, "skipped": False})
+        infos: list[str] = []
+        if item.get("change_type") in {"modified", "renamed"}:
+            rel_path = Path(click_git_root_value) / item["schema_name"] / item["file_name"]
+            try:
+                base_content = _run_git(
+                    git_repo_root,
+                    ["show", f"{base_branch}:{str(rel_path).replace(chr(92), '/')}"],
+                    cwd=worktree_dir,
+                )
+            except Exception:
+                base_content = ""
+            if base_content:
+                infos = _compare_click_meta_attributes(
+                    _load_yaml_if_possible(base_content),
+                    _load_yaml_if_possible(content),
+                )
+        click_results.append({**item, **validation, "infos": infos, "skipped": False})
 
     all_results = [*gp_results, *click_results]
     return {
@@ -1080,6 +1201,7 @@ def validate_meta_workspace_branch(
             "valid": sum(1 for item in all_results if item.get("valid")),
             "invalid": sum(1 for item in all_results if not item.get("valid")),
             "warnings": sum(len(item.get("warnings") or []) for item in all_results),
+            "infos": sum(len(item.get("infos") or []) for item in all_results),
         },
     }
 

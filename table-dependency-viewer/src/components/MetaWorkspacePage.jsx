@@ -736,7 +736,7 @@ export default function MetaWorkspacePage({ userProfile }) {
                 <div className="section-subtitle">Результат проверки ветки</div>
                 <div className="meta-workspace-validation-actions">
                   <div className="muted">
-                    Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}
+                    Всего: {branchValidation.summary.total} · OK: {branchValidation.summary.valid} · Ошибки: {branchValidation.summary.invalid} · Warnings: {branchValidation.summary.warnings}{branchValidation.summary.infos ? ` · Info: ${branchValidation.summary.infos}` : ""}
                   </div>
                   <button
                     type="button"
@@ -765,6 +765,16 @@ export default function MetaWorkspacePage({ userProfile }) {
                       <ul className="meta-workspace-validation-points warn">
                         {item.warnings.map((point, idx) => <li key={`${item.object_key}-warn-${idx}`}>{point}</li>)}
                       </ul>
+                    ) : null}
+                    {item.infos?.length ? (
+                      <details style={{ marginTop: 10 }}>
+                        <summary className="muted" style={{ cursor: "pointer" }}>
+                          Изменения полей ({item.infos.length})
+                        </summary>
+                        <ul className="meta-workspace-validation-points" style={{ marginTop: 8 }}>
+                          {item.infos.map((point, idx) => <li key={`${item.object_key}-info-${idx}`}>{point}</li>)}
+                        </ul>
+                      </details>
                     ) : null}
                   </div>
                 ))}

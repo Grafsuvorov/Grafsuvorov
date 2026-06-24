@@ -146,6 +146,7 @@ function buildGraph(
   }
 
   if (Array.isArray(presetNodes) && presetNodes.length && presetLayout) {
+    const nodeById = Object.fromEntries(presetNodes.map((node) => [node.id, node]));
     const directUpstream = new Set();
     const directDownstream = new Set();
     if (focusNodeId) {
@@ -155,11 +156,12 @@ function buildGraph(
       });
     }
     const nodes = presetNodes.map((node) => {
-      const fqn = node.id;
-      const isCentral = fqn === centralNode;
-      const isFocused = fqn === focusNodeId;
-      const isNeighbor = directUpstream.has(fqn) || directDownstream.has(fqn);
-      const layer = layerOf(fqn);
+      const nodeId = node.id;
+      const nodeFqn = node.fqn || `${node.schema}.${node.table}`;
+      const isCentral = nodeId === centralNode;
+      const isFocused = nodeId === focusNodeId;
+      const isNeighbor = directUpstream.has(nodeId) || directDownstream.has(nodeId);
+      const layer = layerOf(nodeFqn);
       const width = node.width || (isCentral ? CENTRAL_STYLE.width : NODE_WIDTH_BY_LAYER[layer]);
       const height = node.height || 56;
       const style = isCentral
@@ -184,11 +186,11 @@ function buildGraph(
               }
             : { opacity: 0.22, filter: "saturate(0.55)" }
         : {};
-      const pos = presetLayout?.[fqn] || { x: 0, y: 0 };
-      const entityName = node.entity || entities?.[fqn];
+      const pos = presetLayout?.[nodeId] || { x: 0, y: 0 };
+      const entityName = node.entity || entities?.[nodeId];
 
       return {
-        id: fqn,
+        id: nodeId,
         position: {
           x: pos.x - width / 2,
           y: pos.y - height / 2,
@@ -203,8 +205,8 @@ function buildGraph(
           tableId: node.table_id,
           fqn: node.fqn || `${node.schema}.${node.table}`,
           label: (
-            <div title={fqn}>
-              <div style={{ fontWeight: 700 }}>{formatFqn(node.fqn || fqn)}</div>
+            <div title={nodeFqn}>
+              <div style={{ fontWeight: 700 }}>{formatFqn(nodeFqn)}</div>
               {entityName && (
                 <div style={{ marginTop: 6, fontSize: 11, opacity: 0.75 }}>{entityName}</div>
               )}
@@ -249,7 +251,11 @@ function buildGraph(
               : 0.14
             : 0.78,
           strokeDasharray:
-            Math.abs(layerIndexOf(e.source) - layerIndexOf(e.target)) >= 3 ? "6 6" : "0",
+            Math.abs(
+              layerIndexOf(nodeById[e.source]?.fqn || e.source) - layerIndexOf(nodeById[e.target]?.fqn || e.target)
+            ) >= 3
+              ? "6 6"
+              : "0",
         },
       }));
 

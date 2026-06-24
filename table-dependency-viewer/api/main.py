@@ -2886,6 +2886,7 @@ def build_graph_snapshot():
     edges_set: set[tuple[str, str]] = set()
     for m in entries:
         target = m["node_id"]
+        target_entity_group = _normalize_entity_group(m.get("entity_name"))
         for src_schema, tables in (m.get("depends_on") or {}).items():
             for src_table in tables:
                 source_fqn = f"{src_schema}.{src_table}"
@@ -2895,6 +2896,13 @@ def build_graph_snapshot():
                     placeholder_id = f"X::{source_fqn}"
                     register_table(placeholder_id, source_fqn, schema_val, table_val, "UNKNOWN", None)
                     source_ids = [placeholder_id]
+                if len(source_ids) > 1:
+                    same_group = [
+                        source_id
+                        for source_id in source_ids
+                        if _normalize_entity_group(next(iter(table_entities.get(source_id) or []), None)) == target_entity_group
+                    ]
+                    source_ids = same_group or source_ids
                 for source_id in source_ids:
                     edges_set.add((source_id, target))
 

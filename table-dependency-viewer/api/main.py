@@ -2707,7 +2707,7 @@ def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
     order = ["raw_ext", "landing", "dict_stg", "dict_ods", "dict_dds", "stg", "ods", "dds", "dm_calc", "dm", "dm_view", "other"]
     columns = {key: [] for key in order}
     for node_id in table_nodes:
-        layer = _layer_of_table(node_id)
+        layer = _layer_of_table(table_nodes.get(node_id))
         columns.setdefault(layer, []).append(node_id)
 
     col_gap = 180
@@ -2720,8 +2720,8 @@ def _grid_layout_table(table_nodes: dict, edges: list[dict]) -> dict:
         src = edge.get("source")
         tgt = edge.get("target")
         if src in table_nodes and tgt in table_nodes:
-            neighbors[src].append(layer_index.get(_layer_of_table(tgt), 0))
-            neighbors[tgt].append(layer_index.get(_layer_of_table(src), 0))
+            neighbors[src].append(layer_index.get(_layer_of_table(table_nodes.get(tgt)), 0))
+            neighbors[tgt].append(layer_index.get(_layer_of_table(table_nodes.get(src)), 0))
     for layer in order:
         items = columns.get(layer) or []
         if not items:
@@ -2747,7 +2747,7 @@ def _normalize_layer_widths(nodes: list[dict]) -> list[dict]:
         return []
     layers = {}
     for node in nodes:
-        layer = _layer_of_table(node.get("id") or "")
+        layer = _layer_of_table(node)
         layers.setdefault(layer, []).append(node)
 
     max_widths = {
@@ -2756,7 +2756,7 @@ def _normalize_layer_widths(nodes: list[dict]) -> list[dict]:
     }
     out = []
     for node in nodes:
-        layer = _layer_of_table(node.get("id") or "")
+        layer = _layer_of_table(node)
         width = max_widths.get(layer) or node.get("width") or 200
         updated = dict(node)
         updated["width"] = width
@@ -6331,8 +6331,9 @@ def get_graph_impact(schema: str, table: str, depth: int = Query(3, ge=1, le=4),
     snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
+    table_fqn_map = snapshot.get("table_fqn_map") or {}
 
-    key = _resolve_table_key(table_nodes, schema, table)
+    key = _resolve_table_key(table_nodes, schema, table, fqn_map=table_fqn_map)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -6368,8 +6369,9 @@ def get_impact_summary(
     snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
+    table_fqn_map = snapshot.get("table_fqn_map") or {}
 
-    key = _resolve_table_key(table_nodes, schema, table)
+    key = _resolve_table_key(table_nodes, schema, table, fqn_map=table_fqn_map)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 
@@ -6443,8 +6445,9 @@ def get_impact_list(
     snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
+    table_fqn_map = snapshot.get("table_fqn_map") or {}
 
-    key = _resolve_table_key(table_nodes, schema, table)
+    key = _resolve_table_key(table_nodes, schema, table, fqn_map=table_fqn_map)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 

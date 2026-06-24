@@ -307,9 +307,18 @@ export default function App() {
     const params = useParams();
     const searchParams = new URLSearchParams(location.search);
     const source = searchParams.get("source") || "current";
+    const tableIdRaw = searchParams.get("table_id");
+    const tableId = tableIdRaw ? Number(tableIdRaw) : null;
     const handleBack = () => navigate(location.state?.from || "/tables");
-    const handleNavigateTable = (schema, table) => {
-      const suffix = source && source !== "current" ? `?source=${encodeURIComponent(source)}` : "";
+    const handleNavigateTable = (schema, table, nextTableId = null) => {
+      const params = new URLSearchParams();
+      if (source && source !== "current") {
+        params.set("source", source);
+      }
+      if (nextTableId) {
+        params.set("table_id", String(nextTableId));
+      }
+      const suffix = params.toString() ? `?${params.toString()}` : "";
       navigate(`/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}${suffix}`, {
         state: { from: location.pathname + location.search },
       });
@@ -321,6 +330,7 @@ export default function App() {
         source={source}
         onBack={handleBack}
         onNavigateTable={handleNavigateTable}
+        tableContext={tableId ? { table_id: tableId } : null}
         onOpenImpact={(s, t) =>
           navigate(
             `/impact/${encodeURIComponent(s)}/${encodeURIComponent(t)}${source && source !== "current" ? `?source=${encodeURIComponent(source)}` : ""}`,

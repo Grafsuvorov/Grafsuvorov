@@ -18,6 +18,7 @@ export default function TableCard({
   autoShowGraph = false,
   tableContext = null,
 }) {
+  const resolvedTableId = tableContext?.table_id ?? null;
   const formatMinutes = (value) => (value !== null && value !== undefined ? `${value} мин` : "—");
   const formatDurationMmSs = (value) => {
     const minutes = Number(value);
@@ -149,6 +150,9 @@ export default function TableCard({
     if (source && source !== "current") {
       params.set("source", source);
     }
+    if (resolvedTableId) {
+      params.set("table_id", String(resolvedTableId));
+    }
     const suffix = params.toString() ? `?${params.toString()}` : "";
     fetch(`${API_BASE}/api/card/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}${suffix}`)
       .then((res) => {
@@ -158,7 +162,7 @@ export default function TableCard({
       .then(setMeta)
       .catch((err) => setError(err.message || String(err)))
       .finally(() => setLoadingMeta(false));
-  }, [schema, tableName, source]);
+  }, [schema, tableName, source, resolvedTableId]);
 
   useEffect(() => {
     depsRequestRef.current += 1;
@@ -805,6 +809,9 @@ export default function TableCard({
     if (source && source !== "current") {
       params.set("source", source);
     }
+    if (resolvedTableId) {
+      params.set("table_id", String(resolvedTableId));
+    }
     const suffix = params.toString() ? `?${params.toString()}` : "";
     fetch(`${API_BASE}/api/graph/table/${encodeURIComponent(schema)}/${encodeURIComponent(tableName)}${suffix}`)
       .then((res) =>
@@ -853,7 +860,10 @@ export default function TableCard({
   }, [schema, tableName, autoShowGraph, source]);
 
   const tableList = useMemo(() => {
-    return graphNodes.map((n) => n.id).filter(Boolean).sort();
+    return graphNodes
+      .map((n) => n.fqn || (n.schema && n.table ? `${n.schema}.${n.table}` : n.id))
+      .filter(Boolean)
+      .sort();
   }, [graphNodes]);
 
   const copyList = () => {
@@ -862,7 +872,7 @@ export default function TableCard({
     alert("Список таблиц скопирован");
   };
 
-  const handleNodeClick = (newSchema, newTable) => {
+  const handleNodeClick = (newSchema, newTable, newTableId = null) => {
     setShowGraph(false);
     setEdges([]);
     setGraphNodes([]);
@@ -872,7 +882,7 @@ export default function TableCard({
     setGraphStats({ nodes: 0, edges: 0 });
     setGraphTruncated(false);
     if (onNavigateTable) {
-      onNavigateTable(newSchema, newTable);
+      onNavigateTable(newSchema, newTable, newTableId);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };

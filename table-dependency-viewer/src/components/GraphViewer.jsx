@@ -198,9 +198,13 @@ function buildGraph(
         sourcePosition: "right",
         targetPosition: "left",
         data: {
+          schema: node.schema,
+          table: node.table,
+          tableId: node.table_id,
+          fqn: node.fqn || `${node.schema}.${node.table}`,
           label: (
             <div title={fqn}>
-              <div style={{ fontWeight: 700 }}>{formatFqn(fqn)}</div>
+              <div style={{ fontWeight: 700 }}>{formatFqn(node.fqn || fqn)}</div>
               {entityName && (
                 <div style={{ marginTop: 6, fontSize: 11, opacity: 0.75 }}>{entityName}</div>
               )}
@@ -468,10 +472,18 @@ export default function GraphViewer({
       return;
     }
     if (!onNodeClick) return;
-    const parts = node.id.split(".");
-    const table = parts.pop();
-    const schema = parts.join(".");
-    onNodeClick(schema, table);
+    const schema = node?.data?.schema;
+    const table = node?.data?.table;
+    const tableId = node?.data?.tableId;
+    if (schema && table) {
+      onNodeClick(schema, table, tableId);
+      return;
+    }
+    const fqn = node?.data?.fqn || node.id;
+    const parts = String(fqn || "").split(".");
+    const fallbackTable = parts.pop();
+    const fallbackSchema = parts.join(".");
+    onNodeClick(fallbackSchema, fallbackTable, tableId);
   };
 
   return (

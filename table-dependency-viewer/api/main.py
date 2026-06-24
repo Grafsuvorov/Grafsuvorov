@@ -2674,7 +2674,18 @@ def _find_sccs(nodes: list[str], edges: list[dict]) -> list[list[str]]:
     return sccs
 
 
-def _layer_of_table(fqn: str) -> str:
+def _table_fqn_from_node(node_or_fqn: Any) -> str:
+    if isinstance(node_or_fqn, dict):
+        schema = str(node_or_fqn.get("schema") or "").strip()
+        table = str(node_or_fqn.get("table") or "").strip()
+        if schema and table:
+            return f"{schema}.{table}"
+        return str(node_or_fqn.get("fqn") or node_or_fqn.get("id") or "")
+    return str(node_or_fqn or "")
+
+
+def _layer_of_table(node_or_fqn: Any) -> str:
+    fqn = _table_fqn_from_node(node_or_fqn)
     if not fqn or "." not in fqn:
         return "other"
     schema = fqn.split(".", 1)[0]
@@ -2818,10 +2829,12 @@ def build_graph_snapshot():
 
     entries = []
     meta_tables = set()
+    fqn_to_node_ids: dict[str, list[str]] = {}
     for m in all_meta:
         schema = norm(m.get("table_schema"))
         table = norm(m.get("table_name"))
         entity = m.get("entity_name")
+        table_id = m.get("table_id")
         if not schema or not table:
             continue
         if schema in ("raw_ext", "dict_raw_ext"):
@@ -2829,7 +2842,9 @@ def build_graph_snapshot():
         if isinstance(entity, str) and entity.lower() == "raw_ext":
             continue
 
-        meta_tables.add(f"{schema}.{table}")
+        fqn = f"{schema}.{table}"
+        node_id = f"T::{table_id}" if table_id else f"F::{entity or 'UNKNOWN'}::{fqn}"
+        meta_tables.add(node_id)
         depends = {}
         for src_schema, tables in (m.get("depends_on") or {}).items():
             src_schema_norm = norm(src_schema)
@@ -2839,47 +2854,57 @@ def build_graph_snapshot():
             depends[src_schema_norm] = [t for t in cleaned if t]
 
         entries.append({
+            "node_id": node_id,
+            "fqn": fqn,
             "table_schema": schema,
             "table_name": table,
             "entity_name": entity or "UNKNOWN",
-            "table_id": m.get("table_id"),
+            "table_id": table_id,
             "depends_on": depends,
         })
 
     table_entities: dict[str, set[str]] = {}
     table_info: dict[str, dict] = {}
 
-    def register_table(fqn: str, schema: str, table: str, entity: str, table_id):
-        if fqn not in table_info:
-            table_info[fqn] = {
-                "id": fqn,
+    def register_table(node_id: str, fqn: str, schema: str, table: str, entity: str, table_id):
+        if node_id not in table_info:
+            table_info[node_id] = {
+                "id": node_id,
+                "fqn": fqn,
                 "schema": schema,
                 "table": table,
                 "table_id": table_id,
             }
-        table_entities.setdefault(fqn, set()).add(entity)
+        table_entities.setdefault(node_id, set()).add(entity)
+        node_ids = fqn_to_node_ids.setdefault(fqn, [])
+        if node_id not in node_ids:
+            node_ids.append(node_id)
 
     for m in entries:
-        fqn = f"{m['table_schema']}.{m['table_name']}"
-        register_table(fqn, m["table_schema"], m["table_name"], m["entity_name"], m.get("table_id"))
+        register_table(m["node_id"], m["fqn"], m["table_schema"], m["table_name"], m["entity_name"], m.get("table_id"))
 
     edges_set: set[tuple[str, str]] = set()
     for m in entries:
-        target = f"{m['table_schema']}.{m['table_name']}"
+        target = m["node_id"]
         for src_schema, tables in (m.get("depends_on") or {}).items():
             for src_table in tables:
-                source = f"{src_schema}.{src_table}"
-                edges_set.add((source, target))
-                if source not in table_info:
-                    schema_val, table_val = source.split(".", 1)
-                    register_table(source, schema_val, table_val, "UNKNOWN", None)
+                source_fqn = f"{src_schema}.{src_table}"
+                source_ids = fqn_to_node_ids.get(source_fqn)
+                if not source_ids:
+                    schema_val, table_val = source_fqn.split(".", 1)
+                    placeholder_id = f"X::{source_fqn}"
+                    register_table(placeholder_id, source_fqn, schema_val, table_val, "UNKNOWN", None)
+                    source_ids = [placeholder_id]
+                for source_id in source_ids:
+                    edges_set.add((source_id, target))
 
     table_nodes = {}
-    for fqn, info in table_info.items():
-        entities = sorted(table_entities.get(fqn) or [])
-        width = _estimate_node_width(fqn, min_width=200, max_width=520)
-        table_nodes[fqn] = {
-            "id": fqn,
+    for node_id, info in table_info.items():
+        entities = sorted(table_entities.get(node_id) or [])
+        width = _estimate_node_width(info["fqn"], min_width=200, max_width=520)
+        table_nodes[node_id] = {
+            "id": node_id,
+            "fqn": info["fqn"],
             "schema": info["schema"],
             "table": info["table"],
             "entity": entities[0] if entities else "UNKNOWN",
@@ -3068,6 +3093,7 @@ def build_graph_snapshot():
         "meta_ts": _cache_timestamp,
         "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
         "table_graph": {"nodes": table_nodes, "edges": table_edges},
+        "table_fqn_map": {k: sorted(v) for k, v in fqn_to_node_ids.items()},
         "entity_graph": {"nodes": entity_nodes, "edges": entity_edges},
         "layouts": {"entity": entity_layout, "table": table_layout},
         "table_entity_map": {k: sorted(v) for k, v in table_entities.items()},
@@ -3337,20 +3363,37 @@ def _clean_table_name(table_norm: Optional[str]) -> Optional[str]:
     return table_norm.replace("/", "").replace("-", "").replace(" ", "")
 
 
-def _resolve_table_key(mapping: dict, schema: str, table: str) -> Optional[str]:
+def _resolve_table_key(
+    mapping: dict,
+    schema: str,
+    table: str,
+    table_id: Optional[int] = None,
+    fqn_map: Optional[dict[str, list[str]]] = None,
+) -> Optional[str]:
     schema_norm = norm(schema)
     table_norm = norm(table)
     direct = f"{schema_norm}.{table_norm}"
-    if direct in mapping:
-        return direct
-    with_leading_slash = f"{schema_norm}./{table_norm}" if table_norm and not table_norm.startswith("/") else None
-    if with_leading_slash and with_leading_slash in mapping:
-        return with_leading_slash
+    candidates: list[str] = []
+    if fqn_map:
+        candidates.extend(fqn_map.get(direct) or [])
+    if not candidates:
+        with_leading_slash = f"{schema_norm}./{table_norm}" if table_norm and not table_norm.startswith("/") else None
+        if with_leading_slash and fqn_map:
+            candidates.extend(fqn_map.get(with_leading_slash) or [])
     table_clean = _clean_table_name(table_norm)
-    cleaned = f"{schema_norm}.{table_clean}" if table_clean else None
-    if cleaned and cleaned in mapping:
-        return cleaned
-    return direct
+    if not candidates:
+        cleaned = f"{schema_norm}.{table_clean}" if table_clean else None
+        if cleaned and fqn_map:
+            candidates.extend(fqn_map.get(cleaned) or [])
+    if table_id is not None:
+        for candidate in candidates:
+            node = mapping.get(candidate) or {}
+            if node.get("table_id") == table_id:
+                return candidate
+    if candidates:
+        meta_candidates = [candidate for candidate in candidates if str(candidate).startswith("T::")]
+        return (meta_candidates or candidates)[0]
+    return None
 
 @app.on_event("startup")
 def warm_up_cache():
@@ -5751,7 +5794,12 @@ def find_path_case_insensitive(parent_path: Path, name: str) -> Optional[Path]:
 
 
 @router.get("/api/card/{schema}/{table:path}")
-def get_table_card_info_by_path(schema: str, table: str, source: str = Query("current")):
+def get_table_card_info_by_path(
+    schema: str,
+    table: str,
+    source: str = Query("current"),
+    table_id: Optional[int] = Query(None),
+):
     source_name = (source or "current").strip().lower()
     if source_name != "current":
         dbt_card = build_dbt_fallback_card(
@@ -5786,6 +5834,9 @@ def get_table_card_info_by_path(schema: str, table: str, source: str = Query("cu
                 meta = yaml.safe_load(f)
         except Exception as e:
             return JSONResponse(status_code=500, content={"error": str(e)})
+
+        if table_id is not None and meta.get("table_id") != table_id:
+            continue
 
         meta["sql_query_insert_init_sql"] = _read_sql_from_meta(
             yaml_file,
@@ -6162,12 +6213,14 @@ def get_graph_table(
     table: str,
     depth: Optional[int] = Query(None, ge=1, le=20),
     source: str = Query("current"),
+    table_id: Optional[int] = Query(None),
 ):
     snapshot = _get_table_graph_context(source)
     table_nodes = snapshot["table_graph"]["nodes"]
     table_edges = snapshot["table_graph"]["edges"]
+    table_fqn_map = snapshot.get("table_fqn_map") or {}
 
-    key = _resolve_table_key(table_nodes, schema, table)
+    key = _resolve_table_key(table_nodes, schema, table, table_id=table_id, fqn_map=table_fqn_map)
     if key not in table_nodes:
         return JSONResponse(status_code=404, content={"error": "table not found"})
 

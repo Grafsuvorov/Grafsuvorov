@@ -6252,9 +6252,7 @@ def get_graph_table(
                 queue.append((nxt, d + 1))
         return visited_local
 
-    ancestors = traverse(rev)
-    descendants = traverse(fwd)
-    visited = ancestors | descendants
+    visited = traverse(rev)
     truncated = False
 
     edges_filtered = [e for e in table_edges if e["source"] in visited and e["target"] in visited]

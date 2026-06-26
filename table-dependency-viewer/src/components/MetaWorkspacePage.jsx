@@ -308,7 +308,7 @@ export default function MetaWorkspacePage({ userProfile }) {
 
   const openClickObject = (item) => {
     if (branchScopedActive) {
-      handleOpenBranchClickFile(item.schema_name, item.file_name);
+      handleOpenBranchClickFile(item.schema_name, item.file_name, item.file_path);
       return;
     }
     setMode("click");
@@ -367,21 +367,23 @@ export default function MetaWorkspacePage({ userProfile }) {
     }
   };
 
-  const handleOpenBranchClickFile = async (schemaName, fileName) => {
+  const handleOpenBranchClickFile = async (schemaName, fileName, filePath = null) => {
     if (!String(branchName || "").trim() || !schemaName || !fileName) return;
     setBranchFileLoading(true);
     setError(null);
     try {
+      const resolvedPath = String(filePath || `${schemaName}/${fileName}`).trim();
       const data = await metaWorkspaceApi.branchFile({
         branch_name: branchName.trim(),
-        file_path: `${schemaName}/${fileName}`,
+        file_path: resolvedPath,
       });
       setClickBranchFile({
-        token: `${schemaName}/${fileName}:${Date.now()}`,
+        token: `${resolvedPath}:${Date.now()}`,
         branch_name: data.branch_name,
         file: {
           schema_name: schemaName,
           file_name: fileName,
+          file_path: resolvedPath,
           content: data.content,
           revision: data.revision,
         },
@@ -679,7 +681,7 @@ export default function MetaWorkspacePage({ userProfile }) {
                           type="button"
                           key={file.file_path}
                           className={`meta-workspace-file-button ${file.changed ? "changed" : ""}`}
-                          onClick={() => handleOpenBranchClickFile(schema.schema_name, file.file_name)}
+                          onClick={() => handleOpenBranchClickFile(schema.schema_name, file.file_name, file.file_path)}
                         >
                           {file.file_name}
                         </button>

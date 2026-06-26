@@ -671,7 +671,8 @@ def _build_branch_catalog(
         if click_root_parts and path_parts[: len(click_root_parts)] == click_root_parts:
             rel = path_parts[len(click_root_parts):]
             if len(rel) >= 2:
-                schema_name, file_name = rel[0], rel[-1]
+                schema_name = rel[0]
+                file_name = "/".join(rel[1:])
                 object_key = f"{schema_name}/{file_name}"
                 item = click_map.setdefault(
                     object_key,
@@ -679,6 +680,7 @@ def _build_branch_catalog(
                         "object_key": object_key,
                         "schema_name": schema_name,
                         "file_name": file_name,
+                        "file_path": raw_path,
                         "object_kind": "view" if schema_name == "dm_view" else "table",
                         "statuses": set(),
                     },

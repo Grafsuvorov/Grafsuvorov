@@ -1,17 +1,1 @@
-Предметная область: TORO
-
-Сущность загрузки: TORO
-
-Ссылка на гит: zolotukhinmn_dwh-13917 (!1950) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab
-
-Название таблицы Greenplum: dm.exp_toro_equipment_readiness_coefficient_ad_analysis
-
-Способ обновления: полный
-
-Стенд: DEV и PROD
-
-Время работы скрипта: -
-
-Бизнес-ключ для проверки на дубли: complex_equipment_code	, dt_report, finish_good_type_name, downtime_losses_unit_uom_code
-
-Последовательность действий при (псевдо)инкрементальном обновлении таблицы: -
+Файл `dm/dm_view_sb_wuc_meta.yaml` не найден в ветке `DWH-7777_test`

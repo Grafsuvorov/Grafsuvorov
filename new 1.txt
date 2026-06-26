@@ -1,16 +1,17 @@
-drop table if exists tmp_final_keys;
+Предметная область: TORO
 
-create temp table tmp_final_keys as
-select distinct
-    dt_report,
-    id_mdm,
-    car_type,
-    pr_avto,
-    pack_id
-from tmp_norm_day
-distributed by (id_mdm);
+Сущность загрузки: TORO
 
-analyze tmp_final_keys;
+Ссылка на гит: zolotukhinmn_dwh-13917 (!1950) · Merge requests · dwh_analyst / Sql Queries Storage · GitLab
 
-where aurp.cargo_group_asuzdc_code = '1'
-  and plant_short_name is not null
+Название таблицы Greenplum: dm.exp_toro_equipment_readiness_coefficient_ad_analysis
+
+Способ обновления: полный
+
+Стенд: DEV и PROD
+
+Время работы скрипта: -
+
+Бизнес-ключ для проверки на дубли: complex_equipment_code	, dt_report, finish_good_type_name, downtime_losses_unit_uom_code
+
+Последовательность действий при (псевдо)инкрементальном обновлении таблицы: -

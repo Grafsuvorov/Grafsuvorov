@@ -7845,43 +7845,65 @@ def get_entity_table_info(entity_id: int):
     Поля: schema_name, tables_name, last_load, entity_name
     """
     sql = f"""
+        WITH entity_tables AS (
+            SELECT
+                tm.table_id,
+                tm.table_schema,
+                tm.table_name,
+                tm.table_last_load,
+                tm.entity_name
+            FROM {TABLE_TABLES_META} tm
+            WHERE tm.entity_id = :entity_id
+        ),
+        loading_ranked AS (
+            SELECT
+                l.object_id,
+                l.loading_state,
+                CASE
+                    WHEN l.loading_start_dttm IS NOT NULL AND l.loading_finish_dttm IS NOT NULL
+                        THEN ROUND(CAST(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS numeric), 2)
+                    ELSE NULL
+                END AS duration_minutes,
+                ROW_NUMBER() OVER (
+                    PARTITION BY l.object_id
+                    ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
+                ) AS rn_all,
+                ROW_NUMBER() OVER (
+                    PARTITION BY l.object_id
+                    ORDER BY
+                        CASE
+                            WHEN l.loading_start_dttm IS NOT NULL AND l.loading_finish_dttm IS NOT NULL
+                                THEN l.loading_finish_dttm
+                        END DESC NULLS LAST,
+                        CASE
+                            WHEN l.loading_start_dttm IS NOT NULL AND l.loading_finish_dttm IS NOT NULL
+                                THEN l.loading_start_dttm
+                        END DESC NULLS LAST
+                ) AS rn_duration
+            FROM {TABLE_LOADING_HISTORY} l
+            INNER JOIN entity_tables tm
+                ON tm.table_id = l.object_id
+            WHERE l.object_type = 'table'
+        )
         SELECT
-            table_id,
-            table_schema,
-            table_name,
-            table_last_load,
-            entity_name,
-            (
-                SELECT l.loading_state
-                FROM {TABLE_LOADING_HISTORY} l
-                WHERE l.object_type = 'table'
-                  AND l.object_id = tm.table_id
-                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
-                LIMIT 1
-            ) AS last_loading_state,
-            (
-                SELECT ROUND(CAST(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS numeric), 2)
-                FROM {TABLE_LOADING_HISTORY} l
-                WHERE l.object_type = 'table'
-                  AND l.object_id = tm.table_id
-                  AND l.loading_start_dttm IS NOT NULL
-                  AND l.loading_finish_dttm IS NOT NULL
-                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
-                LIMIT 1
-            ) AS current_duration_minutes,
-            (
-                SELECT ROUND(CAST(EXTRACT(EPOCH FROM (l.loading_finish_dttm - l.loading_start_dttm)) / 60.0 AS numeric), 2)
-                FROM {TABLE_LOADING_HISTORY} l
-                WHERE l.object_type = 'table'
-                  AND l.object_id = tm.table_id
-                  AND l.loading_start_dttm IS NOT NULL
-                  AND l.loading_finish_dttm IS NOT NULL
-                ORDER BY l.loading_finish_dttm DESC NULLS LAST, l.loading_start_dttm DESC NULLS LAST
-                OFFSET 1
-                LIMIT 1
-            ) AS previous_duration_minutes
-        FROM {TABLE_TABLES_META} tm
-        WHERE entity_id = :entity_id order by table_last_load
+            tm.table_id,
+            tm.table_schema,
+            tm.table_name,
+            tm.table_last_load,
+            tm.entity_name,
+            MAX(CASE WHEN lr.rn_all = 1 THEN lr.loading_state END) AS last_loading_state,
+            MAX(CASE WHEN lr.rn_duration = 1 THEN lr.duration_minutes END) AS current_duration_minutes,
+            MAX(CASE WHEN lr.rn_duration = 2 THEN lr.duration_minutes END) AS previous_duration_minutes
+        FROM entity_tables tm
+        LEFT JOIN loading_ranked lr
+            ON lr.object_id = tm.table_id
+        GROUP BY
+            tm.table_id,
+            tm.table_schema,
+            tm.table_name,
+            tm.table_last_load,
+            tm.entity_name
+        ORDER BY tm.table_last_load
     """
     try:
         with engine.connect() as conn:

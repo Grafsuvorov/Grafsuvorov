@@ -195,10 +195,10 @@ function buildDrawioXml({ nodes, edges, centralNode, fileLabel = "graph" }) {
       ? "#93C5FD"
       : String(baseStyle.border || "").match(/#([0-9a-f]{6})/i)?.[0] || "#CBD5E1";
     const dashed = String(baseStyle.border || "").includes("dashed") ? "1" : "0";
-    const labelParts = [xmlEscape(fqn)];
+    const labelParts = [fqn];
     const entityLine = node?.data?.entityName || node?.data?.entity;
-    if (entityLine) labelParts.push(xmlEscape(entityLine));
-    const value = labelParts.join("<br/>");
+    if (entityLine) labelParts.push(entityLine);
+    const value = xmlEscape(labelParts.join("\n"));
     const style = [
       "rounded=1",
       "whiteSpace=wrap",

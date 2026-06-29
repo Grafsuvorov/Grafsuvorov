@@ -417,6 +417,13 @@ def _require_admin(request: Request):
     return user
 
 
+def _require_meta_workspace_role(request: Request):
+    user = get_current_user_from_request(request)
+    if not user or user.role not in {"admin", "engineer"}:
+        raise HTTPException(status_code=403, detail="Engineer or admin role required")
+    return user
+
+
 def _optional_user(request: Request):
     try:
         return get_current_user_from_request(request)
@@ -1135,7 +1142,7 @@ def save_admin_dev_meta(payload: DevMetaSavePayload, request: Request):
 
 @router.post("/api/admin/meta-workspace/mr")
 def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         result = create_meta_workspace_mr(
             engine=engine,
@@ -1163,7 +1170,7 @@ def create_admin_meta_workspace_mr(payload: MetaWorkspaceMrPayload, request: Req
 
 @router.get("/api/admin/meta-workspace/branches")
 def get_admin_meta_workspace_branches(request: Request):
-    _require_admin(request)
+    _require_meta_workspace_role(request)
     try:
         return list_meta_workspace_branches(git_repo_value=ENTITY_META_GIT_REPO)
     except ValueError as exc:
@@ -1172,7 +1179,7 @@ def get_admin_meta_workspace_branches(request: Request):
 
 @router.post("/api/admin/meta-workspace/branches")
 def create_admin_meta_workspace_branch(payload: MetaWorkspaceCreateBranchPayload, request: Request):
-    _require_admin(request)
+    _require_meta_workspace_role(request)
     try:
         return create_meta_workspace_branch(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1189,7 +1196,7 @@ def get_admin_meta_workspace_branch_catalog(
     branch_name: str = Query(...),
     base_branch: str = Query("main"),
 ):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return _build_branch_catalog(
             git_repo_root=Path(ENTITY_META_GIT_REPO).resolve(),
@@ -1212,7 +1219,7 @@ def get_admin_meta_workspace_branch_tree(
     branch_name: str = Query(...),
     base_branch: str = Query("main"),
 ):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return build_meta_workspace_branch_tree(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1231,7 +1238,7 @@ def get_admin_meta_workspace_branch_tree(
 
 @router.post("/api/admin/meta-workspace/branch-file")
 def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return read_meta_workspace_branch_file(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1247,7 +1254,7 @@ def get_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFilePayload
 
 @router.post("/api/admin/meta-workspace/branch-gp-bundle")
 def get_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBundlePayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return read_meta_workspace_branch_gp_bundle(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1266,7 +1273,7 @@ def get_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBund
 
 @router.post("/api/admin/meta-workspace/branch-gp-bundle/save")
 def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBundleSavePayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return save_meta_workspace_branch_gp_bundle(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1296,7 +1303,7 @@ def save_admin_meta_workspace_branch_gp_bundle(payload: MetaWorkspaceBranchGpBun
 
 @router.post("/api/admin/meta-workspace/branch-file/save")
 def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return save_meta_workspace_branch_file(
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1320,7 +1327,7 @@ def save_admin_meta_workspace_branch_file(payload: MetaWorkspaceBranchFileSavePa
 
 @router.post("/api/admin/meta-workspace/validate-all")
 def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         return validate_meta_workspace_branch(
             engine=engine,
@@ -1342,7 +1349,7 @@ def validate_admin_meta_workspace_branch(payload: MetaWorkspaceValidatePayload, 
 
 @router.post("/api/admin/meta-workspace/sync-branch")
 def sync_admin_meta_workspace_branch(payload: MetaWorkspaceSyncPayload, request: Request):
-    user = _require_admin(request)
+    user = _require_meta_workspace_role(request)
     try:
         result = sync_meta_workspace_branch(
             engine=engine,

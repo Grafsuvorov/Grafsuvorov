@@ -123,6 +123,144 @@ const LEGEND_ITEMS = [
   { label: "Dict", color: NODE_STYLE_BY_LAYER.dict_stg.background, dashed: true },
 ];
 
+const DRAWIO_NODE_HEIGHT = 68;
+
+const xmlEscape = (value) =>
+  String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&apos;");
+
+const firstRgbaMatch = (value) => {
+  const match = String(value || "").match(/rgba?\(([^)]+)\)/i);
+  if (!match) return null;
+  const parts = match[1].split(",").map((part) => part.trim());
+  const [r, g, b, a = "1"] = parts;
+  const alpha = Number(a);
+  if (![r, g, b].every((part) => Number.isFinite(Number(part)))) return null;
+  return {
+    r: Number(r),
+    g: Number(g),
+    b: Number(b),
+    a: Number.isFinite(alpha) ? alpha : 1,
+  };
+};
+
+const rgbaToHex = ({ r, g, b, a = 1 }) => {
+  const mix = (channel) => Math.round((1 - a) * 255 + a * channel);
+  return `#${[mix(r), mix(g), mix(b)]
+    .map((value) => value.toString(16).padStart(2, "0"))
+    .join("")}`.toUpperCase();
+};
+
+const backgroundToDrawioColors = (background) => {
+  const matches = String(background || "").match(/rgba?\([^)]+\)/gi) || [];
+  const colors = matches.map(firstRgbaMatch).filter(Boolean).map(rgbaToHex);
+  return {
+    fillColor: colors[0] || "#64748B",
+    gradientColor: colors[1] || colors[0] || "#475569",
+  };
+};
+
+const downloadTextFile = (filename, content, mimeType = "application/xml;charset=utf-8") => {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+function buildDrawioXml({ nodes, edges, centralNode, fileLabel = "graph" }) {
+  const cells = [
+    '<mxCell id="0"/>',
+    '<mxCell id="1" parent="0"/>',
+  ];
+
+  nodes.forEach((node, index) => {
+    const isCentral = node.id === centralNode;
+    const fqn = node?.data?.fqn || node.id;
+    const layer = layerOf(fqn);
+    const baseStyle = isCentral ? CENTRAL_STYLE : NODE_STYLE_BY_LAYER[layer] || NODE_STYLE_BY_LAYER.other;
+    const { fillColor, gradientColor } = backgroundToDrawioColors(baseStyle.background);
+    const width = Number(node?.style?.width) || Number(NODE_WIDTH_BY_LAYER[layer]) || 240;
+    const x = Math.round(Number(node?.position?.x) || 0);
+    const y = Math.round(Number(node?.position?.y) || 0);
+    const borderColor = isCentral
+      ? "#93C5FD"
+      : String(baseStyle.border || "").match(/#([0-9a-f]{6})/i)?.[0] || "#CBD5E1";
+    const dashed = String(baseStyle.border || "").includes("dashed") ? "1" : "0";
+    const labelParts = [xmlEscape(fqn)];
+    const entityLine = node?.data?.entityName || node?.data?.entity;
+    if (entityLine) labelParts.push(xmlEscape(entityLine));
+    const value = labelParts.join("<br/>");
+    const style = [
+      "rounded=1",
+      "whiteSpace=wrap",
+      "html=1",
+      "shadow=1",
+      "glass=0",
+      `fillColor=${fillColor}`,
+      `gradientColor=${gradientColor}`,
+      `strokeColor=${borderColor}`,
+      `strokeWidth=${isCentral ? 3 : 1.5}`,
+      `dashed=${dashed}`,
+      `fontColor=${baseStyle.color || "#F8FAFC"}`,
+      `fontStyle=${isCentral ? 1 : 0}`,
+      "align=center",
+      "verticalAlign=middle",
+      "spacing=8",
+      "arcSize=12",
+    ].join(";");
+    cells.push(
+      `<mxCell id="n${index + 1}" value="${value}" style="${style}" vertex="1" parent="1">` +
+        `<mxGeometry x="${x}" y="${y}" width="${Math.round(width)}" height="${DRAWIO_NODE_HEIGHT}" as="geometry"/>` +
+      `</mxCell>`
+    );
+  });
+
+  const nodeCellIds = new Map(nodes.map((node, index) => [node.id, `n${index + 1}`]));
+
+  edges.forEach((edge, index) => {
+    const sourceId = nodeCellIds.get(edge.source);
+    const targetId = nodeCellIds.get(edge.target);
+    if (!sourceId || !targetId) return;
+    const style = [
+      "edgeStyle=orthogonalEdgeStyle",
+      "rounded=1",
+      "html=1",
+      "jettySize=auto",
+      "orthogonalLoop=1",
+      `strokeColor=${edge?.style?.stroke || "#64748B"}`,
+      `strokeWidth=${edge?.style?.strokeWidth || 1.4}`,
+      `dashed=${String(edge?.style?.strokeDasharray || "0") !== "0" ? 1 : 0}`,
+      "endArrow=block",
+      "endFill=1",
+    ].join(";");
+    cells.push(
+      `<mxCell id="e${index + 1}" style="${style}" edge="1" parent="1" source="${sourceId}" target="${targetId}">` +
+        '<mxGeometry relative="1" as="geometry"/>' +
+      "</mxCell>"
+    );
+  });
+
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<mxfile host="app.diagrams.net" modified="${new Date().toISOString()}" agent="table-dependency-viewer" version="24.7.17">` +
+      `<diagram id="graph" name="${xmlEscape(fileLabel)}">` +
+        `<mxGraphModel dx="1600" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1920" pageHeight="1080" math="0" shadow="0">` +
+          `<root>${cells.join("")}</root>` +
+        `</mxGraphModel>` +
+      `</diagram>` +
+    `</mxfile>`
+  );
+}
+
 function buildGraph(
   centralNode,
   edges = [],
@@ -204,6 +342,7 @@ function buildGraph(
           table: node.table,
           tableId: node.table_id,
           fqn: node.fqn || `${node.schema}.${node.table}`,
+          entityName,
           label: (
             <div title={nodeFqn}>
               <div style={{ fontWeight: 700 }}>{formatFqn(nodeFqn)}</div>
@@ -375,6 +514,8 @@ function buildGraph(
           sourcePosition: "right",
           targetPosition: "left",
           data: {
+            fqn,
+            entityName,
             label: (
               <div title={fqn}>
                 <div style={{ fontWeight: 700 }}>{formatFqn(fqn)}</div>
@@ -461,6 +602,10 @@ export default function GraphViewer({
     [centralNode, edges, entities, depthLimit, showAll, nodes, layout, focusNodeId]
   );
   const isLargeGraph = graph.nodes.length > 220 || graph.rfEdges.length > 500;
+  const exportLabel = useMemo(() => {
+    const focusNode = graph.nodes.find((node) => node.id === centralNode);
+    return focusNode?.data?.fqn || centralNode || "graph";
+  }, [graph.nodes, centralNode]);
 
   useEffect(() => {
     if (!graph.nodes.length) return;
@@ -492,6 +637,20 @@ export default function GraphViewer({
     onNodeClick(fallbackSchema, fallbackTable, tableId);
   };
 
+  const handleExportDrawio = () => {
+    if (!graph.nodes.length) return;
+    const xml = buildDrawioXml({
+      nodes: graph.nodes,
+      edges: graph.rfEdges,
+      centralNode,
+      fileLabel: exportLabel,
+    });
+    const safeName = String(exportLabel || "graph")
+      .replaceAll(/[^a-zA-Z0-9._-]+/g, "_")
+      .replaceAll(/^_+|_+$/g, "");
+    downloadTextFile(`${safeName || "graph"}.drawio`, xml);
+  };
+
   return (
     <div className="dep-graph-wrapper">
       <div className="dep-graph-zones">
@@ -518,6 +677,9 @@ export default function GraphViewer({
               Сбросить подсветку
             </button>
           )}
+          <button className="btn btn-secondary" onClick={handleExportDrawio}>
+            Экспорт в draw.io
+          </button>
           {!usePreset && !showAll && (
             <button className="btn btn-ghost" onClick={() => setDepthLimit((d) => d + 1)}>
               +1 уровень

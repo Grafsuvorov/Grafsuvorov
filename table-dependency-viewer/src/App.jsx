@@ -365,7 +365,10 @@ export default function App() {
   };
 
   const isAdmin = useMemo(() => userProfile?.role === "admin", [userProfile]);
-  const canUseMetaWorkspace = useMemo(() => userProfile?.role === "admin", [userProfile]);
+  const canUseMetaWorkspace = useMemo(
+    () => userProfile?.role === "admin" || userProfile?.role === "engineer",
+    [userProfile],
+  );
   const canUseDevMeta = useMemo(() => Boolean(userProfile), [userProfile]);
   const useCustomHoverLabel = useMemo(() => shouldUseCustomHoverLabel(userProfile), [userProfile]);
   const assistantContext = useMemo(() => {

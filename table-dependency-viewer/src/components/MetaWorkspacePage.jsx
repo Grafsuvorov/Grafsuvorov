@@ -810,7 +810,14 @@ export default function MetaWorkspacePage({ userProfile }) {
                         {item.errors.map((point, idx) => <li key={`${item.object_key}-err-${idx}`}>{point}</li>)}
                       </ul>
                     ) : null}
-                    {item.schema_name && item.table_name && item.entity_name && item.normalized?.yaml_content && item.errors?.some((point) => String(point).includes("depends_on")) ? (
+                    {item.schema_name
+                      && item.table_name
+                      && item.entity_name
+                      && item.normalized?.yaml_content
+                      && (
+                        item.errors?.some((point) => String(point).includes("depends_on"))
+                        || item.warnings?.some((point) => String(point).includes("depends_on"))
+                      ) ? (
                       <div className="meta-workspace-validation-actions-inline">
                         <button
                           type="button"
@@ -818,7 +825,7 @@ export default function MetaWorkspacePage({ userProfile }) {
                           disabled={autofillDependsKey === item.object_key}
                           onClick={() => handleAutofillDepends(item)}
                         >
-                          {autofillDependsKey === item.object_key ? "Проставляем..." : "Проставить зависимости"}
+                          {autofillDependsKey === item.object_key ? "Актуализируем..." : "Актуализировать depends_on"}
                         </button>
                       </div>
                     ) : null}

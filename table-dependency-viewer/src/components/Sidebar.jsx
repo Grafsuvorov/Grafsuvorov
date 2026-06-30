@@ -1,7 +1,15 @@
 import "../style/app.css";
 import { useNavigate } from "react-router-dom";
 
-export default function Sidebar({ currentPath, onChangeView, authEnabled, userProfile, onLogout }) {
+export default function Sidebar({
+  currentPath,
+  onChangeView,
+  authEnabled,
+  userProfile,
+  currentTheme = "dark",
+  onThemeChange,
+  onLogout,
+}) {
   const navigate = useNavigate();
   const isActive = (path) => currentPath === path;
   const roleLabel = userProfile?.role === "admin"
@@ -144,8 +152,25 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
         </div>
 
         {/* RIGHT */}
-        {authEnabled && userProfile && (
-          <div className="topnav-right">
+        <div className="topnav-right">
+          <div className="theme-switch" aria-label="Переключение темы">
+            <button
+              type="button"
+              className={`theme-switch-option ${currentTheme === "light" ? "active" : ""}`}
+              onClick={() => onThemeChange?.("light")}
+            >
+              Светлая
+            </button>
+            <button
+              type="button"
+              className={`theme-switch-option ${currentTheme === "dark" ? "active" : ""}`}
+              onClick={() => onThemeChange?.("dark")}
+            >
+              Тёмная
+            </button>
+          </div>
+          {authEnabled && userProfile && (
+            <>
             <div className="auth-pill">
               <div className="auth-user">
                 {userProfile?.username || userProfile?.email || "Пользователь"}
@@ -155,8 +180,9 @@ export default function Sidebar({ currentPath, onChangeView, authEnabled, userPr
             <button type="button" className="auth-logout" onClick={onLogout}>
               Выйти
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

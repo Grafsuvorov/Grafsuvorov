@@ -1,22 +1,61 @@
 /* Base Layout */
-:root {
+:root,
+html[data-theme="dark"] {
   --bg: #0b0f14;
-  --surface: rgba(255,255,255,0.035);
+  --bg-page:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 28%),
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.12), transparent 24%),
+    #0b0f14;
+  --surface: rgba(255,255,255,0.04);
+  --surface-strong: rgba(255,255,255,0.08);
   --surface-soft: rgba(255,255,255,0.025);
+  --surface-panel: rgba(15, 23, 42, 0.82);
+  --surface-panel-strong: rgba(15, 23, 42, 0.92);
   --text: #e5e7eb;
+  --text-strong: #f8fafc;
   --muted: #9ca3af;
+  --border: rgba(255,255,255,0.12);
+  --border-strong: rgba(255,255,255,0.18);
   --accent: #3b82f6;
+  --accent-soft: rgba(59,130,246,0.15);
+  --accent-strong: rgba(59,130,246,0.35);
   --danger: #ef4444;
   --success: #22c55e;
+  --shadow-app: 0 22px 50px rgba(2, 8, 23, 0.28);
   --container-width: 1440px;
   --container-padding: 32px;
 }
 
+html[data-theme="light"] {
+  --bg: #eef3f8;
+  --bg-page:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.11), transparent 25%),
+    radial-gradient(circle at top right, rgba(251, 146, 60, 0.09), transparent 22%),
+    #eef3f8;
+  --surface: rgba(255,255,255,0.92);
+  --surface-strong: rgba(255,255,255,0.98);
+  --surface-soft: rgba(148,163,184,0.08);
+  --surface-panel: rgba(255,255,255,0.96);
+  --surface-panel-strong: rgba(255,255,255,1);
+  --text: #1e293b;
+  --text-strong: #0f172a;
+  --muted: #64748b;
+  --border: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.18);
+  --accent: #2563eb;
+  --accent-soft: rgba(37,99,235,0.12);
+  --accent-strong: rgba(37,99,235,0.28);
+  --danger: #dc2626;
+  --success: #16a34a;
+  --shadow-app: 0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--bg-page);
   color: var(--text);
-  font-family: Inter, system-ui, sans-serif;
+  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  transition: background 180ms ease, color 180ms ease;
 }
 
 .assistant-fab {
@@ -9930,4 +9969,243 @@ body.custom-hover-label-active * {
   .dev-meta-actions .btn {
     flex: 1 1 180px;
   }
+}
+
+/* Theme */
+.theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-app);
+}
+
+.theme-switch-option {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.theme-switch-option:hover {
+  color: var(--text-strong);
+}
+
+.theme-switch-option.active {
+  background: linear-gradient(135deg, var(--accent), #38bdf8);
+  color: #ffffff;
+}
+
+html[data-theme="light"] body,
+html[data-theme="light"] .app-container {
+  background: var(--bg-page);
+}
+
+html[data-theme="light"] .topnav,
+html[data-theme="dark"] .topnav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+}
+
+html[data-theme="light"] .auth-pill,
+html[data-theme="light"] .auth-logout,
+html[data-theme="dark"] .auth-pill,
+html[data-theme="dark"] .auth-logout {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--text-strong);
+}
+
+html[data-theme="light"] .auth-user,
+html[data-theme="light"] .account-hero-name,
+html[data-theme="light"] .card-title,
+html[data-theme="light"] .section-title,
+html[data-theme="light"] .entity-title,
+html[data-theme="light"] .login-title,
+html[data-theme="light"] .topnav-brand,
+html[data-theme="dark"] .topnav-brand {
+  color: var(--text-strong);
+}
+
+html[data-theme="light"] .auth-role,
+html[data-theme="light"] .cc-subtitle,
+html[data-theme="light"] .entity-subtitle,
+html[data-theme="light"] .account-hero-email,
+html[data-theme="light"] .card-subtitle,
+html[data-theme="light"] .muted,
+html[data-theme="dark"] .muted {
+  color: var(--muted);
+}
+
+html[data-theme="light"] .cc-surface,
+html[data-theme="light"] .card,
+html[data-theme="light"] .account-stat-card,
+html[data-theme="light"] .account-favorite-row,
+html[data-theme="light"] .account-favorites-empty,
+html[data-theme="light"] .login-card,
+html[data-theme="light"] .admin-analytics-card,
+html[data-theme="light"] .admin-mini-card,
+html[data-theme="light"] .engineering-focus-card,
+html[data-theme="light"] .entity-kpi-card,
+html[data-theme="light"] .entity-card,
+html[data-theme="light"] .entity-schedule-card,
+html[data-theme="light"] .coverage-card,
+html[data-theme="light"] .dq-entity-card,
+html[data-theme="light"] .incidents-overview-card,
+html[data-theme="light"] .incident-card,
+html[data-theme="light"] .release-summary-card,
+html[data-theme="light"] .release-table-card,
+html[data-theme="light"] .logic-audit-card,
+html[data-theme="light"] .logic-audit-detail-card,
+html[data-theme="light"] .logic-audit-compare-card,
+html[data-theme="light"] .onboarding-card,
+html[data-theme="light"] .about-summary-card,
+html[data-theme="light"] .feedback-admin-card,
+html[data-theme="light"] .meta-workspace-validation-card,
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .dev-copy-card,
+html[data-theme="light"] .dep-graph-wrapper,
+html[data-theme="light"] .table-health-card,
+html[data-theme="light"] .impact-kpi-card,
+html[data-theme="light"] .impact-list-card,
+html[data-theme="light"] .click-summary-grid > div,
+html[data-theme="light"] .click-meta-grid > div,
+html[data-theme="light"] .click-stage-card,
+html[data-theme="light"] .click-stage-row,
+html[data-theme="light"] .click-view-row,
+html[data-theme="light"] .admin-ci-output,
+html[data-theme="light"] .history-toggle,
+html[data-theme="light"] .slow-summary-card,
+html[data-theme="light"] .slow-criteria-card,
+html[data-theme="light"] .night-kpi-card,
+html[data-theme="light"] .night-focus-card,
+html[data-theme="light"] .night-modal-card,
+html[data-theme="light"] .table-sql-card,
+html[data-theme="light"] .table-info-card,
+html[data-theme="light"] .dep-card-rich,
+html[data-theme="light"] .assistant-response-card,
+html[data-theme="light"] .assistant-stat {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--shadow-app);
+  color: var(--text);
+}
+
+html[data-theme="light"] .account-modal,
+html[data-theme="light"] .assistant-panel,
+html[data-theme="light"] .sql-modal,
+html[data-theme="light"] .entity-dev-modal-card {
+  background: var(--surface-panel-strong) !important;
+  border-color: var(--border-strong) !important;
+  color: var(--text);
+}
+
+html[data-theme="light"] .account-modal-backdrop,
+html[data-theme="light"] .assistant-backdrop {
+  background: rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme="light"] .btn,
+html[data-theme="light"] .btn-ghost,
+html[data-theme="light"] .btn-secondary,
+html[data-theme="light"] .auth-logout,
+html[data-theme="light"] .topnav-nav button,
+html[data-theme="light"] .pill,
+html[data-theme="light"] .entity-filter-dropdown button,
+html[data-theme="light"] .dbt-manifest-item:not(.static),
+html[data-theme="light"] .impact-layer-grid button,
+html[data-theme="light"] .slow-select-group button {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .btn-primary,
+html[data-theme="light"] .topnav-nav button.active,
+html[data-theme="light"] .pill-active,
+html[data-theme="light"] .history-toggle .btn.active,
+html[data-theme="light"] .slow-select-group button.active {
+  background: linear-gradient(135deg, var(--accent), #38bdf8) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea,
+html[data-theme="light"] .entity-search,
+html[data-theme="light"] .impact-control-input,
+html[data-theme="light"] .impact-control-select,
+html[data-theme="light"] .table-search-input,
+html[data-theme="light"] .night-window-input,
+html[data-theme="light"] .night-window-select,
+html[data-theme="light"] .entity-picker-input,
+html[data-theme="light"] .admin-field input,
+html[data-theme="light"] .admin-field select,
+html[data-theme="light"] .meta-workspace-page .admin-field textarea,
+html[data-theme="light"] .logic-audit-field select,
+html[data-theme="light"] .logic-audit-field input,
+html[data-theme="light"] .assistant-input,
+html[data-theme="light"] .login-form input,
+html[data-theme="light"] .account-form input,
+html[data-theme="light"] .about-feedback-textarea {
+  background: var(--surface-panel) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder,
+html[data-theme="light"] .assistant-context,
+html[data-theme="light"] .assistant-response-text,
+html[data-theme="light"] .click-label,
+html[data-theme="light"] .table-card-hint,
+html[data-theme="light"] .dbt-manifest-value,
+html[data-theme="light"] .click-stage-meta,
+html[data-theme="light"] .click-stage-head,
+html[data-theme="light"] .incident-card-meta {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] input:focus,
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus,
+html[data-theme="light"] .assistant-input:focus,
+html[data-theme="light"] .table-search-input:focus,
+html[data-theme="light"] .entity-picker-input:focus,
+html[data-theme="light"] .entity-search:focus {
+  border-color: var(--accent-strong) !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+  outline: none;
+}
+
+html[data-theme="light"] .entity-filter-dropdown,
+html[data-theme="light"] .sql-modal-code,
+html[data-theme="light"] .admin-ci-pre,
+html[data-theme="light"] .click-run-error,
+html[data-theme="light"] .dep-error,
+html[data-theme="light"] .dbt-manifest-item.static,
+html[data-theme="light"] .click-meta-block,
+html[data-theme="light"] .click-section-block {
+  background: var(--surface-panel) !important;
+  border-color: var(--border) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .table tr:hover,
+html[data-theme="light"] .clickable:hover,
+html[data-theme="light"] .home-route-card:hover,
+html[data-theme="light"] .onboarding-card:hover,
+html[data-theme="light"] .meta-workspace-object-card:hover {
+  background: rgba(37, 99, 235, 0.08) !important;
 }

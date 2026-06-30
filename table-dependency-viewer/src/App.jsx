@@ -39,6 +39,7 @@ const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED === "true";
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 const TOKEN_KEY = "tdv_access_token";
 const USER_KEY = "tdv_user_profile";
+const THEME_KEY = "tdv_theme";
 
 export default function App() {
   const location = useLocation();
@@ -57,6 +58,12 @@ export default function App() {
     }
   });
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "dark";
+    const saved = window.localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia?.("(prefers-color-scheme: light)")?.matches ? "light" : "dark";
+  });
 
   useEffect(() => {
     if (!AUTH_ENABLED) return;
@@ -94,6 +101,13 @@ export default function App() {
       details: { search: location.search || "" },
     });
   }, [authToken, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
 
   const normalizeFqn = useCallback((value) => {
     if (typeof value !== "string") return null;
@@ -408,6 +422,8 @@ export default function App() {
         onChangeView={openView}
         authEnabled={AUTH_ENABLED}
         userProfile={userProfile}
+        currentTheme={theme}
+        onThemeChange={setTheme}
         onLogout={() => {
           if (AUTH_ENABLED && authToken) {
             fetch(`${API_BASE}/auth/logout`, { method: "POST", keepalive: true }).catch(() => {});

@@ -65,6 +65,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [clickBranchFile, setClickBranchFile] = useState(null);
   const [editorVisible, setEditorVisible] = useState(false);
   const branchScopedActive = Boolean(branchCatalog.branch_name);
+  const branchHasInvalidObjects = Number(branchValidation?.summary?.invalid || 0) > 0;
 
   const taskIdValid = /^DWH-\d+$/.test(String(taskId || "").trim().toUpperCase());
   const suggestedBranchName = useMemo(
@@ -269,6 +270,11 @@ export default function MetaWorkspacePage({ userProfile }) {
       setError("Укажите ветку и base-ветку");
       return;
     }
+    if (branchHasInvalidObjects) {
+      setError(null);
+      setMessage("Сохранить в ветку можно только после того, как все ошибки проверки будут исправлены.");
+      return;
+    }
     setSyncingBranch(true);
     setError(null);
     setMessage(null);
@@ -405,6 +411,42 @@ export default function MetaWorkspacePage({ userProfile }) {
     await loadBranchCatalog(branchName.trim(), { silent: true });
   };
 
+  const handleAutofillDepends = async (item) => {
+    if (!item?.normalized?.yaml_content) return;
+    setError(null);
+    setMessage(null);
+    try {
+      const bundle = await metaWorkspaceApi.branchGpBundle({
+        branch_name: branchName.trim(),
+        entity_name: item.entity_name,
+        schema_name: item.schema_name,
+        table_name: item.table_name,
+      });
+      await metaWorkspaceApi.saveBranchGpBundle({
+        branch_name: branchName.trim(),
+        base_branch: baseBranch.trim(),
+        task_id: taskId,
+        entity_name: item.entity_name,
+        schema_name: item.schema_name,
+        table_name: item.table_name,
+        yaml_content: item.normalized.yaml_content,
+        recreate_sql: bundle?.recreate_sql || "",
+        insert_sql: bundle?.insert_sql || "",
+        truncate_sql: bundle?.truncate_sql || "",
+        expected_revision: bundle?.revision || null,
+      });
+      setMessage(`Зависимости автоматически обновлены для ${item.object_key}.`);
+      await loadBranchCatalog(branchName.trim(), { silent: true });
+      const validationData = await metaWorkspaceApi.validateAll({
+        branch_name: branchName.trim(),
+        base_branch: baseBranch.trim(),
+      });
+      setBranchValidation(validationData || null);
+    } catch (err) {
+      setError(err.message || "Не удалось автоматически проставить depends_on");
+    }
+  };
+
   const jumpToGenerator = (nextMode) => {
     setMode(nextMode);
     setActiveSelection(null);
@@ -426,7 +468,7 @@ export default function MetaWorkspacePage({ userProfile }) {
             <div className="section-title">Meta Workspace</div>
             <div className="section-subtitle">Выберите git-ветку, найдите измененные объекты и откройте их в редакторе прямо из рабочего контура релиза.</div>
           </div>
-          <div className="meta-workspace-badge">Admin only</div>
+          <div className="meta-workspace-badge">Engineer workspace</div>
         </div>
 
         {(message || error) && (
@@ -762,6 +804,17 @@ export default function MetaWorkspacePage({ userProfile }) {
                       <ul className="meta-workspace-validation-points bad">
                         {item.errors.map((point, idx) => <li key={`${item.object_key}-err-${idx}`}>{point}</li>)}
                       </ul>
+                    ) : null}
+                    {item.schema_name && item.table_name && item.entity_name && item.normalized?.yaml_content && item.errors?.some((point) => String(point).includes("depends_on")) ? (
+                      <div className="meta-workspace-validation-actions-inline">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => handleAutofillDepends(item)}
+                        >
+                          Проставить зависимости
+                        </button>
+                      </div>
                     ) : null}
                     {item.warnings?.length ? (
                       <ul className="meta-workspace-validation-points warn">

@@ -1550,6 +1550,8 @@ def sync_meta_workspace_branch(
     *,
     engine,
     base_dir: Path,
+    workspace_root_value: str,
+    prod_root_value: str,
     entity_dev_root_value: str,
     click_dev_root_value: str,
     git_repo_value: str,
@@ -1559,7 +1561,25 @@ def sync_meta_workspace_branch(
     branch_name: str,
     base_branch: str,
     author: str,
+    dev_database_url: str,
 ) -> dict[str, Any]:
+    validation = validate_meta_workspace_branch(
+        engine=engine,
+        base_dir=base_dir,
+        git_repo_value=git_repo_value,
+        entity_git_root_value=entity_git_root_value,
+        click_git_root_value=click_git_root_value,
+        workspace_root_value=workspace_root_value,
+        workspace_owner=author,
+        prod_root_value=prod_root_value,
+        dev_root_value=entity_dev_root_value,
+        branch_name=branch_name,
+        base_branch=base_branch,
+        dev_database_url=dev_database_url,
+    )
+    invalid_count = int((validation.get("summary") or {}).get("invalid") or 0)
+    if invalid_count > 0:
+        raise ValueError("Сохранить в ветку можно только после того, как все ошибки проверки будут исправлены.")
     return _sync_meta_workspace_branch(
         engine=engine,
         base_dir=base_dir,

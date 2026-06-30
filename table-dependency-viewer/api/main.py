@@ -1354,6 +1354,8 @@ def sync_admin_meta_workspace_branch(payload: MetaWorkspaceSyncPayload, request:
         result = sync_meta_workspace_branch(
             engine=engine,
             base_dir=BASE_DIR,
+            workspace_root_value=META_WORKSPACE_ROOT,
+            prod_root_value=ENTITY_META_DIR,
             entity_dev_root_value=DEV_ENTITY_META_DIR,
             click_dev_root_value=DEV_CLICK_META_DIR,
             git_repo_value=ENTITY_META_GIT_REPO,
@@ -1363,6 +1365,7 @@ def sync_admin_meta_workspace_branch(payload: MetaWorkspaceSyncPayload, request:
             branch_name=payload.branch_name,
             base_branch=payload.base_branch,
             author=user.email,
+            dev_database_url=DEV_DATABASE_URL,
         )
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc))

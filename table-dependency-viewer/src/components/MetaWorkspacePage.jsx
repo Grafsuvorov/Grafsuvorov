@@ -61,6 +61,7 @@ export default function MetaWorkspacePage({ userProfile }) {
   const [branchTree, setBranchTree] = useState({ gp_entities: [], click_schemas: [] });
   const [treeLoading, setTreeLoading] = useState(false);
   const [branchFileLoading, setBranchFileLoading] = useState(false);
+  const [autofillDependsKey, setAutofillDependsKey] = useState("");
   const [gpBranchBundle, setGpBranchBundle] = useState(null);
   const [clickBranchFile, setClickBranchFile] = useState(null);
   const [editorVisible, setEditorVisible] = useState(false);
@@ -413,6 +414,8 @@ export default function MetaWorkspacePage({ userProfile }) {
 
   const handleAutofillDepends = async (item) => {
     if (!item?.normalized?.yaml_content) return;
+    const itemKey = String(item.object_key || "");
+    setAutofillDependsKey(itemKey);
     setError(null);
     setMessage(null);
     try {
@@ -444,6 +447,8 @@ export default function MetaWorkspacePage({ userProfile }) {
       setBranchValidation(validationData || null);
     } catch (err) {
       setError(err.message || "Не удалось автоматически проставить depends_on");
+    } finally {
+      setAutofillDependsKey("");
     }
   };
 
@@ -810,9 +815,10 @@ export default function MetaWorkspacePage({ userProfile }) {
                         <button
                           type="button"
                           className="btn btn-secondary"
+                          disabled={autofillDependsKey === item.object_key}
                           onClick={() => handleAutofillDepends(item)}
                         >
-                          Проставить зависимости
+                          {autofillDependsKey === item.object_key ? "Проставляем..." : "Проставить зависимости"}
                         </button>
                       </div>
                     ) : null}

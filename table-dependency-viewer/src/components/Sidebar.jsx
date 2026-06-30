@@ -153,22 +153,24 @@ export default function Sidebar({
 
         {/* RIGHT */}
         <div className="topnav-right">
-          <div className="theme-switch" aria-label="Переключение темы">
-            <button
-              type="button"
-              className={`theme-switch-option ${currentTheme === "light" ? "active" : ""}`}
-              onClick={() => onThemeChange?.("light")}
-            >
-              Светлая
-            </button>
-            <button
-              type="button"
-              className={`theme-switch-option ${currentTheme === "dark" ? "active" : ""}`}
-              onClick={() => onThemeChange?.("dark")}
-            >
-              Тёмная
-            </button>
-          </div>
+          {userProfile?.role === "admin" ? (
+            <div className="theme-switch" aria-label="Переключение темы">
+              <button
+                type="button"
+                className={`theme-switch-option ${currentTheme === "light" ? "active" : ""}`}
+                onClick={() => onThemeChange?.("light")}
+              >
+                Светлая
+              </button>
+              <button
+                type="button"
+                className={`theme-switch-option ${currentTheme === "dark" ? "active" : ""}`}
+                onClick={() => onThemeChange?.("dark")}
+              >
+                Тёмная
+              </button>
+            </div>
+          ) : null}
           {authEnabled && userProfile && (
             <>
             <div className="auth-pill">

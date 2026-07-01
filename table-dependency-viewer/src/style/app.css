@@ -24,6 +24,8 @@ html[data-theme="dark"] {
   --shadow-app: 0 22px 50px rgba(2, 8, 23, 0.28);
   --container-width: 1440px;
   --container-padding: 32px;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 html[data-theme="light"] {
@@ -58,7 +60,7 @@ body {
   margin: 0;
   background: var(--bg-page);
   color: var(--text);
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   transition: background 180ms ease, color 180ms ease;
 }
 
@@ -10511,4 +10513,365 @@ html[data-theme="light"] .release-object-link {
 
 html[data-theme="light"] .release-object-link:hover {
   text-decoration-color: rgba(37, 99, 235, 0.55);
+}
+
+html[data-theme="light"] .table-search-badge.current {
+  color: #334155 !important;
+  background: rgba(148, 163, 184, 0.14) !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+html[data-theme="light"] .table-search-badge.ohd,
+html[data-theme="light"] .db-badge,
+html[data-theme="light"] .coverage-pill,
+html[data-theme="light"] .logic-audit-tag,
+html[data-theme="light"] .meta-workspace-tree-summary.changed::after,
+html[data-theme="light"] .meta-workspace-file-button.changed::after {
+  color: #1d4ed8 !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  border-color: rgba(37, 99, 235, 0.2) !important;
+}
+
+html[data-theme="light"] .account-favorite-row,
+html[data-theme="light"] .account-favorites-empty,
+html[data-theme="light"] .feedback-admin-card,
+html[data-theme="light"] .logic-audit-card,
+html[data-theme="light"] .logic-audit-detail-card,
+html[data-theme="light"] .logic-audit-compare-card,
+html[data-theme="light"] .admin-analytics-card,
+html[data-theme="light"] .admin-spotlight-card,
+html[data-theme="light"] .admin-spotlight-metrics > div,
+html[data-theme="light"] .admin-mini-card,
+html[data-theme="light"] .admin-row,
+html[data-theme="light"] .yt-workload-shell,
+html[data-theme="light"] .yt-workload-kpi,
+html[data-theme="light"] .yt-analytics-block,
+html[data-theme="light"] .yt-analytics-row,
+html[data-theme="light"] .yt-analytics-task-row,
+html[data-theme="light"] .release-list-row,
+html[data-theme="light"] .release-objects-row,
+html[data-theme="light"] .dev-meta-generator,
+html[data-theme="light"] .dev-meta-file-block,
+html[data-theme="light"] .dev-meta-editor-shell,
+html[data-theme="light"] .dev-meta-tree-entity,
+html[data-theme="light"] .dev-meta-tree-schema,
+html[data-theme="light"] .dev-meta-dag-status,
+html[data-theme="light"] .dev-meta-dag-card,
+html[data-theme="light"] .dev-meta-file,
+html[data-theme="light"] .meta-workspace-page,
+html[data-theme="light"] .meta-workspace-hero,
+html[data-theme="light"] .meta-workspace-selection-bar,
+html[data-theme="light"] .meta-workspace-validation,
+html[data-theme="light"] .meta-workspace-branch-column,
+html[data-theme="light"] .meta-workspace-entity-group,
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .meta-workspace-file-button {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] .account-favorite-title,
+html[data-theme="light"] .admin-spotlight-title,
+html[data-theme="light"] .admin-mini-card .mini-title,
+html[data-theme="light"] .dev-meta-runbook-title,
+html[data-theme="light"] .dev-meta-feedback-title,
+html[data-theme="light"] .dev-meta-file-short,
+html[data-theme="light"] .meta-workspace-object-name,
+html[data-theme="light"] .meta-workspace-selection-title,
+html[data-theme="light"] .meta-workspace-validation-title,
+html[data-theme="light"] .dev-meta-tree-summary,
+html[data-theme="light"] .meta-workspace-tree-summary,
+html[data-theme="light"] .feedback-admin-topic-badge,
+html[data-theme="light"] .yt-value,
+html[data-theme="light"] .yt-workload-kpi .value,
+html[data-theme="light"] .logic-audit-detail-title,
+html[data-theme="light"] .logic-audit-fqn-big {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .account-favorite-meta,
+html[data-theme="light"] .admin-analytics-card .hint,
+html[data-theme="light"] .admin-spotlight-metrics span,
+html[data-theme="light"] .admin-mini-card .label,
+html[data-theme="light"] .dev-meta-feedback-text,
+html[data-theme="light"] .dev-meta-file-path,
+html[data-theme="light"] .dev-meta-file-meta,
+html[data-theme="light"] .meta-workspace-object-meta,
+html[data-theme="light"] .meta-workspace-validation-meta,
+html[data-theme="light"] .logic-audit-type,
+html[data-theme="light"] .logic-audit-mini-title,
+html[data-theme="light"] .yt-workload-note,
+html[data-theme="light"] .yt-workload-kpi .label,
+html[data-theme="light"] .yt-workload-kpi .hint,
+html[data-theme="light"] .feedback-admin-date,
+html[data-theme="light"] .feedback-admin-meta,
+html[data-theme="light"] .feedback-admin-message {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .analytics-run-list-plain .analytics-run-row,
+html[data-theme="light"] .analytics-plain-table .analytics-row,
+html[data-theme="light"] .yt-analytics-row,
+html[data-theme="light"] .yt-analytics-task-row,
+html[data-theme="light"] .release-list-row,
+html[data-theme="light"] .release-objects-row,
+html[data-theme="light"] .admin-row {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 12px;
+  padding: 12px 14px !important;
+}
+
+html[data-theme="light"] .analytics-run-list-plain .analytics-run-row:hover,
+html[data-theme="light"] .analytics-plain-table .analytics-row:hover,
+html[data-theme="light"] .yt-analytics-row:hover,
+html[data-theme="light"] .yt-analytics-task-row:hover,
+html[data-theme="light"] .release-list-row:hover,
+html[data-theme="light"] .release-objects-row:hover,
+html[data-theme="light"] .admin-row:hover {
+  background: rgba(37, 99, 235, 0.05) !important;
+}
+
+html[data-theme="light"] .analytics-bar-link,
+html[data-theme="light"] .analytics-cell-name,
+html[data-theme="light"] .account-favorite-title,
+html[data-theme="light"] .dev-meta-file,
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .meta-workspace-file-button,
+html[data-theme="light"] .release-object-link {
+  font-family: var(--font-sans);
+}
+
+html[data-theme="light"] .mono,
+html[data-theme="light"] code,
+html[data-theme="light"] pre,
+html[data-theme="light"] .dev-meta-file-editor textarea,
+html[data-theme="light"] .sql-modal-code,
+html[data-theme="light"] .dev-copy-failed-log {
+  font-family: var(--font-mono);
+}
+
+html[data-theme="light"] .dbt-manifest-block,
+html[data-theme="light"] .dbt-manifest-item,
+html[data-theme="light"] .dbt-manifest-item.static,
+html[data-theme="light"] .dbt-manifest-wrap {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .dbt-manifest-value,
+html[data-theme="light"] .dbt-manifest-item > span {
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .admin-ci-output,
+html[data-theme="light"] .admin-ci-pre,
+html[data-theme="light"] .dev-copy-report-table-wrap,
+html[data-theme="light"] .dev-meta-lock-bar,
+html[data-theme="light"] .dev-meta-scoped-empty,
+html[data-theme="light"] .dev-copy-failed-item,
+html[data-theme="light"] .dev-copy-failed-log {
+  background: rgba(248, 250, 252, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .dev-meta-feedback.success,
+html[data-theme="light"] .dev-meta-dag-state-success {
+  background: rgba(22, 163, 74, 0.08) !important;
+  border-color: rgba(22, 163, 74, 0.2) !important;
+}
+
+html[data-theme="light"] .dev-meta-feedback.warning,
+html[data-theme="light"] .dev-meta-dag-state-queued,
+html[data-theme="light"] .dev-meta-dag-state-running {
+  background: rgba(245, 158, 11, 0.08) !important;
+  border-color: rgba(245, 158, 11, 0.18) !important;
+}
+
+html[data-theme="light"] .dev-meta-feedback.error,
+html[data-theme="light"] .dev-meta-dag-state-failed {
+  background: rgba(220, 38, 38, 0.08) !important;
+  border-color: rgba(220, 38, 38, 0.18) !important;
+}
+
+html[data-theme="light"] .dev-meta-feedback.info {
+  background: rgba(37, 99, 235, 0.08) !important;
+  border-color: rgba(37, 99, 235, 0.18) !important;
+}
+
+html[data-theme="light"] .dev-meta-tab,
+html[data-theme="light"] .meta-workspace-branch-pill,
+html[data-theme="light"] .meta-workspace-branch-option {
+  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .dev-meta-tab:hover,
+html[data-theme="light"] .meta-workspace-object-card:hover,
+html[data-theme="light"] .meta-workspace-file-button:hover,
+html[data-theme="light"] .dev-meta-file:hover:not(:disabled),
+html[data-theme="light"] .meta-workspace-branch-option:hover,
+html[data-theme="light"] .meta-workspace-branch-pill:hover {
+  background: rgba(37, 99, 235, 0.06) !important;
+  border-color: rgba(37, 99, 235, 0.24) !important;
+}
+
+html[data-theme="light"] .dev-meta-tab.active,
+html[data-theme="light"] .meta-workspace-branch-pill.active,
+html[data-theme="light"] .meta-workspace-branch-option.active,
+html[data-theme="light"] .dev-meta-file.active {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.14), rgba(14, 165, 233, 0.12)) !important;
+  border-color: rgba(37, 99, 235, 0.28) !important;
+  color: #1d4ed8 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .meta-workspace-tree-summary.entity,
+html[data-theme="light"] .meta-workspace-tree-summary.schema,
+html[data-theme="light"] .meta-workspace-tree-summary.table,
+html[data-theme="light"] .dev-meta-tree-summary.schema,
+html[data-theme="light"] .meta-workspace-badge {
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .meta-workspace-page .admin-field > span,
+html[data-theme="light"] .dev-meta-dag-card .label {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .meta-workspace-page .btn-secondary,
+html[data-theme="light"] .meta-workspace-page .btn-danger {
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .analytics-block,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .table-search-panel,
+html[data-theme="light"] .engineering-block,
+html[data-theme="light"] .engineering-focus-card,
+html[data-theme="light"] .incident-card,
+html[data-theme="light"] .incident-run-card,
+html[data-theme="light"] .history-row-block,
+html[data-theme="light"] .dq-card,
+html[data-theme="light"] .about-article-block,
+html[data-theme="light"] .dev-meta-runbook-card,
+html[data-theme="light"] .dev-meta-runbook,
+html[data-theme="light"] .dev-meta-validation,
+html[data-theme="light"] .dev-copy-card,
+html[data-theme="light"] .dev-meta-dag-card,
+html[data-theme="light"] .yt-workload-tooltip,
+html[data-theme="light"] .feedback-admin-kpi,
+html[data-theme="light"] .logic-audit-kpi,
+html[data-theme="light"] .logic-audit-explain,
+html[data-theme="light"] .logic-audit-target-row,
+html[data-theme="light"] .table-sql-card,
+html[data-theme="light"] .table-sql-type-block,
+html[data-theme="light"] .click-section-block,
+html[data-theme="light"] .click-stage-card,
+html[data-theme="light"] .click-stage-row,
+html[data-theme="light"] .click-view-row,
+html[data-theme="light"] .incident-card-times,
+html[data-theme="light"] .incident-card-meta,
+html[data-theme="light"] .entity-expanded-panel,
+html[data-theme="light"] .night-focus-card,
+html[data-theme="light"] .dep-card-rich,
+html[data-theme="light"] .dep-card,
+html[data-theme="light"] .dep-empty,
+html[data-theme="light"] .dep-error,
+html[data-theme="light"] .inconsistency-page .card,
+html[data-theme="light"] .search-page .card,
+html[data-theme="light"] .order-breaches-block .card,
+html[data-theme="light"] .table-page .card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] .analytics-block .section-title,
+html[data-theme="light"] .dashboard-panel .section-title,
+html[data-theme="light"] .incident-card-id,
+html[data-theme="light"] .dep-card-title,
+html[data-theme="light"] .table-sql-type,
+html[data-theme="light"] .about-article-title,
+html[data-theme="light"] .engineering-block-head,
+html[data-theme="light"] .feedback-admin-kpi .value,
+html[data-theme="light"] .logic-audit-kpi .value,
+html[data-theme="light"] .click-stage-head,
+html[data-theme="light"] .dev-meta-file-name,
+html[data-theme="light"] .dev-meta-editor-path,
+html[data-theme="light"] .click-meta-block strong,
+html[data-theme="light"] .click-label strong {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .incident-card-meta,
+html[data-theme="light"] .incident-card-times,
+html[data-theme="light"] .dep-card-meta,
+html[data-theme="light"] .click-stage-meta,
+html[data-theme="light"] .click-label,
+html[data-theme="light"] .table-card-hint,
+html[data-theme="light"] .engineering-status,
+html[data-theme="light"] .dev-meta-runbook-list,
+html[data-theme="light"] .dev-meta-editor-path .muted,
+html[data-theme="light"] .feedback-admin-kpi .label,
+html[data-theme="light"] .logic-audit-kpi .label,
+html[data-theme="light"] .about-article-text {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .table-search-panel,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .analytics-block,
+html[data-theme="light"] .engineering-block,
+html[data-theme="light"] .release-summary-card,
+html[data-theme="light"] .feedback-admin-page,
+html[data-theme="light"] .logic-audit-card,
+html[data-theme="light"] .dev-meta-page,
+html[data-theme="light"] .account-shell,
+html[data-theme="light"] .incident-page .cc-surface,
+html[data-theme="light"] .cc-surface {
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] .table-search-empty,
+html[data-theme="light"] .account-favorites-empty,
+html[data-theme="light"] .dev-meta-scoped-empty {
+  background: rgba(248, 250, 252, 0.72) !important;
+  border-color: rgba(148, 163, 184, 0.22) !important;
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .table-search-action,
+html[data-theme="light"] .table-search-meta,
+html[data-theme="light"] .table-search-empty,
+html[data-theme="light"] .admin-ci-check,
+html[data-theme="light"] .top-label-type,
+html[data-theme="light"] .top-hint {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .incidents-top-list {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.92)) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .top-list-title,
+html[data-theme="light"] .top-label,
+html[data-theme="light"] .top-count {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .incident-action-link {
+  color: var(--accent) !important;
+}
+
+html[data-theme="light"] .incident-action-link:hover {
+  color: #1d4ed8 !important;
 }

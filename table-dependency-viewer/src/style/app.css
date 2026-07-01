@@ -11067,3 +11067,258 @@ html[data-theme="light"] .engineering-grid-secondary,
 html[data-theme="light"] .engineering-focus-grid {
   gap: 14px !important;
 }
+
+html[data-theme="light"] .recharts-cartesian-axis-tick-value,
+html[data-theme="light"] .recharts-legend-item-text,
+html[data-theme="light"] .recharts-label,
+html[data-theme="light"] .recharts-text {
+  fill: #64748b !important;
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .health-card,
+html[data-theme="light"] .cc-hero-copy,
+html[data-theme="light"] .home-route-card,
+html[data-theme="light"] .order-row,
+html[data-theme="light"] .order-impact,
+html[data-theme="light"] .order-impact-group,
+html[data-theme="light"] .order-impact-item,
+html[data-theme="light"] .dq-summary-card,
+html[data-theme="light"] .dq-alert-row {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 252, 0.94)) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+}
+
+html[data-theme="light"] .order-impact-grid,
+html[data-theme="light"] .dq-alerts-list {
+  gap: 10px !important;
+}
+
+html[data-theme="light"] .order-impact-item,
+html[data-theme="light"] .order-row,
+html[data-theme="light"] .dq-alert-row {
+  padding: 10px 12px !important;
+}
+
+html[data-theme="light"] .order-impact-title,
+html[data-theme="light"] .order-impact-group-title,
+html[data-theme="light"] .dq-alert-title,
+html[data-theme="light"] .home-route-title,
+html[data-theme="light"] .system-ok-title {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .order-impact-path,
+html[data-theme="light"] .order-impact-note,
+html[data-theme="light"] .home-route-desc,
+html[data-theme="light"] .system-ok-sub,
+html[data-theme="light"] .dq-alert-sub,
+html[data-theme="light"] .dq-alert-date {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .analytics-bar-row,
+html[data-theme="light"] .analytics-compare-row {
+  grid-template-columns: minmax(260px, 1.9fr) minmax(220px, 2.4fr) minmax(90px, 0.8fr) !important;
+  gap: 16px !important;
+  padding: 6px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .analytics-compare-row {
+  grid-template-columns: minmax(260px, 1.5fr) minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(170px, 0.9fr) !important;
+}
+
+html[data-theme="light"] .analytics-run-row:last-child,
+html[data-theme="light"] .analytics-bar-row:last-child,
+html[data-theme="light"] .analytics-compare-row:last-child,
+html[data-theme="light"] .night-window-row:last-child,
+html[data-theme="light"] .entity-table-row:last-child,
+html[data-theme="light"] .engineering-table-row:last-child,
+html[data-theme="light"] .admin-activity-item:last-child {
+  border-bottom: 0 !important;
+}
+
+html[data-theme="light"] .analytics-bar-label,
+html[data-theme="light"] .analytics-compare-meta,
+html[data-theme="light"] .analytics-run-main {
+  min-width: 0;
+}
+
+html[data-theme="light"] .analytics-bar-label,
+html[data-theme="light"] .analytics-cell-name,
+html[data-theme="light"] .analytics-cell-entity {
+  white-space: normal !important;
+  line-height: 1.4;
+}
+
+html[data-theme="light"] .analytics-block {
+  overflow: hidden;
+}
+
+html[data-theme="light"] .analytics-bars,
+html[data-theme="light"] .analytics-compare-list,
+html[data-theme="light"] .analytics-run-list {
+  gap: 0 !important;
+}
+
+html[data-theme="light"] .analytics-run-list-plain .analytics-run-row,
+html[data-theme="light"] .analytics-plain-table .analytics-row,
+html[data-theme="light"] .night-window-row,
+html[data-theme="light"] .entity-table-row,
+html[data-theme="light"] .engineering-table-row {
+  padding-top: 12px !important;
+  padding-bottom: 12px !important;
+}
+
+html[data-theme="light"] .night-window-row,
+html[data-theme="light"] .entity-table-row,
+html[data-theme="light"] .engineering-table-row,
+html[data-theme="light"] .admin-activity-item {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  background: transparent !important;
+}
+
+html[data-theme="light"] .entity-schema-block,
+html[data-theme="light"] .entity-expanded-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 250, 252, 0.93)) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .entity-table-list,
+html[data-theme="light"] .engineering-table,
+html[data-theme="light"] .admin-activity-feed {
+  gap: 0 !important;
+}
+
+html[data-theme="light"] .entity-table-row {
+  grid-template-columns: minmax(260px, 1fr) 150px 180px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+}
+
+html[data-theme="light"] .entity-table-name,
+html[data-theme="light"] .entity-expanded-title,
+html[data-theme="light"] .entity-history-day {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .entity-table-duration,
+html[data-theme="light"] .entity-history-meta,
+html[data-theme="light"] .entity-meta-label,
+html[data-theme="light"] .entity-schema-count {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .account-stat-card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 252, 0.94)) !important;
+}
+
+html[data-theme="light"] .account-stat-card .label,
+html[data-theme="light"] .account-favorite-meta {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .account-stat-card .value,
+html[data-theme="light"] .account-favorite-title {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .admin-spotlight-card,
+html[data-theme="light"] .admin-mini-card,
+html[data-theme="light"] .feedback-admin-kpi {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(249, 250, 252, 0.94)) !important;
+}
+
+html[data-theme="light"] .admin-spotlight-badge {
+  background: rgba(22, 163, 74, 0.12) !important;
+  border-color: rgba(22, 163, 74, 0.2) !important;
+  color: #166534 !important;
+}
+
+html[data-theme="light"] .admin-activity-item {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+}
+
+html[data-theme="light"] .admin-primary,
+html[data-theme="light"] .admin-spotlight-title,
+html[data-theme="light"] .feedback-admin-kpi .value {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .admin-header,
+html[data-theme="light"] .admin-activity-time,
+html[data-theme="light"] .admin-mini-card .label {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .meta-workspace-page,
+html[data-theme="light"] .meta-workspace-hero,
+html[data-theme="light"] .meta-workspace-selection-bar,
+html[data-theme="light"] .meta-workspace-validation,
+html[data-theme="light"] .meta-workspace-branch-column {
+  padding: 16px 18px !important;
+}
+
+html[data-theme="light"] .meta-workspace-page .dev-meta-generator,
+html[data-theme="light"] .meta-workspace-page .dev-meta-file-block,
+html[data-theme="light"] .meta-workspace-page .dev-meta-editor-shell,
+html[data-theme="light"] .meta-workspace-page .dev-meta-validation,
+html[data-theme="light"] .meta-workspace-page .dev-meta-dag-status {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+html[data-theme="light"] .meta-workspace-validation-list,
+html[data-theme="light"] .meta-workspace-table-list,
+html[data-theme="light"] .meta-workspace-tree-files {
+  gap: 4px !important;
+}
+
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .meta-workspace-file-button {
+  padding: 8px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+html[data-theme="light"] .meta-workspace-object-card:hover,
+html[data-theme="light"] .meta-workspace-file-button:hover {
+  background: rgba(37, 99, 235, 0.05) !important;
+}
+
+html[data-theme="light"] .dev-meta-tab,
+html[data-theme="light"] .about-tab {
+  color: var(--text) !important;
+}
+
+html[data-theme="light"] .about-tab.active {
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .about-summary-title,
+html[data-theme="light"] .onboarding-step-title,
+html[data-theme="light"] .onboarding-card-title,
+html[data-theme="light"] .onboarding-map-title,
+html[data-theme="light"] .onboarding-flow-title {
+  color: var(--text-strong) !important;
+}

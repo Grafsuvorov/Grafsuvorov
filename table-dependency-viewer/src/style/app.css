@@ -10875,3 +10875,195 @@ html[data-theme="light"] .incident-action-link {
 html[data-theme="light"] .incident-action-link:hover {
   color: #1d4ed8 !important;
 }
+
+html[data-theme="light"] .health-card,
+html[data-theme="light"] .dq-summary-card,
+html[data-theme="light"] .dq-alert-row,
+html[data-theme="light"] .order-impact,
+html[data-theme="light"] .order-impact-item,
+html[data-theme="light"] .history-row-block,
+html[data-theme="light"] .account-stat-card,
+html[data-theme="light"] .admin-activity-item,
+html[data-theme="light"] .engineering-kpi,
+html[data-theme="light"] .engineering-focus-card,
+html[data-theme="light"] .engineering-focus-row,
+html[data-theme="light"] .engineering-table-row,
+html[data-theme="light"] .onboarding-card,
+html[data-theme="light"] .onboarding-area-card,
+html[data-theme="light"] .onboarding-flow-card,
+html[data-theme="light"] .onboarding-map-card,
+html[data-theme="light"] .about-article-block,
+html[data-theme="light"] .dev-copy-section,
+html[data-theme="light"] .dev-copy-card,
+html[data-theme="light"] .dev-copy-report-table-wrap,
+html[data-theme="light"] .meta-workspace-validation-card,
+html[data-theme="light"] .meta-workspace-selection-bar,
+html[data-theme="light"] .meta-workspace-hero,
+html[data-theme="light"] .meta-workspace-branch-column,
+html[data-theme="light"] .meta-workspace-page .dev-meta-generator,
+html[data-theme="light"] .meta-workspace-page .dev-meta-file-block,
+html[data-theme="light"] .meta-workspace-page .dev-meta-editor-shell,
+html[data-theme="light"] .meta-workspace-page .dev-meta-validation,
+html[data-theme="light"] .meta-workspace-page .dev-meta-dag-status {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(250, 251, 253, 0.94)) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04) !important;
+}
+
+html[data-theme="light"] .health-card {
+  max-width: 340px;
+}
+
+html[data-theme="light"] .health-label,
+html[data-theme="light"] .health-meta,
+html[data-theme="light"] .health-trend,
+html[data-theme="light"] .dq-summary-label,
+html[data-theme="light"] .dq-summary-hint,
+html[data-theme="light"] .dq-alert-sub,
+html[data-theme="light"] .dq-alert-date,
+html[data-theme="light"] .order-impact-note,
+html[data-theme="light"] .order-impact-path,
+html[data-theme="light"] .account-hero-email,
+html[data-theme="light"] .account-stat-card .label,
+html[data-theme="light"] .admin-activity-time,
+html[data-theme="light"] .engineering-kpi .label,
+html[data-theme="light"] .engineering-kpi .hint,
+html[data-theme="light"] .engineering-table-head,
+html[data-theme="light"] .onboarding-card-desc,
+html[data-theme="light"] .onboarding-map-text,
+html[data-theme="light"] .onboarding-flow-list,
+html[data-theme="light"] .about-article-text,
+html[data-theme="light"] .dev-copy-section-mark {
+  color: var(--muted) !important;
+}
+
+html[data-theme="light"] .dq-alert-title,
+html[data-theme="light"] .order-impact-title,
+html[data-theme="light"] .order-impact-group-title,
+html[data-theme="light"] .account-stat-card .value,
+html[data-theme="light"] .engineering-kpi .value,
+html[data-theme="light"] .engineering-primary,
+html[data-theme="light"] .onboarding-card-title,
+html[data-theme="light"] .onboarding-map-title,
+html[data-theme="light"] .onboarding-flow-title,
+html[data-theme="light"] .about-article-title,
+html[data-theme="light"] .health-score {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .history-row-block,
+html[data-theme="light"] .dq-alert-row,
+html[data-theme="light"] .order-impact-item,
+html[data-theme="light"] .engineering-focus-row,
+html[data-theme="light"] .engineering-table-row,
+html[data-theme="light"] .admin-activity-item,
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .meta-workspace-file-button,
+html[data-theme="light"] .dev-meta-file {
+  background: rgba(255, 255, 255, 0.52) !important;
+}
+
+html[data-theme="light"] .analytics-block,
+html[data-theme="light"] .table-search-panel,
+html[data-theme="light"] .dashboard-panel,
+html[data-theme="light"] .engineering-block,
+html[data-theme="light"] .feedback-admin-page,
+html[data-theme="light"] .account-shell,
+html[data-theme="light"] .dev-meta-page,
+html[data-theme="light"] .meta-workspace-page,
+html[data-theme="light"] .cc-surface {
+  border-radius: 16px !important;
+  padding: 22px 24px !important;
+}
+
+html[data-theme="light"] .analytics-run-list-plain .analytics-run-row,
+html[data-theme="light"] .analytics-plain-table .analytics-row,
+html[data-theme="light"] .night-window-row,
+html[data-theme="light"] .yt-analytics-row,
+html[data-theme="light"] .yt-analytics-task-row,
+html[data-theme="light"] .release-list-row,
+html[data-theme="light"] .release-objects-row,
+html[data-theme="light"] .engineering-table-row {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-top: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .analytics-block-actions,
+html[data-theme="light"] .night-panel-actions,
+html[data-theme="light"] .meta-workspace-validation-actions,
+html[data-theme="light"] .meta-workspace-context-head,
+html[data-theme="light"] .engineering-block-head {
+  gap: 14px;
+}
+
+html[data-theme="light"] .analytics-bar-label,
+html[data-theme="light"] .analytics-cell-entity,
+html[data-theme="light"] .night-row-title,
+html[data-theme="light"] .night-panel-title,
+html[data-theme="light"] .release-row span,
+html[data-theme="light"] .yt-analytics-row span,
+html[data-theme="light"] .admin-primary,
+html[data-theme="light"] .account-favorite-title {
+  color: var(--text-strong) !important;
+}
+
+html[data-theme="light"] .table-search-panel .table-search-result,
+html[data-theme="light"] .table-search-panel .table-search-item,
+html[data-theme="light"] .table-search-panel .table-search-row {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .night-window-table,
+html[data-theme="light"] .analytics-run-list-plain,
+html[data-theme="light"] .analytics-plain-table,
+html[data-theme="light"] .yt-analytics-table,
+html[data-theme="light"] .release-list-table,
+html[data-theme="light"] .release-objects-table,
+html[data-theme="light"] .engineering-table {
+  gap: 0 !important;
+}
+
+html[data-theme="light"] .night-window-head,
+html[data-theme="light"] .analytics-head,
+html[data-theme="light"] .release-list-head,
+html[data-theme="light"] .release-objects-head,
+html[data-theme="light"] .yt-analytics-head,
+html[data-theme="light"] .engineering-table-head,
+html[data-theme="light"] .dq-history-head {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .meta-workspace-page .dev-meta-tabs:not(.meta-workspace-tabs),
+html[data-theme="light"] .meta-workspace-tabs,
+html[data-theme="light"] .dev-meta-tabs {
+  gap: 8px;
+}
+
+html[data-theme="light"] .meta-workspace-page .dev-meta-generator,
+html[data-theme="light"] .meta-workspace-page .dev-meta-file-block,
+html[data-theme="light"] .meta-workspace-page .dev-meta-editor-shell,
+html[data-theme="light"] .meta-workspace-page .dev-meta-validation {
+  padding: 14px 16px !important;
+}
+
+html[data-theme="light"] .meta-workspace-object-card,
+html[data-theme="light"] .meta-workspace-file-button,
+html[data-theme="light"] .dev-meta-file {
+  border-radius: 10px !important;
+}
+
+html[data-theme="light"] .onboarding-area-grid,
+html[data-theme="light"] .onboarding-flow-grid,
+html[data-theme="light"] .onboarding-map-grid,
+html[data-theme="light"] .engineering-grid,
+html[data-theme="light"] .engineering-grid-secondary,
+html[data-theme="light"] .engineering-focus-grid {
+  gap: 14px !important;
+}

@@ -109,6 +109,12 @@ export default function App() {
     window.localStorage.setItem(THEME_KEY, theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (userProfile?.role !== "admin" && theme !== "dark") {
+      setTheme("dark");
+    }
+  }, [theme, userProfile?.role]);
+
   const normalizeFqn = useCallback((value) => {
     if (typeof value !== "string") return null;
     const trimmed = value.trim();

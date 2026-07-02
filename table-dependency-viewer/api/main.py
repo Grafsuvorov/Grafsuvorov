@@ -2059,7 +2059,20 @@ def _jaccard_similarity(a: set[str], b: set[str]) -> float:
 
 
 def _build_story(obj: dict) -> str:
-    checks = obj.get("verification") or []
+    raw_checks = obj.get("verification") or []
+    checks = []
+    for item in raw_checks:
+        if isinstance(item, str):
+            checks.append(item)
+        elif isinstance(item, dict):
+            checks.append(
+                item.get("name")
+                or item.get("code")
+                or item.get("type")
+                or json.dumps(item, ensure_ascii=False, sort_keys=True)
+            )
+        else:
+            checks.append(str(item))
     keys = obj.get("key_attributes") or []
     sources = sorted(obj.get("source_tables") or [])
     funcs = sorted(obj.get("signal_functions") or obj.get("functions") or [])

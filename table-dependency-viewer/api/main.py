@@ -568,6 +568,8 @@ def refresh_cache(request: Request):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail="Не удалось обновить кеш")
 
+    return {"ok": True}
+
 
 @router.post("/api/feedback")
 def submit_feedback(payload: FeedbackPayload, request: Request):

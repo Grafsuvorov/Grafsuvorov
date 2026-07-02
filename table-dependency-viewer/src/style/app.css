@@ -7853,6 +7853,18 @@ body.custom-hover-label-active * {
   text-align: left;
 }
 
+.analytics-bar-link.btn,
+.analytics-compare-name.btn,
+.analytics-cell-name.btn {
+  padding: 0 !important;
+  min-height: auto !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  color: inherit !important;
+}
+
 .analytics-bar-track {
   background: rgba(148, 163, 184, 0.15);
   border-radius: 999px;

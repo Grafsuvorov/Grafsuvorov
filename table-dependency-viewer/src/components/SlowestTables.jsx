@@ -609,7 +609,7 @@ export default function SlowestTables({ onSelectTable }) {
                     return (
                       <div key={row.table_fqn} className="analytics-compare-row">
                         <button
-                          className="btn btn-ghost analytics-compare-name mono"
+                          className="analytics-compare-name mono"
                           title={row.table_fqn}
                           onClick={() => openTable(row.table_schema, row.table_name, { compare: true })}
                         >
@@ -747,7 +747,7 @@ export default function SlowestTables({ onSelectTable }) {
                           <div key={`${label}-${row.run_uuid || idx}`} className="analytics-bar-row">
                             <div className="analytics-bar-label mono">
                               <button
-                                className="btn btn-ghost analytics-bar-link"
+                                className="analytics-bar-link"
                                 title={label}
                                 onClick={() => openTable(row.schema_name, row.table_name)}
                               >
@@ -822,7 +822,7 @@ export default function SlowestTables({ onSelectTable }) {
                         <div key={`${fullName}-${row.run_uuid || idx}`} className="analytics-run-row">
                           <div className="analytics-run-main">
                             <button
-                              className="mono analytics-cell-name btn btn-ghost"
+                              className="mono analytics-cell-name"
                               title={fullName}
                               onClick={() => openTable(row.schema_name, row.table_name)}
                             >

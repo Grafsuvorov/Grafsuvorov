@@ -7842,15 +7842,19 @@ body.custom-hover-label-active * {
   padding: 0 !important;
   min-height: auto;
   justify-content: flex-start;
+  display: inline;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
   color: inherit;
   border-radius: 0 !important;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   line-height: 1.4;
   white-space: normal;
   text-align: left;
+  cursor: pointer;
 }
 
 .analytics-bar-link.btn,
@@ -8041,6 +8045,7 @@ body.custom-hover-label-active * {
 }
 
 .analytics-compare-name {
+  display: inline;
   justify-content: flex-start;
   min-height: auto;
   padding: 0 !important;
@@ -8048,10 +8053,28 @@ body.custom-hover-label-active * {
   background: transparent !important;
   box-shadow: none !important;
   border-radius: 0 !important;
+  appearance: none;
+  -webkit-appearance: none;
   font: inherit;
   line-height: 1.4;
   white-space: normal;
   text-align: left;
+  cursor: pointer;
+}
+
+.analytics-cell-name {
+  display: inline;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .analytics-compare-meta {

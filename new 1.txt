@@ -1,79 +1,17 @@
-Наименование
 
-Изменение механизма публикации объектов ClickHouse при загрузке через S3.
-
-Описание проблемы
-
-В текущей реализации при выполнении релиза:
-
-Данные выгружаются в S3.
-Выполняется пересоздание измененных объектов ClickHouse.
-Данные сразу загружаются в основные объекты.
-
-Во время пересоздания и загрузки основной объект может быть временно недоступен либо содержать неполные данные.
-
-Требуется
-
-Изменить механизм публикации объектов таким образом, чтобы обновление происходило через временные объекты.
-
-Требования к реализации
-1. Создание временных объектов
-
-Для каждого изменяемого объекта ClickHouse создавать временный объект с префиксом new_.
-
-Пример:
-
-dm.customer
-
-→
-
-dm.new_customer
-2. Загрузка данных
-
-В рамках основного DAG:
-
-создать объект new_*;
-загрузить в него данные из S3;
-выполнить все необходимые проверки успешности загрузки.
-
-Основной объект при этом не изменяется и остается доступным пользователям.
-
-3. Публикация данных
-
-После успешного завершения загрузки должна существовать отдельная задача (Task) внутри DAG, запускаемая вручную, выполняющая публикацию новой версии объекта.
-
-При запуске задачи необходимо:
-
-удалить (или переименовать) текущий основной объект;
-переименовать объект new_* в основной объект;
-удалить старую версию объекта (если она сохранялась под временным именем).
-
-В результате пользователи начинают работать уже с новой версией объекта.
-
-Последовательность выполнения
-Загрузка в S3
-        │
-        ▼
-Создание new_<table>
-        │
-        ▼
-Загрузка данных в new_<table>
-        │
-        ▼
-Проверка успешной загрузки
-        │
-        ▼
-(ручной запуск Task Publish)
-        │
-        ▼
-Замена основной таблицы на new_<table>
-        │
-        ▼
-Удаление старой версии объекта
-Ожидаемый результат
-Загрузка новых данных не влияет на доступность основной таблицы.
-До момента публикации пользователи продолжают работать со старой версией данных.
-После запуска задачи публикации происходит атомарная замена основной таблицы на новую.
-После успешной замены старая версия объекта удаляется.
-
-Я бы еще добавил одно важное требование: если загрузка в new_* завершилась с ошибкой, основная таблица не должна изменяться вообще. Это позволит избежать ситуации, когда пользователи останутся без рабочей таблицы из-за неудачной загрузки. Это стоит явно прописать в ТЗ как отдельное требование к отказоустойчивости.
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
+table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ad_users depends on api.dag_load_ad_users BUT META NOT FOUND
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:39284 - "GET /api/orderbreaches HTTP/1.1" 200 OK
+table-dependency-viewer-api-1  | ❌ refresh cache error: sequence item 1: expected str instance, dict found
+table-dependency-viewer-api-1  | Traceback (most recent call last):
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 565, in refresh_cache
+table-dependency-viewer-api-1  |     _build_logic_audit_cache()
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2360, in _build_logic_audit_cache
+table-dependency-viewer-api-1  |     obj["story"] = _build_story(obj)
+table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2073, in _build_story
+table-dependency-viewer-api-1  |     f"Проверки: {', '.join(checks) if checks else 'не указаны'}",
+table-dependency-viewer-api-1  |                  ^^^^^^^^^^^^^^^^^
+table-dependency-viewer-api-1  | TypeError: sequence item 1: expected str instance, dict found
+table-dependency-viewer-api-1  |
+table-dependency-viewer-api-1  | INFO:     172.22.0.2:39338 - "POST /api/admin/refresh-cache HTTP/1.1" 500 Internal Server Error

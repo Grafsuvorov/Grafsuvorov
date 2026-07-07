@@ -1,17 +1,74 @@
+Проект
 
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.alarm_accidents depends on landing.input_data_from_sapxi_in BUT META NOT FOUND
-table-dependency-viewer-api-1  | ❌ BROKEN DEP: stg.ad_users depends on api.dag_load_ad_users BUT META NOT FOUND
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39284 - "GET /api/orderbreaches HTTP/1.1" 200 OK
-table-dependency-viewer-api-1  | ❌ refresh cache error: sequence item 1: expected str instance, dict found
-table-dependency-viewer-api-1  | Traceback (most recent call last):
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 565, in refresh_cache
-table-dependency-viewer-api-1  |     _build_logic_audit_cache()
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2360, in _build_logic_audit_cache
-table-dependency-viewer-api-1  |     obj["story"] = _build_story(obj)
-table-dependency-viewer-api-1  |                    ^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  |   File "/app/api/main.py", line 2073, in _build_story
-table-dependency-viewer-api-1  |     f"Проверки: {', '.join(checks) if checks else 'не указаны'}",
-table-dependency-viewer-api-1  |                  ^^^^^^^^^^^^^^^^^
-table-dependency-viewer-api-1  | TypeError: sequence item 1: expected str instance, dict found
-table-dependency-viewer-api-1  |
-table-dependency-viewer-api-1  | INFO:     172.22.0.2:39338 - "POST /api/admin/refresh-cache HTTP/1.1" 500 Internal Server Error
+КХД
+User avatar
+Тип карточки
+
+Task⁠
+T
+Приоритет
+
+Normal⁠
+N
+Состояние
+
+Зарегистрирована
+З
+Исполнитель
+
+Shkretov Dmitriy
+User avatar
+Команда (Подсистема)
+
+DE (Data Engineer)⁠
+D
+Оценка (чел./час.)
+
+0
+Срок
+8 июл. 2026
+Затраченное время
+
+?
+Направление
+
+ТОРО
+Т
+Дата релиза
+9 июл. 2026
+Spent time
+
+?
+Фактические трудозатраты
+
+?
+Дашборд КХД/Направление
+
+PR-0050 Оборудование
+Экономия за счет ИИ
+
+?
+Оценка трудозатрат
+
+?
+Меняется бизнес-ключ
+
+Нет
+Доски
+
+КХД
+
+
+КХД-копия
+
+
+Доска DE
+
+
+КХД-копия.1
+
+
+Тестовая доска релизов
+
+
+DE Copy

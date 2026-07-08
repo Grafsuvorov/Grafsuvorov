@@ -1,56 +1,128 @@
-CREATE TABLE tech_etl.yt_issue_comment (
-	issue_id text NOT NULL,
-	author text NULL,
-	created_at timestamp NULL,
-	comment_text text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
-)
-DISTRIBUTED BY (issue_id);
+select
+    s.issue_id,
+    s.summary,
+    s.project_name,
+    s.project_key,
+    s.created_by,
+    s.assignee,
+    s.created_at,
+    s.updated_at,
+    s.resolved_at,
+    s.current_state,
 
-CREATE TABLE tech_etl.yt_issue_custom_field (
-	issue_id text NOT NULL,
-	field_name text NOT NULL,
-	field_value text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
-)
-DISTRIBUTED BY (issue_id);
+    max(case when cf.field_name = 'Приоритет' then cf.field_value end) as priority,
+    max(case when cf.field_name = 'Срок' then cf.field_value end)::date as due_date,
+    max(case when cf.field_name = 'Дата релиза' then cf.field_value end)::date as release_date,
+    max(case when cf.field_name = 'Команда (Подсистема)' then cf.field_value end) as team,
+    max(case when cf.field_name = 'Направление' then cf.field_value end) as direction,
+    max(case when cf.field_name = 'Оценка трудозатрат' then cf.field_value end)::numeric as estimate_hours,
+    max(case when cf.field_name = 'Фактические трудозатраты' then cf.field_value end)::numeric as fact_hours,
+    max(case when cf.field_name = 'Экономия за счет ИИ' then cf.field_value end)::numeric as ai_saving_hours,
 
-CREATE TABLE tech_etl.yt_issue_snapshot (
-	issue_id text NOT NULL,
-	summary text NULL,
-	description text NULL,
-	project_name text NULL,
-	project_key text NULL,
-	created_by text NULL,
-	assignee text NULL,
-	created_at timestamp NULL,
-	updated_at timestamp NULL,
-	resolved_at timestamp NULL,
-	current_state text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
-)
-DISTRIBUTED BY (issue_id);
+    coalesce(sum(w.minutes), 0) / 60.0 as worklog_hours,
 
-CREATE TABLE tech_etl.yt_issue_timeline (
-	issue_id text NOT NULL,
-	ts timestamp NULL,
-	author text NULL,
-	event_type text NULL,
-	field_name text NULL,
-	value_from text NULL,
-	value_to text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
-)
-DISTRIBUTED BY (issue_id);
+    case
+        when max(case when cf.field_name = 'Срок' then cf.field_value end)::date < current_date
+             and s.resolved_at is null
+        then 1 else 0
+    end as is_overdue,
 
-CREATE TABLE tech_etl.yt_issue_worklog (
-	issue_id text NOT NULL,
-	author text NULL,
-	creator text NULL,
-	work_date timestamp NULL,
-	minutes int4 NULL,
-	work_type text NULL,
-	work_text text NULL,
-	dttm_loaded timestamp DEFAULT now() NULL
-)
-DISTRIBUTED BY (issue_id);
+    case when s.assignee is null or s.assignee = '' then 1 else 0 end as is_without_assignee,
+    case when max(case when cf.field_name = 'Оценка трудозатрат' then cf.field_value end) is null then 1 else 0 end as is_without_estimate,
+
+    extract(day from coalesce(s.resolved_at, now()) - s.created_at) as age_days
+
+from tech_etl.yt_issue_snapshot s
+left join tech_etl.yt_issue_custom_field cf
+    on s.issue_id = cf.issue_id
+left join tech_etl.yt_issue_worklog w
+    on s.issue_id = w.issue_id
+where s.project_key = 'КХД'
+group by
+    s.issue_id,
+    s.summary,
+    s.project_name,
+    s.project_key,
+    s.created_by,
+    s.assignee,
+    s.created_at,
+    s.updated_at,
+    s.resolved_at,
+    s.current_state;
+
+Если project_key = 'КХД' не сработает, замени на:
+
+where s.project_name = 'КХД'
+
+Дальше делай KPI-плитки в Superset через Big Number:
+
+Всего задач
+
+select count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД';
+
+В работе
+
+select count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД'
+  and current_state = 'В работе';
+
+Закрыто
+
+select count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД'
+  and resolved_at is not null;
+
+Без исполнителя
+
+select count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД'
+  and (assignee is null or assignee = '');
+
+Просрочено
+
+select count(*) as cnt
+from (
+    select
+        s.issue_id,
+        max(case when cf.field_name = 'Срок' then cf.field_value end)::date as due_date,
+        s.resolved_at
+    from tech_etl.yt_issue_snapshot s
+    left join tech_etl.yt_issue_custom_field cf
+        on s.issue_id = cf.issue_id
+    where s.project_key = 'КХД'
+    group by s.issue_id, s.resolved_at
+) t
+where due_date < current_date
+  and resolved_at is null;
+
+Для графиков:
+
+По статусам
+
+select current_state, count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД'
+group by current_state
+order by cnt desc;
+
+По исполнителям
+
+select coalesce(nullif(assignee, ''), 'Без исполнителя') as assignee, count(*) as cnt
+from tech_etl.yt_issue_snapshot
+where project_key = 'КХД'
+group by 1
+order by cnt desc;
+
+По списанным часам
+
+select author, sum(minutes) / 60.0 as hours
+from tech_etl.yt_issue_worklog
+group by author
+order by hours desc;
+
+В Superset: SQL → SQL Lab → вставь запрос → Run → Explore → Big Number / Bar Chart / Pie Chart → Save → Add to dashboard.

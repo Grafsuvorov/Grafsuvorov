@@ -1,25 +1,15 @@
-.dashboard {
-  background: #f4f6f8;
-}
+tech_etl.yt_issue_custom_field
 
-.dashboard-component-chart-holder {
-  background: #ffffff !important;
-  border-radius: 14px !important;
-  border: 1px solid #e5e7eb !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important;
-  padding: 8px !important;
-}
-
-.dashboard-component-chart-holder:hover {
-  box-shadow: 0 6px 18px rgba(0,0,0,0.14) !important;
-}
-
-.dashboard-component-chart-holder .header-title {
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  color: #374151 !important;
-}
-
-.dashboard-component-chart-holder .chart-container {
-  padding: 8px !important;
-}
+DWH-14319	Subsystem	DE (Data Engineer)	2026-07-08 20:00:35.000
+DWH-14319	Оценка (чел./час.)	0	2026-07-08 20:00:35.000
+DWH-14319	Due Date		2026-07-08 20:00:35.000
+DWH-14319	Затраченное время		2026-07-08 20:00:35.000
+DWH-14319	Направление	Сбыт	2026-07-08 20:00:35.000
+DWH-14319	Дашборд SD		2026-07-08 20:00:35.000
+DWH-14319	Дата релиза	2026-07-08 15:00	2026-07-08 20:00:35.000
+DWH-14319	Spent time		2026-07-08 20:00:35.000
+DWH-14319	Фактические трудозатраты	2ч 5м	2026-07-08 20:00:35.000
+DWH-14319	Дашборд КХД/Направление	SD-0030 Отслеживание оплаты счетов и дебиторской задолженности	2026-07-08 20:00:35.000
+DWH-14319	Экономия за счет ИИ		2026-07-08 20:00:35.000
+DWH-14319	Оценка трудозатрат		2026-07-08 20:00:35.000
+DWH-14319	Меняется бизнес-ключ	Нет	2026-07-08 20:00:35.000

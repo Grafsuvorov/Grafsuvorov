@@ -1,33 +1,215 @@
+create or replace view tech_etl.v_release_tasks as
+with release_base as (
+    select
+        rl.release_id,
+        rl.release_type,
+        rl.initiated_by,
+        rl.started_at,
+        rl.finished_at,
+        rl.status as release_status,
+        rl.total_objects,
+        rl.ready_to_release,
 
-CREATE TABLE tech_etl.release_log (
-	release_id text NOT NULL,
-	release_type text NOT NULL,
-	initiated_by text NOT NULL,
-	started_at timestamp NOT NULL,
-	finished_at timestamp NULL,
-	status text NOT NULL,
-	total_objects int4 NOT NULL,
-	created_at timestamp DEFAULT now() NULL,
-	ready_to_release bool NULL
-)
-DISTRIBUTED BY (release_id);
+        ro.task_id,
+        ro.target_system,
+        ro.schema_name,
+        ro.table_name,
+        ro.entity_id,
+        ro.entity_name,
+        ro.change_type,
+        ro.final_status,
+        ro.failed_objects,
+        ro.attempt_no,
+        ro.attempts_count,
+        ro.error_message,
+        ro.last_updated,
 
-CREATE TABLE tech_etl.release_objects (
-	release_id text NOT NULL,
-	task_id text NOT NULL,
-	target_system text NOT NULL,
-	schema_name text NOT NULL,
-	table_name text NOT NULL,
-	entity_id int4 NOT NULL,
-	entity_name text NOT NULL,
-	change_type text NOT NULL,
-	final_status text NOT NULL,
-	attempts_count int4 NOT NULL,
-	created_at timestamp DEFAULT now() NULL,
-	failed_objects bool DEFAULT false NULL,
-	attempt_no int4 NOT NULL,
-	error_message text NULL,
-	error_stacktrace text NULL,
-	last_updated timestamp NULL
+        row_number() over (
+            partition by
+                ro.release_id,
+                ro.task_id,
+                ro.target_system,
+                ro.schema_name,
+                ro.table_name,
+                ro.entity_id
+            order by
+                ro.attempt_no desc,
+                ro.last_updated desc nulls last,
+                ro.created_at desc
+        ) as rn
+
+    from tech_etl.release_log rl
+    join tech_etl.release_objects ro
+        on rl.release_id = ro.release_id
+),
+
+task_fields as (
+    select
+        issue_id,
+
+        max(case
+            when field_name = 'Направление'
+            then nullif(field_value, '')
+        end) as direction,
+
+        max(case
+            when field_name = 'Subsystem'
+            then nullif(field_value, '')
+        end) as subsystem,
+
+        max(case
+            when field_name = 'Дашборд КХД/Направление'
+            then nullif(field_value, '')
+        end) as khd_dashboard
+
+    from tech_etl.yt_issue_custom_field
+    group by issue_id
 )
-DISTRIBUTED BY (release_id);
+
+select
+    rb.release_id,
+    rb.release_type,
+    rb.initiated_by,
+    rb.started_at,
+    rb.finished_at,
+    rb.release_status,
+    rb.total_objects,
+    rb.ready_to_release,
+
+    rb.task_id,
+    yt.summary,
+    yt.created_at as task_created_at,
+    yt.updated_at as task_updated_at,
+    yt.resolved_at,
+    yt.current_state,
+    yt.assignee,
+    yt.created_by,
+
+    tf.direction,
+    tf.subsystem,
+    tf.khd_dashboard,
+
+    rb.target_system,
+    rb.schema_name,
+    rb.table_name,
+    rb.entity_id,
+    rb.entity_name,
+    rb.change_type,
+    rb.final_status,
+    rb.failed_objects,
+    rb.attempt_no,
+    rb.attempts_count,
+    rb.error_message,
+    rb.last_updated,
+
+    rb.started_at::date as release_date,
+
+    case
+        when yt.created_at is not null
+        then rb.started_at::date - yt.created_at::date
+    end as days_before_release,
+
+    case
+        when yt.created_at is null then 'Нет даты создания'
+        when rb.started_at::date - yt.created_at::date < 0 then 'После старта релиза'
+        when rb.started_at::date - yt.created_at::date = 0 then 'В день релиза'
+        when rb.started_at::date - yt.created_at::date between 1 and 1 then 'За 1 день'
+        when rb.started_at::date - yt.created_at::date between 2 and 3 then 'За 2–3 дня'
+        when rb.started_at::date - yt.created_at::date between 4 and 7 then 'За 4–7 дней'
+        when rb.started_at::date - yt.created_at::date between 8 and 14 then 'За 8–14 дней'
+        when rb.started_at::date - yt.created_at::date between 15 and 30 then 'За 15–30 дней'
+        else 'Более чем за 30 дней'
+    end as release_lead_bucket,
+
+    case
+        when rb.started_at::date - yt.created_at::date between 0 and 3
+        then 1 else 0
+    end as is_created_last_3_days,
+
+    case
+        when rb.started_at::date - yt.created_at::date between 0 and 7
+        then 1 else 0
+    end as is_created_last_7_days,
+
+    case
+        when rb.started_at::date - yt.created_at::date between 0 and 14
+        then 1 else 0
+    end as is_created_last_14_days
+
+from release_base rb
+left join tech_etl.yt_issue_snapshot yt
+    on rb.task_id = yt.issue_id
+left join task_fields tf
+    on rb.task_id = t
+f.issue_id
+where rb.rn = 1;
+
+
+
+
+create or replace view tech_etl.v_release_task_summary as
+select
+    release_id,
+    release_type,
+    initiated_by,
+    started_at,
+    finished_at,
+    release_status,
+    ready_to_release,
+
+    task_id,
+    summary,
+    task_created_at,
+    task_updated_at,
+    resolved_at,
+    current_state,
+    assignee,
+    created_by,
+    direction,
+    subsystem,
+    khd_dashboard,
+
+    release_date,
+    days_before_release,
+    release_lead_bucket,
+    is_created_last_3_days,
+    is_created_last_7_days,
+    is_created_last_14_days,
+
+    count(*) as objects_count,
+    count(*) filter (where failed_objects) as failed_objects_count,
+    max(attempts_count) as max_attempts_count,
+
+    case
+        when count(*) filter (where failed_objects) > 0
+        then 1 else 0
+    end as task_has_failed_objects
+
+from tech_etl.v_release_tasks
+group by
+    release_id,
+    release_type,
+    initiated_by,
+    started_at,
+    finished_at,
+    release_status,
+    ready_to_release,
+    task_id,
+    summary,
+    task_created_at,
+    task_updated_at,
+    resolved_at,
+    current_state,
+    assignee,
+    created_by,
+    direction,
+    subsystem,
+    khd_dashboard,
+    release_date,
+    days_before_release,
+    release_lead_bucket,
+    is_created_last_3_days,
+    is_created_last_7_days,
+    is_created_last_14_days;
+
+

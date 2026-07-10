@@ -1,119 +1,33 @@
-create or replace view tech_etl.yt as
-with cf as (
-    select
-        issue_id,
 
-        max(case when field_name = 'Исполнитель' then nullif(field_value, '') end) as assignee_cf,
-        max(case when field_name = 'Subsystem' then nullif(field_value, '') end) as subsystem,
-        max(case when field_name = 'Направление' then nullif(field_value, '') end) as direction,
-        max(case when field_name = 'Дашборд КХД/Направление' then nullif(field_value, '') end) as khd_dashboard,
-        max(case when field_name = 'Дата релиза' then nullif(field_value, '') end) as release_date_txt,
-        max(case when field_name = 'Due Date' then nullif(field_value, '') end) as due_date_txt,
-        max(case when field_name = 'Оценка (чел./час.)' then nullif(field_value, '') end) as estimate_hours_txt,
-        max(case when field_name = 'Фактические трудозатраты' then nullif(field_value, '') end) as fact_time_txt,
-        max(case when field_name = 'Экономия за счет ИИ' then nullif(field_value, '') end) as ai_saving_txt,
-        max(case when field_name = 'Меняется бизнес-ключ' then nullif(field_value, '') end) as business_key_changed
-
-    from tech_etl.yt_issue_custom_field
-    group by issue_id
-),
-
-worklog as (
-    select
-        issue_id,
-        sum(minutes) / 60.0 as worklog_hours
-    from tech_etl.yt_issue_worklog
-    group by issue_id
+CREATE TABLE tech_etl.release_log (
+	release_id text NOT NULL,
+	release_type text NOT NULL,
+	initiated_by text NOT NULL,
+	started_at timestamp NOT NULL,
+	finished_at timestamp NULL,
+	status text NOT NULL,
+	total_objects int4 NOT NULL,
+	created_at timestamp DEFAULT now() NULL,
+	ready_to_release bool NULL
 )
+DISTRIBUTED BY (release_id);
 
-select
-    s.issue_id,
-    s.summary,
-    s.description,
-    s.project_name,
-    s.project_key,
-    s.created_by,
-
-    coalesce(cf.assignee_cf, nullif(s.assignee, ''), 'Без исполнителя') as assignee,
-
-    s.created_at,
-    s.updated_at,
-    s.resolved_at,
-    s.current_state,
-
-    cf.subsystem,
-    cf.direction,
-    cf.khd_dashboard,
-    cf.business_key_changed,
-
-    cf.release_date_txt,
-    cf.due_date_txt,
-    cf.estimate_hours_txt,
-    cf.fact_time_txt,
-    cf.ai_saving_txt,
-
-    case
-        when cf.release_date_txt ~ '^\d{4}-\d{2}-\d{2}'
-            then left(cf.release_date_txt, 10)::date
-        when cf.release_date_txt ~ '^\d{2}\.\d{2}\.\d{4}'
-            then to_date(left(cf.release_date_txt, 10), 'DD.MM.YYYY')
-        else null
-    end as release_date,
-
-    case
-        when cf.due_date_txt ~ '^\d{4}-\d{2}-\d{2}'
-            then left(cf.due_date_txt, 10)::date
-        when cf.due_date_txt ~ '^\d{2}\.\d{2}\.\d{4}'
-            then to_date(left(cf.due_date_txt, 10), 'DD.MM.YYYY')
-        else null
-    end as due_date,
-
-    nullif(regexp_replace(coalesce(cf.estimate_hours_txt, ''), '[^0-9.,]', '', 'g'), '')::numeric as estimate_hours,
-
-    (
-        coalesce(nullif(substring(cf.fact_time_txt from '([0-9]+)\s*ч'), '')::numeric, 0)
-        +
-        coalesce(nullif(substring(cf.fact_time_txt from '([0-9]+)\s*м'), '')::numeric, 0) / 60.0
-    ) as fact_hours,
-
-    (
-        coalesce(nullif(substring(cf.ai_saving_txt from '([0-9]+)\s*ч'), '')::numeric, 0)
-        +
-        coalesce(nullif(substring(cf.ai_saving_txt from '([0-9]+)\s*м'), '')::numeric, 0) / 60.0
-    ) as ai_saving_hours,
-
-    coalesce(w.worklog_hours, 0) as worklog_hours,
-
-    case
-        when s.resolved_at is null
-         and (
-            case
-                when cf.due_date_txt ~ '^\d{4}-\d{2}-\d{2}'
-                    then left(cf.due_date_txt, 10)::date
-                when cf.due_date_txt ~ '^\d{2}\.\d{2}\.\d{4}'
-                    then to_date(left(cf.due_date_txt, 10), 'DD.MM.YYYY')
-                else null
-            end
-         ) < current_date
-        then 1 else 0
-    end as is_overdue,
-
-    case
-        when coalesce(cf.assignee_cf, nullif(s.assignee, '')) is null
-        then 1 else 0
-    end as is_without_assignee,
-
-    case
-        when cf.estimate_hours_txt is null
-        then 1 else 0
-    end as is_without_estimate,
-
-    extract(day from coalesce(s.resolved_at, now()) - s.created_at) as age_days
-
-from tech_etl.yt_issue_snapshot s
-left join cf
-    on s.issue_id = cf.issue_id
-left join worklog w
-    on s.issue_id = w.issue_id
-where s.project_key = 'КХД'
-   or s.project_name = 'КХД';
+CREATE TABLE tech_etl.release_objects (
+	release_id text NOT NULL,
+	task_id text NOT NULL,
+	target_system text NOT NULL,
+	schema_name text NOT NULL,
+	table_name text NOT NULL,
+	entity_id int4 NOT NULL,
+	entity_name text NOT NULL,
+	change_type text NOT NULL,
+	final_status text NOT NULL,
+	attempts_count int4 NOT NULL,
+	created_at timestamp DEFAULT now() NULL,
+	failed_objects bool DEFAULT false NULL,
+	attempt_no int4 NOT NULL,
+	error_message text NULL,
+	error_stacktrace text NULL,
+	last_updated timestamp NULL
+)
+DISTRIBUTED BY (release_id);

@@ -1,36 +1,14 @@
-create or replace view tech_etl.v_release_analytics as
 select
     rl.release_id,
+    rl.started_at::date as release_date,
     rl.release_type,
-    rl.started_at::date          as release_date,
-    rl.finished_at,
-    rl.status                    as release_status,
-    rl.ready_to_release,
-
-    ro.task_id,
-    ro.target_system,
-    ro.schema_name,
-    ro.table_name,
-    ro.entity_name,
-    ro.change_type,
-    ro.final_status,
-    ro.attempts_count,
-    ro.failed_objects,
-
-    yt.direction,
-    yt.assignee,
-    yt.created_by,
-    yt.created_at,
-    yt.release_date              as task_release_date,
-    yt.resolved_at,
-    yt.current_state,
-
-    (rl.started_at::date - yt.created_at::date) as days_before_release
-
+    count(distinct ro.task_id) as tasks_cnt
 from tech_etl.release_log rl
-
 join tech_etl.release_objects ro
     on rl.release_id = ro.release_id
-
-left join tech_etl.yt yt
-    on yt.task_id = ro.task_id;
+group by
+    rl.release_id,
+    rl.started_at::date,
+    rl.release_type
+order by
+    rl.started_at;

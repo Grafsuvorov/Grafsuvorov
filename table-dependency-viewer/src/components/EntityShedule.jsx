@@ -36,6 +36,7 @@ export default function EntityShedule() {
   const [intersectionsError, setIntersectionsError] = useState(null);
   const [intersectionQuery, setIntersectionQuery] = useState("");
   const [intersectionMinScore, setIntersectionMinScore] = useState(1);
+  const [intersectionSort, setIntersectionSort] = useState("load");
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -247,22 +248,39 @@ export default function EntityShedule() {
     return ["all", ...schemas];
   }, [coverage]);
 
-  const intersectionPairsFiltered = useMemo(() => {
-    const rows = Array.isArray(intersections?.pairs) ? intersections.pairs : [];
+  const intersectionEntitiesFiltered = useMemo(() => {
+    const rows = Array.isArray(intersections?.entities) ? intersections.entities : [];
     const q = String(intersectionQuery || "").trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => {
+    const merged = rows.map((row) => {
+      const source = normalized.find((item) => Number(item.entity_id) === Number(row.entity_id));
+      return {
+        ...row,
+        lastLoad: source?.scheduleDate || null,
+        lastLoadLabel: formatDateTime(source?.scheduleDate),
+        status: source?.status || "UNKNOWN",
+      };
+    });
+    const filteredRows = !q ? merged : merged.filter((row) => {
       const haystack = [
-        row.a?.entity_name,
-        row.b?.entity_name,
-        ...(row.shared_tables_sample || []),
+        row.entity_name,
+        ...(row.related_entities || []).map((item) => item.entity_name),
+        ...(row.related_entities || []).flatMap((item) => item.shared_tables_sample || []),
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [intersections, intersectionQuery]);
+    return filteredRows.sort((a, b) => {
+      if (intersectionSort === "alpha") {
+        return String(a.entity_name || "").localeCompare(String(b.entity_name || ""), "ru");
+      }
+      const aTime = a.lastLoad?.getTime?.() || 0;
+      const bTime = b.lastLoad?.getTime?.() || 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(a.entity_name || "").localeCompare(String(b.entity_name || ""), "ru");
+    });
+  }, [formatDateTime, intersectionQuery, intersectionSort, intersections, normalized]);
 
   const openTable = (row) => {
     if (!row?.schema || !row?.table) return;
@@ -353,7 +371,7 @@ export default function EntityShedule() {
           <section className="cc-surface">
             <div className="section-title">
               Пересечения между сущностями
-              <span className="section-meta">{intersections?.summary?.pairs ?? 0}</span>
+              <span className="section-meta">{intersections?.summary?.entities_involved ?? 0}</span>
             </div>
             <div className="entity-filter-grid entity-intersection-toolbar">
               <input
@@ -363,6 +381,18 @@ export default function EntityShedule() {
                 onChange={(e) => setIntersectionQuery(e.target.value)}
               />
               <div className="entity-filters">
+                <button
+                  className={`pill ${intersectionSort === "load" ? "pill-active" : ""}`}
+                  onClick={() => setIntersectionSort("load")}
+                >
+                  По загрузке
+                </button>
+                <button
+                  className={`pill ${intersectionSort === "alpha" ? "pill-active" : ""}`}
+                  onClick={() => setIntersectionSort("alpha")}
+                >
+                  По алфавиту
+                </button>
                 {[1, 2, 4, 8].map((score) => (
                   <button
                     key={score}
@@ -401,92 +431,57 @@ export default function EntityShedule() {
           {!intersectionsLoading && !intersectionsError && (
             <section className="cc-surface">
               <div className="section-title">
-                Наиболее связанные сущности
-                <span className="section-meta">{intersections?.top_entities?.length ?? 0}</span>
+                Сущности и их пересечения
+                <span className="section-meta">{intersectionEntitiesFiltered.length}</span>
               </div>
-              <div className="entity-intersection-top-grid">
-                {(intersections?.top_entities || []).map((row) => (
-                  <article key={row.entity_id} className="entity-intersection-top-card">
-                    <div className="entity-intersection-top-name">{row.entity_name}</div>
-                    <div className="entity-intersection-top-meta">ID: {row.entity_id}</div>
-                    <div className="entity-intersection-top-stats">
-                      <span>соседей: {row.peer_count}</span>
-                      <span>общих таблиц: {row.shared_tables_total}</span>
-                      <span>связей: {row.total_links}</span>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!intersectionsLoading && !intersectionsError && (
-            <section className="cc-surface">
-              <div className="section-title">
-                Пары сущностей
-                <span className="section-meta">{intersectionPairsFiltered.length}</span>
-              </div>
-              {intersectionPairsFiltered.length === 0 ? (
+              {intersectionEntitiesFiltered.length === 0 ? (
                 <div className="muted">Нет пересечений под текущий фильтр.</div>
               ) : (
-                <div className="entity-intersection-list">
-                  {intersectionPairsFiltered.map((row) => (
-                    <article key={row.pair_key} className="entity-intersection-card">
+                <div className="entity-intersection-entity-list">
+                  {intersectionEntitiesFiltered.map((row) => (
+                    <article key={row.entity_id} className="entity-intersection-card">
                       <div className="entity-intersection-head">
-                        <div className="entity-intersection-pair">
-                          <div className="entity-intersection-entity">{row.a?.entity_name}</div>
-                          <div className="entity-intersection-connector">↔</div>
-                          <div className="entity-intersection-entity">{row.b?.entity_name}</div>
+                        <div>
+                          <div className="entity-intersection-entity">{row.entity_name}</div>
+                          <div className="entity-intersection-top-meta">
+                            ID: {row.entity_id} · последняя загрузка: {row.lastLoadLabel}
+                          </div>
                         </div>
                         <div className="entity-intersection-score">score {row.score}</div>
                       </div>
                       <div className="entity-intersection-metrics">
-                        <span className="entity-shared-pill">общих таблиц: {row.shared_tables_count}</span>
-                        <span className="entity-shared-pill">A → B: {row.links_ab_count}</span>
-                        <span className="entity-shared-pill">B → A: {row.links_ba_count}</span>
+                        <span className="entity-shared-pill">таблиц в сущности: {row.table_count}</span>
+                        <span className="entity-shared-pill">связанных сущностей: {row.peer_count}</span>
+                        <span className="entity-shared-pill">общих таблиц: {row.shared_tables_total}</span>
+                        <span className="entity-shared-pill">исходящих связей: {row.outbound_links}</span>
+                        <span className="entity-shared-pill">входящих связей: {row.inbound_links}</span>
                       </div>
-                      {(row.shared_tables_sample || []).length > 0 && (
-                        <div className="entity-intersection-block">
-                          <div className="entity-meta-label">Общие таблицы</div>
-                          <div className="entity-intersection-tags">
-                            {row.shared_tables_sample.map((table) => (
-                              <span key={table} className="entity-shared-pill mono">{table}</span>
+                      <div className="entity-intersection-block">
+                        <div className="entity-meta-label">Связанные сущности</div>
+                        {(row.related_entities || []).length > 0 ? (
+                          <div className="entity-intersection-related-list">
+                            {row.related_entities.map((rel) => (
+                              <div key={`${row.entity_id}-${rel.entity_id}`} className="entity-intersection-related-row">
+                                <div className="entity-intersection-related-main">
+                                  <div className="entity-intersection-related-name">{rel.entity_name}</div>
+                                  {(rel.shared_tables_sample || []).length > 0 ? (
+                                    <div className="entity-intersection-related-sample mono">
+                                      {rel.shared_tables_sample.join(", ")}
+                                    </div>
+                                  ) : null}
+                                </div>
+                                <div className="entity-intersection-related-metrics">
+                                  <span>общих таблиц: {rel.shared_tables_count}</span>
+                                  <span>исх.: {rel.links_out}</span>
+                                  <span>вх.: {rel.links_in}</span>
+                                </div>
+                              </div>
                             ))}
                           </div>
-                        </div>
-                      )}
-                      {((row.edge_samples_ab || []).length > 0 || (row.edge_samples_ba || []).length > 0) && (
-                        <div className="entity-intersection-links-grid">
-                          <div className="entity-intersection-block">
-                            <div className="entity-meta-label">{row.a?.entity_name} → {row.b?.entity_name}</div>
-                            {(row.edge_samples_ab || []).length > 0 ? (
-                              <div className="entity-intersection-link-list">
-                                {row.edge_samples_ab.map((edge, idx) => (
-                                  <div key={`ab-${idx}`} className="entity-intersection-link mono">
-                                    {edge.source} → {edge.target}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="muted">Нет прямых связей</div>
-                            )}
-                          </div>
-                          <div className="entity-intersection-block">
-                            <div className="entity-meta-label">{row.b?.entity_name} → {row.a?.entity_name}</div>
-                            {(row.edge_samples_ba || []).length > 0 ? (
-                              <div className="entity-intersection-link-list">
-                                {row.edge_samples_ba.map((edge, idx) => (
-                                  <div key={`ba-${idx}`} className="entity-intersection-link mono">
-                                    {edge.source} → {edge.target}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="muted">Нет прямых связей</div>
-                            )}
-                          </div>
-                        </div>
-                      )}
+                        ) : (
+                          <div className="muted">Нет связанных сущностей</div>
+                        )}
+                      </div>
                     </article>
                   ))}
                 </div>

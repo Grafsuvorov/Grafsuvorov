@@ -3319,6 +3319,11 @@ def get_entity_intersections(
             table_entities.setdefault(fqn, set()).add(str(entity_id))
 
         pair_map: dict[tuple[str, str], dict[str, Any]] = {}
+        entity_table_counts: dict[str, int] = {}
+
+        for entity_ids in table_entities.values():
+            for entity_id in entity_ids:
+                entity_table_counts[entity_id] = entity_table_counts.get(entity_id, 0) + 1
 
         def ensure_pair(left_id: str, right_id: str) -> dict[str, Any]:
             pair_key = tuple(sorted((left_id, right_id)))
@@ -3452,6 +3457,7 @@ def get_entity_intersections(
                 {
                     "entity_id": item["entity_id"],
                     "entity_name": item["entity_name"],
+                    "table_count": entity_table_counts.get(str(item["entity_id"]), 0),
                     "peer_count": peer_count,
                     "shared_tables_total": item["shared_tables_total"],
                     "outbound_links": item["outbound_links"],
@@ -3469,6 +3475,48 @@ def get_entity_intersections(
             )
         )
 
+        entity_items = []
+        for item in top_entities:
+            entity_key = str(item["entity_id"])
+            related = []
+            for row in rows:
+                if str(row["a"]["entity_id"]) == entity_key:
+                    peer = row["b"]
+                    outbound = row["links_ab_count"]
+                    inbound = row["links_ba_count"]
+                elif str(row["b"]["entity_id"]) == entity_key:
+                    peer = row["a"]
+                    outbound = row["links_ba_count"]
+                    inbound = row["links_ab_count"]
+                else:
+                    continue
+                related.append(
+                    {
+                        "entity_id": peer["entity_id"],
+                        "entity_name": peer["entity_name"],
+                        "shared_tables_count": row["shared_tables_count"],
+                        "links_out": outbound,
+                        "links_in": inbound,
+                        "links_total": outbound + inbound,
+                        "score": row["score"],
+                        "shared_tables_sample": row["shared_tables_sample"][:4],
+                    }
+                )
+            related.sort(
+                key=lambda rel: (
+                    -rel["score"],
+                    -rel["links_total"],
+                    -rel["shared_tables_count"],
+                    rel["entity_name"],
+                )
+            )
+            entity_items.append(
+                {
+                    **item,
+                    "related_entities": related,
+                }
+            )
+
         payload = {
             "summary": {
                 "pairs": len(rows),
@@ -3477,6 +3525,7 @@ def get_entity_intersections(
                 "pairs_with_links": pairs_with_links,
                 "direct_links": total_links,
             },
+            "entities": entity_items,
             "top_entities": top_entities[:18],
             "pairs": rows[:limit],
         }

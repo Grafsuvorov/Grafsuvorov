@@ -6407,6 +6407,11 @@ body.custom-hover-label-active * {
   gap: 14px;
 }
 
+.entity-intersection-entity-list {
+  display: grid;
+  gap: 14px;
+}
+
 .entity-intersection-head {
   display: flex;
   justify-content: space-between;
@@ -6440,6 +6445,53 @@ body.custom-hover-label-active * {
   font-size: 12px;
   line-height: 1.45;
   color: var(--text);
+}
+
+.entity-intersection-related-list {
+  display: grid;
+  gap: 10px;
+}
+
+.entity-intersection-related-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.entity-intersection-related-row:last-child {
+  border-bottom: 0;
+}
+
+.entity-intersection-related-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.entity-intersection-related-name {
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.entity-intersection-related-sample {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.entity-intersection-related-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .entity-kpis {

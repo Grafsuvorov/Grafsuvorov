@@ -79,6 +79,22 @@ def _candidate_keys(node: dict[str, Any]) -> set[str]:
     return keys
 
 
+def _dbt_relation_parts(node: dict[str, Any]) -> tuple[str | None, str | None]:
+    schema_name = str(node.get("schema") or "").strip()
+    table_name = str(
+        node.get("alias")
+        or node.get("identifier")
+        or node.get("name")
+        or ""
+    ).strip()
+    if schema_name and table_name:
+        return schema_name.lower(), table_name.lower()
+    relation_schema, relation_table = _parse_relation_name(node.get("relation_name"))
+    if relation_schema and relation_table:
+        return relation_schema.lower(), relation_table.lower()
+    return None, None
+
+
 def _load_manifest_index(base_dir: Path, manifest_dir: str, source: str = "ohd") -> dict[str, Any]:
     path = _resolve_manifest_path(base_dir, manifest_dir, source)
     cache_key = str(path)
@@ -94,6 +110,7 @@ def _load_manifest_index(base_dir: Path, manifest_dir: str, source: str = "ohd")
 
     raw = json.loads(path.read_text(encoding="utf-8"))
     nodes = raw.get("nodes") or {}
+    sources = raw.get("sources") or {}
     index: dict[str, dict[str, Any]] = {}
 
     for unique_id, node in nodes.items():
@@ -155,6 +172,7 @@ def _load_manifest_index(base_dir: Path, manifest_dir: str, source: str = "ohd")
         "path": path,
         "index": index,
         "nodes": nodes,
+        "sources": sources,
         "metadata": raw.get("metadata") or {},
     }
     _MANIFEST_CACHE[cache_key] = {
@@ -176,21 +194,26 @@ def get_dbt_graph_snapshot(base_dir: Path, manifest_dir: str, source: str = "ohd
         return cached_graph["payload"]
 
     nodes_raw = payload["nodes"] or {}
+    sources_raw = payload.get("sources") or {}
     table_nodes: dict[str, dict[str, Any]] = {}
-    unique_to_fqn: dict[str, str] = {}
+    unique_to_node_id: dict[str, str] = {}
+    fqn_to_node_ids: dict[str, set[str]] = {}
     edges: list[dict[str, str]] = []
 
+    allowed_resource_types = {"model", "seed", "snapshot"}
+
     for unique_id, node in nodes_raw.items():
-        if not isinstance(node, dict) or node.get("resource_type") != "model":
+        if not isinstance(node, dict) or node.get("resource_type") not in allowed_resource_types:
             continue
-        schema_name = str(node.get("schema") or "").strip().lower()
-        table_name = str(node.get("alias") or node.get("name") or "").strip().lower()
+        schema_name, table_name = _dbt_relation_parts(node)
         if not schema_name or not table_name:
             continue
         fqn = f"{schema_name}.{table_name}"
-        unique_to_fqn[unique_id] = fqn
-        table_nodes[fqn] = {
-            "id": fqn,
+        node_id = unique_id
+        unique_to_node_id[unique_id] = node_id
+        fqn_to_node_ids.setdefault(fqn, set()).add(node_id)
+        table_nodes[node_id] = {
+            "id": node_id,
             "schema": schema_name,
             "table": table_name,
             "entity": f"dbt:{source}",
@@ -201,31 +224,64 @@ def get_dbt_graph_snapshot(base_dir: Path, manifest_dir: str, source: str = "ohd
             "width": 220,
             "height": 64,
             "dbt_unique_id": unique_id,
+            "dbt_resource_type": node.get("resource_type"),
+            "dbt_model_name": node.get("name"),
+            "dbt_original_file_path": node.get("original_file_path") or node.get("path"),
+            "dbt_description": node.get("description") or "",
+        }
+
+    for unique_id, node in sources_raw.items():
+        if not isinstance(node, dict):
+            continue
+        schema_name, table_name = _dbt_relation_parts(node)
+        if not schema_name or not table_name:
+            continue
+        fqn = f"{schema_name}.{table_name}"
+        node_id = unique_id
+        unique_to_node_id[unique_id] = node_id
+        fqn_to_node_ids.setdefault(fqn, set()).add(node_id)
+        table_nodes[node_id] = {
+            "id": node_id,
+            "schema": schema_name,
+            "table": table_name,
+            "entity": f"dbt:{source}",
+            "entities": [f"dbt:{source}"],
+            "label": fqn,
+            "table_id": None,
+            "entity_id": None,
+            "width": 220,
+            "height": 64,
+            "dbt_unique_id": unique_id,
+            "dbt_resource_type": "source",
             "dbt_model_name": node.get("name"),
             "dbt_original_file_path": node.get("original_file_path") or node.get("path"),
             "dbt_description": node.get("description") or "",
         }
 
     seen_edges: set[tuple[str, str]] = set()
-    for unique_id, node in nodes_raw.items():
-        target_fqn = unique_to_fqn.get(unique_id)
-        if not target_fqn:
+    combined_nodes = {}
+    combined_nodes.update(nodes_raw)
+    combined_nodes.update(sources_raw)
+    for unique_id, node in combined_nodes.items():
+        target_node_id = unique_to_node_id.get(unique_id)
+        if not target_node_id:
             continue
         for dep_unique_id in ((node.get("depends_on") or {}).get("nodes") or []):
-            source_fqn = unique_to_fqn.get(dep_unique_id)
-            if not source_fqn:
+            source_node_id = unique_to_node_id.get(dep_unique_id)
+            if not source_node_id:
                 continue
-            edge_key = (source_fqn, target_fqn)
+            edge_key = (source_node_id, target_node_id)
             if edge_key in seen_edges:
                 continue
             seen_edges.add(edge_key)
-            edges.append({"source": source_fqn, "target": target_fqn})
+            edges.append({"source": source_node_id, "target": target_node_id})
 
     graph_payload = {
         "table_graph": {
             "nodes": table_nodes,
             "edges": edges,
         },
+        "table_fqn_map": {k: sorted(v) for k, v in fqn_to_node_ids.items()},
         "table_entity_map": {node_id: set(node.get("entities") or []) for node_id, node in table_nodes.items()},
         "source": source,
         "manifest_path": str(path),

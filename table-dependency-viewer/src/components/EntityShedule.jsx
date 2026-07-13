@@ -8,6 +8,7 @@ import { sortSchemaNames } from "../utils/schemaOrder.js";
 
 export default function EntityShedule() {
   const location = useLocation();
+  const [activeTab, setActiveTab] = useState("entities");
   const [entities, setEntities] = useState([]);
   const [error, setError] = useState(null);
   const [loadingEntities, setLoadingEntities] = useState(false);
@@ -30,6 +31,11 @@ export default function EntityShedule() {
   const [favoriteEntityLoadingId, setFavoriteEntityLoadingId] = useState(null);
   const [entityTimelineMap, setEntityTimelineMap] = useState({});
   const [expandedEntityIds, setExpandedEntityIds] = useState(new Set());
+  const [intersections, setIntersections] = useState(null);
+  const [intersectionsLoading, setIntersectionsLoading] = useState(false);
+  const [intersectionsError, setIntersectionsError] = useState(null);
+  const [intersectionQuery, setIntersectionQuery] = useState("");
+  const [intersectionMinScore, setIntersectionMinScore] = useState(1);
   const navigate = useNavigate();
   const COVERAGE_PAGE_SIZE = 50;
 
@@ -96,6 +102,20 @@ export default function EntityShedule() {
       .then((data) => setEntityTimelineMap(data?.items || {}))
       .catch(() => setEntityTimelineMap({}));
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "intersections") return;
+    setIntersectionsLoading(true);
+    setIntersectionsError(null);
+    entitiesApi
+      .intersections(160, intersectionMinScore)
+      .then((data) => setIntersections(data || null))
+      .catch((err) => {
+        console.error(err);
+        setIntersectionsError(typeof err === "string" ? err : "Не удалось загрузить пересечения сущностей");
+      })
+      .finally(() => setIntersectionsLoading(false));
+  }, [activeTab, intersectionMinScore]);
 
   const openEntityTables = (row) => {
     const q = new URLSearchParams({ name: row.entity_name ?? '' }).toString();
@@ -227,6 +247,23 @@ export default function EntityShedule() {
     return ["all", ...schemas];
   }, [coverage]);
 
+  const intersectionPairsFiltered = useMemo(() => {
+    const rows = Array.isArray(intersections?.pairs) ? intersections.pairs : [];
+    const q = String(intersectionQuery || "").trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((row) => {
+      const haystack = [
+        row.a?.entity_name,
+        row.b?.entity_name,
+        ...(row.shared_tables_sample || []),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [intersections, intersectionQuery]);
+
   const openTable = (row) => {
     if (!row?.schema || !row?.table) return;
     const schema = String(row.schema).trim();
@@ -265,6 +302,33 @@ export default function EntityShedule() {
         </div>
       </div>
 
+      <div className="about-tabs entity-page-tabs">
+        <button
+          className={`about-tab ${activeTab === "entities" ? "active" : ""}`}
+          onClick={() => setActiveTab("entities")}
+        >
+          Сущности
+        </button>
+        <button
+          className={`about-tab ${activeTab === "intersections" ? "active" : ""}`}
+          onClick={() => setActiveTab("intersections")}
+        >
+          Пересечения
+        </button>
+        <button
+          className={`about-tab ${activeTab === "coverage" ? "active" : ""}`}
+          onClick={() => setActiveTab("coverage")}
+        >
+          Покрытие
+        </button>
+        <button
+          className={`about-tab ${activeTab === "dq" ? "active" : ""}`}
+          onClick={() => setActiveTab("dq")}
+        >
+          Качество данных
+        </button>
+      </div>
+
       <section className="cc-surface">
         <div className="section-title">
           Сводка
@@ -284,7 +348,155 @@ export default function EntityShedule() {
         </div>
       </section>
 
-      <section className="cc-surface">
+      {activeTab === "intersections" && (
+        <>
+          <section className="cc-surface">
+            <div className="section-title">
+              Пересечения между сущностями
+              <span className="section-meta">{intersections?.summary?.pairs ?? 0}</span>
+            </div>
+            <div className="entity-filter-grid entity-intersection-toolbar">
+              <input
+                className="entity-search"
+                placeholder="Поиск по сущностям или таблицам"
+                value={intersectionQuery}
+                onChange={(e) => setIntersectionQuery(e.target.value)}
+              />
+              <div className="entity-filters">
+                {[1, 2, 4, 8].map((score) => (
+                  <button
+                    key={score}
+                    className={`pill ${intersectionMinScore === score ? "pill-active" : ""}`}
+                    onClick={() => setIntersectionMinScore(score)}
+                  >
+                    score ≥ {score}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {intersectionsLoading && <div className="muted">Загрузка пересечений...</div>}
+            {intersectionsError && <div className="dep-error-title">{intersectionsError}</div>}
+            {!intersectionsLoading && !intersectionsError && intersections?.summary && (
+              <div className="entity-kpis entity-intersection-kpis">
+                <div className="entity-kpi-card">
+                  <div className="entity-kpi-label">Пар сущностей</div>
+                  <div className="entity-kpi-value">{intersections.summary.pairs}</div>
+                </div>
+                <div className="entity-kpi-card">
+                  <div className="entity-kpi-label">Сущностей в пересечениях</div>
+                  <div className="entity-kpi-value">{intersections.summary.entities_involved}</div>
+                </div>
+                <div className="entity-kpi-card">
+                  <div className="entity-kpi-label">Пар с общими таблицами</div>
+                  <div className="entity-kpi-value">{intersections.summary.pairs_with_shared_tables}</div>
+                </div>
+                <div className="entity-kpi-card">
+                  <div className="entity-kpi-label">Прямых связей</div>
+                  <div className="entity-kpi-value">{intersections.summary.direct_links}</div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          {!intersectionsLoading && !intersectionsError && (
+            <section className="cc-surface">
+              <div className="section-title">
+                Наиболее связанные сущности
+                <span className="section-meta">{intersections?.top_entities?.length ?? 0}</span>
+              </div>
+              <div className="entity-intersection-top-grid">
+                {(intersections?.top_entities || []).map((row) => (
+                  <article key={row.entity_id} className="entity-intersection-top-card">
+                    <div className="entity-intersection-top-name">{row.entity_name}</div>
+                    <div className="entity-intersection-top-meta">ID: {row.entity_id}</div>
+                    <div className="entity-intersection-top-stats">
+                      <span>соседей: {row.peer_count}</span>
+                      <span>общих таблиц: {row.shared_tables_total}</span>
+                      <span>связей: {row.total_links}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {!intersectionsLoading && !intersectionsError && (
+            <section className="cc-surface">
+              <div className="section-title">
+                Пары сущностей
+                <span className="section-meta">{intersectionPairsFiltered.length}</span>
+              </div>
+              {intersectionPairsFiltered.length === 0 ? (
+                <div className="muted">Нет пересечений под текущий фильтр.</div>
+              ) : (
+                <div className="entity-intersection-list">
+                  {intersectionPairsFiltered.map((row) => (
+                    <article key={row.pair_key} className="entity-intersection-card">
+                      <div className="entity-intersection-head">
+                        <div className="entity-intersection-pair">
+                          <div className="entity-intersection-entity">{row.a?.entity_name}</div>
+                          <div className="entity-intersection-connector">↔</div>
+                          <div className="entity-intersection-entity">{row.b?.entity_name}</div>
+                        </div>
+                        <div className="entity-intersection-score">score {row.score}</div>
+                      </div>
+                      <div className="entity-intersection-metrics">
+                        <span className="entity-shared-pill">общих таблиц: {row.shared_tables_count}</span>
+                        <span className="entity-shared-pill">A → B: {row.links_ab_count}</span>
+                        <span className="entity-shared-pill">B → A: {row.links_ba_count}</span>
+                      </div>
+                      {(row.shared_tables_sample || []).length > 0 && (
+                        <div className="entity-intersection-block">
+                          <div className="entity-meta-label">Общие таблицы</div>
+                          <div className="entity-intersection-tags">
+                            {row.shared_tables_sample.map((table) => (
+                              <span key={table} className="entity-shared-pill mono">{table}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {((row.edge_samples_ab || []).length > 0 || (row.edge_samples_ba || []).length > 0) && (
+                        <div className="entity-intersection-links-grid">
+                          <div className="entity-intersection-block">
+                            <div className="entity-meta-label">{row.a?.entity_name} → {row.b?.entity_name}</div>
+                            {(row.edge_samples_ab || []).length > 0 ? (
+                              <div className="entity-intersection-link-list">
+                                {row.edge_samples_ab.map((edge, idx) => (
+                                  <div key={`ab-${idx}`} className="entity-intersection-link mono">
+                                    {edge.source} → {edge.target}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="muted">Нет прямых связей</div>
+                            )}
+                          </div>
+                          <div className="entity-intersection-block">
+                            <div className="entity-meta-label">{row.b?.entity_name} → {row.a?.entity_name}</div>
+                            {(row.edge_samples_ba || []).length > 0 ? (
+                              <div className="entity-intersection-link-list">
+                                {row.edge_samples_ba.map((edge, idx) => (
+                                  <div key={`ba-${idx}`} className="entity-intersection-link mono">
+                                    {edge.source} → {edge.target}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="muted">Нет прямых связей</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
+      )}
+
+      {activeTab === "coverage" && <section className="cc-surface">
         <div className="section-title">
           Разрывы покрытия
           <span className="section-meta">{coverage?.orphan_count ?? 0}</span>
@@ -398,9 +610,9 @@ export default function EntityShedule() {
             )}
           </>
         )}
-      </section>
+      </section>}
 
-      <section className="cc-surface">
+      {activeTab === "dq" && <section className="cc-surface">
         <div className="section-title">
           Качество данных по сущностям
           <span className="section-meta">{dqEntities.length}</span>
@@ -423,9 +635,9 @@ export default function EntityShedule() {
             ))}
           </div>
         )}
-      </section>
+      </section>}
 
-      <section className="cc-surface">
+      {activeTab === "entities" && <section className="cc-surface">
         <div className="section-title">
           Сущности
           <span className="section-meta">{filtered.length}</span>
@@ -532,7 +744,7 @@ export default function EntityShedule() {
             </article>
           ))}
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

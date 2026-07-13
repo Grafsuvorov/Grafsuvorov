@@ -3288,6 +3288,205 @@ def get_shared_tables_by_entity(limit: int = Query(5, ge=0, le=50)):
     return JSONResponse(content=shared_map, media_type="application/json; charset=utf-8")
 
 
+@router.get("/api/entities/intersections")
+def get_entity_intersections(
+    limit: int = Query(120, ge=1, le=1000),
+    min_score: int = Query(1, ge=1, le=1000),
+):
+    try:
+        snapshot = get_graph_snapshot()
+        all_meta_list, _ = get_cached_meta_and_index()
+
+        entity_by_id: dict[str, dict[str, Any]] = {}
+        for row in all_meta_list:
+            entity_id = row.get("entity_id")
+            entity_name = row.get("entity_name")
+            if entity_id is None or not entity_name:
+                continue
+            entity_by_id[str(entity_id)] = {
+                "entity_id": int(entity_id),
+                "entity_name": str(entity_name),
+            }
+
+        table_entities: dict[str, set[str]] = {}
+        for row in all_meta_list:
+            entity_id = row.get("entity_id")
+            schema_name = row.get("table_schema")
+            table_name = row.get("table_name")
+            if entity_id is None or not schema_name or not table_name:
+                continue
+            fqn = f"{schema_name}.{table_name}"
+            table_entities.setdefault(fqn, set()).add(str(entity_id))
+
+        pair_map: dict[tuple[str, str], dict[str, Any]] = {}
+
+        def ensure_pair(left_id: str, right_id: str) -> dict[str, Any]:
+            pair_key = tuple(sorted((left_id, right_id)))
+            entry = pair_map.get(pair_key)
+            if entry is None:
+                left = entity_by_id.get(pair_key[0], {"entity_id": int(pair_key[0]), "entity_name": pair_key[0]})
+                right = entity_by_id.get(pair_key[1], {"entity_id": int(pair_key[1]), "entity_name": pair_key[1]})
+                entry = {
+                    "pair_key": f"{pair_key[0]}::{pair_key[1]}",
+                    "a": left,
+                    "b": right,
+                    "shared_tables": set(),
+                    "links_ab": 0,
+                    "links_ba": 0,
+                    "edge_samples_ab": [],
+                    "edge_samples_ba": [],
+                }
+                pair_map[pair_key] = entry
+            return entry
+
+        for table_fqn, entity_ids in table_entities.items():
+            if len(entity_ids) < 2:
+                continue
+            for left_id, right_id in combinations(sorted(entity_ids), 2):
+                entry = ensure_pair(left_id, right_id)
+                entry["shared_tables"].add(table_fqn)
+
+        table_edges = snapshot.get("table_graph", {}).get("edges", []) or []
+        table_nodes = snapshot.get("table_graph", {}).get("nodes", {}) or {}
+        for edge in table_edges:
+            source_node = table_nodes.get(edge.get("source")) or {}
+            target_node = table_nodes.get(edge.get("target")) or {}
+            source_fqn = f"{source_node.get('schema')}.{source_node.get('table')}".strip(".")
+            target_fqn = f"{target_node.get('schema')}.{target_node.get('table')}".strip(".")
+            source_entities = table_entities.get(source_fqn) or set()
+            target_entities = table_entities.get(target_fqn) or set()
+            if not source_entities or not target_entities:
+                continue
+            for left_id in source_entities:
+                for right_id in target_entities:
+                    if left_id == right_id:
+                        continue
+                    entry = ensure_pair(left_id, right_id)
+                    left_key = str(entry["a"]["entity_id"])
+                    sample = {"source": source_fqn, "target": target_fqn}
+                    if left_id == left_key:
+                        entry["links_ab"] += 1
+                        if len(entry["edge_samples_ab"]) < 4 and sample not in entry["edge_samples_ab"]:
+                            entry["edge_samples_ab"].append(sample)
+                    else:
+                        entry["links_ba"] += 1
+                        if len(entry["edge_samples_ba"]) < 4 and sample not in entry["edge_samples_ba"]:
+                            entry["edge_samples_ba"].append(sample)
+
+        rows = []
+        entity_rank: dict[str, dict[str, Any]] = {}
+        involved_entities: set[str] = set()
+        pairs_with_shared = 0
+        pairs_with_links = 0
+        total_links = 0
+
+        for entry in pair_map.values():
+            shared_tables = sorted(entry["shared_tables"])
+            shared_count = len(shared_tables)
+            links_ab = int(entry["links_ab"] or 0)
+            links_ba = int(entry["links_ba"] or 0)
+            links_total = links_ab + links_ba
+            total_score = shared_count + links_total
+            if total_score < min_score:
+                continue
+
+            if shared_count > 0:
+                pairs_with_shared += 1
+            if links_total > 0:
+                pairs_with_links += 1
+            total_links += links_total
+            involved_entities.add(str(entry["a"]["entity_id"]))
+            involved_entities.add(str(entry["b"]["entity_id"]))
+
+            rows.append(
+                {
+                    "pair_key": entry["pair_key"],
+                    "a": entry["a"],
+                    "b": entry["b"],
+                    "shared_tables_count": shared_count,
+                    "shared_tables_sample": shared_tables[:6],
+                    "links_ab_count": links_ab,
+                    "links_ba_count": links_ba,
+                    "links_total": links_total,
+                    "score": total_score,
+                    "edge_samples_ab": entry["edge_samples_ab"],
+                    "edge_samples_ba": entry["edge_samples_ba"],
+                }
+            )
+
+            for side, peer, outbound, inbound in (
+                (entry["a"], entry["b"], links_ab, links_ba),
+                (entry["b"], entry["a"], links_ba, links_ab),
+            ):
+                entity_key = str(side["entity_id"])
+                rank = entity_rank.setdefault(
+                    entity_key,
+                    {
+                        "entity_id": side["entity_id"],
+                        "entity_name": side["entity_name"],
+                        "peer_ids": set(),
+                        "shared_tables_total": 0,
+                        "outbound_links": 0,
+                        "inbound_links": 0,
+                    },
+                )
+                rank["peer_ids"].add(str(peer["entity_id"]))
+                rank["shared_tables_total"] += shared_count
+                rank["outbound_links"] += outbound
+                rank["inbound_links"] += inbound
+
+        rows.sort(
+            key=lambda item: (
+                -item["score"],
+                -item["links_total"],
+                -item["shared_tables_count"],
+                item["a"]["entity_name"],
+                item["b"]["entity_name"],
+            )
+        )
+
+        top_entities = []
+        for item in entity_rank.values():
+            peer_count = len(item["peer_ids"])
+            top_entities.append(
+                {
+                    "entity_id": item["entity_id"],
+                    "entity_name": item["entity_name"],
+                    "peer_count": peer_count,
+                    "shared_tables_total": item["shared_tables_total"],
+                    "outbound_links": item["outbound_links"],
+                    "inbound_links": item["inbound_links"],
+                    "total_links": item["outbound_links"] + item["inbound_links"],
+                    "score": peer_count + item["shared_tables_total"] + item["outbound_links"] + item["inbound_links"],
+                }
+            )
+        top_entities.sort(
+            key=lambda item: (
+                -item["score"],
+                -item["peer_count"],
+                -item["total_links"],
+                item["entity_name"],
+            )
+        )
+
+        payload = {
+            "summary": {
+                "pairs": len(rows),
+                "entities_involved": len(involved_entities),
+                "pairs_with_shared_tables": pairs_with_shared,
+                "pairs_with_links": pairs_with_links,
+                "direct_links": total_links,
+            },
+            "top_entities": top_entities[:18],
+            "pairs": rows[:limit],
+        }
+        return JSONResponse(content=payload, media_type="application/json; charset=utf-8")
+    except Exception as e:
+        print("❌ /api/entities/intersections error:", e)
+        print(traceback.format_exc())
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 @router.get("/api/graph/orphans")
 def get_orphan_tables(
     final_schemas: str = Query("dm"),
